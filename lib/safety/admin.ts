@@ -1,5 +1,6 @@
 import "server-only";
 
+import { logBackendEvent } from "@/lib/observability/logger";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -44,6 +45,15 @@ export async function getAdminEmailAccess(email: string) {
   const envAccess = getEnvAdminEmailAccess(normalizedEmail);
 
   if (envAccess.ok) {
+    if (envAccess.isDevelopmentFallback) {
+      // This branch grants admin access to ANY authenticated user. It only
+      // activates when ADMIN_EMAILS is unset outside production, but a
+      // misconfigured NODE_ENV would make it silent — so it is never silent.
+      logBackendEvent("warn", {
+        action: "admin.dev_fallback_access",
+        errorType: "AdminDevFallbackUsed"
+      });
+    }
     return envAccess;
   }
 

@@ -42,6 +42,44 @@ const avatarExtensionsByType = new Map([
   ["image/webp", "webp"]
 ]);
 
+// The browser-reported MIME type is attacker-controlled, so uploads are also
+// checked against the file's real magic bytes before reaching storage.
+function sniffImageExtension(bytes: Uint8Array): "jpg" | "png" | "webp" | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "jpg";
+  }
+
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return "png";
+  }
+
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return "webp";
+  }
+
+  return null;
+}
+
 function missingSupabaseState(): IntegrationActionState | null {
   const env = getSupabaseBrowserEnv();
 
@@ -155,14 +193,21 @@ export async function uploadAvatarAction(formData: FormData): Promise<Integratio
     return { ok: false, message: "Choose an avatar image first." };
   }
 
-  const extension = avatarExtensionsByType.get(file.type);
+  const claimedExtension = avatarExtensionsByType.get(file.type);
 
-  if (!extension) {
+  if (!claimedExtension) {
     return { ok: false, message: "Upload a PNG, JPG, or WebP image." };
   }
 
   if (file.size > 3 * 1024 * 1024) {
     return { ok: false, message: "Use an image smaller than 3 MB." };
+  }
+
+  const headerBytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const extension = sniffImageExtension(headerBytes);
+
+  if (!extension || extension !== claimedExtension) {
+    return { ok: false, message: "That file doesn't look like a PNG, JPG, or WebP image." };
   }
 
   const admin = createSupabaseAdminClient();

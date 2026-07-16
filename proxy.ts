@@ -1,40 +1,21 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { requiredLoginRedirect } from "@/lib/security/route-protection";
 import type { Database } from "@/lib/supabase/database.types";
 
-const protectedPrefixes = [
-  "/dashboard",
-  "/friends",
-  "/notifications",
-  "/plans",
-  "/messages",
-  "/profile",
-  "/settings",
-  "/billing",
-  "/upgrade",
-  "/onboarding",
-  "/help",
-  "/invite",
-  "/safety-center",
-  "/meeting-pings",
-  "/events",
-  "/groups",
-  "/hangout-mode",
-  "/discover",
-  "/invites",
-  "/badges",
-  "/buddy-score",
-  "/reminders",
-  "/admin"
-];
-
 export async function proxy(request: NextRequest) {
+  const loginRedirect = requiredLoginRedirect(request.nextUrl.pathname);
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
+    return NextResponse.next();
+  }
+
+  if (!loginRedirect) {
     return NextResponse.next();
   }
 
@@ -61,16 +42,10 @@ export async function proxy(request: NextRequest) {
     data: { user }
   } = await supabase.auth.getUser();
 
-  const isAdminLogin = request.nextUrl.pathname === "/admin/login";
-  const isProtectedRoute =
-    !isAdminLogin &&
-    protectedPrefixes.some((prefix) => request.nextUrl.pathname.startsWith(prefix));
-
-  if (isProtectedRoute && !user) {
+  if (!user) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = request.nextUrl.pathname.startsWith("/admin")
-      ? "/admin/login"
-      : "/login";
+    redirectUrl.pathname = loginRedirect;
+    redirectUrl.search = "";
     redirectUrl.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(redirectUrl);
   }
