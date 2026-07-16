@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 import { PreviewNotice } from "@/components/ui/preview-notice";
 import type { GroupItem } from "@/components/groups/groups-page";
@@ -31,6 +32,7 @@ const seedMessages: GroupMessage[] = [
 ];
 
 export function GroupDetailPage({ group }: { group: GroupItem }) {
+  const reducedMotion = useReducedMotion();
   const [tab, setTab] = useState<GroupTab>("chat");
   const [messages, setMessages] = useState<GroupMessage[]>(seedMessages);
   const [draft, setDraft] = useState("");
@@ -126,7 +128,7 @@ export function GroupDetailPage({ group }: { group: GroupItem }) {
         <div className="space-y-2">
           {seedMembers.map((member) => (
             <div key={member} className="flex items-center gap-3 rounded-xl border border-border/70 bg-card/50 p-3">
-              <GlowAvatar name={member} size="sm" />
+              <GlowAvatar name={member} size="sm"  reducedMotion={reducedMotion} />
               <span className="text-sm font-medium">{member}</span>
             </div>
           ))}

@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
 import { PreviewNotice } from "@/components/ui/preview-notice";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 
 type DiscoverTab = "people" | "circles" | "plans" | "events";
@@ -34,6 +35,7 @@ const popularCircles = [
 ];
 
 export function DiscoverPageContent() {
+  const reducedMotion = useReducedMotion();
   const [tab, setTab] = useState<DiscoverTab>("people");
   const [query, setQuery] = useState("");
   const [waved, setWaved] = useState<string[]>([]);
@@ -77,7 +79,7 @@ export function DiscoverPageContent() {
               .filter((person) => person.name.toLowerCase().includes(query.trim().toLowerCase()))
               .map((person) => (
                 <div key={person.name} className="flex items-center gap-3 rounded-xl border border-border/70 bg-card/50 p-3">
-                  <GlowAvatar name={person.name} size="md" />
+                  <GlowAvatar name={person.name} size="md"  reducedMotion={reducedMotion} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">{person.name}</p>
                     <p className="text-xs text-muted-foreground">{person.status}</p>

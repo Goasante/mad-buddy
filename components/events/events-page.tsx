@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { PreviewNotice } from "@/components/ui/preview-notice";
 import { Textarea } from "@/components/ui/textarea";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 
 type EventTab = "for-you" | "circles" | "nearby" | "saved";
@@ -213,6 +214,7 @@ export function EventsPageContent() {
 }
 
 function EventCard({ event, onView, onToggleSaved }: { event: EventItem; onView: () => void; onToggleSaved: () => void }) {
+  const reducedMotion = useReducedMotion();
   return (
     <Card className="p-5">
       <div className="flex items-start justify-between gap-3">
@@ -240,7 +242,7 @@ function EventCard({ event, onView, onToggleSaved }: { event: EventItem; onView:
       <div className="mt-3 flex items-center gap-2">
         <div className="flex -space-x-2">
           {event.attendees.slice(0, 4).map((name) => (
-            <GlowAvatar key={name} name={name} size="sm" className="ring-2 ring-card" />
+            <GlowAvatar key={name} name={name} size="sm" className="ring-2 ring-card"  reducedMotion={reducedMotion} />
           ))}
         </div>
         <span className="text-xs text-muted-foreground">{event.goingCount} going</span>
@@ -334,6 +336,7 @@ function EventDetailsModal({
   onOpenChange: (open: boolean) => void;
   onRsvpChange: (rsvp: Rsvp) => void;
 }) {
+  const reducedMotion = useReducedMotion();
   return (
     <Modal open={Boolean(event)} onOpenChange={onOpenChange} title={event?.title ?? "Event"} description={event?.dateLabel}>
       {event ? (
@@ -351,7 +354,7 @@ function EventDetailsModal({
             <div className="flex flex-wrap gap-2">
               {event.attendees.map((name) => (
                 <div key={name} className="flex items-center gap-2 rounded-full border border-border/70 bg-background/60 py-1 pl-1 pr-3">
-                  <GlowAvatar name={name} size="sm" />
+                  <GlowAvatar name={name} size="sm"  reducedMotion={reducedMotion} />
                   <span className="text-xs font-medium">{name}</span>
                 </div>
               ))}

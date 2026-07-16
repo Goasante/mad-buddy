@@ -4,6 +4,7 @@ import { useState, type CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 import { PreviewNotice } from "@/components/ui/preview-notice";
 import type { ProximityLevel } from "@/lib/proximity";
@@ -28,6 +29,7 @@ const peopleAround: Array<{ name: string; proximityLevel: ProximityLevel }> = [
 ];
 
 export function HangoutModePage() {
+  const reducedMotion = useReducedMotion();
   const [active, setActive] = useState(false);
   const [vibe, setVibe] = useState(vibeOptions[0]);
   const [audience, setAudience] = useState<Audience>("Approved Muddies");
@@ -60,7 +62,9 @@ export function HangoutModePage() {
         <div
           className={cn(
             "relative isolate grid h-40 w-40 place-items-center rounded-full text-4xl transition-all",
-            active ? "proximity-halo proximity-halo-very-close proximity-halo-animate bg-primary/10" : "border border-dashed border-border text-muted-foreground"
+            active
+              ? cn("proximity-halo proximity-halo-very-close bg-primary/10", !reducedMotion && "proximity-halo-animate")
+              : "border border-dashed border-border text-muted-foreground"
           )}
           style={active ? ({ "--halo-active-opacity": 0.9, "--halo-rest-opacity": 0.5 } as CSSProperties) : undefined}
         >
@@ -132,7 +136,7 @@ export function HangoutModePage() {
         <div className="space-y-2">
           {peopleAround.map((person) => (
             <div key={person.name} className="flex items-center gap-3 rounded-xl border border-border/70 bg-card/50 p-3">
-              <GlowAvatar name={person.name} proximityLevel={person.proximityLevel} glowStrength={70} confidence="medium" size="sm" />
+              <GlowAvatar name={person.name} proximityLevel={person.proximityLevel} glowStrength={70} confidence="medium" size="sm"  reducedMotion={reducedMotion} />
               <span className="min-w-0 flex-1 truncate text-sm font-medium">{person.name}</span>
               <ProximityBadge proximityLevel={person.proximityLevel} />
             </div>

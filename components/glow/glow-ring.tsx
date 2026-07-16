@@ -43,6 +43,10 @@ export function GlowRing({
 
   return (
     <div
+      // Explicit role so the aria-label spread from GlowAvatar is reliably
+      // exposed by assistive tech (a labeled generic <div> is not guaranteed
+      // to appear in every browser's accessibility tree).
+      role="img"
       className={cn(
         "proximity-halo relative isolate inline-grid place-items-center rounded-full p-[3px]",
         getGlowClass(proximityLevel),

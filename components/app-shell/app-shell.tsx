@@ -125,6 +125,12 @@ export function AppShell({
 
   return (
     <div className="min-h-screen bg-secondary/25 pb-24 dark:bg-[#353537] md:p-4 md:pb-4">
+      <a
+        href="#app-main-content"
+        className="focus-ring sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:shadow-lg"
+      >
+        Skip to content
+      </a>
       <LocationSignalSync initiallyEnabled={locationSyncEnabled} />
       <div className="md:grid md:min-h-[calc(100vh-2rem)] md:grid-cols-[5.25rem_minmax(0,1fr)] md:overflow-hidden md:rounded-[1.35rem] md:border md:border-border/80 md:bg-background md:shadow-[0_28px_90px_hsl(var(--shadow)/0.24)] dark:md:border-white/10 dark:md:bg-[#101011]">
       <DesktopSidebar
@@ -138,7 +144,7 @@ export function AppShell({
           unreadCount={unreadCount}
           currentUsername={currentUsername}
         />
-          <main className="mx-auto w-full max-w-[1200px] px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6">
+          <main id="app-main-content" className="mx-auto w-full max-w-[1200px] px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6">
           {children}
         </main>
         </div>
