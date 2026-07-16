@@ -22,10 +22,12 @@ import { updateVisibilityStatusAction } from "@/app/(app)/settings-actions";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { StatusComposer } from "@/components/social/status-composer";
+import { PulseSummary } from "@/components/dashboard/pulse-summary";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { formatMuddyStatusLabel } from "@/lib/social/rules";
+import { freshnessLabel, type FreshnessState } from "@/lib/proximity/freshness";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn, formatRelativeTime } from "@/lib/utils";
@@ -42,6 +44,7 @@ type DashboardFriend = {
   isPremiumThemeUnlocked: boolean;
   confidence: ConfidenceLevel;
   muddyStatusLabel: string | null;
+  freshnessState: FreshnessState;
 };
 
 type NearbyFriendApiItem = {
@@ -53,6 +56,7 @@ type NearbyFriendApiItem = {
   glow_strength: number;
   status_text: string;
   last_active_estimate: string;
+  freshness_state: FreshnessState;
   is_premium_theme_unlocked: boolean;
   confidence: ConfidenceLevel;
   muddy_availability: string | null;
@@ -316,6 +320,8 @@ export function DashboardPageContent({
         </Button>
       </div>
 
+      <PulseSummary />
+
       <section className="rounded-2xl bg-card/55 p-4 shadow-sm dark:bg-white/[0.035] sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -416,6 +422,14 @@ export function DashboardPageContent({
                 </span>
                 <span className="w-full truncate text-center text-[10px] text-muted-foreground">
                   {friend.muddyStatusLabel ?? proximityLabels[friend.proximityLevel]}
+                </span>
+                <span
+                  className={cn(
+                    "w-full truncate text-center text-[9px]",
+                    friend.freshnessState === "stale" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground/70"
+                  )}
+                >
+                  {freshnessLabel(friend.freshnessState)}
                 </span>
               </button>
             ))}
@@ -558,7 +572,8 @@ function toDashboardFriend(friend: NearbyFriendApiItem): DashboardFriend {
       availability: friend.muddy_availability,
       activity: friend.muddy_activity,
       note: friend.muddy_status_note
-    })
+    }),
+    freshnessState: friend.freshness_state
   };
 }
 

@@ -212,6 +212,12 @@ export function SettingsPageContent({
             onCheckedChange={saveNearbyAlerts}
           />
           <SettingsLinkRow
+            icon={Bell}
+            title="Notification preferences"
+            description="Categories, quiet hours, and how you're reached."
+            href="/settings/notifications"
+          />
+          <SettingsLinkRow
             icon={CalendarClock}
             title="Reminders"
             description="Plan reminders and notification preferences."
@@ -319,6 +325,7 @@ type SettingsLinkRowProps = {
     | "/friends"
     | "/settings/privacy"
     | "/settings/glow-visibility"
+    | "/settings/notifications"
     | "/hangout-mode"
     | "/badges"
     | "/buddy-score"

@@ -71,6 +71,7 @@ describe("assertPrivacySafeResponse", () => {
           glow_strength: 60,
           status_text: "Glowing nearby",
           last_active_estimate: "Active recently",
+          freshness_state: "live",
           is_premium_theme_unlocked: false,
           confidence: "high",
           muddy_availability: null,

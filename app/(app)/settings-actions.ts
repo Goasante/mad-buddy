@@ -213,3 +213,55 @@ export async function updateNotificationPreferenceAction(input: unknown): Promis
 
   return { ok: true, message: "Notification preference saved." };
 }
+
+const smartNotificationPreferencesSchema = z.object({
+  categories: z.record(z.string(), z.enum(["all", "close_friends", "in_app_only", "off"])),
+  quietHoursEnabled: z.boolean(),
+  quietHoursStartMinute: z.number().int().min(0).max(1439),
+  quietHoursEndMinute: z.number().int().min(0).max(1439)
+});
+
+/**
+ * Persists Smart Notification preferences (feature spec batch 4). Stored inside
+ * the existing user_preferences.notification_preferences JSON so no migration is
+ * needed; the prior blob (e.g. nearbyAlerts) is preserved by reading first.
+ */
+export async function updateSmartNotificationPreferencesAction(
+  input: unknown
+): Promise<SettingsActionState> {
+  const parsed = smartNotificationPreferencesSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check your notification settings and try again." };
+
+  const { normalizePreferences } = await import("@/lib/notifications/preferences");
+  const normalized = normalizePreferences(parsed.data);
+
+  const user = await getAuthedUser();
+  if (!user) return { ok: false, message: "Log in before changing notification settings." };
+
+  const admin = createSupabaseAdminClient();
+  const { data: existing } = await admin
+    .from("user_preferences")
+    .select("notification_preferences")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const prior =
+    existing?.notification_preferences && typeof existing.notification_preferences === "object"
+      ? (existing.notification_preferences as Record<string, unknown>)
+      : {};
+
+  const { error } = await admin.from("user_preferences").upsert(
+    {
+      user_id: user.id,
+      notification_preferences: {
+        ...prior,
+        smart: normalized,
+        updatedAt: new Date().toISOString()
+      }
+    },
+    { onConflict: "user_id" }
+  );
+
+  if (error) return { ok: false, message: error.message };
+  return { ok: true, message: "Notification settings saved." };
+}

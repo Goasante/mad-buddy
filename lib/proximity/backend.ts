@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { getFreshnessState } from "@/lib/proximity/freshness";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 
 export const locationUpdateRequestSchema = z.object({
@@ -18,6 +19,9 @@ export const safeNearbyFriendSchema = z.object({
   glow_strength: z.number().int().min(0).max(100),
   status_text: z.string(),
   last_active_estimate: z.string(),
+  // Presence Freshness (feature spec batch 4) — coarse recency band only,
+  // never an exact timestamp or device/permission state.
+  freshness_state: z.enum(["live", "recent", "older", "stale"]),
   is_premium_theme_unlocked: z.boolean(),
   confidence: z.enum(["high", "medium", "low"]),
   // Muddy Status (feature spec batch 1) — availability/activity context,
@@ -253,6 +257,7 @@ export function buildSafeNearbyFriends(input: {
           glow_strength: 0,
           status_text: "Last seen a while ago",
           last_active_estimate: "Last seen a while ago",
+          freshness_state: "stale" as const,
           is_premium_theme_unlocked: input.premiumUserIds.has(friendId),
           confidence: "low" as const,
           ...statusFor(friendId)
@@ -275,6 +280,7 @@ export function buildSafeNearbyFriends(input: {
         glow_strength: glowStrength,
         status_text: statusTextFor(proximityLevel, pairConfidence),
         last_active_estimate: lastActiveEstimate(location.last_updated),
+        freshness_state: getFreshnessState(updatedAt.getTime(), now),
         is_premium_theme_unlocked: input.premiumUserIds.has(friendId),
         confidence: pairConfidence,
         ...statusFor(friendId)
