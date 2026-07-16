@@ -34,33 +34,54 @@ export async function createNotification(
   });
 }
 
-export async function createNearbyNotificationIfAllowed(
+/**
+ * Batched replacement for the old one-query-per-friend throttle check
+ * (audit I-13): one read for the last hour's nearby notifications, one
+ * batched insert for whichever friends haven't been announced yet.
+ * Throttle semantics are unchanged — at most one "friend nearby"
+ * notification per friend name per hour.
+ */
+export async function createNearbyNotificationsIfAllowed(
   supabase: SupabaseAdmin,
   input: {
     userId: string;
-    friendDisplayName: string;
+    friendDisplayNames: string[];
   }
 ) {
+  if (input.friendDisplayNames.length === 0) {
+    return { data: null, error: null };
+  }
+
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const { data: existing, error } = await supabase
     .from("notifications")
-    .select("id")
+    .select("message")
     .eq("user_id", input.userId)
     .eq("type", "friend_nearby")
-    .gte("created_at", oneHourAgo)
-    .ilike("message", `${input.friendDisplayName}%`)
-    .limit(1);
+    .gte("created_at", oneHourAgo);
 
-  if (error || (existing && existing.length > 0)) {
+  if (error) {
     return { data: null, error };
   }
 
-  return createNotification(supabase, {
-    userId: input.userId,
-    type: "friend_nearby",
-    title: "Friend nearby",
-    message: `${input.friendDisplayName} is glowing nearby. Exact location stays private.`
-  });
+  const recentMessages = (existing ?? []).map((row) => row.message.toLowerCase());
+  const namesToAnnounce = input.friendDisplayNames.filter(
+    (name) => !recentMessages.some((message) => message.startsWith(name.toLowerCase()))
+  );
+
+  if (namesToAnnounce.length === 0) {
+    return { data: null, error: null };
+  }
+
+  return supabase.from("notifications").insert(
+    namesToAnnounce.map((name) => ({
+      user_id: input.userId,
+      type: "friend_nearby",
+      title: "Friend nearby",
+      message: `${name} is glowing nearby. Exact location stays private.`,
+      is_read: false
+    }))
+  );
 }
 
 export type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];

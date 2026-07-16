@@ -107,7 +107,12 @@ export function AppShell({
       if (typeof detail?.unreadCount === "number") setUnreadCount(detail.unreadCount);
       else refreshUnreadCount();
     };
-    const interval = window.setInterval(refreshUnreadCount, 10_000);
+    // 60s background cadence, paused while the tab is hidden — the focus and
+    // visibilitychange handlers above refresh immediately on return, so a
+    // slower idle poll costs no freshness the user can see (battery/audit).
+    const interval = window.setInterval(() => {
+      if (!document.hidden) void refreshUnreadCount();
+    }, 60_000);
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("mad-buddy:notifications-updated", handleUpdated);

@@ -114,7 +114,11 @@ export function NotificationsPageContent({
     };
 
     void loadNotifications();
-    const intervalId = window.setInterval(loadNotifications, 10_000);
+    // 30s cadence while this page is the active view, paused when the tab is
+    // hidden; focus/visibility handlers refresh immediately on return.
+    const intervalId = window.setInterval(() => {
+      if (!document.hidden) void loadNotifications();
+    }, 30_000);
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibilityChange);
 

@@ -17,7 +17,15 @@ const notificationResponseSchema = z.object({
   )
 });
 
-export async function GET() {
+// Cursor pagination (audit I-14): callers may pass ?limit=1..100 and
+// ?before=<ISO timestamp> to page backward through history. Defaults keep
+// the previous behavior (newest 50) so existing clients are unaffected.
+const paginationSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  before: z.string().datetime({ offset: true }).optional()
+});
+
+export async function GET(request: Request) {
   const env = getSupabaseBrowserEnv();
 
   if (!env.url || !env.anonKey) {
@@ -37,12 +45,31 @@ export async function GET() {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
-  const { data, error } = await supabase
+  const url = new URL(request.url);
+  const parsedPagination = paginationSchema.safeParse({
+    limit: url.searchParams.get("limit") ?? undefined,
+    before: url.searchParams.get("before") ?? undefined
+  });
+
+  if (!parsedPagination.success) {
+    return NextResponse.json(
+      { error: "Invalid pagination. Use limit=1..100 and before=<ISO timestamp>." },
+      { status: 400 }
+    );
+  }
+
+  let query = supabase
     .from("notifications")
     .select("*")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(parsedPagination.data.limit);
+
+  if (parsedPagination.data.before) {
+    query = query.lt("created_at", parsedPagination.data.before);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -52,5 +79,10 @@ export async function GET() {
     notifications: data.map(toNotificationResponse)
   });
 
-  return NextResponse.json(response);
+  const oldest = response.notifications.at(-1)?.created_at ?? null;
+
+  return NextResponse.json({
+    ...response,
+    next_before: response.notifications.length === parsedPagination.data.limit ? oldest : null
+  });
 }

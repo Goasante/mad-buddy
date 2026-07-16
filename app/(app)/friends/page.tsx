@@ -55,7 +55,13 @@ async function loadFriendNetwork(): Promise<UserSummary[]> {
     .select("user_id, full_name, username")
     .in("user_id", [...profileIds]);
   const profilesById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
-  const missingProfileIds = [...profileIds].filter((profileId) => !profilesById.has(profileId));
+  // Fallback for users whose profiles row hasn't synced yet. The auth admin
+  // API has no bulk lookup, so this is inherently per-id — bounded to keep a
+  // pathological backlog from fanning out into unbounded admin calls
+  // (audit I-13). Ids beyond the cap are omitted until their profile syncs.
+  const missingProfileIds = [...profileIds]
+    .filter((profileId) => !profilesById.has(profileId))
+    .slice(0, 20);
 
   await Promise.all(
     missingProfileIds.map(async (profileId) => {

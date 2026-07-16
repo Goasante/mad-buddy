@@ -8,12 +8,13 @@ import { Card } from "@/components/ui/card";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { SubscriptionPlan, SubscriptionStatus } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
+import { planDisplayPrices } from "@/components/premium/plans";
 
 const planCards = [
   {
     id: "free",
     name: "Free",
-    price: "GHS 0",
+    price: planDisplayPrices.free,
     badge: "Starter",
     description: "Try private glow with a small trusted circle.",
     features: ["Basic glow", "25 Muddies", "Manual refresh"]
@@ -22,7 +23,7 @@ const planCards = [
     id: "buddy_plus",
     checkoutPlan: "plus",
     name: "Buddy Plus",
-    price: "GHS 50",
+    price: planDisplayPrices.plus,
     badge: "Best for Muddies",
     description: "A real social upgrade for active friend groups.",
     features: ["Unlimited Muddies", "Best Buddies priority", "Smart nearby alerts", "Custom glow colors"],
@@ -32,7 +33,7 @@ const planCards = [
     id: "buddy_pro",
     checkoutPlan: "pro",
     name: "Buddy Pro",
-    price: "GHS 100",
+    price: planDisplayPrices.pro,
     badge: "Maximum control",
     description: "Serious privacy controls for people who need boundaries.",
     features: ["Muddy Circles", "Ghost Mode schedules", "Privacy Zones", "Event Mode"]

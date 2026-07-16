@@ -1,5 +1,15 @@
 export type PlanId = "free" | "plus" | "pro";
 
+// Single source of truth for displayed prices (audit I-12). Both the public
+// pricing page and the billing page must read from here — never hardcode a
+// price string elsewhere. Charged amounts are configured in Paystack plan
+// codes; keep these display values in sync with that configuration.
+export const planDisplayPrices: Record<PlanId, string> = {
+  free: "GHS 0",
+  plus: "GHS 50",
+  pro: "GHS 100"
+};
+
 export type PricingPlan = {
   id: PlanId;
   name: string;
@@ -14,7 +24,7 @@ export const pricingPlans: PricingPlan[] = [
   {
     id: "free",
     name: "Free",
-    price: "GHS 0",
+    price: planDisplayPrices.free,
     description: "Start with a small circle of approved friends.",
     features: [
       "Nearby glow",
@@ -27,7 +37,7 @@ export const pricingPlans: PricingPlan[] = [
   {
     id: "plus",
     name: "Buddy Plus",
-    price: "GHS 50",
+    price: planDisplayPrices.plus,
     description: "More flexibility for active friend groups.",
     badge: "Most popular",
     features: [
@@ -42,7 +52,7 @@ export const pricingPlans: PricingPlan[] = [
   {
     id: "pro",
     name: "Buddy Pro",
-    price: "GHS 100",
+    price: planDisplayPrices.pro,
     description: "Advanced visibility controls for larger friend circles.",
     badge: "Most flexible",
     features: [

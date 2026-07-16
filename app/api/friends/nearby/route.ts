@@ -11,7 +11,7 @@ import {
   weakerConfidence,
   type SafeNearbyFriend
 } from "@/lib/proximity/backend";
-import { createNearbyNotificationIfAllowed } from "@/lib/notifications/server";
+import { createNearbyNotificationsIfAllowed } from "@/lib/notifications/server";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import type { LocationConfidence } from "@/lib/supabase/database.types";
@@ -256,29 +256,27 @@ export async function GET() {
   const response = nearbyFriendsResponseSchema.parse({ friends });
   assertPrivacySafeResponse(response);
 
-  await Promise.all(
-    response.friends.map((friend) =>
-      admin.from("proximity_events").insert({
+  // Single batched insert instead of one write per friend (audit I-13).
+  if (response.friends.length > 0) {
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    await admin.from("proximity_events").insert(
+      response.friends.map((friend) => ({
         user_id: user.id,
         friend_id: friend.friend_id,
         proximity_level: friend.proximity_level,
         glow_strength: friend.glow_strength,
         confidence: friend.confidence,
-        expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString()
-      })
-    )
-  );
+        expires_at: expiresAt
+      }))
+    );
+  }
 
-  await Promise.all(
-    response.friends
+  await createNearbyNotificationsIfAllowed(admin, {
+    userId: user.id,
+    friendDisplayNames: response.friends
       .filter((friend) => friend.proximity_level === "very_close" || friend.proximity_level === "nearby")
-      .map((friend) =>
-        createNearbyNotificationIfAllowed(admin, {
-          userId: user.id,
-          friendDisplayName: friend.display_name
-        })
-      )
-  );
+      .map((friend) => friend.display_name)
+  });
 
   logBackendEvent("info", {
     requestId,
