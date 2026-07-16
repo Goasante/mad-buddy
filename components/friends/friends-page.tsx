@@ -29,6 +29,12 @@ import {
   updateFriendRequestStatusAction
 } from "@/app/(app)/actions";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
+import {
+  addCircleMembersAction,
+  addCloseFriendAction,
+  createCircleAction,
+  removeCloseFriendAction
+} from "@/app/(app)/circles-actions";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,7 +44,6 @@ import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
-import { PreviewNotice } from "@/components/ui/preview-notice";
 import { Textarea } from "@/components/ui/textarea";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import { cn } from "@/lib/utils";
@@ -68,6 +73,15 @@ type Circle = {
   protected?: boolean;
 };
 
+export type InitialCircle = {
+  id: string;
+  name: string;
+  icon: string | null;
+  memberIds: string[];
+};
+
+const CLOSE_FRIENDS_CIRCLE_ID = "close-friends";
+
 type NearbyFriendApiItem = {
   friend_id: string;
   proximity_level: ProximityLevel;
@@ -83,7 +97,15 @@ const tabs: Array<{ id: FriendTab; label: string }> = [
   { id: "blocked", label: "Blocked" }
 ];
 
-export function FriendsPageContent({ initialUsers = [] }: { initialUsers?: UserSummary[] }) {
+export function FriendsPageContent({
+  initialUsers = [],
+  initialCircles = [],
+  initialCloseFriendIds = []
+}: {
+  initialUsers?: UserSummary[];
+  initialCircles?: InitialCircle[];
+  initialCloseFriendIds?: string[];
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<FriendTab>(() => {
@@ -94,7 +116,10 @@ export function FriendsPageContent({ initialUsers = [] }: { initialUsers?: UserS
   const [requestSubTab, setRequestSubTab] = useState<"received" | "sent">("received");
   const [users, setUsers] = useState<UserSummary[]>(initialUsers);
   const [proximityByFriendId, setProximityByFriendId] = useState<Record<string, ProximityInfo>>({});
-  const [circles, setCircles] = useState<Circle[]>([{ id: "close-friends", name: "Close Friends", memberIds: [], protected: true }]);
+  const [circles, setCircles] = useState<Circle[]>(() => [
+    { id: CLOSE_FRIENDS_CIRCLE_ID, name: "Close Friends", memberIds: initialCloseFriendIds, protected: true },
+    ...initialCircles.map((circle) => ({ id: circle.id, name: circle.name, memberIds: circle.memberIds }))
+  ]);
   const [activeCircleId, setActiveCircleId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -218,44 +243,79 @@ export function FriendsPageContent({ initialUsers = [] }: { initialUsers?: UserS
     });
   }
 
-  function toggleCloseFriend(user: UserSummary) {
+  function setCloseFriendMembership(userId: string, isMember: boolean) {
     setCircles((current) =>
       current.map((circle) => {
-        if (circle.id !== "close-friends") return circle;
-        const isMember = circle.memberIds.includes(user.id);
+        if (circle.id !== CLOSE_FRIENDS_CIRCLE_ID) return circle;
         return {
           ...circle,
           memberIds: isMember
-            ? circle.memberIds.filter((id) => id !== user.id)
-            : [...circle.memberIds, user.id]
+            ? [...new Set([...circle.memberIds, userId])]
+            : circle.memberIds.filter((id) => id !== userId)
         };
       })
     );
-    const isMember = closeFriendIds.includes(user.id);
-    setFeedback(isMember ? `${user.displayName} removed from Close Friends.` : `${user.displayName} added to Close Friends.`);
+  }
+
+  function toggleCloseFriend(user: UserSummary) {
+    const wasMember = closeFriendIds.includes(user.id);
+    // Optimistic; revert if the server rejects (e.g. tier limit reached).
+    setCloseFriendMembership(user.id, !wasMember);
+    startTransition(async () => {
+      const result = wasMember
+        ? await removeCloseFriendAction(user.id)
+        : await addCloseFriendAction(user.id);
+      setFeedback(result.message);
+      if (!result.ok) setCloseFriendMembership(user.id, wasMember);
+    });
   }
 
   function createCircle() {
     const name = newCircleName.trim();
     if (!name) return;
-    const id = `circle-${Date.now()}`;
-    setCircles((current) => [...current, { id, name, memberIds: circleTargetUser ? [circleTargetUser.id] : [] }]);
+    const targetId = circleTargetUser?.id ?? null;
     setNewCircleName("");
     setCreateCircleOpen(false);
     setCircleTargetUser(null);
-    setFeedback(`Circle "${name}" created.`);
+    startTransition(async () => {
+      const result = await createCircleAction({
+        name,
+        memberIds: targetId ? [targetId] : []
+      });
+      setFeedback(result.message);
+      if (result.ok && result.circleId) {
+        setCircles((current) => [
+          ...current,
+          { id: result.circleId!, name, memberIds: targetId ? [targetId] : [] }
+        ]);
+      }
+    });
   }
 
   function addToCircle(user: UserSummary, circleId: string) {
+    const alreadyIn = circles.find((circle) => circle.id === circleId)?.memberIds.includes(user.id);
+    if (alreadyIn) return;
     setCircles((current) =>
       current.map((circle) =>
-        circle.id === circleId && !circle.memberIds.includes(user.id)
+        circle.id === circleId
           ? { ...circle, memberIds: [...circle.memberIds, user.id] }
           : circle
       )
     );
     const circleName = circles.find((circle) => circle.id === circleId)?.name;
-    setFeedback(`${user.displayName} added to ${circleName}.`);
+    startTransition(async () => {
+      const result = await addCircleMembersAction(circleId, [user.id]);
+      setFeedback(result.ok ? `${user.displayName} added to ${circleName}.` : result.message);
+      if (!result.ok) {
+        setCircles((current) =>
+          current.map((circle) =>
+            circle.id === circleId
+              ? { ...circle, memberIds: circle.memberIds.filter((id) => id !== user.id) }
+              : circle
+          )
+        );
+      }
+    });
   }
 
   return (
@@ -298,7 +358,6 @@ export function FriendsPageContent({ initialUsers = [] }: { initialUsers?: UserS
         <p className="text-sm text-muted-foreground" role="status">{feedback}</p>
       ) : null}
 
-      {activeTab === "circles" || activeTab === "close" ? <PreviewNotice /> : null}
 
       {activeTab === "all" || activeTab === "close" || (activeTab === "circles" && activeCircleId) ? (
         <div className="space-y-4">

@@ -1,21 +1,37 @@
-import { FriendsPageContent, type UserSummary } from "@/components/friends/friends-page";
+import {
+  FriendsPageContent,
+  type InitialCircle,
+  type UserSummary
+} from "@/components/friends/friends-page";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export default async function FriendsPage() {
-  const initialUsers = await loadFriendNetwork();
+export const dynamic = "force-dynamic";
 
-  return <FriendsPageContent initialUsers={initialUsers} />;
+export default async function FriendsPage() {
+  const { users, circles, closeFriendIds } = await loadFriendNetwork();
+
+  return (
+    <FriendsPageContent
+      initialUsers={users}
+      initialCircles={circles}
+      initialCloseFriendIds={closeFriendIds}
+    />
+  );
 }
 
-async function loadFriendNetwork(): Promise<UserSummary[]> {
+async function loadFriendNetwork(): Promise<{
+  users: UserSummary[];
+  circles: InitialCircle[];
+  closeFriendIds: string[];
+}> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return [];
+    return { users: [], circles: [], closeFriendIds: [] };
   }
 
   const admin = createSupabaseAdminClient();
@@ -46,8 +62,13 @@ async function loadFriendNetwork(): Promise<UserSummary[]> {
   });
   blocked.forEach((entry) => profileIds.add(entry.blocked_id));
 
+  const [circles, closeFriendIds] = await Promise.all([
+    loadCircles(admin, user.id),
+    loadCloseFriendIds(admin, user.id)
+  ]);
+
   if (profileIds.size === 0) {
-    return [];
+    return { users: [], circles, closeFriendIds };
   }
 
   const { data: profiles } = await admin
@@ -131,5 +152,52 @@ async function loadFriendNetwork(): Promise<UserSummary[]> {
     }
   });
 
-  return results;
+  return { users: results, circles, closeFriendIds };
+}
+
+async function loadCircles(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  userId: string
+): Promise<InitialCircle[]> {
+  const { data: circleRows } = await admin
+    .from("friend_circles")
+    .select("id, name, icon")
+    .eq("user_id", userId)
+    .is("archived_at", null)
+    .order("created_at", { ascending: true });
+
+  const circles = circleRows ?? [];
+  if (circles.length === 0) return [];
+
+  const { data: members } = await admin
+    .from("circle_members")
+    .select("circle_id, friend_id")
+    .in(
+      "circle_id",
+      circles.map((circle) => circle.id)
+    );
+
+  const membersByCircle = new Map<string, string[]>();
+  for (const member of members ?? []) {
+    if (!membersByCircle.has(member.circle_id)) membersByCircle.set(member.circle_id, []);
+    membersByCircle.get(member.circle_id)!.push(member.friend_id);
+  }
+
+  return circles.map((circle) => ({
+    id: circle.id,
+    name: circle.name,
+    icon: circle.icon,
+    memberIds: membersByCircle.get(circle.id) ?? []
+  }));
+}
+
+async function loadCloseFriendIds(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  userId: string
+): Promise<string[]> {
+  const { data } = await admin
+    .from("close_friend_relationships")
+    .select("friend_id")
+    .eq("owner_id", userId);
+  return (data ?? []).map((row) => row.friend_id);
 }
