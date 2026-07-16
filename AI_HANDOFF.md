@@ -31,3 +31,13 @@
 - Suggested next step for Codex:
   - Continue the UI polish pass on the remaining premium and utility flows, then consolidate the patterns into a few reusable surface components.
   - Review light/dark theme visuals and adjust the light mode palette to better match the provided sample.
+
+
+## UI redesign branch update — 2026-07-16
+
+- Branch: `ui-redesign`
+- Added `app/redesign.css` as a reversible visual layer based on the approved ChatGPT mockups.
+- Updated the root layout to load the redesign and align light/dark browser theme colours.
+- Added a dashboard scope and responsive desktop/mobile composition without changing Supabase queries, APIs, auth, location, notifications, or social actions.
+- Main remains unchanged.
+- Next: review the draft PR preview/checks, then extend the same system to Muddies, Pulse, and Plans.
