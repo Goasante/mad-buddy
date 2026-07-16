@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "preflight": "node scripts/preflight.mjs",
     "preflight:production": "node scripts/preflight.mjs --production",
-    "preflight:paystack": "node scripts/preflight.mjs --paystack"
+    "preflight:paystack": "node scripts/preflight.mjs --paystack",
+    "test": "vitest run"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
@@ -40,6 +41,7 @@
     "postcss": "^8.5.16",
     "supabase": "^2.109.1",
     "tailwindcss": "^3.4.17",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.7"
   }
 }

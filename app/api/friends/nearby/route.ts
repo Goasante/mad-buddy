@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
 import {
   assertPrivacySafeResponse,
-  bucketProximity,
-  downgradeForConfidence,
-  glowStrengthForLevel,
-  haversineMeters,
-  lastActiveEstimate,
+  buildSafeNearbyFriends,
   nearbyFriendsResponseSchema,
-  statusTextFor,
-  weakerConfidence,
   type SafeNearbyFriend
 } from "@/lib/proximity/backend";
 import { createNearbyNotificationsIfAllowed } from "@/lib/notifications/server";
@@ -200,57 +194,13 @@ export async function GET() {
   );
 
   const viewer = viewerLocation as LocationRow;
-  const friends: SafeNearbyFriend[] = friendIds.flatMap((friendId) => {
-    if (blockedIds.has(friendId)) {
-      return [];
-    }
-
-    const location = locationByUserId.get(friendId);
-    const profile = profileByUserId.get(friendId);
-
-    if (!location || !profile || profile.visibility_status === "ghost") {
-      return [];
-    }
-
-    const updatedAt = new Date(location.last_updated);
-    const isStale = Date.now() - updatedAt.getTime() > 30 * 60 * 1000;
-
-    if (isStale) {
-      return [
-        {
-          friend_id: friendId,
-          display_name: profile.full_name,
-          username: profile.username,
-          avatar_url: profile.avatar_url,
-          proximity_level: "hidden",
-          glow_strength: 0,
-          status_text: "Last seen a while ago",
-          last_active_estimate: "Last seen a while ago",
-          is_premium_theme_unlocked: premiumUserIds.has(friendId),
-          confidence: "low"
-        }
-      ];
-    }
-
-    const pairConfidence = weakerConfidence(viewer.confidence, location.confidence);
-    const rawLevel = bucketProximity(haversineMeters(viewer, location));
-    const proximityLevel = downgradeForConfidence(rawLevel, pairConfidence);
-    const glowStrength = glowStrengthForLevel(proximityLevel);
-
-    return [
-      {
-        friend_id: friendId,
-        display_name: profile.full_name,
-        username: profile.username,
-        avatar_url: profile.avatar_url,
-        proximity_level: proximityLevel,
-        glow_strength: glowStrength,
-        status_text: statusTextFor(proximityLevel, pairConfidence),
-        last_active_estimate: lastActiveEstimate(location.last_updated),
-        is_premium_theme_unlocked: premiumUserIds.has(friendId),
-        confidence: pairConfidence
-      }
-    ];
+  const friends: SafeNearbyFriend[] = buildSafeNearbyFriends({
+    viewer,
+    friendIds,
+    blockedIds,
+    premiumUserIds,
+    locationByUserId,
+    profileByUserId
   });
 
   const response = nearbyFriendsResponseSchema.parse({ friends });

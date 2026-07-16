@@ -165,6 +165,96 @@ export function lastActiveEstimate(lastUpdated: string | Date) {
   return "Last seen a while ago";
 }
 
+export type NearbyLocationRow = {
+  user_id: string;
+  latitude: number;
+  longitude: number;
+  confidence: ConfidenceLevel;
+  last_updated: string;
+};
+
+export type NearbyProfileRow = {
+  user_id: string;
+  full_name: string;
+  username: string;
+  avatar_url: string | null;
+  visibility_status: "visible" | "ghost" | "app_open_only";
+};
+
+export const NEARBY_STALE_AFTER_MS = 30 * 60 * 1000;
+
+/**
+ * Core privacy filter for the nearby-friends response, extracted from the
+ * route handler verbatim so it can be unit tested (audit I-09). Enforces:
+ * blocked users (either direction) never appear; Ghost Mode users never
+ * appear; users without a location or profile never appear; stale signals
+ * degrade to "hidden" with zero glow; coordinates never leave this function.
+ */
+export function buildSafeNearbyFriends(input: {
+  viewer: Pick<NearbyLocationRow, "latitude" | "longitude" | "confidence">;
+  friendIds: string[];
+  blockedIds: ReadonlySet<string>;
+  premiumUserIds: ReadonlySet<string>;
+  locationByUserId: ReadonlyMap<string, NearbyLocationRow>;
+  profileByUserId: ReadonlyMap<string, NearbyProfileRow>;
+  now?: number;
+}): SafeNearbyFriend[] {
+  const now = input.now ?? Date.now();
+
+  return input.friendIds.flatMap((friendId) => {
+    if (input.blockedIds.has(friendId)) {
+      return [];
+    }
+
+    const location = input.locationByUserId.get(friendId);
+    const profile = input.profileByUserId.get(friendId);
+
+    if (!location || !profile || profile.visibility_status === "ghost") {
+      return [];
+    }
+
+    const updatedAt = new Date(location.last_updated);
+    const isStale = now - updatedAt.getTime() > NEARBY_STALE_AFTER_MS;
+
+    if (isStale) {
+      return [
+        {
+          friend_id: friendId,
+          display_name: profile.full_name,
+          username: profile.username,
+          avatar_url: profile.avatar_url,
+          proximity_level: "hidden" as const,
+          glow_strength: 0,
+          status_text: "Last seen a while ago",
+          last_active_estimate: "Last seen a while ago",
+          is_premium_theme_unlocked: input.premiumUserIds.has(friendId),
+          confidence: "low" as const
+        }
+      ];
+    }
+
+    const pairConfidence = weakerConfidence(input.viewer.confidence, location.confidence);
+    const rawLevel = bucketProximity(haversineMeters(input.viewer, location));
+    const proximityLevel = downgradeForConfidence(rawLevel, pairConfidence);
+    const glowStrength = glowStrengthForLevel(proximityLevel);
+
+    return [
+      {
+        friend_id: friendId,
+        display_name: profile.full_name,
+        username: profile.username,
+        avatar_url: profile.avatar_url,
+        proximity_level: proximityLevel,
+        glow_strength: glowStrength,
+        status_text: statusTextFor(proximityLevel, pairConfidence),
+        last_active_estimate: lastActiveEstimate(location.last_updated),
+        is_premium_theme_unlocked: input.premiumUserIds.has(friendId),
+        confidence: pairConfidence
+      }
+    ];
+  });
+}
+
 export function assertPrivacySafeResponse(value: unknown) {
   const visit = (current: unknown) => {
     if (Array.isArray(current)) {
