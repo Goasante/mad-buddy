@@ -1,4 +1,11 @@
 import type { NextConfig } from "next";
+import { buildContentSecurityPolicy, supabaseOriginFromEnv } from "./lib/security/csp";
+
+const contentSecurityPolicy = buildContentSecurityPolicy({
+  supabaseOrigin: supabaseOriginFromEnv(process.env.NEXT_PUBLIC_SUPABASE_URL),
+  mode: "report-only",
+  allowDevEval: process.env.NODE_ENV === "development"
+});
 
 const nextConfig: NextConfig = {
   turbopack: {
@@ -18,8 +25,22 @@ const nextConfig: NextConfig = {
           {
             key: "Permissions-Policy",
             value: "geolocation=(self), camera=(), microphone=(), payment=(), usb=()"
+          },
+          // STAGE 2 of the CSP rollout (audit §13): Report-Only observes,
+          // never blocks. Flip to "Content-Security-Policy" only after a
+          // clean report window and the script-src nonce upgrade.
+          {
+            key: "Content-Security-Policy-Report-Only",
+            value: contentSecurityPolicy
           }
         ]
+      },
+      {
+        // Authenticated/user-specific JSON must never be publicly cacheable
+        // (audit §10). Route handlers that already set a stricter value
+        // (e.g. /api/health's no-store) keep their own header.
+        source: "/api/:path*",
+        headers: [{ key: "Cache-Control", value: "private, no-store" }]
       }
     ];
   }
