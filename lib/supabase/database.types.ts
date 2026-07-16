@@ -739,6 +739,238 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["stripe_webhook_events"]["Insert"]>;
         Relationships: [];
       };
+      plans: {
+        Row: {
+          id: string;
+          creator_id: string;
+          title: string;
+          description: string | null;
+          plan_type: PlanType;
+          visibility_type: PlanVisibilityType;
+          status: PlanStatus;
+          start_at: string | null;
+          end_at: string | null;
+          timezone: string;
+          rsvp_deadline: string | null;
+          max_participants: number;
+          place_type: PlanPlaceType;
+          place_id: string | null;
+          custom_place_text: string | null;
+          reminder_minutes: number | null;
+          source_hangout_id: string | null;
+          source_ping_id: string | null;
+          created_at: string;
+          updated_at: string;
+          cancelled_at: string | null;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          creator_id: string;
+          title: string;
+          description?: string | null;
+          plan_type: PlanType;
+          visibility_type?: PlanVisibilityType;
+          status?: PlanStatus;
+          start_at?: string | null;
+          end_at?: string | null;
+          timezone?: string;
+          rsvp_deadline?: string | null;
+          max_participants?: number;
+          place_type?: PlanPlaceType;
+          place_id?: string | null;
+          custom_place_text?: string | null;
+          reminder_minutes?: number | null;
+          source_hangout_id?: string | null;
+          source_ping_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          cancelled_at?: string | null;
+          completed_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["plans"]["Insert"]>;
+        Relationships: [];
+      };
+      plan_participants: {
+        Row: {
+          id: string;
+          plan_id: string;
+          user_id: string;
+          role: PlanRole;
+          rsvp_status: RsvpStatus;
+          response_note: string | null;
+          attendance_visibility: AttendanceVisibility;
+          invited_by: string | null;
+          viewed_at: string | null;
+          responded_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          plan_id: string;
+          user_id: string;
+          role?: PlanRole;
+          rsvp_status?: RsvpStatus;
+          response_note?: string | null;
+          attendance_visibility?: AttendanceVisibility;
+          invited_by?: string | null;
+          viewed_at?: string | null;
+          responded_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["plan_participants"]["Insert"]>;
+        Relationships: [];
+      };
+      plan_polls: {
+        Row: {
+          id: string;
+          plan_id: string;
+          creator_id: string;
+          poll_type: PollType;
+          question: string;
+          selection_mode: PollSelectionMode;
+          results_visibility: PollResultsVisibility;
+          closes_at: string | null;
+          status: PollStatus;
+          confirmed_option_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          plan_id: string;
+          creator_id: string;
+          poll_type: PollType;
+          question: string;
+          selection_mode?: PollSelectionMode;
+          results_visibility?: PollResultsVisibility;
+          closes_at?: string | null;
+          status?: PollStatus;
+          confirmed_option_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["plan_polls"]["Insert"]>;
+        Relationships: [];
+      };
+      plan_poll_options: {
+        Row: {
+          id: string;
+          poll_id: string;
+          label: string;
+          value: string | null;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          poll_id: string;
+          label: string;
+          value?: string | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["plan_poll_options"]["Insert"]>;
+        Relationships: [];
+      };
+      plan_poll_votes: {
+        Row: {
+          id: string;
+          poll_id: string;
+          option_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          poll_id: string;
+          option_id: string;
+          user_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["plan_poll_votes"]["Insert"]>;
+        Relationships: [];
+      };
+      hangout_sessions: {
+        Row: {
+          id: string;
+          owner_id: string;
+          activity_type: HangoutActivityType;
+          message: string | null;
+          audience_type: HangoutAudienceType;
+          broad_area_text: string | null;
+          starts_at: string;
+          ends_at: string;
+          max_participants: number;
+          allow_pings: boolean;
+          allow_friend_invites: boolean;
+          status: HangoutStatus;
+          converted_plan_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          activity_type: HangoutActivityType;
+          message?: string | null;
+          audience_type?: HangoutAudienceType;
+          broad_area_text?: string | null;
+          starts_at?: string;
+          ends_at: string;
+          max_participants?: number;
+          allow_pings?: boolean;
+          allow_friend_invites?: boolean;
+          status?: HangoutStatus;
+          converted_plan_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["hangout_sessions"]["Insert"]>;
+        Relationships: [];
+      };
+      hangout_audience_targets: {
+        Row: {
+          id: string;
+          hangout_session_id: string;
+          target_type: "circle" | "user";
+          target_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          hangout_session_id: string;
+          target_type: "circle" | "user";
+          target_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["hangout_audience_targets"]["Insert"]>;
+        Relationships: [];
+      };
+      hangout_requests: {
+        Row: {
+          id: string;
+          hangout_session_id: string;
+          requester_id: string;
+          status: HangoutRequestStatus;
+          message: string | null;
+          responded_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          hangout_session_id: string;
+          requester_id: string;
+          status?: HangoutRequestStatus;
+          message?: string | null;
+          responded_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["hangout_requests"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -827,3 +1059,56 @@ export type CloseFriendNotificationPreference =
 export type VisibilityFeatureType = "glow" | "status" | "wave" | "meeting_ping";
 
 export type VisibilityMode = "all_muddies" | "selected_circles" | "close_friends" | "hidden";
+
+// --- Batch 3: Plans, RSVP, Polls, Hangout Mode ---
+
+export type PlanType = "quick" | "scheduled" | "poll";
+export type PlanVisibilityType = "invited" | "circle" | "close_friends";
+export type PlanStatus =
+  | "draft"
+  | "inviting"
+  | "polling"
+  | "confirmed"
+  | "cancelled"
+  | "completed"
+  | "expired";
+export type PlanPlaceType = "custom" | "decide_in_chat" | "poll";
+export type PlanRole = "host" | "co_host" | "participant";
+export type RsvpStatus =
+  | "invited"
+  | "viewed"
+  | "going"
+  | "maybe"
+  | "not_going"
+  | "removed"
+  | "waitlisted";
+export type AttendanceVisibility = "names" | "counts" | "host_only";
+
+export type PollType = "time" | "date" | "place" | "activity";
+export type PollSelectionMode = "single" | "multiple";
+export type PollResultsVisibility = "immediate" | "after_vote" | "after_close" | "host_only";
+export type PollStatus = "open" | "closed" | "confirmed";
+
+export type HangoutActivityType =
+  | "food"
+  | "study"
+  | "sports"
+  | "gym"
+  | "walk"
+  | "gaming"
+  | "chill"
+  | "anything";
+export type HangoutAudienceType =
+  | "all_muddies"
+  | "close_friends"
+  | "selected_circles"
+  | "selected_muddies";
+export type HangoutStatus =
+  | "draft"
+  | "active"
+  | "paused"
+  | "full"
+  | "expired"
+  | "cancelled"
+  | "converted_to_plan";
+export type HangoutRequestStatus = "pending" | "accepted" | "maybe" | "declined" | "cancelled";

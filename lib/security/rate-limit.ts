@@ -19,7 +19,11 @@ export type RateLimitAction =
   | "waves.send.daily"
   | "pings.create"
   | "pings.create.daily"
-  | "status.update";
+  | "status.update"
+  | "plans.create"
+  | "plans.invite"
+  | "hangouts.start"
+  | "hangouts.request";
 
 export type RateLimitResult = {
   allowed: boolean;
@@ -41,7 +45,12 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "waves.send.daily": { limit: 50, windowSeconds: 24 * 60 * 60 },
   "pings.create": { limit: 10, windowSeconds: 60 * 60 },
   "pings.create.daily": { limit: 25, windowSeconds: 24 * 60 * 60 },
-  "status.update": { limit: 30, windowSeconds: 60 * 60 }
+  "status.update": { limit: 30, windowSeconds: 60 * 60 },
+  // Plans / Hangout anti-spam (feature spec §55, §10).
+  "plans.create": { limit: 20, windowSeconds: 60 * 60 },
+  "plans.invite": { limit: 100, windowSeconds: 60 * 60 },
+  "hangouts.start": { limit: 10, windowSeconds: 60 * 60 },
+  "hangouts.request": { limit: 40, windowSeconds: 60 * 60 }
 };
 
 function hashIp(value: string | null) {
