@@ -1,15 +1,14 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { CalendarCheck2, MapPin, Plus, Users, Vote } from "lucide-react";
+import { useId, useMemo, useState, useTransition } from "react";
 import {
-  CalendarCheck2,
-  MapPin,
-  MessageCircle,
-  Plus,
-  Users,
-  Vote
-} from "lucide-react";
-import { useEffect, useId, useMemo, useState } from "react";
+  cancelPlanAction,
+  createPlanAction,
+  rsvpAction,
+  votePollAction
+} from "@/app/(app)/plans-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,108 +17,34 @@ import { FormField } from "@/components/auth/form-field";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-import { PreviewNotice } from "@/components/ui/preview-notice";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-type PlanType = "hangout" | "study" | "sports" | "other";
-type PlanBucket = "upcoming" | "invites" | "hosting" | "past";
-type Rsvp = "going" | "maybe" | "invited" | "declined";
+export type PlanInvitee = { id: string; name: string };
 
-type PlanAttendee = { name: string; rsvp: Rsvp };
+export type PlanPollSummary = {
+  id: string;
+  question: string;
+  status: string;
+  myOptionIds: string[];
+  options: Array<{ id: string; label: string; votes: number; sort: number }>;
+};
 
-type Plan = {
+export type PlanSummary = {
   id: string;
   title: string;
-  type: PlanType;
-  dateLabel: string;
-  location: string;
-  description: string;
-  hostName: string;
+  description: string | null;
+  planType: string;
+  status: string;
+  startAt: string | null;
+  placeText: string | null;
   isHost: boolean;
-  bucket: PlanBucket;
-  attendees: PlanAttendee[];
-  myRsvp: Rsvp;
+  myRsvp: string;
+  attendees: Array<{ name: string; rsvp: string; isMe: boolean }>;
+  polls: PlanPollSummary[];
 };
 
-const planTypeMeta: Record<PlanType, { label: string; icon: typeof CalendarCheck2 }> = {
-  hangout: { label: "Hangout", icon: Users },
-  study: { label: "Study", icon: CalendarCheck2 },
-  sports: { label: "Sports", icon: Users },
-  other: { label: "Other", icon: CalendarCheck2 }
-};
-
-const seedPlans: Plan[] = [
-  {
-    id: "plan-1",
-    title: "Study Session",
-    type: "study",
-    dateLabel: "Today · 5:30 PM",
-    location: "Legon Library · Study Room 2",
-    description: "Let's prepare for the midterms together. Bring your notes!",
-    hostName: "Kojo Mensah",
-    isHost: false,
-    bucket: "upcoming",
-    myRsvp: "going",
-    attendees: [
-      { name: "Kojo Mensah", rsvp: "going" },
-      { name: "Ama", rsvp: "going" },
-      { name: "You", rsvp: "going" },
-      { name: "Nana", rsvp: "maybe" }
-    ]
-  },
-  {
-    id: "plan-2",
-    title: "Dinner Night",
-    type: "hangout",
-    dateLabel: "Tomorrow · 7:00 PM",
-    location: "East Legon",
-    description: "Casual dinner before the week gets busy.",
-    hostName: "You",
-    isHost: true,
-    bucket: "hosting",
-    myRsvp: "going",
-    attendees: [
-      { name: "You", rsvp: "going" },
-      { name: "Efua", rsvp: "going" },
-      { name: "Kofi", rsvp: "maybe" }
-    ]
-  },
-  {
-    id: "plan-3",
-    title: "Football Match",
-    type: "sports",
-    dateLabel: "Sat, 24 May · 6:00 PM",
-    location: "Legon Park",
-    description: "Weekend five-a-side. Bring boots.",
-    hostName: "Nana",
-    isHost: false,
-    bucket: "upcoming",
-    myRsvp: "going",
-    attendees: [
-      { name: "Nana", rsvp: "going" },
-      { name: "You", rsvp: "going" },
-      { name: "Kofi", rsvp: "going" },
-      { name: "Ama", rsvp: "maybe" }
-    ]
-  },
-  {
-    id: "plan-4",
-    title: "Movie Night",
-    type: "hangout",
-    dateLabel: "Sun, 25 May · 8:00 PM",
-    location: "Accra Mall",
-    description: "Which movie should we watch? Vote once you're in.",
-    hostName: "Efua",
-    isHost: false,
-    bucket: "invites",
-    myRsvp: "invited",
-    attendees: [
-      { name: "Efua", rsvp: "going" },
-      { name: "Kofi", rsvp: "going" }
-    ]
-  }
-];
+type PlanBucket = "upcoming" | "invites" | "hosting" | "past";
 
 const bucketTabs: Array<{ id: PlanBucket; label: string }> = [
   { id: "upcoming", label: "Upcoming" },
@@ -128,92 +53,104 @@ const bucketTabs: Array<{ id: PlanBucket; label: string }> = [
   { id: "past", label: "Past" }
 ];
 
-const inviteCandidates = ["Ama", "Kofi", "Nana", "Efua"];
+const TERMINAL = new Set(["cancelled", "completed", "expired"]);
 
-type PollOption = { id: string; label: string; votes: number };
+function bucketFor(plan: PlanSummary): PlanBucket {
+  if (TERMINAL.has(plan.status)) return "past";
+  if (plan.isHost) return "hosting";
+  if (plan.myRsvp === "invited" || plan.myRsvp === "viewed") return "invites";
+  return "upcoming";
+}
 
-const seedPolls: Record<string, PollOption[]> = {
-  "plan-2": [
-    { id: "opt-1", label: "Café Kwame", votes: 3 },
-    { id: "opt-2", label: "Bistro 22", votes: 1 },
-    { id: "opt-3", label: "Bella Roma", votes: 0 }
-  ]
-};
+function dateLabel(plan: PlanSummary): string {
+  if (!plan.startAt) return plan.planType === "poll" ? "Time being decided" : "Time TBD";
+  return new Date(plan.startAt).toLocaleString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
 
-export function PlansPageContent() {
+export function PlansPageContent({
+  initialPlans = [],
+  invitees = []
+}: {
+  initialPlans?: PlanSummary[];
+  invitees?: PlanInvitee[];
+  currentUserId?: string | null;
+}) {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const [plans, setPlans] = useState<Plan[]>(seedPlans);
+  const [plans, setPlans] = useState<PlanSummary[]>(initialPlans);
   const [activeBucket, setActiveBucket] = useState<PlanBucket>("upcoming");
   const [createOpen, setCreateOpen] = useState(() => searchParams.get("create") === "1");
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
-  const [pollsByPlanId, setPollsByPlanId] = useState<Record<string, PollOption[]>>(seedPolls);
-
-  useEffect(() => {
-    if (!feedback) return;
-    const timer = window.setTimeout(() => setFeedback(""), 3200);
-    return () => window.clearTimeout(timer);
-  }, [feedback]);
+  const [isPending, startTransition] = useTransition();
 
   const visiblePlans = useMemo(
-    () => plans.filter((plan) => plan.bucket === activeBucket),
+    () => plans.filter((plan) => bucketFor(plan) === activeBucket),
     [plans, activeBucket]
   );
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? null;
 
-  function updateMyRsvp(planId: string, rsvp: Rsvp) {
+  function changeRsvp(planId: string, rsvp: "going" | "maybe" | "not_going") {
+    // Optimistic; refresh from server on completion for authoritative counts.
     setPlans((current) =>
-      current.map((plan) =>
-        plan.id === planId
-          ? {
-              ...plan,
-              myRsvp: rsvp,
-              attendees: plan.attendees.map((attendee) =>
-                attendee.name === "You" ? { ...attendee, rsvp } : attendee
-              )
-            }
-          : plan
-      )
+      current.map((plan) => (plan.id === planId ? { ...plan, myRsvp: rsvp } : plan))
     );
+    startTransition(async () => {
+      const result = await rsvpAction(planId, rsvp);
+      setFeedback(result.message);
+      router.refresh();
+    });
   }
 
-  function voteOnPoll(planId: string, optionId: string) {
-    setPollsByPlanId((current) => ({
-      ...current,
-      [planId]: (current[planId] ?? []).map((option) =>
-        option.id === optionId ? { ...option, votes: option.votes + 1 } : option
-      )
-    }));
+  function vote(pollId: string, optionId: string) {
+    startTransition(async () => {
+      const result = await votePollAction(pollId, [optionId]);
+      setFeedback(result.message);
+      router.refresh();
+    });
   }
 
-  function addPollOption(planId: string, label: string) {
-    setPollsByPlanId((current) => ({
-      ...current,
-      [planId]: [...(current[planId] ?? []), { id: `opt-${Date.now()}`, label, votes: 0 }]
-    }));
+  function cancelPlan(planId: string) {
+    startTransition(async () => {
+      const result = await cancelPlanAction(planId);
+      setFeedback(result.message);
+      if (result.ok) {
+        setSelectedPlanId(null);
+        router.refresh();
+      }
+    });
   }
 
-  function createPlan(input: { title: string; dateLabel: string; location: string; description: string; type: PlanType; invitees: string[] }) {
-    const newPlan: Plan = {
-      id: `plan-${Date.now()}`,
-      title: input.title,
-      type: input.type,
-      dateLabel: input.dateLabel,
-      location: input.location,
-      description: input.description,
-      hostName: "You",
-      isHost: true,
-      bucket: "hosting",
-      myRsvp: "going",
-      attendees: [
-        { name: "You", rsvp: "going" },
-        ...input.invitees.map((name) => ({ name, rsvp: "invited" as Rsvp }))
-      ]
-    };
-    setPlans((current) => [newPlan, ...current]);
-    setActiveBucket("hosting");
-    setCreateOpen(false);
-    setFeedback(`${input.title} created and shared with your Muddies.`);
+  function createPlan(input: {
+    title: string;
+    description: string;
+    startAt: string | null;
+    placeText: string;
+    participantIds: string[];
+  }) {
+    startTransition(async () => {
+      const result = await createPlanAction({
+        title: input.title,
+        description: input.description || undefined,
+        planType: input.startAt ? "scheduled" : "quick",
+        startAt: input.startAt,
+        placeType: "custom",
+        customPlaceText: input.placeText || undefined,
+        participantIds: input.participantIds
+      });
+      setFeedback(result.message);
+      if (result.ok) {
+        setCreateOpen(false);
+        setActiveBucket("hosting");
+        router.refresh();
+      }
+    });
   }
 
   return (
@@ -228,8 +165,6 @@ export function PlansPageContent() {
           New Plan
         </Button>
       </header>
-
-      <PreviewNotice />
 
       {feedback ? (
         <div className="rounded-[1rem] border border-orange-400/20 bg-orange-400/10 p-3 text-sm text-orange-800 dark:text-orange-50" role="status">
@@ -278,16 +213,22 @@ export function PlansPageContent() {
         />
       )}
 
-      <CreatePlanModal open={createOpen} onOpenChange={setCreateOpen} onCreate={createPlan} />
+      <CreatePlanModal
+        open={createOpen}
+        invitees={invitees}
+        pending={isPending}
+        onOpenChange={setCreateOpen}
+        onCreate={createPlan}
+      />
       <PlanDetailsModal
         plan={selectedPlan}
-        poll={selectedPlan ? pollsByPlanId[selectedPlan.id] ?? [] : []}
+        pending={isPending}
         onOpenChange={(open) => {
           if (!open) setSelectedPlanId(null);
         }}
-        onRsvpChange={(rsvp) => selectedPlan && updateMyRsvp(selectedPlan.id, rsvp)}
-        onVote={(optionId) => selectedPlan && voteOnPoll(selectedPlan.id, optionId)}
-        onAddPollOption={(label) => selectedPlan && addPollOption(selectedPlan.id, label)}
+        onRsvpChange={(rsvp) => selectedPlan && changeRsvp(selectedPlan.id, rsvp)}
+        onVote={(pollId, optionId) => vote(pollId, optionId)}
+        onCancel={() => selectedPlan && cancelPlan(selectedPlan.id)}
       />
     </div>
   );
@@ -300,8 +241,7 @@ const emptyCopy: Record<PlanBucket, { title: string; description: string }> = {
   past: { title: "No past plans", description: "Plans that have happened will show up here." }
 };
 
-function PlanCard({ plan, onView }: { plan: Plan; onView: () => void }) {
-  const TypeIcon = planTypeMeta[plan.type].icon;
+function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
   const goingCount = plan.attendees.filter((attendee) => attendee.rsvp === "going").length;
   const maybeCount = plan.attendees.filter((attendee) => attendee.rsvp === "maybe").length;
 
@@ -309,19 +249,22 @@ function PlanCard({ plan, onView }: { plan: Plan; onView: () => void }) {
     <Card className="p-5">
       <div className="flex items-start gap-4">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-          <TypeIcon className="h-5 w-5" aria-hidden="true" />
+          <Users className="h-5 w-5" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate text-base font-semibold">{plan.title}</h3>
             {plan.isHost ? <Badge variant="orange">Hosting</Badge> : null}
             {plan.myRsvp === "invited" ? <Badge variant="violet">Invited</Badge> : null}
+            {TERMINAL.has(plan.status) ? <Badge variant="default">{plan.status}</Badge> : null}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">{plan.dateLabel}</p>
-          <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            {plan.location}
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{dateLabel(plan)}</p>
+          {plan.placeText ? (
+            <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {plan.placeText}
+            </p>
+          ) : null}
           <p className="mt-3 text-xs text-muted-foreground">
             {goingCount} going{maybeCount > 0 ? ` · ${maybeCount} maybe` : ""}
           </p>
@@ -336,186 +279,109 @@ function PlanCard({ plan, onView }: { plan: Plan; onView: () => void }) {
 
 function CreatePlanModal({
   open,
+  invitees,
+  pending,
   onOpenChange,
   onCreate
 }: {
   open: boolean;
+  invitees: PlanInvitee[];
+  pending: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (input: { title: string; dateLabel: string; location: string; description: string; type: PlanType; invitees: string[] }) => void;
+  onCreate: (input: {
+    title: string;
+    description: string;
+    startAt: string | null;
+    placeText: string;
+    participantIds: string[];
+  }) => void;
 }) {
-  const [step, setStep] = useState<0 | 1 | 2>(0);
   const [title, setTitle] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [location, setLocation] = useState("");
+  const [datetime, setDatetime] = useState("");
+  const [placeText, setPlaceText] = useState("");
   const [description, setDescription] = useState("");
-  const [type, setType] = useState<PlanType>("hangout");
-  const [invitees, setInvitees] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
   const formId = useId();
 
-  function resetFields() {
-    setStep(0);
+  function reset() {
     setTitle("");
-    setDate("");
-    setTime("");
-    setLocation("");
+    setDatetime("");
+    setPlaceText("");
     setDescription("");
-    setType("hangout");
-    setInvitees([]);
+    setSelected([]);
   }
 
   function handleOpenChange(next: boolean) {
     onOpenChange(next);
-    if (!next) resetFields();
+    if (!next) reset();
   }
 
-  const canContinueDetails = title.trim().length > 1 && date.trim().length > 0 && time.trim().length > 0;
-
-  function toggleInvitee(name: string) {
-    setInvitees((current) =>
-      current.includes(name) ? current.filter((entry) => entry !== name) : [...current, name]
-    );
+  function toggle(id: string) {
+    setSelected((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]));
   }
+
+  const canCreate = title.trim().length > 0;
 
   return (
-    <Modal open={open} onOpenChange={handleOpenChange} title="Create New Plan" description={`Step ${step + 1} of 3`}>
-      <div className="max-h-[65vh] space-y-5 overflow-y-auto pr-1">
-        {step === 0 ? (
-          <div className="grid gap-4">
-            <FormField htmlFor={`${formId}-title`} label="Plan name">
-              <Input
-                id={`${formId}-title`}
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="e.g. Dinner Night"
-              />
-            </FormField>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField htmlFor={`${formId}-date`} label="Date">
-                <Input id={`${formId}-date`} type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-              </FormField>
-              <FormField htmlFor={`${formId}-time`} label="Time">
-                <Input id={`${formId}-time`} type="time" value={time} onChange={(event) => setTime(event.target.value)} />
-              </FormField>
-            </div>
-            <FormField htmlFor={`${formId}-location`} label="Location (optional)">
-              <Input
-                id={`${formId}-location`}
-                value={location}
-                onChange={(event) => setLocation(event.target.value)}
-                placeholder="e.g. East Legon"
-              />
-            </FormField>
-            <fieldset>
-              <legend className="mb-2 text-sm font-medium text-foreground">Plan type</legend>
-              <div className="grid grid-cols-4 gap-2">
-                {(Object.keys(planTypeMeta) as PlanType[]).map((planType) => {
-                  const Icon = planTypeMeta[planType].icon;
-                  return (
-                    <button
-                      key={planType}
-                      type="button"
-                      onClick={() => setType(planType)}
-                      className={cn(
-                        "focus-ring safe-motion flex flex-col items-center gap-1.5 rounded-lg border p-3 text-xs font-medium",
-                        type === planType
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border text-muted-foreground hover:bg-secondary"
-                      )}
-                    >
-                      <Icon className="h-4 w-4" aria-hidden="true" />
-                      {planTypeMeta[planType].label}
-                    </button>
-                  );
-                })}
-              </div>
-            </fieldset>
-            <FormField htmlFor={`${formId}-description`} label="Description (optional)">
-              <Textarea
-                id={`${formId}-description`}
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="Add more details about the plan"
-              />
-            </FormField>
-          </div>
-        ) : null}
-
-        {step === 1 ? (
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Invite Muddies</p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {inviteCandidates.map((name) => (
+    <Modal open={open} onOpenChange={handleOpenChange} title="Create a plan" description="Invite your Muddies. Your location is never shared.">
+      <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
+        <FormField htmlFor={`${formId}-title`} label="Plan name">
+          <Input id={`${formId}-title`} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Lunch after class" />
+        </FormField>
+        <FormField htmlFor={`${formId}-datetime`} label="When (optional — leave blank for a quick plan)">
+          <Input id={`${formId}-datetime`} type="datetime-local" value={datetime} onChange={(event) => setDatetime(event.target.value)} />
+        </FormField>
+        <FormField htmlFor={`${formId}-place`} label="Where (optional)">
+          <Input id={`${formId}-place`} value={placeText} onChange={(event) => setPlaceText(event.target.value)} placeholder="e.g. Student Centre" />
+        </FormField>
+        <FormField htmlFor={`${formId}-description`} label="Details (optional)">
+          <Textarea id={`${formId}-description`} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Anything people should know" />
+        </FormField>
+        <div>
+          <p className="mb-2 text-sm font-medium text-foreground">Invite Muddies</p>
+          {invitees.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Add Muddies first to invite them to a plan.</p>
+          ) : (
+            <div className="grid max-h-52 gap-2 overflow-y-auto sm:grid-cols-2">
+              {invitees.map((invitee) => (
                 <button
-                  key={name}
+                  key={invitee.id}
                   type="button"
-                  onClick={() => toggleInvitee(name)}
+                  onClick={() => toggle(invitee.id)}
                   className={cn(
                     "focus-ring safe-motion flex items-center gap-3 rounded-lg border p-3 text-left text-sm",
-                    invitees.includes(name)
-                      ? "border-primary bg-primary/10"
-                      : "border-border hover:bg-secondary"
+                    selected.includes(invitee.id) ? "border-primary bg-primary/10" : "border-border hover:bg-secondary"
                   )}
                 >
-                  <GlowAvatar name={name} size="sm" />
-                  <span className="font-medium">{name}</span>
-                  {invitees.includes(name) ? (
-                    <Badge variant="orange" className="ml-auto">Invited</Badge>
-                  ) : null}
+                  <GlowAvatar name={invitee.name} size="sm" />
+                  <span className="min-w-0 flex-1 truncate font-medium">{invitee.name}</span>
+                  {selected.includes(invitee.id) ? <Badge variant="orange">Invited</Badge> : null}
                 </button>
               ))}
             </div>
-          </div>
-        ) : null}
-
-        {step === 2 ? (
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-foreground">Review</p>
-            <div className="rounded-xl border border-border/70 bg-card/50 p-4 text-sm">
-              <p className="font-semibold">{title || "Untitled plan"}</p>
-              <p className="mt-1 text-muted-foreground">
-                {date || "No date"} {time ? `· ${time}` : ""}
-              </p>
-              {location ? <p className="mt-1 text-muted-foreground">{location}</p> : null}
-              {description ? <p className="mt-2 text-muted-foreground">{description}</p> : null}
-              <p className="mt-3 text-xs text-muted-foreground">
-                {invitees.length > 0 ? `Inviting ${invitees.join(", ")}` : "No one invited yet"}
-              </p>
-            </div>
-          </div>
-        ) : null}
+          )}
+        </div>
       </div>
 
       <div className="mt-5 flex justify-between gap-3">
-        <Button type="button" variant="outline" onClick={() => (step === 0 ? handleOpenChange(false) : setStep((current) => (current - 1) as 0 | 1))}>
-          {step === 0 ? "Cancel" : "Back"}
+        <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+          Cancel
         </Button>
-        {step < 2 ? (
-          <Button
-            type="button"
-            disabled={step === 0 && !canContinueDetails}
-            onClick={() => setStep((current) => (current + 1) as 1 | 2)}
-          >
-            Next
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            onClick={() => {
-              onCreate({
-                title: title.trim(),
-                dateLabel: date && time ? `${date} · ${time}` : date || time || "Date TBD",
-                location: location.trim() || "Location TBD",
-                description: description.trim(),
-                type,
-                invitees
-              });
-              resetFields();
-            }}
-          >
-            Create Plan
-          </Button>
-        )}
+        <Button
+          type="button"
+          disabled={!canCreate || pending}
+          onClick={() =>
+            onCreate({
+              title: title.trim(),
+              description: description.trim(),
+              startAt: datetime ? new Date(datetime).toISOString() : null,
+              placeText: placeText.trim(),
+              participantIds: selected
+            })
+          }
+        >
+          Create plan
+        </Button>
       </div>
     </Modal>
   );
@@ -523,148 +389,92 @@ function CreatePlanModal({
 
 function PlanDetailsModal({
   plan,
-  poll,
+  pending,
   onOpenChange,
   onRsvpChange,
   onVote,
-  onAddPollOption
+  onCancel
 }: {
-  plan: Plan | null;
-  poll: PollOption[];
+  plan: PlanSummary | null;
+  pending: boolean;
   onOpenChange: (open: boolean) => void;
-  onRsvpChange: (rsvp: Rsvp) => void;
-  onVote: (optionId: string) => void;
-  onAddPollOption: (label: string) => void;
+  onRsvpChange: (rsvp: "going" | "maybe" | "not_going") => void;
+  onVote: (pollId: string, optionId: string) => void;
+  onCancel: () => void;
 }) {
-  const [tab, setTab] = useState<"overview" | "chat" | "polls">("overview");
-  const [newOption, setNewOption] = useState("");
-
-  function handleOpenChange(next: boolean) {
-    onOpenChange(next);
-    if (!next) setTab("overview");
-  }
-
   return (
-    <Modal
-      open={Boolean(plan)}
-      onOpenChange={handleOpenChange}
-      title={plan?.title ?? "Plan"}
-      description={plan?.dateLabel}
-    >
+    <Modal open={Boolean(plan)} onOpenChange={onOpenChange} title={plan?.title ?? "Plan"} description={plan ? dateLabel(plan) : undefined}>
       {plan ? (
-      <div className="space-y-4">
-        <div className="flex gap-1 border-b border-border/70">
-          {(["overview", "chat", "polls"] as const).map((tabId) => (
-            <button
-              key={tabId}
-              type="button"
-              onClick={() => setTab(tabId)}
-              className={cn(
-                "focus-ring safe-motion border-b-2 px-3 py-2 text-sm font-medium capitalize",
-                tab === tabId
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {tabId}
-            </button>
-          ))}
-        </div>
-
-        {tab === "overview" ? (
-          <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-1">
+        <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+          {plan.placeText ? (
             <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {plan.location}
+              {plan.placeText}
             </p>
-            {plan.description ? <p className="text-sm leading-6">{plan.description}</p> : null}
+          ) : null}
+          {plan.description ? <p className="text-sm leading-6">{plan.description}</p> : null}
 
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Who&apos;s going ({plan.attendees.filter((a) => a.rsvp === "going").length})
-              </p>
-              <ul className="space-y-2">
-                {plan.attendees.map((attendee) => (
-                  <li
-                    key={attendee.name}
-                    className="flex items-center gap-3 rounded-lg border border-border/70 bg-background/60 px-3 py-2"
-                  >
-                    <GlowAvatar name={attendee.name} size="sm" />
-                    <span className="text-sm font-medium">{attendee.name}</span>
-                    <RsvpBadge rsvp={attendee.rsvp} className="ml-auto" />
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {!plan.isHost ? (
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Your RSVP
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={plan.myRsvp === "going" ? "primary" : "outline"}
-                    onClick={() => onRsvpChange("going")}
-                  >
-                    Going
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={plan.myRsvp === "maybe" ? "primary" : "outline"}
-                    onClick={() => onRsvpChange("maybe")}
-                  >
-                    Maybe
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={plan.myRsvp === "declined" ? "primary" : "outline"}
-                    onClick={() => onRsvpChange("declined")}
-                  >
-                    Can&apos;t go
-                  </Button>
-                </div>
-              </div>
-            ) : null}
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Who&apos;s going ({plan.attendees.filter((a) => a.rsvp === "going").length})
+            </p>
+            <ul className="space-y-2">
+              {plan.attendees.map((attendee) => (
+                <li key={attendee.name} className="flex items-center gap-3 rounded-lg border border-border/70 bg-background/60 px-3 py-2">
+                  <GlowAvatar name={attendee.name} size="sm" />
+                  <span className="text-sm font-medium">{attendee.name}</span>
+                  <RsvpBadge rsvp={attendee.rsvp} className="ml-auto" />
+                </li>
+              ))}
+            </ul>
           </div>
-        ) : null}
 
-        {tab === "chat" ? (
-          <EmptyState
-            icon={MessageCircle}
-            className="!min-h-0 !shadow-none p-5"
-            title="Plan chat is coming soon"
-            description="Messaging inside a plan isn't wired up yet — this is a placeholder for a future update."
-          />
-        ) : null}
+          {!plan.isHost && !TERMINAL.has(plan.status) ? (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your RSVP</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant={plan.myRsvp === "going" ? "primary" : "outline"} onClick={() => onRsvpChange("going")} disabled={pending}>
+                  Going
+                </Button>
+                <Button type="button" size="sm" variant={plan.myRsvp === "maybe" ? "primary" : "outline"} onClick={() => onRsvpChange("maybe")} disabled={pending}>
+                  Maybe
+                </Button>
+                <Button type="button" size="sm" variant={plan.myRsvp === "not_going" ? "primary" : "outline"} onClick={() => onRsvpChange("not_going")} disabled={pending}>
+                  Can&apos;t make it
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
-        {tab === "polls" ? (
-          <div className="space-y-4">
-            <p className="text-sm font-semibold">Where should we eat?</p>
-            {poll.length > 0 ? (
+          {plan.polls.map((poll) => (
+            <div key={poll.id}>
+              <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+                <Vote className="h-4 w-4 text-primary" aria-hidden="true" />
+                {poll.question}
+              </p>
               <div className="space-y-2">
                 {(() => {
-                  const totalVotes = poll.reduce((sum, option) => sum + option.votes, 0);
-                  return poll.map((option) => {
-                    const percent = totalVotes > 0 ? Math.round((option.votes / totalVotes) * 100) : 0;
+                  const total = poll.options.reduce((sum, option) => sum + option.votes, 0);
+                  return poll.options.map((option) => {
+                    const percent = total > 0 ? Math.round((option.votes / total) * 100) : 0;
+                    const mine = poll.myOptionIds.includes(option.id);
                     return (
                       <button
                         key={option.id}
                         type="button"
-                        onClick={() => onVote(option.id)}
-                        className="focus-ring safe-motion relative block w-full overflow-hidden rounded-lg border border-border/70 p-3 text-left hover:bg-secondary/40"
+                        disabled={pending || poll.status !== "open"}
+                        onClick={() => onVote(poll.id, option.id)}
+                        className={cn(
+                          "focus-ring safe-motion relative block w-full overflow-hidden rounded-lg border p-3 text-left disabled:opacity-70",
+                          mine ? "border-primary" : "border-border/70 hover:bg-secondary/40"
+                        )}
                       >
-                        <div
-                          className="absolute inset-y-0 left-0 bg-primary/10"
-                          style={{ width: `${percent}%` }}
-                          aria-hidden="true"
-                        />
+                        <div className="absolute inset-y-0 left-0 bg-primary/10" style={{ width: `${percent}%` }} aria-hidden="true" />
                         <div className="relative flex items-center justify-between text-sm">
-                          <span className="font-medium">{option.label}</span>
+                          <span className="font-medium">
+                            {option.label}
+                            {mine ? <span className="ml-1 text-xs text-primary">· your vote</span> : null}
+                          </span>
                           <span className="text-xs text-muted-foreground">{option.votes} votes</span>
                         </div>
                       </button>
@@ -672,42 +482,35 @@ function PlanDetailsModal({
                   });
                 })()}
               </div>
-            ) : (
-              <EmptyState icon={Vote} className="!min-h-0 !shadow-none p-5" title="No poll options yet" description="Add an option to start the vote." />
-            )}
-            <form
-              className="flex gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const trimmed = newOption.trim();
-                if (!trimmed) return;
-                onAddPollOption(trimmed);
-                setNewOption("");
-              }}
-            >
-              <Input
-                value={newOption}
-                onChange={(event) => setNewOption(event.target.value)}
-                placeholder="Add option"
-                aria-label="Add poll option"
-                className="flex-1"
-              />
-              <Button type="submit" variant="outline" size="sm" disabled={!newOption.trim()}>
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                Add
+            </div>
+          ))}
+
+          {plan.isHost && !TERMINAL.has(plan.status) ? (
+            <div className="border-t border-border/70 pt-4">
+              <Button type="button" variant="danger" size="sm" onClick={onCancel} disabled={pending}>
+                Cancel plan
               </Button>
-            </form>
-          </div>
-        ) : null}
-      </div>
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </Modal>
   );
 }
 
-function RsvpBadge({ rsvp, className }: { rsvp: Rsvp; className?: string }) {
-  const variant = rsvp === "going" ? "green" : rsvp === "maybe" ? "warning" : rsvp === "invited" ? "violet" : "default";
-  const label = rsvp === "going" ? "Going" : rsvp === "maybe" ? "Maybe" : rsvp === "invited" ? "Invited" : "Can't go";
+function RsvpBadge({ rsvp, className }: { rsvp: string; className?: string }) {
+  const variant =
+    rsvp === "going" ? "green" : rsvp === "maybe" ? "warning" : rsvp === "waitlisted" ? "violet" : "default";
+  const label =
+    rsvp === "going"
+      ? "Going"
+      : rsvp === "maybe"
+        ? "Maybe"
+        : rsvp === "waitlisted"
+          ? "Waitlist"
+          : rsvp === "not_going"
+            ? "Can't make it"
+            : "Invited";
   return (
     <Badge variant={variant} className={className}>
       {label}
