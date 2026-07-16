@@ -331,6 +331,188 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["meetup_requests"]["Insert"]>;
         Relationships: [];
       };
+      user_statuses: {
+        Row: {
+          id: string;
+          user_id: string;
+          availability_type: AvailabilityType;
+          activity_type: ActivityType | null;
+          custom_text: string | null;
+          visibility_type: StatusVisibilityType;
+          starts_at: string;
+          expires_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          availability_type: AvailabilityType;
+          activity_type?: ActivityType | null;
+          custom_text?: string | null;
+          visibility_type?: StatusVisibilityType;
+          starts_at?: string;
+          expires_at: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["user_statuses"]["Insert"]>;
+        Relationships: [];
+      };
+      status_visibility_targets: {
+        Row: {
+          id: string;
+          status_id: string;
+          target_type: "circle" | "user";
+          target_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          status_id: string;
+          target_type: "circle" | "user";
+          target_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["status_visibility_targets"]["Insert"]>;
+        Relationships: [];
+      };
+      waves: {
+        Row: {
+          id: string;
+          sender_id: string;
+          recipient_id: string;
+          source: WaveSource;
+          reply_to_wave_id: string | null;
+          sent_at: string;
+          seen_at: string | null;
+          responded_at: string | null;
+          response_type: WaveResponseType | null;
+          expires_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          sender_id: string;
+          recipient_id: string;
+          source?: WaveSource;
+          reply_to_wave_id?: string | null;
+          sent_at?: string;
+          seen_at?: string | null;
+          responded_at?: string | null;
+          response_type?: WaveResponseType | null;
+          expires_at?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["waves"]["Insert"]>;
+        Relationships: [];
+      };
+      wave_mutes: {
+        Row: {
+          id: string;
+          user_id: string;
+          muted_user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          muted_user_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["wave_mutes"]["Insert"]>;
+        Relationships: [];
+      };
+      meeting_pings: {
+        Row: {
+          id: string;
+          sender_id: string;
+          recipient_id: string;
+          ping_type: PingType;
+          custom_message: string | null;
+          proposed_time: string;
+          expires_at: string;
+          place_type: "custom" | "chat";
+          custom_place_text: string | null;
+          status: PingStatus;
+          seen_at: string | null;
+          responded_at: string | null;
+          cancelled_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          sender_id: string;
+          recipient_id: string;
+          ping_type: PingType;
+          custom_message?: string | null;
+          proposed_time: string;
+          expires_at: string;
+          place_type?: "custom" | "chat";
+          custom_place_text?: string | null;
+          status?: PingStatus;
+          seen_at?: string | null;
+          responded_at?: string | null;
+          cancelled_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["meeting_pings"]["Insert"]>;
+        Relationships: [];
+      };
+      meeting_ping_responses: {
+        Row: {
+          id: string;
+          ping_id: string;
+          responder_id: string;
+          response_type: PingResponseType;
+          suggested_time: string | null;
+          message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          ping_id: string;
+          responder_id: string;
+          response_type: PingResponseType;
+          suggested_time?: string | null;
+          message?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["meeting_ping_responses"]["Insert"]>;
+        Relationships: [];
+      };
+      temporary_plans: {
+        Row: {
+          id: string;
+          source_ping_id: string;
+          creator_id: string;
+          participant_id: string;
+          title: string;
+          meeting_time: string;
+          place_text: string | null;
+          status: "active" | "cancelled" | "completed";
+          expires_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          source_ping_id: string;
+          creator_id: string;
+          participant_id: string;
+          title: string;
+          meeting_time: string;
+          place_text?: string | null;
+          status?: "active" | "cancelled" | "completed";
+          expires_at: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["temporary_plans"]["Insert"]>;
+        Relationships: [];
+      };
       user_preferences: {
         Row: RowWithTimestamps & {
           id: string;
@@ -517,3 +699,42 @@ export type Database = {
     CompositeTypes: Record<string, never>;
   };
 };
+
+export type AvailabilityType =
+  | "free"
+  | "open_to_hang_out"
+  | "maybe_available"
+  | "busy"
+  | "do_not_disturb";
+
+export type ActivityType =
+  | "studying"
+  | "working"
+  | "eating"
+  | "at_an_event"
+  | "exercising"
+  | "gaming"
+  | "travelling"
+  | "heading_home"
+  | "relaxing";
+
+export type StatusVisibilityType = "all_muddies" | "selected_circles" | "selected_muddies";
+
+export type WaveSource = "proximity_card" | "profile" | "chat" | "status" | "wave_back";
+
+export type WaveResponseType = "wave_back" | "message" | "meeting_ping" | "none";
+
+export type PingType = "meet" | "food" | "study" | "chat" | "walk" | "custom";
+
+export type PingStatus =
+  | "pending"
+  | "seen"
+  | "maybe"
+  | "counter_proposed"
+  | "accepted"
+  | "declined"
+  | "cancelled"
+  | "expired"
+  | "completed";
+
+export type PingResponseType = "accept" | "maybe" | "decline" | "counter_propose" | "message";
