@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Hand, MessageCircle, MessagesSquare } from "lucide-react";
-import { sendWaveAction } from "@/app/(app)/actions";
+import { sendWaveV2Action } from "@/app/(app)/social-actions";
 import { Button } from "@/components/ui/button";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
@@ -38,7 +38,7 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
     const friendId = muddy?.friendId;
     if (!friendId) return;
     startWaveTransition(async () => {
-      const result = await sendWaveAction(friendId);
+      const result = await sendWaveV2Action(friendId, "profile");
       setWaveFeedback(result.message);
       if (result.ok) setWaveSent(true);
     });

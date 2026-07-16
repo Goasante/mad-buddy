@@ -10,6 +10,7 @@ import {
   MapPinOff,
   MessageCircle,
   RefreshCcw,
+  Sparkles,
   UserPlus,
   WifiOff
 } from "lucide-react";
@@ -20,9 +21,11 @@ import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { updateVisibilityStatusAction } from "@/app/(app)/settings-actions";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
+import { StatusComposer } from "@/components/social/status-composer";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { formatMuddyStatusLabel } from "@/lib/social/rules";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn, formatRelativeTime } from "@/lib/utils";
@@ -38,6 +41,7 @@ type DashboardFriend = {
   lastActiveEstimate: string;
   isPremiumThemeUnlocked: boolean;
   confidence: ConfidenceLevel;
+  muddyStatusLabel: string | null;
 };
 
 type NearbyFriendApiItem = {
@@ -51,6 +55,9 @@ type NearbyFriendApiItem = {
   last_active_estimate: string;
   is_premium_theme_unlocked: boolean;
   confidence: ConfidenceLevel;
+  muddy_availability: string | null;
+  muddy_activity: string | null;
+  muddy_status_note: string | null;
 };
 
 type AttentionItem = {
@@ -96,6 +103,7 @@ export function DashboardPageContent({
   const [statusMessage, setStatusMessage] = useState("Checking for nearby friends...");
   const [promptFeedback, setPromptFeedback] = useState<{ message: string; error: boolean } | null>(null);
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+  const [statusComposerOpen, setStatusComposerOpen] = useState(false);
   const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([]);
   const [isPending, startTransition] = useTransition();
   const locationUpdateInFlightRef = useRef(false);
@@ -295,11 +303,17 @@ export function DashboardPageContent({
     <div className="mx-auto max-w-[1200px] space-y-8 pt-6">
       <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
 
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl" suppressHydrationWarning>
-          {getGreeting()}, {displayName} 👋
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">Here&apos;s what&apos;s happening around your people.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl" suppressHydrationWarning>
+            {getGreeting()}, {displayName} 👋
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">Here&apos;s what&apos;s happening around your people.</p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={() => setStatusComposerOpen(true)}>
+          <Sparkles className="h-4 w-4" aria-hidden="true" />
+          Set status
+        </Button>
       </div>
 
       <section className="rounded-2xl bg-card/55 p-4 shadow-sm dark:bg-white/[0.035] sm:p-5">
@@ -401,7 +415,7 @@ export function DashboardPageContent({
                   {friend.displayName.split(" ")[0]}
                 </span>
                 <span className="w-full truncate text-center text-[10px] text-muted-foreground">
-                  {proximityLabels[friend.proximityLevel]}
+                  {friend.muddyStatusLabel ?? proximityLabels[friend.proximityLevel]}
                 </span>
               </button>
             ))}
@@ -496,6 +510,12 @@ export function DashboardPageContent({
           if (selectedFriendId) sendConnectionPrompt(selectedFriendId, message);
         }}
       />
+
+      <StatusComposer
+        open={statusComposerOpen}
+        onOpenChange={setStatusComposerOpen}
+        onSaved={(message) => showPromptFeedback(message)}
+      />
     </div>
   );
 }
@@ -533,7 +553,12 @@ function toDashboardFriend(friend: NearbyFriendApiItem): DashboardFriend {
     statusText: friend.status_text,
     lastActiveEstimate: friend.last_active_estimate,
     isPremiumThemeUnlocked: friend.is_premium_theme_unlocked,
-    confidence: friend.confidence
+    confidence: friend.confidence,
+    muddyStatusLabel: formatMuddyStatusLabel({
+      availability: friend.muddy_availability,
+      activity: friend.muddy_activity,
+      note: friend.muddy_status_note
+    })
   };
 }
 

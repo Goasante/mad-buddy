@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CalendarCheck2, ChevronLeft, Hand, Image as ImageIcon, MessagesSquare, MoreHorizontal, Users } from "lucide-react";
 import { useState, useTransition } from "react";
-import { sendWaveAction } from "@/app/(app)/actions";
+import { sendWaveV2Action } from "@/app/(app)/social-actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -43,7 +43,7 @@ export function MuddyProfilePage({ muddy }: { muddy: MuddyProfileData }) {
 
   function sendWave() {
     startWaveTransition(async () => {
-      const result = await sendWaveAction(muddy.friendId);
+      const result = await sendWaveV2Action(muddy.friendId, "profile");
       setWaveFeedback(result.message);
       if (result.ok) setWaveSent(true);
     });

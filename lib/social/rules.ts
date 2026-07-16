@@ -58,6 +58,26 @@ export const activityLabels: Record<ActivityType, string> = {
   relaxing: "Relaxing"
 };
 
+/**
+ * Human label for a Muddy's status, combining availability + activity + note
+ * for display (e.g. "Open to hang out · Studying · At the library until 6").
+ * Returns null when no availability is present.
+ */
+export function formatMuddyStatusLabel(input: {
+  availability: string | null;
+  activity: string | null;
+  note: string | null;
+}): string | null {
+  if (!input.availability) return null;
+  const parts: string[] = [];
+  const availabilityLabel = availabilityLabels[input.availability as AvailabilityType];
+  if (availabilityLabel) parts.push(availabilityLabel);
+  const activityLabel = input.activity ? activityLabels[input.activity as ActivityType] : null;
+  if (activityLabel) parts.push(activityLabel);
+  if (input.note?.trim()) parts.push(input.note.trim());
+  return parts.length ? parts.join(" · ") : null;
+}
+
 export const STATUS_MAX_TEXT_LENGTH = 60;
 export const STATUS_MAX_DURATION_MS = 24 * 60 * 60 * 1000;
 export const STATUS_DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;

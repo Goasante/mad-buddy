@@ -25,10 +25,10 @@ import {
   reportUserAction,
   searchUsersAction,
   sendFriendRequestAction,
-  sendWaveAction,
   unblockUserAction,
   updateFriendRequestStatusAction
 } from "@/app/(app)/actions";
+import { sendWaveV2Action } from "@/app/(app)/social-actions";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -331,7 +331,7 @@ export function FriendsPageContent({ initialUsers = [] }: { initialUsers?: UserS
                   onViewProfile={() => setProfileUser(user)}
                   onWave={() => {
                     startTransition(async () => {
-                      const result = await sendWaveAction(user.id);
+                      const result = await sendWaveV2Action(user.id, "proximity_card");
                       setFeedback(result.message);
                     });
                   }}
