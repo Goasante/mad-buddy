@@ -1,0 +1,378 @@
+/*
+ * Mad Buddy 2026 UI refresh
+ * Visual layer based on the approved desktop + mobile concepts.
+ * Kept separate from globals.css so the redesign can be reviewed or reverted cleanly.
+ */
+
+:root {
+  --mb-canvas: #f7f8fa;
+  --mb-sidebar: #ffffff;
+  --mb-panel: #ffffff;
+  --mb-panel-raised: #f3f5f7;
+  --mb-panel-hover: #eceff2;
+  --mb-line: rgba(15, 23, 42, 0.10);
+  --mb-line-strong: rgba(15, 23, 42, 0.16);
+  --mb-copy: #0f172a;
+  --mb-copy-muted: #64748b;
+  --mb-orange: #ff6a00;
+  --mb-orange-bright: #ff7a00;
+  --mb-orange-soft: rgba(255, 106, 0, 0.12);
+  --mb-green: #22c55e;
+  --mb-purple: #8b5cf6;
+  --mb-blue: #5b6cff;
+  --mb-red: #ef4444;
+  --mb-shadow: 0 18px 55px rgba(15, 23, 42, 0.12);
+
+  --background: 220 20% 97%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --secondary: 220 17% 94%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 220 16% 93%;
+  --muted-foreground: 215 16% 47%;
+  --border: 220 13% 86%;
+  --input: 220 17% 94%;
+  --primary: 25 100% 50%;
+  --ring: 25 100% 50%;
+  --radius: 0.75rem;
+}
+
+html.dark {
+  --mb-canvas: #050a0f;
+  --mb-sidebar: #070c11;
+  --mb-panel: #0d1319;
+  --mb-panel-raised: #111820;
+  --mb-panel-hover: #151e27;
+  --mb-line: rgba(255, 255, 255, 0.075);
+  --mb-line-strong: rgba(255, 255, 255, 0.13);
+  --mb-copy: #f5f7fa;
+  --mb-copy-muted: #8d97a3;
+  --mb-orange: #ff6a00;
+  --mb-orange-bright: #ff7a00;
+  --mb-orange-soft: rgba(255, 106, 0, 0.12);
+  --mb-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+
+  --background: 210 50% 3%;
+  --foreground: 210 20% 97%;
+  --card: 210 31% 8%;
+  --card-foreground: 210 20% 97%;
+  --secondary: 210 27% 11%;
+  --secondary-foreground: 210 20% 97%;
+  --muted: 210 24% 12%;
+  --muted-foreground: 215 11% 61%;
+  --border: 210 18% 16%;
+  --input: 210 24% 11%;
+  --primary: 25 100% 50%;
+  --ring: 25 100% 50%;
+  --bg-primary: var(--mb-canvas);
+  --bg-secondary: #070d13;
+  --warm-grad-1: #070d13;
+  --warm-grad-2: #050a0f;
+  --body-radial: rgba(255, 106, 0, 0.055);
+  --glass-bg: rgba(13, 19, 25, 0.88);
+  --glass-border: var(--mb-line);
+  --glass-highlight: rgba(255, 255, 255, 0.04);
+  --surface-soft: rgba(255, 255, 255, 0.025);
+  --surface-hover: rgba(255, 255, 255, 0.055);
+}
+
+html {
+  color-scheme: light;
+  background: var(--mb-canvas);
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  background:
+    radial-gradient(circle at 72% -20%, rgba(255, 106, 0, 0.075), transparent 32rem),
+    var(--mb-canvas);
+  color: var(--mb-copy);
+  font-feature-settings: "ss01" 1, "cv02" 1, "cv03" 1;
+  letter-spacing: -0.006em;
+}
+
+html.dark body {
+  background:
+    radial-gradient(circle at 70% -18%, rgba(255, 106, 0, 0.07), transparent 34rem),
+    linear-gradient(145deg, #050a0f 0%, #070c11 55%, #05090d 100%);
+}
+
+/* The application canvas */
+body > div {
+  isolation: isolate;
+}
+
+html.dark [class*="dark:bg-[#353537]"] {
+  background: var(--mb-canvas) !important;
+}
+
+html.dark [class*="dark:bg-[#111112]"],
+html.dark [class*="dark:bg-[#101011]"],
+html.dark [class*="dark:bg-[#09090a]"] {
+  background: var(--mb-sidebar) !important;
+}
+
+html.dark [class*="dark:border-white/10"] {
+  border-color: var(--mb-line) !important;
+}
+
+/* Shared surfaces */
+.glass-panel,
+[class*="bg-card/"],
+[class~="bg-card"] {
+  border-color: var(--mb-line);
+  background-color: var(--mb-panel);
+  box-shadow: none;
+}
+
+.glass-panel {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--mb-panel) 96%, transparent), color-mix(in srgb, var(--mb-panel-raised) 92%, transparent));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035), var(--mb-shadow);
+  backdrop-filter: blur(18px);
+}
+
+html.dark [class*="dark:bg-white/"] {
+  background-color: rgba(255, 255, 255, 0.028) !important;
+}
+
+.rounded-2xl,
+.rounded-xl,
+.rounded-lg {
+  border-color: var(--mb-line);
+}
+
+/* Cards and list rows get the compact, dense treatment from the concepts. */
+section [class*="rounded-2xl"][class*="border"],
+ul[class*="rounded-2xl"][class*="border"] {
+  border-color: var(--mb-line);
+  background: var(--mb-panel);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
+}
+
+section [class*="rounded-2xl"][class*="border"]:hover {
+  border-color: var(--mb-line-strong);
+}
+
+/* Typography */
+h1,
+h2,
+h3 {
+  color: var(--mb-copy);
+  letter-spacing: -0.025em;
+}
+
+.text-muted-foreground {
+  color: var(--mb-copy-muted);
+}
+
+a.text-primary,
+.text-primary {
+  color: var(--mb-orange);
+}
+
+/* Interactive controls */
+button,
+[role="button"],
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+[class*="rounded-"][class*="border"] {
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+button:active,
+[role="button"]:active {
+  transform: translateY(1px);
+}
+
+.bg-primary {
+  background: linear-gradient(135deg, var(--mb-orange-bright), var(--mb-orange));
+}
+
+.shadow-glow,
+[class*="shadow-[0_8px_24px"] {
+  box-shadow: 0 10px 30px rgba(255, 106, 0, 0.24) !important;
+}
+
+input,
+textarea,
+select {
+  border-color: var(--mb-line) !important;
+  background: var(--mb-panel-raised) !important;
+  color: var(--mb-copy) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in srgb, var(--mb-copy-muted) 78%, transparent);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: rgba(255, 106, 0, 0.62) !important;
+  box-shadow: 0 0 0 3px rgba(255, 106, 0, 0.10);
+}
+
+/* Desktop sidebar */
+@media (min-width: 768px) {
+  aside[aria-label="Main navigation"] {
+    border-color: var(--mb-line);
+    background: var(--mb-sidebar);
+  }
+
+  aside[aria-label="Main navigation"] nav a {
+    color: var(--mb-copy-muted);
+  }
+
+  aside[aria-label="Main navigation"] nav a:hover {
+    background: var(--mb-panel-hover);
+    color: var(--mb-copy);
+  }
+
+  aside[aria-label="Main navigation"] nav a[aria-current="page"] {
+    background: rgba(255, 106, 0, 0.14);
+    color: var(--mb-orange);
+    box-shadow: inset 3px 0 var(--mb-orange);
+  }
+
+  #app-main-content {
+    max-width: 1240px;
+  }
+}
+
+/* Header */
+header.sticky {
+  border-color: var(--mb-line);
+  background: color-mix(in srgb, var(--mb-canvas) 88%, transparent);
+  backdrop-filter: blur(22px) saturate(130%);
+}
+
+/* Mobile bottom navigation: fixed, thumb friendly and visually quiet. */
+nav[aria-label="Mobile navigation"] > div {
+  border-color: var(--mb-line-strong);
+  background: rgba(7, 12, 17, 0.96);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.48);
+}
+
+nav[aria-label="Mobile navigation"] a {
+  color: #a4adb7;
+}
+
+nav[aria-label="Mobile navigation"] a[aria-current="page"] {
+  color: var(--mb-orange);
+}
+
+nav[aria-label="Mobile navigation"] a[aria-current="page"] > span:first-child {
+  background: var(--mb-orange-soft);
+  color: var(--mb-orange);
+}
+
+/* Dashboard rhythm */
+#app-main-content > div {
+  animation: mb-page-enter 260ms ease-out both;
+}
+
+#app-main-content section {
+  scroll-margin-top: 5rem;
+}
+
+#app-main-content section > div:first-child h2 {
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+#app-main-content ul > li + li {
+  border-color: var(--mb-line);
+}
+
+#app-main-content ul > li a:hover {
+  background: var(--mb-panel-hover);
+}
+
+/* Status colours */
+.bg-red-500 {
+  background: var(--mb-red);
+}
+
+[class*="bg-primary/10"] {
+  background-color: var(--mb-orange-soft);
+}
+
+[class*="border-orange-400"] {
+  border-color: rgba(255, 106, 0, 0.30);
+}
+
+/* Scrollbars are intentionally subtle like the supplied dense desktop views. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(141, 151, 163, 0.28) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(141, 151, 163, 0.28);
+  background-clip: padding-box;
+}
+
+@keyframes mb-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 767px) {
+  body {
+    background: var(--mb-canvas);
+  }
+
+  #app-main-content {
+    padding-inline: 0.9rem;
+  }
+
+  #app-main-content > div {
+    padding-top: 1rem;
+  }
+
+  #app-main-content h1 {
+    font-size: 1.2rem;
+  }
+
+  #app-main-content section {
+    border-radius: 0.8rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #app-main-content > div {
+    animation: none;
+  }
+
+  button,
+  [role="button"],
+  a {
+    transition: none !important;
+  }
+}
