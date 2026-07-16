@@ -12,6 +12,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false }
 };
 
+// Every page in this group renders behind auth with per-request Supabase
+// data; none may be statically prerendered at build time (build environments
+// have no secrets — static export of these pages broke the Vercel build).
+export const dynamic = "force-dynamic";
+
 export default async function ProtectedAppLayout({ children }: ProtectedAppLayoutProps) {
   const supabase = await createSupabaseServerClient();
   const {

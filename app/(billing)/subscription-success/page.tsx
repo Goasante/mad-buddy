@@ -4,6 +4,10 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { syncPaystackSubscription } from "@/lib/paystack/sync";
 
+// Renders per-user billing/onboarding state; never statically prerender
+// (build environments have no Supabase secrets).
+export const dynamic = "force-dynamic";
+
 type SubscriptionSuccessPageProps = {
   searchParams: Promise<{ reference?: string; trxref?: string; provider?: string }>;
 };

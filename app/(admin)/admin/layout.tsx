@@ -8,6 +8,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false }
 };
 
+// Admin pages read live data with the service-role client and must never be
+// statically prerendered at build time (build environments have no secrets;
+// this exact prerender broke the first Vercel deploy of this branch).
+export const dynamic = "force-dynamic";
+
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const context = await getSafetyAdminContext();
 
