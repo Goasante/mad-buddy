@@ -14,7 +14,12 @@ export type RateLimitAction =
   | "location.update"
   | "friends.nearby"
   | "reports.create"
-  | "paystack.initialize";
+  | "paystack.initialize"
+  | "waves.send"
+  | "waves.send.daily"
+  | "pings.create"
+  | "pings.create.daily"
+  | "status.update";
 
 export type RateLimitResult = {
   allowed: boolean;
@@ -30,7 +35,13 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "location.update": { limit: 60, windowSeconds: 60 },
   "friends.nearby": { limit: 60, windowSeconds: 60 },
   "reports.create": { limit: 5, windowSeconds: 60 * 60 },
-  "paystack.initialize": { limit: 5, windowSeconds: 15 * 60 }
+  "paystack.initialize": { limit: 5, windowSeconds: 15 * 60 },
+  // Wave/Ping anti-spam (feature spec §20, §41).
+  "waves.send": { limit: 20, windowSeconds: 60 * 60 },
+  "waves.send.daily": { limit: 50, windowSeconds: 24 * 60 * 60 },
+  "pings.create": { limit: 10, windowSeconds: 60 * 60 },
+  "pings.create.daily": { limit: 25, windowSeconds: 24 * 60 * 60 },
+  "status.update": { limit: 30, windowSeconds: 60 * 60 }
 };
 
 function hashIp(value: string | null) {

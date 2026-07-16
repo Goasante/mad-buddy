@@ -144,24 +144,34 @@ export async function GET() {
     return NextResponse.json(nearbyFriendsResponseSchema.parse({ friends: [] }));
   }
 
-  const [locationsResult, profilesResult, blocksResult, subscriptionsResult] = await Promise.all([
-    admin
-      .from("user_locations")
-      .select("user_id, latitude, longitude, confidence, last_updated")
-      .in("user_id", friendIds),
-    admin
-      .from("profiles")
-      .select("user_id, full_name, username, avatar_url, visibility_status")
-      .in("user_id", friendIds),
-    admin
-      .from("blocked_users")
-      .select("blocker_id, blocked_id")
-      .or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`),
-    admin
-      .from("subscriptions")
-      .select("user_id, plan, status")
-      .in("user_id", friendIds)
-  ]);
+  const [locationsResult, profilesResult, blocksResult, subscriptionsResult, statusesResult] =
+    await Promise.all([
+      admin
+        .from("user_locations")
+        .select("user_id, latitude, longitude, confidence, last_updated")
+        .in("user_id", friendIds),
+      admin
+        .from("profiles")
+        .select("user_id, full_name, username, avatar_url, visibility_status")
+        .in("user_id", friendIds),
+      admin
+        .from("blocked_users")
+        .select("blocker_id, blocked_id")
+        .or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`),
+      admin
+        .from("subscriptions")
+        .select("user_id, plan, status")
+        .in("user_id", friendIds),
+      // Muddy Status context (MVP: all_muddies visibility). Best-effort —
+      // a missing table or error simply omits statuses rather than failing
+      // the proximity feed.
+      admin
+        .from("user_statuses")
+        .select("user_id, availability_type, activity_type, custom_text, expires_at")
+        .in("user_id", friendIds)
+        .eq("visibility_type", "all_muddies")
+        .gt("expires_at", new Date().toISOString())
+    ]);
 
   if (locationsResult.error || profilesResult.error || blocksResult.error || subscriptionsResult.error) {
     logBackendEvent("warn", {
@@ -193,6 +203,10 @@ export async function GET() {
       .map((subscription) => subscription.user_id)
   );
 
+  const statusByUserId = new Map(
+    (statusesResult.data ?? []).map((status) => [status.user_id, status])
+  );
+
   const viewer = viewerLocation as LocationRow;
   const friends: SafeNearbyFriend[] = buildSafeNearbyFriends({
     viewer,
@@ -200,7 +214,8 @@ export async function GET() {
     blockedIds,
     premiumUserIds,
     locationByUserId,
-    profileByUserId
+    profileByUserId,
+    statusByUserId
   });
 
   const response = nearbyFriendsResponseSchema.parse({ friends });

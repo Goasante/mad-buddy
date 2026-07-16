@@ -73,6 +73,9 @@ describe("assertPrivacySafeResponse", () => {
           last_active_estimate: "Active recently",
           is_premium_theme_unlocked: false,
           confidence: "high",
+          muddy_availability: null,
+          muddy_activity: null,
+          muddy_status_note: null,
           latitude: 5.55 // stripped by zod, but never trusted to be
         }
       ]
@@ -274,6 +277,52 @@ describe("buildSafeNearbyFriends", () => {
     // Physically very close, but low confidence must not claim "very_close".
     expect(result[0].proximity_level).toBe("around");
     expect(result[0].confidence).toBe("low");
+  });
+
+  it("attaches an active Muddy Status and passes the privacy assertion", () => {
+    const result = build({
+      friendIds: ["a"],
+      locationByUserId: new Map([["a", location("a")]]),
+      profileByUserId: new Map([["a", profile("a")]]),
+      statusByUserId: new Map([
+        [
+          "a",
+          {
+            availability_type: "open_to_hang_out",
+            activity_type: "studying",
+            custom_text: "At the library until 6",
+            expires_at: new Date(NOW + 60 * 60 * 1000).toISOString()
+          }
+        ]
+      ])
+    });
+
+    expect(result[0].muddy_availability).toBe("open_to_hang_out");
+    expect(result[0].muddy_activity).toBe("studying");
+    expect(result[0].muddy_status_note).toBe("At the library until 6");
+    expect(() => assertPrivacySafeResponse({ friends: result })).not.toThrow();
+  });
+
+  it("never surfaces an expired status", () => {
+    const result = build({
+      friendIds: ["a"],
+      locationByUserId: new Map([["a", location("a")]]),
+      profileByUserId: new Map([["a", profile("a")]]),
+      statusByUserId: new Map([
+        [
+          "a",
+          {
+            availability_type: "free",
+            activity_type: null,
+            custom_text: null,
+            expires_at: new Date(NOW - 1000).toISOString()
+          }
+        ]
+      ])
+    });
+
+    expect(result[0].muddy_availability).toBeNull();
+    expect(result[0].muddy_status_note).toBeNull();
   });
 
   it("far friends get zero glow strength", () => {

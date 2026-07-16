@@ -16,7 +16,7 @@ export type NotificationType =
 
 export type CreateNotificationInput = {
   userId: string;
-  type: NotificationType | `meetup_request:${string}`;
+  type: NotificationType | `meetup_request:${string}` | `wave:${string}` | `meeting_ping:${string}`;
   title: string;
   message: string;
 };

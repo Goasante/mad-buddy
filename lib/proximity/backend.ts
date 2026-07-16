@@ -19,7 +19,12 @@ export const safeNearbyFriendSchema = z.object({
   status_text: z.string(),
   last_active_estimate: z.string(),
   is_premium_theme_unlocked: z.boolean(),
-  confidence: z.enum(["high", "medium", "low"])
+  confidence: z.enum(["high", "medium", "low"]),
+  // Muddy Status (feature spec batch 1) — availability/activity context,
+  // never location data. All nullable: absent when no active status.
+  muddy_availability: z.string().nullable(),
+  muddy_activity: z.string().nullable(),
+  muddy_status_note: z.string().nullable()
 });
 
 export const nearbyFriendsResponseSchema = z.object({
@@ -190,6 +195,13 @@ export const NEARBY_STALE_AFTER_MS = 30 * 60 * 1000;
  * appear; users without a location or profile never appear; stale signals
  * degrade to "hidden" with zero glow; coordinates never leave this function.
  */
+export type MuddyStatusSummary = {
+  availability_type: string;
+  activity_type: string | null;
+  custom_text: string | null;
+  expires_at: string;
+};
+
 export function buildSafeNearbyFriends(input: {
   viewer: Pick<NearbyLocationRow, "latitude" | "longitude" | "confidence">;
   friendIds: string[];
@@ -197,9 +209,23 @@ export function buildSafeNearbyFriends(input: {
   premiumUserIds: ReadonlySet<string>;
   locationByUserId: ReadonlyMap<string, NearbyLocationRow>;
   profileByUserId: ReadonlyMap<string, NearbyProfileRow>;
+  statusByUserId?: ReadonlyMap<string, MuddyStatusSummary>;
   now?: number;
 }): SafeNearbyFriend[] {
   const now = input.now ?? Date.now();
+  const statusFor = (friendId: string) => {
+    const status = input.statusByUserId?.get(friendId);
+    // Expired statuses never surface (spec: expired statuses must not
+    // remain visible); Ghost/blocked exclusion already happened above this.
+    if (!status || Date.parse(status.expires_at) <= now) {
+      return { muddy_availability: null, muddy_activity: null, muddy_status_note: null };
+    }
+    return {
+      muddy_availability: status.availability_type,
+      muddy_activity: status.activity_type,
+      muddy_status_note: status.custom_text
+    };
+  };
 
   return input.friendIds.flatMap((friendId) => {
     if (input.blockedIds.has(friendId)) {
@@ -228,7 +254,8 @@ export function buildSafeNearbyFriends(input: {
           status_text: "Last seen a while ago",
           last_active_estimate: "Last seen a while ago",
           is_premium_theme_unlocked: input.premiumUserIds.has(friendId),
-          confidence: "low" as const
+          confidence: "low" as const,
+          ...statusFor(friendId)
         }
       ];
     }
@@ -249,7 +276,8 @@ export function buildSafeNearbyFriends(input: {
         status_text: statusTextFor(proximityLevel, pairConfidence),
         last_active_estimate: lastActiveEstimate(location.last_updated),
         is_premium_theme_unlocked: input.premiumUserIds.has(friendId),
-        confidence: pairConfidence
+        confidence: pairConfidence,
+        ...statusFor(friendId)
       }
     ];
   });
