@@ -266,6 +266,10 @@ export type Database = {
           name: string;
           description: string | null;
           visibility_rule: string;
+          icon: string | null;
+          theme: string | null;
+          is_system_circle: boolean;
+          archived_at: string | null;
         };
         Insert: {
           id?: string;
@@ -273,6 +277,10 @@ export type Database = {
           name: string;
           description?: string | null;
           visibility_rule?: string;
+          icon?: string | null;
+          theme?: string | null;
+          is_system_circle?: boolean;
+          archived_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -280,9 +288,79 @@ export type Database = {
         Relationships: [];
       };
       circle_members: {
-        Row: { id: string; circle_id: string; friend_id: string; created_at: string };
-        Insert: { id?: string; circle_id: string; friend_id: string; created_at?: string };
+        Row: { id: string; circle_id: string; friend_id: string; added_by: string | null; created_at: string };
+        Insert: { id?: string; circle_id: string; friend_id: string; added_by?: string | null; created_at?: string };
         Update: Partial<Database["public"]["Tables"]["circle_members"]["Insert"]>;
+        Relationships: [];
+      };
+      close_friend_relationships: {
+        Row: {
+          id: string;
+          owner_id: string;
+          friend_id: string;
+          priority_level: "standard" | "priority";
+          notification_preference: CloseFriendNotificationPreference;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          friend_id: string;
+          priority_level?: "standard" | "priority";
+          notification_preference?: CloseFriendNotificationPreference;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["close_friend_relationships"]["Insert"]>;
+        Relationships: [];
+      };
+      visibility_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          feature_type: VisibilityFeatureType;
+          visibility_mode: VisibilityMode;
+          starts_at: string;
+          ends_at: string | null;
+          source: "manual" | "schedule" | "hangout_mode" | "event_mode";
+          status: "active" | "ended" | "expired";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          feature_type?: VisibilityFeatureType;
+          visibility_mode: VisibilityMode;
+          starts_at?: string;
+          ends_at?: string | null;
+          source?: "manual" | "schedule" | "hangout_mode" | "event_mode";
+          status?: "active" | "ended" | "expired";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["visibility_sessions"]["Insert"]>;
+        Relationships: [];
+      };
+      visibility_targets: {
+        Row: {
+          id: string;
+          session_id: string;
+          target_type: "circle" | "user";
+          target_id: string;
+          access_type: "include" | "exclude";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          target_type: "circle" | "user";
+          target_id: string;
+          access_type?: "include" | "exclude";
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["visibility_targets"]["Insert"]>;
         Relationships: [];
       };
       privacy_zones: {
@@ -738,3 +816,14 @@ export type PingStatus =
   | "completed";
 
 export type PingResponseType = "accept" | "maybe" | "decline" | "counter_propose" | "message";
+
+export type CloseFriendNotificationPreference =
+  | "always"
+  | "meeting_pings_only"
+  | "very_close_only"
+  | "status_changes"
+  | "normal";
+
+export type VisibilityFeatureType = "glow" | "status" | "wave" | "meeting_ping";
+
+export type VisibilityMode = "all_muddies" | "selected_circles" | "close_friends" | "hidden";
