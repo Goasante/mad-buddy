@@ -4,6 +4,7 @@ import { Award, Calendar, HandHeart, Medal, Sparkles, Target, Trophy } from "luc
 import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 
 type BadgesTab = "overview" | "badges" | "milestones";
 
@@ -49,6 +50,8 @@ export function BadgesPageContent() {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Badges & Achievements</h1>
         <p className="mt-2 text-sm text-muted-foreground">Celebrate your vibe, consistency, and positive impact.</p>
       </div>
+
+      <PreviewNotice />
 
       <div className="flex gap-1 border-b border-border/70">
         {tabs.map((item) => (

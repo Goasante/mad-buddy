@@ -6,6 +6,7 @@ import {
   CheckCheck,
   CircleDollarSign,
   Ghost,
+  Hand,
   MapPinOff,
   MessageCircle,
   RefreshCcw,
@@ -79,7 +80,8 @@ const attentionIconByType: Record<string, LucideIcon> = {
   friend_request_received: UserPlus,
   friend_request_accepted: CheckCheck,
   friend_nearby: MapPinOff,
-  meetup_request: MessageCircle
+  meetup_request: MessageCircle,
+  wave: Hand
 };
 
 export function DashboardPageContent({
@@ -477,6 +479,7 @@ export function DashboardPageContent({
         muddy={
           selectedFriend
             ? {
+                friendId: selectedFriend.friendId,
                 displayName: selectedFriend.displayName,
                 username: selectedFriend.username,
                 about: selectedFriend.statusText,

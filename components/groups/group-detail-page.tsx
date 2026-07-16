@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 import type { GroupItem } from "@/components/groups/groups-page";
 
 type GroupTab = "chat" | "plans" | "polls" | "members" | "files";
@@ -47,6 +48,8 @@ export function GroupDetailPage({ group }: { group: GroupItem }) {
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         Groups
       </Link>
+
+      <PreviewNotice />
 
       <div className="flex items-center gap-4 rounded-2xl border border-border/70 bg-card/50 p-5">
         <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">

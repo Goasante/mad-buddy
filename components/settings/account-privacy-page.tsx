@@ -5,6 +5,7 @@ import { ChevronRight, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { PrivacyToggle } from "@/components/settings/privacy-toggle";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 import { cn } from "@/lib/utils";
 
 type Audience = "Everyone" | "Muddies" | "Close Friends";
@@ -21,6 +22,8 @@ export function AccountPrivacyPage() {
   return (
     <div className="mr-auto max-w-[680px] space-y-6 pt-6">
       <SettingsSubHeader title="Account Privacy" description="Control who can see you and what they can do." />
+
+      <PreviewNotice />
 
       <div className="divide-y divide-border/70 border-y border-border/70">
         <AudienceRow label="Profile Visibility" value={profileVisibility} onChange={setProfileVisibility} />

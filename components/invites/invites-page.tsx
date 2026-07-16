@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { cn } from "@/lib/utils";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 
 type InviteTab = "received" | "sent" | "connections";
 
@@ -44,6 +45,8 @@ export function InvitesPageContent() {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Invites</h1>
         <p className="mt-2 text-sm text-muted-foreground">Manage incoming invites and connection requests.</p>
       </div>
+
+      <PreviewNotice />
 
       <div className="flex gap-1 border-b border-border/70">
         {inviteTabs.map((item) => (

@@ -4,6 +4,7 @@ import { Star } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,8 @@ export function AppFeedbackPage() {
   return (
     <div className="mr-auto max-w-[560px] space-y-6 pt-6">
       <SettingsSubHeader title="Send feedback" description="Help us build a better Mad Buddy." />
+
+      <PreviewNotice />
 
       <div className="flex gap-1 border-b border-border/70">
         {(["feedback", "suggestions"] as const).map((id) => (

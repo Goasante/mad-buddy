@@ -729,3 +729,117 @@ export async function reportUserAction(input: {
 
   return { ok: true, message: "Report submitted." };
 }
+
+export async function sendWaveAction(targetUserId: string): Promise<IntegrationActionState> {
+  const requestId = createRequestId();
+  const startedAt = Date.now();
+  const missingEnv = missingSupabaseState() ?? missingServiceRoleState();
+
+  if (missingEnv) {
+    return missingEnv;
+  }
+
+  const parsedTarget = uuidSchema.safeParse(targetUserId);
+
+  if (!parsedTarget.success) {
+    return { ok: false, message: "Choose a Muddy before waving." };
+  }
+
+  const userId = await getAuthedUserId();
+
+  if (!userId) {
+    return { ok: false, message: "Log in before waving at a Muddy." };
+  }
+
+  if (userId === parsedTarget.data) {
+    return { ok: false, message: "You cannot wave at yourself." };
+  }
+
+  const admin = createSupabaseAdminClient();
+  const receiverId = parsedTarget.data;
+
+  // Waves are only allowed between mutually approved, unblocked Muddies.
+  const [friendshipResult, blockResult] = await Promise.all([
+    admin
+      .from("friendships")
+      .select("user_one_id")
+      .or(
+        `and(user_one_id.eq.${userId},user_two_id.eq.${receiverId}),and(user_one_id.eq.${receiverId},user_two_id.eq.${userId})`
+      )
+      .limit(1),
+    admin
+      .from("blocked_users")
+      .select("blocker_id")
+      .or(
+        `and(blocker_id.eq.${userId},blocked_id.eq.${receiverId}),and(blocker_id.eq.${receiverId},blocked_id.eq.${userId})`
+      )
+      .limit(1)
+  ]);
+
+  if (friendshipResult.error || blockResult.error) {
+    logBackendEvent("warn", {
+      requestId,
+      action: "wave.send",
+      statusCode: 500,
+      latencyMs: Date.now() - startedAt,
+      userId,
+      errorType: errorType(friendshipResult.error ?? blockResult.error)
+    });
+    return { ok: false, message: "Couldn't send your wave. Try again." };
+  }
+
+  if (!friendshipResult.data?.length || blockResult.data?.length) {
+    return { ok: false, message: "You can only wave at approved Muddies." };
+  }
+
+  const { data: senderProfile } = await admin
+    .from("profiles")
+    .select("full_name")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const senderName = senderProfile?.full_name?.trim() || "A Muddy";
+
+  // Throttle: one wave notification per sender per receiver per hour.
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const { data: recentWave } = await admin
+    .from("notifications")
+    .select("id")
+    .eq("user_id", receiverId)
+    .eq("type", `wave:${userId}`)
+    .gte("created_at", oneHourAgo)
+    .limit(1);
+
+  if (recentWave?.length) {
+    return { ok: true, message: "You already waved recently — they saw it." };
+  }
+
+  const { error: notificationError } = await admin.from("notifications").insert({
+    user_id: receiverId,
+    type: `wave:${userId}`,
+    title: `${senderName} waved at you`,
+    message: `${senderName} waved at you. Wave back or send a ping to connect.`,
+    is_read: false
+  });
+
+  if (notificationError) {
+    logBackendEvent("warn", {
+      requestId,
+      action: "wave.send",
+      statusCode: 500,
+      latencyMs: Date.now() - startedAt,
+      userId,
+      errorType: errorType(notificationError)
+    });
+    return { ok: false, message: "Couldn't send your wave. Try again." };
+  }
+
+  logBackendEvent("info", {
+    requestId,
+    action: "wave.send",
+    statusCode: 200,
+    latencyMs: Date.now() - startedAt,
+    userId
+  });
+
+  return { ok: true, message: "Wave sent 👋" };
+}

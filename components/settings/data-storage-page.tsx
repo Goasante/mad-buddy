@@ -5,6 +5,7 @@ import { useState } from "react";
 import { DataExportButton } from "@/components/settings/data-export-button";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 import { Button } from "@/components/ui/button";
 
 const storageBreakdown = [
@@ -20,6 +21,8 @@ export function DataStoragePage() {
   return (
     <div className="mr-auto max-w-[720px] space-y-6 pt-6">
       <SettingsSubHeader title="Data & Storage" description="Manage your data, exports, and storage." />
+
+      <PreviewNotice />
 
       <section className="rounded-xl border border-border/70 bg-card/50 p-4">
         <div className="flex items-center justify-between text-sm">

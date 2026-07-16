@@ -6,6 +6,7 @@ import { useState } from "react";
 import { PrivacyToggle } from "@/components/settings/privacy-toggle";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 
 type ReminderTab = "upcoming" | "snoozed" | "completed";
 
@@ -43,6 +44,8 @@ export function RemindersPage() {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Reminders</h1>
         <p className="mt-2 text-sm text-muted-foreground">Stay informed on what matters.</p>
       </div>
+
+      <PreviewNotice />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-4">

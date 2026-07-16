@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 import { cn } from "@/lib/utils";
 
 type DiscoverTab = "people" | "circles" | "plans" | "events";
@@ -44,6 +45,8 @@ export function DiscoverPageContent() {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Discover</h1>
         <p className="mt-2 text-sm text-muted-foreground">Find people, circles, plans, and events that matter.</p>
       </div>
+
+      <PreviewNotice />
 
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />

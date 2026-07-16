@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Hand, MessageCircle, MessagesSquare } from "lucide-react";
+import { sendWaveAction } from "@/app/(app)/actions";
 import { Button } from "@/components/ui/button";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
@@ -11,6 +12,7 @@ import { CONNECTION_PROMPTS } from "@/lib/meetups/connection-prompts";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 
 export type MuddyProfileSummary = {
+  friendId?: string;
   displayName: string;
   username: string;
   about?: string;
@@ -29,6 +31,18 @@ export type MuddyProfileModalProps = {
 export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProfileModalProps) {
   const [pingOpen, setPingOpen] = useState(false);
   const [waveSent, setWaveSent] = useState(false);
+  const [waveFeedback, setWaveFeedback] = useState("");
+  const [isWavePending, startWaveTransition] = useTransition();
+
+  function sendWave() {
+    const friendId = muddy?.friendId;
+    if (!friendId) return;
+    startWaveTransition(async () => {
+      const result = await sendWaveAction(friendId);
+      setWaveFeedback(result.message);
+      if (result.ok) setWaveSent(true);
+    });
+  }
 
   return (
     <Modal
@@ -38,6 +52,7 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
         if (!open) {
           setPingOpen(false);
           setWaveSent(false);
+          setWaveFeedback("");
         }
       }}
       title={muddy?.displayName ?? "Muddy"}
@@ -69,15 +84,17 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={waveSent}
-              onClick={() => setWaveSent(true)}
-            >
-              <Hand className="h-4 w-4" aria-hidden="true" />
-              {waveSent ? "Wave sent" : "Wave"}
-            </Button>
+            {muddy.friendId ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={waveSent || isWavePending}
+                onClick={sendWave}
+              >
+                <Hand className="h-4 w-4" aria-hidden="true" />
+                {isWavePending ? "Waving..." : waveSent ? "Wave sent" : "Wave"}
+              </Button>
+            ) : null}
             <Button type="button" variant="outline" onClick={() => setPingOpen((current) => !current)}>
               <MessageCircle className="h-4 w-4" aria-hidden="true" />
               Ping
@@ -89,6 +106,12 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
               </Link>
             </Button>
           </div>
+
+          {waveFeedback ? (
+            <p className="text-sm text-muted-foreground" role="status">
+              {waveFeedback}
+            </p>
+          ) : null}
 
           <Link
             href={`/friends/${muddy.username}`}

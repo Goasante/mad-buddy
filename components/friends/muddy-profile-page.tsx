@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { CalendarCheck2, ChevronLeft, Hand, Image as ImageIcon, MessagesSquare, MoreHorizontal, Users } from "lucide-react";
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { sendWaveAction } from "@/app/(app)/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -37,6 +38,16 @@ export function MuddyProfilePage({ muddy }: { muddy: MuddyProfileData }) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("about");
   const [pingOpen, setPingOpen] = useState(false);
   const [waveSent, setWaveSent] = useState(false);
+  const [waveFeedback, setWaveFeedback] = useState("");
+  const [isWavePending, startWaveTransition] = useTransition();
+
+  function sendWave() {
+    startWaveTransition(async () => {
+      const result = await sendWaveAction(muddy.friendId);
+      setWaveFeedback(result.message);
+      if (result.ok) setWaveSent(true);
+    });
+  }
 
   return (
     <div className="mx-auto max-w-[900px] space-y-6 pt-6">
@@ -72,15 +83,25 @@ export function MuddyProfilePage({ muddy }: { muddy: MuddyProfileData }) {
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
-            <Button type="button" variant={waveSent ? "outline" : "primary"} disabled={waveSent} onClick={() => setWaveSent(true)}>
+            <Button
+              type="button"
+              variant={waveSent ? "outline" : "primary"}
+              disabled={waveSent || isWavePending}
+              onClick={sendWave}
+            >
               <Hand className="h-4 w-4" aria-hidden="true" />
-              {waveSent ? "Wave sent" : "Wave"}
+              {isWavePending ? "Waving..." : waveSent ? "Wave sent" : "Wave"}
             </Button>
             <Button type="button" variant="outline" onClick={() => setPingOpen((current) => !current)}>
               <MessagesSquare className="h-4 w-4" aria-hidden="true" />
               Ping
             </Button>
           </div>
+          {waveFeedback ? (
+            <p className="mt-2 text-sm text-muted-foreground" role="status">
+              {waveFeedback}
+            </p>
+          ) : null}
 
           {pingOpen ? (
             <div className="mt-4 rounded-xl border border-border/70 bg-card/50 p-3">

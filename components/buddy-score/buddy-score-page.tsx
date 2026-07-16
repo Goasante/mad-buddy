@@ -2,6 +2,7 @@
 
 import { CalendarCheck2, Clock, HandHeart, ThumbsUp, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 
 const totalScore = 782;
 const maxScore = 1000;
@@ -32,6 +33,8 @@ export function BuddyScorePage() {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Buddy Score</h1>
         <p className="mt-2 text-sm text-muted-foreground">Your trust score that grows with good vibes.</p>
       </div>
+
+      <PreviewNotice />
 
       <div className="grid gap-6 sm:grid-cols-[auto_1fr]">
         <div className="flex flex-col items-center justify-center rounded-2xl border border-border/70 bg-card/50 p-6">

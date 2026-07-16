@@ -4,6 +4,7 @@ import { Copy, MessageCircle, Send, Share2, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 
 const shareChannels = [
   { label: "WhatsApp", icon: MessageCircle },
@@ -26,6 +27,7 @@ export function InviteBuddiesPage() {
 
   return (
     <div className="mx-auto max-w-[640px] space-y-8 pt-6">
+      <PreviewNotice />
       <div className="rounded-2xl border border-border/70 bg-card/50 p-6 text-center">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary/10 text-primary">
           <UserPlus className="h-7 w-7" aria-hidden="true" />

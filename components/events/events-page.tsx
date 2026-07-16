@@ -10,6 +10,7 @@ import { FormField } from "@/components/auth/form-field";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -151,6 +152,8 @@ export function EventsPageContent() {
           Create Event
         </Button>
       </header>
+
+      <PreviewNotice />
 
       {feedback ? (
         <p className="text-sm text-muted-foreground" role="status">{feedback}</p>

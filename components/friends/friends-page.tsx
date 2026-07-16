@@ -25,6 +25,7 @@ import {
   reportUserAction,
   searchUsersAction,
   sendFriendRequestAction,
+  sendWaveAction,
   unblockUserAction,
   updateFriendRequestStatusAction
 } from "@/app/(app)/actions";
@@ -37,6 +38,7 @@ import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 import { Textarea } from "@/components/ui/textarea";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import { cn } from "@/lib/utils";
@@ -296,6 +298,8 @@ export function FriendsPageContent({ initialUsers = [] }: { initialUsers?: UserS
         <p className="text-sm text-muted-foreground" role="status">{feedback}</p>
       ) : null}
 
+      {activeTab === "circles" || activeTab === "close" ? <PreviewNotice /> : null}
+
       {activeTab === "all" || activeTab === "close" || (activeTab === "circles" && activeCircleId) ? (
         <div className="space-y-4">
           <div className="relative w-full sm:max-w-sm">
@@ -325,7 +329,12 @@ export function FriendsPageContent({ initialUsers = [] }: { initialUsers?: UserS
                   isCloseFriend={closeFriendIds.includes(user.id)}
                   circles={circles}
                   onViewProfile={() => setProfileUser(user)}
-                  onWave={() => setFeedback(`Wave sent to ${user.displayName}.`)}
+                  onWave={() => {
+                    startTransition(async () => {
+                      const result = await sendWaveAction(user.id);
+                      setFeedback(result.message);
+                    });
+                  }}
                   onMessage={() => router.push("/messages")}
                   onRemove={() =>
                     runFriendAction(
@@ -560,6 +569,7 @@ export function FriendsPageContent({ initialUsers = [] }: { initialUsers?: UserS
         muddy={
           profileUser
             ? {
+                friendId: profileUser.id,
                 displayName: profileUser.displayName,
                 username: profileUser.username,
                 about: profileUser.note,

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 import { cn } from "@/lib/utils";
 
 type ConversationKind = "direct" | "plan";
@@ -136,6 +137,7 @@ export function MessagesPageContent() {
 
   return (
     <div className="mx-auto max-w-[1200px] pt-6">
+      <PreviewNotice className="mb-4" />
       <div className="grid gap-0 overflow-hidden rounded-2xl border border-border/70 md:h-[calc(100vh-9rem)] md:grid-cols-[20rem_minmax(0,1fr)]">
         <div className={cn("flex min-h-0 flex-col border-border/70 md:border-r", selected && "hidden md:flex")}>
           <div className="space-y-3 border-b border-border/70 p-4">

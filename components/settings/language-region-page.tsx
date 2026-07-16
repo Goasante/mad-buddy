@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/auth/form-field";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 import { cn } from "@/lib/utils";
 
 const languages = ["English (US)", "English (UK)", "Twi", "French"];
@@ -22,6 +23,8 @@ export function LanguageRegionPage() {
   return (
     <div className="mr-auto max-w-[640px] space-y-6 pt-6">
       <SettingsSubHeader title="Language & Region" description="Choose your preferred language and region." />
+
+      <PreviewNotice />
 
       <div className="space-y-4">
         <FormField htmlFor="language" label="Language">

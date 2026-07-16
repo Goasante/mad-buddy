@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
 import { cn } from "@/lib/utils";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 import type { ProximityLevel } from "@/lib/proximity";
 
 type Audience = "Approved Muddies" | "Close Friends" | "Circles";
@@ -52,6 +53,8 @@ export function HangoutModePage() {
           </button>
         </label>
       </div>
+
+      <PreviewNotice />
 
       <div className="relative mx-auto grid h-72 w-72 max-w-full place-items-center overflow-hidden">
         <div

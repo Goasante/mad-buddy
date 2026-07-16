@@ -4,6 +4,7 @@ import { Laptop, Smartphone } from "lucide-react";
 import { logoutAction } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
+import { PreviewNotice } from "@/components/ui/preview-notice";
 
 const sessions = [
   { id: "s1", device: "Windows · Chrome", location: "This device", active: true, icon: Laptop },
@@ -16,6 +17,8 @@ export function SessionsPage() {
   return (
     <div className="mr-auto max-w-[640px] space-y-6 pt-6">
       <SettingsSubHeader title="Sessions" description="You're currently logged in on these devices." />
+
+      <PreviewNotice />
 
       <ul className="divide-y divide-border/70 rounded-xl border border-border/70">
         {sessions.map((session) => (

@@ -568,6 +568,7 @@ function iconForType(type: string): LucideIcon {
     best_buddy_nearby: HeartHandshake,
     circle_nearby: UsersRound,
     meetup_request: MessageCircle,
+    wave: Hand,
     subscription_update: CircleDollarSign,
     system_alert: ShieldAlert
   };
