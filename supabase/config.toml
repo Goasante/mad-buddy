@@ -1,0 +1,17 @@
+project_id = "mad-buddy"
+
+[api]
+enabled = true
+schemas = ["public", "storage"]
+extra_search_path = ["public", "extensions"]
+
+[db]
+major_version = 15
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/onboarding"]
+
+[storage]
+enabled = true

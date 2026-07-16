@@ -1,0 +1,48 @@
+import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import { AppShell } from "@/components/app-shell/app-shell";
+import { getSafetyAdminContext } from "@/lib/safety/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+type ProtectedAppLayoutProps = {
+  children: ReactNode;
+};
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false }
+};
+
+export default async function ProtectedAppLayout({ children }: ProtectedAppLayoutProps) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  const [adminContext, unreadResult, profileResult] = await Promise.all([
+    getSafetyAdminContext(),
+    user
+      ? supabase
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("is_read", false)
+      : Promise.resolve({ count: 0 }),
+    user
+      ? supabase
+          .from("profiles")
+          .select("username, visibility_status")
+          .eq("user_id", user.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null })
+  ]);
+
+  return (
+    <AppShell
+      showAdminLink={adminContext.ok}
+      initialUnreadCount={unreadResult.count ?? 0}
+      locationSyncEnabled={profileResult.data?.visibility_status !== "ghost"}
+      currentUsername={profileResult.data?.username ?? null}
+    >
+      {children}
+    </AppShell>
+  );
+}

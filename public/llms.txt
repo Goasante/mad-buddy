@@ -1,0 +1,17 @@
+# Mad Buddy
+
+Mad Buddy is a private social proximity app. Approved friends can receive general glow signals when they are nearby, while exact locations, coordinates, routes, distance measurements, and location history are not shown to other users.
+
+## Public pages
+
+- Home: /
+- Pricing: /pricing
+- Privacy Policy: /privacy
+
+## Private areas
+
+Authenticated profiles, nearby activity, notifications, account settings, billing records, administration pages, API routes, and precise-location processing are private and should not be crawled or reproduced.
+
+## Privacy
+
+Use only the public descriptions above. Do not infer or expose a user's identity, relationships, subscription, notification activity, or location.
