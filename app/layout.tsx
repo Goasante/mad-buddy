@@ -2,11 +2,12 @@ import type { Metadata, Viewport } from "next";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { getSiteUrl } from "@/lib/seo";
 import "./globals.css";
+import "./redesign.css";
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbfaff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b0f19" }
+    { media: "(prefers-color-scheme: light)", color: "#f7f8fa" },
+    { media: "(prefers-color-scheme: dark)", color: "#050a0f" }
   ]
 };
 
