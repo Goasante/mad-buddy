@@ -153,7 +153,7 @@ export function LoginForm() {
       <label className="flex items-center gap-2 text-sm text-white/55">
         <input
           type="checkbox"
-          className="h-4 w-4 rounded border-white/20 bg-white/[0.06] accent-violet-500"
+          className="h-4 w-4 rounded border-white/20 bg-white/[0.06] accent-primary"
           {...register("rememberMe")}
         />
         Remember me on this device
@@ -166,7 +166,7 @@ export function LoginForm() {
       ) : null}
       <Button
         type="submit"
-        className="w-full border-white bg-white text-slate-950 shadow-[0_12px_30px_rgba(255,255,255,0.12)] hover:bg-white/90 hover:shadow-[0_16px_36px_rgba(255,255,255,0.16)]"
+        className="w-full border-primary shadow-[0_12px_30px_hsl(var(--primary)/0.3)] hover:shadow-[0_16px_36px_hsl(var(--primary)/0.4)]"
         disabled={isPending || isGooglePending || isApplePending}
       >
         {isPending ? (

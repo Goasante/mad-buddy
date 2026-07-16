@@ -18,7 +18,7 @@ export function SignInCard({ title, description, children, footer }: SignInCardP
 
   return (
     <main className="relative flex h-dvh items-center justify-center overflow-hidden bg-[#07060b] px-4 py-16 text-white sm:px-6">
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(139,92,246,0.46)_0%,rgba(76,29,149,0.34)_38%,rgba(7,6,11,0.96)_78%)]" aria-hidden="true" />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(249,115,22,0.38)_0%,rgba(124,45,18,0.32)_38%,rgba(7,6,11,0.96)_78%)]" aria-hidden="true" />
       <div
         className="absolute inset-0 opacity-[0.035] mix-blend-soft-light"
         style={{
@@ -29,13 +29,13 @@ export function SignInCard({ title, description, children, footer }: SignInCardP
         aria-hidden="true"
       />
       <motion.div
-        className="absolute left-1/2 top-[-18rem] h-[36rem] w-[min(60rem,120vw)] -translate-x-1/2 rounded-full bg-violet-300/20 blur-[90px]"
+        className="absolute left-1/2 top-[-18rem] h-[36rem] w-[min(60rem,120vw)] -translate-x-1/2 rounded-full bg-orange-300/20 blur-[90px]"
         animate={reducedMotion ? undefined : { opacity: [0.45, 0.72, 0.45], scale: [0.98, 1.04, 0.98] }}
         transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
         aria-hidden="true"
       />
       <motion.div
-        className="absolute bottom-[-24rem] left-1/2 h-[38rem] w-[min(52rem,110vw)] -translate-x-1/2 rounded-full bg-blue-500/15 blur-[100px]"
+        className="absolute bottom-[-24rem] left-1/2 h-[38rem] w-[min(52rem,110vw)] -translate-x-1/2 rounded-full bg-amber-500/15 blur-[100px]"
         animate={reducedMotion ? undefined : { opacity: [0.35, 0.58, 0.35], scale: [1, 1.07, 1] }}
         transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
         aria-hidden="true"
@@ -52,16 +52,16 @@ export function SignInCard({ title, description, children, footer }: SignInCardP
         className="relative z-10 w-full max-w-sm"
         aria-labelledby="sign-in-title"
       >
-        <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-white/20 via-white/[0.035] to-violet-300/15 opacity-80" aria-hidden="true" />
+        <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-white/20 via-white/[0.035] to-orange-300/15 opacity-80" aria-hidden="true" />
         <motion.div
-          className="absolute -inset-3 -z-10 rounded-[1.75rem] bg-violet-400/10 blur-2xl"
+          className="absolute -inset-3 -z-10 rounded-[1.75rem] bg-orange-400/10 blur-2xl"
           animate={reducedMotion ? undefined : { opacity: [0.35, 0.62, 0.35] }}
           transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
           aria-hidden="true"
         />
         <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-black/55 p-6 shadow-[0_28px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl sm:p-7">
           <motion.span
-            className="pointer-events-none absolute top-0 z-10 h-px w-1/3 bg-gradient-to-r from-transparent via-violet-200/80 to-transparent"
+            className="pointer-events-none absolute top-0 z-10 h-px w-1/3 bg-gradient-to-r from-transparent via-orange-200/80 to-transparent"
             initial={reducedMotion ? { left: "34%" } : { left: "-35%" }}
             animate={reducedMotion ? undefined : { left: ["-35%", "105%"] }}
             transition={{ duration: 3.4, repeat: Infinity, repeatDelay: 1.2, ease: "easeInOut" }}

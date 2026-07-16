@@ -150,7 +150,7 @@ export function SignupForm() {
         <label className="flex items-start gap-3 text-sm leading-6 text-muted-foreground">
           <input
             type="checkbox"
-            className="mt-1 h-4 w-4 shrink-0 rounded border-border accent-violet-500"
+            className="mt-1 h-4 w-4 shrink-0 rounded border-border accent-primary"
             aria-invalid={Boolean(errors.acceptedPolicy)}
             {...register("acceptedPolicy")}
           />
