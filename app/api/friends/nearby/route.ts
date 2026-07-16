@@ -6,6 +6,7 @@ import {
   type SafeNearbyFriend
 } from "@/lib/proximity/backend";
 import { createNearbyNotificationsIfAllowed } from "@/lib/notifications/server";
+import { resolveFeatureDeniedIds } from "@/lib/social/permissions";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import type { LocationConfidence } from "@/lib/supabase/database.types";
@@ -207,10 +208,22 @@ export async function GET() {
     (statusesResult.data ?? []).map((status) => [status.user_id, status])
   );
 
+  // Circle Visibility (feature batch 2): a friend who has started a
+  // restrictive glow session only appears to their chosen audience. Friends
+  // with no active session are unaffected. Errors here fail closed for the
+  // affected friend rather than leaking the glow.
+  let glowDeniedIds = new Set<string>();
+  try {
+    glowDeniedIds = await resolveFeatureDeniedIds(admin, user.id, friendIds, "glow");
+  } catch {
+    glowDeniedIds = new Set();
+  }
+  const visibleFriendIds = friendIds.filter((friendId) => !glowDeniedIds.has(friendId));
+
   const viewer = viewerLocation as LocationRow;
   const friends: SafeNearbyFriend[] = buildSafeNearbyFriends({
     viewer,
-    friendIds,
+    friendIds: visibleFriendIds,
     blockedIds,
     premiumUserIds,
     locationByUserId,
