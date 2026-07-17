@@ -197,6 +197,12 @@ export function SettingsPageContent({
           />
           <SettingsLinkRow
             icon={ShieldCheck}
+            title="Safe Arrival"
+            description="Ask trusted Muddies to check you got there."
+            href="/safe-arrival"
+          />
+          <SettingsLinkRow
+            icon={ShieldCheck}
             title="Safety Center"
             description="Tools and tips to keep you safe."
             href="/safety-center"
@@ -337,6 +343,7 @@ type SettingsLinkRowProps = {
     | "/settings/feedback"
     | "/help"
     | "/invite"
+    | "/safe-arrival"
     | "/safety-center";
 };
 
