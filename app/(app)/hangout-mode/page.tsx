@@ -1,3 +1,4 @@
+import { getVisibleHangoutsAction, type VisibleHangout } from "@/app/(app)/hangout-actions";
 import {
   HangoutModePage,
   type ActiveHangout,
@@ -66,5 +67,7 @@ export default async function HangoutModeRoute() {
     }
   }
 
-  return <HangoutModePage initialActiveHangout={activeHangout} initialRequests={requests} />;
+  const feed: VisibleHangout[] = user ? await getVisibleHangoutsAction() : [];
+
+  return <HangoutModePage initialActiveHangout={activeHangout} initialRequests={requests} initialFeed={feed} />;
 }

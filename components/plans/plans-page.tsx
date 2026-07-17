@@ -6,6 +6,7 @@ import { useId, useMemo, useState, useTransition } from "react";
 import {
   cancelPlanAction,
   createPlanAction,
+  createPollAction,
   rsvpAction,
   votePollAction
 } from "@/app/(app)/plans-actions";
@@ -111,6 +112,19 @@ export function PlansPageContent({
   function vote(pollId: string, optionId: string) {
     startTransition(async () => {
       const result = await votePollAction(pollId, [optionId]);
+      setFeedback(result.message);
+      router.refresh();
+    });
+  }
+
+  function addPoll(planId: string, question: string, pollType: string, options: string[]) {
+    startTransition(async () => {
+      const result = await createPollAction({
+        planId,
+        pollType,
+        question,
+        options: options.map((label) => ({ label }))
+      });
       setFeedback(result.message);
       router.refresh();
     });
@@ -229,6 +243,7 @@ export function PlansPageContent({
         onRsvpChange={(rsvp) => selectedPlan && changeRsvp(selectedPlan.id, rsvp)}
         onVote={(pollId, optionId) => vote(pollId, optionId)}
         onCancel={() => selectedPlan && cancelPlan(selectedPlan.id)}
+        onAddPoll={(question, pollType, options) => selectedPlan && addPoll(selectedPlan.id, question, pollType, options)}
       />
     </div>
   );
@@ -393,7 +408,8 @@ function PlanDetailsModal({
   onOpenChange,
   onRsvpChange,
   onVote,
-  onCancel
+  onCancel,
+  onAddPoll
 }: {
   plan: PlanSummary | null;
   pending: boolean;
@@ -401,6 +417,7 @@ function PlanDetailsModal({
   onRsvpChange: (rsvp: "going" | "maybe" | "not_going") => void;
   onVote: (pollId: string, optionId: string) => void;
   onCancel: () => void;
+  onAddPoll: (question: string, pollType: string, options: string[]) => void;
 }) {
   return (
     <Modal open={Boolean(plan)} onOpenChange={onOpenChange} title={plan?.title ?? "Plan"} description={plan ? dateLabel(plan) : undefined}>
@@ -486,7 +503,8 @@ function PlanDetailsModal({
           ))}
 
           {plan.isHost && !TERMINAL.has(plan.status) ? (
-            <div className="border-t border-border/70 pt-4">
+            <div className="space-y-4 border-t border-border/70 pt-4">
+              <AddPollForm pending={pending} onSubmit={onAddPoll} />
               <Button type="button" variant="danger" size="sm" onClick={onCancel} disabled={pending}>
                 Cancel plan
               </Button>
@@ -495,6 +513,89 @@ function PlanDetailsModal({
         </div>
       ) : null}
     </Modal>
+  );
+}
+
+/** Host-only "add a poll" control (batch 3 §polls; limits enforced server-side). */
+function AddPollForm({
+  pending,
+  onSubmit
+}: {
+  pending: boolean;
+  onSubmit: (question: string, pollType: string, options: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [pollType, setPollType] = useState("time");
+  const [optionsText, setOptionsText] = useState("");
+
+  const options = optionsText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  const valid = question.trim().length > 0 && options.length >= 2;
+
+  if (!open) {
+    return (
+      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+        <Vote className="h-4 w-4" aria-hidden="true" />
+        Add a poll
+      </Button>
+    );
+  }
+
+  return (
+    <form
+      className="space-y-3 rounded-xl border border-border/70 bg-card/50 p-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!valid) return;
+        onSubmit(question.trim(), pollType, options);
+        setOpen(false);
+        setQuestion("");
+        setOptionsText("");
+      }}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          value={question}
+          maxLength={160}
+          onChange={(event) => setQuestion(event.target.value)}
+          placeholder="What should we decide? e.g. What time works?"
+          aria-label="Poll question"
+          className="focus-ring safe-motion h-10 min-w-0 flex-1 rounded-md border border-border bg-card/70 px-3 text-sm"
+        />
+        <select
+          value={pollType}
+          onChange={(event) => setPollType(event.target.value)}
+          aria-label="Poll type"
+          className="focus-ring safe-motion h-10 rounded-md border border-border bg-card/70 px-2 text-sm"
+        >
+          <option value="time">Time</option>
+          <option value="date">Date</option>
+          <option value="place">Place</option>
+          <option value="activity">Activity</option>
+        </select>
+      </div>
+      <textarea
+        value={optionsText}
+        onChange={(event) => setOptionsText(event.target.value)}
+        rows={3}
+        placeholder={"One option per line (2–6), e.g.\n6:00 PM\n7:30 PM"}
+        aria-label="Poll options, one per line"
+        className="focus-ring safe-motion w-full rounded-md border border-border bg-card/70 px-3 py-2 text-sm"
+      />
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={!valid || pending}>
+          Add poll
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          Cancel
+        </Button>
+      </div>
+    </form>
   );
 }
 

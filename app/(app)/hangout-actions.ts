@@ -252,6 +252,88 @@ export async function endHangoutAction(hangoutId: string): Promise<HangoutAction
 }
 
 // ---------------------------------------------------------------------------
+// Discovery feed (spec §49) — hangouts the viewer may see and ask to join.
+// ---------------------------------------------------------------------------
+
+export type VisibleHangout = {
+  id: string;
+  ownerName: string;
+  activityType: HangoutActivityType;
+  message: string | null;
+  broadAreaText: string | null;
+  endsAt: string;
+  allowPings: boolean;
+  myRequestStatus: string | null;
+};
+
+/**
+ * Active hangouts from the viewer's Muddies, filtered through the same
+ * server-side eligibility as everything else (block > not-muddies > Ghost
+ * Mode > audience narrowing). Broad area text only — never location.
+ */
+export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
+  const env = getSupabaseServerEnv();
+  if (!env.url || !env.serviceRoleKey) return [];
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+
+  const admin = createSupabaseAdminClient();
+  const { data: friendships } = await admin
+    .from("friendships")
+    .select("user_one_id, user_two_id")
+    .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)
+    .is("ended_at", null);
+  const friendIds = (friendships ?? []).map((row) =>
+    row.user_one_id === userId ? row.user_two_id : row.user_one_id
+  );
+  if (friendIds.length === 0) return [];
+
+  const { data: sessions } = await admin
+    .from("hangout_sessions")
+    .select("id, owner_id, activity_type, message, broad_area_text, ends_at, allow_pings, audience_type, status")
+    .in("owner_id", friendIds)
+    .eq("status", "active")
+    .gt("ends_at", new Date().toISOString())
+    .order("ends_at", { ascending: true })
+    .limit(50);
+  if (!sessions?.length) return [];
+
+  const visible: typeof sessions = [];
+  for (const session of sessions) {
+    if (await canViewHangout(admin, userId, session)) visible.push(session);
+  }
+  if (visible.length === 0) return [];
+
+  const [{ data: owners }, { data: myRequests }] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("user_id, full_name")
+      .in("user_id", [...new Set(visible.map((session) => session.owner_id))]),
+    admin
+      .from("hangout_requests")
+      .select("hangout_session_id, status")
+      .eq("requester_id", userId)
+      .in(
+        "hangout_session_id",
+        visible.map((session) => session.id)
+      )
+  ]);
+  const nameById = new Map((owners ?? []).map((row) => [row.user_id, row.full_name]));
+  const requestBySession = new Map((myRequests ?? []).map((row) => [row.hangout_session_id, row.status]));
+
+  return visible.map((session) => ({
+    id: session.id,
+    ownerName: nameById.get(session.owner_id)?.trim() || "A Muddy",
+    activityType: session.activity_type,
+    message: session.message,
+    broadAreaText: session.broad_area_text,
+    endsAt: session.ends_at,
+    allowPings: session.allow_pings,
+    myRequestStatus: requestBySession.get(session.id) ?? null
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // Join requests (spec §49, §55, §56)
 // ---------------------------------------------------------------------------
 

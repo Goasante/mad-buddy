@@ -5,8 +5,10 @@ import { useState, useTransition, type CSSProperties } from "react";
 import {
   convertHangoutToPlanAction,
   endHangoutAction,
+  requestHangoutAction,
   respondHangoutRequestAction,
-  startHangoutAction
+  startHangoutAction,
+  type VisibleHangout
 } from "@/app/(app)/hangout-actions";
 import { Button } from "@/components/ui/button";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -52,10 +54,12 @@ const durationOptions: Array<{ id: Duration; label: string; ms: number }> = [
 
 export function HangoutModePage({
   initialActiveHangout = null,
-  initialRequests = []
+  initialRequests = [],
+  initialFeed = []
 }: {
   initialActiveHangout?: ActiveHangout | null;
   initialRequests?: HangoutRequestSummary[];
+  initialFeed?: VisibleHangout[];
 }) {
   const router = useRouter();
   const reducedMotion = useReducedMotion();
@@ -69,10 +73,23 @@ export function HangoutModePage({
   );
   const [duration, setDuration] = useState<Duration>("1h");
   const [message, setMessage] = useState(initialActiveHangout?.message ?? "");
+  const [feed, setFeed] = useState(initialFeed);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const active = activeHangout !== null;
+
+  function requestToJoin(hangoutId: string) {
+    startTransition(async () => {
+      const result = await requestHangoutAction(hangoutId);
+      setFeedback(result.message);
+      if (result.ok) {
+        setFeed((current) =>
+          current.map((item) => (item.id === hangoutId ? { ...item, myRequestStatus: "pending" } : item))
+        );
+      }
+    });
+  }
   const acceptedCount = requests.filter((request) => request.status === "accepted").length;
 
   function turnOn() {
@@ -297,6 +314,45 @@ export function HangoutModePage({
           </Button>
         </div>
       )}
+
+      <div className="space-y-3">
+        <h2 className="text-base font-semibold">Muddies open to hang out</h2>
+        {feed.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nobody&apos;s open right now. When a Muddy turns on Hangout Mode, they&apos;ll show up here.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {feed.map((hangout) => (
+              <li
+                key={hangout.id}
+                className="flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-card/50 p-4"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">
+                    {hangout.ownerName} is open to{" "}
+                    {HANGOUT_ACTIVITY_LABELS[hangout.activityType]?.toLowerCase() ?? "hang out"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {hangout.message ? `“${hangout.message}” · ` : ""}
+                    {hangout.broadAreaText ? `${hangout.broadAreaText} · ` : ""}
+                    Until {new Date(hangout.endsAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                  </p>
+                </div>
+                {hangout.myRequestStatus ? (
+                  <span className="text-xs font-medium capitalize text-muted-foreground">
+                    {hangout.myRequestStatus === "pending" ? "Requested" : hangout.myRequestStatus}
+                  </span>
+                ) : (
+                  <Button type="button" size="sm" disabled={isPending} onClick={() => requestToJoin(hangout.id)}>
+                    I&apos;m interested
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
