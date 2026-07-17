@@ -200,13 +200,13 @@ function DesktopSidebar({
       <Link
         href="/dashboard"
         aria-label="Mad Buddy dashboard"
-        className="focus-ring grid h-20 place-items-center border-b border-border/70 dark:border-white/10"
+        className="focus-ring grid h-14 shrink-0 place-items-center border-b border-border/70 dark:border-white/10"
       >
-        <BrandMark className="h-11 w-11" priority />
+        <BrandMark className="h-9 w-9" priority />
       </Link>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-5" aria-label="Social navigation">
-            <ul className="space-y-2">
+      <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-2" aria-label="Social navigation">
+            <ul className="flex flex-col items-center space-y-1">
               {socialItems.map((item) => {
                 const isActive = isNavigationItemActive(item, pathname);
                 return (
@@ -221,13 +221,13 @@ function DesktopSidebar({
                           : item.label
                       }
                       className={cn(
-                        "focus-ring relative grid h-11 w-11 place-items-center rounded-xl transition-colors motion-reduce:transition-none",
+                        "focus-ring relative grid h-9 w-9 place-items-center rounded-xl transition-colors motion-reduce:transition-none",
                         isActive
                           ? "bg-primary text-primary-foreground shadow-[0_8px_24px_hsl(var(--primary)/0.28)]"
                           : "text-muted-foreground hover:bg-secondary hover:text-foreground dark:hover:bg-white/[0.05]"
                       )}
                     >
-                      <item.icon className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
+                      <item.icon className="h-[18px] w-[18px]" strokeWidth={1.8} aria-hidden="true" />
                       {item.href === "/notifications" ? <UnreadBadge count={unreadCount} /> : null}
                     </Link>
                   </li>
@@ -236,7 +236,7 @@ function DesktopSidebar({
             </ul>
       </nav>
 
-      <div className="space-y-2 border-t border-border/70 p-3 dark:border-white/10">
+      <div className="flex shrink-0 flex-col items-center space-y-1 border-t border-border/70 p-2 dark:border-white/10">
         <div id="sidebar-subscription-status" />
         {adminItem ? (
           <Link
@@ -244,16 +244,16 @@ function DesktopSidebar({
             aria-label="Admin"
             title="Admin"
             className={cn(
-              "focus-ring grid h-11 w-11 place-items-center rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground",
+              "focus-ring grid h-9 w-9 place-items-center rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground",
               pathname === "/admin" && "bg-primary text-primary-foreground"
             )}
           >
-            <Gauge className="h-5 w-5" aria-hidden="true" />
+            <Gauge className="h-[18px] w-[18px]" aria-hidden="true" />
           </Link>
         ) : null}
         <form action={logoutAction}>
-          <Button type="submit" variant="ghost" size="icon" className="h-11 w-11" aria-label="Log out" title="Log out">
-            <LogOut className="h-5 w-5" aria-hidden="true" />
+          <Button type="submit" variant="ghost" size="icon" className="h-9 w-9" aria-label="Log out" title="Log out">
+            <LogOut className="h-[18px] w-[18px]" aria-hidden="true" />
           </Button>
         </form>
       </div>
