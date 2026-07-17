@@ -352,6 +352,7 @@ type SettingsLinkRowProps = {
     | "/settings/notifications"
     | "/settings/privacy-setup"
     | "/settings/engagement"
+    | "/settings/communication"
     | "/hangout-mode"
     | "/badges"
     | "/buddy-score"
