@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { MessagesSquare, Search, Send, VolumeX } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   deleteMessageAction,
   editMessageAction,
@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
 import { QUICK_ACTIONS, quickActionLabel, DELETED_MESSAGE_PLACEHOLDER } from "@/lib/messaging/rules";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
 const tabs = [
@@ -105,6 +106,35 @@ export function MessagesPageContent({
   }
 
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
+
+  // Realtime (spec §64): subscribe to the open thread's messages instead of
+  // only reloading after our own sends. Authorization is server-side — RLS on
+  // messages means a non-member subscription simply receives nothing. If the
+  // subscription isn't available, the existing reload-after-send still works.
+  useEffect(() => {
+    if (!selectedId) return;
+    let supabase: ReturnType<typeof createSupabaseBrowserClient>;
+    try {
+      supabase = createSupabaseBrowserClient();
+    } catch {
+      return;
+    }
+    const channel = supabase
+      .channel(`messages:${selectedId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages", filter: `conversation_id=eq.${selectedId}` },
+        () => {
+          // Refetch through the server action so blocks, hides, and receipt
+          // preferences are re-applied — never trust the raw event payload.
+          void getMessagesAction(selectedId).then(setMessages);
+        }
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [selectedId]);
 
   const visible = useMemo(() => {
     const term = query.trim().toLowerCase();
