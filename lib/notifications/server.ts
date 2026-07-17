@@ -24,7 +24,9 @@ export type CreateNotificationInput = {
     | `plan:${string}`
     | `hangout:${string}`
     | `safe_arrival:${string}`
-    | `event:${string}`;
+    | `event:${string}`
+    | `moment:${string}`
+    | `drop:${string}`;
   title: string;
   message: string;
 };

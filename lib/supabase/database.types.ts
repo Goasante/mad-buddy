@@ -1219,6 +1219,298 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["event_announcements"]["Insert"]>;
         Relationships: [];
       };
+      media_assets: {
+        Row: {
+          id: string;
+          owner_id: string;
+          storage_key: string;
+          content_type: MediaContentType;
+          size_bytes: number;
+          width: number | null;
+          height: number | null;
+          processing_status: MediaProcessingStatus;
+          moderation_status: ModerationStatus;
+          context_type: MediaContextType;
+          retention_policy: MediaRetentionPolicy;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          storage_key: string;
+          content_type: MediaContentType;
+          size_bytes: number;
+          width?: number | null;
+          height?: number | null;
+          processing_status?: MediaProcessingStatus;
+          moderation_status?: ModerationStatus;
+          context_type: MediaContextType;
+          retention_policy?: MediaRetentionPolicy;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["media_assets"]["Insert"]>;
+        Relationships: [];
+      };
+      media_variants: {
+        Row: {
+          id: string;
+          media_asset_id: string;
+          variant_type: MediaVariantType;
+          storage_key: string;
+          width: number | null;
+          height: number | null;
+          size_bytes: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          media_asset_id: string;
+          variant_type: MediaVariantType;
+          storage_key: string;
+          width?: number | null;
+          height?: number | null;
+          size_bytes?: number | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["media_variants"]["Insert"]>;
+        Relationships: [];
+      };
+      media_deletion_queue: {
+        Row: {
+          id: string;
+          media_asset_id: string;
+          reason: "parent_deleted" | "parent_expired" | "user_deleted" | "moderation";
+          queued_at: string;
+          processed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          media_asset_id: string;
+          reason: "parent_deleted" | "parent_expired" | "user_deleted" | "moderation";
+          queued_at?: string;
+          processed_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["media_deletion_queue"]["Insert"]>;
+        Relationships: [];
+      };
+      moments: {
+        Row: {
+          id: string;
+          author_id: string;
+          content_type: MomentContentType;
+          text_content: string | null;
+          media_id: string | null;
+          caption: string | null;
+          audience_type: MomentAudienceType;
+          status: MomentStatus;
+          starts_at: string;
+          expires_at: string;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          author_id: string;
+          content_type: MomentContentType;
+          text_content?: string | null;
+          media_id?: string | null;
+          caption?: string | null;
+          audience_type: MomentAudienceType;
+          status?: MomentStatus;
+          starts_at?: string;
+          expires_at: string;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["moments"]["Insert"]>;
+        Relationships: [];
+      };
+      moment_audience_targets: {
+        Row: {
+          id: string;
+          moment_id: string;
+          target_type: AudienceTargetType;
+          target_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          moment_id: string;
+          target_type: AudienceTargetType;
+          target_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["moment_audience_targets"]["Insert"]>;
+        Relationships: [];
+      };
+      moment_reactions: {
+        Row: {
+          id: string;
+          moment_id: string;
+          user_id: string;
+          reaction_type: ReactionType;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          moment_id: string;
+          user_id: string;
+          reaction_type: ReactionType;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["moment_reactions"]["Insert"]>;
+        Relationships: [];
+      };
+      muddy_drops: {
+        Row: {
+          id: string;
+          creator_id: string;
+          drop_type: DropType;
+          context_type: DropContextType;
+          context_id: string;
+          content_type: MomentContentType;
+          text_content: string | null;
+          media_id: string | null;
+          action_type: DropActionType | null;
+          action_target_id: string | null;
+          status: DropStatus;
+          starts_at: string;
+          expires_at: string;
+          max_unlocks: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          creator_id: string;
+          drop_type: DropType;
+          context_type: DropContextType;
+          context_id: string;
+          content_type: MomentContentType;
+          text_content?: string | null;
+          media_id?: string | null;
+          action_type?: DropActionType | null;
+          action_target_id?: string | null;
+          status?: DropStatus;
+          starts_at?: string;
+          expires_at: string;
+          max_unlocks?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["muddy_drops"]["Insert"]>;
+        Relationships: [];
+      };
+      drop_audience_targets: {
+        Row: {
+          id: string;
+          drop_id: string;
+          target_type: AudienceTargetType;
+          target_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          drop_id: string;
+          target_type: AudienceTargetType;
+          target_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["drop_audience_targets"]["Insert"]>;
+        Relationships: [];
+      };
+      drop_unlocks: {
+        Row: {
+          id: string;
+          drop_id: string;
+          user_id: string;
+          unlocked_at: string;
+          viewed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          drop_id: string;
+          user_id: string;
+          unlocked_at?: string;
+          viewed_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["drop_unlocks"]["Insert"]>;
+        Relationships: [];
+      };
+      content_reports: {
+        Row: {
+          id: string;
+          reporter_id: string | null;
+          content_type: ReportableContentType;
+          content_id: string;
+          reported_user_id: string | null;
+          category: ReportCategory;
+          details: string | null;
+          status: ContentReportStatus;
+          created_at: string;
+          resolved_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          reporter_id?: string | null;
+          content_type: ReportableContentType;
+          content_id: string;
+          reported_user_id?: string | null;
+          category: ReportCategory;
+          details?: string | null;
+          status?: ContentReportStatus;
+          created_at?: string;
+          resolved_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["content_reports"]["Insert"]>;
+        Relationships: [];
+      };
+      moderation_actions: {
+        Row: {
+          id: string;
+          report_id: string | null;
+          moderator_id: string | null;
+          action_type: ModerationActionType;
+          reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          report_id?: string | null;
+          moderator_id?: string | null;
+          action_type: ModerationActionType;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["moderation_actions"]["Insert"]>;
+        Relationships: [];
+      };
+      hidden_content: {
+        Row: {
+          id: string;
+          user_id: string;
+          content_type: ReportableContentType;
+          content_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          content_type: ReportableContentType;
+          content_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["hidden_content"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -1397,3 +1689,69 @@ export type EventCircleStatus = "draft" | "open" | "active" | "closing" | "archi
 export type EventCircleMemberVisibility = "members" | "count_only" | "host_only";
 export type EventCircleRole = "host" | "co_host" | "moderator" | "member";
 export type EventCircleMemberStatus = "joined" | "left" | "removed" | "banned";
+
+// --- Batch 6: Moments, Drops, Private Media, Content Safety ---
+
+export type MediaContentType = "image/jpeg" | "image/png" | "image/webp";
+export type MediaProcessingStatus = "pending" | "processing" | "ready" | "failed" | "quarantined";
+export type MediaContextType = "profile" | "moment" | "drop" | "event" | "plan" | "chat";
+export type MediaRetentionPolicy = "follows_parent" | "keep_30d" | "legal_hold";
+export type MediaVariantType = "thumb" | "feed" | "full";
+
+/** Shared moderation lifecycle for content and media (spec §52). */
+export type ModerationStatus =
+  | "active"
+  | "under_review"
+  | "restricted"
+  | "removed"
+  | "restored"
+  | "deleted_by_user";
+
+export type MomentContentType = "text" | "photo";
+export type MomentAudienceType =
+  | "close_friends"
+  | "selected_muddies"
+  | "selected_circles"
+  | "nearby_muddies"
+  | "event_circle"
+  | "plan";
+export type MomentStatus =
+  | "active"
+  | "under_review"
+  | "restricted"
+  | "removed"
+  | "deleted_by_user"
+  | "expired";
+export type AudienceTargetType = "user" | "circle" | "event_circle" | "plan";
+export type ReactionType = "heart" | "laugh" | "wave" | "fire" | "clap";
+
+export type DropType = "circle" | "plan" | "event";
+export type DropContextType = "circle" | "plan" | "event" | "event_circle";
+export type DropActionType = "open_chat" | "join_plan" | "wave" | "rsvp" | "view_announcement";
+export type DropStatus = "draft" | "scheduled" | "active" | "expired" | "cancelled" | "removed";
+
+export type ReportableContentType = "moment" | "drop" | "message" | "profile" | "announcement" | "plan";
+export type ReportCategory =
+  | "harassment"
+  | "threat_or_violence"
+  | "sexual_content"
+  | "hate_or_discrimination"
+  | "spam"
+  | "scam"
+  | "impersonation"
+  | "private_information"
+  | "unwanted_contact"
+  | "dangerous_location_sharing"
+  | "other";
+export type ContentReportStatus = "received" | "under_review" | "actioned" | "dismissed";
+export type ModerationActionType =
+  | "no_action"
+  | "hide_content"
+  | "remove_content"
+  | "warn_user"
+  | "rate_limit_user"
+  | "suspend_feature"
+  | "temporary_suspension"
+  | "permanent_suspension"
+  | "escalate"
+  | "restore_content";

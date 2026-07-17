@@ -27,7 +27,13 @@ export type RateLimitAction =
   | "safe_arrival.create"
   | "checkins.create"
   | "event_circles.join"
-  | "event_announcements.send";
+  | "event_announcements.send"
+  | "moments.create"
+  | "moments.react"
+  | "drops.create"
+  | "drops.unlock"
+  | "media.upload"
+  | "content.report";
 
 export type RateLimitResult = {
   allowed: boolean;
@@ -59,7 +65,15 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "safe_arrival.create": { limit: 10, windowSeconds: 60 * 60 },
   "checkins.create": { limit: 20, windowSeconds: 60 * 60 },
   "event_circles.join": { limit: 20, windowSeconds: 60 * 60 },
-  "event_announcements.send": { limit: 10, windowSeconds: 60 * 60 }
+  "event_announcements.send": { limit: 10, windowSeconds: 60 * 60 },
+  // Moments/Drops/media anti-spam (feature spec §16, §32, §54). Reporting is
+  // deliberately generous — never rate-limit a user out of safety tools (§16).
+  "moments.create": { limit: 25, windowSeconds: 24 * 60 * 60 },
+  "moments.react": { limit: 120, windowSeconds: 60 * 60 },
+  "drops.create": { limit: 25, windowSeconds: 24 * 60 * 60 },
+  "drops.unlock": { limit: 60, windowSeconds: 60 * 60 },
+  "media.upload": { limit: 40, windowSeconds: 60 * 60 },
+  "content.report": { limit: 60, windowSeconds: 60 * 60 }
 };
 
 function hashIp(value: string | null) {

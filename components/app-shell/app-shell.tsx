@@ -13,6 +13,7 @@ import {
   LogOut,
   MessagesSquare,
   PartyPopper,
+  Sparkles,
   Plus,
   Settings,
   UserPlus,
@@ -35,6 +36,7 @@ const navigationItems: Array<{
     | "/friends"
     | "/notifications"
     | "/plans"
+    | "/moments"
     | "/profile"
     | "/messages"
     | "/events"
@@ -50,6 +52,7 @@ const navigationItems: Array<{
   { href: "/friends", label: "Muddies", icon: UsersRound },
   { href: "/notifications", label: "Pulse", icon: Bell },
   { href: "/plans", label: "Plans", icon: CalendarCheck2 },
+  { href: "/moments", label: "Moments", icon: Sparkles },
   { href: "/profile", label: "You", icon: UserRound },
   { href: "/messages", label: "Messages", icon: MessagesSquare },
   { href: "/events", label: "Events", icon: PartyPopper },
