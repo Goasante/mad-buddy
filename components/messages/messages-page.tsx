@@ -4,9 +4,12 @@ import { useRouter } from "next/navigation";
 import { MessagesSquare, Search, Send, VolumeX } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import {
+  deleteMessageAction,
+  editMessageAction,
   getMessagesAction,
   markConversationReadAction,
   muteConversationAction,
+  reactToMessageAction,
   sendMessageAction,
   type ChatMessageView,
   type ConversationView
@@ -26,6 +29,19 @@ const tabs = [
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
+
+const REACTIONS = [
+  { id: "heart", emoji: "❤️" },
+  { id: "laugh", emoji: "😂" },
+  { id: "thumbs_up", emoji: "👍" },
+  { id: "wave", emoji: "👋" },
+  { id: "fire", emoji: "🔥" },
+  { id: "wow", emoji: "😮" }
+] as const;
+
+function reactionEmoji(id: string | null): string | null {
+  return REACTIONS.find((reaction) => reaction.id === id)?.emoji ?? null;
+}
 
 function stateLabel(state: string): string {
   switch (state) {
@@ -54,7 +70,39 @@ export function MessagesPageContent({
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [reactingId, setReactingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  function react(messageId: string, reaction: string) {
+    if (!selectedId) return;
+    setReactingId(null);
+    startTransition(async () => {
+      const result = await reactToMessageAction(messageId, reaction);
+      if (!result.ok) setFeedback(result.message);
+      setMessages(await getMessagesAction(selectedId));
+    });
+  }
+
+  function saveEdit(messageId: string) {
+    if (!selectedId || !editDraft.trim()) return;
+    startTransition(async () => {
+      const result = await editMessageAction(messageId, editDraft.trim());
+      if (!result.ok) setFeedback(result.message);
+      setEditingId(null);
+      setMessages(await getMessagesAction(selectedId));
+    });
+  }
+
+  function remove(messageId: string) {
+    if (!selectedId) return;
+    startTransition(async () => {
+      const result = await deleteMessageAction(messageId, true);
+      if (!result.ok) setFeedback(result.message);
+      setMessages(await getMessagesAction(selectedId));
+    });
+  }
 
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
 
@@ -261,30 +309,125 @@ export function MessagesPageContent({
                         {message.text}
                       </p>
                     ) : (
-                      <div key={message.id} className={cn("flex", message.isMine ? "justify-end" : "justify-start")}>
-                        <div
-                          className={cn(
-                            "max-w-[75%] rounded-2xl px-3 py-2",
-                            message.isMine ? "bg-primary text-white" : "bg-secondary"
-                          )}
-                        >
-                          <p className={cn("text-sm", message.deleted && "italic opacity-70")}>
-                            {message.deleted
-                              ? DELETED_MESSAGE_PLACEHOLDER
-                              : message.quickActionType
-                                ? quickActionLabel(message.quickActionType)
-                                : message.text}
-                          </p>
-                          <p
+                      <div
+                        key={message.id}
+                        className={cn("group flex", message.isMine ? "justify-end" : "justify-start")}
+                      >
+                        <div className={cn("max-w-[75%]", message.isMine && "flex flex-col items-end")}>
+                          <div
                             className={cn(
-                              "mt-0.5 text-[10px]",
-                              message.isMine ? "text-white/70" : "text-muted-foreground"
+                              "rounded-2xl px-3 py-2",
+                              message.isMine ? "bg-primary text-white" : "bg-secondary"
                             )}
                           >
-                            {formatRelativeTime(message.createdAt)}
-                            {message.editedAt ? " · edited" : ""}
-                            {message.isMine ? ` · ${stateLabel(message.state)}` : ""}
-                          </p>
+                            {editingId === message.id ? (
+                              <form
+                                className="flex items-center gap-1.5"
+                                onSubmit={(event) => {
+                                  event.preventDefault();
+                                  saveEdit(message.id);
+                                }}
+                              >
+                                <Input
+                                  value={editDraft}
+                                  maxLength={2000}
+                                  autoFocus
+                                  onChange={(event) => setEditDraft(event.target.value)}
+                                  aria-label="Edit message"
+                                  className="h-7 bg-white text-sm text-foreground"
+                                />
+                                <Button type="submit" size="sm" disabled={!editDraft.trim() || isPending}>
+                                  Save
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => setEditingId(null)}>
+                                  Cancel
+                                </Button>
+                              </form>
+                            ) : (
+                              <p className={cn("text-sm", message.deleted && "italic opacity-70")}>
+                                {message.deleted
+                                  ? DELETED_MESSAGE_PLACEHOLDER
+                                  : message.quickActionType
+                                    ? quickActionLabel(message.quickActionType)
+                                    : message.text}
+                              </p>
+                            )}
+                            <p
+                              className={cn(
+                                "mt-0.5 text-[10px]",
+                                message.isMine ? "text-white/70" : "text-muted-foreground"
+                              )}
+                            >
+                              {formatRelativeTime(message.createdAt)}
+                              {message.editedAt ? " · edited" : ""}
+                              {message.isMine ? ` · ${stateLabel(message.state)}` : ""}
+                            </p>
+                          </div>
+
+                          {message.myReaction ? (
+                            <button
+                              type="button"
+                              onClick={() => react(message.id, message.myReaction as string)}
+                              title="Remove reaction"
+                              className="focus-ring -mt-1 w-fit rounded-full border border-border bg-card px-1.5 text-xs"
+                            >
+                              {reactionEmoji(message.myReaction)}
+                            </button>
+                          ) : null}
+
+                          {!message.deleted ? (
+                            <div
+                              className={cn(
+                                "mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
+                                message.isMine ? "justify-end" : "justify-start"
+                              )}
+                            >
+                              {reactingId === message.id ? (
+                                REACTIONS.map((reaction) => (
+                                  <button
+                                    key={reaction.id}
+                                    type="button"
+                                    onClick={() => react(message.id, reaction.id)}
+                                    aria-label={`React with ${reaction.id}`}
+                                    className="focus-ring rounded px-0.5 text-sm hover:scale-110"
+                                  >
+                                    {reaction.emoji}
+                                  </button>
+                                ))
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setReactingId(message.id)}
+                                    className="focus-ring rounded px-1 hover:text-foreground"
+                                  >
+                                    React
+                                  </button>
+                                  {message.isMine && message.messageType === "text" ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingId(message.id);
+                                          setEditDraft(message.text ?? "");
+                                        }}
+                                        className="focus-ring rounded px-1 hover:text-foreground"
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => remove(message.id)}
+                                        className="focus-ring rounded px-1 hover:text-destructive"
+                                      >
+                                        Delete
+                                      </button>
+                                    </>
+                                  ) : null}
+                                </>
+                              )}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     )
