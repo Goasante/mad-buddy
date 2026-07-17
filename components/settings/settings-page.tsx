@@ -225,6 +225,12 @@ export function SettingsPageContent({
           />
           <SettingsLinkRow
             icon={Bell}
+            title="Focus & balance"
+            description="Exam Mode, notification limits, recaps and streaks."
+            href="/settings/engagement"
+          />
+          <SettingsLinkRow
+            icon={Bell}
             title="Notification preferences"
             description="Categories, quiet hours, and how you're reached."
             href="/settings/notifications"
@@ -339,6 +345,7 @@ type SettingsLinkRowProps = {
     | "/settings/glow-visibility"
     | "/settings/notifications"
     | "/settings/privacy-setup"
+    | "/settings/engagement"
     | "/hangout-mode"
     | "/badges"
     | "/buddy-score"

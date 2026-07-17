@@ -2068,6 +2068,204 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["promotion_redemptions"]["Insert"]>;
         Relationships: [];
       };
+      friendship_recaps: {
+        Row: {
+          id: string;
+          user_id: string;
+          period_type: "weekly" | "monthly" | "semester" | "annual";
+          period_start: string;
+          period_end: string;
+          summary_data: Json;
+          generated_at: string;
+          viewed_at: string | null;
+          status: "generating" | "ready" | "failed" | "dismissed";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          period_type: "weekly" | "monthly" | "semester" | "annual";
+          period_start: string;
+          period_end: string;
+          summary_data?: Json;
+          generated_at?: string;
+          viewed_at?: string | null;
+          status?: "generating" | "ready" | "failed" | "dismissed";
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["friendship_recaps"]["Insert"]>;
+        Relationships: [];
+      };
+      recap_preferences: {
+        Row: {
+          user_id: string;
+          weekly_enabled: boolean;
+          monthly_enabled: boolean;
+          annual_enabled: boolean;
+          sharing_enabled: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          weekly_enabled?: boolean;
+          monthly_enabled?: boolean;
+          annual_enabled?: boolean;
+          sharing_enabled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["recap_preferences"]["Insert"]>;
+        Relationships: [];
+      };
+      friendship_streaks: {
+        Row: {
+          id: string;
+          friendship_id: string;
+          current_weeks: number;
+          longest_weeks: number;
+          last_qualified_period: string | null;
+          status: "active" | "paused" | "ended";
+          paused_until: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          friendship_id: string;
+          current_weeks?: number;
+          longest_weeks?: number;
+          last_qualified_period?: string | null;
+          status?: "active" | "paused" | "ended";
+          paused_until?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["friendship_streaks"]["Insert"]>;
+        Relationships: [];
+      };
+      streak_qualifying_events: {
+        Row: {
+          id: string;
+          friendship_id: string;
+          actor_id: string;
+          event_type: StreakEventTypeName;
+          event_reference_id: string | null;
+          period_key: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          friendship_id: string;
+          actor_id: string;
+          event_type: StreakEventTypeName;
+          event_reference_id?: string | null;
+          period_key: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["streak_qualifying_events"]["Insert"]>;
+        Relationships: [];
+      };
+      achievement_definitions: {
+        Row: {
+          id: string;
+          code: string;
+          name: string;
+          description: string;
+          category: "connection" | "community" | "privacy" | "balance" | "safety";
+          criteria_type: "first_time" | "count" | "distinct_count";
+          criteria_value: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          code: string;
+          name: string;
+          description: string;
+          category: "connection" | "community" | "privacy" | "balance" | "safety";
+          criteria_type: "first_time" | "count" | "distinct_count";
+          criteria_value?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["achievement_definitions"]["Insert"]>;
+        Relationships: [];
+      };
+      user_achievements: {
+        Row: {
+          id: string;
+          user_id: string;
+          achievement_code: string;
+          earned_at: string;
+          viewed_at: string | null;
+          shared_at: string | null;
+          hidden: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          achievement_code: string;
+          earned_at?: string;
+          viewed_at?: string | null;
+          shared_at?: string | null;
+          hidden?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["user_achievements"]["Insert"]>;
+        Relationships: [];
+      };
+      engagement_preferences: {
+        Row: {
+          user_id: string;
+          recaps_enabled: boolean;
+          streaks_enabled: boolean;
+          achievements_enabled: boolean;
+          streak_notifications_enabled: boolean;
+          daily_notification_budget: number;
+          exam_mode_until: string | null;
+          exam_mode_allow_close_friends: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          recaps_enabled?: boolean;
+          streaks_enabled?: boolean;
+          achievements_enabled?: boolean;
+          streak_notifications_enabled?: boolean;
+          daily_notification_budget?: number;
+          exam_mode_until?: string | null;
+          exam_mode_allow_close_friends?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["engagement_preferences"]["Insert"]>;
+        Relationships: [];
+      };
+      notification_budget_usage: {
+        Row: {
+          id: string;
+          user_id: string;
+          day_key: string;
+          sent_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          day_key: string;
+          sent_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["notification_budget_usage"]["Insert"]>;
+        Relationships: [];
+      };
       privacy_setup_versions: {
         Row: {
           user_id: string;
@@ -2422,6 +2620,17 @@ export type ProfileFieldName =
   | "pronouns";
 
 export type ProfileFieldVisibility = "only_me" | "approved_muddies" | "close_friends" | "shared_communities";
+
+// --- Batch 11: Recaps, Streaks, Achievements, Healthy Engagement ---
+
+export type StreakEventTypeName =
+  | "plan_completed"
+  | "wave_exchanged"
+  | "ping_accepted"
+  | "shared_plan"
+  | "safe_arrival_completed"
+  | "event_checked_in_together"
+  | "conversation_activity";
 
 export type ModerationActionType =
   | "no_action"
