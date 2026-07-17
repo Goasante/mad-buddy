@@ -1,7 +1,9 @@
 "use client";
 
-import { Copy, QrCode, RefreshCcw, ShieldCheck, UserPlus, X } from "lucide-react";
-import { useState, useTransition } from "react";
+import Link from "next/link";
+import { Copy, QrCode, RefreshCcw, ScanLine, ShieldCheck, UserPlus, X } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
+import { toDataURL } from "qrcode";
 import {
   createInviteAction,
   getPersonalQrAction,
@@ -20,7 +22,23 @@ export function InviteBuddiesPage({ initialQr = null }: { initialQr?: PersonalQr
   const [qr, setQr] = useState<PersonalQr | null>(initialQr);
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [qrImage, setQrImage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Rendered locally from the opaque token — nothing personal is encoded.
+  useEffect(() => {
+    if (!qr?.token) {
+      setQrImage(null);
+      return;
+    }
+    let cancelled = false;
+    void toDataURL(qr.token, { margin: 1, width: 220 }).then((url) => {
+      if (!cancelled) setQrImage(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [qr?.token]);
 
   const fullUrl = invite ? `${typeof window !== "undefined" ? window.location.origin : ""}${invite.url}` : "";
 
@@ -127,9 +145,14 @@ export function InviteBuddiesPage({ initialQr = null }: { initialQr?: PersonalQr
 
         {qr ? (
           <div className="mt-4 space-y-3">
-            <div className="grid place-items-center rounded-xl border border-border/70 bg-background/60 p-4">
+            <div className="grid place-items-center rounded-xl border border-border/70 bg-white p-4">
               {/* The token itself is opaque and carries no personal data. */}
-              <p className="break-all text-center font-mono text-[10px] text-muted-foreground">{qr.token}</p>
+              {qrImage ? (
+                // eslint-disable-next-line @next/next/no-img-element -- local data URL, not a remote asset
+                <img src={qrImage} alt="Your personal QR code" width={220} height={220} />
+              ) : (
+                <p className="break-all text-center font-mono text-[10px] text-muted-foreground">{qr.token}</p>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm">
@@ -145,6 +168,13 @@ export function InviteBuddiesPage({ initialQr = null }: { initialQr?: PersonalQr
         ) : (
           <p className="mt-4 text-sm text-muted-foreground">Your QR isn&apos;t available right now.</p>
         )}
+
+        <Button asChild type="button" variant="outline" className="mt-4">
+          <Link href="/scan">
+            <ScanLine className="h-4 w-4" aria-hidden="true" />
+            Scan someone&apos;s code
+          </Link>
+        </Button>
       </Card>
 
       <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-card/50 p-4">
