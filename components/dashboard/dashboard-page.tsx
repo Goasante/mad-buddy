@@ -400,7 +400,16 @@ export function DashboardPageContent({
         </div>
 
         {visibleFriends.length > 0 ? (
-          <div className="flex gap-4 overflow-x-auto pb-1" aria-label="Nearby Muddies">
+          // overflow-x-auto forces the browser to also clip vertically
+          // (overflow-y computes to "auto" once overflow-x isn't "visible"),
+          // which was hard-cutting the glow ring's blurred halo at the row's
+          // top edge, and at the left edge of the first avatar. Padding
+          // gives the blur room to render; the matching negative margin
+          // keeps the row's visible position unchanged.
+          <div
+            className="-mx-8 -mt-8 flex gap-4 overflow-x-auto px-8 pb-3 pt-8"
+            aria-label="Nearby Muddies"
+          >
             {visibleFriends.map((friend) => (
               <button
                 key={friend.friendId}
