@@ -174,7 +174,27 @@ export async function uploadAvatarAction(formData: FormData): Promise<Integratio
   const admin = createSupabaseAdminClient();
   const uploadedAt = Date.now();
   const path = `${userId}/avatar-${uploadedAt}.${extension}`;
-  const { error } = await admin.storage.from("avatars").upload(path, file, {
+
+  // Avatars are on a public bucket, so EXIF stripping matters even more here:
+  // re-encode (drops GPS and all metadata) and cap the dimensions.
+  let avatarBuffer: Buffer;
+  try {
+    const sharp = (await import("sharp")).default;
+    const pipeline = sharp(Buffer.from(await file.arrayBuffer()), { failOn: "error" })
+      .rotate()
+      .resize(512, 512, { fit: "inside", withoutEnlargement: true });
+    avatarBuffer = await (extension === "png"
+      ? pipeline.png()
+      : extension === "webp"
+        ? pipeline.webp()
+        : pipeline.jpeg({ quality: 85 })
+    ).toBuffer();
+  } catch {
+    return { ok: false, message: "That image couldn't be processed. Try a different photo." };
+  }
+
+  const { error } = await admin.storage.from("avatars").upload(path, avatarBuffer, {
+    contentType: validation.mimeType,
     cacheControl: "31536000",
     upsert: false
   });

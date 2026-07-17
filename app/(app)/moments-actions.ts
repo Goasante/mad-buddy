@@ -115,7 +115,20 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
   if (assetError || !asset) return { ok: false, message: "Couldn't prepare the upload." };
 
   const key = storageKeyFor({ ownerId: userId, context: "moment", mediaId: asset.id, kind: validation.kind });
-  const { error: uploadError } = await admin.storage.from("media").upload(key, file, {
+
+  // Strip EXIF (GPS!) and build thumb/feed variants BEFORE anything reaches
+  // storage — the stored original is already the metadata-free re-encode.
+  let processed;
+  try {
+    const { processImageUpload } = await import("@/lib/media/processing");
+    processed = await processImageUpload(Buffer.from(await file.arrayBuffer()), validation.kind);
+  } catch {
+    await admin.from("media_assets").delete().eq("id", asset.id).eq("owner_id", userId);
+    return { ok: false, message: "That image couldn't be processed. Try a different photo." };
+  }
+
+  const { variantStorageKey } = await import("@/lib/media/processing");
+  const { error: uploadError } = await admin.storage.from("media").upload(key, processed.original.buffer, {
     contentType: validation.mimeType,
     upsert: false
   });
@@ -127,9 +140,40 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
     return { ok: false, message: "Couldn't upload that image. Try again." };
   }
 
+  // Variants are best-effort: signMediaForAsset falls back to the (already
+  // stripped) original if a variant upload failed.
+  const variantRows: Array<{ variant: "thumb" | "feed"; key: string; image: (typeof processed.variants)["thumb"] }> = [
+    { variant: "thumb", key: variantStorageKey(key, "thumb"), image: processed.variants.thumb },
+    { variant: "feed", key: variantStorageKey(key, "feed"), image: processed.variants.feed }
+  ];
+  await Promise.all(
+    variantRows.map(async ({ variant, key: variantKey, image }) => {
+      const { error } = await admin.storage.from("media").upload(variantKey, image.buffer, {
+        contentType: validation.mimeType,
+        upsert: false
+      });
+      if (error) return;
+      await admin.from("media_variants").insert({
+        media_asset_id: asset.id,
+        variant_type: variant,
+        storage_key: variantKey,
+        width: image.width,
+        height: image.height,
+        size_bytes: image.buffer.byteLength
+      });
+    })
+  );
+
   await admin
     .from("media_assets")
-    .update({ storage_key: key, processing_status: "ready", updated_at: new Date().toISOString() })
+    .update({
+      storage_key: key,
+      processing_status: "ready",
+      width: processed.original.width,
+      height: processed.original.height,
+      size_bytes: processed.original.buffer.byteLength,
+      updated_at: new Date().toISOString()
+    })
     .eq("id", asset.id)
     .eq("owner_id", userId);
 
