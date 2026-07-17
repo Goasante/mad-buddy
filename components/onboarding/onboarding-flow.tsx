@@ -2,20 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Bell,
-  Check,
-  Eye,
-  Ghost,
-  LocateFixed,
-  MessageCircle,
-  ShieldCheck,
-  UserPlus
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Eye, LocateFixed, ShieldCheck, UserPlus } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { completeOnboardingAction } from "@/app/(onboarding)/onboarding/actions";
+import {
+  completeOnboardingStepAction,
+  completeOnboardingV2Action
+} from "@/app/(app)/onboarding-actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,7 +24,7 @@ import {
   VisibilityPreviewCard,
   type VisibilityPreference
 } from "@/components/onboarding/visibility-preview-card";
-import { LocationPermissionPanel } from "@/components/onboarding/location-permission-panel";
+import { PrivacySetupPanel } from "@/components/onboarding/privacy-setup-panel";
 import { cn } from "@/lib/utils";
 
 type OnboardingStep = {
@@ -52,14 +45,9 @@ const steps: OnboardingStep[] = [
     description: "See what approved friends can safely view."
   },
   {
-    id: "location",
-    title: "Location privacy",
-    description: "Turn precise location into private glow signals."
-  },
-  {
-    id: "preferences",
-    title: "Set preferences",
-    description: "Choose visibility and nearby alerts."
+    id: "privacy",
+    title: "Privacy setup",
+    description: "You start hidden. Choose who can see you and who can reach you."
   },
   {
     id: "friend",
@@ -68,23 +56,38 @@ const steps: OnboardingStep[] = [
   }
 ];
 
-export function OnboardingFlow() {
+export function OnboardingFlow({
+  initialName = "",
+  initialUsername = "",
+  initialBio = ""
+}: {
+  initialName?: string;
+  initialUsername?: string;
+  initialBio?: string;
+}) {
   const router = useRouter();
   const [stepIndex, setStepIndex] = useState(0);
-  const [displayName, setDisplayName] = useState("Godfred");
-  const [username, setUsername] = useState("godfred");
-  const [bio, setBio] = useState("");
+  const [displayName, setDisplayName] = useState(initialName);
+  const [username, setUsername] = useState(initialUsername);
+  const [bio, setBio] = useState(initialBio);
   const [moodStatus, setMoodStatus] = useState<MoodStatus>("open");
-  const [visibility, setVisibility] = useState<VisibilityPreference>("friends");
-  const [notifications, setNotifications] = useState("smart");
+  const [privacySaved, setPrivacySaved] = useState(false);
   const [firstFriend, setFirstFriend] = useState("");
   const [feedback, setFeedback] = useState("Ready to set up your profile.");
   const [isPending, startTransition] = useTransition();
+
+  // Preview only — real visibility is whatever the privacy panel saves
+  // (hidden by default, spec §31).
+  const previewVisibility: VisibilityPreference = privacySaved ? "friends" : "ghost";
 
   const activeStep = steps[stepIndex];
   const progress = useMemo(() => ((stepIndex + 1) / steps.length) * 100, [stepIndex]);
 
   function goNext() {
+    // Leaving the profile step records the milestone server-side.
+    if (steps[stepIndex].id === "profile" && displayName.trim().length >= 2) {
+      void completeOnboardingStepAction("profile_completed");
+    }
     setStepIndex((current) => Math.min(current + 1, steps.length - 1));
   }
 
@@ -93,20 +96,26 @@ export function OnboardingFlow() {
   }
 
   function finishOnboarding() {
+    if (!privacySaved) {
+      setFeedback("Save your privacy settings first — you start hidden either way.");
+      setStepIndex(steps.findIndex((step) => step.id === "privacy"));
+      return;
+    }
     startTransition(async () => {
       const result = await completeOnboardingAction({
         fullName: displayName,
         username,
         bio,
         moodStatus,
-        visibility,
-        notifications,
+        notifications: "smart",
         firstFriend
       });
 
       setFeedback(result.message);
 
       if (result.ok) {
+        if (firstFriend.trim()) void completeOnboardingStepAction("first_muddy_added");
+        await completeOnboardingV2Action();
         router.push("/dashboard");
       }
     });
@@ -183,19 +192,28 @@ export function OnboardingFlow() {
                 displayName={displayName}
                 username={username}
                 moodStatus={moodStatus}
-                visibility={visibility}
+                visibility={previewVisibility}
               />
             ) : null}
-            {stepIndex === 2 ? <LocationStep /> : null}
+            {stepIndex === 2 ? (
+              <div>
+                <Badge variant="blue">Privacy setup</Badge>
+                <h2 className="mt-4 text-2xl font-semibold">Choose who can see you.</h2>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                  You start hidden. Nothing is shared until you actively turn your glow on — and location
+                  permission is only requested after you choose an audience.
+                </p>
+                <div className="mt-6">
+                  <PrivacySetupPanel
+                    onSaved={() => {
+                      setPrivacySaved(true);
+                      setFeedback("Privacy saved. One more step.");
+                    }}
+                  />
+                </div>
+              </div>
+            ) : null}
             {stepIndex === 3 ? (
-              <PreferencesStep
-                visibility={visibility}
-                setVisibility={setVisibility}
-                notifications={notifications}
-                setNotifications={setNotifications}
-              />
-            ) : null}
-            {stepIndex === 4 ? (
               <FirstFriendStep firstFriend={firstFriend} setFirstFriend={setFirstFriend} />
             ) : null}
 
@@ -308,141 +326,6 @@ function PreviewStep({ displayName, username, moodStatus, visibility }: PreviewS
         moodStatus={moodStatus}
         visibility={visibility}
       />
-    </div>
-  );
-}
-
-function LocationStep() {
-  return (
-    <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-      <div>
-        <Badge variant="blue">Location privacy</Badge>
-        <h2 className="mt-4 text-2xl font-semibold">Enable location without becoming trackable.</h2>
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">
-          Location is used to create a private proximity level. The UI should never
-          show latitude, longitude, exact distance, GPS accuracy, or a map pin.
-        </p>
-        <div className="mt-5 rounded-lg border border-amber-300/20 bg-amber-300/10 p-4 text-sm leading-6 text-amber-50">
-          Friendly signal labels are okay. Technical GPS details are not shown to friends.
-        </div>
-      </div>
-      <LocationPermissionPanel />
-    </div>
-  );
-}
-
-type PreferencesStepProps = {
-  visibility: VisibilityPreference;
-  setVisibility: (value: VisibilityPreference) => void;
-  notifications: string;
-  setNotifications: (value: string) => void;
-};
-
-function PreferencesStep({
-  visibility,
-  setVisibility,
-  notifications,
-  setNotifications
-}: PreferencesStepProps) {
-  return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <ChoiceGroup
-        title="Visibility preference"
-        options={[
-          {
-            value: "friends",
-            label: "Visible to Muddies",
-            description: "Approved friends can see safe glow signals.",
-            icon: Eye
-          },
-          {
-            value: "app_open",
-            label: "Only when app is open",
-            description: "Glow only while you are actively using Mad Buddy.",
-            icon: LocateFixed
-          },
-          {
-            value: "ghost",
-            label: "Ghost Mode",
-            description: "Stay hidden until you turn visibility back on.",
-            icon: Ghost
-          }
-        ]}
-        value={visibility}
-        onChange={(value) => setVisibility(value as VisibilityPreference)}
-      />
-      <ChoiceGroup
-        title="Notification preference"
-        options={[
-          {
-            value: "smart",
-            label: "Smart nearby alerts",
-            description: "Limit nearby alerts so the app stays calm.",
-            icon: Bell
-          },
-          {
-            value: "requests",
-            label: "Requests only",
-            description: "Friend requests and account updates only.",
-            icon: UserPlus
-          },
-          {
-            value: "quiet",
-            label: "Quiet notifications",
-            description: "Minimal alerts while you settle in.",
-            icon: MessageCircle
-          }
-        ]}
-        value={notifications}
-        onChange={setNotifications}
-      />
-    </div>
-  );
-}
-
-type ChoiceOption = {
-  value: string;
-  label: string;
-  description: string;
-  icon: typeof Eye;
-};
-
-type ChoiceGroupProps = {
-  title: string;
-  options: ChoiceOption[];
-  value: string;
-  onChange: (value: string) => void;
-};
-
-function ChoiceGroup({ title, options, value, onChange }: ChoiceGroupProps) {
-  return (
-    <div>
-      <h2 className="text-xl font-semibold">{title}</h2>
-      <div className="mt-4 grid gap-3">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className={cn(
-              "focus-ring safe-motion rounded-lg border p-4 text-left",
-              value === option.value
-                ? "border-accent bg-emerald-300/10"
-                : "border-white/15 bg-white/[0.04] hover:bg-white/[0.08]"
-            )}
-            onClick={() => onChange(option.value)}
-          >
-            <div className="flex gap-3">
-              <option.icon className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
-              <div>
-                <p className="text-sm font-semibold">{option.label}</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {option.description}
-                </p>
-              </div>
-            </div>
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

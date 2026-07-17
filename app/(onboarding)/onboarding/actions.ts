@@ -21,7 +21,12 @@ const onboardingSchema = z.object({
     .regex(/^[a-z0-9_]+$/),
   bio: z.string().trim().max(160).optional(),
   moodStatus: z.string().trim().max(80).optional(),
-  visibility: z.enum(["friends", "app_open", "ghost"]),
+  /**
+   * Legacy field. The spec-correct PrivacySetupPanel now owns visibility via
+   * savePrivacySetupAction (hidden by default) — when omitted, this action
+   * leaves visibility_status alone.
+   */
+  visibility: z.enum(["friends", "app_open", "ghost"]).optional(),
   notifications: z.enum(["smart", "requests", "quiet"]),
   firstFriend: z
     .string()
@@ -61,7 +66,7 @@ export async function completeOnboardingAction(input: unknown): Promise<Onboardi
     username: parsed.data.username,
     bio: parsed.data.bio || null,
     mood_status: parsed.data.moodStatus || null,
-    visibility_status: visibilityMap[parsed.data.visibility],
+    ...(parsed.data.visibility ? { visibility_status: visibilityMap[parsed.data.visibility] } : {}),
     is_onboarded: true
   });
 
