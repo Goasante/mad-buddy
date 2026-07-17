@@ -600,6 +600,8 @@ export type Database = {
           ghost_mode_type: string;
           scheduled_visibility: Json;
           notification_preferences: Json;
+          // Added by the batch-7 messaging migration.
+          communication_preferences: Json;
         };
         Insert: {
           id?: string;
@@ -609,6 +611,7 @@ export type Database = {
           ghost_mode_type?: string;
           scheduled_visibility?: Json;
           notification_preferences?: Json;
+          communication_preferences?: Json;
           created_at?: string;
           updated_at?: string;
         };
@@ -1511,6 +1514,158 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["hidden_content"]["Insert"]>;
         Relationships: [];
       };
+      conversations: {
+        Row: {
+          id: string;
+          conversation_type: ConversationType;
+          created_by: string | null;
+          context_type: ConversationContextType | null;
+          context_id: string | null;
+          status: ConversationStatus;
+          direct_key: string | null;
+          created_at: string;
+          updated_at: string;
+          last_message_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          conversation_type: ConversationType;
+          created_by?: string | null;
+          context_type?: ConversationContextType | null;
+          context_id?: string | null;
+          status?: ConversationStatus;
+          direct_key?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          last_message_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["conversations"]["Insert"]>;
+        Relationships: [];
+      };
+      conversation_members: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          user_id: string;
+          role: ConversationRole;
+          status: ConversationMemberStatus;
+          joined_at: string;
+          left_at: string | null;
+          muted_until: string | null;
+          last_read_message_id: string | null;
+          read_receipts_enabled: boolean;
+          history_visible_from: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          user_id: string;
+          role?: ConversationRole;
+          status?: ConversationMemberStatus;
+          joined_at?: string;
+          left_at?: string | null;
+          muted_until?: string | null;
+          last_read_message_id?: string | null;
+          read_receipts_enabled?: boolean;
+          history_visible_from?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["conversation_members"]["Insert"]>;
+        Relationships: [];
+      };
+      group_settings: {
+        Row: {
+          conversation_id: string;
+          name: string;
+          description: string | null;
+          image_media_id: string | null;
+          join_mode: GroupJoinMode;
+          history_visibility: GroupHistoryVisibility;
+          posting_mode: GroupPostingMode;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          conversation_id: string;
+          name: string;
+          description?: string | null;
+          image_media_id?: string | null;
+          join_mode?: GroupJoinMode;
+          history_visibility?: GroupHistoryVisibility;
+          posting_mode?: GroupPostingMode;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["group_settings"]["Insert"]>;
+        Relationships: [];
+      };
+      messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_id: string | null;
+          message_type: MessageType;
+          text_content: string | null;
+          media_id: string | null;
+          reply_to_message_id: string | null;
+          system_event_type: SystemEventType | null;
+          quick_action_type: QuickActionType | null;
+          duration_seconds: number | null;
+          waveform_data: Json | null;
+          status: MessageStatus;
+          client_message_id: string | null;
+          created_at: string;
+          edited_at: string | null;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender_id?: string | null;
+          message_type?: MessageType;
+          text_content?: string | null;
+          media_id?: string | null;
+          reply_to_message_id?: string | null;
+          system_event_type?: SystemEventType | null;
+          quick_action_type?: QuickActionType | null;
+          duration_seconds?: number | null;
+          waveform_data?: Json | null;
+          status?: MessageStatus;
+          client_message_id?: string | null;
+          created_at?: string;
+          edited_at?: string | null;
+          deleted_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
+        Relationships: [];
+      };
+      message_reactions: {
+        Row: {
+          id: string;
+          message_id: string;
+          user_id: string;
+          reaction_type: MessageReactionType;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          message_id: string;
+          user_id: string;
+          reaction_type: MessageReactionType;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["message_reactions"]["Insert"]>;
+        Relationships: [];
+      };
+      message_hides: {
+        Row: { id: string; message_id: string; user_id: string; created_at: string };
+        Insert: { id?: string; message_id: string; user_id: string; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["message_hides"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -1744,6 +1899,38 @@ export type ReportCategory =
   | "dangerous_location_sharing"
   | "other";
 export type ContentReportStatus = "received" | "under_review" | "actioned" | "dismissed";
+// --- Batch 7: Messaging, Group Chat, Plan Chat, Voice Notes ---
+
+export type ConversationType = "direct" | "group" | "plan" | "event" | "safe_arrival";
+export type ConversationContextType = "plan" | "event" | "event_circle" | "safe_arrival" | "ping" | "wave";
+export type ConversationStatus = "active" | "archived" | "restricted" | "deleted";
+export type ConversationRole = "owner" | "admin" | "moderator" | "member";
+export type ConversationMemberStatus = "invited" | "joined" | "left" | "removed" | "banned";
+
+export type GroupJoinMode = "invite" | "link" | "closed";
+export type GroupHistoryVisibility = "since_join" | "full" | "none";
+export type GroupPostingMode = "all_members" | "admins_only" | "moderated";
+
+export type MessageType = "text" | "image" | "voice_note" | "system" | "quick_action";
+export type MessageStatus = "sent" | "delivered" | "read" | "failed" | "deleted" | "removed_by_moderation";
+export type MessageReactionType = "heart" | "laugh" | "thumbs_up" | "wave" | "fire" | "wow";
+export type SystemEventType =
+  | "plan_confirmed"
+  | "plan_time_changed"
+  | "plan_place_changed"
+  | "plan_cancelled"
+  | "poll_confirmed"
+  | "participant_joined"
+  | "participant_left"
+  | "conversation_created";
+export type QuickActionType =
+  | "on_my_way"
+  | "im_here"
+  | "running_late"
+  | "where_to_meet"
+  | "cant_make_it"
+  | "start_without_me";
+
 export type ModerationActionType =
   | "no_action"
   | "hide_content"

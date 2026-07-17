@@ -26,7 +26,8 @@ export type CreateNotificationInput = {
     | `safe_arrival:${string}`
     | `event:${string}`
     | `moment:${string}`
-    | `drop:${string}`;
+    | `drop:${string}`
+    | `message:${string}`;
   title: string;
   message: string;
 };

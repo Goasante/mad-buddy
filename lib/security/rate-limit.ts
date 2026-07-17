@@ -33,7 +33,10 @@ export type RateLimitAction =
   | "drops.create"
   | "drops.unlock"
   | "media.upload"
-  | "content.report";
+  | "content.report"
+  | "messages.send"
+  | "conversations.create"
+  | "groups.create";
 
 export type RateLimitResult = {
   allowed: boolean;
@@ -73,7 +76,12 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "drops.create": { limit: 25, windowSeconds: 24 * 60 * 60 },
   "drops.unlock": { limit: 60, windowSeconds: 60 * 60 },
   "media.upload": { limit: 40, windowSeconds: 60 * 60 },
-  "content.report": { limit: 60, windowSeconds: 60 * 60 }
+  "content.report": { limit: 60, windowSeconds: 60 * 60 },
+  // Messaging (feature spec §8): generous enough not to damage normal
+  // conversations — 30/minute is the documented cap.
+  "messages.send": { limit: 30, windowSeconds: 60 },
+  "conversations.create": { limit: 30, windowSeconds: 60 * 60 },
+  "groups.create": { limit: 10, windowSeconds: 24 * 60 * 60 }
 };
 
 function hashIp(value: string | null) {
