@@ -20,6 +20,7 @@ import {
   REPORT_CONFIRMATION_MESSAGE,
   requiresHumanReview
 } from "@/lib/content/safety";
+import { guardAction } from "@/lib/admin/enforcement";
 import { storageKeyFor, uploadValidationMessage, validateImageUpload } from "@/lib/media/validation";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
@@ -80,6 +81,12 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
   const rateLimit = await consumeRateLimit({ action: "media.upload", userId });
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
+  const admin = createSupabaseAdminClient();
+
+  // Kill switch + account restrictions, before any bytes are read or stored.
+  const guard = await guardAction(admin, { userId, surface: "moments", control: "media_uploads" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+
   const file = formData.get("media");
   if (!(file instanceof File)) return { ok: false, message: "Choose an image first." };
 
@@ -92,7 +99,6 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
   });
   if (!validation.valid) return { ok: false, message: uploadValidationMessage(validation.reason) };
 
-  const admin = createSupabaseAdminClient();
   const { data: asset, error: assetError } = await admin
     .from("media_assets")
     .insert({
@@ -177,6 +183,10 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
   const admin = createSupabaseAdminClient();
+
+  const guard = await guardAction(admin, { userId, surface: "moments" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+
   const access = await getCurrentSubscriptionAccess(userId);
   const limits = contentTierLimitsFor(access.plan);
 

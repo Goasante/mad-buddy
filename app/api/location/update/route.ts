@@ -3,8 +3,10 @@ import { z } from "zod";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { locationUpdateRequestSchema, confidenceFromAccuracy } from "@/lib/proximity/backend";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import { guardFeature } from "@/lib/admin/enforcement";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
+import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 
 const responseSchema = z.object({
   received: z.boolean(),
@@ -68,6 +70,18 @@ export async function POST(request: Request) {
 
   if (!rateLimit.allowed) {
     return NextResponse.json({ error: rateLimitMessage(rateLimit.resetAt) }, { status: 429 });
+  }
+
+  // Emergency kill switch (batch 13 §46, §47). During a suspected location
+  // exposure we stop ingesting location entirely — this is the switch that
+  // has to actually work, so it is checked before anything is written.
+  const serverEnv = getSupabaseServerEnv();
+  if (serverEnv.url && serverEnv.serviceRoleKey) {
+    const guard = await guardFeature(createSupabaseAdminClient(), "location_collection");
+    if (!guard.allowed) {
+      logBackendEvent("warn", { requestId, route, statusCode: 503, latencyMs: Date.now() - startedAt });
+      return NextResponse.json({ error: guard.message }, { status: 503 });
+    }
   }
 
   const confidence = confidenceFromAccuracy(parsedBody.data.accuracy);

@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { guardAction } from "@/lib/admin/enforcement";
 import { createNotification } from "@/lib/notifications/server";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
@@ -182,6 +183,10 @@ export async function sendWaveV2Action(
   const admin = createSupabaseAdminClient();
   const recipientId = parsedTarget.data;
 
+  // A suspension blocks every outbound social surface (batch 13 §19).
+  const guard = await guardAction(admin, { userId, surface: "waves" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+
   const relationship = await verifyMuddyRelationship(admin, userId, recipientId);
   if (relationship === "error") return { ok: false, message: "Couldn't send your wave. Try again." };
   if (relationship === "not_muddies") {
@@ -316,6 +321,9 @@ export async function createMeetingPingAction(input: unknown): Promise<SocialAct
 
   const admin = createSupabaseAdminClient();
   const recipientId = parsed.data.recipientId;
+
+  const guard = await guardAction(admin, { userId, surface: "pings" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
 
   const relationship = await verifyMuddyRelationship(admin, userId, recipientId);
   if (relationship === "error") return { ok: false, message: "Couldn't send your ping. Try again." };

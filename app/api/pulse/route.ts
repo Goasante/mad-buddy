@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { guardFeature } from "@/lib/admin/enforcement";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { rankPulseItems, basePriorityFor, type PulseItem } from "@/lib/pulse/ranking";
 import { loadNearbyForUser } from "@/lib/proximity/nearby-service";
@@ -43,9 +44,13 @@ export async function GET() {
   const nowIso = new Date(now).toISOString();
   const soonIso = new Date(now + 3 * 60 * 60 * 1000).toISOString();
 
+  // The Pulse computes proximity too, so it honours the same kill switch. The
+  // rest of the Pulse (waves, pings, plans) still works — degrade, don't fail.
+  const proximityAvailable = (await guardFeature(admin, "proximity")).allowed;
+
   try {
     const [nearby, wavesResult, pingsResult, myParticipantRows] = await Promise.all([
-      loadNearbyForUser(admin, user.id),
+      proximityAvailable ? loadNearbyForUser(admin, user.id) : Promise.resolve([]),
       admin
         .from("waves")
         .select("id, sender_id, sent_at, expires_at")

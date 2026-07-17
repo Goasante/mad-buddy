@@ -17,6 +17,7 @@ import {
   shortCodeFromToken,
   verifyPersonalQrToken
 } from "@/lib/discovery/invites";
+import { guardAction, guardFeature } from "@/lib/admin/enforcement";
 import { contactPepper, qrSecret, resolvePairState } from "@/lib/discovery/service";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -88,8 +89,11 @@ export async function createInviteAction(input: unknown): Promise<InviteActionSt
   const rateLimit = await consumeRateLimit({ action: "invites.create", userId });
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
-  const token = generateInviteToken();
   const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId, surface: "invite_links", control: "invite_links" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+
+  const token = generateInviteToken();
   const { data: invite, error } = await admin
     .from("invite_links")
     .insert({
@@ -353,6 +357,11 @@ export async function matchContactsAction(input: unknown): Promise<{ matches: Co
 
   const rateLimit = await consumeRateLimit({ action: "contacts.match", userId });
   if (!rateLimit.allowed) return { matches: [], message: rateLimitMessage(rateLimit.resetAt) };
+
+  // Contact matching has its own kill switch (batch 13 §62) — it processes
+  // personal identifiers, so it must be stoppable without a deploy.
+  const guard = await guardFeature(createSupabaseAdminClient(), "contact_matching");
+  if (!guard.allowed) return { matches: [], message: guard.message };
 
   const country = parsed.data.defaultCountryCode || "233";
   const normalizedPhones = (parsed.data.phones ?? [])

@@ -16,6 +16,7 @@ import {
   resolveConversationAccess,
   type CommunicationPreferences
 } from "@/lib/messaging/service";
+import { guardAction } from "@/lib/admin/enforcement";
 import { createNotification } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -150,6 +151,12 @@ export async function sendMessageAction(input: unknown): Promise<MessagingAction
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
   const admin = createSupabaseAdminClient();
+
+  // Kill switch + account restrictions. A suspended user must not be able to
+  // message, and the messaging kill switch must actually stop messaging.
+  const guard = await guardAction(admin, { userId, surface: "messaging", control: "messaging" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+
   const permission = await canSendMessage(admin, userId, parsed.data.conversationId);
   if (!permission.allowed) {
     return {

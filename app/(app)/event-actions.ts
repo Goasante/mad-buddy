@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { guardFeature } from "@/lib/admin/enforcement";
 import { createNotification } from "@/lib/notifications/server";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { verifyEventToken } from "@/lib/events/qr";
@@ -203,6 +204,12 @@ export async function getEventGlowAction(eventId: string): Promise<EventGlowMudd
   if (!userId) return { count: 0, muddies: [] };
 
   const admin = createSupabaseAdminClient();
+
+  // Event Glow has its own kill switch and is force-disabled during a
+  // location-exposure incident (batch 13 §47). Empty list rather than an
+  // error: nobody is "here" while it's off.
+  if (!(await guardFeature(admin, "event_glow")).allowed) return { count: 0, muddies: [] };
+
   return buildEventGlowList(admin, eventId, userId);
 }
 

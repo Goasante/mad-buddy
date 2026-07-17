@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { paystackRequest, type PaystackCustomer, type PaystackInitializeTransaction } from "@/lib/paystack/client";
 import { getAppUrl, getMissingPaystackConfig, getPaystackPlan, type PaidPlanId } from "@/lib/paystack/config";
+import { guardFeature } from "@/lib/admin/enforcement";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -70,6 +71,16 @@ export async function POST(request: Request) {
   }
 
   const admin = createSupabaseAdminClient();
+
+  // Payments kill switch (batch 13 §62). Checked before a checkout session is
+  // created, so a billing incident stops new charges rather than only new
+  // subscriptions. Existing entitlements are untouched (§63: degrade safely).
+  const guard = await guardFeature(admin, "payments");
+  if (!guard.allowed) {
+    logBackendEvent("warn", { requestId, route, statusCode: 503, latencyMs: Date.now() - startedAt });
+    return NextResponse.json({ error: guard.message }, { status: 503 });
+  }
+
   const { data: subscription } = await admin
     .from("subscriptions")
     .select("paystack_customer_code")

@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { guardAction } from "@/lib/admin/enforcement";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { createNotification } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
@@ -103,6 +104,10 @@ export async function createPlanAction(input: unknown): Promise<PlanActionState>
   if (timingError) return { ok: false, message: timingError };
 
   const admin = createSupabaseAdminClient();
+
+  const guard = await guardAction(admin, { userId, surface: "plans" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+
   const access = await getCurrentSubscriptionAccess(userId);
   const limits = planTierLimitsFor(access.plan);
 

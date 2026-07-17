@@ -5,6 +5,7 @@ import {
   nearbyFriendsResponseSchema,
   type SafeNearbyFriend
 } from "@/lib/proximity/backend";
+import { guardFeature } from "@/lib/admin/enforcement";
 import { createNearbyNotificationsIfAllowed } from "@/lib/notifications/server";
 import { resolveFeatureDeniedIds } from "@/lib/social/permissions";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
@@ -77,6 +78,14 @@ export async function GET() {
   }
 
   const admin = createSupabaseAdminClient();
+
+  // Emergency kill switch (batch 13 §46). Checked before any proximity is
+  // computed, so flipping it during an incident actually stops the feature.
+  const guard = await guardFeature(admin, "proximity");
+  if (!guard.allowed) {
+    logBackendEvent("warn", { requestId, route, statusCode: 503, latencyMs: Date.now() - startedAt });
+    return NextResponse.json({ error: guard.message }, { status: 503 });
+  }
   const { data: viewerLocation, error: viewerLocationError } = await admin
     .from("user_locations")
     .select("user_id, latitude, longitude, confidence, last_updated")
