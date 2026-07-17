@@ -11,6 +11,7 @@ import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
 import { CONNECTION_PROMPTS } from "@/lib/meetups/connection-prompts";
 import type { PublicTrustSummary } from "@/lib/discovery/trust";
+import type { VisibleProfileFields } from "@/lib/profile/service";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 import { cn } from "@/lib/utils";
 
@@ -37,10 +38,12 @@ const profileTabs: Array<{ id: ProfileTab; label: string }> = [
 
 export function MuddyProfilePage({
   muddy,
-  trust = null
+  trust = null,
+  fields = null
 }: {
   muddy: MuddyProfileData;
   trust?: PublicTrustSummary | null;
+  fields?: VisibleProfileFields | null;
 }) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("about");
   const [pingOpen, setPingOpen] = useState(false);
@@ -172,6 +175,31 @@ export function MuddyProfilePage({
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">You have in common</p>
             <p className="mt-2 text-sm">{muddy.mutualMuddies} mutual Muddies</p>
           </div>
+          {fields &&
+          (fields.pronouns || fields.institution || fields.programme || fields.graduationYear || fields.generalArea) ? (
+            <div className="rounded-xl border border-border/70 bg-card/50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Details</p>
+              <dl className="mt-2 space-y-1 text-sm">
+                {fields.pronouns ? <DetailRow label="Pronouns" value={fields.pronouns} /> : null}
+                {fields.institution ? <DetailRow label="Institution" value={fields.institution} /> : null}
+                {fields.programme ? <DetailRow label="Programme" value={fields.programme} /> : null}
+                {fields.graduationYear ? <DetailRow label="Class of" value={String(fields.graduationYear)} /> : null}
+                {fields.generalArea ? <DetailRow label="Around" value={fields.generalArea} /> : null}
+              </dl>
+            </div>
+          ) : null}
+          {fields?.interests?.length ? (
+            <div className="rounded-xl border border-border/70 bg-card/50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Interests</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {fields.interests.map((interest) => (
+                  <span key={interest} className="rounded-full border border-border px-2.5 py-0.5 text-xs">
+                    {interest}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -202,6 +230,15 @@ export function MuddyProfilePage({
         </div>
         <p className="text-sm text-muted-foreground">No shared plans yet.</p>
       </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-2">
+      <dt className="w-24 shrink-0 text-muted-foreground">{label}</dt>
+      <dd>{value}</dd>
     </div>
   );
 }

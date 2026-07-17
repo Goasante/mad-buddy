@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { MuddyProfilePage } from "@/components/friends/muddy-profile-page";
 import { getPublicTrustSummary } from "@/lib/discovery/service";
+import { getVisibleProfileFields, resolveViewerRelationship } from "@/lib/profile/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -28,17 +29,22 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
       ? await getPublicTrustSummary(admin, user.id, profile.user_id)
       : null;
 
+  // Per-field privacy (batch 9 §12): hidden fields never leave the server.
+  const relationship = user ? await resolveViewerRelationship(admin, user.id, profile.user_id) : "stranger";
+  const fields = user ? await getVisibleProfileFields(admin, profile.user_id, relationship) : null;
+
   return (
     <MuddyProfilePage
       muddy={{
         friendId: profile.user_id,
         displayName: profile.full_name,
         username: profile.username,
-        bio: profile.bio ?? "",
+        bio: fields?.bio ?? "",
         moodStatus: profile.mood_status ?? "",
         mutualMuddies: trust?.mutualCount ?? 0
       }}
       trust={trust}
+      fields={fields}
     />
   );
 }

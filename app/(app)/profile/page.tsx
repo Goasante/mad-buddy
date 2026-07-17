@@ -1,3 +1,5 @@
+import { getProfileDetailsAction } from "@/app/(app)/profile-actions";
+import { ProfileDetailsEditor } from "@/components/profile/profile-details-editor";
 import { ProfilePageContent } from "@/components/profile/profile-page";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -26,15 +28,24 @@ export default async function ProfilePage() {
         .then((result) => result.count ?? 0)
     : 0;
 
+  const details = user ? await getProfileDetailsAction() : null;
+
   return (
-    <ProfilePageContent
-      initialDisplayName={profile?.full_name ?? user?.user_metadata?.full_name ?? "Your name"}
-      initialUsername={profile?.username ?? user?.user_metadata?.username ?? "username"}
-      initialBio={profile?.bio ?? ""}
-      initialMoodStatus={profile?.mood_status ?? ""}
-      initialAvatarUrl={profile?.avatar_url ?? null}
-      initialVisibilityStatus={profile?.visibility_status ?? "visible"}
-      muddyCount={muddyCount}
-    />
+    <div className="space-y-6">
+      <ProfilePageContent
+        initialDisplayName={profile?.full_name ?? user?.user_metadata?.full_name ?? "Your name"}
+        initialUsername={profile?.username ?? user?.user_metadata?.username ?? "username"}
+        initialBio={profile?.bio ?? ""}
+        initialMoodStatus={profile?.mood_status ?? ""}
+        initialAvatarUrl={profile?.avatar_url ?? null}
+        initialVisibilityStatus={profile?.visibility_status ?? "visible"}
+        muddyCount={muddyCount}
+      />
+      {details ? (
+        <div className="mx-auto max-w-[900px] pb-8">
+          <ProfileDetailsEditor initialDetails={details} />
+        </div>
+      ) : null}
+    </div>
   );
 }
