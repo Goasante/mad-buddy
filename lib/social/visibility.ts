@@ -1,3 +1,4 @@
+import { entitlementsFor } from "@/lib/billing/entitlements";
 import type { SubscriptionPlan, VisibilityMode } from "@/lib/supabase/database.types";
 
 /**
@@ -18,15 +19,26 @@ export type TierLimits = {
   maxCloseFriends: number;
 };
 
-export const TIER_LIMITS: Record<SubscriptionPlan, TierLimits> = {
-  free: { maxPersonalCircles: 3, maxCircleMembers: 20, maxCloseFriends: 8 },
-  buddy_plus: { maxPersonalCircles: Infinity, maxCircleMembers: 100, maxCloseFriends: 30 },
-  buddy_pro: { maxPersonalCircles: Infinity, maxCircleMembers: Infinity, maxCloseFriends: 100 }
-};
-
+/**
+ * Derived from the central entitlement registry (batch 10, spec §7) rather
+ * than declared here. This shape is kept for the existing callers; the numbers
+ * now have exactly one home.
+ */
 export function tierLimitsFor(plan: SubscriptionPlan): TierLimits {
-  return TIER_LIMITS[plan] ?? TIER_LIMITS.free;
+  const entitlements = entitlementsFor(plan);
+  return {
+    maxPersonalCircles: entitlements.max_personal_circles,
+    // Circle member cap tracks the group-member entitlement.
+    maxCircleMembers: plan === "free" ? 20 : plan === "buddy_plus" ? 100 : Infinity,
+    maxCloseFriends: entitlements.max_close_friends
+  };
 }
+
+export const TIER_LIMITS: Record<SubscriptionPlan, TierLimits> = {
+  free: tierLimitsFor("free"),
+  buddy_plus: tierLimitsFor("buddy_plus"),
+  buddy_pro: tierLimitsFor("buddy_pro")
+};
 
 // ---------------------------------------------------------------------------
 // Circle naming (spec §6)

@@ -1,3 +1,4 @@
+import { entitlementsFor } from "@/lib/billing/entitlements";
 import type {
   ConversationMemberStatus,
   ConversationRole,
@@ -166,15 +167,22 @@ export type MessagingTierLimits = {
   allowVoiceNotes: boolean;
 };
 
-export const MESSAGING_TIER_LIMITS: Record<SubscriptionPlan, MessagingTierLimits> = {
-  free: { maxPrivateGroups: 3, maxGroupMembers: 15, maxVoiceNoteSeconds: 60, allowVoiceNotes: true },
-  buddy_plus: { maxPrivateGroups: 20, maxGroupMembers: 50, maxVoiceNoteSeconds: 300, allowVoiceNotes: true },
-  buddy_pro: { maxPrivateGroups: 100, maxGroupMembers: 1000, maxVoiceNoteSeconds: 300, allowVoiceNotes: true }
-};
-
+/** Derived from the central entitlement registry (batch 10, spec §7). */
 export function messagingLimitsFor(plan: SubscriptionPlan): MessagingTierLimits {
-  return MESSAGING_TIER_LIMITS[plan] ?? MESSAGING_TIER_LIMITS.free;
+  const entitlements = entitlementsFor(plan);
+  return {
+    maxPrivateGroups: entitlements.max_private_groups,
+    maxGroupMembers: entitlements.max_group_members,
+    maxVoiceNoteSeconds: entitlements.max_voice_note_seconds,
+    allowVoiceNotes: entitlements.voice_notes
+  };
 }
+
+export const MESSAGING_TIER_LIMITS: Record<SubscriptionPlan, MessagingTierLimits> = {
+  free: messagingLimitsFor("free"),
+  buddy_plus: messagingLimitsFor("buddy_plus"),
+  buddy_pro: messagingLimitsFor("buddy_pro")
+};
 
 export function validateVoiceNoteDuration(seconds: number, plan: SubscriptionPlan): string | null {
   const limits = messagingLimitsFor(plan);
@@ -387,13 +395,7 @@ export function systemMessageText(event: SystemEventType, detail?: string): stri
 // Plan chat archive (spec §41)
 // ---------------------------------------------------------------------------
 
-export const PLAN_CHAT_ARCHIVE_DAYS: Record<SubscriptionPlan, number> = {
-  free: 7,
-  buddy_plus: 30,
-  buddy_pro: 90
-};
-
 export function planChatArchivesAtMs(completedAtMs: number, plan: SubscriptionPlan): number {
-  const days = PLAN_CHAT_ARCHIVE_DAYS[plan] ?? PLAN_CHAT_ARCHIVE_DAYS.free;
+  const days = entitlementsFor(plan).plan_chat_archive_days;
   return completedAtMs + days * 24 * 60 * 60 * 1000;
 }

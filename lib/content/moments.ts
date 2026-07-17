@@ -1,3 +1,4 @@
+import { entitlementsFor } from "@/lib/billing/entitlements";
 import type {
   DropStatus,
   MomentAudienceType,
@@ -25,33 +26,23 @@ export type ContentTierLimits = {
   allowEventDrops: boolean;
 };
 
-export const CONTENT_TIER_LIMITS: Record<SubscriptionPlan, ContentTierLimits> = {
-  free: {
-    maxActiveMomentsPerDay: 5,
-    maxActiveNearbyMoments: 1,
-    maxActiveDrops: 3,
-    allowPhotoMoments: true,
-    allowEventDrops: false
-  },
-  buddy_plus: {
-    maxActiveMomentsPerDay: 20,
-    maxActiveNearbyMoments: 5,
-    maxActiveDrops: 20,
-    allowPhotoMoments: true,
-    allowEventDrops: true
-  },
-  buddy_pro: {
-    maxActiveMomentsPerDay: 100,
-    maxActiveNearbyMoments: 20,
-    maxActiveDrops: 100,
-    allowPhotoMoments: true,
-    allowEventDrops: true
-  }
-};
-
+/** Derived from the central entitlement registry (batch 10, spec §7). */
 export function contentTierLimitsFor(plan: SubscriptionPlan): ContentTierLimits {
-  return CONTENT_TIER_LIMITS[plan] ?? CONTENT_TIER_LIMITS.free;
+  const entitlements = entitlementsFor(plan);
+  return {
+    maxActiveMomentsPerDay: entitlements.max_daily_moments,
+    maxActiveNearbyMoments: entitlements.max_active_nearby_moments,
+    maxActiveDrops: entitlements.max_active_drops,
+    allowPhotoMoments: entitlements.photo_moments,
+    allowEventDrops: entitlements.event_drops
+  };
 }
+
+export const CONTENT_TIER_LIMITS: Record<SubscriptionPlan, ContentTierLimits> = {
+  free: contentTierLimitsFor("free"),
+  buddy_plus: contentTierLimitsFor("buddy_plus"),
+  buddy_pro: contentTierLimitsFor("buddy_pro")
+};
 
 // ---------------------------------------------------------------------------
 // Content validation + expiry (spec §3, §6, §8)

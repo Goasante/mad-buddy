@@ -1,3 +1,4 @@
+import { entitlementsFor } from "@/lib/billing/entitlements";
 import type { SafeArrivalStatus, SubscriptionPlan } from "@/lib/supabase/database.types";
 
 /**
@@ -21,15 +22,20 @@ export type SafeArrivalLimits = {
   maxActiveSessions: number;
 };
 
-export const SAFE_ARRIVAL_LIMITS: Record<SubscriptionPlan, SafeArrivalLimits> = {
-  free: { maxContacts: 2, maxActiveSessions: 3 },
-  buddy_plus: { maxContacts: 5, maxActiveSessions: 3 },
-  buddy_pro: { maxContacts: 5, maxActiveSessions: 3 }
-};
-
+/** Derived from the central entitlement registry (batch 10, spec §7). */
 export function safeArrivalLimitsFor(plan: SubscriptionPlan): SafeArrivalLimits {
-  return SAFE_ARRIVAL_LIMITS[plan] ?? SAFE_ARRIVAL_LIMITS.free;
+  const entitlements = entitlementsFor(plan);
+  return {
+    maxContacts: entitlements.max_safe_arrival_contacts,
+    maxActiveSessions: entitlements.max_active_safe_arrivals
+  };
 }
+
+export const SAFE_ARRIVAL_LIMITS: Record<SubscriptionPlan, SafeArrivalLimits> = {
+  free: safeArrivalLimitsFor("free"),
+  buddy_plus: safeArrivalLimitsFor("buddy_plus"),
+  buddy_pro: safeArrivalLimitsFor("buddy_pro")
+};
 
 // ---------------------------------------------------------------------------
 // Validation (spec §5, §14)

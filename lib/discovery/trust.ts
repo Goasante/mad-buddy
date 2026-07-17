@@ -1,3 +1,4 @@
+import { entitlementsFor } from "@/lib/billing/entitlements";
 import type { SubscriptionPlan, VerificationType } from "@/lib/supabase/database.types";
 
 /**
@@ -149,10 +150,11 @@ export function requestExpiresAtMs(nowMs: number): number {
 
 export type RequestLimits = { perDay: number };
 
+/** Derived from the central entitlement registry (batch 10, spec §7). */
 export const REQUEST_LIMITS: Record<SubscriptionPlan, RequestLimits> = {
-  free: { perDay: 20 },
-  buddy_plus: { perDay: 50 },
-  buddy_pro: { perDay: 50 }
+  free: { perDay: entitlementsFor("free").max_friend_requests_per_day },
+  buddy_plus: { perDay: entitlementsFor("buddy_plus").max_friend_requests_per_day },
+  buddy_pro: { perDay: entitlementsFor("buddy_pro").max_friend_requests_per_day }
 };
 
 /** New accounts get a lower ceiling regardless of plan (spec §11, §56). */

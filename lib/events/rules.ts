@@ -1,3 +1,4 @@
+import { entitlementsFor } from "@/lib/billing/entitlements";
 import type {
   EventCircleRole,
   EventCircleStatus,
@@ -141,31 +142,33 @@ export function canManageMembers(role: EventCircleRole): boolean {
   return role === "host" || role === "co_host";
 }
 
+/** Derived from the central entitlement registry (batch 10, spec §7). */
+export function archiveRetentionDaysFor(plan: SubscriptionPlan): number {
+  return entitlementsFor(plan).event_circle_archive_days;
+}
+
 // Archive retention by tier (spec §51).
 export const ARCHIVE_RETENTION_DAYS: Record<SubscriptionPlan, number> = {
-  free: 7,
-  buddy_plus: 30,
-  buddy_pro: 90
+  free: archiveRetentionDaysFor("free"),
+  buddy_plus: archiveRetentionDaysFor("buddy_plus"),
+  buddy_pro: archiveRetentionDaysFor("buddy_pro")
 };
-
-export function archiveRetentionDaysFor(plan: SubscriptionPlan): number {
-  return ARCHIVE_RETENTION_DAYS[plan] ?? ARCHIVE_RETENTION_DAYS.free;
-}
 
 export function archivesAtMs(closesAtMs: number, plan: SubscriptionPlan): number {
   return closesAtMs + archiveRetentionDaysFor(plan) * 24 * 60 * 60 * 1000;
 }
 
+/** Derived from the central entitlement registry (batch 10, spec §7). */
+export function eventCircleMaxMembersFor(plan: SubscriptionPlan): number {
+  return entitlementsFor(plan).max_event_circle_members;
+}
+
 // Circle capacity by tier (spec §62).
 export const EVENT_CIRCLE_MAX_MEMBERS: Record<SubscriptionPlan, number> = {
-  free: 50,
-  buddy_plus: 250,
-  buddy_pro: 5000
+  free: eventCircleMaxMembersFor("free"),
+  buddy_plus: eventCircleMaxMembersFor("buddy_plus"),
+  buddy_pro: eventCircleMaxMembersFor("buddy_pro")
 };
-
-export function eventCircleMaxMembersFor(plan: SubscriptionPlan): number {
-  return EVENT_CIRCLE_MAX_MEMBERS[plan] ?? EVENT_CIRCLE_MAX_MEMBERS.free;
-}
 
 // ---------------------------------------------------------------------------
 // Join eligibility (spec §48, §57)

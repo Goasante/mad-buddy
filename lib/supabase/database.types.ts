@@ -257,11 +257,20 @@ export type Database = {
           status: SubscriptionStatus;
           current_period_start: string | null;
           current_period_end: string | null;
+          // Added by the batch-10 entitlements migration.
+          subject_type: "user" | "workspace" | "community";
+          cancel_at_period_end: boolean;
+          trial_ends_at: string | null;
+          grace_ends_at: string | null;
         };
         Insert: {
           id?: string;
           user_id: string;
           provider?: string;
+          subject_type?: "user" | "workspace" | "community";
+          cancel_at_period_end?: boolean;
+          trial_ends_at?: string | null;
+          grace_ends_at?: string | null;
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
           paystack_customer_code?: string | null;
@@ -1913,6 +1922,150 @@ export type Database = {
         Row: { id: string; user_id: string; interest: string; created_at: string };
         Insert: { id?: string; user_id: string; interest: string; created_at?: string };
         Update: Partial<Database["public"]["Tables"]["user_interests"]["Insert"]>;
+        Relationships: [];
+      };
+      entitlement_overrides: {
+        Row: {
+          id: string;
+          subject_type: "user" | "workspace" | "community";
+          subject_id: string;
+          entitlement_key: string;
+          value_type: "integer" | "boolean";
+          integer_value: number | null;
+          boolean_value: boolean | null;
+          reason: string | null;
+          starts_at: string | null;
+          ends_at: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          subject_type?: "user" | "workspace" | "community";
+          subject_id: string;
+          entitlement_key: string;
+          value_type: "integer" | "boolean";
+          integer_value?: number | null;
+          boolean_value?: boolean | null;
+          reason?: string | null;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["entitlement_overrides"]["Insert"]>;
+        Relationships: [];
+      };
+      subscription_changes: {
+        Row: {
+          id: string;
+          subscription_id: string | null;
+          user_id: string;
+          change_type: "upgrade" | "downgrade" | "cancel" | "reactivate";
+          from_plan: SubscriptionPlan;
+          to_plan: SubscriptionPlan;
+          effective_at: string | null;
+          status: "scheduled" | "applied" | "cancelled" | "failed";
+          requested_at: string;
+          applied_at: string | null;
+          cancelled_at: string | null;
+          reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          subscription_id?: string | null;
+          user_id: string;
+          change_type: "upgrade" | "downgrade" | "cancel" | "reactivate";
+          from_plan: SubscriptionPlan;
+          to_plan: SubscriptionPlan;
+          effective_at?: string | null;
+          status?: "scheduled" | "applied" | "cancelled" | "failed";
+          requested_at?: string;
+          applied_at?: string | null;
+          cancelled_at?: string | null;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["subscription_changes"]["Insert"]>;
+        Relationships: [];
+      };
+      downgrade_adjustments: {
+        Row: {
+          id: string;
+          subscription_change_id: string;
+          resource_type: "personal_circles" | "close_friends" | "private_groups" | "active_plans" | "storage";
+          resource_id: string | null;
+          selected_action: "keep" | "archive" | "revert" | "restrict";
+          status: "pending" | "applied" | "failed";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          subscription_change_id: string;
+          resource_type: "personal_circles" | "close_friends" | "private_groups" | "active_plans" | "storage";
+          resource_id?: string | null;
+          selected_action: "keep" | "archive" | "revert" | "restrict";
+          status?: "pending" | "applied" | "failed";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["downgrade_adjustments"]["Insert"]>;
+        Relationships: [];
+      };
+      promotion_codes: {
+        Row: {
+          id: string;
+          code_hash: string;
+          discount_type: "percent" | "fixed" | "trial_extension";
+          discount_value: number;
+          currency: string | null;
+          eligible_plans: string[];
+          starts_at: string | null;
+          expires_at: string | null;
+          max_redemptions: number | null;
+          redemptions_count: number;
+          per_user_limit: number;
+          status: "active" | "paused" | "expired";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          code_hash: string;
+          discount_type: "percent" | "fixed" | "trial_extension";
+          discount_value: number;
+          currency?: string | null;
+          eligible_plans?: string[];
+          starts_at?: string | null;
+          expires_at?: string | null;
+          max_redemptions?: number | null;
+          redemptions_count?: number;
+          per_user_limit?: number;
+          status?: "active" | "paused" | "expired";
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["promotion_codes"]["Insert"]>;
+        Relationships: [];
+      };
+      promotion_redemptions: {
+        Row: {
+          id: string;
+          promotion_id: string;
+          user_id: string;
+          subscription_id: string | null;
+          redeemed_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          promotion_id: string;
+          user_id: string;
+          subscription_id?: string | null;
+          redeemed_at?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["promotion_redemptions"]["Insert"]>;
         Relationships: [];
       };
       privacy_setup_versions: {

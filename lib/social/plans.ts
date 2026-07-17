@@ -1,3 +1,4 @@
+import { entitlementsFor } from "@/lib/billing/entitlements";
 import type {
   HangoutStatus,
   PlanStatus,
@@ -26,33 +27,23 @@ export type PlanTierLimits = {
   maxHangoutCapacity: number;
 };
 
-export const PLAN_TIER_LIMITS: Record<SubscriptionPlan, PlanTierLimits> = {
-  free: {
-    maxActivePlans: 5,
-    maxPlanParticipants: 10,
-    maxPollsPerPlan: 1,
-    maxActiveHangouts: 3,
-    maxHangoutCapacity: 5
-  },
-  buddy_plus: {
-    maxActivePlans: Infinity,
-    maxPlanParticipants: 50,
-    maxPollsPerPlan: Infinity,
-    maxActiveHangouts: 3,
-    maxHangoutCapacity: 50
-  },
-  buddy_pro: {
-    maxActivePlans: Infinity,
-    maxPlanParticipants: 500,
-    maxPollsPerPlan: Infinity,
-    maxActiveHangouts: 3,
-    maxHangoutCapacity: 50
-  }
-};
-
+/** Derived from the central entitlement registry (batch 10, spec §7). */
 export function planTierLimitsFor(plan: SubscriptionPlan): PlanTierLimits {
-  return PLAN_TIER_LIMITS[plan] ?? PLAN_TIER_LIMITS.free;
+  const entitlements = entitlementsFor(plan);
+  return {
+    maxActivePlans: entitlements.max_active_plans,
+    maxPlanParticipants: entitlements.max_plan_participants,
+    maxPollsPerPlan: entitlements.max_polls_per_plan,
+    maxActiveHangouts: entitlements.max_active_hangouts,
+    maxHangoutCapacity: entitlements.max_hangout_capacity
+  };
 }
+
+export const PLAN_TIER_LIMITS: Record<SubscriptionPlan, PlanTierLimits> = {
+  free: planTierLimitsFor("free"),
+  buddy_plus: planTierLimitsFor("buddy_plus"),
+  buddy_pro: planTierLimitsFor("buddy_pro")
+};
 
 // ---------------------------------------------------------------------------
 // Validation (spec §5, §6, §46)
