@@ -130,6 +130,25 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     return { ok: false, message: error.message };
   }
 
+  // Anti-enumeration behaviour: signing up again with an email that's already
+  // registered and confirmed returns no error, no session, no email sent —
+  // and a user object with an empty identities array whose id does NOT match
+  // the real account. Without this check we told the caller "Account
+  // created" and (before this fix existed) even tried to bootstrap rows
+  // against that fake id. Tell them the truth instead: this email is taken.
+  if (data.user && data.user.identities?.length === 0 && !data.session) {
+    logBackendEvent("info", {
+      requestId,
+      action: "auth.signup",
+      statusCode: 409,
+      latencyMs: Date.now() - startedAt
+    });
+    return {
+      ok: false,
+      message: "An account with this email already exists. Log in, or use “Forgot password” if you don't remember it."
+    };
+  }
+
   if (data.user) {
     // When email confirmation is required, signUp returns no session, so
     // auth.uid() is null for the rest of this request — the owner-only RLS
@@ -257,6 +276,19 @@ export async function loginAction(input: unknown): Promise<AuthActionState> {
       return {
         ok: false,
         message: "Mad Buddy could not reach the login service. Check your connection and try again."
+      };
+    }
+
+    // Distinct from wrong credentials: the account exists but hasn't
+    // confirmed its email yet. The client must not fold this into the
+    // generic "incorrect" message — that's precisely what left new users
+    // unable to tell "you typed the wrong password" apart from "you haven't
+    // confirmed your email," with no way to recover from the second one.
+    if (error.code === "email_not_confirmed") {
+      return {
+        ok: false,
+        message:
+          "Confirm your email first — check your inbox (and spam folder) for the link, or request a new one from the signup page."
       };
     }
 

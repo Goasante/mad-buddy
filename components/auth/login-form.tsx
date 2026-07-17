@@ -48,7 +48,9 @@ export function LoginForm() {
         result.ok ||
         result.message.includes("Supabase is not configured") ||
         result.message.includes("Too many") ||
-        result.message.includes("could not reach the login service")
+        result.message.includes("could not reach the login service") ||
+        result.message.includes("Confirm your email first") ||
+        result.message.includes("already exists")
           ? result
           : { ...result, message: "Email address or password is incorrect." }
       );
