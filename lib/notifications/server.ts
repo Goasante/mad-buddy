@@ -154,6 +154,16 @@ export async function deliverNotification(
     message: input.message
   });
 
+  if (decision.push) {
+    // Real web push transport; silent no-op until VAPID keys are configured.
+    const { sendPushToUser } = await import("@/lib/notifications/push");
+    await sendPushToUser(supabase, input.userId, {
+      title: input.title,
+      body: input.message,
+      url: "/notifications"
+    });
+  }
+
   // Only budgeted pushes consume the budget — critical/high bypass it, so
   // counting them would let an emergency alert starve tomorrow's normal ones.
   if (decision.push && priority !== "critical" && priority !== "high") {

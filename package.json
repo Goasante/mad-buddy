@@ -31,6 +31,7 @@
     "react-hook-form": "^7.81.0",
     "sharp": "^0.35.3",
     "tailwind-merge": "^3.6.0",
+    "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -38,6 +39,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.5.2",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.10",

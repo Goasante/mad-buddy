@@ -1,4 +1,5 @@
 import { NotificationPreferencesPage } from "@/components/settings/notification-preferences-page";
+import { PushToggle } from "@/components/settings/push-toggle";
 import { normalizePreferences } from "@/lib/notifications/preferences";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -27,5 +28,12 @@ export default async function SettingsNotificationsPage() {
     }
   }
 
-  return <NotificationPreferencesPage initialPreferences={normalizePreferences(stored)} />;
+  return (
+    <div className="space-y-4">
+      <NotificationPreferencesPage initialPreferences={normalizePreferences(stored)} />
+      <div className="mr-auto max-w-[640px]">
+        <PushToggle />
+      </div>
+    </div>
+  );
 }
