@@ -9,8 +9,9 @@ import {
   rateLimitMessage
 } from "@/lib/security/rate-limit";
 import { getAdminEmailAccess } from "@/lib/safety/admin";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
+import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
 
 export type AuthActionState = {
@@ -130,22 +131,58 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
   }
 
   if (data.user) {
-    await supabase.from("profiles").upsert({
-      user_id: data.user.id,
-      full_name: fullName,
-      username,
-      is_onboarded: false
-    });
+    // When email confirmation is required, signUp returns no session, so
+    // auth.uid() is null for the rest of this request — the owner-only RLS
+    // policies on these tables would silently reject an anon-client insert
+    // (42501), leaving a confirmed user with no profile/subscription/prefs
+    // rows at all. The service role bypasses RLS so bootstrap always
+    // succeeds regardless of session state.
+    const env = getSupabaseServerEnv();
+    if (env.url && env.serviceRoleKey) {
+      const admin = createSupabaseAdminClient();
+      const [profileResult, subscriptionResult, preferencesResult] = await Promise.all([
+        admin.from("profiles").upsert({
+          user_id: data.user.id,
+          full_name: fullName,
+          username,
+          is_onboarded: false
+        }),
+        admin.from("subscriptions").upsert({
+          user_id: data.user.id,
+          plan: "free",
+          status: "free"
+        }),
+        admin.from("user_preferences").upsert({
+          user_id: data.user.id
+        })
+      ]);
 
-    await supabase.from("subscriptions").upsert({
-      user_id: data.user.id,
-      plan: "free",
-      status: "free"
-    });
-
-    await supabase.from("user_preferences").upsert({
-      user_id: data.user.id
-    });
+      for (const [label, result] of [
+        ["profile", profileResult],
+        ["subscription", subscriptionResult],
+        ["preferences", preferencesResult]
+      ] as const) {
+        if (result.error) {
+          logBackendEvent("error", {
+            requestId,
+            action: "auth.signup",
+            statusCode: 500,
+            latencyMs: Date.now() - startedAt,
+            userId: data.user.id,
+            errorType: `bootstrap_${label}_failed`
+          });
+        }
+      }
+    } else {
+      logBackendEvent("error", {
+        requestId,
+        action: "auth.signup",
+        statusCode: 500,
+        latencyMs: Date.now() - startedAt,
+        userId: data.user.id,
+        errorType: "missing_service_role_for_bootstrap"
+      });
+    }
   }
 
   logBackendEvent("info", {
