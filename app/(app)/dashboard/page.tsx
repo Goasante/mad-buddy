@@ -13,11 +13,13 @@ export default async function DashboardPage() {
     : [null, null];
 
   return (
-    <DashboardPageContent
-      subscriptionPlan={access?.plan}
-      hasPremium={access?.hasPremium}
-      initialVisibilityStatus={profile?.visibility_status ?? "visible"}
-      displayName={profile?.full_name?.split(" ")[0] || "there"}
-    />
+    <div className="dashboard-redesign">
+      <DashboardPageContent
+        subscriptionPlan={access?.plan}
+        hasPremium={access?.hasPremium}
+        initialVisibilityStatus={profile?.visibility_status ?? "visible"}
+        displayName={profile?.full_name?.split(" ")[0] || "there"}
+      />
+    </div>
   );
 }

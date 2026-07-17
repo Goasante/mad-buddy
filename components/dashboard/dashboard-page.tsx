@@ -304,74 +304,69 @@ export function DashboardPageContent({
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] space-y-8 pt-6">
+    <div className="mb-dashboard mx-auto max-w-[1180px] pb-6 pt-5">
       <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
 
-      <div className="flex items-start justify-between gap-3">
+      <div className="mb-dashboard-heading flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl" suppressHydrationWarning>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl" suppressHydrationWarning>
             {getGreeting()}, {displayName} 👋
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">Here&apos;s what&apos;s happening around your people.</p>
+          <p className="mt-1 text-xs text-muted-foreground sm:text-sm">Here&apos;s what&apos;s happening around your people.</p>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => setStatusComposerOpen(true)}>
+        <Button className="mb-set-status" type="button" variant="outline" size="sm" onClick={() => setStatusComposerOpen(true)}>
           <Sparkles className="h-4 w-4" aria-hidden="true" />
           Set status
         </Button>
       </div>
 
-      <PulseSummary />
-
-      <section className="rounded-2xl bg-card/55 p-4 shadow-sm dark:bg-white/[0.035] sm:p-5">
+      <section className="mb-glow-card">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <span
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide",
+                "mb-glow-status inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]",
                 ghostMode
-                  ? "bg-secondary text-muted-foreground"
-                  : "bg-primary/10 text-primary"
+                  ? "text-muted-foreground"
+                  : "text-emerald-400"
               )}
             >
-              <span className={cn("h-1.5 w-1.5 rounded-full", ghostMode ? "bg-muted-foreground" : "bg-primary")} />
+              <span className={cn("h-1.5 w-1.5 rounded-full", ghostMode ? "bg-muted-foreground" : "bg-emerald-400")} />
               {ghostMode ? "Glow paused" : "Glow active"}
             </span>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Approved Muddies · Updated {isPending ? "now" : "just now"}
-            </p>
+            <span className="ml-3 text-[11px] text-muted-foreground">Approved Muddies&nbsp;&nbsp;•&nbsp;&nbsp;Updated {isPending ? "now" : "just now"}</span>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
+              className="h-8 rounded-lg px-3 text-xs"
               type="button"
               variant={ghostMode ? "primary" : "outline"}
               onClick={toggleVisibility}
               disabled={isPending}
               aria-label={ghostMode ? "Resume visibility" : "Pause visibility"}
             >
-              <Ghost className="h-4 w-4" aria-hidden="true" />
-              {ghostMode ? "Resume visibility" : "Pause visibility"}
+              {ghostMode ? "Resume Glow" : "Pause Glow"}
             </Button>
             <Button
               type="button"
               variant="outline"
               size="icon"
-              className="w-auto px-4 sm:w-10 sm:px-0"
+              className="h-8 w-8 rounded-lg p-0"
               onClick={updatePrivateLocation}
               disabled={isPending}
               aria-label="Check again"
               title="Check again"
             >
               <RefreshCcw className={cn("h-4 w-4", isPending && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
-              <span className="sm:hidden">Refresh</span>
             </Button>
           </div>
         </div>
 
         {!ghostMode ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            <CountPill label="Very Close" count={proximityCounts.very_close} tone="strong" />
-            <CountPill label="Nearby" count={proximityCounts.nearby} tone="medium" />
-            <CountPill label="Around You" count={proximityCounts.around} tone="soft" />
+          <div className="mb-proximity-grid">
+            <CountPill index="1" label="Very Close" count={proximityCounts.very_close} tone="strong" />
+            <CountPill index="2" label="Nearby" count={proximityCounts.nearby} tone="medium" />
+            <CountPill index="3" label="Around You" count={proximityCounts.around} tone="soft" />
           </div>
         ) : null}
 
@@ -380,33 +375,31 @@ export function DashboardPageContent({
             {isPending ? "Checking for nearby friends..." : statusMessage}
           </p>
         ) : null}
-        {!ghostMode ? (
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            Your exact location is never shown to friends. Mad Buddy converts it into a general glow signal.
-          </p>
-        ) : (
+        {ghostMode ? (
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             You won&apos;t appear nearby until you turn visibility back on.
           </p>
-        )}
+        ) : null}
       </section>
 
-      <section>
+      <div className="mb-dashboard-columns">
+      <div className="min-w-0">
+      <section className="mb-nearby-section">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">Nearby Muddies</h2>
-          <Link href="/friends" className="text-sm font-medium text-primary hover:underline">
-            See all
+          <h2 className="text-sm font-semibold tracking-tight sm:text-base">Nearby Muddies</h2>
+          <Link href="/friends" className="text-xs font-medium text-muted-foreground hover:text-primary">
+            See all →
           </Link>
         </div>
 
         {visibleFriends.length > 0 ? (
-          <div className="flex gap-4 overflow-x-auto pb-1" aria-label="Nearby Muddies">
+          <div className="mb-muddy-list" aria-label="Nearby Muddies">
             {visibleFriends.map((friend) => (
               <button
                 key={friend.friendId}
                 type="button"
                 onClick={() => setSelectedFriendId(friend.friendId)}
-                className="focus-ring safe-motion flex w-16 shrink-0 flex-col items-center gap-1.5 rounded-lg"
+                className="mb-muddy-card focus-ring safe-motion"
               >
                 <GlowAvatar
                   name={friend.displayName}
@@ -420,9 +413,10 @@ export function DashboardPageContent({
                 <span className="w-full truncate text-center text-xs font-medium">
                   {friend.displayName.split(" ")[0]}
                 </span>
-                <span className="w-full truncate text-center text-[10px] text-muted-foreground">
+                <span className="w-full truncate text-center text-[9px] text-orange-400">
                   {friend.muddyStatusLabel ?? proximityLabels[friend.proximityLevel]}
                 </span>
+                <span className="w-full truncate text-center text-[10px] text-muted-foreground">{friend.statusText || "Free now"}</span>
                 <span
                   className={cn(
                     "w-full truncate text-center text-[9px]",
@@ -455,10 +449,13 @@ export function DashboardPageContent({
           />
         )}
       </section>
+      </div>
 
-      <section>
+      <aside className="mb-attention-column">
+      <PulseSummary />
+      <section className="mb-attention-section">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">Needs your attention</h2>
+          <h2 className="text-sm font-semibold tracking-tight">Needs your attention</h2>
           {attentionItems.length > 0 ? (
             <Link href="/notifications" className="text-sm font-medium text-primary hover:underline">
               See all
@@ -467,12 +464,12 @@ export function DashboardPageContent({
         </div>
 
         {attentionItems.length > 0 ? (
-          <ul className="divide-y divide-border/60 rounded-2xl border border-border/70 bg-card/40">
+          <ul className="mb-attention-list">
             {attentionItems.map((item) => (
               <li key={item.id}>
                 <Link
                   href="/notifications"
-                  className="focus-ring safe-motion flex items-center gap-3 px-4 py-3 hover:bg-secondary/50"
+                  className="focus-ring safe-motion flex items-center gap-3 px-3 py-2.5"
                 >
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
                     <item.icon className="h-4 w-4" aria-hidden="true" />
@@ -489,6 +486,8 @@ export function DashboardPageContent({
           </p>
         )}
       </section>
+      </aside>
+      </div>
 
       {promptFeedback ? (
         <div
@@ -541,17 +540,17 @@ function getGreeting() {
   return "Good evening";
 }
 
-function CountPill({ label, count, tone }: { label: string; count: number; tone: "strong" | "medium" | "soft" }) {
+function CountPill({ index, label, count, tone }: { index: string; label: string; count: number; tone: "strong" | "medium" | "soft" }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium",
-        tone === "strong" && "border-orange-400/40 bg-orange-400/15 text-orange-700 dark:text-orange-200",
-        tone === "medium" && "border-orange-400/25 bg-orange-400/10 text-orange-700 dark:text-orange-100",
-        tone === "soft" && "border-border bg-secondary text-muted-foreground"
+        "mb-proximity-item",
+        tone === "strong" && "mb-proximity-strong",
+        tone === "medium" && "mb-proximity-medium",
+        tone === "soft" && "mb-proximity-soft"
       )}
     >
-      {count} {label}
+      <b>{count || index}</b><span>{label}</span>
     </span>
   );
 }
