@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createNotification } from "@/lib/notifications/server";
+import { deliverNotification } from "@/lib/notifications/server";
 import { requireSafetyAdmin } from "@/lib/safety/admin";
 
 export type SafetyActionState = {
@@ -98,8 +98,9 @@ export async function blockReportedUserAction(input: unknown): Promise<SafetyAct
     }
 
     if (report.reporter_id) {
-      await createNotification(admin, {
+      await deliverNotification(admin, {
         userId: report.reporter_id,
+        priority: "high",
         type: "system_alert",
         title: "Safety report update",
         message: "A safety report you submitted is now under review."

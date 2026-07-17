@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { guardAction } from "@/lib/admin/enforcement";
-import { createNotification } from "@/lib/notifications/server";
+import { deliverNotification } from "@/lib/notifications/server";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import {
@@ -239,8 +239,10 @@ export async function sendWaveV2Action(
 
   if (!mute) {
     const name = await senderDisplayName(admin, userId);
-    await createNotification(admin, {
+    await deliverNotification(admin, {
       userId: recipientId,
+      senderId: userId,
+      category: "waves",
       type: `wave:${userId}`,
       title: `${name} waved at you`,
       message: `${name} waved at you 👋 Wave back or send a Meet Ping.`
@@ -367,8 +369,11 @@ export async function createMeetingPingAction(input: unknown): Promise<SocialAct
 
   const name = await senderDisplayName(admin, userId);
   const label = pingTypeLabels[parsed.data.pingType as keyof typeof pingTypeLabels] ?? "Want to meet?";
-  await createNotification(admin, {
+  await deliverNotification(admin, {
     userId: recipientId,
+    senderId: userId,
+    category: "pings",
+    priority: "high",
     type: `meeting_ping:${userId}`,
     title: `${name} wants to meet`,
     message: `${name} sent a Meet Ping: ${label} Open Meeting Pings to reply.`
@@ -489,8 +494,11 @@ export async function respondToPingAction(input: unknown): Promise<SocialActionS
       place_text: ping.custom_place_text,
       expires_at: new Date(Date.parse(meetingTime) + 6 * 60 * 60 * 1000).toISOString()
     });
-    await createNotification(admin, {
+    await deliverNotification(admin, {
       userId: otherUserId,
+      senderId: userId,
+      category: "pings",
+      priority: "high",
       type: `meeting_ping:${userId}`,
       title: `${name} accepted your Meet Ping`,
       message: `You're on! Check Meeting Pings for the plan details.`
@@ -499,8 +507,10 @@ export async function respondToPingAction(input: unknown): Promise<SocialActionS
   }
 
   if (nextStatus === "maybe") {
-    await createNotification(admin, {
+    await deliverNotification(admin, {
       userId: otherUserId,
+      senderId: userId,
+      category: "pings",
       type: `meeting_ping:${userId}`,
       title: `${name} may be available`,
       message: `${name} said maybe. You can suggest a time or wait.`
@@ -509,8 +519,10 @@ export async function respondToPingAction(input: unknown): Promise<SocialActionS
   }
 
   if (nextStatus === "counter_proposed") {
-    await createNotification(admin, {
+    await deliverNotification(admin, {
       userId: otherUserId,
+      senderId: userId,
+      category: "pings",
       type: `meeting_ping:${userId}`,
       title: `${name} suggested another time`,
       message: `${name} proposed a different time. Open Meeting Pings to accept or decline.`
@@ -519,8 +531,10 @@ export async function respondToPingAction(input: unknown): Promise<SocialActionS
   }
 
   // Declines stay gentle and reason-free (spec §34).
-  await createNotification(admin, {
+  await deliverNotification(admin, {
     userId: otherUserId,
+    senderId: userId,
+    category: "pings",
     type: `meeting_ping:${userId}`,
     title: `${name} can't meet right now`,
     message: `No worries — maybe another time.`
@@ -569,8 +583,10 @@ export async function cancelPingAction(pingId: string): Promise<SocialActionStat
 
   // Notify only if the recipient had already seen it (spec §37).
   if (ping.seen_at) {
-    await createNotification(admin, {
+    await deliverNotification(admin, {
       userId: ping.recipient_id,
+      senderId: userId,
+      category: "pings",
       type: `meeting_ping:${userId}`,
       title: "A Meet Ping was cancelled",
       message: "That Meet Ping is no longer active."

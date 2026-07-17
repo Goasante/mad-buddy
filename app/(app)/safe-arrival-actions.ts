@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { createNotification } from "@/lib/notifications/server";
+import { deliverNotification } from "@/lib/notifications/server";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import {
@@ -70,8 +70,11 @@ async function notifyContacts(
     .neq("acknowledgement_status", "declined");
   await Promise.all(
     (contacts ?? []).map((contact) =>
-      createNotification(admin, {
+      // Safety notifications are critical: they bypass category prefs, quiet
+      // hours, Exam Mode, and the daily budget by design.
+      deliverNotification(admin, {
         userId: contact.contact_user_id,
+        priority: "critical",
         type: notification.type,
         title: notification.title,
         message: notification.message
@@ -162,8 +165,9 @@ export async function createSafeArrivalAction(input: unknown): Promise<SafeArriv
   const arrivalLabel = new Date(expectedMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   await Promise.all(
     contacts.map((contactId) =>
-      createNotification(admin, {
+      deliverNotification(admin, {
         userId: contactId,
+        priority: "critical",
         type: "safe_arrival:request",
         title: "Safe Arrival request",
         message: `${name} is heading to ${parsed.data.destinationLabel.trim()} and expects to arrive by ${arrivalLabel}.`

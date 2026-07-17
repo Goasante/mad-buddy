@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { guardFeature } from "@/lib/admin/enforcement";
-import { createNotification } from "@/lib/notifications/server";
+import { deliverNotification } from "@/lib/notifications/server";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { verifyEventToken } from "@/lib/events/qr";
 import {
@@ -378,8 +378,10 @@ export async function sendEventAnnouncementAction(input: unknown): Promise<Event
 
   await Promise.all(
     (members ?? []).map((member) =>
-      createNotification(admin, {
+      deliverNotification(admin, {
         userId: member.user_id,
+        senderId: userId,
+        category: "plans",
         type: "event:announcement",
         title: circle.name,
         message: parsed.data.title.trim()

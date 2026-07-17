@@ -17,7 +17,7 @@ import {
   type CommunicationPreferences
 } from "@/lib/messaging/service";
 import { guardAction } from "@/lib/admin/enforcement";
-import { createNotification } from "@/lib/notifications/server";
+import { deliverNotification } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -244,8 +244,12 @@ async function notifyOtherMembers(
         messageText: text
       });
       if (!preview) return;
-      await createNotification(admin, {
+      // Messages have their own comms-privacy gating above; no batch-4
+      // category applies, but quiet hours / Exam Mode / budget still do.
+      await deliverNotification(admin, {
         userId: member.user_id,
+        senderId,
+        priority: "high",
         type: "message:new",
         title: preview.title,
         message: preview.body

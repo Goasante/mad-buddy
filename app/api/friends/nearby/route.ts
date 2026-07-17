@@ -260,9 +260,9 @@ export async function GET() {
 
   await createNearbyNotificationsIfAllowed(admin, {
     userId: user.id,
-    friendDisplayNames: response.friends
+    friends: response.friends
       .filter((friend) => friend.proximity_level === "very_close" || friend.proximity_level === "nearby")
-      .map((friend) => friend.display_name)
+      .map((friend) => ({ friendId: friend.friend_id, displayName: friend.display_name }))
   });
 
   logBackendEvent("info", {

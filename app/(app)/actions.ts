@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createNotification } from "@/lib/notifications/server";
+import { deliverNotification } from "@/lib/notifications/server";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { uploadValidationMessage, validateImageUpload } from "@/lib/media/validation";
@@ -442,8 +442,9 @@ export async function sendFriendRequestAction(targetUserId: string): Promise<Int
     .eq("user_id", userId)
     .maybeSingle();
 
-  await createNotification(supabase, {
+  await deliverNotification(supabase, {
     userId: parsedTarget.data,
+    senderId: userId,
     type: "friend_request_received",
     title: "Muddy request received",
     message: `${senderProfile?.full_name ?? "Someone"} wants to connect before any glow signals appear.`
@@ -508,8 +509,9 @@ export async function acceptFriendRequestAction(requestId: string): Promise<Inte
     .eq("user_id", userId)
     .maybeSingle();
 
-  await createNotification(admin, {
+  await deliverNotification(admin, {
     userId: request.sender_id,
+    senderId: userId,
     type: "friend_request_accepted",
     title: "Muddy request accepted",
     message: `${receiverProfile?.full_name ?? "A Muddy"} approved your request.`

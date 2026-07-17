@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { guardAction } from "@/lib/admin/enforcement";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
-import { createNotification } from "@/lib/notifications/server";
+import { deliverNotification } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import {
   canTransitionPlan,
@@ -170,8 +170,10 @@ export async function createPlanAction(input: unknown): Promise<PlanActionState>
     const name = await senderName(admin, userId);
     await Promise.all(
       invitees.map((inviteeId) =>
-        createNotification(admin, {
+        deliverNotification(admin, {
           userId: inviteeId,
+          senderId: userId,
+          category: "plans",
           type: `plan:invite`,
           title: "New plan invite",
           message: `${name} invited you to "${parsed.data.title.trim()}".`
@@ -296,8 +298,11 @@ export async function cancelPlanAction(planId: string): Promise<PlanActionState>
     .neq("user_id", userId);
   await Promise.all(
     (participants ?? []).map((participant) =>
-      createNotification(admin, {
+      deliverNotification(admin, {
         userId: participant.user_id,
+        senderId: userId,
+        category: "plans",
+        priority: "high",
         type: `plan:cancelled`,
         title: "Plan cancelled",
         message: `"${plan.title}" has been cancelled.`
@@ -371,8 +376,10 @@ export async function addPlanParticipantsAction(
   const { data: plan } = await admin.from("plans").select("title").eq("id", planId).maybeSingle();
   await Promise.all(
     invitees.map((inviteeId) =>
-      createNotification(admin, {
+      deliverNotification(admin, {
         userId: inviteeId,
+        senderId: userId,
+        category: "plans",
         type: `plan:invite`,
         title: "New plan invite",
         message: `${name} invited you to "${plan?.title ?? "a plan"}".`

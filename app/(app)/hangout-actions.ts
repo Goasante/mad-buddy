@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
-import { createNotification } from "@/lib/notifications/server";
+import { deliverNotification } from "@/lib/notifications/server";
 import {
   areApprovedMuddies,
   isBlockedEitherDirection,
@@ -309,8 +309,10 @@ export async function requestHangoutAction(
   if (error) return { ok: false, message: "Couldn't send your request." };
 
   const name = await displayName(admin, userId);
-  await createNotification(admin, {
+  await deliverNotification(admin, {
     userId: session.owner_id,
+    senderId: userId,
+    category: "plans",
     type: `hangout:request`,
     title: "Someone wants to join",
     message: `${name} is interested in your hangout.`
@@ -369,8 +371,10 @@ export async function respondHangoutRequestAction(
     .eq("status", "pending");
   if (error) return { ok: false, message: "Couldn't respond to the request." };
 
-  await createNotification(admin, {
+  await deliverNotification(admin, {
     userId: request.requester_id,
+    senderId: userId,
+    category: "plans",
     type: `hangout:response`,
     title: "Hangout update",
     message:
@@ -462,8 +466,10 @@ export async function convertHangoutToPlanAction(
   const name = await displayName(admin, userId);
   await Promise.all(
     participantIds.map((participantId) =>
-      createNotification(admin, {
+      deliverNotification(admin, {
         userId: participantId,
+        senderId: userId,
+        category: "plans",
         type: `plan:created`,
         title: "Your hangout became a plan",
         message: `${name} created "${planTitle}".`

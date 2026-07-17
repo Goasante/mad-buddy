@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { createNotification } from "@/lib/notifications/server";
+import { deliverNotification } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -117,8 +117,9 @@ export async function completeOnboardingAction(input: unknown): Promise<Onboardi
         return { ok: false, message: requestError.message };
       }
 
-      await createNotification(supabase, {
+      await deliverNotification(supabase, {
         userId: friendProfile.user_id,
+        senderId: user.id,
         type: "friend_request_received",
         title: "Muddy request received",
         message: `${parsed.data.fullName} wants to connect before any glow signals appear.`

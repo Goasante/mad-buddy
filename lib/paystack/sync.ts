@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createNotification } from "@/lib/notifications/server";
+import { deliverNotification } from "@/lib/notifications/server";
 import type { Database, SubscriptionPlan, SubscriptionStatus } from "@/lib/supabase/database.types";
 import { paidPlanToSubscriptionPlan, paystackPlanFromPlanCode, mapPaystackSubscriptionStatus } from "@/lib/paystack/subscriptions";
 
@@ -95,8 +95,9 @@ export async function syncPaystackSubscription(
     throw new Error(error.message);
   }
 
-  await createNotification(admin, {
+  await deliverNotification(admin, {
     userId: input.userId,
+    priority: "high",
     type: "subscription_update",
     title: "Subscription update",
     message: `Your ${planLabel(plan)} subscription is ${statusLabel(status)}.`

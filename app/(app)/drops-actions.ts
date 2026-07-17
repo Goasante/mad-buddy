@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { contentTierLimitsFor, resolveDropUnlock, validateExpiry } from "@/lib/content/moments";
 import { signMediaForAsset } from "@/lib/content/service";
-import { createNotification } from "@/lib/notifications/server";
+import { deliverNotification } from "@/lib/notifications/server";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
@@ -293,8 +293,10 @@ export async function unlockDropAction(dropId: string): Promise<DropActionState>
 
   if (!isCreator) {
     const { data: profile } = await admin.from("profiles").select("full_name").eq("user_id", userId).maybeSingle();
-    await createNotification(admin, {
+    await deliverNotification(admin, {
       userId: drop.creator_id,
+      senderId: userId,
+      category: "status",
       type: "moment:drop_unlocked",
       title: "Drop unlocked",
       message: `${profile?.full_name?.trim() || "A Muddy"} unlocked your Drop.`

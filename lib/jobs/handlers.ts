@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createNotification } from "@/lib/notifications/server";
+import { deliverNotification } from "@/lib/notifications/server";
 import {
   gracePeriodEndMs,
   shouldSendUnconfirmedAlert,
@@ -101,8 +101,9 @@ export const handleSafeArrivalUnconfirmedAlert: JobHandler = async (admin) => {
 
     await Promise.all(
       (contacts ?? []).map((contact) =>
-        createNotification(admin, {
+        deliverNotification(admin, {
           userId: contact.contact_user_id,
+          priority: "critical",
           type: "safe_arrival:unconfirmed",
           title: "Safe Arrival check",
           // Neutral by construction — never "missing" (batch 5 §9).

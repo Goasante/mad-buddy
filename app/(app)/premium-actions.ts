@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createNotification } from "@/lib/notifications/server";
+import { deliverNotification } from "@/lib/notifications/server";
 import { requirePremiumPlan } from "@/lib/premium/access";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
@@ -254,8 +254,11 @@ export async function createMeetupRequestAction(input: unknown): Promise<Premium
       .eq("user_id", userId)
       .maybeSingle();
     const senderName = senderProfile?.full_name ?? "A Muddy";
-    const { error: notificationError } = await createNotification(admin, {
+    await deliverNotification(admin, {
       userId: parsed.data.receiverId,
+      senderId: userId,
+      category: "pings",
+      priority: "high",
       type: `meetup_request:${meetupRequest.id}`,
       title: `${senderName} sent a connection prompt`,
       message:
@@ -263,10 +266,6 @@ export async function createMeetupRequestAction(input: unknown): Promise<Premium
           ? `${senderName} sent you a quick hello.`
           : parsed.data.message || `${senderName} wants to meet nearby.`
     });
-
-    if (notificationError) {
-      return { ok: false, message: "Your hello was saved, but the notification could not be delivered." };
-    }
 
     revalidatePath("/notifications");
     return { ok: true, message: "Hello sent." };
@@ -317,16 +316,15 @@ export async function respondToMeetupRequestAction(input: unknown): Promise<Prem
       .eq("user_id", userId)
       .maybeSingle();
     const senderName = profile?.full_name ?? "A Muddy";
-    const { error: notificationError } = await createNotification(admin, {
+    await deliverNotification(admin, {
       userId: originalRequest.sender_id,
+      senderId: userId,
+      category: "pings",
+      priority: "high",
       type: `meetup_request:${reply.id}`,
       title: `${senderName} replied`,
       message: parsed.data.message
     });
-
-    if (notificationError) {
-      return { ok: false, message: "Your response was saved, but its notification could not be delivered." };
-    }
 
     revalidatePath("/notifications");
     return { ok: true, message: "Response sent." };

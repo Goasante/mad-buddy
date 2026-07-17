@@ -72,6 +72,36 @@ export function isWithinQuietHours(prefs: NotificationPreferences, minuteOfDay: 
     : minuteOfDay >= start || minuteOfDay < end; // crosses midnight
 }
 
+/**
+ * Recipient timezone until per-user timezones are stored. The product launches
+ * in Ghana, so quiet hours are evaluated in Accra time rather than server UTC
+ * (which happens to coincide, but the intent should be explicit).
+ */
+export const DEFAULT_RECIPIENT_TIMEZONE = "Africa/Accra";
+
+/** Minute-of-day [0,1440) for `date` in an IANA timezone. */
+export function minuteOfDayInTimeZone(date: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+  return hour * 60 + minute;
+}
+
+/** Local calendar day key (e.g. "2026-07-17") for the daily notification budget. */
+export function dayKeyInTimeZone(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
 export type NotificationEvent = {
   category: NotificationCategory;
   priority: NotificationPriority;

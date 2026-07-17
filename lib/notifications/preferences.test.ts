@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
+  dayKeyInTimeZone,
   decideNotification,
   isWithinQuietHours,
+  minuteOfDayInTimeZone,
   normalizePreferences,
   type NotificationEvent,
   type NotificationPreferences
@@ -21,6 +23,20 @@ function event(overrides: Partial<NotificationEvent> = {}): NotificationEvent {
     ...overrides
   };
 }
+
+describe("timezone helpers", () => {
+  it("computes minute-of-day in the recipient's timezone", () => {
+    const date = new Date("2026-07-17T23:30:00Z");
+    expect(minuteOfDayInTimeZone(date, "Africa/Accra")).toBe(23 * 60 + 30); // GMT
+    expect(minuteOfDayInTimeZone(date, "Europe/Paris")).toBe(90); // +2 in July, next day 01:30
+  });
+
+  it("computes the local day key, including across midnight", () => {
+    const date = new Date("2026-07-17T23:30:00Z");
+    expect(dayKeyInTimeZone(date, "Africa/Accra")).toBe("2026-07-17");
+    expect(dayKeyInTimeZone(date, "Europe/Paris")).toBe("2026-07-18");
+  });
+});
 
 describe("normalizePreferences", () => {
   it("falls back to defaults for junk input", () => {
