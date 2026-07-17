@@ -236,6 +236,12 @@ export function SettingsPageContent({
             href="/settings/notifications"
           />
           <SettingsLinkRow
+            icon={MessageSquare}
+            title="Messaging privacy"
+            description="Who can message you, group adds, read receipts, previews."
+            href="/settings/communication"
+          />
+          <SettingsLinkRow
             icon={CalendarClock}
             title="Reminders"
             description="Plan reminders and notification preferences."
