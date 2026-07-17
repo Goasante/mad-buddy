@@ -83,12 +83,23 @@ export type Database = {
           sender_id: string;
           receiver_id: string;
           status: FriendRequestStatus;
+          // Added by the batch-8 discovery migration.
+          context_type: RequestContextType | null;
+          context_id: string | null;
+          message: string | null;
+          responded_at: string | null;
+          expires_at: string | null;
         };
         Insert: {
           id?: string;
           sender_id: string;
           receiver_id: string;
           status?: FriendRequestStatus;
+          context_type?: RequestContextType | null;
+          context_id?: string | null;
+          message?: string | null;
+          responded_at?: string | null;
+          expires_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -101,12 +112,17 @@ export type Database = {
           user_one_id: string;
           user_two_id: string;
           created_at: string;
+          // Added by the batch-8 discovery migration.
+          accepted_request_id: string | null;
+          ended_at: string | null;
         };
         Insert: {
           id?: string;
           user_one_id: string;
           user_two_id: string;
           created_at?: string;
+          accepted_request_id?: string | null;
+          ended_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["friendships"]["Insert"]>;
         Relationships: [];
@@ -1666,6 +1682,156 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["message_hides"]["Insert"]>;
         Relationships: [];
       };
+      invite_links: {
+        Row: {
+          id: string;
+          creator_id: string;
+          invite_type: InviteType;
+          context_id: string | null;
+          token_hash: string;
+          delivery_type: InviteDeliveryType;
+          status: InviteStatus;
+          max_uses: number;
+          uses_count: number;
+          expires_at: string;
+          revoked_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          creator_id: string;
+          invite_type: InviteType;
+          context_id?: string | null;
+          token_hash: string;
+          delivery_type?: InviteDeliveryType;
+          status?: InviteStatus;
+          max_uses?: number;
+          uses_count?: number;
+          expires_at: string;
+          revoked_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["invite_links"]["Insert"]>;
+        Relationships: [];
+      };
+      qr_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          token_hash: string;
+          starts_at: string;
+          expires_at: string;
+          used_at: string | null;
+          used_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          token_hash: string;
+          starts_at?: string;
+          expires_at: string;
+          used_at?: string | null;
+          used_by?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["qr_sessions"]["Insert"]>;
+        Relationships: [];
+      };
+      discoverability_identifiers: {
+        Row: {
+          id: string;
+          user_id: string;
+          identifier_type: IdentifierType;
+          protected_identifier: string;
+          is_discoverable: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          identifier_type: IdentifierType;
+          protected_identifier: string;
+          is_discoverable?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["discoverability_identifiers"]["Insert"]>;
+        Relationships: [];
+      };
+      contact_match_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          status: ContactMatchStatus;
+          submitted_count: number;
+          matched_count: number;
+          created_at: string;
+          expires_at: string | null;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          status?: ContactMatchStatus;
+          submitted_count?: number;
+          matched_count?: number;
+          created_at?: string;
+          expires_at?: string | null;
+          deleted_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["contact_match_sessions"]["Insert"]>;
+        Relationships: [];
+      };
+      account_verifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          verification_type: VerificationType;
+          status: VerificationStatus;
+          provider: string | null;
+          evidence_label: string | null;
+          verified_at: string | null;
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          verification_type: VerificationType;
+          status?: VerificationStatus;
+          provider?: string | null;
+          evidence_label?: string | null;
+          verified_at?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["account_verifications"]["Insert"]>;
+        Relationships: [];
+      };
+      account_trust_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          event_type: TrustEventType;
+          risk_level: "low" | "medium" | "high";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          event_type: TrustEventType;
+          risk_level?: "low" | "medium" | "high";
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["account_trust_events"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -1930,6 +2096,28 @@ export type QuickActionType =
   | "where_to_meet"
   | "cant_make_it"
   | "start_without_me";
+
+// --- Batch 8: Discovery, Invites, QR, Contact Matching, Account Trust ---
+
+export type RequestContextType = "school" | "work" | "church" | "event" | "friend" | "other";
+
+export type InviteType = "personal" | "event" | "circle" | "community";
+export type InviteDeliveryType = "link" | "qr";
+export type InviteStatus = "active" | "used" | "revoked" | "expired";
+
+export type IdentifierType = "phone" | "email";
+export type ContactMatchStatus = "running" | "completed" | "failed" | "deleted";
+
+export type VerificationType = "email" | "phone" | "institution" | "organisation";
+export type VerificationStatus = "pending" | "verified" | "failed" | "expired" | "revoked";
+export type TrustEventType =
+  | "request_declined"
+  | "blocked_by_user"
+  | "report_received"
+  | "invite_abuse"
+  | "duplicate_content"
+  | "rapid_requests"
+  | "impersonation_report";
 
 export type ModerationActionType =
   | "no_action"

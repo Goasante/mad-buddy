@@ -41,6 +41,19 @@ describe("route protection (deny-by-default, audit I-08)", () => {
     }
   });
 
+  it("makes an invite landing public but keeps the authed invite screen private", () => {
+    // A logged-out recipient must be able to open an invite link (spec §21).
+    expect(requiredLoginRedirect("/invite/abc123token")).toBeNull();
+    expect(isPublicPath("/invite/abc123token")).toBe(true);
+
+    // ...but /invite itself is the authenticated "Invite a Muddy" screen. A
+    // plain prefix rule would wrongly expose it, so this must stay protected.
+    expect(requiredLoginRedirect("/invite")).toBe("/login");
+    expect(isPublicPath("/invite")).toBe(false);
+    // A trailing slash with no token is not a landing page either.
+    expect(isPublicPath("/invite/")).toBe(false);
+  });
+
   it("protects routes that do not exist yet — the deny-by-default guarantee", () => {
     // This is the regression the old allowlist model shipped once (/plans).
     expect(requiredLoginRedirect("/some-feature-added-next-sprint")).toBe("/login");

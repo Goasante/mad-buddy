@@ -34,8 +34,22 @@ const PUBLIC_PREFIXES = [
   "/subscription-cancelled"
 ];
 
+/**
+ * Prefixes whose SUB-PATHS are public but whose bare path is not.
+ *
+ * `/invite/<token>` is an invite landing page a logged-out recipient must be
+ * able to open (that is the entire point of an invite link), while `/invite`
+ * itself is the authenticated "Invite a Muddy" screen and must stay private.
+ * Listing "/invite" in PUBLIC_PREFIXES would wrongly expose both.
+ */
+const PUBLIC_SUBPATH_ONLY_PREFIXES = ["/invite"];
+
 function matchesPrefix(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
+}
+
+function matchesSubpathOnly(pathname: string, prefix: string) {
+  return pathname.startsWith(`${prefix}/`) && pathname.length > prefix.length + 1;
 }
 
 export function isPublicPath(pathname: string) {
@@ -43,7 +57,11 @@ export function isPublicPath(pathname: string) {
     return true;
   }
 
-  return PUBLIC_PREFIXES.some((prefix) => matchesPrefix(pathname, prefix));
+  if (PUBLIC_PREFIXES.some((prefix) => matchesPrefix(pathname, prefix))) {
+    return true;
+  }
+
+  return PUBLIC_SUBPATH_ONLY_PREFIXES.some((prefix) => matchesSubpathOnly(pathname, prefix));
 }
 
 export function isApiPath(pathname: string) {

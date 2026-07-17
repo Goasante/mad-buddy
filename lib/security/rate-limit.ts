@@ -36,7 +36,11 @@ export type RateLimitAction =
   | "content.report"
   | "messages.send"
   | "conversations.create"
-  | "groups.create";
+  | "groups.create"
+  | "invites.create"
+  | "invites.resolve"
+  | "contacts.match"
+  | "verify.phone";
 
 export type RateLimitResult = {
   allowed: boolean;
@@ -81,7 +85,13 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   // conversations — 30/minute is the documented cap.
   "messages.send": { limit: 30, windowSeconds: 60 },
   "conversations.create": { limit: 30, windowSeconds: 60 * 60 },
-  "groups.create": { limit: 10, windowSeconds: 24 * 60 * 60 }
+  "groups.create": { limit: 10, windowSeconds: 24 * 60 * 60 },
+  // Discovery / invites (feature spec §23, §37, §56). Tight on resolve to make
+  // token guessing and QR scraping impractical.
+  "invites.create": { limit: 20, windowSeconds: 60 * 60 },
+  "invites.resolve": { limit: 30, windowSeconds: 10 * 60 },
+  "contacts.match": { limit: 5, windowSeconds: 24 * 60 * 60 },
+  "verify.phone": { limit: 5, windowSeconds: 60 * 60 }
 };
 
 function hashIp(value: string | null) {
