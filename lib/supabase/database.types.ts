@@ -2266,6 +2266,474 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["notification_budget_usage"]["Insert"]>;
         Relationships: [];
       };
+      admin_roles: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          is_system_role: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          is_system_role?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["admin_roles"]["Insert"]>;
+        Relationships: [];
+      };
+      admin_role_permissions: {
+        Row: { id: string; role_id: string; permission_key: string; created_at: string };
+        Insert: { id?: string; role_id: string; permission_key: string; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["admin_role_permissions"]["Insert"]>;
+        Relationships: [];
+      };
+      admin_assignments: {
+        Row: {
+          id: string;
+          user_id: string;
+          role_id: string;
+          status: "active" | "suspended" | "revoked";
+          assigned_by: string | null;
+          starts_at: string;
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          role_id: string;
+          status?: "active" | "suspended" | "revoked";
+          assigned_by?: string | null;
+          starts_at?: string;
+          expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["admin_assignments"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "admin_assignments_role_id_fkey";
+            columns: ["role_id"];
+            referencedRelation: "admin_roles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      admin_audit_events: {
+        Row: {
+          id: string;
+          actor_id: string | null;
+          actor_role: string | null;
+          action: string;
+          target_type: string | null;
+          target_id: string | null;
+          case_reference: string | null;
+          previous_state: Json | null;
+          new_state: Json | null;
+          reason: string | null;
+          auth_strength: "password" | "mfa" | "step_up" | "break_glass" | null;
+          session_reference: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          actor_id?: string | null;
+          actor_role?: string | null;
+          action: string;
+          target_type?: string | null;
+          target_id?: string | null;
+          case_reference?: string | null;
+          previous_state?: Json | null;
+          new_state?: Json | null;
+          reason?: string | null;
+          auth_strength?: "password" | "mfa" | "step_up" | "break_glass" | null;
+          session_reference?: string | null;
+          created_at?: string;
+        };
+        // Append-only: a database trigger rejects UPDATE and DELETE.
+        Update: never;
+        Relationships: [];
+      };
+      sensitive_access_log: {
+        Row: {
+          id: string;
+          actor_id: string | null;
+          category: string;
+          subject_user_id: string | null;
+          case_reference: string | null;
+          reason: string;
+          approved_by: string | null;
+          accessed_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          actor_id?: string | null;
+          category: string;
+          subject_user_id?: string | null;
+          case_reference?: string | null;
+          reason: string;
+          approved_by?: string | null;
+          accessed_at?: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      trust_safety_cases: {
+        Row: {
+          id: string;
+          case_type: string;
+          priority: "level_1" | "level_2" | "level_3" | "level_4";
+          status: string;
+          subject_user_id: string | null;
+          created_from_report_id: string | null;
+          assigned_to: string | null;
+          opened_at: string;
+          resolved_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          case_type: string;
+          priority?: "level_1" | "level_2" | "level_3" | "level_4";
+          status?: string;
+          subject_user_id?: string | null;
+          created_from_report_id?: string | null;
+          assigned_to?: string | null;
+          opened_at?: string;
+          resolved_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["trust_safety_cases"]["Insert"]>;
+        Relationships: [];
+      };
+      case_evidence: {
+        Row: {
+          id: string;
+          case_id: string;
+          evidence_type: string;
+          protected_reference: string;
+          access_level: "level_1" | "level_2" | "level_3" | "level_4";
+          retention_expires_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          case_id: string;
+          evidence_type: string;
+          protected_reference: string;
+          access_level?: "level_1" | "level_2" | "level_3" | "level_4";
+          retention_expires_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["case_evidence"]["Insert"]>;
+        Relationships: [];
+      };
+      case_actions: {
+        Row: {
+          id: string;
+          case_id: string;
+          actor_id: string | null;
+          action_type: string;
+          target_type: string | null;
+          target_id: string | null;
+          reason_code: string | null;
+          starts_at: string;
+          ends_at: string | null;
+          reversed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          case_id: string;
+          actor_id?: string | null;
+          action_type: string;
+          target_type?: string | null;
+          target_id?: string | null;
+          reason_code?: string | null;
+          starts_at?: string;
+          ends_at?: string | null;
+          reversed_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["case_actions"]["Insert"]>;
+        Relationships: [];
+      };
+      user_restrictions: {
+        Row: {
+          id: string;
+          user_id: string;
+          restriction_type: string;
+          case_id: string | null;
+          reason_code: string | null;
+          starts_at: string;
+          ends_at: string | null;
+          lifted_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          restriction_type: string;
+          case_id?: string | null;
+          reason_code?: string | null;
+          starts_at?: string;
+          ends_at?: string | null;
+          lifted_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["user_restrictions"]["Insert"]>;
+        Relationships: [];
+      };
+      support_tickets: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          category: string;
+          subject: string;
+          description: string;
+          diagnostics: Json;
+          priority: "low" | "normal" | "high" | "urgent";
+          status: string;
+          assigned_to: string | null;
+          created_at: string;
+          updated_at: string;
+          resolved_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          category: string;
+          subject: string;
+          description: string;
+          diagnostics?: Json;
+          priority?: "low" | "normal" | "high" | "urgent";
+          status?: string;
+          assigned_to?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          resolved_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["support_tickets"]["Insert"]>;
+        Relationships: [];
+      };
+      support_ticket_messages: {
+        Row: {
+          id: string;
+          ticket_id: string;
+          sender_type: "user" | "agent" | "system";
+          sender_id: string | null;
+          message: string;
+          attachment_media_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          ticket_id: string;
+          sender_type: "user" | "agent" | "system";
+          sender_id?: string | null;
+          message: string;
+          attachment_media_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["support_ticket_messages"]["Insert"]>;
+        Relationships: [];
+      };
+      appeals: {
+        Row: {
+          id: string;
+          subject_user_id: string;
+          source_action_id: string | null;
+          source_restriction_id: string | null;
+          reason: string;
+          status: "submitted" | "in_review" | "decided" | "withdrawn";
+          submitted_at: string;
+          assigned_to: string | null;
+          decided_at: string | null;
+          decision: "upheld" | "modified" | "reversed" | null;
+          decision_note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          subject_user_id: string;
+          source_action_id?: string | null;
+          source_restriction_id?: string | null;
+          reason: string;
+          status?: "submitted" | "in_review" | "decided" | "withdrawn";
+          submitted_at?: string;
+          assigned_to?: string | null;
+          decided_at?: string | null;
+          decision?: "upheld" | "modified" | "reversed" | null;
+          decision_note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["appeals"]["Insert"]>;
+        Relationships: [];
+      };
+      security_incidents: {
+        Row: {
+          id: string;
+          title: string;
+          severity: "sev_1" | "sev_2" | "sev_3" | "sev_4";
+          status: string;
+          incident_type: string;
+          commander_id: string | null;
+          detected_at: string;
+          contained_at: string | null;
+          resolved_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          severity: "sev_1" | "sev_2" | "sev_3" | "sev_4";
+          status?: string;
+          incident_type: string;
+          commander_id?: string | null;
+          detected_at?: string;
+          contained_at?: string | null;
+          resolved_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["security_incidents"]["Insert"]>;
+        Relationships: [];
+      };
+      incident_actions: {
+        Row: {
+          id: string;
+          incident_id: string;
+          actor_id: string | null;
+          action_type: string;
+          description: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          incident_id: string;
+          actor_id?: string | null;
+          action_type: string;
+          description?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["incident_actions"]["Insert"]>;
+        Relationships: [];
+      };
+      emergency_controls: {
+        Row: {
+          control_key: string;
+          is_disabled: boolean;
+          reason: string | null;
+          incident_id: string | null;
+          disabled_by: string | null;
+          disabled_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          control_key: string;
+          is_disabled?: boolean;
+          reason?: string | null;
+          incident_id?: string | null;
+          disabled_by?: string | null;
+          disabled_at?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["emergency_controls"]["Insert"]>;
+        Relationships: [];
+      };
+      privacy_requests: {
+        Row: {
+          id: string;
+          user_id: string;
+          request_type: string;
+          status: string;
+          verified_at: string | null;
+          submitted_at: string;
+          completed_at: string | null;
+          assigned_to: string | null;
+          legal_hold_reason: string | null;
+          legal_hold_expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          request_type: string;
+          status?: string;
+          verified_at?: string | null;
+          submitted_at?: string;
+          completed_at?: string | null;
+          assigned_to?: string | null;
+          legal_hold_reason?: string | null;
+          legal_hold_expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["privacy_requests"]["Insert"]>;
+        Relationships: [];
+      };
+      feature_flags: {
+        Row: {
+          id: string;
+          key: string;
+          description: string | null;
+          status: "off" | "on" | "rollout" | "archived";
+          default_value: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          key: string;
+          description?: string | null;
+          status?: "off" | "on" | "rollout" | "archived";
+          default_value?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["feature_flags"]["Insert"]>;
+        Relationships: [];
+      };
+      feature_flag_rules: {
+        Row: {
+          id: string;
+          feature_flag_id: string;
+          target_type: string;
+          target_value: string | null;
+          rollout_percentage: number | null;
+          starts_at: string | null;
+          ends_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          feature_flag_id: string;
+          target_type: string;
+          target_value?: string | null;
+          rollout_percentage?: number | null;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["feature_flag_rules"]["Insert"]>;
+        Relationships: [];
+      };
       privacy_setup_versions: {
         Row: {
           user_id: string;
