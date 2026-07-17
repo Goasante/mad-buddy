@@ -190,6 +190,12 @@ const PAID_ACCESS_STATUSES: ReadonlySet<SubscriptionStatus> = new Set<Subscripti
   "attention"
 ]);
 
+/**
+ * How long paid access survives a failed renewal (spec §61). The webhook sets
+ * `grace_ends_at` from this when Paystack reports a payment failure.
+ */
+export const GRACE_PERIOD_DAYS = 7;
+
 export type BillingState = {
   plan: SubscriptionPlan;
   status: SubscriptionStatus;

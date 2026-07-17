@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
+import { GRACE_PERIOD_DAYS } from "@/lib/billing/entitlements";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { markPaystackSubscriptionStatus, syncPaystackSubscription } from "@/lib/paystack/sync";
 import { getMissingPaystackWebhookConfig, getPaystackWebhookSecret } from "@/lib/paystack/config";
@@ -156,15 +157,33 @@ async function handlePaystackEvent(event: PaystackWebhookEvent) {
       return;
     }
     case "subscription.not_renew": {
-      await markPaystackSubscriptionStatus(admin, data.subscription_code ?? data.subscription?.subscription_code, "non_renewing");
+      // Cancelled-but-paid-through: access continues to period end (§59).
+      await markPaystackSubscriptionStatus(
+        admin,
+        data.subscription_code ?? data.subscription?.subscription_code,
+        "non_renewing",
+        { cancelAtPeriodEnd: true }
+      );
       return;
     }
     case "subscription.disable": {
-      await markPaystackSubscriptionStatus(admin, data.subscription_code ?? data.subscription?.subscription_code, "cancelled");
+      await markPaystackSubscriptionStatus(
+        admin,
+        data.subscription_code ?? data.subscription?.subscription_code,
+        "cancelled",
+        { graceEndsAt: null }
+      );
       return;
     }
     case "invoice.payment_failed": {
-      await markPaystackSubscriptionStatus(admin, data.subscription_code ?? data.subscription?.subscription_code, "attention");
+      // Failed renewal starts the grace window (§61): paid features survive
+      // until grace_ends_at, then effectivePlan falls back to free (§62).
+      await markPaystackSubscriptionStatus(
+        admin,
+        data.subscription_code ?? data.subscription?.subscription_code,
+        "past_due",
+        { graceEndsAt: new Date(Date.now() + GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000).toISOString() }
+      );
       return;
     }
     default:

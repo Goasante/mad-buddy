@@ -86,7 +86,11 @@ export async function syncPaystackSubscription(
       plan,
       status: status === "free" && plan !== "free" ? "active" : status,
       current_period_start: plan === "free" ? null : paidAt.toISOString(),
-      current_period_end: plan === "free" ? null : periodEnd.toISOString()
+      current_period_end: plan === "free" ? null : periodEnd.toISOString(),
+      // A successful payment sync ends any grace window and un-cancels
+      // (batch 10 §61): the renewal went through.
+      grace_ends_at: null,
+      cancel_at_period_end: false
     },
     { onConflict: "user_id" }
   );
@@ -107,15 +111,20 @@ export async function syncPaystackSubscription(
 export async function markPaystackSubscriptionStatus(
   admin: SupabaseClient<Database>,
   subscriptionCode: string | null | undefined,
-  status: SubscriptionStatus
+  status: SubscriptionStatus,
+  extra: { graceEndsAt?: string | null; cancelAtPeriodEnd?: boolean } = {}
 ) {
   if (!subscriptionCode) {
     return;
   }
 
+  const update: Database["public"]["Tables"]["subscriptions"]["Update"] = { provider: "paystack", status };
+  if ("graceEndsAt" in extra) update.grace_ends_at = extra.graceEndsAt;
+  if (extra.cancelAtPeriodEnd !== undefined) update.cancel_at_period_end = extra.cancelAtPeriodEnd;
+
   const { error } = await admin
     .from("subscriptions")
-    .update({ provider: "paystack", status })
+    .update(update)
     .eq("paystack_subscription_code", subscriptionCode);
 
   if (error) {
