@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarCheck2, ChevronLeft, Hand, Image as ImageIcon, MessagesSquare, MoreHorizontal, Users } from "lucide-react";
+import { BadgeCheck, CalendarCheck2, ChevronLeft, Hand, Image as ImageIcon, MessagesSquare, MoreHorizontal, Users } from "lucide-react";
 import { useState, useTransition } from "react";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
 import { CONNECTION_PROMPTS } from "@/lib/meetups/connection-prompts";
+import type { PublicTrustSummary } from "@/lib/discovery/trust";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 import { cn } from "@/lib/utils";
 
@@ -34,7 +35,13 @@ const profileTabs: Array<{ id: ProfileTab; label: string }> = [
   { id: "photos", label: "Photos" }
 ];
 
-export function MuddyProfilePage({ muddy }: { muddy: MuddyProfileData }) {
+export function MuddyProfilePage({
+  muddy,
+  trust = null
+}: {
+  muddy: MuddyProfileData;
+  trust?: PublicTrustSummary | null;
+}) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("about");
   const [pingOpen, setPingOpen] = useState(false);
   const [waveSent, setWaveSent] = useState(false);
@@ -75,6 +82,25 @@ export function MuddyProfilePage({ muddy }: { muddy: MuddyProfileData }) {
                 </div>
                 <p className="text-sm text-muted-foreground">@{muddy.username}</p>
                 {muddy.proximityLevel ? <div className="mt-1"><ProximityBadge proximityLevel={muddy.proximityLevel} /></div> : null}
+                {trust ? (
+                  // Safe public trust signals only (batch 8 §57) — never
+                  // internal risk data.
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    {trust.badgeLabel ? (
+                      <span className="inline-flex items-center gap-1 font-medium text-primary">
+                        <BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                        {trust.badgeLabel}
+                      </span>
+                    ) : null}
+                    {trust.mutualCount > 0 ? (
+                      <span>
+                        {trust.mutualCount} mutual {trust.mutualCount === 1 ? "Muddy" : "Muddies"}
+                      </span>
+                    ) : null}
+                    <span>{trust.accountAgeLabel}</span>
+                    {trust.sharedCommunity ? <span>{trust.sharedCommunity}</span> : null}
+                  </div>
+                ) : null}
               </div>
             </div>
             <Button type="button" variant="outline" size="icon" aria-label="More options">

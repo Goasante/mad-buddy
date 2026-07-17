@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { MuddyProfilePage } from "@/components/friends/muddy-profile-page";
+import { getPublicTrustSummary } from "@/lib/discovery/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function MuddyProfileRoute({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
@@ -16,6 +18,16 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
     notFound();
   }
 
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  const trust =
+    user && user.id !== profile.user_id
+      ? await getPublicTrustSummary(admin, user.id, profile.user_id)
+      : null;
+
   return (
     <MuddyProfilePage
       muddy={{
@@ -24,8 +36,9 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
         username: profile.username,
         bio: profile.bio ?? "",
         moodStatus: profile.mood_status ?? "",
-        mutualMuddies: 0
+        mutualMuddies: trust?.mutualCount ?? 0
       }}
+      trust={trust}
     />
   );
 }
