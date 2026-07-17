@@ -231,8 +231,16 @@ export async function sendWaveV2Action(
     return { ok: false, message: "Your wave was not sent. Try again." };
   }
 
-  const { recordMilestone } = await import("@/lib/onboarding/service");
-  await recordMilestone(admin, userId, "first_wave_sent");
+  {
+    const [{ recordMilestone }, { grantAchievement }] = await Promise.all([
+      import("@/lib/onboarding/service"),
+      import("@/lib/engagement/achievements")
+    ]);
+    await Promise.all([
+      recordMilestone(admin, userId, "first_wave_sent"),
+      grantAchievement(admin, userId, "first_wave")
+    ]);
+  }
 
   // Mute silences notifications without telling the sender (spec §20):
   // the wave record exists either way; a muted recipient just isn't pinged.

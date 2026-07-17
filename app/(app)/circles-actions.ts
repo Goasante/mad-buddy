@@ -115,6 +115,11 @@ export async function createCircleAction(input: unknown): Promise<CircleActionSt
     );
   }
 
+  {
+    const { grantCountAchievement } = await import("@/lib/engagement/achievements");
+    await grantCountAchievement(admin, userId, "circle_builder", (circleCount ?? 0) + 1);
+  }
+
   return {
     ok: true,
     message: `${parsed.data.name.trim()} created with ${eligibleMembers.length} ${
@@ -378,8 +383,14 @@ export async function startVisibilitySessionAction(input: unknown): Promise<Circ
   if (error || !session) return { ok: false, message: "Couldn't update visibility." };
 
   if (featureType === "glow" && parsed.data.visibilityMode !== "hidden") {
-    const { recordMilestone } = await import("@/lib/onboarding/service");
-    await recordMilestone(admin, userId, "first_glow_enabled");
+    const [{ recordMilestone }, { grantAchievement }] = await Promise.all([
+      import("@/lib/onboarding/service"),
+      import("@/lib/engagement/achievements")
+    ]);
+    await Promise.all([
+      recordMilestone(admin, userId, "first_glow_enabled"),
+      grantAchievement(admin, userId, "first_glow")
+    ]);
   }
 
   if (parsed.data.visibilityMode === "selected_circles" && parsed.data.circleIds?.length) {

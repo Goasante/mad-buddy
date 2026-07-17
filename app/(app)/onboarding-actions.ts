@@ -344,7 +344,10 @@ export async function savePrivacySetupAction(input: unknown): Promise<Onboarding
         },
         { onConflict: "user_id" }
       ),
-    recordMilestone(admin, userId, "privacy_setup_completed")
+    recordMilestone(admin, userId, "privacy_setup_completed"),
+    import("@/lib/engagement/achievements").then(({ grantAchievement }) =>
+      grantAchievement(admin, userId, "privacy_pro")
+    )
   ]);
 
   return {

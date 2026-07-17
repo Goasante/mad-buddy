@@ -530,11 +530,16 @@ export async function acceptFriendRequestAction(requestId: string): Promise<Inte
 
   // Both sides now have a Muddy; the sender's request was also accepted.
   {
-    const { recordMilestone } = await import("@/lib/onboarding/service");
+    const [{ recordMilestone }, { grantAchievement }] = await Promise.all([
+      import("@/lib/onboarding/service"),
+      import("@/lib/engagement/achievements")
+    ]);
     await Promise.all([
       recordMilestone(admin, userId, "first_muddy_added"),
       recordMilestone(admin, request.sender_id, "first_muddy_added"),
-      recordMilestone(admin, request.sender_id, "first_request_accepted")
+      recordMilestone(admin, request.sender_id, "first_request_accepted"),
+      grantAchievement(admin, userId, "first_muddy"),
+      grantAchievement(admin, request.sender_id, "first_muddy")
     ]);
   }
 

@@ -160,6 +160,10 @@ export async function createSafeArrivalAction(input: unknown): Promise<SafeArriv
   );
 
   await recordSafeArrivalEvent(admin, { sessionId: session.id, eventType: "created", createdBy: userId });
+  {
+    const { grantAchievement } = await import("@/lib/engagement/achievements");
+    await grantAchievement(admin, userId, "trusted_contact");
+  }
 
   const name = await travellerName(admin, userId);
   const arrivalLabel = new Date(expectedMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -259,6 +263,10 @@ export async function confirmSafeArrivalAction(sessionId: string): Promise<SafeA
   if (!updated?.length) return { ok: true, message: "You're marked as arrived." };
 
   await recordSafeArrivalEvent(admin, { sessionId, eventType: "confirmed", createdBy: userId });
+  {
+    const { grantAchievement } = await import("@/lib/engagement/achievements");
+    await grantAchievement(admin, userId, "good_check_in");
+  }
   const name = await travellerName(admin, userId);
   await notifyContacts(admin, sessionId, {
     type: "safe_arrival:arrived",

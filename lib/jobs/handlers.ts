@@ -343,6 +343,48 @@ export const handleExpireAdminAssignments: JobHandler = async (admin) => {
   return data?.length ?? 0;
 };
 
+/**
+ * Completes confirmed/inviting plans whose end time has passed. Nothing else
+ * ever sets "completed", so without this recaps count zero plansCompleted and
+ * the plan achievements can never be earned. Grants first_plan / plan_maker
+ * to the host and everyone who was going (criteria from the definitions).
+ */
+export const handleCompletePastPlans: JobHandler = async (admin) => {
+  const nowIso = new Date().toISOString();
+  const { data: completed, error } = await admin
+    .from("plans")
+    .update({ status: "completed", updated_at: nowIso })
+    .lt("end_at", nowIso)
+    .in("status", ["inviting", "confirmed"])
+    .select("id, creator_id");
+  if (error) throw new JobError("DATABASE_TIMEOUT", error.message);
+  if (!completed?.length) return 0;
+
+  const { grantAchievement, grantCountAchievement } = await import("@/lib/engagement/achievements");
+  const { data: goers } = await admin
+    .from("plan_participants")
+    .select("user_id")
+    .in(
+      "plan_id",
+      completed.map((plan) => plan.id)
+    )
+    .eq("rsvp_status", "going");
+
+  const userIds = [...new Set([...completed.map((plan) => plan.creator_id), ...(goers ?? []).map((row) => row.user_id)])];
+  for (const userId of userIds) {
+    await grantAchievement(admin, userId, "first_plan");
+    const { count } = await admin
+      .from("plan_participants")
+      .select("id, plans!inner(status)", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("rsvp_status", "going")
+      .eq("plans.status", "completed");
+    await grantCountAchievement(admin, userId, "plan_maker", count ?? 0);
+  }
+
+  return completed.length;
+};
+
 export const handleExpireStatuses: JobHandler = async (admin) => {
   const nowIso = new Date().toISOString();
   const { data, error } = await admin.from("user_statuses").delete().lt("expires_at", nowIso).select("id");
@@ -574,6 +616,7 @@ export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
   "billing.apply_scheduled_downgrade": handleApplyScheduledDowngrade,
   "streaks.close_expired_periods": handleCloseExpiredStreaks,
   "recap.generate_monthly": handleGenerateMonthlyRecaps,
+  "expiry.plans": handleCompletePastPlans,
   "expiry.statuses": handleExpireStatuses,
   "expiry.visibility_sessions": handleExpireVisibilitySessions,
   "expiry.pings": handleExpirePings,

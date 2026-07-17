@@ -1,57 +1,77 @@
 "use client";
 
-import { Award, Calendar, HandHeart, Medal, Sparkles, Target, Trophy } from "lucide-react";
+import { Award, Flame, HandHeart, PauseCircle, ShieldCheck, Sparkles, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { pauseStreakAction, type EngagementOverview } from "@/app/(app)/engagement-actions";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { PreviewNotice } from "@/components/ui/preview-notice";
 
-type BadgesTab = "overview" | "badges" | "milestones";
-
-type Badge = { title: string; description: string; icon: LucideIcon; earned: boolean };
-type Milestone = { title: string; description: string; progress: number; total: number; completed: boolean };
-
-const overviewStats = [
-  { label: "Badges earned", value: 23 },
-  { label: "Milestones achieved", value: 7 },
-  { label: "Days active", value: 84 },
-  { label: "People you've helped", value: 31 }
-];
-
-const badgesList: Badge[] = [
-  { title: "First Wave", description: "Wave to 5 people", icon: Sparkles, earned: true },
-  { title: "Plan Maker", description: "Create 3 plans", icon: Target, earned: true },
-  { title: "On Time", description: "Never late to plans", icon: Medal, earned: true },
-  { title: "Good Vibes", description: "Positive interactions", icon: HandHeart, earned: true },
-  { title: "Helper", description: "Help 10 Muddies", icon: Award, earned: true },
-  { title: "Streak Master", description: "30-day active streak", icon: Trophy, earned: false }
-];
-
-const milestones: Milestone[] = [
-  { title: "7 Day Streak", description: "Keep the vibe going", progress: 7, total: 7, completed: true },
-  { title: "30 Plans Created", description: "Create and host plans", progress: 24, total: 30, completed: false },
-  { title: "50 Waves Sent", description: "Connect with more people", progress: 37, total: 50, completed: false },
-  { title: "100 Days Active", description: "Stay consistent", progress: 84, total: 100, completed: false }
-];
+type BadgesTab = "achievements" | "streaks" | "recap";
 
 const tabs: Array<{ id: BadgesTab; label: string }> = [
-  { id: "overview", label: "Overview" },
-  { id: "badges", label: "Badges" },
-  { id: "milestones", label: "Milestones" }
+  { id: "achievements", label: "Achievements" },
+  { id: "streaks", label: "Streaks" },
+  { id: "recap", label: "Monthly recap" }
 ];
 
-export function BadgesPageContent() {
-  const [tab, setTab] = useState<BadgesTab>("overview");
-  const nextMilestone = milestones.find((milestone) => !milestone.completed);
+const categoryIcons: Record<string, LucideIcon> = {
+  connection: HandHeart,
+  community: Users,
+  privacy: ShieldCheck,
+  balance: Sparkles,
+  safety: Award
+};
+
+const recapRows: Array<{ key: string; label: string }> = [
+  { key: "plansCompleted", label: "Plans completed" },
+  { key: "plansCreated", label: "Plans created" },
+  { key: "muddiesInteractedWith", label: "Muddies you made time for" },
+  { key: "newMuddies", label: "New Muddies" },
+  { key: "wavesSent", label: "Waves sent" },
+  { key: "hangoutSessions", label: "Hangouts hosted" },
+  { key: "daysVisible", label: "Days with your glow on" }
+];
+
+/**
+ * Private by design (batch 11): everything on this page is the viewer's own
+ * data. No comparisons, no rankings, no "days active" pressure — the copy
+ * states what happened and stops (spec §6, §26, §44).
+ */
+export function BadgesPageContent({ overview }: { overview: EngagementOverview }) {
+  const [tab, setTab] = useState<BadgesTab>("achievements");
+  const [streaks, setStreaks] = useState(overview.streaks);
+  const [feedback, setFeedback] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  const earnedCount = overview.achievements.filter((achievement) => achievement.earned).length;
+
+  function pause(streakId: string) {
+    startTransition(async () => {
+      const result = await pauseStreakAction(streakId, 2);
+      setFeedback(result.message);
+      if (result.ok) {
+        setStreaks((current) =>
+          current.map((streak) => (streak.streakId === streakId ? { ...streak, status: "paused" } : streak))
+        );
+      }
+    });
+  }
 
   return (
     <div className="mx-auto max-w-[1000px] space-y-6 pt-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Badges & Achievements</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Celebrate your vibe, consistency, and positive impact.</p>
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Achievements & Recaps</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Private to you. Nothing here is ranked, compared, or shown to anyone else.
+        </p>
       </div>
 
-      <PreviewNotice />
+      {feedback ? (
+        <p className="text-sm text-muted-foreground" role="status">
+          {feedback}
+        </p>
+      ) : null}
 
       <div className="flex gap-1 border-b border-border/70">
         {tabs.map((item) => (
@@ -69,99 +89,103 @@ export function BadgesPageContent() {
         ))}
       </div>
 
-      {tab === "overview" ? (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {overviewStats.map((stat) => (
-              <div key={stat.label} className="rounded-xl border border-border/70 bg-card/50 p-4 text-center">
-                <p className="text-xl font-semibold tabular-nums">{stat.value}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{stat.label}</p>
-              </div>
-            ))}
-            {nextMilestone ? (
-              <div className="col-span-2 rounded-xl border border-primary/30 bg-primary/10 p-4 text-center sm:col-span-1">
-                <p className="text-xs font-semibold text-primary">Next milestone</p>
-                <p className="mt-1 text-sm font-medium">{nextMilestone.title}</p>
-                <p className="text-xs text-muted-foreground">{nextMilestone.progress}/{nextMilestone.total}</p>
-              </div>
-            ) : null}
+      {tab === "achievements" ? (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {earnedCount} of {overview.achievements.length} earned. Criteria are always visible — nothing is random.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {overview.achievements.map((achievement) => {
+              const Icon = categoryIcons[achievement.category] ?? Award;
+              return (
+                <div
+                  key={achievement.code}
+                  className={cn(
+                    "rounded-xl border p-4",
+                    achievement.earned ? "border-primary/40 bg-primary/5" : "border-border/70 bg-card/50 opacity-70"
+                  )}
+                >
+                  <Icon
+                    className={cn("h-5 w-5", achievement.earned ? "text-primary" : "text-muted-foreground")}
+                    aria-hidden="true"
+                  />
+                  <p className="mt-2 text-sm font-semibold">{achievement.name}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{achievement.description}</p>
+                  {achievement.earned && achievement.earnedAt ? (
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Earned {new Date(achievement.earnedAt).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
-
-          <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-muted-foreground">Recent badges</h2>
-              <button type="button" onClick={() => setTab("badges")} className="text-xs font-medium text-primary hover:underline">
-                See all
-              </button>
-            </div>
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
-              {badgesList.slice(0, 5).map((badge) => (
-                <BadgeTile key={badge.title} badge={badge} />
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Milestones</h2>
-            <div className="space-y-3">
-              {milestones.map((milestone) => (
-                <MilestoneRow key={milestone.title} milestone={milestone} />
-              ))}
-            </div>
-          </section>
         </div>
       ) : null}
 
-      {tab === "badges" ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {badgesList.map((badge) => (
-            <BadgeTile key={badge.title} badge={badge} />
-          ))}
-        </div>
-      ) : null}
-
-      {tab === "milestones" ? (
+      {tab === "streaks" ? (
         <div className="space-y-3">
-          {milestones.map((milestone) => (
-            <MilestoneRow key={milestone.title} milestone={milestone} />
-          ))}
+          {streaks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No active streaks yet. A streak starts when you and a Muddy both connect in the same week — and it&apos;s
+              always fine to let one end.
+            </p>
+          ) : (
+            streaks.map((streak) => (
+              <div
+                key={streak.streakId}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/50 p-4"
+              >
+                <div className="flex items-center gap-3">
+                  <Flame className="h-5 w-5 text-primary" aria-hidden="true" />
+                  <div>
+                    <p className="text-sm font-medium">{streak.label}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Longest: {streak.longestWeeks} {streak.longestWeeks === 1 ? "week" : "weeks"}
+                      {streak.status === "paused" ? " · Paused" : ""}
+                    </p>
+                  </div>
+                </div>
+                {streak.status === "active" ? (
+                  <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => pause(streak.streakId)}>
+                    <PauseCircle className="h-4 w-4" aria-hidden="true" />
+                    Pause 2 weeks
+                  </Button>
+                ) : null}
+              </div>
+            ))
+          )}
+          <p className="text-xs text-muted-foreground">
+            Pausing is free, always. Streaks never cost anything to keep or recover.
+          </p>
         </div>
       ) : null}
-    </div>
-  );
-}
 
-function BadgeTile({ badge }: { badge: Badge }) {
-  return (
-    <div className={cn("rounded-xl border p-4 text-center", badge.earned ? "border-primary/30 bg-primary/10" : "border-border bg-card/30 opacity-60")}>
-      <span className={cn("mx-auto grid h-10 w-10 place-items-center rounded-full", badge.earned ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground")}>
-        <badge.icon className="h-5 w-5" aria-hidden="true" />
-      </span>
-      <p className="mt-2 text-xs font-semibold">{badge.title}</p>
-      <p className="mt-1 text-[10px] text-muted-foreground">{badge.earned ? "Earned" : badge.description}</p>
-    </div>
-  );
-}
-
-function MilestoneRow({ milestone }: { milestone: Milestone }) {
-  const percent = Math.min(100, Math.round((milestone.progress / milestone.total) * 100));
-  return (
-    <div className="rounded-xl border border-border/70 bg-card/50 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-          <div>
-            <p className="text-sm font-semibold">{milestone.title}</p>
-            <p className="text-xs text-muted-foreground">{milestone.description}</p>
+      {tab === "recap" ? (
+        overview.recap ? (
+          <div className="space-y-4 rounded-2xl border border-border/70 bg-card/50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {overview.recap.periodLabel}
+            </p>
+            <h2 className="text-xl font-semibold">{overview.recap.headline}</h2>
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {recapRows.map((row) => (
+                <div key={row.key} className="rounded-xl border border-border/70 bg-background/60 p-3 text-center">
+                  <dd className="text-lg font-semibold tabular-nums">
+                    {overview.recap?.summary[row.key as keyof typeof overview.recap.summary] ?? 0}
+                  </dd>
+                  <dt className="mt-1 text-[11px] text-muted-foreground">{row.label}</dt>
+                </div>
+              ))}
+            </dl>
+            <p className="text-sm text-muted-foreground">{overview.recap.reflectionPrompt}</p>
           </div>
-        </div>
-        <span className="shrink-0 text-xs font-medium text-muted-foreground">
-          {milestone.completed ? "Completed" : `${milestone.progress}/${milestone.total}`}
-        </span>
-      </div>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
-        <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
-      </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Your first monthly recap arrives after a full month of activity. A quiet month is fine too.
+          </p>
+        )
+      ) : null}
     </div>
   );
 }

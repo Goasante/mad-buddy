@@ -27,6 +27,7 @@ export type JobType =
   | "recap.generate_monthly"
   | "streaks.close_expired_periods"
   // Expiry sweeps (spec §31).
+  | "expiry.plans"
   | "expiry.statuses"
   | "expiry.visibility_sessions"
   | "expiry.pings"
@@ -158,6 +159,7 @@ export const SCHEDULE: readonly ScheduleSpec[] = [
   { jobType: "billing.apply_scheduled_downgrade", everyMinutes: 60, priority: 3 },
   { jobType: "streaks.close_expired_periods", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "recap.generate_monthly", everyMinutes: 60 * 24, priority: 7 },
+  { jobType: "expiry.plans", everyMinutes: 60, priority: 5 },
   { jobType: "expiry.statuses", everyMinutes: 15, priority: 5 },
   { jobType: "expiry.visibility_sessions", everyMinutes: 15, priority: 2 },
   { jobType: "expiry.pings", everyMinutes: 15, priority: 5 },
