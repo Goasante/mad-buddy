@@ -386,6 +386,185 @@ export const handleCloseExpiredStreaks: JobHandler = async (admin) => {
 };
 
 // ---------------------------------------------------------------------------
+// Monthly recap generation (batch 11 §10)
+// ---------------------------------------------------------------------------
+
+/**
+ * Generates last month's recap for every user who was active in that month,
+ * has recaps enabled, and whose plan includes friendship_recaps. Aggregated
+ * counts only — every summary passes through sanitizeRecapSummary, so nothing
+ * outside RECAP_ALLOWED_FIELDS can be stored (spec §4).
+ *
+ * Runs daily but is naturally idempotent: the (user, period_type,
+ * period_start) unique constraint plus ignoreDuplicates means each month is
+ * generated once, shortly after it ends.
+ */
+export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
+  const { sanitizeRecapSummary } = await import("@/lib/engagement/rules");
+  const { resolveUserEntitlements } = await import("@/lib/billing/service");
+
+  const now = new Date();
+  const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const startIso = periodStart.toISOString();
+  const endIso = periodEnd.toISOString();
+
+  // Pull the month's activity once and aggregate in memory. Bounded reads —
+  // at current scale these are small; revisit with keyset pagination later.
+  const [wavesRes, plansRes, participantsRes, friendshipsRes, hangoutsRes, sessionsRes] = await Promise.all([
+    admin
+      .from("waves")
+      .select("sender_id, recipient_id, reply_to_wave_id")
+      .gte("sent_at", startIso)
+      .lt("sent_at", endIso)
+      .limit(10000),
+    admin
+      .from("plans")
+      .select("id, creator_id, status, plan_type")
+      .gte("created_at", startIso)
+      .lt("created_at", endIso)
+      .limit(10000),
+    admin
+      .from("plan_participants")
+      .select("plan_id, user_id")
+      .gte("created_at", startIso)
+      .lt("created_at", endIso)
+      .limit(10000),
+    admin
+      .from("friendships")
+      .select("user_one_id, user_two_id")
+      .gte("created_at", startIso)
+      .lt("created_at", endIso)
+      .limit(10000),
+    admin
+      .from("hangout_sessions")
+      .select("owner_id, activity_type")
+      .gte("created_at", startIso)
+      .lt("created_at", endIso)
+      .limit(10000),
+    admin
+      .from("visibility_sessions")
+      .select("user_id, visibility_mode, starts_at")
+      .gte("starts_at", startIso)
+      .lt("starts_at", endIso)
+      .limit(10000)
+  ]);
+  for (const res of [wavesRes, plansRes, participantsRes, friendshipsRes, hangoutsRes, sessionsRes]) {
+    if (res.error) throw new JobError("DATABASE_TIMEOUT", res.error.message);
+  }
+
+  const raw = new Map<string, Record<string, unknown> & { _interacted: Set<string>; _days: Set<string>; _activities: string[] }>();
+  const forUser = (userId: string) => {
+    let entry = raw.get(userId);
+    if (!entry) {
+      entry = { _interacted: new Set(), _days: new Set(), _activities: [] };
+      raw.set(userId, entry);
+    }
+    return entry;
+  };
+  const bump = (userId: string, field: string, by = 1) => {
+    const entry = forUser(userId);
+    entry[field] = ((entry[field] as number) ?? 0) + by;
+  };
+
+  for (const wave of wavesRes.data ?? []) {
+    bump(wave.sender_id, "wavesSent");
+    forUser(wave.sender_id)._interacted.add(wave.recipient_id);
+    forUser(wave.recipient_id)._interacted.add(wave.sender_id);
+    if (wave.reply_to_wave_id) bump(wave.recipient_id, "wavesReturned");
+  }
+
+  const planCreators = new Map((plansRes.data ?? []).map((plan) => [plan.id, plan]));
+  for (const plan of plansRes.data ?? []) {
+    bump(plan.creator_id, "plansCreated");
+    if (plan.status === "completed") bump(plan.creator_id, "plansCompleted");
+  }
+  for (const participant of participantsRes.data ?? []) {
+    const plan = planCreators.get(participant.plan_id);
+    if (!plan || participant.user_id === plan.creator_id) continue;
+    forUser(participant.user_id)._interacted.add(plan.creator_id);
+    forUser(plan.creator_id)._interacted.add(participant.user_id);
+    if (plan.status === "completed") bump(participant.user_id, "plansCompleted");
+  }
+
+  for (const friendship of friendshipsRes.data ?? []) {
+    bump(friendship.user_one_id, "newMuddies");
+    bump(friendship.user_two_id, "newMuddies");
+  }
+
+  for (const hangout of hangoutsRes.data ?? []) {
+    bump(hangout.owner_id, "hangoutSessions");
+    forUser(hangout.owner_id)._activities.push(hangout.activity_type);
+  }
+
+  for (const session of sessionsRes.data ?? []) {
+    const entry = forUser(session.user_id);
+    if (session.visibility_mode === "hidden") bump(session.user_id, "ghostModeUsed");
+    else entry._days.add(session.starts_at.slice(0, 10));
+  }
+
+  if (raw.size === 0) return 0;
+
+  const userIds = [...raw.keys()];
+  const [existingRes, prefsRes, engagementRes] = await Promise.all([
+    admin
+      .from("friendship_recaps")
+      .select("user_id")
+      .eq("period_type", "monthly")
+      .eq("period_start", startIso)
+      .in("user_id", userIds),
+    admin.from("recap_preferences").select("user_id, monthly_enabled").in("user_id", userIds),
+    admin.from("engagement_preferences").select("user_id, recaps_enabled").in("user_id", userIds)
+  ]);
+
+  const alreadyGenerated = new Set((existingRes.data ?? []).map((row) => row.user_id));
+  const monthlyDisabled = new Set(
+    (prefsRes.data ?? []).filter((row) => !row.monthly_enabled).map((row) => row.user_id)
+  );
+  for (const row of engagementRes.data ?? []) {
+    if (!row.recaps_enabled) monthlyDisabled.add(row.user_id);
+  }
+
+  let generated = 0;
+  for (const [userId, entry] of raw) {
+    if (alreadyGenerated.has(userId) || monthlyDisabled.has(userId)) continue;
+
+    const entitlements = await resolveUserEntitlements(admin, userId);
+    if (!entitlements.friendship_recaps) continue;
+
+    const activityCounts = new Map<string, number>();
+    for (const activity of entry._activities) {
+      activityCounts.set(activity, (activityCounts.get(activity) ?? 0) + 1);
+    }
+    const mostCommonActivity =
+      [...activityCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+    const summary = sanitizeRecapSummary({
+      ...entry,
+      muddiesInteractedWith: entry._interacted.size,
+      daysVisible: entry._days.size,
+      mostCommonActivity
+    });
+
+    const { error } = await admin.from("friendship_recaps").upsert(
+      {
+        user_id: userId,
+        period_type: "monthly",
+        period_start: startIso,
+        period_end: endIso,
+        summary_data: summary as never,
+        status: "ready"
+      },
+      { onConflict: "user_id,period_type,period_start", ignoreDuplicates: true }
+    );
+    if (error) throw new JobError("DATABASE_TIMEOUT", error.message);
+    generated += 1;
+  }
+
+  return generated;
+};
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
@@ -394,6 +573,7 @@ export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
   "media.delete_queued": handleMediaDeleteQueued,
   "billing.apply_scheduled_downgrade": handleApplyScheduledDowngrade,
   "streaks.close_expired_periods": handleCloseExpiredStreaks,
+  "recap.generate_monthly": handleGenerateMonthlyRecaps,
   "expiry.statuses": handleExpireStatuses,
   "expiry.visibility_sessions": handleExpireVisibilitySessions,
   "expiry.pings": handleExpirePings,
