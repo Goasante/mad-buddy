@@ -23,7 +23,11 @@ export type RateLimitAction =
   | "plans.create"
   | "plans.invite"
   | "hangouts.start"
-  | "hangouts.request";
+  | "hangouts.request"
+  | "safe_arrival.create"
+  | "checkins.create"
+  | "event_circles.join"
+  | "event_announcements.send";
 
 export type RateLimitResult = {
   allowed: boolean;
@@ -50,7 +54,12 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "plans.create": { limit: 20, windowSeconds: 60 * 60 },
   "plans.invite": { limit: 100, windowSeconds: 60 * 60 },
   "hangouts.start": { limit: 10, windowSeconds: 60 * 60 },
-  "hangouts.request": { limit: 40, windowSeconds: 60 * 60 }
+  "hangouts.request": { limit: 40, windowSeconds: 60 * 60 },
+  // Safe Arrival / event anti-abuse (feature spec §17, §30, §56).
+  "safe_arrival.create": { limit: 10, windowSeconds: 60 * 60 },
+  "checkins.create": { limit: 20, windowSeconds: 60 * 60 },
+  "event_circles.join": { limit: 20, windowSeconds: 60 * 60 },
+  "event_announcements.send": { limit: 10, windowSeconds: 60 * 60 }
 };
 
 function hashIp(value: string | null) {

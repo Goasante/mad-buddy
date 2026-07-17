@@ -22,7 +22,9 @@ export type CreateNotificationInput = {
     | `wave:${string}`
     | `meeting_ping:${string}`
     | `plan:${string}`
-    | `hangout:${string}`;
+    | `hangout:${string}`
+    | `safe_arrival:${string}`
+    | `event:${string}`;
   title: string;
   message: string;
 };

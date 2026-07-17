@@ -971,6 +971,254 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["hangout_requests"]["Insert"]>;
         Relationships: [];
       };
+      events: {
+        Row: {
+          id: string;
+          host_id: string;
+          name: string;
+          description: string | null;
+          venue_label: string | null;
+          starts_at: string;
+          ends_at: string;
+          checkin_opens_minutes_before: number;
+          visibility: EventVisibility;
+          status: EventStatus;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          host_id: string;
+          name: string;
+          description?: string | null;
+          venue_label?: string | null;
+          starts_at: string;
+          ends_at: string;
+          checkin_opens_minutes_before?: number;
+          visibility?: EventVisibility;
+          status?: EventStatus;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["events"]["Insert"]>;
+        Relationships: [];
+      };
+      safe_arrival_sessions: {
+        Row: {
+          id: string;
+          traveller_id: string;
+          destination_type: SafeArrivalDestinationType;
+          destination_label: string;
+          destination_event_id: string | null;
+          expected_arrival_at: string;
+          grace_period_minutes: number;
+          note: string | null;
+          status: SafeArrivalStatus;
+          started_at: string;
+          confirmed_at: string | null;
+          cancelled_at: string | null;
+          unconfirmed_notified_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          traveller_id: string;
+          destination_type?: SafeArrivalDestinationType;
+          destination_label: string;
+          destination_event_id?: string | null;
+          expected_arrival_at: string;
+          grace_period_minutes?: number;
+          note?: string | null;
+          status?: SafeArrivalStatus;
+          started_at?: string;
+          confirmed_at?: string | null;
+          cancelled_at?: string | null;
+          unconfirmed_notified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["safe_arrival_sessions"]["Insert"]>;
+        Relationships: [];
+      };
+      safe_arrival_contacts: {
+        Row: {
+          id: string;
+          session_id: string;
+          contact_user_id: string;
+          acknowledgement_status: SafeArrivalAcknowledgement;
+          acknowledged_at: string | null;
+          notified_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          contact_user_id: string;
+          acknowledgement_status?: SafeArrivalAcknowledgement;
+          acknowledged_at?: string | null;
+          notified_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["safe_arrival_contacts"]["Insert"]>;
+        Relationships: [];
+      };
+      safe_arrival_events: {
+        Row: {
+          id: string;
+          session_id: string;
+          event_type: SafeArrivalEventType;
+          created_by: string | null;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          event_type: SafeArrivalEventType;
+          created_by?: string | null;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["safe_arrival_events"]["Insert"]>;
+        Relationships: [];
+      };
+      safe_arrival_blocks: {
+        Row: {
+          id: string;
+          user_id: string;
+          blocked_traveller_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          blocked_traveller_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["safe_arrival_blocks"]["Insert"]>;
+        Relationships: [];
+      };
+      check_ins: {
+        Row: {
+          id: string;
+          user_id: string;
+          context_type: CheckInContextType;
+          context_id: string;
+          method: CheckInMethod;
+          visibility: CheckInVisibility;
+          status: CheckInStatus;
+          event_glow_enabled: boolean;
+          checked_in_at: string;
+          checked_out_at: string | null;
+          verified_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          context_type: CheckInContextType;
+          context_id: string;
+          method?: CheckInMethod;
+          visibility?: CheckInVisibility;
+          status?: CheckInStatus;
+          event_glow_enabled?: boolean;
+          checked_in_at?: string;
+          checked_out_at?: string | null;
+          verified_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["check_ins"]["Insert"]>;
+        Relationships: [];
+      };
+      event_circles: {
+        Row: {
+          id: string;
+          event_id: string | null;
+          owner_id: string;
+          name: string;
+          description: string | null;
+          join_mode: EventCircleJoinMode;
+          status: EventCircleStatus;
+          member_visibility: EventCircleMemberVisibility;
+          opens_at: string | null;
+          closes_at: string | null;
+          archives_at: string | null;
+          max_members: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id?: string | null;
+          owner_id: string;
+          name: string;
+          description?: string | null;
+          join_mode?: EventCircleJoinMode;
+          status?: EventCircleStatus;
+          member_visibility?: EventCircleMemberVisibility;
+          opens_at?: string | null;
+          closes_at?: string | null;
+          archives_at?: string | null;
+          max_members?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_circles"]["Insert"]>;
+        Relationships: [];
+      };
+      event_circle_members: {
+        Row: {
+          id: string;
+          event_circle_id: string;
+          user_id: string;
+          role: EventCircleRole;
+          status: EventCircleMemberStatus;
+          joined_at: string;
+          left_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_circle_id: string;
+          user_id: string;
+          role?: EventCircleRole;
+          status?: EventCircleMemberStatus;
+          joined_at?: string;
+          left_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_circle_members"]["Insert"]>;
+        Relationships: [];
+      };
+      event_announcements: {
+        Row: {
+          id: string;
+          event_circle_id: string;
+          author_id: string;
+          title: string;
+          body: string;
+          priority: "normal" | "high";
+          published_at: string;
+          expires_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_circle_id: string;
+          author_id: string;
+          title: string;
+          body: string;
+          priority?: "normal" | "high";
+          published_at?: string;
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_announcements"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -1112,3 +1360,40 @@ export type HangoutStatus =
   | "cancelled"
   | "converted_to_plan";
 export type HangoutRequestStatus = "pending" | "accepted" | "maybe" | "declined" | "cancelled";
+
+// --- Batch 5: Safe Arrival, Check-ins, Event Glow, Event Circles ---
+
+export type EventVisibility = "invite" | "link" | "community";
+export type EventStatus = "draft" | "scheduled" | "active" | "ended" | "cancelled";
+
+export type SafeArrivalDestinationType = "custom" | "place" | "event";
+export type SafeArrivalStatus =
+  | "draft"
+  | "pending_acknowledgement"
+  | "active"
+  | "grace_period"
+  | "extended"
+  | "completed"
+  | "cancelled"
+  | "expired"
+  | "unconfirmed";
+export type SafeArrivalAcknowledgement = "pending" | "watching" | "declined";
+export type SafeArrivalEventType =
+  | "created"
+  | "acknowledged"
+  | "declined"
+  | "extended"
+  | "confirmed"
+  | "cancelled"
+  | "unconfirmed_alert";
+
+export type CheckInContextType = "event" | "plan" | "place" | "circle";
+export type CheckInMethod = "manual" | "qr" | "code" | "host_assisted";
+export type CheckInVisibility = "private" | "participants" | "selected_muddies" | "anonymous_count";
+export type CheckInStatus = "checked_in" | "checked_out" | "revoked" | "invalidated";
+
+export type EventCircleJoinMode = "invite" | "check_in" | "qr" | "community";
+export type EventCircleStatus = "draft" | "open" | "active" | "closing" | "archived" | "deleted";
+export type EventCircleMemberVisibility = "members" | "count_only" | "host_only";
+export type EventCircleRole = "host" | "co_host" | "moderator" | "member";
+export type EventCircleMemberStatus = "joined" | "left" | "removed" | "banned";
