@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { guardAction } from "@/lib/admin/enforcement";
+import { upgradePromptFor } from "@/lib/billing/entitlements";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { deliverNotification } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
@@ -115,9 +116,7 @@ export async function createPlanAction(input: unknown): Promise<PlanActionState>
     return {
       ok: false,
       message:
-        access.plan === "free"
-          ? "Free plan allows up to 5 active plans. Upgrade for more."
-          : "You've reached your active plan limit."
+        upgradePromptFor("max_active_plans", access.plan) ?? "You've reached your active plan limit."
     };
   }
 
@@ -433,9 +432,7 @@ export async function createPollAction(input: unknown): Promise<PlanActionState>
     return {
       ok: false,
       message:
-        subscription.plan === "free"
-          ? "Free plan allows one poll per plan. Upgrade for more."
-          : "You've reached the poll limit for this plan."
+        upgradePromptFor("max_polls_per_plan", subscription.plan) ?? "You've reached the poll limit for this plan."
     };
   }
 

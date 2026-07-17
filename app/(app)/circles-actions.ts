@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { upgradePromptFor } from "@/lib/billing/entitlements";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
 import { tierLimitsFor, validateCircleName } from "@/lib/social/visibility";
@@ -72,9 +73,7 @@ export async function createCircleAction(input: unknown): Promise<CircleActionSt
     return {
       ok: false,
       message:
-        access.plan === "free"
-          ? "Free plan allows up to 3 circles. Upgrade for more."
-          : "You've reached your circle limit."
+        upgradePromptFor("max_personal_circles", access.plan) ?? "You've reached your circle limit."
     };
   }
 
@@ -291,9 +290,7 @@ export async function addCloseFriendAction(friendId: string): Promise<CircleActi
     return {
       ok: false,
       message:
-        access.plan === "free"
-          ? "Free plan allows up to 8 Close Friends. Upgrade for more."
-          : "You've reached your Close Friends limit."
+        upgradePromptFor("max_close_friends", access.plan) ?? "You've reached your Close Friends limit."
     };
   }
 

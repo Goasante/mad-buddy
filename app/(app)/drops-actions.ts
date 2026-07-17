@@ -4,6 +4,7 @@ import { z } from "zod";
 import { contentTierLimitsFor, resolveDropUnlock, validateExpiry } from "@/lib/content/moments";
 import { signMediaForAsset } from "@/lib/content/service";
 import { deliverNotification } from "@/lib/notifications/server";
+import { upgradePromptFor } from "@/lib/billing/entitlements";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
@@ -185,9 +186,7 @@ export async function createDropAction(input: unknown): Promise<DropActionState>
     return {
       ok: false,
       message:
-        access.plan === "free"
-          ? "Free plan allows 3 active Drops. Upgrade for more."
-          : "You've reached your active Drop limit."
+        upgradePromptFor("max_active_drops", access.plan) ?? "You've reached your active Drop limit."
     };
   }
 

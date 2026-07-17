@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { upgradePromptFor } from "@/lib/billing/entitlements";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { deliverNotification } from "@/lib/notifications/server";
 import {
@@ -162,9 +163,8 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
     return {
       ok: false,
       message:
-        access.plan === "free"
-          ? "Free plan allows up to 5 people per hangout. Upgrade for larger groups."
-          : `Hangouts allow up to ${limits.maxHangoutCapacity} people on your plan.`
+        upgradePromptFor("max_hangout_capacity", access.plan) ??
+        `Hangouts allow up to ${limits.maxHangoutCapacity} people on your plan.`
     };
   }
 

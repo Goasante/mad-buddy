@@ -334,6 +334,12 @@ export function upgradePromptFor(key: NumericEntitlementKey, currentPlan: Subscr
       return "Free includes 5 Moments a day. Buddy Plus includes 20.";
     case "max_muddies":
       return "Free includes 30 Muddies. Buddy Plus includes 150.";
+    case "max_active_drops":
+      return "Free includes 3 active Drops. Buddy Plus includes 20.";
+    case "max_hangout_capacity":
+      return "Free hangouts include up to 5 people. Buddy Plus includes up to 50.";
+    case "max_polls_per_plan":
+      return "Free includes one poll per plan. Buddy Plus includes unlimited polls.";
     default:
       return null;
   }

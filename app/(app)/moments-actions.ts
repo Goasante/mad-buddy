@@ -22,6 +22,7 @@ import {
 } from "@/lib/content/safety";
 import { guardAction } from "@/lib/admin/enforcement";
 import { storageKeyFor, uploadValidationMessage, validateImageUpload } from "@/lib/media/validation";
+import { upgradePromptFor } from "@/lib/billing/entitlements";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
@@ -245,9 +246,7 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
     return {
       ok: false,
       message:
-        access.plan === "free"
-          ? "Free plan allows 5 Moments a day. Upgrade for more."
-          : "You've reached your Moment limit for today."
+        upgradePromptFor("max_daily_moments", access.plan) ?? "You've reached your Moment limit for today."
     };
   }
 
