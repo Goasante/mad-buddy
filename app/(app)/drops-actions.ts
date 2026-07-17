@@ -128,6 +128,144 @@ async function resolveContextMembership(
 }
 
 // ---------------------------------------------------------------------------
+// List (spec §24) — the read surface for the Drops page.
+// ---------------------------------------------------------------------------
+
+export type DropListItem = {
+  id: string;
+  contextLabel: string;
+  creatorName: string;
+  isMine: boolean;
+  unlocked: boolean;
+  contentType: "text" | "photo";
+  expiresAt: string;
+};
+
+/**
+ * Active Drops in every context the viewer belongs to (their circles, plans,
+ * joined event circles, and events they're checked in to), plus their own.
+ * Content is NOT included — a locked Drop stays locked until unlockDropAction
+ * re-verifies membership.
+ */
+export async function getMyDropsAction(): Promise<DropListItem[]> {
+  const env = getSupabaseServerEnv();
+  if (!env.url || !env.serviceRoleKey) return [];
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+
+  const admin = createSupabaseAdminClient();
+  const nowIso = new Date().toISOString();
+
+  const [ownCircles, memberCircles, plans, eventCircles, checkIns] = await Promise.all([
+    admin.from("friend_circles").select("id, name").eq("user_id", userId).is("archived_at", null),
+    admin.from("circle_members").select("circle_id, friend_circles(name)").eq("friend_id", userId),
+    admin
+      .from("plan_participants")
+      .select("plan_id, plans!inner(title, status)")
+      .eq("user_id", userId)
+      .neq("rsvp_status", "removed"),
+    admin
+      .from("event_circle_members")
+      .select("event_circle_id, event_circles(name)")
+      .eq("user_id", userId)
+      .eq("status", "joined"),
+    admin
+      .from("check_ins")
+      .select("context_id")
+      .eq("user_id", userId)
+      .eq("context_type", "event")
+      .eq("status", "checked_in")
+  ]);
+
+  const contextLabels = new Map<string, string>();
+  for (const circle of ownCircles.data ?? []) contextLabels.set(circle.id, circle.name);
+  for (const row of memberCircles.data ?? []) {
+    contextLabels.set(row.circle_id, (row.friend_circles as { name?: string } | null)?.name ?? "A circle");
+  }
+  for (const row of plans.data ?? []) {
+    contextLabels.set(row.plan_id, (row.plans as unknown as { title?: string } | null)?.title ?? "A plan");
+  }
+  for (const row of eventCircles.data ?? []) {
+    contextLabels.set(row.event_circle_id, (row.event_circles as { name?: string } | null)?.name ?? "An event circle");
+  }
+  for (const row of checkIns.data ?? []) {
+    if (!contextLabels.has(row.context_id)) contextLabels.set(row.context_id, "An event");
+  }
+
+  const contextIds = [...contextLabels.keys()];
+  const orFilter = contextIds.length
+    ? `creator_id.eq.${userId},context_id.in.(${contextIds.join(",")})`
+    : `creator_id.eq.${userId}`;
+
+  const { data: drops } = await admin
+    .from("muddy_drops")
+    .select("id, creator_id, context_id, content_type, expires_at, starts_at, status")
+    .or(orFilter)
+    .eq("status", "active")
+    .lte("starts_at", nowIso)
+    .gt("expires_at", nowIso)
+    .order("expires_at", { ascending: true })
+    .limit(50);
+  if (!drops?.length) return [];
+
+  const [{ data: unlocks }, { data: creators }] = await Promise.all([
+    admin
+      .from("drop_unlocks")
+      .select("drop_id")
+      .eq("user_id", userId)
+      .in(
+        "drop_id",
+        drops.map((drop) => drop.id)
+      ),
+    admin
+      .from("profiles")
+      .select("user_id, full_name")
+      .in("user_id", [...new Set(drops.map((drop) => drop.creator_id))])
+  ]);
+  const unlockedIds = new Set((unlocks ?? []).map((row) => row.drop_id));
+  const nameById = new Map((creators ?? []).map((row) => [row.user_id, row.full_name]));
+
+  return drops.map((drop) => ({
+    id: drop.id,
+    contextLabel: contextLabels.get(drop.context_id) ?? "A shared space",
+    creatorName: drop.creator_id === userId ? "You" : nameById.get(drop.creator_id)?.trim() || "A Muddy",
+    isMine: drop.creator_id === userId,
+    unlocked: unlockedIds.has(drop.id) || drop.creator_id === userId,
+    contentType: drop.content_type,
+    expiresAt: drop.expires_at
+  }));
+}
+
+/** The viewer's circles/plans they can drop into, for the create form. */
+export async function getDropContextsAction(): Promise<Array<{ id: string; label: string; contextType: "circle" | "plan" }>> {
+  const env = getSupabaseServerEnv();
+  if (!env.url || !env.serviceRoleKey) return [];
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+
+  const admin = createSupabaseAdminClient();
+  const [circles, plans] = await Promise.all([
+    admin.from("friend_circles").select("id, name").eq("user_id", userId).is("archived_at", null).limit(30),
+    admin
+      .from("plan_participants")
+      .select("plan_id, plans!inner(title, status)")
+      .eq("user_id", userId)
+      .eq("role", "host")
+      .in("plans.status", ["inviting", "polling", "confirmed"])
+      .limit(30)
+  ]);
+
+  return [
+    ...(circles.data ?? []).map((circle) => ({ id: circle.id, label: circle.name, contextType: "circle" as const })),
+    ...(plans.data ?? []).map((row) => ({
+      id: row.plan_id,
+      label: (row.plans as unknown as { title?: string } | null)?.title ?? "A plan",
+      contextType: "plan" as const
+    }))
+  ];
+}
+
+// ---------------------------------------------------------------------------
 // Create (spec §24, §31, §32)
 // ---------------------------------------------------------------------------
 
