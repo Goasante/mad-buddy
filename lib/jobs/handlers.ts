@@ -246,6 +246,8 @@ function expirySweep(config: {
   column: string;
   from: string[];
   to: string;
+  /** The expiry timestamp column — not every table calls it expires_at. */
+  timeColumn?: string;
 }): JobHandler {
   return async (admin) => {
     const nowIso = new Date().toISOString();
@@ -253,7 +255,9 @@ function expirySweep(config: {
       .from(config.table)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .update({ [config.column]: config.to } as any)
-      .lt("expires_at", nowIso)
+      // A null time (e.g. a visibility session that lasts "until I turn it
+      // off") is correctly excluded — .lt never matches null.
+      .lt(config.timeColumn ?? "expires_at", nowIso)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .in(config.column as any, config.from as any)
       .select("id");
@@ -273,7 +277,10 @@ export const handleExpireVisibilitySessions: JobHandler = expirySweep({
   table: "visibility_sessions",
   column: "status",
   from: ["active"],
-  to: "ended"
+  to: "ended",
+  // visibility_sessions has ends_at, not expires_at — with the default
+  // column this job errored on every run since batch 14.
+  timeColumn: "ends_at"
 });
 
 export const handleExpirePings: JobHandler = expirySweep({
