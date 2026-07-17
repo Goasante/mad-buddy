@@ -1,6 +1,14 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-export type FriendRequestStatus = "pending" | "accepted" | "declined" | "cancelled" | "blocked";
+// "expired" added by the batch-14 jobs migration, so the 30-day request expiry
+// from batch 8 has a terminal state to sweep into.
+export type FriendRequestStatus =
+  | "pending"
+  | "accepted"
+  | "declined"
+  | "cancelled"
+  | "blocked"
+  | "expired";
 export type VisibilityStatus = "visible" | "ghost" | "app_open_only";
 export type LocationConfidence = "high" | "medium" | "low";
 export type ProximityLevel = "very_close" | "nearby" | "around" | "far" | "hidden";
@@ -2734,6 +2742,97 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["feature_flag_rules"]["Insert"]>;
         Relationships: [];
       };
+      jobs: {
+        Row: {
+          id: string;
+          job_type: string;
+          payload: Json;
+          priority: number;
+          status: "queued" | "scheduled" | "processing" | "completed" | "failed" | "retrying" | "dead_letter";
+          attempts: number;
+          max_attempts: number;
+          run_at: string;
+          locked_at: string | null;
+          locked_by: string | null;
+          last_error_code: string | null;
+          last_error_at: string | null;
+          idempotency_key: string | null;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          job_type: string;
+          payload?: Json;
+          priority?: number;
+          status?: "queued" | "scheduled" | "processing" | "completed" | "failed" | "retrying" | "dead_letter";
+          attempts?: number;
+          max_attempts?: number;
+          run_at?: string;
+          locked_at?: string | null;
+          locked_by?: string | null;
+          last_error_code?: string | null;
+          last_error_at?: string | null;
+          idempotency_key?: string | null;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["jobs"]["Insert"]>;
+        Relationships: [];
+      };
+      idempotency_keys: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          scope: string;
+          key: string;
+          result: Json | null;
+          status: "in_progress" | "completed" | "failed";
+          expires_at: string;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          scope: string;
+          key: string;
+          result?: Json | null;
+          status?: "in_progress" | "completed" | "failed";
+          expires_at?: string;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["idempotency_keys"]["Insert"]>;
+        Relationships: [];
+      };
+      domain_events: {
+        Row: {
+          id: string;
+          event_type: string;
+          version: number;
+          resource_type: string;
+          resource_id: string | null;
+          actor_id: string | null;
+          payload: Json;
+          occurred_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_type: string;
+          version?: number;
+          resource_type: string;
+          resource_id?: string | null;
+          actor_id?: string | null;
+          payload?: Json;
+          occurred_at?: string;
+          created_at?: string;
+        };
+        // Append-only: a database trigger rejects UPDATE and DELETE.
+        Update: never;
+        Relationships: [];
+      };
       privacy_setup_versions: {
         Row: {
           user_id: string;
@@ -2770,6 +2869,10 @@ export type Database = {
           remaining: number;
           reset_at: string;
         }>;
+      };
+      claim_jobs: {
+        Args: { p_worker: string; p_limit: number; p_stale_seconds?: number };
+        Returns: Database["public"]["Tables"]["jobs"]["Row"][];
       };
       cleanup_expired_private_location: { Args: Record<string, never>; Returns: number };
       cleanup_expired_proximity_events: { Args: Record<string, never>; Returns: number };
