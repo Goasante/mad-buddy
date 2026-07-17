@@ -56,6 +56,133 @@ async function getAuthedUserId() {
 }
 
 // ---------------------------------------------------------------------------
+// Events list + creation (spec §24) — the read surface for the events page.
+// ---------------------------------------------------------------------------
+
+export type EventView = {
+  id: string;
+  name: string;
+  description: string | null;
+  venueLabel: string | null;
+  startsAt: string;
+  endsAt: string;
+  status: string;
+  hostName: string;
+  isHost: boolean;
+  /** The viewer's live check-in, if any. */
+  myCheckInId: string | null;
+  myGlowEnabled: boolean;
+};
+
+/**
+ * Community/link events that are upcoming or live, plus anything the viewer
+ * hosts. Venue is a label only — never coordinates (spec §24).
+ */
+export async function getEventsAction(): Promise<EventView[]> {
+  const env = getSupabaseServerEnv();
+  if (!env.url || !env.serviceRoleKey) return [];
+
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+
+  const admin = createSupabaseAdminClient();
+  const nowIso = new Date().toISOString();
+  const { data: events } = await admin
+    .from("events")
+    .select("id, host_id, name, description, venue_label, starts_at, ends_at, visibility, status")
+    .in("status", ["scheduled", "active"])
+    .gte("ends_at", nowIso)
+    .order("starts_at", { ascending: true })
+    .limit(100);
+  if (!events?.length) return [];
+
+  const visible = events.filter((event) => event.visibility !== "invite" || event.host_id === userId);
+  if (visible.length === 0) return [];
+
+  const [{ data: checkIns }, { data: hosts }] = await Promise.all([
+    admin
+      .from("check_ins")
+      .select("id, context_id, event_glow_enabled")
+      .eq("user_id", userId)
+      .eq("context_type", "event")
+      .eq("status", "checked_in")
+      .in(
+        "context_id",
+        visible.map((event) => event.id)
+      ),
+    admin
+      .from("profiles")
+      .select("user_id, full_name")
+      .in("user_id", [...new Set(visible.map((event) => event.host_id))])
+  ]);
+
+  const checkInByEvent = new Map((checkIns ?? []).map((row) => [row.context_id, row]));
+  const hostNames = new Map((hosts ?? []).map((row) => [row.user_id, row.full_name]));
+
+  return visible.map((event) => {
+    const checkIn = checkInByEvent.get(event.id);
+    return {
+      id: event.id,
+      name: event.name,
+      description: event.description,
+      venueLabel: event.venue_label,
+      startsAt: event.starts_at,
+      endsAt: event.ends_at,
+      status: event.status,
+      hostName: event.host_id === userId ? "You" : hostNames.get(event.host_id)?.trim() || "A Muddy",
+      isHost: event.host_id === userId,
+      myCheckInId: checkIn?.id ?? null,
+      myGlowEnabled: checkIn?.event_glow_enabled ?? false
+    };
+  });
+}
+
+const createEventSchema = z.object({
+  name: z.string().min(2).max(120),
+  description: z.string().max(1000).optional(),
+  venueLabel: z.string().max(160).optional(),
+  startsAt: z.string().datetime({ offset: true }),
+  endsAt: z.string().datetime({ offset: true })
+});
+
+export async function createEventAction(input: unknown): Promise<EventActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+
+  const parsed = createEventSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check the event details and try again." };
+
+  const startsMs = Date.parse(parsed.data.startsAt);
+  const endsMs = Date.parse(parsed.data.endsAt);
+  if (endsMs <= startsMs) return { ok: false, message: "The event must end after it starts." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const rateLimit = await consumeRateLimit({ action: "events.create", userId });
+  if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
+
+  const admin = createSupabaseAdminClient();
+  const { data: event, error } = await admin
+    .from("events")
+    .insert({
+      host_id: userId,
+      name: parsed.data.name.trim(),
+      description: parsed.data.description?.trim() || null,
+      venue_label: parsed.data.venueLabel?.trim() || null,
+      starts_at: parsed.data.startsAt,
+      ends_at: parsed.data.endsAt,
+      visibility: "community",
+      status: "scheduled"
+    })
+    .select("id")
+    .single();
+  if (error || !event) return { ok: false, message: "Couldn't create the event." };
+
+  return { ok: true, message: `${parsed.data.name.trim()} created.`, eventId: event.id };
+}
+
+// ---------------------------------------------------------------------------
 // Check in / out (spec §24, §26, §30)
 // ---------------------------------------------------------------------------
 

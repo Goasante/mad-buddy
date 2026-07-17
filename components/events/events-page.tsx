@@ -1,7 +1,16 @@
 "use client";
 
-import { Bookmark, CalendarPlus, MapPin, Share2, Users } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { CalendarPlus, MapPin, Sparkles, Users } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import {
+  checkInToEventAction,
+  checkOutAction,
+  createEventAction,
+  getEventGlowAction,
+  setEventGlowAction,
+  type EventView
+} from "@/app/(app)/event-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,135 +19,151 @@ import { FormField } from "@/components/auth/form-field";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-import { PreviewNotice } from "@/components/ui/preview-notice";
 import { Textarea } from "@/components/ui/textarea";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import type { EventGlowMuddyList } from "@/lib/events/types";
 import { cn } from "@/lib/utils";
 
-type EventTab = "for-you" | "circles" | "nearby" | "saved";
-type Rsvp = "going" | "maybe" | "none";
-
-type EventItem = {
-  id: string;
-  title: string;
-  dateLabel: string;
-  location: string;
-  description: string;
-  audience: string;
-  hostName: string;
-  goingCount: number;
-  attendees: string[];
-  saved: boolean;
-  myRsvp: Rsvp;
-  tab: EventTab;
-};
-
-const seedEvents: EventItem[] = [
-  {
-    id: "evt-1",
-    title: "Independence Weekend Jam",
-    dateLabel: "Sat, 8 Mar · 6:00 PM",
-    location: "Abelemkpe, Accra",
-    description: "Live performances, food, games, and good vibes to celebrate our independence.",
-    audience: "Your circle",
-    hostName: "Yaw Boateng",
-    goingCount: 12,
-    attendees: ["Ama", "Kojo", "Sena", "Kweku"],
-    saved: false,
-    myRsvp: "none",
-    tab: "for-you"
-  },
-  {
-    id: "evt-2",
-    title: "Art & Chill",
-    dateLabel: "Sun, 9 Mar · 3:00 PM",
-    location: "Labadi Beach",
-    description: "Casual afternoon of art, music, and chilling by the beach.",
-    audience: "Friends of friends",
-    hostName: "Efua Yeboah",
-    goingCount: 8,
-    attendees: ["Ama", "Nana"],
-    saved: true,
-    myRsvp: "going",
-    tab: "for-you"
-  },
-  {
-    id: "evt-3",
-    title: "Tech Talk: AI in Africa",
-    dateLabel: "Tue, 11 Mar · 6:30 PM",
-    location: "Impact Hub, Accra",
-    description: "A community talk exploring AI's impact and opportunity in Africa.",
-    audience: "Your circle",
-    hostName: "Legon Entrepreneurs",
-    goingCount: 25,
-    attendees: ["Kofi", "Sena"],
-    saved: false,
-    myRsvp: "none",
-    tab: "circles"
-  },
-  {
-    id: "evt-4",
-    title: "Sunday Brunch",
-    dateLabel: "Sun, 16 Mar · 11:00 AM",
-    location: "East Legon",
-    description: "Relaxed Sunday brunch with the crew.",
-    audience: "Close Friends",
-    hostName: "Nana",
-    goingCount: 7,
-    attendees: ["Ama", "Kojo"],
-    saved: false,
-    myRsvp: "maybe",
-    tab: "nearby"
-  }
-];
+type EventTab = "upcoming" | "live" | "mine";
 
 const eventTabs: Array<{ id: EventTab; label: string }> = [
-  { id: "for-you", label: "For You" },
-  { id: "circles", label: "Your Circles" },
-  { id: "nearby", label: "Nearby" },
-  { id: "saved", label: "Saved" }
+  { id: "upcoming", label: "Upcoming" },
+  { id: "live", label: "Happening now" },
+  { id: "mine", label: "Hosting" }
 ];
 
-export function EventsPageContent() {
-  const [events, setEvents] = useState<EventItem[]>(seedEvents);
-  const [activeTab, setActiveTab] = useState<EventTab>("for-you");
+function eventDateLabel(startsAt: string): string {
+  return new Date(startsAt).toLocaleString([], {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
+function isLive(event: EventView, nowMs: number): boolean {
+  return Date.parse(event.startsAt) <= nowMs && nowMs < Date.parse(event.endsAt);
+}
+
+export function EventsPageContent({ initialEvents = [] }: { initialEvents?: EventView[] }) {
+  const router = useRouter();
+  const [events, setEvents] = useState<EventView[]>(initialEvents);
+  const [activeTab, setActiveTab] = useState<EventTab>("upcoming");
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [glowList, setGlowList] = useState<EventGlowMuddyList | null>(null);
   const [feedback, setFeedback] = useState("");
+  const [isPending, startTransition] = useTransition();
 
-  const visibleEvents = useMemo(
-    () => (activeTab === "saved" ? events.filter((event) => event.saved) : events.filter((event) => event.tab === activeTab)),
-    [events, activeTab]
-  );
+  const nowMs = Date.now();
+  const visibleEvents = useMemo(() => {
+    if (activeTab === "mine") return events.filter((event) => event.isHost);
+    if (activeTab === "live") return events.filter((event) => isLive(event, nowMs));
+    return events.filter((event) => !isLive(event, nowMs));
+  }, [events, activeTab, nowMs]);
   const selectedEvent = events.find((event) => event.id === selectedId) ?? null;
 
-  function updateRsvp(id: string, rsvp: Rsvp) {
-    setEvents((current) => current.map((event) => (event.id === id ? { ...event, myRsvp: rsvp } : event)));
+  function openDetails(eventId: string) {
+    setSelectedId(eventId);
+    setGlowList(null);
+    startTransition(async () => {
+      setGlowList(await getEventGlowAction(eventId));
+    });
   }
 
-  function toggleSaved(id: string) {
-    setEvents((current) => current.map((event) => (event.id === id ? { ...event, saved: !event.saved } : event)));
+  function checkIn(event: EventView) {
+    startTransition(async () => {
+      const result = await checkInToEventAction({ eventId: event.id });
+      setFeedback(result.message);
+      if (result.ok && result.checkInId) {
+        setEvents((current) =>
+          current.map((item) =>
+            item.id === event.id
+              ? { ...item, myCheckInId: result.checkInId ?? null, myGlowEnabled: true }
+              : item
+          )
+        );
+        setGlowList(await getEventGlowAction(event.id));
+      }
+    });
   }
 
-  function createEvent(input: { title: string; dateLabel: string; location: string; description: string }) {
-    const newEvent: EventItem = {
-      id: `evt-${Date.now()}`,
-      title: input.title,
-      dateLabel: input.dateLabel,
-      location: input.location,
-      description: input.description,
-      audience: "Your circle",
-      hostName: "You",
-      goingCount: 1,
-      attendees: [],
-      saved: false,
-      myRsvp: "going",
-      tab: "for-you"
-    };
-    setEvents((current) => [newEvent, ...current]);
-    setActiveTab("for-you");
-    setCreateOpen(false);
-    setFeedback(`${input.title} created.`);
+  function checkOut(event: EventView) {
+    if (!event.myCheckInId) return;
+    const checkInId = event.myCheckInId;
+    startTransition(async () => {
+      const result = await checkOutAction(checkInId);
+      setFeedback(result.message);
+      if (result.ok) {
+        setEvents((current) =>
+          current.map((item) =>
+            item.id === event.id ? { ...item, myCheckInId: null, myGlowEnabled: false } : item
+          )
+        );
+        setGlowList(await getEventGlowAction(event.id));
+      }
+    });
+  }
+
+  function toggleGlow(event: EventView) {
+    if (!event.myCheckInId) return;
+    const next = !event.myGlowEnabled;
+    startTransition(async () => {
+      const result = await setEventGlowAction(event.myCheckInId as string, next);
+      setFeedback(result.message);
+      if (result.ok) {
+        setEvents((current) =>
+          current.map((item) => (item.id === event.id ? { ...item, myGlowEnabled: next } : item))
+        );
+        setGlowList(await getEventGlowAction(event.id));
+      }
+    });
+  }
+
+  function createEvent(input: {
+    name: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    venueLabel: string;
+    description: string;
+  }) {
+    const startsAt = new Date(`${input.date}T${input.startTime}`);
+    const endsAt = new Date(`${input.date}T${input.endTime}`);
+    startTransition(async () => {
+      const result = await createEventAction({
+        name: input.name,
+        description: input.description || undefined,
+        venueLabel: input.venueLabel || undefined,
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString()
+      });
+      setFeedback(result.message);
+      if (result.ok) {
+        setCreateOpen(false);
+        setActiveTab("mine");
+        router.refresh();
+        if (result.eventId) {
+          setEvents((current) => [
+            {
+              id: result.eventId as string,
+              name: input.name,
+              description: input.description || null,
+              venueLabel: input.venueLabel || null,
+              startsAt: startsAt.toISOString(),
+              endsAt: endsAt.toISOString(),
+              status: "scheduled",
+              hostName: "You",
+              isHost: true,
+              myCheckInId: null,
+              myGlowEnabled: false
+            },
+            ...current
+          ]);
+        }
+      }
+    });
   }
 
   return (
@@ -146,7 +171,9 @@ export function EventsPageContent() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Events</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Discover events from your community and circles.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Check in to see which Muddies are at the same event. Venue names only — never exact location.
+          </p>
         </div>
         <Button type="button" onClick={() => setCreateOpen(true)}>
           <CalendarPlus className="h-4 w-4" aria-hidden="true" />
@@ -154,10 +181,10 @@ export function EventsPageContent() {
         </Button>
       </header>
 
-      <PreviewNotice />
-
       {feedback ? (
-        <p className="text-sm text-muted-foreground" role="status">{feedback}</p>
+        <p className="text-sm text-muted-foreground" role="status">
+          {feedback}
+        </p>
       ) : null}
 
       <nav className="overflow-x-auto border-b border-border/70" aria-label="Events tabs">
@@ -169,7 +196,9 @@ export function EventsPageContent() {
               onClick={() => setActiveTab(tab.id)}
               className={cn(
                 "focus-ring safe-motion border-b-2 px-4 py-3 text-sm font-medium",
-                activeTab === tab.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+                activeTab === tab.id
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
               {tab.label}
@@ -181,75 +210,99 @@ export function EventsPageContent() {
       {visibleEvents.length > 0 ? (
         <div className="grid gap-3 lg:grid-cols-2">
           {visibleEvents.map((event) => (
-            <EventCard key={event.id} event={event} onView={() => setSelectedId(event.id)} onToggleSaved={() => toggleSaved(event.id)} />
+            <EventCard
+              key={event.id}
+              event={event}
+              live={isLive(event, nowMs)}
+              pending={isPending}
+              onView={() => openDetails(event.id)}
+              onCheckIn={() => checkIn(event)}
+              onCheckOut={() => checkOut(event)}
+            />
           ))}
         </div>
       ) : (
         <EmptyState
           icon={CalendarPlus}
           className="!min-h-0 !shadow-none p-5"
-          title={activeTab === "saved" ? "No saved events" : "No events here yet"}
-          description={activeTab === "saved" ? "Bookmark events to find them here later." : "Check back soon, or create your own event."}
+          title={activeTab === "mine" ? "You're not hosting anything yet" : "No events here yet"}
+          description="Create an event and Muddies who check in can find each other there."
           action={
-            activeTab !== "saved" ? (
-              <Button type="button" onClick={() => setCreateOpen(true)}>
-                <CalendarPlus className="h-4 w-4" aria-hidden="true" />
-                Create Event
-              </Button>
-            ) : undefined
+            <Button type="button" onClick={() => setCreateOpen(true)}>
+              <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+              Create Event
+            </Button>
           }
         />
       )}
 
-      <CreateEventModal open={createOpen} onOpenChange={setCreateOpen} onCreate={createEvent} />
+      <CreateEventModal open={createOpen} onOpenChange={setCreateOpen} pending={isPending} onCreate={createEvent} />
       <EventDetailsModal
         event={selectedEvent}
+        glowList={glowList}
+        pending={isPending}
         onOpenChange={(open) => {
           if (!open) setSelectedId(null);
         }}
-        onRsvpChange={(rsvp) => selectedEvent && updateRsvp(selectedEvent.id, rsvp)}
+        onCheckIn={() => selectedEvent && checkIn(selectedEvent)}
+        onCheckOut={() => selectedEvent && checkOut(selectedEvent)}
+        onToggleGlow={() => selectedEvent && toggleGlow(selectedEvent)}
       />
     </div>
   );
 }
 
-function EventCard({ event, onView, onToggleSaved }: { event: EventItem; onView: () => void; onToggleSaved: () => void }) {
-  const reducedMotion = useReducedMotion();
+function EventCard({
+  event,
+  live,
+  pending,
+  onView,
+  onCheckIn,
+  onCheckOut
+}: {
+  event: EventView;
+  live: boolean;
+  pending: boolean;
+  onView: () => void;
+  onCheckIn: () => void;
+  onCheckOut: () => void;
+}) {
   return (
     <Card className="p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-base font-semibold">{event.title}</h3>
-            <Badge variant="violet">{event.audience}</Badge>
+            <h3 className="truncate text-base font-semibold">{event.name}</h3>
+            {live ? <Badge variant="violet">Happening now</Badge> : null}
+            {event.myCheckInId ? <Badge>Checked in</Badge> : null}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">{event.dateLabel}</p>
-          <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            {event.location}
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{eventDateLabel(event.startsAt)}</p>
+          {event.venueLabel ? (
+            <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {event.venueLabel}
+            </p>
+          ) : null}
         </div>
-        <button
-          type="button"
-          onClick={onToggleSaved}
-          aria-pressed={event.saved}
-          aria-label={event.saved ? "Unsave event" : "Save event"}
-          className="focus-ring safe-motion shrink-0 text-muted-foreground hover:text-primary"
-        >
-          <Bookmark className={cn("h-5 w-5", event.saved && "fill-primary text-primary")} aria-hidden="true" />
-        </button>
       </div>
-      <div className="mt-3 flex items-center gap-2">
-        <div className="flex -space-x-2">
-          {event.attendees.slice(0, 4).map((name) => (
-            <GlowAvatar key={name} name={name} size="sm" className="ring-2 ring-card"  reducedMotion={reducedMotion} />
-          ))}
-        </div>
-        <span className="text-xs text-muted-foreground">{event.goingCount} going</span>
+      <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        Hosted by {event.hostName}
+      </p>
+      <div className="mt-4 flex gap-2">
+        <Button type="button" variant="outline" className="flex-1" onClick={onView}>
+          View
+        </Button>
+        {event.myCheckInId ? (
+          <Button type="button" variant="outline" className="flex-1" disabled={pending} onClick={onCheckOut}>
+            Check out
+          </Button>
+        ) : (
+          <Button type="button" className="flex-1" disabled={pending} onClick={onCheckIn}>
+            Check in
+          </Button>
+        )}
       </div>
-      <Button type="button" variant="outline" className="mt-4 w-full" onClick={onView}>
-        View
-      </Button>
     </Card>
   );
 }
@@ -257,23 +310,36 @@ function EventCard({ event, onView, onToggleSaved }: { event: EventItem; onView:
 function CreateEventModal({
   open,
   onOpenChange,
+  pending,
   onCreate
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (input: { title: string; dateLabel: string; location: string; description: string }) => void;
+  pending: boolean;
+  onCreate: (input: {
+    name: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    venueLabel: string;
+    description: string;
+  }) => void;
 }) {
-  const [title, setTitle] = useState("");
+  const [name, setName] = useState("");
   const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [location, setLocation] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [venueLabel, setVenueLabel] = useState("");
   const [description, setDescription] = useState("");
 
+  const complete = name.trim().length >= 2 && date && startTime && endTime;
+
   function resetFields() {
-    setTitle("");
+    setName("");
     setDate("");
-    setTime("");
-    setLocation("");
+    setStartTime("");
+    setEndTime("");
+    setVenueLabel("");
     setDescription("");
   }
 
@@ -283,24 +349,37 @@ function CreateEventModal({
   }
 
   return (
-    <Modal open={open} onOpenChange={handleOpenChange} title="Create Event" description="Discoverable by your circles.">
+    <Modal
+      open={open}
+      onOpenChange={handleOpenChange}
+      title="Create Event"
+      description="Visible to the community. Use a venue name, not an address."
+    >
       <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
-        <FormField htmlFor="event-title" label="Event name">
-          <Input id="event-title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Sunday Brunch" />
+        <FormField htmlFor="event-name" label="Event name">
+          <Input id="event-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Sunday Brunch" />
+        </FormField>
+        <FormField htmlFor="event-date" label="Date">
+          <Input id="event-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
         </FormField>
         <div className="grid gap-4 sm:grid-cols-2">
-          <FormField htmlFor="event-date" label="Date">
-            <Input id="event-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+          <FormField htmlFor="event-start" label="Starts">
+            <Input id="event-start" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
           </FormField>
-          <FormField htmlFor="event-time" label="Time">
-            <Input id="event-time" type="time" value={time} onChange={(event) => setTime(event.target.value)} />
+          <FormField htmlFor="event-end" label="Ends">
+            <Input id="event-end" type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
           </FormField>
         </div>
-        <FormField htmlFor="event-location" label="Location">
-          <Input id="event-location" value={location} onChange={(event) => setLocation(event.target.value)} placeholder="e.g. East Legon" />
+        <FormField htmlFor="event-venue" label="Venue (label only)">
+          <Input id="event-venue" value={venueLabel} onChange={(event) => setVenueLabel(event.target.value)} placeholder="e.g. Impact Hub, Accra" />
         </FormField>
         <FormField htmlFor="event-description" label="Description">
-          <Textarea id="event-description" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What's this event about?" />
+          <Textarea
+            id="event-description"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="What's this event about?"
+          />
         </FormField>
       </div>
       <div className="mt-5 flex justify-end gap-3">
@@ -309,12 +388,14 @@ function CreateEventModal({
         </Button>
         <Button
           type="button"
-          disabled={title.trim().length < 2}
+          disabled={!complete || pending}
           onClick={() => {
             onCreate({
-              title: title.trim(),
-              dateLabel: date && time ? `${date} · ${time}` : "Date TBD",
-              location: location.trim() || "Location TBD",
+              name: name.trim(),
+              date,
+              startTime,
+              endTime,
+              venueLabel: venueLabel.trim(),
               description: description.trim()
             });
             resetFields();
@@ -329,55 +410,89 @@ function CreateEventModal({
 
 function EventDetailsModal({
   event,
+  glowList,
+  pending,
   onOpenChange,
-  onRsvpChange
+  onCheckIn,
+  onCheckOut,
+  onToggleGlow
 }: {
-  event: EventItem | null;
+  event: EventView | null;
+  glowList: EventGlowMuddyList | null;
+  pending: boolean;
   onOpenChange: (open: boolean) => void;
-  onRsvpChange: (rsvp: Rsvp) => void;
+  onCheckIn: () => void;
+  onCheckOut: () => void;
+  onToggleGlow: () => void;
 }) {
   const reducedMotion = useReducedMotion();
   return (
-    <Modal open={Boolean(event)} onOpenChange={onOpenChange} title={event?.title ?? "Event"} description={event?.dateLabel}>
+    <Modal
+      open={Boolean(event)}
+      onOpenChange={onOpenChange}
+      title={event?.name ?? "Event"}
+      description={event ? eventDateLabel(event.startsAt) : undefined}
+    >
       {event ? (
         <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
-          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
-            {event.location}
-          </p>
-          <p className="text-sm leading-6">{event.description}</p>
+          {event.venueLabel ? (
+            <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {event.venueLabel}
+            </p>
+          ) : null}
+          {event.description ? <p className="text-sm leading-6">{event.description}</p> : null}
 
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Going ({event.goingCount})
+              Muddies here{glowList ? ` (${glowList.count})` : ""}
             </p>
             <div className="flex flex-wrap gap-2">
-              {event.attendees.map((name) => (
-                <div key={name} className="flex items-center gap-2 rounded-full border border-border/70 bg-background/60 py-1 pl-1 pr-3">
-                  <GlowAvatar name={name} size="sm"  reducedMotion={reducedMotion} />
-                  <span className="text-xs font-medium">{name}</span>
+              {(glowList?.muddies ?? []).map((muddy) => (
+                <div
+                  key={muddy.userId}
+                  className="flex items-center gap-2 rounded-full border border-border/70 bg-background/60 py-1 pl-1 pr-3"
+                >
+                  <GlowAvatar name={muddy.displayName} size="sm" reducedMotion={reducedMotion} />
+                  <span className="text-xs font-medium">{muddy.displayName}</span>
                 </div>
               ))}
-              {event.attendees.length === 0 ? <p className="text-xs text-muted-foreground">Be the first to go.</p> : null}
+              {glowList && glowList.muddies.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {glowList.count > 0
+                    ? `${glowList.count} checked in privately.`
+                    : "None of your Muddies are here yet."}
+                </p>
+              ) : null}
             </div>
           </div>
 
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            Hosted by {event.hostName} · {event.audience}
+            Hosted by {event.hostName}
           </div>
 
           <div className="flex flex-wrap gap-2 border-t border-border/70 pt-4">
-            <Button type="button" variant={event.myRsvp === "going" ? "primary" : "outline"} onClick={() => onRsvpChange("going")}>
-              Going
-            </Button>
-            <Button type="button" variant={event.myRsvp === "maybe" ? "primary" : "outline"} onClick={() => onRsvpChange("maybe")}>
-              Maybe
-            </Button>
-            <Button type="button" variant="outline">
-              <Share2 className="h-4 w-4" aria-hidden="true" />
-              Share
-            </Button>
+            {event.myCheckInId ? (
+              <>
+                <Button type="button" variant="outline" disabled={pending} onClick={onCheckOut}>
+                  Check out
+                </Button>
+                <Button
+                  type="button"
+                  variant={event.myGlowEnabled ? "primary" : "outline"}
+                  disabled={pending}
+                  onClick={onToggleGlow}
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  {event.myGlowEnabled ? "Visible to Muddies here" : "Hidden at this event"}
+                </Button>
+              </>
+            ) : (
+              <Button type="button" disabled={pending} onClick={onCheckIn}>
+                Check in
+              </Button>
+            )}
           </div>
         </div>
       ) : null}
