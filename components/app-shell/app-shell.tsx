@@ -140,19 +140,19 @@ export function AppShell({
         Skip to content
       </a>
       <LocationSignalSync initiallyEnabled={locationSyncEnabled} />
-      <div className="md:grid md:min-h-[calc(100vh-2rem)] md:grid-cols-[5.25rem_minmax(0,1fr)] md:overflow-hidden md:rounded-[1.35rem] md:border md:border-border/80 md:bg-background md:shadow-[0_28px_90px_hsl(var(--shadow)/0.24)] dark:md:border-white/10 dark:md:bg-[#101011]">
+      <div className="md:grid md:h-[calc(100vh-2rem)] md:grid-cols-[5.25rem_minmax(0,1fr)] md:overflow-hidden md:rounded-[1.35rem] md:border md:border-border/80 md:bg-background md:shadow-[0_28px_90px_hsl(var(--shadow)/0.24)] dark:md:border-white/10 dark:md:bg-[#101011]">
       <DesktopSidebar
         navigationItems={visibleNavigationItems}
         unreadCount={unreadCount}
         currentUsername={currentUsername}
       />
-        <div className="min-w-0 bg-background dark:bg-[#111112]">
+        <div className="flex min-w-0 flex-col bg-background dark:bg-[#111112] md:min-h-0">
         <AppHeader
           navigationItems={visibleNavigationItems}
           unreadCount={unreadCount}
           currentUsername={currentUsername}
         />
-          <main id="app-main-content" className="mx-auto w-full max-w-[1200px] px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6">
+          <main id="app-main-content" className="mx-auto w-full max-w-[1200px] px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
           {children}
         </main>
         </div>
