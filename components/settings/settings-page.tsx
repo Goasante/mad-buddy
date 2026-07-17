@@ -197,6 +197,12 @@ export function SettingsPageContent({
           />
           <SettingsLinkRow
             icon={ShieldCheck}
+            title="Privacy setup"
+            description="Who can see your glow, and who can reach you."
+            href="/settings/privacy-setup"
+          />
+          <SettingsLinkRow
+            icon={ShieldCheck}
             title="Safe Arrival"
             description="Ask trusted Muddies to check you got there."
             href="/safe-arrival"
@@ -332,6 +338,7 @@ type SettingsLinkRowProps = {
     | "/settings/privacy"
     | "/settings/glow-visibility"
     | "/settings/notifications"
+    | "/settings/privacy-setup"
     | "/hangout-mode"
     | "/badges"
     | "/buddy-score"

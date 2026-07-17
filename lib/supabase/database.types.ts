@@ -37,6 +37,15 @@ export type Database = {
           visibility_status: VisibilityStatus;
           is_onboarded: boolean;
           deleted_at: string | null;
+          // Added by the batch-9 profiles migration.
+          username_normalized: string | null;
+          profile_media_id: string | null;
+          institution: string | null;
+          programme: string | null;
+          graduation_year: number | null;
+          general_area: string | null;
+          pronouns: string | null;
+          username_changed_at: string | null;
         };
         Insert: {
           id?: string;
@@ -49,6 +58,14 @@ export type Database = {
           visibility_status?: VisibilityStatus;
           is_onboarded?: boolean;
           deleted_at?: string | null;
+          username_normalized?: string | null;
+          profile_media_id?: string | null;
+          institution?: string | null;
+          programme?: string | null;
+          graduation_year?: number | null;
+          general_area?: string | null;
+          pronouns?: string | null;
+          username_changed_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1832,6 +1849,92 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["account_trust_events"]["Insert"]>;
         Relationships: [];
       };
+      onboarding_progress: {
+        Row: {
+          user_id: string;
+          current_step: OnboardingStepName;
+          profile_completed_at: string | null;
+          privacy_reviewed_at: string | null;
+          visibility_configured_at: string | null;
+          location_prompted_at: string | null;
+          location_permission_result: PermissionResult | null;
+          first_muddy_added_at: string | null;
+          activated_at: string | null;
+          completed_at: string | null;
+          skipped_optional: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          current_step?: OnboardingStepName;
+          profile_completed_at?: string | null;
+          privacy_reviewed_at?: string | null;
+          visibility_configured_at?: string | null;
+          location_prompted_at?: string | null;
+          location_permission_result?: PermissionResult | null;
+          first_muddy_added_at?: string | null;
+          activated_at?: string | null;
+          completed_at?: string | null;
+          skipped_optional?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["onboarding_progress"]["Insert"]>;
+        Relationships: [];
+      };
+      activation_milestones: {
+        Row: { id: string; user_id: string; milestone: MilestoneName; reached_at: string };
+        Insert: { id?: string; user_id: string; milestone: MilestoneName; reached_at?: string };
+        Update: Partial<Database["public"]["Tables"]["activation_milestones"]["Insert"]>;
+        Relationships: [];
+      };
+      profile_field_privacy: {
+        Row: {
+          id: string;
+          user_id: string;
+          field_name: ProfileFieldName;
+          visibility: ProfileFieldVisibility;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          field_name: ProfileFieldName;
+          visibility: ProfileFieldVisibility;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["profile_field_privacy"]["Insert"]>;
+        Relationships: [];
+      };
+      user_interests: {
+        Row: { id: string; user_id: string; interest: string; created_at: string };
+        Insert: { id?: string; user_id: string; interest: string; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["user_interests"]["Insert"]>;
+        Relationships: [];
+      };
+      privacy_setup_versions: {
+        Row: {
+          user_id: string;
+          policy_version: string;
+          setup_completed_at: string | null;
+          last_reviewed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          policy_version: string;
+          setup_completed_at?: string | null;
+          last_reviewed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["privacy_setup_versions"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -2118,6 +2221,54 @@ export type TrustEventType =
   | "duplicate_content"
   | "rapid_requests"
   | "impersonation_report";
+
+// --- Batch 9: Profiles, Onboarding, Privacy Setup ---
+
+export type OnboardingStepName =
+  | "not_started"
+  | "profile_started"
+  | "profile_completed"
+  | "privacy_reviewed"
+  | "visibility_configured"
+  | "location_prompted"
+  | "first_muddy_added"
+  | "activated"
+  | "completed";
+
+export type PermissionResult =
+  | "not_requested"
+  | "pre_prompt_viewed"
+  | "granted"
+  | "granted_approximate"
+  | "denied"
+  | "denied_permanently"
+  | "revoked"
+  | "unsupported"
+  | "error";
+
+export type MilestoneName =
+  | "account_created"
+  | "email_verified"
+  | "profile_completed"
+  | "privacy_setup_completed"
+  | "first_request_sent"
+  | "first_request_accepted"
+  | "first_muddy_added"
+  | "first_status_created"
+  | "first_wave_sent"
+  | "first_glow_enabled"
+  | "first_plan_created";
+
+export type ProfileFieldName =
+  | "bio"
+  | "institution"
+  | "programme"
+  | "graduation_year"
+  | "general_area"
+  | "interests"
+  | "pronouns";
+
+export type ProfileFieldVisibility = "only_me" | "approved_muddies" | "close_friends" | "shared_communities";
 
 export type ModerationActionType =
   | "no_action"
