@@ -153,6 +153,9 @@ export async function createPlanAction(input: unknown): Promise<PlanActionState>
 
   if (error || !plan) return { ok: false, message: "Couldn't create the plan. Try again." };
 
+  const { recordMilestone } = await import("@/lib/onboarding/service");
+  await recordMilestone(admin, userId, "first_plan_created");
+
   // Host row (auto-going) plus one invited row per eligible Muddy.
   const rows = [
     { plan_id: plan.id, user_id: userId, role: "host" as const, rsvp_status: "going" as const },

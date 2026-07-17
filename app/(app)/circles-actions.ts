@@ -380,6 +380,11 @@ export async function startVisibilitySessionAction(input: unknown): Promise<Circ
 
   if (error || !session) return { ok: false, message: "Couldn't update visibility." };
 
+  if (featureType === "glow" && parsed.data.visibilityMode !== "hidden") {
+    const { recordMilestone } = await import("@/lib/onboarding/service");
+    await recordMilestone(admin, userId, "first_glow_enabled");
+  }
+
   if (parsed.data.visibilityMode === "selected_circles" && parsed.data.circleIds?.length) {
     // Only the user's own, non-archived circles can be an audience.
     const { data: ownedCircles } = await admin

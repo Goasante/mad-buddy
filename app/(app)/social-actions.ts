@@ -141,6 +141,9 @@ export async function setStatusAction(input: unknown): Promise<SocialActionState
     return { ok: false, message: "Couldn't save your status. Try again." };
   }
 
+  const { recordMilestone } = await import("@/lib/onboarding/service");
+  await recordMilestone(admin, userId, "first_status_created");
+
   const until = new Date(expiresAtMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   return { ok: true, message: `Status updated. Your Muddies can see it until ${until}.` };
 }
@@ -227,6 +230,9 @@ export async function sendWaveV2Action(
     logBackendEvent("warn", { requestId, action: "wave.send", userId, errorType: errorType(waveError) });
     return { ok: false, message: "Your wave was not sent. Try again." };
   }
+
+  const { recordMilestone } = await import("@/lib/onboarding/service");
+  await recordMilestone(admin, userId, "first_wave_sent");
 
   // Mute silences notifications without telling the sender (spec §20):
   // the wave record exists either way; a muted recipient just isn't pinged.

@@ -462,6 +462,11 @@ export async function sendFriendRequestAction(targetUserId: string): Promise<Int
     .eq("user_id", userId)
     .maybeSingle();
 
+  {
+    const { recordMilestone } = await import("@/lib/onboarding/service");
+    await recordMilestone(createSupabaseAdminClient(), userId, "first_request_sent");
+  }
+
   await deliverNotification(supabase, {
     userId: parsedTarget.data,
     senderId: userId,
@@ -522,6 +527,16 @@ export async function acceptFriendRequestAction(requestId: string): Promise<Inte
   }
 
   await admin.from("friend_requests").update({ status: "accepted" }).eq("id", parsedRequest.data);
+
+  // Both sides now have a Muddy; the sender's request was also accepted.
+  {
+    const { recordMilestone } = await import("@/lib/onboarding/service");
+    await Promise.all([
+      recordMilestone(admin, userId, "first_muddy_added"),
+      recordMilestone(admin, request.sender_id, "first_muddy_added"),
+      recordMilestone(admin, request.sender_id, "first_request_accepted")
+    ]);
+  }
 
   const { data: receiverProfile } = await admin
     .from("profiles")
@@ -620,6 +635,12 @@ export async function blockUserAction(targetUserId: string): Promise<Integration
   if (error) {
     return { ok: false, message: error.message };
   }
+
+  // Blocking archives the pair's direct conversation immediately (batch 7):
+  // sends were already refused via per-send block checks; this removes the
+  // thread from both inboxes too.
+  const { applyBlockToConversations } = await import("@/lib/messaging/service");
+  await applyBlockToConversations(createSupabaseAdminClient(), userId, parsedTarget.data);
 
   return { ok: true, message: "User blocked." };
 }
