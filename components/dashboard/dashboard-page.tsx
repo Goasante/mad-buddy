@@ -356,8 +356,8 @@ export function DashboardPageContent({
     <div className="mx-auto max-w-[1200px] space-y-6 pt-6">
       <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
 
-      <div className="flex items-center justify-between gap-3">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl" suppressHydrationWarning>
             {getGreeting()}
             {displayName ? `, ${capitalize(displayName)}` : ""}
@@ -368,6 +368,7 @@ export function DashboardPageContent({
           type="button"
           variant="outline"
           size="sm"
+          className="w-full shrink-0 whitespace-nowrap sm:w-auto"
           onClick={() => setStatusComposerOpen(true)}
           title={hasActiveStatus ? "Update your status" : undefined}
         >
@@ -389,7 +390,7 @@ export function DashboardPageContent({
               )}
             >
               <span className={cn("h-1.5 w-1.5 rounded-full", ghostMode ? "bg-muted-foreground" : "bg-blue-500")} />
-              {ghostMode ? "Visibility paused" : "Visibility on"}
+              {ghostMode ? "Visibility paused" : "Visible"}
             </span>
 
             {!ghostMode ? (
@@ -434,7 +435,7 @@ export function DashboardPageContent({
           {statusMessage ||
             (ghostMode
               ? "You won’t appear nearby until you turn visibility back on."
-              : "Approved Muddies can see when you’re nearby.")}
+              : "Your Muddies can see when you’re nearby.")}
         </p>
       </section>
 
@@ -451,55 +452,87 @@ export function DashboardPageContent({
           </div>
 
           {nearbyFriends.length > 0 ? (
-            // minmax(240px) rather than the requested 260-280px: at the
-            // page's 1200px max-width and this section's 65% share, three
-            // literal 260px cards plus gaps don't fit (812px needed vs
-            // ~770px available). 240px is the largest floor that still
-            // yields three columns here, auto-fill's 1fr stretches each
-            // card to ~250-260px in practice, close to the target width
-            // while actually delivering the requested three-per-row.
-            <div
-              className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]"
-              aria-label="Nearby Muddies"
-            >
-              {nearbyFriends.map((friend) => {
-                // The username is the reliable fallback if a profile has no
-                // full_name; it's also shown for disambiguation when two
-                // friends share the same display name.
-                const name = friend.displayName || friend.username;
-                const showUsername = duplicateDisplayNames.has(name.toLowerCase());
-                return (
-                  <button
-                    key={friend.friendId}
-                    type="button"
-                    onClick={() => setSelectedFriendId(friend.friendId)}
-                    className="focus-ring safe-motion flex min-h-[104px] items-center gap-3 rounded-2xl border border-border/70 bg-card/50 p-4 text-left hover:bg-secondary/40"
-                  >
-                    <GlowAvatar
-                      name={name}
-                      src={friend.avatarUrl}
-                      proximityLevel={friend.proximityLevel}
-                      glowStrength={friend.glowStrength}
-                      confidence={friend.confidence}
-                      size="md"
-                      reducedMotion={reducedMotion}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{capitalize(name)}</p>
-                      {showUsername ? (
-                        <p className="truncate text-xs text-foreground/70">@{friend.username}</p>
-                      ) : null}
-                      <span className="mt-1 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+            <>
+              {/* Mobile: a horizontal avatar strip so several Muddies are
+                  visible at a glance without pushing the feed below the fold.
+                  Hidden scrollbar (touch scrolling preserved), edge-to-edge
+                  bleed via -mx-4. */}
+              <div
+                className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 md:hidden"
+                aria-label="Nearby Muddies"
+              >
+                {nearbyFriends.map((friend) => {
+                  const name = friend.displayName || friend.username;
+                  return (
+                    <button
+                      key={friend.friendId}
+                      type="button"
+                      onClick={() => setSelectedFriendId(friend.friendId)}
+                      className="focus-ring safe-motion flex w-20 shrink-0 flex-col items-center gap-1.5 text-center"
+                      aria-label={`${capitalize(name)}, ${proximityLabels[friend.proximityLevel]}`}
+                    >
+                      <GlowAvatar
+                        name={name}
+                        src={friend.avatarUrl}
+                        proximityLevel={friend.proximityLevel}
+                        glowStrength={friend.glowStrength}
+                        confidence={friend.confidence}
+                        size="md"
+                        reducedMotion={reducedMotion}
+                      />
+                      <span className="w-full truncate text-xs font-medium">{capitalize(name)}</span>
+                      <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                         {proximityLabels[friend.proximityLevel]}
                       </span>
-                      {friend.muddyStatusLabel ? (
-                        <p className="mt-1 truncate text-xs text-muted-foreground">{friend.muddyStatusLabel}</p>
-                      ) : null}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Desktop/tablet: the fuller card grid. */}
+              <div
+                className="hidden gap-4 md:grid [grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]"
+                aria-label="Nearby Muddies"
+              >
+                {nearbyFriends.map((friend) => {
+                  // The username is the reliable fallback if a profile has no
+                  // full_name; it's also shown for disambiguation when two
+                  // friends share the same display name.
+                  const name = friend.displayName || friend.username;
+                  const showUsername = duplicateDisplayNames.has(name.toLowerCase());
+                  return (
+                    <button
+                      key={friend.friendId}
+                      type="button"
+                      onClick={() => setSelectedFriendId(friend.friendId)}
+                      className="focus-ring safe-motion flex min-h-[104px] items-center gap-3 rounded-2xl border border-border/70 bg-card/50 p-4 text-left hover:bg-secondary/40"
+                    >
+                      <GlowAvatar
+                        name={name}
+                        src={friend.avatarUrl}
+                        proximityLevel={friend.proximityLevel}
+                        glowStrength={friend.glowStrength}
+                        confidence={friend.confidence}
+                        size="md"
+                        reducedMotion={reducedMotion}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{capitalize(name)}</p>
+                        {showUsername ? (
+                          <p className="truncate text-xs text-foreground/70">@{friend.username}</p>
+                        ) : null}
+                        <span className="mt-1 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                          {proximityLabels[friend.proximityLevel]}
+                        </span>
+                        {friend.muddyStatusLabel ? (
+                          <p className="mt-1 truncate text-xs text-muted-foreground">{friend.muddyStatusLabel}</p>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           ) : (
             <EmptyState
               icon={ghostMode ? Ghost : Users}

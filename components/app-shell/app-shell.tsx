@@ -10,6 +10,8 @@ import {
   CircleDollarSign,
   Compass,
   Gauge,
+  Hand,
+  HelpCircle,
   Home,
   LogOut,
   MessagesSquare,
@@ -18,12 +20,11 @@ import {
   Sparkles,
   Plus,
   Settings,
-  UserPlus,
   UserRound,
   Users2,
   UsersRound
 } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { logoutAction } from "@/app/(auth)/actions";
 import { LocationSignalSync } from "@/components/app-shell/location-signal-sync";
@@ -140,7 +141,7 @@ export function AppShell({
     : navigationItems;
 
   return (
-    <div className="min-h-screen bg-secondary/25 pb-24 dark:bg-[#353537] md:p-4 md:pb-4">
+    <div className="min-h-screen bg-secondary/25 pb-[calc(5rem+env(safe-area-inset-bottom))] dark:bg-[#353537] md:p-4 md:pb-4">
       <a
         href="#app-main-content"
         className="focus-ring sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:shadow-lg"
@@ -158,6 +159,8 @@ export function AppShell({
         <AppHeader
           navigationItems={visibleNavigationItems}
           currentUsername={currentUsername}
+          unreadCount={unreadCount}
+          showAdminLink={showAdminLink}
         />
           <main id="app-main-content" className="mx-auto w-full max-w-[1200px] px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
           {children}
@@ -435,7 +438,7 @@ function AccountMenuItem({
   icon: Icon,
   isActive
 }: {
-  href: NavigationItem["href"];
+  href: ComponentProps<typeof Link>["href"];
   label: string;
   icon: LucideIcon;
   isActive: boolean;
@@ -452,10 +455,14 @@ function AccountMenuItem({
 
 function AppHeader({
   navigationItems,
-  currentUsername
+  currentUsername,
+  unreadCount,
+  showAdminLink
 }: {
   navigationItems: NavigationItem[];
   currentUsername: string | null;
+  unreadCount: number;
+  showAdminLink: boolean;
 }) {
   const pathname = usePathname();
   const activeItem = navigationItems.find((item) => item.href === pathname);
@@ -479,8 +486,18 @@ function AppHeader({
   return (
     <header className="sticky top-0 z-30 border-b border-border/70 bg-background/90 py-3 backdrop-blur-xl dark:border-white/10 dark:bg-[#111112]/90">
       <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-        <BrandMark className="h-10 w-10 md:hidden" priority />
-        <div className="mr-auto min-w-0">
+        {/* Mobile: logo only, the greeting below establishes the page, so no
+            "Home" title competes with it. Desktop keeps the in-panel page
+            title (the sidebar carries the logo there). */}
+        <Link
+          href="/dashboard"
+          aria-label="Mad Buddy home"
+          title="Mad Buddy home"
+          className="focus-ring shrink-0 md:hidden"
+        >
+          <BrandMark className="h-9 w-9" priority />
+        </Link>
+        <div className="mr-auto hidden min-w-0 md:block">
           {pathname !== "/dashboard" && pathname !== "/friends" ? (
             <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
               {pageLabel}
@@ -490,7 +507,7 @@ function AppHeader({
             {pathname === "/dashboard" ? "Home" : pathname === "/friends" ? "Friends" : "Mad Buddy"}
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <Button
             type="button"
             variant="outline"
@@ -501,27 +518,25 @@ function AppHeader({
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
           </Button>
-          {currentUsername ? (
-            // Visible only in the sm-md gap, where the desktop sidebar (md+)
-            // isn't rendered yet but the header still is, below sm the
-            // mobile bottom nav covers it; at md+ the sidebar's own account
-            // menu already goes here, so showing both would be a duplicate
-            // destination in the same viewport.
-            <Link
-              href="/profile"
-              className="focus-ring hidden h-10 w-10 place-items-center rounded-full border border-border/70 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground sm:grid md:hidden"
-              aria-label={`Signed in as @${currentUsername}`}
-              title={`Signed in as @${currentUsername}`}
-            >
-              <UserRound className="h-4 w-4" aria-hidden="true" />
-            </Link>
-          ) : null}
-          <form action={logoutAction} className="md:hidden">
-            <Button type="submit" variant="ghost" size="sm" aria-label="Log out" title="Log out">
-              <LogOut className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Log out</span>
-            </Button>
-          </form>
+          {/* Notifications + account are mobile-only here (md:hidden); on
+              desktop the sidebar already provides both, so surfacing them in
+              the header too would duplicate destinations in one viewport. */}
+          <Link
+            href="/notifications"
+            aria-label="Notifications"
+            title="Notifications"
+            className="focus-ring relative grid h-10 w-10 place-items-center rounded-full border border-border/70 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground md:hidden"
+          >
+            <Bell className="h-4 w-4" aria-hidden="true" />
+            <UnreadBadge count={unreadCount} />
+          </Link>
+          <div className="md:hidden">
+            <MobileAccountMenu
+              currentUsername={currentUsername}
+              showAdminLink={showAdminLink}
+              pathname={pathname}
+            />
+          </div>
         </div>
       </div>
       <CreateMenu open={createOpen} onOpenChange={setCreateOpen} />
@@ -529,36 +544,142 @@ function AppHeader({
   );
 }
 
+function MobileAccountMenu({
+  currentUsername,
+  showAdminLink,
+  pathname
+}: {
+  currentUsername: string | null;
+  showAdminLink: boolean;
+  pathname: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const initial = currentUsername?.[0]?.toUpperCase() ?? "?";
+  const logoutFormRef = useRef<HTMLFormElement>(null);
+
+  return (
+    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          aria-label="Account"
+          title="Account"
+          className="focus-ring grid h-10 w-10 place-items-center rounded-full border border-border/70"
+        >
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-secondary text-sm font-semibold text-foreground dark:bg-white/[0.06]">
+            {initial}
+          </span>
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          side="bottom"
+          align="end"
+          sideOffset={8}
+          collisionPadding={8}
+          className={FLYOUT_CONTENT_CLASSNAME}
+        >
+          {currentUsername ? (
+            <p className="truncate px-3 pb-1.5 pt-1 text-xs font-medium text-muted-foreground">
+              @{currentUsername}
+            </p>
+          ) : null}
+          <AccountMenuItem href="/profile" label="Profile" icon={UserRound} isActive={pathname === "/profile"} />
+          <AccountMenuItem href="/settings" label="Settings" icon={Settings} isActive={pathname === "/settings"} />
+          <AccountMenuItem
+            href="/billing"
+            label="Plan and billing"
+            icon={CircleDollarSign}
+            isActive={pathname === "/billing"}
+          />
+          <AccountMenuItem
+            href="/help"
+            label="Help and support"
+            icon={HelpCircle}
+            isActive={pathname === "/help"}
+          />
+          {showAdminLink ? (
+            <AccountMenuItem href="/admin" label="Admin" icon={Gauge} isActive={pathname === "/admin"} />
+          ) : null}
+          <DropdownMenu.Separator className="my-2 h-px bg-border/70 dark:bg-white/10" />
+          <DropdownMenu.Item
+            className={cn(flyoutItemClassName(false), "text-destructive")}
+            onSelect={() => logoutFormRef.current?.requestSubmit()}
+          >
+            <LogOut className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+            Log out
+          </DropdownMenu.Item>
+          <form ref={logoutFormRef} action={logoutAction} className="hidden" />
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+const createActions: Array<{
+  href: ComponentProps<typeof Link>["href"];
+  title: string;
+  description: string;
+  icon: LucideIcon;
+}> = [
+  {
+    href: "/plans?create=1",
+    title: "New plan",
+    description: "Create a hangout and invite Muddies",
+    icon: CalendarCheck2
+  },
+  {
+    href: "/meeting-pings",
+    title: "Meeting ping",
+    description: "Ask a Muddy to meet up nearby",
+    icon: Hand
+  },
+  {
+    href: "/moments",
+    title: "Share a Moment",
+    description: "Post a moment for your Muddies",
+    icon: Sparkles
+  }
+];
+
 function CreateMenu({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
     <Modal open={open} onOpenChange={onOpenChange} title="Create" compact>
       <div className="grid gap-2">
-        <Button asChild variant="outline" className="h-auto justify-start gap-3 py-3" onClick={() => onOpenChange(false)}>
-          <Link href="/plans?create=1">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-              <CalendarCheck2 className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <span className="text-left">
-              <span className="block text-sm font-semibold">New Plan</span>
-              <span className="block text-xs text-muted-foreground">Create a hangout and invite Muddies</span>
-            </span>
-          </Link>
-        </Button>
-        <Button asChild variant="outline" className="h-auto justify-start gap-3 py-3" onClick={() => onOpenChange(false)}>
-          <Link href="/friends?tab=add">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-              <UserPlus className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <span className="text-left">
-              <span className="block text-sm font-semibold">Add a Muddy</span>
-              <span className="block text-xs text-muted-foreground">Search by username and send a request</span>
-            </span>
-          </Link>
-        </Button>
+        {createActions.map((action) => (
+          <Button
+            key={action.title}
+            asChild
+            variant="outline"
+            className="h-auto justify-start gap-3 py-3"
+            onClick={() => onOpenChange(false)}
+          >
+            <Link href={action.href}>
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                <action.icon className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <span className="text-left">
+                <span className="block text-sm font-semibold">{action.title}</span>
+                <span className="block text-xs text-muted-foreground">{action.description}</span>
+              </span>
+            </Link>
+          </Button>
+        ))}
       </div>
     </Modal>
   );
 }
+
+// Mobile-only labels for the five primary tabs. The desktop sidebar keeps the
+// navigationItems labels (Friends, Notifications) for its tooltips; the
+// product's mobile bottom bar uses the social-facing names.
+const MOBILE_NAV_LABELS: Record<string, string> = {
+  "/dashboard": "Home",
+  "/friends": "Muddies",
+  "/notifications": "Pulse",
+  "/messages": "Messages",
+  "/plans": "Plans"
+};
 
 function MobileNav({ navigationItems, unreadCount }: { navigationItems: NavigationItem[]; unreadCount: number }) {
   const pathname = usePathname();
@@ -568,36 +689,40 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
 
   return (
     <nav
-      className="pointer-events-none fixed inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-50 px-3 md:hidden"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl dark:border-white/10 dark:bg-[#111112]/95 md:hidden"
       aria-label="Mobile navigation"
     >
-      <div className="pointer-events-auto mx-auto flex w-full max-w-[26rem] items-center justify-between rounded-full bg-background px-6 py-3.5 shadow-[0_12px_40px_rgba(0,0,0,0.25)] sm:px-8 sm:py-4">
+      <ul className="mx-auto flex w-full max-w-[30rem] items-stretch justify-between px-1">
         {mobileItems.map((item) => {
           const isActive = isNavigationItemActive(item, pathname);
+          const label = MOBILE_NAV_LABELS[item.href] ?? item.label;
 
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-label={item.label}
-              title={item.label}
-              aria-current={isActive ? "page" : undefined}
-              className={cn(
-                "safe-motion relative flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                isActive ? "text-primary" : "text-foreground/70 hover:text-foreground"
-              )}
-            >
-              <item.icon
-                className="h-6 w-6"
-                strokeWidth={1.75}
-                fill={isActive ? "currentColor" : "none"}
-                aria-hidden="true"
-              />
-              {item.href === "/notifications" ? <UnreadBadge count={unreadCount} /> : null}
-            </Link>
+            <li key={item.href} className="flex-1">
+              <Link
+                href={item.href}
+                aria-label={label}
+                aria-current={isActive ? "page" : undefined}
+                className={cn(
+                  "safe-motion flex min-h-[56px] flex-col items-center justify-center gap-1 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span className="relative">
+                  <item.icon
+                    className="h-6 w-6"
+                    strokeWidth={1.75}
+                    fill={isActive ? "currentColor" : "none"}
+                    aria-hidden="true"
+                  />
+                  {item.href === "/notifications" ? <UnreadBadge count={unreadCount} /> : null}
+                </span>
+                <span className="text-[11px] font-medium leading-none">{label}</span>
+              </Link>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </nav>
   );
 }

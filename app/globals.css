@@ -2,39 +2,64 @@
 @tailwind components;
 @tailwind utilities;
 
-/* One scrollbar style everywhere — page scroll, modal bodies, flyouts,
- * dropdowns, message/notification lists. Colours use the theme's own
- * --border / --muted-foreground tokens (not a hardcoded white) so contrast
- * holds in both the light and dark theme, and across every accent variant
- * under [data-accent]. Cosmetic only: never forces a scrollbar where content
- * already fits, never touches overflow/layout. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--border) / 0.9) transparent;
+/* The slim visible scrollbar is a desktop-only affordance (page scroll, modal
+ * bodies, flyouts, dropdowns, message/notification lists). Colours use the
+ * theme's own --border / --muted-foreground tokens (not a hardcoded white) so
+ * contrast holds in both themes and across every accent variant under
+ * [data-accent]. Cosmetic only: never forces a scrollbar where content already
+ * fits, never touches overflow/layout. */
+@media (min-width: 768px) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border) / 0.9) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border) / 0.9);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.6);
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-button {
+    display: none;
+  }
 }
 
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Mobile: no visible scrollbar anywhere, but touch/keyboard scrolling is fully
+ * preserved (display:none on the bar only, not overflow). */
+@media (max-width: 767px) {
+  * {
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
+  }
 }
 
-*::-webkit-scrollbar-track {
-  background: transparent;
+/* Opt-in hidden scrollbar for horizontal strips (e.g. the mobile Nearby
+ * Muddies avatar rail) at any width, scrolling preserved. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-*::-webkit-scrollbar-thumb {
-  background-color: hsl(var(--border) / 0.9);
-  border-radius: 9999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-*::-webkit-scrollbar-thumb:hover {
-  background-color: hsl(var(--muted-foreground) / 0.6);
-  background-clip: padding-box;
-}
-
-*::-webkit-scrollbar-button {
+.no-scrollbar::-webkit-scrollbar {
   display: none;
 }
 
