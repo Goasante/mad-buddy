@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -26,7 +27,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "@/components/brand/brand-mark";
-import { HeroDemo } from "@/components/landing/hero-demo";
 import { LandingNav, useLandingActiveSection } from "@/components/landing/landing-nav";
 import { cn } from "@/lib/utils";
 
@@ -250,7 +250,7 @@ function Hero() {
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(249,115,22,0.16),transparent_42%),radial-gradient(circle_at_80%_30%,rgba(251,146,60,0.12),transparent_40%),radial-gradient(circle_at_50%_90%,rgba(234,88,12,0.1),transparent_35%)]"
         aria-hidden="true"
       />
-      <div className="relative mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
+      <div className="relative mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-14">
         <div className="max-w-2xl">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
@@ -277,7 +277,47 @@ function Hero() {
             </Button>
           </div>
         </div>
-        <HeroDemo />
+        <div className="relative flex w-full items-center justify-center">
+          {/* Ambient glow behind the mockup: a wide soft haze plus a tighter
+              warm core centred on the middle phone, echoing the hero's own
+              radial atmosphere so the devices sit in the same pool of light
+              rather than on a separate backdrop. Lighter on small screens,
+              fuller on desktop. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-[-2%] rounded-full bg-orange-500/5 blur-[90px] lg:inset-[-6%] lg:bg-orange-500/8 lg:blur-[140px]"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-[16%] rounded-full bg-orange-400/10 blur-[55px] lg:inset-[14%] lg:bg-orange-400/14 lg:blur-[85px]"
+          />
+          {/* A soft grounding shadow so the phones read as standing in the
+              scene instead of floating with nothing beneath them. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute bottom-[4%] left-1/2 h-10 w-[50%] -translate-x-1/2 rounded-[100%] bg-black/25 blur-xl lg:bottom-[6%] lg:h-16 lg:w-[55%] lg:bg-black/40 lg:blur-2xl"
+          />
+          {/* Concentric rings that continuously grow outward and fade behind
+              the phones, like a proximity ping — three identical circles on
+              a staggered loop so it reads as one ongoing ripple. */}
+          <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2">
+            <span className="hero-ring-grow absolute left-1/2 top-1/2 h-48 w-48 rounded-full border-2 border-primary/80 sm:h-56 sm:w-56 lg:h-72 lg:w-72" />
+            <span className="hero-ring-grow absolute left-1/2 top-1/2 h-48 w-48 rounded-full border-2 border-primary/80 [animation-delay:1.2s] sm:h-56 sm:w-56 lg:h-72 lg:w-72" />
+            <span className="hero-ring-grow absolute left-1/2 top-1/2 h-48 w-48 rounded-full border-2 border-primary/80 [animation-delay:2.4s] sm:h-56 sm:w-56 lg:h-72 lg:w-72" />
+          </div>
+          {/* This asset has its background removed (true alpha, not a CSS
+              mask) — the phones and glow lines are the only opaque pixels,
+              so nothing here can read as a rectangle. */}
+          <Image
+            src="/brand/mad-buddy-hero-mockup-transparent.png"
+            alt="Mad Buddy app showing three phone screens with nearby friends, social plans and privacy controls"
+            width={617}
+            height={405}
+            priority
+            sizes="(max-width: 1024px) 65vw, 36vw"
+            className="relative z-10 h-auto w-full max-w-[520px] object-contain"
+          />
+        </div>
       </div>
     </section>
   );

@@ -316,6 +316,14 @@ select {
   .sidebar-flyout[data-side="bottom"] {
     transform-origin: top left;
   }
+
+  /* Hero mockup: concentric rings that continuously grow outward and fade,
+     like a proximity ping — three identical circles staggered a third of a
+     cycle apart so they read as one ongoing ripple, not three separate
+     shapes. */
+  .hero-ring-grow {
+    animation: hero-ring-grow 3.6s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -327,6 +335,25 @@ select {
 
   .sidebar-flyout[data-state="open"] {
     animation: none;
+  }
+
+  .hero-ring-grow {
+    animation: none;
+    opacity: 0.45;
+  }
+}
+
+@keyframes hero-ring-grow {
+  0% {
+    transform: translate(-50%, -50%) scale(0.55);
+    opacity: 0.85;
+  }
+  60% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.6);
+    opacity: 0;
   }
 }
 
