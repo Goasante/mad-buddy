@@ -8,6 +8,8 @@ import {
   CheckCheck,
   CheckCircle2,
   CircleDollarSign,
+  Eye,
+  EyeOff,
   Ghost,
   Hand,
   MapPinOff,
@@ -162,19 +164,6 @@ export function DashboardPageContent({
   const [previewLimit, setPreviewLimit] = useState(8);
   const nearbyPreview = nearbyFriends.slice(0, previewLimit);
   const hasMoreNearbyFriends = nearbyFriends.length > previewLimit;
-
-  // A friend's own full_name can be missing (deleted profile, sync gap); the
-  // username is the one thing every account always has. Duplicate display
-  // names (two friends both "Sam") get their @username shown for
-  // disambiguation, this Set is what decides that per render.
-  const duplicateDisplayNames = useMemo(() => {
-    const seen = new Map<string, number>();
-    for (const friend of nearbyFriends) {
-      const name = (friend.displayName || friend.username).toLowerCase();
-      seen.set(name, (seen.get(name) ?? 0) + 1);
-    }
-    return new Set([...seen.entries()].filter(([, count]) => count > 1).map(([name]) => name));
-  }, [nearbyFriends]);
 
   const proximityCounts = useMemo(() => {
     const counts = { very_close: 0, nearby: 0, around: 0 };
@@ -433,7 +422,11 @@ export function DashboardPageContent({
               aria-label={ghostMode ? "Resume visibility" : "Pause visibility"}
               title={ghostMode ? "Resume visibility" : "Pause visibility"}
             >
-              <Ghost className="h-4 w-4" aria-hidden="true" />
+              {ghostMode ? (
+                <Eye className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <EyeOff className="h-4 w-4" aria-hidden="true" />
+              )}
             </Button>
             <Button
               type="button"
@@ -463,8 +456,8 @@ export function DashboardPageContent({
         </p>
       </section>
 
+      {/* Row 2: nearby Muddies (65) beside quick actions (35) */}
       <div className="grid gap-6 lg:grid-cols-[65fr_35fr]">
-        <div className="space-y-6">
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold tracking-tight">Nearby Muddies</h2>
@@ -517,23 +510,19 @@ export function DashboardPageContent({
                 })}
               </div>
 
-              {/* Desktop/tablet: the fuller card grid. */}
-              <div
-                className="hidden gap-4 md:grid [grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]"
-                aria-label="Nearby Muddies"
-              >
+              {/* Desktop/tablet: standalone glowing avatars (no card, no
+                  border), the same visual language as the mobile strip but
+                  wrapping. Padding keeps the contained glow from being clipped. */}
+              <div className="hidden flex-wrap gap-6 pt-3 pb-1 md:flex" aria-label="Nearby Muddies">
                 {nearbyPreview.map((friend) => {
-                  // The username is the reliable fallback if a profile has no
-                  // full_name; it's also shown for disambiguation when two
-                  // friends share the same display name.
                   const name = friend.displayName || friend.username;
-                  const showUsername = duplicateDisplayNames.has(name.toLowerCase());
                   return (
                     <button
                       key={friend.friendId}
                       type="button"
                       onClick={() => setSelectedFriendId(friend.friendId)}
-                      className="focus-ring safe-motion flex min-h-[104px] items-center gap-3 rounded-2xl border border-border/70 bg-card/50 p-4 text-left hover:bg-secondary/40"
+                      className="focus-ring safe-motion flex w-[104px] shrink-0 flex-col items-center text-center"
+                      aria-label={`${capitalize(name)}, ${proximityLabels[friend.proximityLevel]}`}
                     >
                       <GlowAvatar
                         name={name}
@@ -541,21 +530,18 @@ export function DashboardPageContent({
                         proximityLevel={friend.proximityLevel}
                         glowStrength={friend.glowStrength}
                         confidence={friend.confidence}
-                        size="md"
+                        size="lg"
                         reducedMotion={reducedMotion}
                       />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium">{capitalize(name)}</p>
-                        {showUsername ? (
-                          <p className="truncate text-xs text-foreground/70">@{friend.username}</p>
-                        ) : null}
-                        <span className="mt-1 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-                          {proximityLabels[friend.proximityLevel]}
+                      <span className="mt-2 w-full truncate text-sm font-medium">{capitalize(name)}</span>
+                      <span className="mt-1.5 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                        {proximityLabels[friend.proximityLevel]}
+                      </span>
+                      {friend.muddyStatusLabel ? (
+                        <span className="mt-1 w-full truncate text-xs text-muted-foreground">
+                          {friend.muddyStatusLabel}
                         </span>
-                        {friend.muddyStatusLabel ? (
-                          <p className="mt-1 truncate text-xs text-muted-foreground">{friend.muddyStatusLabel}</p>
-                        ) : null}
-                      </div>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -585,25 +571,30 @@ export function DashboardPageContent({
           )}
         </section>
 
-          <FeaturedPlan plan={upcomingPlans[0]} hasMore={hasMorePlans || upcomingPlans.length > 1} />
+        <QuickActions />
+      </div>
 
-          <MuddiesOpenToPlans muddies={openToPlansMuddies} onSelect={setSelectedFriendId} />
-        </div>
+      {/* Row 3: featured plan (65) beside recent activity (35). Recent activity
+          is omitted entirely when empty so no bordered placeholder is rendered
+          and the right column simply collapses. */}
+      <div className="grid gap-6 lg:grid-cols-[65fr_35fr]">
+        <FeaturedPlan plan={upcomingPlans[0]} hasMore={hasMorePlans || upcomingPlans.length > 1} />
 
-        <div className="space-y-6">
-          <QuickActions />
-
+        {attentionItems.length > 0 ? (
           <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold tracking-tight">Recent activity</h2>
-            {unreadActivityCount > attentionItems.length ? (
-              <Link href="/notifications" className="text-sm font-medium text-primary hover:underline">
-                View all
-              </Link>
-            ) : null}
-          </div>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-semibold tracking-tight">Recent activity</h2>
+              {unreadActivityCount > attentionItems.length ? (
+                <Link
+                  href="/notifications"
+                  aria-label="View all activity"
+                  className="text-sm font-medium text-primary hover:underline"
+                >
+                  View all
+                </Link>
+              ) : null}
+            </div>
 
-          {attentionItems.length > 0 ? (
             <ul className="divide-y divide-border/60 rounded-2xl border border-border/70 bg-card/40">
               {attentionItems.map((item) => (
                 <li key={item.id}>
@@ -625,15 +616,12 @@ export function DashboardPageContent({
                 </li>
               ))}
             </ul>
-          ) : (
-            <div className="rounded-2xl border border-border/70 bg-card/40 px-4 py-5 text-center">
-              <p className="text-sm font-medium">No recent activity</p>
-              <p className="mt-1 text-xs text-muted-foreground">Updates from your Muddies will appear here.</p>
-            </div>
-          )}
           </section>
-        </div>
+        ) : null}
       </div>
+
+      {/* Row 4: Muddies open to plans, full width below the grid */}
+      <MuddiesOpenToPlans muddies={openToPlansMuddies} onSelect={setSelectedFriendId} />
 
       {promptFeedback ? (
         <div
@@ -833,18 +821,31 @@ function FeaturedPlan({ plan, hasMore }: { plan: HomeUpcomingPlan | undefined; h
                 })}
               </p>
               {plan.placeText ? (
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">{plan.placeText}</p>
+                <p className="mt-0.5 truncate text-xs font-medium text-foreground/80">
+                  {capitalize(plan.placeText)}
+                </p>
               ) : null}
             </div>
             <span className="inline-flex shrink-0 items-center rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-foreground">
               {rsvpLabel(plan.myRsvp)}
             </span>
           </div>
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <p className="text-xs text-muted-foreground">
-              {plan.goingCount} going
-              {plan.maybeCount > 0 ? ` · ${plan.maybeCount} maybe` : ""}
-            </p>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              {plan.goingCount > 0 ? (
+                // A neutral count visualisation, not real attendee identities
+                // (Home doesn't load those). Purely presentational.
+                <div className="flex -space-x-2" aria-hidden="true">
+                  {Array.from({ length: Math.min(plan.goingCount, 3) }).map((_, index) => (
+                    <span key={index} className="h-6 w-6 rounded-full border-2 border-card bg-primary/20" />
+                  ))}
+                </div>
+              ) : null}
+              <p className="text-xs text-muted-foreground">
+                {plan.goingCount} going
+                {plan.maybeCount > 0 ? ` · ${plan.maybeCount} maybe` : ""}
+              </p>
+            </div>
             <Button type="button" size="sm" asChild>
               <Link href="/plans">{actionLabel}</Link>
             </Button>
@@ -918,20 +919,17 @@ function MuddiesOpenToPlans({
           })}
         </ul>
       ) : (
-        <EmptyState
-          icon={Users}
-          className="w-full !border-border/50 !shadow-none p-4 sm:p-5"
-          title="No one is open to plans right now"
-          description="Check again later or create a plan."
-          action={
-            <Button type="button" asChild>
-              <Link href="/plans">
-                <CalendarCheck2 className="h-4 w-4" aria-hidden="true" />
-                New plan
-              </Link>
-            </Button>
-          }
-        />
+        // Compact inline state, not a large bordered panel: keeps Home short
+        // when nobody is available and stays left-aligned on desktop.
+        <div className="flex flex-col items-start gap-2 rounded-xl bg-card/40 px-4 py-4">
+          <div>
+            <p className="text-sm font-medium">No Muddies are available right now</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Check again later or start a new plan.</p>
+          </div>
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link href="/plans">New plan</Link>
+          </Button>
+        </div>
       )}
     </section>
   );
