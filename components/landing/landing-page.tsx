@@ -26,28 +26,30 @@ import { BrandMark } from "@/components/brand/brand-mark";
 import { LandingNav, useLandingActiveSection } from "@/components/landing/landing-nav";
 import { cn } from "@/lib/utils";
 
-const quadFeatures = [
+const railFeatures = [
   {
-    title: "See Who's Around",
-    description: "Discover Muddies nearby with broad, privacy-safe proximity — never a map or exact distance.",
+    title: "See who's around",
+    description: "Know when approved Muddies are nearby.",
     icon: Radio
   },
   {
-    title: "Wave & Connect",
-    description: "Send a Wave to say you're open to connect. When it's mutual, the chat opens.",
+    title: "Wave and connect",
+    description: "Start a conversation when the feeling is mutual.",
     icon: Hand
   },
   {
-    title: "Make Plans",
-    description: "Create plans, invite Muddies, and keep RSVPs organized in one place.",
+    title: "Make plans",
+    description: "Create plans and invite your Muddies.",
     icon: CalendarCheck2
   },
   {
-    title: "Meet in Real Life",
-    description: "Turn digital connection into real memories, on your terms.",
+    title: "Meet in real life",
+    description: "Turn nearby connections into real moments.",
     icon: Users
   }
 ];
+
+const trustPoints = ["Mutual approval required", "No maps or exact locations", "You control when you're visible"];
 
 const howItWorksSteps = [
   {
@@ -158,8 +160,7 @@ export function LandingPage() {
       <LandingNav activeSection={activeSection} onSectionChange={setActiveSection} />
       <main id="main-content" className="min-h-screen bg-background text-foreground">
         <Hero />
-        <TrustStrip />
-        <QuadFeatureSection />
+        <FeatureRail />
         <HowGlowWorks />
         <UseCasesSection />
         <PrivacySection />
@@ -175,13 +176,13 @@ function Hero() {
   return (
     <section
       id="top"
-      className="relative scroll-mt-[4.25rem] overflow-hidden px-4 pb-10 pt-[calc(4.25rem+2rem)] sm:scroll-mt-[4.5rem] sm:px-6 sm:pb-12 sm:pt-[calc(4.5rem+2.5rem)] lg:pb-14"
+      className="relative scroll-mt-[4.25rem] overflow-hidden px-4 pb-16 pt-[calc(4.25rem+2rem)] sm:scroll-mt-[4.5rem] sm:px-6 sm:pb-20 sm:pt-[calc(4.5rem+2.5rem)] lg:flex lg:min-h-[680px] lg:items-center lg:pb-24"
     >
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(249,115,22,0.16),transparent_42%),radial-gradient(circle_at_80%_30%,rgba(251,146,60,0.12),transparent_40%),radial-gradient(circle_at_50%_90%,rgba(234,88,12,0.1),transparent_35%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(249,115,22,0.16),transparent_42%),radial-gradient(circle_at_80%_30%,rgba(251,146,60,0.12),transparent_40%),radial-gradient(circle_at_50%_90%,rgba(234,88,12,0.14),transparent_45%)]"
         aria-hidden="true"
       />
-      <div className="relative mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-14">
+      <div className="relative mx-auto grid w-full max-w-7xl items-center gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-14">
         <div className="max-w-2xl">
           <h1 className="text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.25rem]">
             When your Muddies are close,{" "}
@@ -193,15 +194,27 @@ function Hero() {
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Button asChild size="lg">
-              <Link href="/signup">
+              <Link href="/signup" aria-label="Get started — create a Mad Buddy account">
                 Get started
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg">
-              <a href="#how-it-works">See how it works</a>
+              <a href="#how-it-works" aria-label="See how Mad Buddy works">
+                See how it works
+              </a>
             </Button>
           </div>
+          {/* Trust points live here now, as a compact inline line under the
+              CTAs, instead of their own full-width strip below the hero. */}
+          <ul className="mt-6 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-1.5">
+            {trustPoints.map((item) => (
+              <li key={item} className="inline-flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
         </div>
         <div className="relative flex w-full items-center justify-center">
           {/* Ambient glow behind the mockup: a wide soft haze plus a tighter
@@ -211,38 +224,41 @@ function Hero() {
               fuller on desktop. */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-[-2%] rounded-full bg-orange-500/5 blur-[90px] lg:inset-[-6%] lg:bg-orange-500/8 lg:blur-[140px]"
+            className="pointer-events-none absolute inset-[-4%] rounded-full bg-orange-500/6 blur-[100px] lg:inset-[-8%] lg:bg-orange-500/9 lg:blur-[150px]"
           />
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-[16%] rounded-full bg-orange-400/10 blur-[55px] lg:inset-[14%] lg:bg-orange-400/14 lg:blur-[85px]"
+            className="pointer-events-none absolute inset-[14%] rounded-full bg-orange-400/10 blur-[60px] lg:inset-[12%] lg:bg-orange-400/15 lg:blur-[95px]"
           />
           {/* A soft, irregular (not circular) orange haze — deliberately
               blob-shaped rather than a perfect ring so it reads as ambient
               light, not a radar/tracking signal. */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-1/2 h-[65%] w-[65%] -translate-x-1/2 -translate-y-1/2 rounded-[62%_38%_55%_45%/45%_60%_40%_55%] bg-orange-500/10 blur-[60px] lg:blur-[90px]"
+            className="pointer-events-none absolute left-1/2 top-1/2 h-[70%] w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-[62%_38%_55%_45%/45%_60%_40%_55%] bg-orange-500/10 blur-[65px] lg:blur-[95px]"
           />
           {/* A soft grounding shadow so the phones read as standing in the
               scene instead of floating with nothing beneath them. */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute bottom-[4%] left-1/2 h-10 w-[50%] -translate-x-1/2 rounded-[100%] bg-black/25 blur-xl lg:bottom-[6%] lg:h-16 lg:w-[55%] lg:bg-black/40 lg:blur-2xl"
+            className="pointer-events-none absolute bottom-0 left-1/2 h-10 w-[55%] -translate-x-1/2 rounded-[100%] bg-black/25 blur-xl lg:bottom-[2%] lg:h-16 lg:w-[60%] lg:bg-black/40 lg:blur-2xl"
           />
           {/* This asset has its background removed (true alpha, not a CSS
               mask) — the phones and glow lines are the only opaque pixels,
               so nothing here can read as a rectangle. A slight contrast/
               saturation lift keeps the devices reading as sharp as the
-              surrounding text without touching the source file. */}
+              surrounding text without touching the source file. Sized up
+              and let to sit close to the hero's bottom edge so the feature
+              rail overlapping beneath reads as a continuation of the same
+              composition rather than a new section. */}
           <Image
             src="/brand/mad-buddy-hero-mockup-v2.png"
             alt="Mad Buddy showing nearby Muddies, plans, and privacy controls"
             width={617}
             height={405}
             priority
-            sizes="(max-width: 1024px) 65vw, 36vw"
-            className="relative z-10 h-auto w-full max-w-[520px] object-contain [filter:contrast(1.06)_saturate(1.08)]"
+            sizes="(max-width: 1024px) 75vw, 42vw"
+            className="relative z-10 h-auto w-full max-w-[620px] object-contain [filter:contrast(1.06)_saturate(1.08)]"
           />
         </div>
       </div>
@@ -250,43 +266,25 @@ function Hero() {
   );
 }
 
-function TrustStrip() {
+function FeatureRail() {
   return (
-    <section aria-label="Trust highlights" className="border-t border-border/60 px-4 py-3 sm:px-6">
-      <ul className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-8 sm:gap-y-2">
-        {[
-          "Mutual approval required",
-          "No maps or exact locations",
-          "You control when you’re visible"
-        ].map((item) => (
-          <li key={item} className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-            <Check className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function QuadFeatureSection() {
-  return (
-    <section aria-label="What you can do on Mad Buddy" className="px-4 py-10 sm:px-6 sm:py-12">
-      <div className="mx-auto grid max-w-7xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {quadFeatures.map((feature) => (
-          <div
-            key={feature.title}
-            className="rounded-2xl border border-border/80 bg-card/60 p-5 shadow-[0_12px_30px_hsl(var(--shadow)/0.06)]"
-          >
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-primary/10 text-primary">
-              <feature.icon className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <h3 className="mt-4 text-base font-semibold">{feature.title}</h3>
-            <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{feature.description}</p>
-          </div>
-        ))}
+    <div className="relative z-10 px-4 sm:px-6">
+      <div className="mx-auto mt-4 max-w-7xl overflow-hidden rounded-2xl border border-border/70 bg-card/90 shadow-[0_24px_70px_hsl(var(--shadow)/0.28)] backdrop-blur-xl sm:-mt-14 lg:-mt-20">
+        <div className="grid divide-y divide-border/60 sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+          {railFeatures.map((feature) => (
+            <div key={feature.title} className="flex items-start gap-3 p-[18px] sm:p-5">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                <feature.icon className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold">{feature.title}</h3>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{feature.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -294,10 +292,17 @@ function HowGlowWorks() {
   return (
     <section
       id="how-it-works"
-      className="scroll-mt-[4.25rem] border-t border-border/60 px-4 py-12 sm:scroll-mt-[4.5rem] sm:px-6 sm:py-16"
+      className="relative scroll-mt-[4.25rem] overflow-hidden px-4 pb-16 pt-14 sm:scroll-mt-[4.5rem] sm:px-6 sm:pb-20 sm:pt-16"
     >
-      <div className="mx-auto max-w-7xl">
-        <SectionHeading eyebrow="How it works" title="Three simple steps. No map." align="center" />
+      {/* Echoes the hero's own orange radial glow, faded in from the top, so
+          the seam where the feature rail overlaps reads as one continuous
+          lighting scheme instead of a new section starting cold. */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_50%_0%,rgba(249,115,22,0.12),transparent_65%)]"
+        aria-hidden="true"
+      />
+      <div className="relative mx-auto max-w-7xl">
+        <SectionHeading eyebrow="How it works" title="Simple. Social. Human." align="center" />
         <ol className="mx-auto mt-10 grid max-w-5xl gap-6 sm:grid-cols-3">
           {howItWorksSteps.map((step, index) => (
             <li key={step.title} className="rounded-2xl border border-border/80 bg-card/60 p-5">
