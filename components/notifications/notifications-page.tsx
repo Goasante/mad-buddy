@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   Bell,
+  CalendarCheck2,
   CheckCheck,
   ChevronRight,
   CircleDollarSign,
@@ -17,6 +18,7 @@ import {
   UsersRound
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import * as Popover from "@radix-ui/react-popover";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { respondToMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { Button } from "@/components/ui/button";
@@ -61,6 +63,7 @@ export function NotificationsPageContent({
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [nearbyAlerts, setNearbyAlerts] = useState(true);
   const [quietMode, setQuietMode] = useState(false);
+  const [planAlerts, setPlanAlerts] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<NotificationItem | null>(null);
   const [filter, setFilter] = useState<"all" | "unread">("all");
@@ -222,16 +225,58 @@ export function NotificationsPageContent({
                 {isPending ? "Marking..." : "Mark all as read"}
               </Button>
             ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => setSettingsOpen(true)}
-              aria-label="Notification settings"
-              title="Notification settings"
-            >
-              <Settings2 className="h-4 w-4" aria-hidden="true" />
-            </Button>
+            <Popover.Root open={settingsOpen} onOpenChange={setSettingsOpen}>
+              <Popover.Trigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Notification settings"
+                  title="Notification settings"
+                >
+                  <Settings2 className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content
+                  align="end"
+                  sideOffset={8}
+                  collisionPadding={12}
+                  className="z-50 w-[min(320px,calc(100vw-1.5rem))] rounded-2xl border border-border/70 bg-card p-2 shadow-lg outline-none"
+                >
+                  <p className="px-2 pb-1 pt-1.5 text-sm font-semibold">Notification settings</p>
+                  <div className="grid gap-0.5">
+                    <PrivacyToggle
+                      icon={MapPinOff}
+                      title="Nearby alerts"
+                      description="Get occasional alerts when approved Muddies are nearby."
+                      checked={nearbyAlerts}
+                      onCheckedChange={(checked) => {
+                        setNearbyAlerts(checked);
+                        // Nothing to quiet once nearby alerts are off; clear it
+                        // so the two can never sit in a contradictory state.
+                        if (!checked) setQuietMode(false);
+                      }}
+                    />
+                    <PrivacyToggle
+                      icon={Bell}
+                      title="Quiet nearby alerts"
+                      description="Temporarily silence nearby alerts."
+                      checked={quietMode}
+                      disabled={!nearbyAlerts}
+                      onCheckedChange={setQuietMode}
+                    />
+                    <PrivacyToggle
+                      icon={CalendarCheck2}
+                      title="Plan alerts"
+                      description="Get updates about invitations, changes, and reminders."
+                      checked={planAlerts}
+                      onCheckedChange={setPlanAlerts}
+                    />
+                  </div>
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
           </div>
         </div>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">Updates from your Muddies and account.</p>
@@ -289,44 +334,6 @@ export function NotificationsPageContent({
           )}
         </div>
       </section>
-
-      <Modal
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        title="Notification settings"
-        description="Choose which nearby updates you want to receive."
-      >
-        <div className="grid gap-3">
-          <PrivacyToggle
-            icon={MapPinOff}
-            title="Nearby alerts"
-            description="Get occasional alerts when approved friends are nearby."
-            checked={nearbyAlerts}
-            onCheckedChange={(checked) => {
-              setNearbyAlerts(checked);
-              if (checked) setQuietMode(false);
-            }}
-          />
-          <PrivacyToggle
-            icon={Bell}
-            title="Pause nearby alerts"
-            description="Pause nearby alerts without missing account updates."
-            checked={quietMode}
-            onCheckedChange={(checked) => {
-              setQuietMode(checked);
-              if (checked) setNearbyAlerts(false);
-            }}
-          />
-          <Link
-            href="/meeting-pings"
-            onClick={() => setSettingsOpen(false)}
-            className="focus-ring safe-motion flex min-h-[4.25rem] items-center gap-3 px-2 py-3 text-sm font-semibold text-foreground hover:bg-secondary/40"
-          >
-            <Hand className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-            Plan alerts
-          </Link>
-        </div>
-      </Modal>
 
       <Modal
         open={Boolean(selectedRequest)}

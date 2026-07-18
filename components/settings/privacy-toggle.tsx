@@ -9,6 +9,7 @@ export type PrivacyToggleProps = {
   description: string;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
+  disabled?: boolean;
 };
 
 export function PrivacyToggle({
@@ -16,13 +17,20 @@ export function PrivacyToggle({
   title,
   description,
   checked,
-  onCheckedChange
+  onCheckedChange,
+  disabled = false
 }: PrivacyToggleProps) {
   return (
     <button
       type="button"
-      className="focus-ring safe-motion flex min-h-[4.25rem] w-full items-center justify-between gap-4 px-2 py-3 text-left hover:bg-secondary/40"
-      onClick={() => onCheckedChange(!checked)}
+      disabled={disabled}
+      className={cn(
+        "focus-ring safe-motion flex min-h-[4.25rem] w-full items-center justify-between gap-4 px-2 py-3 text-left",
+        disabled ? "cursor-not-allowed opacity-50" : "hover:bg-secondary/40"
+      )}
+      onClick={() => {
+        if (!disabled) onCheckedChange(!checked);
+      }}
       aria-pressed={checked}
       aria-label={title}
       title={title}
