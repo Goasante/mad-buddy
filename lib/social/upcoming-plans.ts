@@ -12,6 +12,11 @@ import { getSupabaseServerEnv } from "@/lib/supabase/env";
  * page's full loader.
  */
 
+export type PlanAttendee = {
+  name: string;
+  avatarUrl: string | null;
+};
+
 export type HomeUpcomingPlan = {
   id: string;
   title: string;
@@ -22,7 +27,12 @@ export type HomeUpcomingPlan = {
   goingCount: number;
   maybeCount: number;
   placeText: string | null;
+  // A few real "going" attendees for the Home avatar stack (capped; not the
+  // full roster). Empty when nobody has RSVP'd going yet.
+  attendees: PlanAttendee[];
 };
+
+const MAX_ATTENDEE_FACES = 4;
 
 export type UpcomingPlansResult = {
   plans: HomeUpcomingPlan[];
@@ -78,7 +88,7 @@ export async function loadUpcomingPlans(userId: string, limit = 3): Promise<Upco
   const [{ data: participantRows }, { data: creatorProfiles }] = await Promise.all([
     admin
       .from("plan_participants")
-      .select("plan_id, rsvp_status")
+      .select("plan_id, rsvp_status, user_id")
       .in("plan_id", shownIds)
       .neq("rsvp_status", "removed"),
     admin.from("profiles").select("user_id, full_name").in("user_id", creatorIds)
@@ -87,14 +97,37 @@ export async function loadUpcomingPlans(userId: string, limit = 3): Promise<Upco
   const invitedCountByPlan = new Map<string, number>();
   const goingCountByPlan = new Map<string, number>();
   const maybeCountByPlan = new Map<string, number>();
+  // Collect a bounded set of "going" attendee ids per plan for the face stack.
+  const goingIdsByPlan = new Map<string, string[]>();
   for (const row of participantRows ?? []) {
     invitedCountByPlan.set(row.plan_id, (invitedCountByPlan.get(row.plan_id) ?? 0) + 1);
     if (row.rsvp_status === "going") {
       goingCountByPlan.set(row.plan_id, (goingCountByPlan.get(row.plan_id) ?? 0) + 1);
+      const ids = goingIdsByPlan.get(row.plan_id) ?? [];
+      if (ids.length < MAX_ATTENDEE_FACES) ids.push(row.user_id);
+      goingIdsByPlan.set(row.plan_id, ids);
     } else if (row.rsvp_status === "maybe") {
       maybeCountByPlan.set(row.plan_id, (maybeCountByPlan.get(row.plan_id) ?? 0) + 1);
     }
   }
+
+  // One profile lookup for every attendee face across the shown plans, reusing
+  // the same admin client (no per-plan query).
+  const attendeeIds = [...new Set([...goingIdsByPlan.values()].flat())];
+  const attendeeProfileById = new Map<string, { name: string; avatarUrl: string | null }>();
+  if (attendeeIds.length > 0) {
+    const { data: attendeeProfiles } = await admin
+      .from("profiles")
+      .select("user_id, full_name, avatar_url")
+      .in("user_id", attendeeIds);
+    for (const profile of attendeeProfiles ?? []) {
+      attendeeProfileById.set(profile.user_id, {
+        name: profile.full_name?.trim() || "A Muddy",
+        avatarUrl: profile.avatar_url
+      });
+    }
+  }
+
   const creatorNameById = new Map(
     (creatorProfiles ?? []).map((profile) => [profile.user_id, profile.full_name?.trim() || "A Muddy"])
   );
@@ -111,7 +144,10 @@ export async function loadUpcomingPlans(userId: string, limit = 3): Promise<Upco
       invitedCount: invitedCountByPlan.get(plan.id) ?? 0,
       goingCount: goingCountByPlan.get(plan.id) ?? 0,
       maybeCount: maybeCountByPlan.get(plan.id) ?? 0,
-      placeText: plan.custom_place_text
+      placeText: plan.custom_place_text,
+      attendees: (goingIdsByPlan.get(plan.id) ?? [])
+        .map((id) => attendeeProfileById.get(id))
+        .filter((profile): profile is { name: string; avatarUrl: string | null } => Boolean(profile))
     };
   });
 

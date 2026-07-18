@@ -33,7 +33,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { formatMuddyStatusLabel } from "@/lib/social/rules";
-import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
+import type { HomeUpcomingPlan, PlanAttendee } from "@/lib/social/upcoming-plans";
 import { type FreshnessState } from "@/lib/proximity/freshness";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import type { ActivityType, AvailabilityType, SubscriptionPlan } from "@/lib/supabase/database.types";
@@ -130,6 +130,7 @@ export function DashboardPageContent({
   const [ghostMode, setGhostMode] = useState(initialVisibilityStatus === "ghost");
   const [friends, setFriends] = useState<DashboardFriend[]>([]);
   const [statusMessage, setStatusMessage] = useState("");
+  const [isCheckingNearby, setIsCheckingNearby] = useState(false);
   const [promptFeedback, setPromptFeedback] = useState<{ title?: string; message: string; error: boolean } | null>(
     null
   );
@@ -234,7 +235,10 @@ export function DashboardPageContent({
     }
 
     locationUpdateInFlightRef.current = true;
-    setStatusMessage("Updating your private proximity signal...");
+    // Transient loading state, not a permanent description; cleared in every
+    // terminal branch below so it never sticks.
+    setIsCheckingNearby(true);
+    setStatusMessage("");
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
@@ -253,18 +257,22 @@ export function DashboardPageContent({
             const data = (await response.json().catch(() => null)) as { error?: string } | null;
             setStatusMessage(data?.error ?? "Could not update your private proximity signal.");
             locationUpdateInFlightRef.current = false;
+            setIsCheckingNearby(false);
             return;
           }
 
           locationUpdateInFlightRef.current = false;
+          setIsCheckingNearby(false);
           loadNearbyFriends();
         } catch {
           locationUpdateInFlightRef.current = false;
+          setIsCheckingNearby(false);
           setStatusMessage("Could not update your private proximity signal.");
         }
       },
       (error) => {
         locationUpdateInFlightRef.current = false;
+        setIsCheckingNearby(false);
         if (error.code === error.PERMISSION_DENIED) {
           setStatusMessage("Location access is blocked. Allow it in this browser’s site settings, then refresh.");
         } else if (error.code === error.POSITION_UNAVAILABLE) {
@@ -437,7 +445,10 @@ export function DashboardPageContent({
               aria-label="Check again"
               title="Check again"
             >
-              <RefreshCcw className={cn("h-4 w-4", isPending && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
+              <RefreshCcw
+                className={cn("h-4 w-4", isCheckingNearby && "animate-spin motion-reduce:animate-none")}
+                aria-hidden="true"
+              />
             </Button>
           </div>
         </div>
@@ -449,10 +460,12 @@ export function DashboardPageContent({
         ) : null}
 
         <p className="mt-1 text-xs text-muted-foreground" role="status">
-          {statusMessage ||
-            (ghostMode
-              ? "You won’t appear nearby until you turn visibility back on."
-              : "Approved Muddies can see when you’re nearby.")}
+          {isCheckingNearby
+            ? "Checking nearby Muddies…"
+            : statusMessage ||
+              (ghostMode
+                ? "You won’t appear nearby until you turn visibility back on."
+                : "Approved Muddies can see when you’re nearby.")}
         </p>
       </section>
 
@@ -786,6 +799,31 @@ function rsvpLabel(rsvp: string): string {
   }
 }
 
+function PlanFace({ attendee }: { attendee: PlanAttendee }) {
+  const name = attendee.name || "Muddy";
+  const initials = name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  return attendee.avatarUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={attendee.avatarUrl}
+      alt={capitalize(name)}
+      className="h-6 w-6 rounded-full border-2 border-card object-cover"
+    />
+  ) : (
+    <span
+      className="grid h-6 w-6 place-items-center rounded-full border-2 border-card bg-primary/15 text-[9px] font-semibold text-primary"
+      aria-label={capitalize(name)}
+    >
+      {initials}
+    </span>
+  );
+}
+
 function FeaturedPlan({ plan, hasMore }: { plan: HomeUpcomingPlan | undefined; hasMore: boolean }) {
   const actionLabel = !plan
     ? ""
@@ -832,12 +870,10 @@ function FeaturedPlan({ plan, hasMore }: { plan: HomeUpcomingPlan | undefined; h
           </div>
           <div className="mt-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              {plan.goingCount > 0 ? (
-                // A neutral count visualisation, not real attendee identities
-                // (Home doesn't load those). Purely presentational.
-                <div className="flex -space-x-2" aria-hidden="true">
-                  {Array.from({ length: Math.min(plan.goingCount, 3) }).map((_, index) => (
-                    <span key={index} className="h-6 w-6 rounded-full border-2 border-card bg-primary/20" />
+              {plan.attendees.length > 0 ? (
+                <div className="flex -space-x-2">
+                  {plan.attendees.map((attendee, index) => (
+                    <PlanFace key={index} attendee={attendee} />
                   ))}
                 </div>
               ) : null}
