@@ -984,6 +984,36 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["hangout_sessions"]["Insert"]>;
         Relationships: [];
       };
+      socialize_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          activity: string;
+          note: string | null;
+          area_tier: string;
+          starts_at: string;
+          expires_at: string;
+          ended_at: string | null;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          activity: string;
+          note?: string | null;
+          area_tier: string;
+          starts_at?: string;
+          expires_at: string;
+          ended_at?: string | null;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["socialize_sessions"]["Insert"]>;
+        Relationships: [];
+      };
       hangout_audience_targets: {
         Row: {
           id: string;

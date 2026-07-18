@@ -62,7 +62,7 @@ const navigationItems: Array<{
   { href: "/moments", label: "Moments", icon: Sparkles },
   { href: "/events", label: "Events", icon: PartyPopper },
   { href: "/groups", label: "Groups", icon: Users2 },
-  { href: "/discover", label: "Discover", icon: Compass },
+  { href: "/discover", label: "Socialize", icon: Compass },
   { href: "/profile", label: "Profile", icon: UserRound },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/billing", label: "Plan and billing", icon: CircleDollarSign }
