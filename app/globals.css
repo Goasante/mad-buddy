@@ -160,8 +160,61 @@ html.dark {
   border-color: hsl(var(--border));
 }
 
+/* Matches the landing nav's fixed h-[4.25rem] sm:h-[4.5rem]. Used by the
+ * landing page's full-viewport sections and scroll-snap offsets so a snapped
+ * section starts exactly below the header. */
+:root {
+  --header-height: 4.25rem;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --header-height: 4.5rem;
+  }
+}
+
 html {
   background: var(--bg-primary);
+}
+
+/* Landing page only (class toggled on <html> while the page is mounted):
+ * one full-viewport section per scroll stop. Snapping stays on <html> — the
+ * real scroll container — so window-scroll listeners (nav highlighting)
+ * keep working. Mobile/tablet use proximity so long content is never
+ * trapped; desktop upgrades to mandatory + always. */
+html.landing-snap {
+  scroll-snap-type: y proximity;
+  scroll-padding-top: var(--header-height);
+}
+
+html.landing-snap .landing-section {
+  scroll-snap-align: start;
+}
+
+@media (min-width: 1024px) {
+  html.landing-snap {
+    scroll-snap-type: y mandatory;
+  }
+
+  html.landing-snap .landing-section {
+    scroll-snap-stop: always;
+  }
+}
+
+/* One restrained entry animation per landing section: fade + small rise.
+ * Elements stay fully visible when reduced motion is preferred (the
+ * observer's .is-visible class then has nothing to change). */
+@media (prefers-reduced-motion: no-preference) {
+  .landing-reveal {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 400ms ease-out, transform 400ms ease-out;
+  }
+
+  .landing-reveal.is-visible {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 

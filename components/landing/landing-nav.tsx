@@ -7,7 +7,9 @@ import { BrandMark } from "@/components/brand/brand-mark";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const sectionIds = ["how-it-works", "features", "privacy"] as const;
+// Must stay in document order — the scroll tracker picks the last id whose
+// section top has passed the header.
+const sectionIds = ["how-it-works", "real-life-moments", "privacy", "features"] as const;
 
 type LandingNavProps = {
   activeSection: string | null;
