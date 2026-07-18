@@ -31,8 +31,8 @@ const tabs = [
   { id: "all", label: "All" },
   { id: "unread", label: "Unread" },
   // "Plans" filters conversation_type === "plan" (the group chat attached to
-  // a specific Plan), a real, working filter, just unclearly named before.
-  { id: "plans", label: "Plan chats" }
+  // a specific Plan), a real, working filter linked to existing plans.
+  { id: "plans", label: "Plans" }
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -262,7 +262,7 @@ export function MessagesPageContent({
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Messages</h1>
           <p className="mt-2 text-sm text-muted-foreground">Chat privately with your approved Muddies.</p>
         </div>
-        <Button type="button" size="sm" onClick={() => setNewMessageOpen(true)} title="New message">
+        <Button type="button" onClick={() => setNewMessageOpen(true)} aria-label="New message" title="New message">
           <PenSquare className="h-4 w-4" aria-hidden="true" />
           New message
         </Button>
@@ -280,17 +280,17 @@ export function MessagesPageContent({
         <EmptyState
           icon={MessagesSquare}
           className="!min-h-0 mx-auto max-w-md !shadow-none py-4"
-          title="No messages yet"
-          description="Choose a Muddy to start a conversation."
+          title="No conversations yet"
+          description="Message an approved Muddy to start one."
           action={
-            <Button type="button" onClick={() => setNewMessageOpen(true)}>
+            <Button type="button" onClick={() => setNewMessageOpen(true)} aria-label="New message">
               <PenSquare className="h-4 w-4" aria-hidden="true" />
               New message
             </Button>
           }
         />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
+        <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
           <div className={cn("space-y-3", selectedId && "hidden lg:block")}>
             <div className="relative">
               <Search
@@ -326,8 +326,8 @@ export function MessagesPageContent({
 
             {visible.length === 0 ? (
               <p className="px-1 py-6 text-center text-sm text-muted-foreground">
-                <span className="block font-medium text-foreground">No messages found</span>
-                Try another Muddy or keyword.
+                <span className="block font-medium text-foreground">No conversations found</span>
+                Try another name or keyword.
               </p>
             ) : (
               <ul className="space-y-1.5">
@@ -342,7 +342,7 @@ export function MessagesPageContent({
                         onClick={() => openConversation(conversation.id)}
                         aria-current={isSelected}
                         className={cn(
-                          "focus-ring safe-motion flex min-h-[76px] w-full items-center gap-3 rounded-xl border border-l-2 p-3 text-left",
+                          "focus-ring safe-motion flex min-h-[72px] w-full items-center gap-3 rounded-xl border border-l-2 p-3 text-left transition-colors active:bg-secondary/70",
                           isSelected
                             ? "border-transparent border-l-primary bg-primary/5"
                             : "border-transparent border-l-transparent hover:bg-secondary"
@@ -375,7 +375,10 @@ export function MessagesPageContent({
                             </span>
                           ) : null}
                           {conversation.unreadCount > 0 ? (
-                            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-white">
+                            <span
+                              className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-white"
+                              aria-label={`${conversation.unreadCount} unread`}
+                            >
                               {conversation.unreadCount}
                             </span>
                           ) : null}
@@ -388,16 +391,23 @@ export function MessagesPageContent({
             )}
           </div>
 
-          <div className={cn("rounded-2xl border border-border/70 bg-card/40", !selectedId && "hidden lg:block")}>
+          <div
+            className={cn(
+              "flex h-[calc(100dvh-13rem)] max-h-[720px] min-h-[420px] flex-col rounded-2xl border border-border/70 bg-card/40",
+              !selectedId && "hidden lg:flex"
+            )}
+          >
             {!selected ? (
-              <EmptyState
-                icon={MessagesSquare}
-                className="!min-h-[280px] !shadow-none"
-                title="Choose a conversation"
-                description="Select a chat to view your messages."
-              />
+              // Centred directly in the panel, no oversized empty-state card.
+              <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+                <span className="grid h-12 w-12 place-items-center rounded-full bg-secondary text-muted-foreground">
+                  <MessagesSquare className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <p className="mt-3 text-sm font-semibold">Select a conversation</p>
+                <p className="mt-1 text-sm text-muted-foreground">Choose a Muddy to view your conversation.</p>
+              </div>
             ) : (
-              <div className="flex h-[500px] flex-col">
+              <div className="flex min-h-0 flex-1 flex-col">
                 <div className="flex min-h-[68px] items-center gap-2 border-b border-border/70 px-3">
                   <button
                     type="button"
@@ -437,7 +447,7 @@ export function MessagesPageContent({
                   ) : messages.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center text-center">
                       <p className="text-sm font-semibold">Start the conversation</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Send a message or choose a quick reply.</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Send a message to {selected.title}.</p>
                     </div>
                   ) : (
                     messages.map((message) =>
