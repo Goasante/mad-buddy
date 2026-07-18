@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   Bell,
+  CalendarCheck2,
   CheckCheck,
   CircleDollarSign,
   Ghost,
@@ -10,6 +11,7 @@ import {
   MapPinOff,
   MessageCircle,
   RefreshCcw,
+  ShieldCheck,
   Sparkles,
   UserPlus,
   Users
@@ -353,7 +355,7 @@ export function DashboardPageContent({
             {getGreeting()}
             {displayName ? `, ${capitalize(displayName)}` : ""}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">See which approved friends are nearby.</p>
+          <p className="mt-1 text-sm text-muted-foreground">See which approved Muddies are nearby.</p>
         </div>
         <Button
           type="button"
@@ -425,14 +427,16 @@ export function DashboardPageContent({
           {statusMessage ||
             (ghostMode
               ? "You won’t appear nearby until you turn visibility back on."
-              : "Approved friends can see when you’re nearby.")}
+              : "Approved Muddies can see when you’re nearby.")}
         </p>
       </section>
+
+      <QuickActions />
 
       <div className="grid gap-5 lg:grid-cols-3">
         <section className="lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold tracking-tight">Nearby friends</h2>
+            <h2 className="text-lg font-semibold tracking-tight">Nearby Muddies</h2>
             {hasMoreNearbyFriends ? (
               <Link href="/friends" className="text-sm font-medium text-primary hover:underline">
                 View all
@@ -450,7 +454,7 @@ export function DashboardPageContent({
             // while actually delivering the requested three-per-row.
             <div
               className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]"
-              aria-label="Nearby friends"
+              aria-label="Nearby Muddies"
             >
               {nearbyFriends.map((friend) => {
                 // The username is the reliable fallback if a profile has no
@@ -494,18 +498,18 @@ export function DashboardPageContent({
             <EmptyState
               icon={ghostMode ? Ghost : Users}
               className="w-full !border-border/50 !shadow-none p-4 sm:p-5"
-              title={ghostMode ? "Visibility is paused" : "No friends nearby"}
+              title={ghostMode ? "Visibility is paused" : "No Muddies nearby"}
               description={
                 ghostMode
                   ? "You won’t appear nearby until you turn visibility back on."
-                  : "Approved friends will appear here when they’re nearby."
+                  : "Approved Muddies will appear here when they’re nearby."
               }
               action={
                 !ghostMode ? (
                   <Button type="button" asChild>
                     <Link href="/friends?tab=add">
                       <UserPlus className="h-4 w-4" aria-hidden="true" />
-                      Add friends
+                      Add Muddies
                     </Link>
                   </Button>
                 ) : undefined
@@ -609,6 +613,62 @@ function CountPill({ label, count }: { label: string; count: number }) {
     <span className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-1 text-xs font-medium text-foreground">
       {count} {label}
     </span>
+  );
+}
+
+// Compact entry points to the temporary/active features users reach for most
+// often. Each links to its existing route (nothing here duplicates that
+// feature's own logic or invents new backend behaviour); the live
+// active-state surfacing (e.g. "Available until 7pm") is a follow-up that
+// needs its own data read.
+const quickActions: Array<{
+  href: "/hangout-mode" | "/safe-arrival" | "/plans";
+  title: string;
+  description: string;
+  icon: LucideIcon;
+}> = [
+  {
+    href: "/hangout-mode",
+    title: "Hangout Mode",
+    description: "Let your Muddies know you’re open to meeting.",
+    icon: Hand
+  },
+  {
+    href: "/safe-arrival",
+    title: "Safe Arrival",
+    description: "Ask trusted Muddies to confirm you arrived safely.",
+    icon: ShieldCheck
+  },
+  {
+    href: "/plans",
+    title: "New plan",
+    description: "Invite your Muddies and organise a meet-up.",
+    icon: CalendarCheck2
+  }
+];
+
+function QuickActions() {
+  return (
+    <section aria-label="Quick actions">
+      <h2 className="mb-3 text-lg font-semibold tracking-tight">Quick actions</h2>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {quickActions.map((action) => (
+          <Link
+            key={action.href}
+            href={action.href}
+            className="focus-ring safe-motion flex items-start gap-3 rounded-2xl border border-border/70 bg-card/50 p-4 hover:bg-secondary/40"
+          >
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+              <action.icon className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold">{action.title}</span>
+              <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{action.description}</span>
+            </span>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }
 
