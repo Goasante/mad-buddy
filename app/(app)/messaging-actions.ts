@@ -49,6 +49,10 @@ export type ChatMessageView = {
 export type ConversationView = {
   id: string;
   title: string;
+  /** The other person's username for a direct chat — used to disambiguate
+   * when two conversations share the same display name. Null for
+   * group/plan chats, which have no single "other person." */
+  otherUsername: string | null;
   kind: string;
   lastMessagePreview: string | null;
   lastMessageAt: string | null;
@@ -258,6 +262,57 @@ async function notifyOtherMembers(
   );
 }
 
+export type MessageableFriend = {
+  friendId: string;
+  displayName: string;
+  username: string;
+  avatarUrl: string | null;
+};
+
+/**
+ * Friends the "New message" picker can offer. This is discovery only —
+ * openDirectConversationAction re-validates eligibility (blocks, comms
+ * preferences) server-side when a conversation is actually opened, so a
+ * stale/omitted block check here can't let anyone actually message past it.
+ */
+export async function getMessageableFriendsAction(): Promise<MessageableFriend[]> {
+  const env = getSupabaseServerEnv();
+  if (!env.url || !env.serviceRoleKey) return [];
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+
+  const admin = createSupabaseAdminClient();
+  const [{ data: friendships }, { data: blocks }] = await Promise.all([
+    admin
+      .from("friendships")
+      .select("user_one_id, user_two_id")
+      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`),
+    admin.from("blocked_users").select("blocker_id, blocked_id").or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)
+  ]);
+
+  const blockedIds = new Set(
+    (blocks ?? []).flatMap((row) => [row.blocker_id, row.blocked_id]).filter((id) => id !== userId)
+  );
+  const friendIds = (friendships ?? [])
+    .map((row) => (row.user_one_id === userId ? row.user_two_id : row.user_one_id))
+    .filter((id) => !blockedIds.has(id));
+  if (friendIds.length === 0) return [];
+
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("user_id, full_name, username, avatar_url")
+    .in("user_id", friendIds);
+
+  return (profiles ?? [])
+    .map((profile) => ({
+      friendId: profile.user_id,
+      displayName: profile.full_name,
+      username: profile.username,
+      avatarUrl: profile.avatar_url
+    }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
 // ---------------------------------------------------------------------------
 // Read / list (spec §19)
 // ---------------------------------------------------------------------------
@@ -292,15 +347,17 @@ export async function getConversationsAction(): Promise<ConversationView[]> {
   for (const conversation of conversations ?? []) {
     // Title: the other person for direct chats, else the group name.
     let title = "Conversation";
+    let otherUsername: string | null = null;
     if (conversation.conversation_type === "direct" && conversation.direct_key) {
       const otherId = conversation.direct_key.split(":").find((id) => id !== userId);
       if (otherId) {
         const { data: profile } = await admin
           .from("profiles")
-          .select("full_name")
+          .select("full_name, username")
           .eq("user_id", otherId)
           .maybeSingle();
         title = profile?.full_name?.trim() || "A Muddy";
+        otherUsername = profile?.username ?? null;
       }
     } else {
       const { data: settings } = await admin
@@ -335,6 +392,7 @@ export async function getConversationsAction(): Promise<ConversationView[]> {
     views.push({
       id: conversation.id,
       title,
+      otherUsername,
       kind: conversation.conversation_type,
       lastMessagePreview:
         lastMessage?.message_type === "voice_note"
