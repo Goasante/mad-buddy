@@ -10,9 +10,9 @@ import {
   Hand,
   MapPinOff,
   MessageCircle,
+  MessageSquareText,
   RefreshCcw,
   ShieldCheck,
-  Sparkles,
   UserPlus,
   Users
 } from "lucide-react";
@@ -360,71 +360,53 @@ export function DashboardPageContent({
     <div className="mx-auto max-w-[1200px] space-y-6 pt-6">
       <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl" suppressHydrationWarning>
-            {getGreeting()}
-            {displayName ? `, ${capitalize(displayName)}` : ""}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">See which approved Muddies are nearby.</p>
-        </div>
-        <Button
+      <div className="min-w-0">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl" suppressHydrationWarning>
+          {getGreeting()}
+          {displayName ? `, ${capitalize(displayName)}` : ""}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">See which approved Muddies are nearby.</p>
+        <button
           type="button"
-          variant="outline"
-          size="sm"
-          className="w-fit shrink-0 self-start whitespace-nowrap rounded-full"
           onClick={() => setStatusComposerOpen(true)}
-          title={hasActiveStatus ? "Update your status" : undefined}
+          title={hasActiveStatus ? "Edit your status" : "Add a status"}
+          className="focus-ring safe-motion mt-3 inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 bg-card/50 px-3 text-sm font-medium text-foreground hover:bg-secondary/60"
         >
-          <Sparkles className="h-4 w-4" aria-hidden="true" />
-          {hasActiveStatus ? "Update status" : "Set status"}
-        </Button>
+          <MessageSquareText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          {hasActiveStatus ? "Edit status" : "Add status"}
+        </button>
       </div>
 
-      <section className="rounded-2xl bg-card/55 p-2.5 shadow-sm dark:bg-white/[0.035] sm:p-3.5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <section className="rounded-2xl bg-card/55 p-4 shadow-sm dark:bg-white/[0.035]">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            {/* A simple status dot, not a filled pill: green when visible,
+                muted when paused. */}
             <span
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold tracking-wide",
-                // Orange is reserved for glow/proximity states (the ring and
-                // the chips below); this is a general on/off toggle, so it
-                // gets a distinct blue instead of doubling up on orange.
-                ghostMode ? "bg-secondary text-muted-foreground" : "bg-blue-500/10 text-blue-700 dark:text-blue-300"
-              )}
-            >
-              <span className={cn("h-1.5 w-1.5 rounded-full", ghostMode ? "bg-muted-foreground" : "bg-blue-500")} />
-              {ghostMode ? "Visibility paused" : "Visible"}
-            </span>
-
-            {!ghostMode ? (
-              <div className="flex flex-wrap gap-1.5">
-                {proximityCounts.very_close > 0 ? (
-                  <CountPill count={proximityCounts.very_close} label="very close" />
-                ) : null}
-                {proximityCounts.nearby > 0 ? <CountPill count={proximityCounts.nearby} label="nearby" /> : null}
-                {proximityCounts.around > 0 ? <CountPill count={proximityCounts.around} label="around" /> : null}
-              </div>
-            ) : null}
+              className={cn("h-2 w-2 shrink-0 rounded-full", ghostMode ? "bg-muted-foreground" : "bg-emerald-500")}
+              aria-hidden="true"
+            />
+            <span className="text-sm font-semibold">{ghostMode ? "Visibility paused" : "Visible"}</span>
           </div>
 
-          <div className="flex shrink-0 flex-wrap gap-2">
+          {/* Pause is the primary action (subtle bordered emphasis); refresh
+              is a neutral ghost icon so the two don't read as equal weight. */}
+          <div className="flex shrink-0 items-center gap-1">
             <Button
               type="button"
               variant={ghostMode ? "primary" : "outline"}
-              className={ghostMode ? undefined : "border-border bg-secondary/60 hover:bg-secondary"}
+              size="icon"
               onClick={toggleVisibility}
               disabled={isPending}
               aria-label={ghostMode ? "Resume visibility" : "Pause visibility"}
+              title={ghostMode ? "Resume visibility" : "Pause visibility"}
             >
               <Ghost className="h-4 w-4" aria-hidden="true" />
-              {ghostMode ? "Resume visibility" : "Pause visibility"}
             </Button>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="icon"
-              className="border-border bg-secondary/60 hover:bg-secondary"
               onClick={updatePrivateLocation}
               disabled={isPending}
               aria-label="Check again"
@@ -435,7 +417,13 @@ export function DashboardPageContent({
           </div>
         </div>
 
-        <p className="mt-1.5 truncate text-xs text-muted-foreground" role="status">
+        {!ghostMode ? (
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            {formatNearbyCount(proximityCounts.very_close + proximityCounts.nearby + proximityCounts.around)}
+          </p>
+        ) : null}
+
+        <p className="mt-1 text-xs text-muted-foreground" role="status">
           {statusMessage ||
             (ghostMode
               ? "You won’t appear nearby until you turn visibility back on."
@@ -666,12 +654,10 @@ function getGreeting() {
   return "Good evening";
 }
 
-function CountPill({ label, count }: { label: string; count: number }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-1 text-xs font-medium text-foreground">
-      {count} {label}
-    </span>
-  );
+function formatNearbyCount(total: number): string {
+  if (total <= 0) return "No Muddies nearby";
+  if (total === 1) return "1 Muddy nearby";
+  return `${total} Muddies nearby`;
 }
 
 // Three compact tiles, short labels only (the full description lives in the
