@@ -7,7 +7,7 @@ import { BrandMark } from "@/components/brand/brand-mark";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const sectionIds = ["how-it-works", "features", "safety"] as const;
+const sectionIds = ["how-it-works", "features", "privacy"] as const;
 
 type LandingNavProps = {
   activeSection: string | null;
@@ -76,6 +76,7 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
           href="/"
           className="focus-ring flex items-center gap-3 rounded-lg font-semibold"
           aria-label="Mad Buddy home"
+          title="Mad Buddy home"
           onClick={() => onSectionChange(null)}
         >
           <BrandMark className="h-9 w-9" priority />
@@ -91,9 +92,9 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
             How it works
           </NavAnchor>
           <NavAnchor
-            href="#safety"
-            isActive={activeSection === "safety"}
-            onClick={() => onSectionChange("safety")}
+            href="#privacy"
+            isActive={activeSection === "privacy"}
+            onClick={() => onSectionChange("privacy")}
           >
             Privacy
           </NavAnchor>
@@ -141,7 +142,7 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
             <MobileNavLink href="#how-it-works" onNavigate={closeMobile}>
               How it works
             </MobileNavLink>
-            <MobileNavLink href="#safety" onNavigate={closeMobile}>
+            <MobileNavLink href="#privacy" onNavigate={closeMobile}>
               Privacy
             </MobileNavLink>
             <MobileNavLink href="/faq" onNavigate={closeMobile}>

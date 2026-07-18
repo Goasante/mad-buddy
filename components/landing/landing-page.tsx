@@ -4,26 +4,22 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
-  BadgeCheck,
+  Battery,
   Bell,
   CalendarCheck2,
   Check,
   Eye,
-  EyeOff,
   Ghost,
   GraduationCap,
   Hand,
-  Heart,
   Lock,
   MapPinOff,
-  MessageCircle,
   Music2,
   Radio,
-  ShieldAlert,
   ShieldCheck,
   Sparkles,
   Users,
-  X
+  UserPlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "@/components/brand/brand-mark";
@@ -55,29 +51,19 @@ const quadFeatures = [
 
 const howItWorksSteps = [
   {
-    title: "Glow",
-    description: "See Muddies around you with broad, privacy-first proximity.",
+    title: "Add your Muddies",
+    description: "You both approve before either of you appears nearby.",
+    icon: UserPlus
+  },
+  {
+    title: "Choose when you're visible",
+    description: "Turn visibility on whenever you want your Muddies to know you're nearby.",
+    icon: Eye
+  },
+  {
+    title: "See them glow",
+    description: "Nearby Muddies appear as glowing profile cards.",
     icon: Sparkles
-  },
-  {
-    title: "Wave",
-    description: "Send a Wave to say you're open to connect.",
-    icon: Hand
-  },
-  {
-    title: "Ping",
-    description: "Chat and vibe. See if you're on the same page.",
-    icon: MessageCircle
-  },
-  {
-    title: "Plan",
-    description: "Create a plan and invite the right people.",
-    icon: CalendarCheck2
-  },
-  {
-    title: "Meet",
-    description: "Show up, have fun, and build real friendships.",
-    icon: Users
   }
 ];
 
@@ -102,68 +88,60 @@ const useCases = [
   }
 ];
 
-const friendsMaySee = [
-  "A privacy-safe proximity level (Very close, Nearby, or Around you)",
-  "Your chosen profile name and image",
-  "Whether you have chosen to be visible"
-];
-
-const friendsNeverSee = [
-  "Exact coordinates",
-  "A map pin",
-  "Street address",
-  "Direction of travel",
-  "Exact distance"
-];
-
-const safetyItems = [
+const privacyCards = [
   {
-    title: "Privacy Controls",
-    description: "You decide what you share and with whom.",
-    icon: Lock
-  },
-  {
-    title: "Ghost Mode",
-    description: "Browse and connect without revealing yourself.",
-    icon: Ghost
-  },
-  {
-    title: "Block & Report",
-    description: "Easily block or report anyone who breaks the rules.",
-    icon: ShieldAlert
-  },
-  {
-    title: "Verified Community",
-    description: "Real people, real profiles, and real accountability.",
-    icon: BadgeCheck
-  }
-];
-
-const primaryFeatures = [
-  {
-    title: "Privacy-safe proximity",
-    description:
-      "Friends see simple glow levels — Very close, Nearby, Around you, or no active signal — never a map or exact distance.",
+    title: "No maps or pins",
+    description: "No streets, routes, or map positions.",
     icon: MapPinOff
   },
   {
-    title: "Mutual approval",
-    description: "Only Muddies you have both approved can appear in each other’s nearby list.",
+    title: "No exact distances",
+    description: "Friends only see Very close, Nearby, or Around.",
+    icon: Radio
+  },
+  {
+    title: "Only approved friends",
+    description: "You both approve before either of you appears nearby.",
     icon: ShieldCheck
   },
   {
-    title: "You control visibility",
-    description: "Pause your glow, switch on Ghost Mode, or adjust alerts whenever you want.",
+    title: "You're in control",
+    description: "Pause visibility, use Ghost Mode, or delete your data at any time.",
     icon: Lock
   }
 ];
 
-const secondaryFeatures = [
-  { title: "Optional nearby alerts", icon: Bell },
-  { title: "Muddy circles", icon: Heart },
-  { title: "Custom glow colours", icon: Sparkles },
-  { title: "Ghost Mode", icon: Ghost },
-  { title: "Web now, mobile next", icon: Radio }
+const featureItems = [
+  {
+    title: "Nearby signals",
+    description: "See clear labels: Very close, Nearby, or Around.",
+    icon: Radio
+  },
+  {
+    title: "Nearby alerts",
+    description: "Get optional alerts when selected Muddies are nearby.",
+    icon: Bell
+  },
+  {
+    title: "Glow styles",
+    description: "Personalise your profile without sharing more location detail.",
+    icon: Sparkles
+  },
+  {
+    title: "Circles",
+    description: "Organise your Muddies into groups that make sense to you.",
+    icon: Users
+  },
+  {
+    title: "Ghost Mode",
+    description: "Pause visibility whenever you want.",
+    icon: Ghost
+  },
+  {
+    title: "Battery-friendly",
+    description: "Designed to minimise battery use.",
+    icon: Battery
+  }
 ];
 
 export function LandingPage() {
@@ -184,7 +162,7 @@ export function LandingPage() {
         <QuadFeatureSection />
         <HowGlowWorks />
         <UseCasesSection />
-        <SafetySection />
+        <PrivacySection />
         <FeatureSection />
         <FinalCta />
         <Footer />
@@ -205,18 +183,13 @@ function Hero() {
       />
       <div className="relative mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-14">
         <div className="max-w-2xl">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
-            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-            Private. Social. Nearby.
-          </span>
-          <h1 className="mt-4 text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.25rem]">
+          <h1 className="text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.25rem]">
             When your Muddies are close,{" "}
             <span className="text-primary">they glow.</span>
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
             A <strong className="font-semibold text-foreground">Muddy</strong> is a friend you both
-            approve. See who&rsquo;s nearby, connect, and make plans&mdash;without sharing exact
-            locations.
+            approve. Know when your Muddies are nearby&mdash;without maps or exact locations.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Button asChild size="lg">
@@ -264,7 +237,7 @@ function Hero() {
               surrounding text without touching the source file. */}
           <Image
             src="/brand/mad-buddy-hero-mockup-v2.png"
-            alt="Mad Buddy app showing nearby Muddies, plans, and privacy controls"
+            alt="Mad Buddy showing nearby Muddies, plans, and privacy controls"
             width={617}
             height={405}
             priority
@@ -298,8 +271,8 @@ function TrustStrip() {
 
 function QuadFeatureSection() {
   return (
-    <section aria-label="What you can do on Mad Buddy" className="px-4 py-14 sm:px-6 sm:py-16">
-      <div className="mx-auto grid max-w-6xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <section aria-label="What you can do on Mad Buddy" className="px-4 py-10 sm:px-6 sm:py-12">
+      <div className="mx-auto grid max-w-7xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {quadFeatures.map((feature) => (
           <div
             key={feature.title}
@@ -321,27 +294,20 @@ function HowGlowWorks() {
   return (
     <section
       id="how-it-works"
-      className="scroll-mt-[4.25rem] border-t border-border/60 px-4 py-16 sm:scroll-mt-[4.5rem] sm:px-6 sm:py-20"
+      className="scroll-mt-[4.25rem] border-t border-border/60 px-4 py-12 sm:scroll-mt-[4.5rem] sm:px-6 sm:py-16"
     >
-      <div className="mx-auto max-w-6xl">
-        <SectionHeading
-          eyebrow="How it works"
-          title="Simple. Social. Human."
-          description="Mad Buddy is built around approved friends and simple proximity signals — not live location tracking."
-          align="center"
-        />
-        <ol className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-5 lg:gap-6">
+      <div className="mx-auto max-w-7xl">
+        <SectionHeading eyebrow="How it works" title="Three simple steps. No map." align="center" />
+        <ol className="mx-auto mt-10 grid max-w-5xl gap-6 sm:grid-cols-3">
           {howItWorksSteps.map((step, index) => (
-            <li key={step.title} className="relative lg:px-1">
-              <div className="flex items-center gap-3">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                  <step.icon className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <span className="text-sm font-semibold text-muted-foreground" aria-hidden="true">
-                  {index + 1}. {step.title}
-                </span>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">{step.description}</p>
+            <li key={step.title} className="rounded-2xl border border-border/80 bg-card/60 p-5">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                <step.icon className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <p className="mt-3 text-sm font-semibold" aria-hidden="true">
+                {index + 1}. {step.title}
+              </p>
+              <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{step.description}</p>
             </li>
           ))}
         </ol>
@@ -352,8 +318,8 @@ function HowGlowWorks() {
 
 function UseCasesSection() {
   return (
-    <section className="border-t border-border/60 bg-secondary/20 px-4 py-16 sm:px-6 sm:py-20">
-      <div className="mx-auto max-w-6xl">
+    <section className="border-t border-border/60 bg-secondary/20 px-4 py-12 sm:px-6 sm:py-16">
+      <div className="mx-auto max-w-7xl">
         <SectionHeading
           eyebrow="Real-life moments"
           title="Why people use Mad Buddy"
@@ -375,21 +341,22 @@ function UseCasesSection() {
   );
 }
 
-function SafetySection() {
+function PrivacySection() {
   return (
     <section
-      id="safety"
-      className="scroll-mt-[4.25rem] px-4 py-16 sm:scroll-mt-[4.5rem] sm:px-6 sm:py-20"
+      id="privacy"
+      className="scroll-mt-[4.25rem] px-4 py-12 sm:scroll-mt-[4.5rem] sm:px-6 sm:py-16"
     >
-      <div className="mx-auto max-w-6xl">
-        <SectionHeading
-          eyebrow="Safety first"
-          title="Your safety. Our priority."
-          description="Mad Buddy is designed to keep you safe while you connect and meet — nearby, without giving away where."
-          align="center"
-        />
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {safetyItems.map((item) => (
+      <div className="mx-auto max-w-7xl">
+        <SectionHeading eyebrow="Privacy" title="Your privacy. Our priority." align="center" />
+        <p className="mx-auto mt-2 max-w-2xl text-center text-sm font-medium text-primary">
+          Nearby, without giving away where.
+        </p>
+        <p className="mx-auto mt-3 max-w-2xl text-center text-base leading-7 text-muted-foreground">
+          Only approved friends can see when you&rsquo;re nearby, and no exact location is shared.
+        </p>
+        <div className="mx-auto mt-10 grid max-w-5xl gap-4 sm:grid-cols-2">
+          {privacyCards.map((item) => (
             <div key={item.title} className="rounded-2xl border border-border/80 bg-card/60 p-5">
               <span className="grid h-10 w-10 place-items-center rounded-full bg-primary/10 text-primary">
                 <item.icon className="h-5 w-5" aria-hidden="true" />
@@ -399,11 +366,7 @@ function SafetySection() {
             </div>
           ))}
         </div>
-        <div className="mt-10 grid gap-8 lg:grid-cols-2">
-          <PrivacyColumn title="What friends may see" tone="may" items={friendsMaySee} />
-          <PrivacyColumn title="What friends never see" tone="never" items={friendsNeverSee} />
-        </div>
-        <p className="mt-6 text-sm text-muted-foreground">
+        <p className="mt-6 text-center text-sm text-muted-foreground">
           Read the full{" "}
           <Link href="/privacy" className="font-medium text-primary underline-offset-4 hover:underline">
             privacy policy
@@ -415,81 +378,27 @@ function SafetySection() {
   );
 }
 
-function PrivacyColumn({
-  title,
-  tone,
-  items
-}: {
-  title: string;
-  tone: "may" | "never";
-  items: string[];
-}) {
-  const Icon = tone === "may" ? Eye : EyeOff;
-
-  return (
-    <div className="rounded-2xl border border-border/80 bg-card/60 p-6">
-      <div className="flex items-center gap-3">
-        <span
-          className={cn(
-            "grid h-10 w-10 place-items-center rounded-full",
-            tone === "may" ? "bg-emerald-400/12 text-emerald-700 dark:text-emerald-100" : "bg-red-400/10 text-red-700 dark:text-red-200"
-          )}
-        >
-          <Icon className="h-5 w-5" aria-hidden="true" />
-        </span>
-        <h3 className="text-lg font-semibold">{title}</h3>
-      </div>
-      <ul className="mt-5 space-y-3">
-        {items.map((item) => (
-          <li key={item} className="flex gap-3 text-sm leading-6 text-muted-foreground">
-            {tone === "may" ? (
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-            ) : (
-              <X className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-300" aria-hidden="true" />
-            )}
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function FeatureSection() {
   return (
     <section
       id="features"
-      className="scroll-mt-[4.25rem] border-t border-border/60 bg-secondary/20 px-4 py-16 sm:scroll-mt-[4.5rem] sm:px-6 sm:py-20"
+      className="scroll-mt-[4.25rem] border-t border-border/60 bg-secondary/20 px-4 py-12 sm:scroll-mt-[4.5rem] sm:px-6 sm:py-16"
     >
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-7xl">
         <SectionHeading
           eyebrow="Features"
-          title="Built for trust, not tracking"
+          title="Simple features. Private by design."
           description="The essentials come first. Extras stay optional."
         />
-        <div className="mt-10 grid gap-6 md:grid-cols-3">
-          {primaryFeatures.map((feature) => (
-            <article
-              key={feature.title}
-              className="rounded-2xl border border-border/80 bg-card p-6 shadow-[0_16px_40px_hsl(var(--shadow)/0.06)]"
-            >
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {featureItems.map((feature) => (
+            <article key={feature.title} className="rounded-2xl border border-border/80 bg-card p-5">
               <span className="grid h-10 w-10 place-items-center rounded-full bg-primary/10 text-primary">
                 <feature.icon className="h-5 w-5" aria-hidden="true" />
               </span>
-              <h3 className="mt-4 text-lg font-semibold">{feature.title}</h3>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{feature.description}</p>
+              <h3 className="mt-3 text-base font-semibold">{feature.title}</h3>
+              <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{feature.description}</p>
             </article>
-          ))}
-        </div>
-        <div className="mt-8 flex flex-wrap gap-3">
-          {secondaryFeatures.map((feature) => (
-            <span
-              key={feature.title}
-              className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-background/80 px-3 py-2 text-sm text-muted-foreground"
-            >
-              <feature.icon className="h-4 w-4 text-primary" aria-hidden="true" />
-              {feature.title}
-            </span>
           ))}
         </div>
       </div>
@@ -500,14 +409,16 @@ function FeatureSection() {
 function FinalCta() {
   return (
     <section className="px-4 pb-4 pt-4 sm:px-6">
-      <div className="mx-auto max-w-6xl overflow-hidden rounded-2xl bg-primary px-6 py-10 sm:px-10 sm:py-12">
+      <div className="mx-auto max-w-7xl overflow-hidden rounded-2xl bg-primary px-6 py-10 sm:px-10 sm:py-12">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-semibold tracking-tight text-primary-foreground sm:text-4xl">
-            Your people are around. Go find them.
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary-foreground/80">
+            Ready to glow?
+          </p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-primary-foreground sm:text-4xl">
+            Start with your first Muddy.
           </h2>
           <p className="mt-4 text-base leading-7 text-primary-foreground/85">
-            Create a free account, approve a friend, and see the glow when you are nearby — on your
-            terms.
+            Create an account, approve a friend, and choose when to glow.
           </p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             <Button asChild size="lg" className="bg-background text-primary hover:bg-background/90">
@@ -522,7 +433,7 @@ function FinalCta() {
               size="lg"
               className="border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
             >
-              <a href="#how-it-works">See how it works</a>
+              <Link href="/login">Log in</Link>
             </Button>
           </div>
         </div>
@@ -534,15 +445,15 @@ function FinalCta() {
 function Footer() {
   return (
     <footer className="px-4 pb-8 pt-12 sm:px-6 sm:pt-16">
-      <div className="mx-auto max-w-6xl border-t border-border/70 pt-10">
+      <div className="mx-auto max-w-7xl border-t border-border/70 pt-10">
         <div className="grid gap-10 lg:grid-cols-[1.7fr_0.8fr_0.8fr_0.8fr] lg:gap-12">
           <div className="max-w-sm">
-            <Link href="#top" className="inline-flex items-center gap-3" aria-label="Mad Buddy home">
+            <Link href="#top" className="inline-flex items-center gap-3" aria-label="Mad Buddy home" title="Mad Buddy home">
               <BrandMark className="h-9 w-9" />
               <span className="text-base font-semibold text-foreground">Mad Buddy</span>
             </Link>
             <p className="mt-4 text-sm leading-6 text-muted-foreground">
-              When your Muddies are close, they glow — without sharing exact locations.
+              When your friends are close, they glow.
             </p>
           </div>
 
@@ -555,18 +466,13 @@ function Footer() {
                 </a>
               </li>
               <li>
-                <a href="#features" className="transition-colors hover:text-foreground">
-                  Features
+                <a href="#privacy" className="transition-colors hover:text-foreground">
+                  Privacy
                 </a>
               </li>
               <li>
-                <a href="#safety" className="transition-colors hover:text-foreground">
-                  Safety
-                </a>
-              </li>
-              <li>
-                <Link href="/faq" className="transition-colors hover:text-foreground">
-                  FAQ
+                <Link href="/pricing" className="transition-colors hover:text-foreground">
+                  Pricing
                 </Link>
               </li>
             </ul>
@@ -577,17 +483,12 @@ function Footer() {
             <ul className="mt-4 flex flex-col gap-3 text-sm text-muted-foreground">
               <li>
                 <Link href="/signup" className="transition-colors hover:text-foreground">
-                  Create free account
+                  Get started
                 </Link>
               </li>
               <li>
                 <Link href="/login" className="transition-colors hover:text-foreground">
                   Log in
-                </Link>
-              </li>
-              <li>
-                <Link href="/pricing" className="transition-colors hover:text-foreground">
-                  Premium
                 </Link>
               </li>
             </ul>
@@ -612,7 +513,6 @@ function Footer() {
 
         <div className="mt-10 flex flex-col gap-3 border-t border-border/70 pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} Mad Buddy. All rights reserved.</p>
-          <p>Private proximity for approved friends.</p>
         </div>
       </div>
     </footer>
