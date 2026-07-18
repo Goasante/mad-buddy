@@ -388,29 +388,32 @@ export function SocializePage({
       </div>
 
       {isActive && session ? (
-        <div className="grid gap-8 lg:grid-cols-[40fr_60fr] lg:items-start">
-          {/* Left: active status + controls */}
+        <div className="grid gap-8 lg:grid-cols-[34fr_66fr] lg:items-start">
+          {/* Left: active status + controls. Dark neutral surface, orange only
+              as a contained accent (dot + subtle border/glow). */}
           <section
             className={cn(
-              "relative isolate overflow-hidden rounded-2xl border border-primary/40 bg-primary/5 p-5",
+              "relative isolate overflow-hidden rounded-2xl border border-primary/30 bg-card/60 p-5 dark:bg-white/[0.04] lg:max-w-[380px]",
               !reducedMotion && "proximity-halo proximity-halo-around"
             )}
-            style={{ "--halo-active-opacity": 0.35, "--halo-rest-opacity": 0.2 } as CSSProperties}
+            style={{ "--halo-active-opacity": 0.22, "--halo-rest-opacity": 0.12 } as CSSProperties}
           >
-            <p className="text-base font-semibold text-primary">Socialize is on</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Open to {activityLabel.toLowerCase()} until {formatTime(session.expiresAt)}.
-            </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Search area: {SOCIALIZE_AREA_LABELS[session.areaTier]}
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+              <p className="text-base font-semibold">Socialize is on</p>
+            </div>
+            <p className="mt-3 text-sm font-medium">{activityLabel}</p>
+            <p className="text-xs text-muted-foreground">Until {formatTime(session.expiresAt)}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Area: {SOCIALIZE_AREA_LABELS[session.areaTier]}
             </p>
             <div className="mt-4 flex gap-2">
               {renderSetup(
-                <Button type="button" variant="outline" size="sm" disabled={isPending}>
+                <Button type="button" variant="secondary" size="sm" disabled={isPending}>
                   Edit
                 </Button>
               )}
-              <Button type="button" variant="danger" size="sm" onClick={turnOff} disabled={isPending}>
+              <Button type="button" variant="outline" size="sm" onClick={turnOff} disabled={isPending}>
                 Turn off
               </Button>
             </div>
@@ -418,12 +421,7 @@ export function SocializePage({
 
           {/* Right: people open to connect */}
           <section>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold tracking-tight">People open to connect</h2>
-              <Button type="button" variant="ghost" size="sm" onClick={refresh} disabled={isRefreshing || isPending}>
-                {isRefreshing ? "Checking..." : "Check again"}
-              </Button>
-            </div>
+            <h2 className="mb-3 text-lg font-semibold tracking-tight">People open to connect</h2>
 
             {people.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2">
@@ -443,18 +441,26 @@ export function SocializePage({
                 ))}
               </div>
             ) : (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-card/40 px-4 py-4">
+              // Compact inline empty state: copy left, actions beside on wide
+              // screens and stacked on mobile. The only refresh action lives here.
+              <div className="flex flex-col gap-3 rounded-xl bg-card/40 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-medium">No one is open to connect nearby</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Try again later or expand your search area.
-                  </p>
+                  <p className="text-sm font-medium">No one nearby is socializing yet</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Check again later or widen your area.</p>
                 </div>
                 <div className="flex gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={refresh} disabled={isRefreshing}>
-                    Check again
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={refresh}
+                    disabled={isRefreshing}
+                    aria-label="Check again"
+                    aria-busy={isRefreshing}
+                  >
+                    {isRefreshing ? "Checking..." : "Check again"}
                   </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={openSetup}>
+                  <Button type="button" variant="ghost" size="sm" onClick={openSetup} aria-label="Edit area">
                     Edit area
                   </Button>
                 </div>
