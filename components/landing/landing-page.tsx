@@ -309,7 +309,7 @@ function Hero() {
               mask) — the phones and glow lines are the only opaque pixels,
               so nothing here can read as a rectangle. */}
           <Image
-            src="/brand/mad-buddy-hero-mockup-transparent.png"
+            src="/brand/mad-buddy-hero-mockup-v2.png"
             alt="Mad Buddy app showing three phone screens with nearby friends, social plans and privacy controls"
             width={617}
             height={405}
