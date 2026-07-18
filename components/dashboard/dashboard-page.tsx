@@ -139,7 +139,6 @@ export function DashboardPageContent({
     null
   );
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
-  const [statusComposerOpen, setStatusComposerOpen] = useState(false);
   const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([]);
   const [unreadActivityCount, setUnreadActivityCount] = useState(0);
   const [isPending, startTransition] = useTransition();
@@ -403,15 +402,32 @@ export function DashboardPageContent({
           {displayName ? `, ${capitalize(displayName)}` : ""}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">See which approved Muddies are nearby.</p>
-        <button
-          type="button"
-          onClick={() => setStatusComposerOpen(true)}
-          title={hasActiveStatus ? "Edit your status" : "Add a status"}
-          className="focus-ring safe-motion mt-3 inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 bg-card/50 px-3 text-sm font-medium text-foreground hover:bg-secondary/60"
-        >
-          <MessageSquareText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          {hasActiveStatus ? "Edit status" : "Add status"}
-        </button>
+        <div className="mt-3">
+          <StatusComposer
+            hasActiveStatus={hasActiveStatus}
+            initialAvailability={initialStatusAvailability}
+            initialActivity={initialStatusActivity}
+            initialNote={initialStatusNote}
+            onSaved={({ message, expiresAt }) => {
+              if (expiresAt) {
+                const time = new Date(expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+                showPromptFeedback(`Visible to your Muddies until ${time}.`, false, "Status updated");
+              } else {
+                showPromptFeedback(message);
+              }
+            }}
+            trigger={
+              <button
+                type="button"
+                title={hasActiveStatus ? "Edit your status" : "Add a status"}
+                className="focus-ring safe-motion inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 bg-card/50 px-3 text-sm font-medium text-foreground hover:bg-secondary/60"
+              >
+                <MessageSquareText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                {hasActiveStatus ? "Edit status" : "Add status"}
+              </button>
+            }
+          />
+        </div>
       </div>
 
       <section className="rounded-2xl bg-card/55 p-4 shadow-sm dark:bg-white/[0.035]">
@@ -708,22 +724,6 @@ export function DashboardPageContent({
         }}
       />
 
-      <StatusComposer
-        open={statusComposerOpen}
-        onOpenChange={setStatusComposerOpen}
-        onSaved={({ message, expiresAt }) => {
-          if (expiresAt) {
-            const time = new Date(expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-            showPromptFeedback(`Visible to your Muddies until ${time}.`, false, "Status updated");
-          } else {
-            showPromptFeedback(message);
-          }
-        }}
-        hasActiveStatus={hasActiveStatus}
-        initialAvailability={initialStatusAvailability}
-        initialActivity={initialStatusActivity}
-        initialNote={initialStatusNote}
-      />
     </div>
   );
 }
