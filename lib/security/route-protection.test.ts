@@ -7,6 +7,7 @@ describe("route protection (deny-by-default, audit I-08)", () => {
       "/",
       "/pricing",
       "/about",
+      "/faq",
       "/privacy",
       "/terms",
       "/login",
