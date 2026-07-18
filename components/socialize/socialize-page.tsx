@@ -9,6 +9,8 @@ import {
   Sparkles,
   X
 } from "lucide-react";
+import * as Popover from "@radix-ui/react-popover";
+import type { ReactNode } from "react";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
 import {
   deactivateSocializeAction,
@@ -102,7 +104,9 @@ export function SocializePage({
     });
   }, []);
 
-  function openSetup() {
+  // Prefill the draft from the active session (edit) or clear it (new). Called
+  // both when the dropdown opens via its trigger and via the "Edit area" path.
+  function prepareForm() {
     if (isActive && session) {
       setActivity(session.activity);
       setAreaTier(session.areaTier);
@@ -115,11 +119,14 @@ export function SocializePage({
       setDuration("1h");
     }
     setAttempted(false);
+  }
+
+  function openSetup() {
+    prepareForm();
     setSetupOpen(true);
   }
 
   function closeSetup() {
-    // Radix Dialog restores focus to the trigger that opened it.
     setSetupOpen(false);
   }
 
@@ -208,6 +215,131 @@ export function SocializePage({
   }
 
   const activityLabel = session ? SOCIALIZE_ACTIVITY_LABELS[session.activity] : "";
+  const selectClass =
+    "focus-ring safe-motion h-11 w-full rounded-md border border-border bg-card/70 px-3 text-sm";
+
+  // The setup panel is an anchored dropdown (not a modal). Its trigger is
+  // whichever state button is currently shown (Turn on / Edit). Each field is
+  // itself a dropdown (native select) so the whole flow reads as nested menus.
+  function renderSetup(trigger: ReactNode) {
+    return (
+      <Popover.Root
+        open={setupOpen}
+        onOpenChange={(open) => {
+          if (open) prepareForm();
+          setSetupOpen(open);
+        }}
+      >
+        <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            align="start"
+            sideOffset={8}
+            collisionPadding={12}
+            className="z-50 max-h-[min(560px,80vh)] w-[min(360px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-border/70 bg-card p-4 shadow-lg outline-none"
+          >
+            <p className="text-base font-semibold">{isActive ? "Edit Socialize" : "Turn on Socialize"}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Choose what you&apos;re open to and how long you want to be visible.
+            </p>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <label htmlFor="socialize-activity" className="mb-1.5 block text-sm font-medium">
+                  What are you open to?
+                </label>
+                <select
+                  id="socialize-activity"
+                  value={activity ?? ""}
+                  onChange={(event) => setActivity(event.target.value as SocializeActivity)}
+                  className={selectClass}
+                >
+                  <option value="" disabled>
+                    Choose an activity
+                  </option>
+                  {SOCIALIZE_ACTIVITIES.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {attempted && !activity ? <p className="mt-1 text-xs text-red-500">Choose an activity.</p> : null}
+              </div>
+
+              <div>
+                <label htmlFor="socialize-area" className="mb-1.5 block text-sm font-medium">
+                  Area
+                </label>
+                <select
+                  id="socialize-area"
+                  value={areaTier ?? ""}
+                  onChange={(event) => setAreaTier(event.target.value as SocializeAreaTier)}
+                  className={selectClass}
+                >
+                  <option value="" disabled>
+                    Choose an area
+                  </option>
+                  {SOCIALIZE_AREA_TIERS.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {attempted && !areaTier ? <p className="mt-1 text-xs text-red-500">Choose an area.</p> : null}
+              </div>
+
+              <div>
+                <label htmlFor="socialize-duration" className="mb-1.5 block text-sm font-medium">
+                  Duration
+                </label>
+                <select
+                  id="socialize-duration"
+                  value={duration}
+                  onChange={(event) => setDuration(event.target.value as SocializeDuration)}
+                  className={selectClass}
+                >
+                  {SOCIALIZE_DURATIONS.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="socialize-note" className="mb-1.5 block text-sm font-medium">
+                  Add a note
+                </label>
+                <input
+                  id="socialize-note"
+                  type="text"
+                  value={note}
+                  maxLength={140}
+                  onChange={(event) => setNote(event.target.value)}
+                  placeholder="Coffee after class, anyone around?"
+                  className={selectClass}
+                />
+              </div>
+
+              <p className="flex items-start gap-2 text-xs text-muted-foreground">
+                <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                Only your profile, activity, and broad proximity are shared. Your exact location stays private.
+              </p>
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={closeSetup} disabled={isPending}>
+                Cancel
+              </Button>
+              <Button type="button" size="sm" onClick={submitSetup} disabled={isPending}>
+                {isPending ? "Saving..." : isActive ? "Save changes" : "Start Socializing"}
+              </Button>
+            </div>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-6 pt-6">
@@ -235,9 +367,11 @@ export function SocializePage({
               <p className="mt-0.5 text-xs text-muted-foreground">Area: {SOCIALIZE_AREA_LABELS[session.areaTier]}</p>
             </div>
             <div className="flex gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={openSetup} disabled={isPending}>
-                Edit
-              </Button>
+              {renderSetup(
+                <Button type="button" variant="outline" size="sm" disabled={isPending}>
+                  Edit
+                </Button>
+              )}
               <Button type="button" variant="danger" size="sm" onClick={turnOff} disabled={isPending}>
                 Turn off
               </Button>
@@ -250,9 +384,13 @@ export function SocializePage({
           <p className="mt-1 text-sm text-muted-foreground">
             Turn it on when you&apos;re open to meeting new people nearby.
           </p>
-          <Button type="button" className="mt-4" onClick={openSetup} disabled={isPending}>
-            Turn on Socialize
-          </Button>
+          <div className="mt-4">
+            {renderSetup(
+              <Button type="button" disabled={isPending}>
+                Turn on Socialize
+              </Button>
+            )}
+          </div>
         </section>
       )}
 
@@ -296,89 +434,6 @@ export function SocializePage({
           )}
         </section>
       ) : null}
-
-      {/* Setup flow */}
-      <Modal
-        open={setupOpen}
-        onOpenChange={(open) => (open ? setSetupOpen(true) : closeSetup())}
-        title={isActive ? "Edit Socialize" : "Turn on Socialize"}
-        description="Choose what you're open to and how long you want to be visible."
-      >
-        <div className="max-h-[65vh] space-y-5 overflow-y-auto pr-1">
-          <fieldset>
-            <legend className="mb-2 text-sm font-medium">What are you open to?</legend>
-            <div className="flex flex-wrap gap-2">
-              {SOCIALIZE_ACTIVITIES.map((option) => (
-                <PillButton
-                  key={option.id}
-                  label={option.label}
-                  selected={activity === option.id}
-                  onClick={() => setActivity(option.id)}
-                />
-              ))}
-            </div>
-            {attempted && !activity ? <p className="mt-2 text-xs text-red-500">Choose an activity.</p> : null}
-          </fieldset>
-
-          <fieldset>
-            <legend className="mb-2 text-sm font-medium">Area</legend>
-            <div className="flex flex-wrap gap-2">
-              {SOCIALIZE_AREA_TIERS.map((option) => (
-                <PillButton
-                  key={option.id}
-                  label={option.label}
-                  selected={areaTier === option.id}
-                  onClick={() => setAreaTier(option.id)}
-                />
-              ))}
-            </div>
-            {attempted && !areaTier ? <p className="mt-2 text-xs text-red-500">Choose an area.</p> : null}
-          </fieldset>
-
-          <fieldset>
-            <legend className="mb-2 text-sm font-medium">Duration</legend>
-            <div className="flex flex-wrap gap-2">
-              {SOCIALIZE_DURATIONS.map((option) => (
-                <PillButton
-                  key={option.id}
-                  label={option.label}
-                  selected={duration === option.id}
-                  onClick={() => setDuration(option.id)}
-                />
-              ))}
-            </div>
-          </fieldset>
-
-          <div>
-            <label htmlFor="socialize-note" className="mb-1.5 block text-sm font-medium">
-              Add a note
-            </label>
-            <input
-              id="socialize-note"
-              type="text"
-              value={note}
-              maxLength={140}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Coffee after class, anyone around?"
-              className="focus-ring safe-motion h-11 w-full rounded-md border border-border bg-card/70 px-3 text-sm"
-            />
-          </div>
-
-          <p className="flex items-start gap-2 text-xs text-muted-foreground">
-            <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-            Only your profile, activity, and broad proximity are shared. Your exact location stays private.
-          </p>
-        </div>
-
-        <div className="mt-5 flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={closeSetup} disabled={isPending}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={submitSetup} disabled={isPending}>
-            {isPending ? "Saving..." : isActive ? "Save changes" : "Start Socializing"}
-          </Button>
-        </div>
-      </Modal>
 
       {/* Safety menu (block / report) */}
       <Modal
@@ -460,22 +515,6 @@ export function SocializePage({
         </div>
       ) : null}
     </div>
-  );
-}
-
-function PillButton({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      className={cn(
-        "focus-ring safe-motion rounded-full border px-3 py-1.5 text-sm font-medium",
-        selected ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-secondary"
-      )}
-    >
-      {label}
-    </button>
   );
 }
 
