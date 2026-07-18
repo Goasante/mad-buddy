@@ -2,24 +2,30 @@
 
 import Link from "next/link";
 import {
+  AlertTriangle,
   Bell,
   CalendarCheck2,
+  Check,
   CheckCheck,
+  CheckCircle2,
+  ChevronDown,
   ChevronRight,
   CircleDollarSign,
   Hand,
   HeartHandshake,
+  ListChecks,
   MapPinOff,
   MessageCircle,
   Send,
   Settings2,
   ShieldAlert,
   UserPlus,
-  UsersRound
+  UsersRound,
+  X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { respondToMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -57,6 +63,14 @@ type NotificationsPageContentProps = {
   canSendCustomMessages?: boolean;
 };
 
+type FilterValue = "all" | "unread" | "read";
+
+const FILTER_OPTIONS: Array<{ value: FilterValue; label: string }> = [
+  { value: "all", label: "All updates" },
+  { value: "unread", label: "Unread" },
+  { value: "read", label: "Read" }
+];
+
 export function NotificationsPageContent({
   canSendCustomMessages = false
 }: NotificationsPageContentProps) {
@@ -66,16 +80,41 @@ export function NotificationsPageContent({
   const [planAlerts, setPlanAlerts] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<NotificationItem | null>(null);
-  const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [filter, setFilter] = useState<FilterValue>("all");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [toast, setToast] = useState<{ message: string; error: boolean } | null>(null);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unreadCount = notifications.filter((notification) => notification.unread).length;
   const visibleNotifications = useMemo(
-    () => filter === "unread"
-      ? notifications.filter((notification) => notification.unread)
-      : notifications,
+    () =>
+      filter === "unread"
+        ? notifications.filter((notification) => notification.unread)
+        : filter === "read"
+          ? notifications.filter((notification) => !notification.unread)
+          : notifications,
     [filter, notifications]
   );
+
+  const selectedItems = useMemo(
+    () => notifications.filter((notification) => selectedIds.has(notification.id)),
+    [notifications, selectedIds]
+  );
+  const selectedCount = selectedItems.length;
+  const allSelectedRead = selectedCount > 0 && selectedItems.every((item) => !item.unread);
+  const allSelectedUnread = selectedCount > 0 && selectedItems.every((item) => item.unread);
+  const allVisibleSelected =
+    visibleNotifications.length > 0 && visibleNotifications.every((item) => selectedIds.has(item.id));
+
+  const showToast = useCallback((message: string, error = false) => {
+    setToast({ message, error });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 3500);
+  }, []);
   const notificationGroups = useMemo(
     () => groupNotificationsByDate(visibleNotifications),
     [visibleNotifications]
@@ -134,6 +173,12 @@ export function NotificationsPageContent({
       window.clearInterval(intervalId);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, []);
 
@@ -210,6 +255,67 @@ export function NotificationsPageContent({
         })
       );
       setFeedback("Could not mark this notification as read.");
+    });
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function exitSelection() {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+    setActionsOpen(false);
+  }
+
+  function selectAllVisible() {
+    setSelectedIds(new Set(visibleNotifications.map((item) => item.id)));
+  }
+
+  // Bulk read/unread through the existing read-state endpoint (extended
+  // additively to accept an id set and an explicit isRead). Optimistic, with
+  // rollback and the shared unread-count broadcast.
+  function applyBulkRead(isRead: boolean) {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const previous = notifications;
+
+    const next = notifications.map((item) =>
+      idSet.has(item.id) ? { ...item, unread: !isRead } : item
+    );
+    setNotifications(next);
+    window.dispatchEvent(
+      new CustomEvent("mad-buddy:notifications-updated", {
+        detail: { unreadCount: next.filter((item) => item.unread).length }
+      })
+    );
+    setSelectedIds(new Set());
+    setActionsOpen(false);
+
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/notifications/read", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids, isRead })
+        });
+        if (!response.ok) throw new Error("bulk update failed");
+        showToast(isRead ? "Updates marked as read" : "Updates marked as unread");
+      } catch {
+        setNotifications(previous);
+        window.dispatchEvent(
+          new CustomEvent("mad-buddy:notifications-updated", {
+            detail: { unreadCount: previous.filter((item) => item.unread).length }
+          })
+        );
+        showToast("Couldn’t update these notifications. Try again.", true);
+      }
     });
   }
 
@@ -290,12 +396,109 @@ export function NotificationsPageContent({
 
       <section>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-2">
-          <div className="flex gap-1" aria-label="Notification filters">
-            <Button type="button" size="sm" variant={filter === "all" ? "secondary" : "ghost"} onClick={() => setFilter("all")}>All</Button>
-            <Button type="button" size="sm" variant={filter === "unread" ? "secondary" : "ghost"} onClick={() => setFilter("unread")}>
-              {unreadCount > 0 ? `Unread (${unreadCount})` : "Unread"}
+          {/* Filter dropdown: trigger always shows the active filter. */}
+          <Popover.Root open={filterOpen} onOpenChange={setFilterOpen}>
+            <Popover.Trigger asChild>
+              <Button type="button" size="sm" variant="outline" aria-label="Filter updates">
+                {FILTER_OPTIONS.find((option) => option.value === filter)?.label}
+                {filter === "unread" && unreadCount > 0 ? ` (${unreadCount})` : ""}
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                align="start"
+                sideOffset={8}
+                collisionPadding={12}
+                className="z-50 w-[min(190px,calc(100vw-1.5rem))] rounded-xl border border-border/70 bg-card p-1 shadow-lg outline-none"
+              >
+                {FILTER_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={filter === option.value}
+                    onClick={() => {
+                      setFilter(option.value);
+                      setFilterOpen(false);
+                    }}
+                    className="focus-ring flex min-h-[40px] w-full items-center justify-between gap-2 rounded-lg px-3 text-sm hover:bg-secondary/60"
+                  >
+                    <span className={cn(filter === option.value && "font-medium text-primary")}>{option.label}</span>
+                    {filter === option.value ? <Check className="h-4 w-4 text-primary" aria-hidden="true" /> : null}
+                  </button>
+                ))}
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+
+          {/* Bulk selection control. */}
+          {selectionMode ? (
+            <div className="flex items-center gap-1.5">
+              <Popover.Root
+                open={actionsOpen && selectedCount > 0}
+                onOpenChange={(open) => setActionsOpen(open)}
+              >
+                <Popover.Trigger asChild>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    aria-label={selectedCount > 0 ? `Bulk actions, ${selectedCount} selected` : "Select updates"}
+                    onClick={(event) => {
+                      // With nothing selected there are no actions to show, so
+                      // the trigger just leaves selection mode instead.
+                      if (selectedCount === 0) {
+                        event.preventDefault();
+                        exitSelection();
+                      }
+                    }}
+                  >
+                    <ListChecks className="h-4 w-4" aria-hidden="true" />
+                    <span aria-live="polite">{selectedCount > 0 ? `${selectedCount} selected` : "Select"}</span>
+                  </Button>
+                </Popover.Trigger>
+                <Popover.Portal>
+                  <Popover.Content
+                    align="end"
+                    sideOffset={8}
+                    collisionPadding={12}
+                    className="z-50 w-[min(210px,calc(100vw-1.5rem))] rounded-xl border border-border/70 bg-card p-1 shadow-lg outline-none"
+                  >
+                    {!allVisibleSelected ? (
+                      <BulkMenuItem label="Select all" onClick={() => selectAllVisible()} />
+                    ) : null}
+                    <BulkMenuItem
+                      label="Mark as read"
+                      disabled={allSelectedRead}
+                      onClick={() => applyBulkRead(true)}
+                    />
+                    <BulkMenuItem
+                      label="Mark as unread"
+                      disabled={allSelectedUnread}
+                      onClick={() => applyBulkRead(false)}
+                    />
+                    <div className="my-1 border-t border-border/70" />
+                    <BulkMenuItem
+                      label="Clear selection"
+                      onClick={() => {
+                        setSelectedIds(new Set());
+                        setActionsOpen(false);
+                      }}
+                    />
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
+              <Button type="button" size="sm" variant="ghost" onClick={exitSelection}>
+                Done
+              </Button>
+            </div>
+          ) : (
+            <Button type="button" size="sm" variant="outline" onClick={() => setSelectionMode(true)}>
+              <ListChecks className="h-4 w-4" aria-hidden="true" />
+              Select
             </Button>
-          </div>
+          )}
         </div>
 
         <div>
@@ -315,6 +518,9 @@ export function NotificationsPageContent({
                         key={notification.id}
                         notification={notification}
                         destination={resolveNotificationDestination(notification.type)}
+                        selectionMode={selectionMode}
+                        selected={selectedIds.has(notification.id)}
+                        onToggleSelect={() => toggleSelected(notification.id)}
                         onActivate={() =>
                           notification.meetupRequestId
                             ? openMeetupRequest(notification)
@@ -328,8 +534,20 @@ export function NotificationsPageContent({
             </div>
           ) : (
             <InlineEmptyState
-              title={filter === "unread" ? "No unread updates" : "You’re all caught up"}
-              description={filter === "unread" ? "You’ve seen everything for now." : "New updates will appear here."}
+              title={
+                filter === "unread"
+                  ? "No unread updates"
+                  : filter === "read"
+                    ? "No read updates"
+                    : "You’re all caught up"
+              }
+              description={
+                filter === "unread"
+                  ? "You’ve seen everything for now."
+                  : filter === "read"
+                    ? "Updates you’ve read will appear here."
+                    : "New updates will appear here."
+              }
             />
           )}
         </div>
@@ -361,6 +579,31 @@ export function NotificationsPageContent({
           />
         ) : null}
       </Modal>
+
+      {toast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="toast-in fixed bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-2rem)] max-w-[320px] -translate-x-1/2 md:bottom-6"
+        >
+          <div className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-[#1b1b1d] px-4 py-3 text-white shadow-lg">
+            {toast.error ? (
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+            ) : (
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+            )}
+            <p className="min-w-0 flex-1 text-sm">{toast.message}</p>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              aria-label="Dismiss notification"
+              className="focus-ring -mr-1 shrink-0 rounded text-white/50 hover:text-white"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -490,10 +733,20 @@ function capitalize(text: string): string {
 type NotificationCardProps = {
   notification: NotificationItem;
   destination: NotificationDestination;
+  selectionMode: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
   onActivate: () => void;
 };
 
-function NotificationCard({ notification, destination, onActivate }: NotificationCardProps) {
+function NotificationCard({
+  notification,
+  destination,
+  selectionMode,
+  selected,
+  onToggleSelect,
+  onActivate
+}: NotificationCardProps) {
   const actionable = Boolean(notification.meetupRequestId);
   const isMuddyActivity = isMuddyActivityType(notification.type);
   // Three mutually exclusive shapes: an in-place reply (button), a deep link
@@ -504,6 +757,17 @@ function NotificationCard({ notification, destination, onActivate }: Notificatio
 
   const body = (
     <>
+      {selectionMode ? (
+        <span
+          className={cn(
+            "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center self-center rounded-md border",
+            selected ? "border-primary bg-primary text-white" : "border-border bg-transparent"
+          )}
+          aria-hidden="true"
+        >
+          {selected ? <Check className="h-3.5 w-3.5" /> : null}
+        </span>
+      ) : null}
       <div
         className={cn(
           "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
@@ -525,7 +789,7 @@ function NotificationCard({ notification, destination, onActivate }: Notificatio
         {actionable ? <p className="mt-1 text-xs font-medium text-primary">Reply</p> : null}
       </div>
       <span className="mt-0.5 shrink-0 text-[11px] text-muted-foreground">{notification.time}</span>
-      {isLink ? (
+      {isLink && !selectionMode ? (
         <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 self-center text-muted-foreground" aria-hidden="true" />
       ) : null}
     </>
@@ -535,6 +799,23 @@ function NotificationCard({ notification, destination, onActivate }: Notificatio
     "flex min-h-[80px] items-start gap-3 rounded-xl border-b border-border/60 px-2 py-3 last:border-b-0";
   const interactiveClass =
     "focus-ring cursor-pointer text-left transition-colors hover:bg-secondary/50 active:bg-secondary/70";
+
+  // Selection mode wins: the whole row toggles selection (checkbox semantics),
+  // and no navigation happens until selection mode is closed.
+  if (selectionMode) {
+    return (
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={selected}
+        aria-label={`Select: ${notification.title}`}
+        onClick={onToggleSelect}
+        className={cn(baseClass, interactiveClass, "w-full")}
+      >
+        {body}
+      </button>
+    );
+  }
 
   if (isLink && destination) {
     return (
@@ -563,6 +844,30 @@ function NotificationCard({ notification, destination, onActivate }: Notificatio
   }
 
   return <article className={cn(baseClass, !clickable && "cursor-default")}>{body}</article>;
+}
+
+function BulkMenuItem({
+  label,
+  onClick,
+  disabled = false
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "focus-ring flex min-h-[40px] w-full items-center rounded-lg px-3 text-left text-sm",
+        disabled ? "cursor-not-allowed text-muted-foreground/50" : "hover:bg-secondary/60"
+      )}
+    >
+      {label}
+    </button>
+  );
 }
 
 function InlineEmptyState({ title, description }: { title: string; description: string }) {
