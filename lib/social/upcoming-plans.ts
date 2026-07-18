@@ -19,6 +19,9 @@ export type HomeUpcomingPlan = {
   organiserName: string;
   myRsvp: string;
   invitedCount: number;
+  goingCount: number;
+  maybeCount: number;
+  placeText: string | null;
 };
 
 export type UpcomingPlansResult = {
@@ -57,7 +60,7 @@ export async function loadUpcomingPlans(userId: string, limit = 3): Promise<Upco
   // Fetch one extra so "View all" can be decided without a second count query.
   const { data: planRows } = await admin
     .from("plans")
-    .select("id, creator_id, title, start_at, status")
+    .select("id, creator_id, title, start_at, status, custom_place_text")
     .in("id", planIds)
     .in("status", [...ACTIVE_STATUSES])
     .not("start_at", "is", null)
@@ -82,8 +85,15 @@ export async function loadUpcomingPlans(userId: string, limit = 3): Promise<Upco
   ]);
 
   const invitedCountByPlan = new Map<string, number>();
+  const goingCountByPlan = new Map<string, number>();
+  const maybeCountByPlan = new Map<string, number>();
   for (const row of participantRows ?? []) {
     invitedCountByPlan.set(row.plan_id, (invitedCountByPlan.get(row.plan_id) ?? 0) + 1);
+    if (row.rsvp_status === "going") {
+      goingCountByPlan.set(row.plan_id, (goingCountByPlan.get(row.plan_id) ?? 0) + 1);
+    } else if (row.rsvp_status === "maybe") {
+      maybeCountByPlan.set(row.plan_id, (maybeCountByPlan.get(row.plan_id) ?? 0) + 1);
+    }
   }
   const creatorNameById = new Map(
     (creatorProfiles ?? []).map((profile) => [profile.user_id, profile.full_name?.trim() || "A Muddy"])
@@ -98,7 +108,10 @@ export async function loadUpcomingPlans(userId: string, limit = 3): Promise<Upco
       startAt: plan.start_at as string,
       organiserName: plan.creator_id === userId ? "You" : creatorNameById.get(plan.creator_id) ?? "A Muddy",
       myRsvp: isHost ? "going" : myRow?.rsvp_status ?? "invited",
-      invitedCount: invitedCountByPlan.get(plan.id) ?? 0
+      invitedCount: invitedCountByPlan.get(plan.id) ?? 0,
+      goingCount: goingCountByPlan.get(plan.id) ?? 0,
+      maybeCount: maybeCountByPlan.get(plan.id) ?? 0,
+      placeText: plan.custom_place_text
     };
   });
 

@@ -141,7 +141,7 @@ export function AppShell({
     : navigationItems;
 
   return (
-    <div className="min-h-screen bg-secondary/25 pb-[calc(5rem+env(safe-area-inset-bottom))] dark:bg-[#353537] md:p-4 md:pb-4">
+    <div className="min-h-screen bg-secondary/25 pb-[calc(88px+env(safe-area-inset-bottom))] dark:bg-[#353537] md:p-4 md:pb-4">
       <a
         href="#app-main-content"
         className="focus-ring sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:shadow-lg"
@@ -159,7 +159,6 @@ export function AppShell({
         <AppHeader
           navigationItems={visibleNavigationItems}
           currentUsername={currentUsername}
-          unreadCount={unreadCount}
           showAdminLink={showAdminLink}
         />
           <main id="app-main-content" className="mx-auto w-full max-w-[1200px] px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
@@ -456,12 +455,10 @@ function AccountMenuItem({
 function AppHeader({
   navigationItems,
   currentUsername,
-  unreadCount,
   showAdminLink
 }: {
   navigationItems: NavigationItem[];
   currentUsername: string | null;
-  unreadCount: number;
   showAdminLink: boolean;
 }) {
   const pathname = usePathname();
@@ -521,14 +518,17 @@ function AppHeader({
           {/* Notifications + account are mobile-only here (md:hidden); on
               desktop the sidebar already provides both, so surfacing them in
               the header too would duplicate destinations in one viewport. */}
+          {/* No unread badge here on purpose: the bell and the Pulse tab both
+              open /notifications from the same unread source, so badging both
+              would show the same count twice. The badge stays on the Pulse
+              tab (the labelled destination). */}
           <Link
             href="/notifications"
             aria-label="Notifications"
             title="Notifications"
-            className="focus-ring relative grid h-10 w-10 place-items-center rounded-full border border-border/70 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground md:hidden"
+            className="focus-ring grid h-10 w-10 place-items-center rounded-full border border-border/70 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground md:hidden"
           >
             <Bell className="h-4 w-4" aria-hidden="true" />
-            <UnreadBadge count={unreadCount} />
           </Link>
           <div className="md:hidden">
             <MobileAccountMenu

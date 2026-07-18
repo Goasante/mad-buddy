@@ -4,9 +4,7 @@ import Link from "next/link";
 import {
   Bell,
   CalendarCheck2,
-  CalendarClock,
   CheckCheck,
-  ChevronRight,
   CircleDollarSign,
   Ghost,
   Hand,
@@ -48,6 +46,7 @@ type DashboardFriend = {
   isPremiumThemeUnlocked: boolean;
   confidence: ConfidenceLevel;
   muddyStatusLabel: string | null;
+  availability: string | null;
   freshnessState: FreshnessState;
 };
 
@@ -71,6 +70,7 @@ type NearbyFriendApiItem = {
 type AttentionItem = {
   id: string;
   title: string;
+  preview: string;
   time: string;
   icon: LucideIcon;
 };
@@ -144,7 +144,10 @@ export function DashboardPageContent({
     (friend) =>
       friend.proximityLevel === "very_close" || friend.proximityLevel === "nearby" || friend.proximityLevel === "around"
   );
-  const selectedFriend = nearbyFriends.find((friend) => friend.friendId === selectedFriendId) ?? null;
+  // "Muddies open to plans" reuses the existing availability signal only, a
+  // Muddy who set their availability to "open to hang out". No invented state.
+  const openToPlansMuddies = visibleFriends.filter((friend) => friend.availability === "open_to_hang_out");
+  const selectedFriend = visibleFriends.find((friend) => friend.friendId === selectedFriendId) ?? null;
 
   // The dashboard never truncates this list (every nearby friend is always
   // rendered), so "View all" would only ever be a redundant link to the same
@@ -278,9 +281,10 @@ export function DashboardPageContent({
         const unread = data.notifications.filter((notification) => !notification.is_read);
         setUnreadActivityCount(unread.length);
         setAttentionItems(
-          unread.slice(0, 4).map((notification) => ({
+          unread.slice(0, 3).map((notification) => ({
             id: notification.id,
             title: notification.title,
+            preview: notification.message,
             time: formatRelativeTime(notification.created_at),
             icon: attentionIconByType[notification.type.split(":")[0]] ?? Bell
           }))
@@ -368,7 +372,7 @@ export function DashboardPageContent({
           type="button"
           variant="outline"
           size="sm"
-          className="w-full shrink-0 whitespace-nowrap sm:w-auto"
+          className="w-fit shrink-0 self-start whitespace-nowrap rounded-full"
           onClick={() => setStatusComposerOpen(true)}
           title={hasActiveStatus ? "Update your status" : undefined}
         >
@@ -435,7 +439,7 @@ export function DashboardPageContent({
           {statusMessage ||
             (ghostMode
               ? "You won’t appear nearby until you turn visibility back on."
-              : "Your Muddies can see when you’re nearby.")}
+              : "Approved Muddies can see when you’re nearby.")}
         </p>
       </section>
 
@@ -557,7 +561,9 @@ export function DashboardPageContent({
           )}
         </section>
 
-          <UpcomingPlans plans={upcomingPlans} hasMore={hasMorePlans} />
+          <FeaturedPlan plan={upcomingPlans[0]} hasMore={hasMorePlans || upcomingPlans.length > 1} />
+
+          <MuddiesOpenToPlans muddies={openToPlansMuddies} onSelect={setSelectedFriendId} />
         </div>
 
         <div className="space-y-6">
@@ -579,12 +585,17 @@ export function DashboardPageContent({
                 <li key={item.id}>
                   <Link
                     href="/notifications"
-                    className="focus-ring safe-motion flex min-h-[68px] items-center gap-3 px-4 py-3.5 hover:bg-secondary/50"
+                    className="focus-ring safe-motion flex min-h-[60px] items-center gap-3 px-4 py-3 hover:bg-secondary/50"
                   >
                     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
                       <item.icon className="h-4 w-4" aria-hidden="true" />
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-sm">{capitalize(item.title)}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{capitalize(item.title)}</span>
+                      {item.preview ? (
+                        <span className="block truncate text-xs text-muted-foreground">{item.preview}</span>
+                      ) : null}
+                    </span>
                     <span className="shrink-0 text-xs text-muted-foreground">{item.time}</span>
                   </Link>
                 </li>
@@ -663,32 +674,30 @@ function CountPill({ label, count }: { label: string; count: number }) {
   );
 }
 
-// Compact entry points to the temporary/active features users reach for most
-// often. Each links to its existing route (nothing here duplicates that
-// feature's own logic or invents new backend behaviour); the live
-// active-state surfacing (e.g. "Available until 7pm") is a follow-up that
-// needs its own data read.
+// Three compact tiles, short labels only (the full description lives in the
+// tooltip / aria-label and the opened flow, not permanently on Home). Each
+// links to its existing route; nothing here duplicates that feature's logic.
 const quickActions: Array<{
   href: "/hangout-mode" | "/safe-arrival" | "/plans";
-  title: string;
+  label: string;
   description: string;
   icon: LucideIcon;
 }> = [
   {
     href: "/hangout-mode",
-    title: "Hangout Mode",
+    label: "Hangout",
     description: "Let your Muddies know you’re open to meeting.",
     icon: Hand
   },
   {
     href: "/safe-arrival",
-    title: "Safe Arrival",
+    label: "Safe Arrival",
     description: "Let trusted Muddies know when you arrive safely.",
     icon: ShieldCheck
   },
   {
     href: "/plans",
-    title: "New plan",
+    label: "New plan",
     description: "Create a plan and invite your Muddies.",
     icon: CalendarCheck2
   }
@@ -698,25 +707,22 @@ function QuickActions() {
   return (
     <section aria-label="Quick actions">
       <h2 className="mb-3 text-lg font-semibold tracking-tight">Quick actions</h2>
-      <ul className="divide-y divide-border/60 rounded-2xl border border-border/70 bg-card/40">
+      <div className="grid grid-cols-3 gap-3">
         {quickActions.map((action) => (
-          <li key={action.href}>
-            <Link
-              href={action.href}
-              className="focus-ring safe-motion flex min-h-[64px] items-center gap-3 px-4 py-3 hover:bg-secondary/50"
-            >
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                <action.icon className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold">{action.title}</span>
-                <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{action.description}</span>
-              </span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            </Link>
-          </li>
+          <Link
+            key={action.href}
+            href={action.href}
+            aria-label={action.description}
+            title={action.description}
+            className="focus-ring safe-motion flex min-h-[84px] flex-col items-center justify-center gap-2 rounded-2xl border border-border/70 bg-card/50 p-3 text-center hover:bg-secondary/40"
+          >
+            <span className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-primary">
+              <action.icon className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <span className="text-xs font-medium leading-tight">{action.label}</span>
+          </Link>
         ))}
-      </ul>
+      </div>
     </section>
   );
 }
@@ -735,61 +741,131 @@ function rsvpLabel(rsvp: string): string {
   }
 }
 
-function UpcomingPlans({ plans, hasMore }: { plans: HomeUpcomingPlan[]; hasMore: boolean }) {
+function FeaturedPlan({ plan, hasMore }: { plan: HomeUpcomingPlan | undefined; hasMore: boolean }) {
+  const actionLabel = !plan
+    ? ""
+    : plan.myRsvp === "invited"
+      ? "Respond"
+      : plan.organiserName === "You"
+        ? "Manage plan"
+        : "View plan";
+
   return (
     <section>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-lg font-semibold tracking-tight">Upcoming plans</h2>
-        {hasMore ? (
+        {plan && hasMore ? (
           <Link href="/plans" className="text-sm font-medium text-primary hover:underline">
             View all
           </Link>
         ) : null}
       </div>
 
-      {plans.length > 0 ? (
-        <ul className="divide-y divide-border/60 rounded-2xl border border-border/70 bg-card/40">
-          {plans.map((plan) => (
-            <li key={plan.id}>
-              <Link
-                href="/plans"
-                className="focus-ring safe-motion flex min-h-[72px] items-center gap-3 px-4 py-3.5 hover:bg-secondary/50"
-              >
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                  <CalendarClock className="h-4 w-4" aria-hidden="true" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold">{plan.title}</span>
-                  <span className="mt-0.5 block truncate text-xs text-muted-foreground" suppressHydrationWarning>
-                    {new Date(plan.startAt).toLocaleString([], {
-                      weekday: "short",
-                      month: "short",
-                      day: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit"
-                    })}
-                    {" · "}
-                    {plan.organiserName === "You" ? "You’re hosting" : `by ${capitalize(plan.organiserName)}`}
-                  </span>
-                </span>
-                <span className="flex shrink-0 flex-col items-end gap-1">
-                  <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-foreground">
-                    {rsvpLabel(plan.myRsvp)}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {plan.invitedCount} invited
-                  </span>
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+      {plan ? (
+        <div className="rounded-2xl border border-border/70 bg-card/50 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-base font-semibold">{capitalize(plan.title)}</p>
+              <p className="mt-1 text-sm text-muted-foreground" suppressHydrationWarning>
+                {new Date(plan.startAt).toLocaleString([], {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit"
+                })}
+              </p>
+              {plan.placeText ? (
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{plan.placeText}</p>
+              ) : null}
+            </div>
+            <span className="inline-flex shrink-0 items-center rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-foreground">
+              {rsvpLabel(plan.myRsvp)}
+            </span>
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              {plan.goingCount} going
+              {plan.maybeCount > 0 ? ` · ${plan.maybeCount} maybe` : ""}
+            </p>
+            <Button type="button" size="sm" asChild>
+              <Link href="/plans">{actionLabel}</Link>
+            </Button>
+          </div>
+        </div>
       ) : (
         <EmptyState
           icon={CalendarCheck2}
           className="w-full !border-border/50 !shadow-none p-4 sm:p-5"
-          title="No upcoming plans"
+          title="Nothing planned yet"
           description="Create a plan when you’re ready to meet up."
+          action={
+            <Button type="button" asChild>
+              <Link href="/plans">
+                <CalendarCheck2 className="h-4 w-4" aria-hidden="true" />
+                New plan
+              </Link>
+            </Button>
+          }
+        />
+      )}
+    </section>
+  );
+}
+
+const NEARBY_LEVELS = new Set<ProximityLevel>(["very_close", "nearby", "around"]);
+
+function MuddiesOpenToPlans({
+  muddies,
+  onSelect
+}: {
+  muddies: DashboardFriend[];
+  onSelect: (friendId: string) => void;
+}) {
+  return (
+    <section>
+      <h2 className="mb-3 text-lg font-semibold tracking-tight">Muddies open to plans</h2>
+      {muddies.length > 0 ? (
+        <ul className="divide-y divide-border/60 rounded-2xl border border-border/70 bg-card/40">
+          {muddies.map((muddy) => {
+            const name = muddy.displayName || muddy.username;
+            return (
+              <li key={muddy.friendId}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(muddy.friendId)}
+                  className="focus-ring safe-motion flex min-h-[64px] w-full items-center gap-3 px-4 py-3 text-left hover:bg-secondary/50"
+                >
+                  <GlowAvatar
+                    name={name}
+                    src={muddy.avatarUrl}
+                    proximityLevel={muddy.proximityLevel}
+                    glowStrength={muddy.glowStrength}
+                    confidence={muddy.confidence}
+                    size="sm"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{capitalize(name)}</span>
+                    {muddy.muddyStatusLabel ? (
+                      <span className="block truncate text-xs text-muted-foreground">{muddy.muddyStatusLabel}</span>
+                    ) : null}
+                  </span>
+                  {NEARBY_LEVELS.has(muddy.proximityLevel) ? (
+                    <span className="inline-flex shrink-0 items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                      {proximityLabels[muddy.proximityLevel]}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <EmptyState
+          icon={Users}
+          className="w-full !border-border/50 !shadow-none p-4 sm:p-5"
+          title="No one is open to plans right now"
+          description="Check again later or create a plan."
           action={
             <Button type="button" asChild>
               <Link href="/plans">
@@ -821,6 +897,7 @@ function toDashboardFriend(friend: NearbyFriendApiItem): DashboardFriend {
       activity: friend.muddy_activity,
       note: friend.muddy_status_note
     }),
+    availability: friend.muddy_availability,
     freshnessState: friend.freshness_state
   };
 }
