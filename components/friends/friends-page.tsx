@@ -205,6 +205,33 @@ export function FriendsPageContent({
   );
   const blockedUsers = useMemo(() => users.filter((user) => user.status === "blocked"), [users]);
 
+  // Active-first grouping for the Muddies list. "Active" reuses the same
+  // privacy-filtered proximity signal already fetched above (no second query):
+  // a Muddy counts as active only when their live proximity is very close,
+  // nearby or around. Active Muddies are ordered by proximity priority then
+  // name; inactive Muddies fall back to alphabetical since no live sort exists.
+  const { activeFriends, inactiveFriends } = useMemo(() => {
+    const active: UserSummary[] = [];
+    const inactive: UserSummary[] = [];
+    for (const user of visibleFriendUsers) {
+      const level = proximityByFriendId[user.id]?.proximityLevel;
+      if (level === "very_close" || level === "nearby" || level === "around") {
+        active.push(user);
+      } else {
+        inactive.push(user);
+      }
+    }
+    const proximityRank = (user: UserSummary) => {
+      const level = proximityByFriendId[user.id]?.proximityLevel;
+      return level === "very_close" ? 0 : level === "nearby" ? 1 : 2;
+    };
+    active.sort(
+      (a, b) => proximityRank(a) - proximityRank(b) || a.displayName.localeCompare(b.displayName)
+    );
+    inactive.sort((a, b) => a.displayName.localeCompare(b.displayName));
+    return { activeFriends: active, inactiveFriends: inactive };
+  }, [visibleFriendUsers, proximityByFriendId]);
+
   function updateUserStatus(userId: string, status: UserSummary["status"], message: string) {
     setUsers((currentUsers) =>
       currentUsers.map((user) => (user.id === userId ? { ...user, status } : user))
@@ -318,6 +345,45 @@ export function FriendsPageContent({
     });
   }
 
+  // Shared row renderer so the "Active now" and "All Muddies" sections render
+  // identical cards without duplicating the (many) action closures.
+  const renderUserRow = (user: UserSummary) => (
+    <UserRow
+      key={user.id}
+      user={user}
+      proximity={proximityByFriendId[user.id]}
+      isCloseFriend={closeFriendIds.includes(user.id)}
+      circles={circles}
+      onViewProfile={() => setProfileUser(user)}
+      onWave={() => {
+        startTransition(async () => {
+          const result = await sendWaveV2Action(user.id, "proximity_card");
+          setFeedback(result.message);
+        });
+      }}
+      onMessage={() => router.push("/messages")}
+      onRemove={() =>
+        runFriendAction(
+          () => removeFriendAction(user.id),
+          () => removeUser(user.id, `${user.displayName} was removed.`)
+        )
+      }
+      onBlock={() =>
+        runFriendAction(
+          () => blockUserAction(user.id),
+          () => updateUserStatus(user.id, "blocked", `${user.displayName} is blocked.`)
+        )
+      }
+      onReport={() => setReportUser(user)}
+      onToggleCloseFriend={() => toggleCloseFriend(user)}
+      onAddToCircle={(circleId) => addToCircle(user, circleId)}
+      onCreateCircle={() => {
+        setCircleTargetUser(user);
+        setCreateCircleOpen(true);
+      }}
+    />
+  );
+
   return (
     <div className="mx-auto max-w-[1200px] space-y-6 pt-6">
       <header className="flex items-center justify-between gap-3">
@@ -379,44 +445,30 @@ export function FriendsPageContent({
           ) : null}
 
           {visibleFriendUsers.length > 0 ? (
-            <div className="grid gap-3 lg:grid-cols-2">
-              {visibleFriendUsers.map((user) => (
-                <UserRow
-                  key={user.id}
-                  user={user}
-                  proximity={proximityByFriendId[user.id]}
-                  isCloseFriend={closeFriendIds.includes(user.id)}
-                  circles={circles}
-                  onViewProfile={() => setProfileUser(user)}
-                  onWave={() => {
-                    startTransition(async () => {
-                      const result = await sendWaveV2Action(user.id, "proximity_card");
-                      setFeedback(result.message);
-                    });
-                  }}
-                  onMessage={() => router.push("/messages")}
-                  onRemove={() =>
-                    runFriendAction(
-                      () => removeFriendAction(user.id),
-                      () => removeUser(user.id, `${user.displayName} was removed.`)
-                    )
-                  }
-                  onBlock={() =>
-                    runFriendAction(
-                      () => blockUserAction(user.id),
-                      () => updateUserStatus(user.id, "blocked", `${user.displayName} is blocked.`)
-                    )
-                  }
-                  onReport={() => setReportUser(user)}
-                  onToggleCloseFriend={() => toggleCloseFriend(user)}
-                  onAddToCircle={(circleId) => addToCircle(user, circleId)}
-                  onCreateCircle={() => {
-                    setCircleTargetUser(user);
-                    setCreateCircleOpen(true);
-                  }}
-                />
-              ))}
-            </div>
+            activeFriends.length > 0 ? (
+              // Active-first layout: nearby/visible Muddies surface under
+              // "Active now"; everyone else stays reachable under "All Muddies".
+              <div className="space-y-6">
+                <section>
+                  <div className="mb-3 flex items-center gap-2">
+                    <h2 className="text-base font-semibold tracking-tight">Active now</h2>
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                      {activeFriends.length} active
+                    </span>
+                  </div>
+                  <div className="grid gap-3 lg:grid-cols-2">{activeFriends.map(renderUserRow)}</div>
+                </section>
+
+                {inactiveFriends.length > 0 ? (
+                  <section>
+                    <h2 className="mb-3 text-base font-semibold tracking-tight">All Muddies</h2>
+                    <div className="grid gap-3 lg:grid-cols-2">{inactiveFriends.map(renderUserRow)}</div>
+                  </section>
+                ) : null}
+              </div>
+            ) : (
+              <div className="grid gap-3 lg:grid-cols-2">{visibleFriendUsers.map(renderUserRow)}</div>
+            )
           ) : (
             <FriendsEmptyState
               activeTab={activeTab}
@@ -675,7 +727,7 @@ function FriendsEmptyState({
   }
 
   const copy: Record<string, { title: string; description: string }> = {
-    all: { title: "No Muddies yet", description: "Add friends to see when they’re nearby." },
+    all: { title: "No Muddies yet", description: "Add approved Muddies to see when they’re nearby." },
     close: { title: "No Close Friends yet", description: "Mark a Muddy as a Close Friend from their card menu." },
     circles: { title: "No one in this circle yet", description: "Add Muddies to this circle from their card menu." }
   };

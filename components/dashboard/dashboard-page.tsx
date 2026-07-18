@@ -154,11 +154,14 @@ export function DashboardPageContent({
   const openToPlansMuddies = visibleFriends.filter((friend) => friend.availability === "open_to_hang_out");
   const selectedFriend = visibleFriends.find((friend) => friend.friendId === selectedFriendId) ?? null;
 
-  // The dashboard never truncates this list (every nearby friend is always
-  // rendered), so "View all" would only ever be a redundant link to the same
-  // set. Kept as an explicit flag rather than deleted outright so it's ready
-  // to flip on if the list ever gains a display cap.
-  const hasMoreNearbyFriends = false;
+  // Home shows only a compact preview of nearby Muddies; the cap adapts to the
+  // viewport (mobile 5, tablet 6, desktop 8) and "View all" links to the full
+  // Muddies list when more active Muddies exist than the preview shows. The
+  // list only renders after a client fetch, so a width-derived cap is free of
+  // hydration concerns.
+  const [previewLimit, setPreviewLimit] = useState(8);
+  const nearbyPreview = nearbyFriends.slice(0, previewLimit);
+  const hasMoreNearbyFriends = nearbyFriends.length > previewLimit;
 
   // A friend's own full_name can be missing (deleted profile, sync gap); the
   // username is the one thing every account always has. Duplicate display
@@ -288,6 +291,16 @@ export function DashboardPageContent({
   useEffect(() => {
     loadNearbyFriends();
   }, [loadNearbyFriends]);
+
+  useEffect(() => {
+    const computeLimit = () => {
+      const width = window.innerWidth;
+      setPreviewLimit(width < 768 ? 5 : width < 1024 ? 6 : 8);
+    };
+    computeLimit();
+    window.addEventListener("resize", computeLimit);
+    return () => window.removeEventListener("resize", computeLimit);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -456,7 +469,11 @@ export function DashboardPageContent({
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold tracking-tight">Nearby Muddies</h2>
             {hasMoreNearbyFriends ? (
-              <Link href="/friends" className="text-sm font-medium text-primary hover:underline">
+              <Link
+                href="/friends"
+                aria-label="View all Muddies"
+                className="text-sm font-medium text-primary hover:underline"
+              >
                 View all
               </Link>
             ) : null}
@@ -472,7 +489,7 @@ export function DashboardPageContent({
                 className="glow-strip no-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pt-4 pb-2 md:hidden"
                 aria-label="Nearby Muddies"
               >
-                {nearbyFriends.map((friend) => {
+                {nearbyPreview.map((friend) => {
                   const name = friend.displayName || friend.username;
                   return (
                     <button
@@ -505,7 +522,7 @@ export function DashboardPageContent({
                 className="hidden gap-4 md:grid [grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]"
                 aria-label="Nearby Muddies"
               >
-                {nearbyFriends.map((friend) => {
+                {nearbyPreview.map((friend) => {
                   // The username is the reliable fallback if a profile has no
                   // full_name; it's also shown for disambiguation when two
                   // friends share the same display name.
