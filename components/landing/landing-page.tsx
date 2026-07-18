@@ -166,52 +166,6 @@ const secondaryFeatures = [
   { title: "Web now, mobile next", icon: Radio }
 ];
 
-const faqItems = [
-  {
-    question: "What is a Muddy?",
-    answer:
-      "A Muddy is a friend you have mutually approved on Mad Buddy. You both need to accept before either of you can appear nearby."
-  },
-  {
-    question: "Can friends see my exact location?",
-    answer:
-      "No. Friends see privacy-safe proximity levels and your profile — not coordinates, maps, street addresses, direction of travel, or exact distance."
-  },
-  {
-    question: "Do both people have to approve?",
-    answer: "Yes. Mad Buddy requires mutual approval before anyone appears in a nearby list."
-  },
-  {
-    question: "What's the difference between a Wave and a Plan?",
-    answer:
-      "A Wave is a quick signal that you're open to connect — when it's mutual, a chat opens. A Plan is a real event you create and invite Muddies to, with simple RSVPs."
-  },
-  {
-    question: "Can I stop appearing nearby?",
-    answer:
-      "Yes. Pause your visibility from the dashboard or turn on Ghost Mode in settings whenever you want more privacy."
-  },
-  {
-    question: "What does Ghost Mode do?",
-    answer:
-      "Ghost Mode pauses your visibility. Approved friends will not see your glow while it is on. You can turn it off again at any time."
-  },
-  {
-    question: "Does Mad Buddy show a map?",
-    answer: "No. Mad Buddy uses glowing profile cards and proximity levels — there is no map view."
-  },
-  {
-    question: "Can I delete my data?",
-    answer:
-      "Yes. You can delete your account from settings, which removes your profile and associated data. Production deletion behaviour should be verified against your live deployment."
-  },
-  {
-    question: "Is Mad Buddy free?",
-    answer:
-      "Yes. Mad Buddy has a free plan with nearby glow, up to 25 approved friends, and Ghost Mode. Paid plans add more friends and extras — see Pricing for details."
-  }
-];
-
 export function LandingPage() {
   const [activeSection, setActiveSection] = useLandingActiveSection();
 
@@ -232,7 +186,6 @@ export function LandingPage() {
         <UseCasesSection />
         <SafetySection />
         <FeatureSection />
-        <FaqSection />
         <FinalCta />
         <Footer />
       </main>
@@ -544,24 +497,6 @@ function FeatureSection() {
   );
 }
 
-function FaqSection() {
-  return (
-    <section id="faq" className="scroll-mt-[4.25rem] px-4 py-16 sm:scroll-mt-[4.5rem] sm:px-6 sm:py-20">
-      <div className="mx-auto max-w-3xl">
-        <SectionHeading eyebrow="FAQ" title="Common questions" align="center" />
-        <dl className="mt-10 space-y-3">
-          {faqItems.map((item) => (
-            <div key={item.question} className="rounded-xl border border-border/70 bg-card/50 px-5 py-4">
-              <dt className="text-base font-semibold">{item.question}</dt>
-              <dd className="mt-2 text-sm leading-6 text-muted-foreground">{item.answer}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-    </section>
-  );
-}
-
 function FinalCta() {
   return (
     <section className="px-4 pb-4 pt-4 sm:px-6">
@@ -630,9 +565,9 @@ function Footer() {
                 </a>
               </li>
               <li>
-                <a href="#faq" className="transition-colors hover:text-foreground">
+                <Link href="/faq" className="transition-colors hover:text-foreground">
                   FAQ
-                </a>
+                </Link>
               </li>
             </ul>
           </nav>

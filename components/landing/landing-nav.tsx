@@ -7,7 +7,7 @@ import { BrandMark } from "@/components/brand/brand-mark";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const sectionIds = ["how-it-works", "features", "safety", "faq"] as const;
+const sectionIds = ["how-it-works", "features", "safety"] as const;
 
 type LandingNavProps = {
   activeSection: string | null;
@@ -144,7 +144,7 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
             <MobileNavLink href="#safety" onNavigate={closeMobile}>
               Privacy
             </MobileNavLink>
-            <MobileNavLink href="#faq" onNavigate={closeMobile}>
+            <MobileNavLink href="/faq" onNavigate={closeMobile}>
               FAQ
             </MobileNavLink>
             <MobileNavLink href="/pricing" onNavigate={closeMobile}>
@@ -239,7 +239,7 @@ function MobileNavLink({
   onNavigate,
   children
 }: {
-  href: `#${string}` | "/pricing" | "/login" | "/signup";
+  href: `#${string}` | "/pricing" | "/faq" | "/login" | "/signup";
   onNavigate: () => void;
   children: ReactNode;
 }) {
