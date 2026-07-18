@@ -75,6 +75,7 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
         <Link
           href="/"
           className="focus-ring flex items-center gap-3 rounded-lg font-semibold"
+          aria-label="Mad Buddy home"
           onClick={() => onSectionChange(null)}
         >
           <BrandMark className="h-9 w-9" priority />
@@ -90,32 +91,18 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
             How it works
           </NavAnchor>
           <NavAnchor
-            href="#features"
-            isActive={activeSection === "features"}
-            onClick={() => onSectionChange("features")}
-          >
-            Features
-          </NavAnchor>
-          <NavAnchor
             href="#safety"
             isActive={activeSection === "safety"}
             onClick={() => onSectionChange("safety")}
           >
-            Safety
+            Privacy
           </NavAnchor>
           <Link
             className={navLinkClass(false)}
             href="/pricing"
             onClick={() => onSectionChange(null)}
           >
-            Premium
-          </Link>
-          <Link
-            className={navLinkClass(false)}
-            href="/about"
-            onClick={() => onSectionChange(null)}
-          >
-            About Us
+            Pricing
           </Link>
         </div>
 
@@ -124,7 +111,7 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
             <Link href="/login">Log in</Link>
           </Button>
           <Button asChild size="sm">
-            <Link href="/signup">Sign Up Free</Link>
+            <Link href="/signup">Get started</Link>
           </Button>
         </div>
 
@@ -154,20 +141,14 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
             <MobileNavLink href="#how-it-works" onNavigate={closeMobile}>
               How it works
             </MobileNavLink>
-            <MobileNavLink href="#features" onNavigate={closeMobile}>
-              Features
-            </MobileNavLink>
             <MobileNavLink href="#safety" onNavigate={closeMobile}>
-              Safety
+              Privacy
             </MobileNavLink>
             <MobileNavLink href="#faq" onNavigate={closeMobile}>
               FAQ
             </MobileNavLink>
             <MobileNavLink href="/pricing" onNavigate={closeMobile}>
-              Premium
-            </MobileNavLink>
-            <MobileNavLink href="/about" onNavigate={closeMobile}>
-              About Us
+              Pricing
             </MobileNavLink>
             <MobileNavLink href="/login" onNavigate={closeMobile}>
               Log in
@@ -175,7 +156,7 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
           </div>
           <Button asChild className="mt-4 w-full" size="lg">
             <Link href="/signup" onClick={closeMobile}>
-              Sign Up Free
+              Get started
             </Link>
           </Button>
         </div>
@@ -258,7 +239,7 @@ function MobileNavLink({
   onNavigate,
   children
 }: {
-  href: `#${string}` | "/pricing" | "/about" | "/login" | "/signup";
+  href: `#${string}` | "/pricing" | "/login" | "/signup";
   onNavigate: () => void;
   children: ReactNode;
 }) {

@@ -244,7 +244,7 @@ function Hero() {
   return (
     <section
       id="top"
-      className="relative scroll-mt-[4.25rem] overflow-hidden px-4 pb-16 pt-[calc(4.25rem+2rem)] sm:scroll-mt-[4.5rem] sm:px-6 sm:pb-20 sm:pt-[calc(4.5rem+2.5rem)] lg:pb-24"
+      className="relative scroll-mt-[4.25rem] overflow-hidden px-4 pb-10 pt-[calc(4.25rem+2rem)] sm:scroll-mt-[4.5rem] sm:px-6 sm:pb-12 sm:pt-[calc(4.5rem+2.5rem)] lg:pb-14"
     >
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(249,115,22,0.16),transparent_42%),radial-gradient(circle_at_80%_30%,rgba(251,146,60,0.12),transparent_40%),radial-gradient(circle_at_50%_90%,rgba(234,88,12,0.1),transparent_35%)]"
@@ -254,21 +254,21 @@ function Hero() {
         <div className="max-w-2xl">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-            Private social proximity
+            Private. Social. Nearby.
           </span>
           <h1 className="mt-4 text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.25rem]">
             When your Muddies are close,{" "}
             <span className="text-primary">they glow.</span>
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
-            A <strong className="font-semibold text-foreground">Muddy</strong> is a friend you have
-            mutually approved. See who’s around, wave to connect, and make real plans — without
-            maps, coordinates, or exact distances.
+            A <strong className="font-semibold text-foreground">Muddy</strong> is a friend you both
+            approve. See who&rsquo;s nearby, connect, and make plans&mdash;without sharing exact
+            locations.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Button asChild size="lg">
               <Link href="/signup">
-                Join Mad Buddy
+                Get started
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </Button>
@@ -291,31 +291,32 @@ function Hero() {
             aria-hidden="true"
             className="pointer-events-none absolute inset-[16%] rounded-full bg-orange-400/10 blur-[55px] lg:inset-[14%] lg:bg-orange-400/14 lg:blur-[85px]"
           />
+          {/* A soft, irregular (not circular) orange haze — deliberately
+              blob-shaped rather than a perfect ring so it reads as ambient
+              light, not a radar/tracking signal. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1/2 top-1/2 h-[65%] w-[65%] -translate-x-1/2 -translate-y-1/2 rounded-[62%_38%_55%_45%/45%_60%_40%_55%] bg-orange-500/10 blur-[60px] lg:blur-[90px]"
+          />
           {/* A soft grounding shadow so the phones read as standing in the
               scene instead of floating with nothing beneath them. */}
           <div
             aria-hidden="true"
             className="pointer-events-none absolute bottom-[4%] left-1/2 h-10 w-[50%] -translate-x-1/2 rounded-[100%] bg-black/25 blur-xl lg:bottom-[6%] lg:h-16 lg:w-[55%] lg:bg-black/40 lg:blur-2xl"
           />
-          {/* Concentric rings that continuously grow outward and fade behind
-              the phones, like a proximity ping — three identical circles on
-              a staggered loop so it reads as one ongoing ripple. */}
-          <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2">
-            <span className="hero-ring-grow absolute left-1/2 top-1/2 h-48 w-48 rounded-full border-2 border-primary/80 sm:h-56 sm:w-56 lg:h-72 lg:w-72" />
-            <span className="hero-ring-grow absolute left-1/2 top-1/2 h-48 w-48 rounded-full border-2 border-primary/80 [animation-delay:1.2s] sm:h-56 sm:w-56 lg:h-72 lg:w-72" />
-            <span className="hero-ring-grow absolute left-1/2 top-1/2 h-48 w-48 rounded-full border-2 border-primary/80 [animation-delay:2.4s] sm:h-56 sm:w-56 lg:h-72 lg:w-72" />
-          </div>
           {/* This asset has its background removed (true alpha, not a CSS
               mask) — the phones and glow lines are the only opaque pixels,
-              so nothing here can read as a rectangle. */}
+              so nothing here can read as a rectangle. A slight contrast/
+              saturation lift keeps the devices reading as sharp as the
+              surrounding text without touching the source file. */}
           <Image
             src="/brand/mad-buddy-hero-mockup-v2.png"
-            alt="Mad Buddy app showing three phone screens with nearby friends, social plans and privacy controls"
+            alt="Mad Buddy app showing nearby Muddies, plans, and privacy controls"
             width={617}
             height={405}
             priority
             sizes="(max-width: 1024px) 65vw, 36vw"
-            className="relative z-10 h-auto w-full max-w-[520px] object-contain"
+            className="relative z-10 h-auto w-full max-w-[520px] object-contain [filter:contrast(1.06)_saturate(1.08)]"
           />
         </div>
       </div>
@@ -325,8 +326,8 @@ function Hero() {
 
 function TrustStrip() {
   return (
-    <section aria-label="Trust highlights" className="border-y border-border/70 bg-secondary/35 px-4 py-5 sm:px-6">
-      <ul className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-8 sm:gap-y-2">
+    <section aria-label="Trust highlights" className="border-t border-border/60 px-4 py-3 sm:px-6">
+      <ul className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-8 sm:gap-y-2">
         {[
           "Mutual approval required",
           "No maps or exact locations",
@@ -576,7 +577,7 @@ function FinalCta() {
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             <Button asChild size="lg" className="bg-background text-primary hover:bg-background/90">
               <Link href="/signup">
-                Join Mad Buddy
+                Get started
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </Button>
