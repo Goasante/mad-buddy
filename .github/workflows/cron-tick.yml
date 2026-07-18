@@ -1,0 +1,26 @@
+name: Cron tick
+
+# Vercel Hobby only allows once-daily cron, but several jobs behind
+# /api/cron/tick need much tighter cadence (safe_arrival.unconfirmed_alert
+# runs every 5 minutes; several expiry jobs every 15-30). This workflow is
+# the real scheduler; Vercel's own cron.json entry only covers the
+# once-daily jobs. The endpoint itself buckets by job type and is
+# idempotent, so calling it more often than a given job needs is harmless.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call cron tick endpoint
+        run: |
+          status=$(curl -s -o /dev/stderr -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://mad-buddy.vercel.app/api/cron/tick")
+          echo "status=$status"
+          if [ "$status" -ge 300 ]; then
+            exit 1
+          fi
