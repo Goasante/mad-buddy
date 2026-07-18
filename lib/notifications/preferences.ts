@@ -1,7 +1,7 @@
 /**
  * Smart Notifications decision core (feature architecture batch 4, spec §15-§29).
  * Pure logic for the notification preference model, quiet hours, and the
- * shouldNotify decision engine (spec §22). No I/O — the server action loads
+ * shouldNotify decision engine (spec §22). No I/O, the server action loads
  * preferences and calls decideNotification so the interruption rules live in
  * one tested place.
  */

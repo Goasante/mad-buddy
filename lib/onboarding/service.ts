@@ -5,7 +5,7 @@ import type { MilestoneName } from "@/lib/supabase/database.types";
 
 /**
  * Onboarding server helpers (spec §63). These take the admin client, so they
- * deliberately live here rather than in the "use server" actions file — an
+ * deliberately live here rather than in the "use server" actions file, an
  * export from that file becomes a client-callable server action, which these
  * must never be.
  */

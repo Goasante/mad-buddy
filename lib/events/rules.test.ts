@@ -71,11 +71,11 @@ describe("Event Glow eligibility (spec §34, §37)", () => {
     expect(resolveEventGlow(glow())).toEqual({ visible: true, reason: "visible" });
   });
 
-  it("requires the viewer to be present too — it answers 'who else is here'", () => {
+  it("requires the viewer to be present too, it answers 'who else is here'", () => {
     expect(resolveEventGlow(glow({ viewerCheckedIn: false })).reason).toBe("not_checked_in");
   });
 
-  it("never activates from proximity alone — the target must have checked in", () => {
+  it("never activates from proximity alone, the target must have checked in", () => {
     expect(resolveEventGlow(glow({ targetCheckedIn: false })).reason).toBe("target_not_present");
   });
 

@@ -457,7 +457,7 @@ function connectionModalTitle(title: string) {
     .replace(/ replied$/i, " wants to connect");
 }
 
-/** Notification titles interpolate a profile's stored full_name verbatim —
+/** Notification titles interpolate a profile's stored full_name verbatim,
  * some accounts have that saved in lowercase. Capitalising once here, at the
  * point every notification enters the page's state, fixes display
  * everywhere the title is shown (card, unread dot context, reply modal)
@@ -607,7 +607,7 @@ const MUDDY_ACTIVITY_TYPES = new Set([
   "wave"
 ]);
 
-/** Orange is reserved for Muddy activity and proximity — billing/system
+/** Orange is reserved for Muddy activity and proximity, billing/system
  * notifications get a neutral icon treatment instead. */
 function isMuddyActivityType(type: string): boolean {
   return MUDDY_ACTIVITY_TYPES.has(type.split(":")[0]);

@@ -60,7 +60,7 @@ export const EXPIRY_PRESETS = [
 
 export type ExpiryPresetId = (typeof EXPIRY_PRESETS)[number]["id"];
 
-/** Everything expires — the default is 6 hours (spec §8). */
+/** Everything expires, the default is 6 hours (spec §8). */
 export const DEFAULT_EXPIRY_MS = 6 * 60 * 60 * 1000;
 export const MAX_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
@@ -114,7 +114,7 @@ export type MomentVisibilityInput = {
   areApprovedMuddies: boolean;
   isBlockedEitherDirection: boolean;
   authorGhostMode: boolean;
-  /** Reporter chose "report and hide" — hidden for this viewer only (§50). */
+  /** Reporter chose "report and hide", hidden for this viewer only (§50). */
   viewerHidThis: boolean;
   audienceType: MomentAudienceType;
   /** Viewer is in the moment's explicit audience (circle/user/etc). */
@@ -201,7 +201,7 @@ export type DropUnlockResult = {
 };
 
 /**
- * Whether a viewer may unlock a Drop. `already_unlocked` is NOT a failure — a
+ * Whether a viewer may unlock a Drop. `already_unlocked` is NOT a failure, a
  * duplicate unlock returns the existing one (spec §33), the caller just must
  * not create a second row.
  */

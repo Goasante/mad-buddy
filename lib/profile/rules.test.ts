@@ -54,7 +54,7 @@ describe("display name rules (spec §8)", () => {
     expect(validateDisplayName("Ama Serwaa 🎓")).toBeNull();
     expect(validateDisplayName("")).toMatch(/display name/);
     expect(validateDisplayName("<script>")).toMatch(/</);
-    // Zero-width characters only — renders blank, a known impersonation trick.
+    // Zero-width characters only, renders blank, a known impersonation trick.
     expect(validateDisplayName("​​")).toMatch(/people can read/);
     expect(validateDisplayName("x".repeat(51))).toMatch(/at most/);
   });

@@ -76,7 +76,7 @@ export function OnboardingFlow({
   const [feedback, setFeedback] = useState("Ready to set up your profile.");
   const [isPending, startTransition] = useTransition();
 
-  // Preview only — real visibility is whatever the privacy panel saves
+  // Preview only, real visibility is whatever the privacy panel saves
   // (hidden by default, spec §31).
   const previewVisibility: VisibilityPreference = privacySaved ? "friends" : "ghost";
 
@@ -97,7 +97,7 @@ export function OnboardingFlow({
 
   function finishOnboarding() {
     if (!privacySaved) {
-      setFeedback("Save your privacy settings first — you start hidden either way.");
+      setFeedback("Save your privacy settings first, you start hidden either way.");
       setStepIndex(steps.findIndex((step) => step.id === "privacy"));
       return;
     }
@@ -200,7 +200,7 @@ export function OnboardingFlow({
                 <Badge variant="blue">Privacy setup</Badge>
                 <h2 className="mt-4 text-2xl font-semibold">Choose who can see you.</h2>
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                  You start hidden. Nothing is shared until you actively turn your glow on — and location
+                  You start hidden. Nothing is shared until you actively turn your glow on, and location
                   permission is only requested after you choose an audience.
                 </p>
                 <div className="mt-6">

@@ -31,7 +31,7 @@ const tabs = [
   { id: "all", label: "All" },
   { id: "unread", label: "Unread" },
   // "Plans" filters conversation_type === "plan" (the group chat attached to
-  // a specific Plan) — a real, working filter, just unclearly named before.
+  // a specific Plan), a real, working filter, just unclearly named before.
   { id: "plans", label: "Plan chats" }
 ] as const;
 
@@ -113,7 +113,7 @@ export function MessagesPageContent({
     });
   }
 
-  // Defensive de-dup by conversation id — a row should never render twice
+  // Defensive de-dup by conversation id, a row should never render twice
   // for the same real conversation, whatever produced the raw list.
   const uniqueConversations = useMemo(() => {
     const seen = new Set<string>();
@@ -138,7 +138,7 @@ export function MessagesPageContent({
   const selected = uniqueConversations.find((conversation) => conversation.id === selectedId) ?? null;
 
   // Realtime (spec §64): subscribe to the open thread's messages instead of
-  // only reloading after our own sends. Authorization is server-side — RLS on
+  // only reloading after our own sends. Authorization is server-side, RLS on
   // messages means a non-member subscription simply receives nothing. If the
   // subscription isn't available, the existing reload-after-send still works.
   useEffect(() => {
@@ -156,7 +156,7 @@ export function MessagesPageContent({
         { event: "*", schema: "public", table: "messages", filter: `conversation_id=eq.${selectedId}` },
         () => {
           // Refetch through the server action so blocks, hides, and receipt
-          // preferences are re-applied — never trust the raw event payload.
+          // preferences are re-applied, never trust the raw event payload.
           void getMessagesAction(selectedId).then(setMessages);
         }
       )
@@ -177,7 +177,7 @@ export function MessagesPageContent({
   }, [uniqueConversations, activeTab, query]);
 
   /**
-   * Opening a conversation is an event, not a render side effect — so the load
+   * Opening a conversation is an event, not a render side effect, so the load
    * lives in the handler. Loads the thread, then marks it read.
    */
   function openConversation(conversationId: string) {
@@ -275,7 +275,7 @@ export function MessagesPageContent({
       ) : null}
 
       {!hasAnyConversations ? (
-        // One compact, centred empty state — no search, filters, list, or
+        // One compact, centred empty state, no search, filters, list, or
         // right panel until there's something for them to operate on.
         <EmptyState
           icon={MessagesSquare}
@@ -572,7 +572,7 @@ export function MessagesPageContent({
                   )}
                 </div>
 
-                {/* Quick coordination actions (spec §39) — no location attached. */}
+                {/* Quick coordination actions (spec §39), no location attached. */}
                 <div className="flex flex-wrap gap-1.5 border-t border-border/70 px-3 pt-2">
                   {QUICK_ACTIONS.slice(0, 3).map((action) => (
                     <button
@@ -615,7 +615,7 @@ export function MessagesPageContent({
 
       <NewMessageModal open={newMessageOpen} onOpenChange={setNewMessageOpen} onSelect={startConversationWith} />
 
-      {/* Honest crypto language (spec §62) — never claim end-to-end. Lives
+      {/* Honest crypto language (spec §62), never claim end-to-end. Lives
           behind the header's info icon now rather than a standing sentence
           on every screen. */}
       <Modal open={infoOpen} onOpenChange={setInfoOpen} title="Message information" compact>

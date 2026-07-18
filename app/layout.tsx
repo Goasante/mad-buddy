@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     default: "Mad Buddy",
     template: "%s | Mad Buddy"
   },
-  description: "When your Muddies are close, they glow — private proximity for mutually approved friends.",
+  description: "When your Muddies are close, they glow, private proximity for mutually approved friends.",
   openGraph: {
     title: "Mad Buddy",
     description: "When your Muddies are close, they glow.",

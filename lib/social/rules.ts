@@ -105,8 +105,8 @@ export function isStatusActive(status: { expires_at: string }, nowMs: number): b
 
 /**
  * Server-side visibility floor (spec §6): mutual friendship required, no
- * blocks, unexpired, and — because a visible status can indirectly reveal
- * activity — Ghost Mode hides status by default (spec §7).
+ * blocks, unexpired, and, because a visible status can indirectly reveal
+ * activity, Ghost Mode hides status by default (spec §7).
  */
 export function canViewStatus(input: {
   areMutualMuddies: boolean;

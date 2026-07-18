@@ -40,7 +40,7 @@ export function AppFeedbackPage() {
 
       {submitted ? (
         <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-800 dark:text-emerald-100">
-          Thanks — your {tab} was sent.
+          Thanks, your {tab} was sent.
         </div>
       ) : (
         <div className="space-y-4">

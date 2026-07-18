@@ -15,7 +15,7 @@ export default function NotFound() {
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">This page isn&apos;t glowing.</h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
           The page you&apos;re looking for doesn&apos;t exist or has moved. Even we don&apos;t know
-          where it is — and we don&apos;t track locations.
+          where it is, and we don&apos;t track locations.
         </p>
         <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
           <Button asChild>

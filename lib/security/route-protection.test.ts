@@ -55,7 +55,7 @@ describe("route protection (deny-by-default, audit I-08)", () => {
     expect(isPublicPath("/invite/")).toBe(false);
   });
 
-  it("protects routes that do not exist yet — the deny-by-default guarantee", () => {
+  it("protects routes that do not exist yet, the deny-by-default guarantee", () => {
     // This is the regression the old allowlist model shipped once (/plans).
     expect(requiredLoginRedirect("/some-feature-added-next-sprint")).toBe("/login");
     expect(requiredLoginRedirect("/x")).toBe("/login");
@@ -71,7 +71,7 @@ describe("route protection (deny-by-default, audit I-08)", () => {
     // "/pricingx" must NOT inherit "/pricing"'s public status.
     expect(isPublicPath("/pricingx")).toBe(false);
     expect(requiredLoginRedirect("/pricingx")).toBe("/login");
-    // "/administrator" is not under "/admin" either — but is still private.
+    // "/administrator" is not under "/admin" either, but is still private.
     expect(requiredLoginRedirect("/administrator")).toBe("/login");
   });
 

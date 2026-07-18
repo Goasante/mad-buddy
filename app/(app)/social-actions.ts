@@ -52,7 +52,7 @@ async function getAuthedUserId() {
 /**
  * Shared relationship gate for every social interaction (spec: privacy
  * first). Confirms mutual friendship and the absence of blocks in either
- * direction — the client never decides eligibility.
+ * direction, the client never decides eligibility.
  */
 async function verifyMuddyRelationship(
   admin: ReturnType<typeof createSupabaseAdminClient>,
@@ -344,7 +344,7 @@ export async function createMeetingPingAction(input: unknown): Promise<SocialAct
   const relationship = await verifyMuddyRelationship(admin, userId, recipientId);
   if (relationship === "error") return { ok: false, message: "Couldn't send your ping. Try again." };
   if (relationship === "not_muddies") {
-    // Neutral wording — never reveals blocks or mutes (spec §41).
+    // Neutral wording, never reveals blocks or mutes (spec §41).
     return { ok: false, message: "You cannot send a Ping to this Muddy right now." };
   }
 
@@ -429,7 +429,7 @@ export async function respondToPingAction(input: unknown): Promise<SocialActionS
     return { ok: false, message: "This ping is no longer available." };
   }
 
-  // Lazy expiry — server time is the source of truth (spec §35).
+  // Lazy expiry, server time is the source of truth (spec §35).
   const now = Date.now();
   if (OPEN_PING_STATUSES.includes(ping.status) && Date.parse(ping.expires_at) <= now) {
     await admin
@@ -529,7 +529,7 @@ export async function respondToPingAction(input: unknown): Promise<SocialActionS
       title: `${name} may be available`,
       message: `${name} said maybe. You can suggest a time or wait.`
     });
-    return { ok: true, message: "Reply sent — they'll know you might make it." };
+    return { ok: true, message: "Reply sent, they'll know you might make it." };
   }
 
   if (nextStatus === "counter_proposed") {
@@ -551,9 +551,9 @@ export async function respondToPingAction(input: unknown): Promise<SocialActionS
     category: "pings",
     type: `meeting_ping:${userId}`,
     title: `${name} can't meet right now`,
-    message: `No worries — maybe another time.`
+    message: `No worries, maybe another time.`
   });
-  return { ok: true, message: "No pressure — they've been let know politely." };
+  return { ok: true, message: "No pressure, they've been let know politely." };
 }
 
 export async function cancelPingAction(pingId: string): Promise<SocialActionState> {

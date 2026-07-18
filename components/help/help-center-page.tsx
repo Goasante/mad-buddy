@@ -68,7 +68,7 @@ export function HelpCenterPage() {
         </div>
 
         {sent ? (
-          <p className="text-sm text-muted-foreground">Thanks — our team will get back to you soon.</p>
+          <p className="text-sm text-muted-foreground">Thanks, our team will get back to you soon.</p>
         ) : (
           <div className="grid gap-4">
             <div className="grid gap-4 sm:grid-cols-2">

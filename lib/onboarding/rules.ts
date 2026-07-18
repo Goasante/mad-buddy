@@ -7,7 +7,7 @@
  *    (spec §31). Nothing here can silently enable it.
  *  - A client's claim of location permission is never proof. Visibility
  *    activates only on a valid recent presence update (spec §48).
- *  - Activation means a real connection plus a meaningful action — not form
+ *  - Activation means a real connection plus a meaningful action, not form
  *    completion (spec §57).
  */
 
@@ -74,7 +74,7 @@ export type OnboardingProgressState = {
 /**
  * Whether onboarding may be marked complete. The server validates required
  * steps rather than trusting a client "done" call (spec §26). Location and the
- * first Muddy are deliberately NOT required — a user must be able to finish
+ * first Muddy are deliberately NOT required, a user must be able to finish
  * without granting location or waiting on someone else to accept (spec §61).
  */
 export function canCompleteOnboarding(state: OnboardingProgressState): boolean {
@@ -157,7 +157,7 @@ export function glowDurationMs(duration: GlowDuration, nowMs: number): number | 
     case "4h":
       return 4 * 60 * 60 * 1000;
     case "until_tonight": {
-      // Until 23:59 local-ish — computed from the caller's supplied clock.
+      // Until 23:59 local-ish, computed from the caller's supplied clock.
       const end = new Date(nowMs);
       end.setHours(23, 59, 0, 0);
       const ms = end.getTime() - nowMs;
@@ -169,7 +169,7 @@ export function glowDurationMs(duration: GlowDuration, nowMs: number): number | 
 }
 
 // ---------------------------------------------------------------------------
-// Permission summary (spec §33) — only claims that are technically true.
+// Permission summary (spec §33), only claims that are technically true.
 // ---------------------------------------------------------------------------
 
 export const FRIENDS_CAN_SEE = [
@@ -209,7 +209,7 @@ export function permissionAllowsLocation(state: PermissionState): boolean {
 
 /**
  * Whether glow may actually go live. A client claiming "granted" is NOT
- * sufficient — there must be a real, recent presence update (spec §48). This
+ * sufficient, there must be a real, recent presence update (spec §48). This
  * is what stops a spoofed client from flipping visibility on.
  */
 export function canActivateVisibility(input: {

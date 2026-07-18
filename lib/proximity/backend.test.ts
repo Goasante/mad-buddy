@@ -14,7 +14,7 @@ import {
 } from "@/lib/proximity/backend";
 
 // ---------------------------------------------------------------------------
-// assertPrivacySafeResponse — the product's core promise. These tests are the
+// assertPrivacySafeResponse, the product's core promise. These tests are the
 // regression guard the audit (I-09) said was missing: if anyone ever adds a
 // coordinate-bearing field to a nearby response, this suite goes red.
 // ---------------------------------------------------------------------------
@@ -82,7 +82,7 @@ describe("assertPrivacySafeResponse", () => {
       ]
     });
 
-    // zod dropped the key — and the assertion would catch it if it hadn't.
+    // zod dropped the key, and the assertion would catch it if it hadn't.
     expect(JSON.stringify(smuggled)).not.toContain("latitude");
     expect(() => assertPrivacySafeResponse(smuggled)).not.toThrow();
   });
@@ -162,7 +162,7 @@ describe("haversineMeters", () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildSafeNearbyFriends — Ghost Mode, blocking, staleness enforcement
+// buildSafeNearbyFriends, Ghost Mode, blocking, staleness enforcement
 // ---------------------------------------------------------------------------
 
 const NOW = Date.parse("2026-07-16T12:00:00.000Z");
@@ -215,7 +215,7 @@ describe("buildSafeNearbyFriends", () => {
     expect(() => assertPrivacySafeResponse({ friends: result })).not.toThrow();
   });
 
-  it("excludes Ghost Mode users entirely — server-enforced, not UI-hidden", () => {
+  it("excludes Ghost Mode users entirely, server-enforced, not UI-hidden", () => {
     const result = build({
       friendIds: ["ghost"],
       locationByUserId: new Map([["ghost", location("ghost")]]),

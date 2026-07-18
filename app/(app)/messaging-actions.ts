@@ -49,7 +49,7 @@ export type ChatMessageView = {
 export type ConversationView = {
   id: string;
   title: string;
-  /** The other person's username for a direct chat — used to disambiguate
+  /** The other person's username for a direct chat, used to disambiguate
    * when two conversations share the same display name. Null for
    * group/plan chats, which have no single "other person." */
   otherUsername: string | null;
@@ -98,7 +98,7 @@ function eligibilityMessage(reason: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Open a conversation (spec §4) — no manual "create chat" step.
+// Open a conversation (spec §4), no manual "create chat" step.
 // ---------------------------------------------------------------------------
 
 export async function openDirectConversationAction(recipientId: string): Promise<MessagingActionState> {
@@ -189,7 +189,7 @@ export async function sendMessageAction(input: unknown): Promise<MessagingAction
     .select("id")
     .single();
 
-  // A duplicate send collides on (sender_id, client_message_id) — return the
+  // A duplicate send collides on (sender_id, client_message_id), return the
   // existing message rather than erroring or double-posting (spec §21).
   if (error || !message) {
     const { data: existing } = await admin
@@ -270,7 +270,7 @@ export type MessageableFriend = {
 };
 
 /**
- * Friends the "New message" picker can offer. This is discovery only —
+ * Friends the "New message" picker can offer. This is discovery only,
  * openDirectConversationAction re-validates eligibility (blocks, comms
  * preferences) server-side when a conversation is actually opened, so a
  * stale/omitted block check here can't let anyone actually message past it.

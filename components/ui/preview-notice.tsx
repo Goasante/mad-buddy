@@ -19,7 +19,7 @@ export function PreviewNotice({ className }: { className?: string }) {
     >
       <FlaskConical className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" aria-hidden="true" />
       <p className="text-sm leading-6 text-amber-800 dark:text-amber-100">
-        <span className="font-semibold">Preview</span> — this feature shows sample data. You can
+        <span className="font-semibold">Preview</span>, this feature shows sample data. You can
         try everything, but changes aren&apos;t saved or shared with anyone yet.
       </p>
     </div>

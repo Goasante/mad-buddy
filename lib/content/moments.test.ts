@@ -52,7 +52,7 @@ describe("content + expiry validation (spec §3, §8)", () => {
     ).toMatch(/Captions/);
   });
 
-  it("requires a future expiry within 24 hours — everything expires", () => {
+  it("requires a future expiry within 24 hours, everything expires", () => {
     expect(validateExpiry(NOW - 1, NOW)).toMatch(/future/);
     expect(validateExpiry(NOW + 25 * HOUR, NOW)).toMatch(/24 hours/);
     expect(validateExpiry(NOW + 6 * HOUR, NOW)).toBeNull();

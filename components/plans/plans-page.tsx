@@ -215,7 +215,7 @@ export function PlansPageContent({
             ))}
           </div>
         ) : (
-          // Compact inline state, not the bordered EmptyState panel — a
+          // Compact inline state, not the bordered EmptyState panel, a
           // full card-style empty state for "nothing here yet" was reading
           // as an oversized, disconnected block on a tabbed list page.
           <div className="py-12 text-center">
@@ -273,7 +273,7 @@ function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
             {plan.myRsvp === "invited" ? <Badge variant="violet">Invited</Badge> : null}
             {TERMINAL.has(plan.status) ? <Badge variant="default">{plan.status}</Badge> : null}
           </div>
-          {/* Overview cards intentionally omit exact place text — that's
+          {/* Overview cards intentionally omit exact place text, that's
               only shown once a Muddy opens the plan's own details. */}
           <p className="mt-1 text-sm text-muted-foreground">{dateLabel(plan)}</p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -364,7 +364,7 @@ function CreatePlanModal({
             }
             onClick={() => {
               // Date without a time still means "quick plan, no fixed hour"
-              // wasn't the intent here — a date was deliberately chosen, so
+              // wasn't the intent here, a date was deliberately chosen, so
               // default the time to the very start of that day rather than
               // silently dropping it.
               const combined = date ? `${date}T${time || "00:00"}` : null;
@@ -449,7 +449,7 @@ function CreatePlanModal({
 
 /**
  * A searchable, anchored multi-select (spec: "not a modal") built on Popover
- * rather than DropdownMenu — the search input inside needs to own normal text
+ * rather than DropdownMenu, the search input inside needs to own normal text
  * editing and caret behaviour, which fights a menu's built-in typeahead and
  * roving-focus handling.
  */

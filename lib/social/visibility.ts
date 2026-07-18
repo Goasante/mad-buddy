@@ -103,11 +103,11 @@ export type FeatureAccessResult = {
  * any mutual, unblocked, non-ghosted Muddy may see them.
  */
 export function resolveFeatureAccess(input: FeatureAccessInput): FeatureAccessResult {
-  // 1. Block — strongest deny.
+  // 1. Block, strongest deny.
   if (input.isBlockedEitherDirection) return { allowed: false, reason: "blocked" };
   // 2. Suspension.
   if (input.ownerSuspended) return { allowed: false, reason: "suspended" };
-  // Relationship gate — no status for non-Muddies, ever.
+  // Relationship gate, no status for non-Muddies, ever.
   if (!input.areMutualMuddies) return { allowed: false, reason: "not_muddies" };
   // 3. Ghost Mode overrides everything below, including Close Friends (spec §48).
   if (input.ownerGhostMode) return { allowed: false, reason: "ghost_mode" };

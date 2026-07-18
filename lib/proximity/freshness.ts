@@ -1,7 +1,7 @@
 /**
  * Presence Freshness (feature architecture batch 4, spec §43-§55). Pure,
  * server-time-authoritative helpers that tell a viewer how current a proximity
- * result is. Coarse labels only — freshness must never leak another user's
+ * result is. Coarse labels only, freshness must never leak another user's
  * exact app-open time, device, or permission state (spec §53).
  */
 
@@ -52,7 +52,7 @@ export function proximityActionsAllowed(state: FreshnessState): boolean {
 
 /**
  * The owner-facing warning when *their own* presence isn't updating (spec §51).
- * Only ever shown to the user about themselves — never about another user.
+ * Only ever shown to the user about themselves, never about another user.
  */
 export function ownerStalePresenceWarning(state: FreshnessState): string | null {
   if (state !== "stale") return null;

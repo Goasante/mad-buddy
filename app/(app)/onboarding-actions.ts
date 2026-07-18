@@ -138,7 +138,7 @@ const stepSchema = z.enum([
 ]);
 
 /**
- * Advances a step. Progress only moves forward (spec §24) — a replayed or
+ * Advances a step. Progress only moves forward (spec §24), a replayed or
  * out-of-order client event can never rewind someone's onboarding.
  */
 export async function completeOnboardingStepAction(step: string): Promise<OnboardingActionState> {
@@ -272,7 +272,7 @@ const privacySetupSchema = z.object({
 
 /**
  * Saves the initial privacy setup. Glow is only ever activated later, after a
- * real presence update — saving "close_friends" here does NOT make the user
+ * real presence update, saving "close_friends" here does NOT make the user
  * visible (spec §32 step 7).
  */
 export async function savePrivacySetupAction(input: unknown): Promise<OnboardingActionState> {

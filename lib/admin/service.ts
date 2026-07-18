@@ -18,7 +18,7 @@ import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
  *
  *  - No function returns private user content. Sensitive reads must go through
  *    recordSensitiveAccess FIRST, which fails closed if the access wasn't
- *    justified — there is no "read and maybe log later" path.
+ *    justified, there is no "read and maybe log later" path.
  *  - Audit writes are best-effort-proof: if the audit insert fails, the action
  *    is refused rather than performed unlogged (spec §56).
  */
@@ -70,7 +70,7 @@ export type AuditEvent = {
 
 /**
  * Appends an audit event. Returns false when the write fails so callers can
- * refuse the action — an unlogged privileged action is worse than a failed
+ * refuse the action, an unlogged privileged action is worse than a failed
  * one (spec §56). The table is append-only via a database trigger, so not even
  * this service role can rewrite history.
  */
@@ -119,7 +119,7 @@ export async function recordSensitiveAccess(
 }
 
 // ---------------------------------------------------------------------------
-// Emergency controls (spec §62) — must work instantly, without a deploy.
+// Emergency controls (spec §62), must work instantly, without a deploy.
 // ---------------------------------------------------------------------------
 
 /**

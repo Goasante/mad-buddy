@@ -1,7 +1,7 @@
 export type PlanId = "free" | "plus" | "pro";
 
 // Single source of truth for displayed prices (audit I-12). Both the public
-// pricing page and the billing page must read from here — never hardcode a
+// pricing page and the billing page must read from here, never hardcode a
 // price string elsewhere. Charged amounts are configured in Paystack plan
 // codes; keep these display values in sync with that configuration.
 export const planDisplayPrices: Record<PlanId, string> = {

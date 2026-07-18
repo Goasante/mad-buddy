@@ -32,7 +32,7 @@ export type GuardedSurface =
 
 /**
  * Every surface this gate knows how to block. Kept in lockstep with batch 13's
- * SUSPENSION_BLOCKS by a test — if the two drift, a suspended user silently
+ * SUSPENSION_BLOCKS by a test, if the two drift, a suspended user silently
  * keeps access to the surface that was forgotten (spec §19's partial bypass).
  */
 export const GUARDED_SURFACES: readonly GuardedSurface[] = [

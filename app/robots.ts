@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { absoluteUrl } from "@/lib/seo";
 
 // Note: robots.txt is a crawl hint, not access control. Every route listed
-// here is also auth-gated by the deny-by-default guard in proxy.ts — this
+// here is also auth-gated by the deny-by-default guard in proxy.ts, this
 // list only keeps login-redirect noise out of search results.
 // No trailing slashes: Next.js serves these paths without them, and
 // robots.txt matching is a literal prefix match.

@@ -23,7 +23,7 @@ const onboardingSchema = z.object({
   moodStatus: z.string().trim().max(80).optional(),
   /**
    * Legacy field. The spec-correct PrivacySetupPanel now owns visibility via
-   * savePrivacySetupAction (hidden by default) — when omitted, this action
+   * savePrivacySetupAction (hidden by default), when omitted, this action
    * leaves visibility_status alone.
    */
   visibility: z.enum(["friends", "app_open", "ghost"]).optional(),

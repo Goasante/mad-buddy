@@ -212,7 +212,7 @@ export function HangoutModePage({
                     <span className="min-w-0 flex-1 truncate text-sm font-medium">
                       {request.requesterName}
                       {request.message ? (
-                        <span className="ml-1 text-xs font-normal text-muted-foreground">— {request.message}</span>
+                        <span className="ml-1 text-xs font-normal text-muted-foreground">: {request.message}</span>
                       ) : null}
                     </span>
                     {request.status === "pending" ? (

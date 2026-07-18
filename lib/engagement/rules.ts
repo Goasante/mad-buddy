@@ -9,11 +9,11 @@
  *    never sustain one (§14, §17).
  *  - Nothing here is public. There is no ranking/leaderboard shape at all (§16).
  *  - Streaks cannot be bought back (§18) and losing one is not punished (§19).
- *  - Recaps carry aggregated counts only — never message content or location (§4).
+ *  - Recaps carry aggregated counts only, never message content or location (§4).
  */
 
 // ---------------------------------------------------------------------------
-// Weekly periods (spec §15) — weekly, deliberately, not daily.
+// Weekly periods (spec §15), weekly, deliberately, not daily.
 // ---------------------------------------------------------------------------
 
 /** ISO-week key, e.g. "2026-W29". Weekly cadence is the anti-addiction choice. */
@@ -59,7 +59,7 @@ const MEANINGFUL_EVENTS: ReadonlySet<string> = new Set<StreakEventType>([
 
 /**
  * Whether an event counts toward a streak. App opens, profile views, location
- * updates, and notification taps are deliberately absent — a streak measures
+ * updates, and notification taps are deliberately absent, a streak measures
  * friendship, not usage (spec §14).
  */
 export function isMeaningfulMutualInteraction(eventType: string): boolean {
@@ -147,7 +147,7 @@ export const STREAK_PAUSE_OPTIONS_WEEKS = [1, 2, 4, 8] as const;
 
 /**
  * Pausing is always free. There is no paid path to preserve or restore a
- * streak — spec §18 forbids monetising it, so no function here accepts a plan.
+ * streak, spec §18 forbids monetising it, so no function here accepts a plan.
  */
 export function pauseUntilMs(weeks: number, nowMs: number): number {
   const clamped = Math.min(Math.max(weeks, 1), 8);
@@ -219,7 +219,7 @@ export function sanitizeRecapSummary(raw: Record<string, unknown>): RecapSummary
 
 /**
  * Warm, neutral framing (spec §6). Never comparative ("you only met 2"), never
- * shaming — the copy states what happened and stops.
+ * shaming, the copy states what happened and stops.
  */
 export function recapHeadline(summary: RecapSummary): string {
   if (summary.muddiesInteractedWith === 0 && summary.plansCompleted === 0) {
@@ -255,7 +255,7 @@ export type BudgetDecision = {
 
 /**
  * Whether a push fits the day's budget. Critical and high-priority items
- * (security, a Ping, a plan change) bypass it — the budget exists to stop
+ * (security, a Ping, a plan change) bypass it, the budget exists to stop
  * low-value noise, not to swallow things the user actually needs (spec §45).
  */
 export function checkNotificationBudget(input: {
@@ -291,7 +291,7 @@ const RED_DOT_ALLOWED: ReadonlySet<RedDotSurface> = new Set<RedDotSurface>([
 
 /**
  * Unread indicators are reserved for things a person actually needs to act on.
- * Achievements, recaps, tips, and marketing never get a dot (spec §46) —
+ * Achievements, recaps, tips, and marketing never get a dot (spec §46),
  * that's the difference between an indicator and a manipulation.
  */
 export function allowsRedDot(surface: RedDotSurface): boolean {
@@ -409,7 +409,7 @@ export function applyEngagementGuards(
     nowMs: number;
   }
 ): BaseNotificationDecision {
-  // In-app delivery is never suppressed by these guards — the item still
+  // In-app delivery is never suppressed by these guards, the item still
   // exists, it just doesn't interrupt.
   if (!base.push) return base;
 

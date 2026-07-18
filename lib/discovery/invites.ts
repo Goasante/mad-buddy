@@ -77,7 +77,7 @@ export type InviteRedemptionResult = {
  * friendship invite, even if it is otherwise valid.
  */
 export function resolveInviteRedemption(input: InviteRedemptionInput): InviteRedemptionResult {
-  // Purpose binding before anything else — a mismatched token is simply wrong.
+  // Purpose binding before anything else, a mismatched token is simply wrong.
   if (input.inviteType !== input.requestedType) return { allowed: false, reason: "purpose_mismatch" };
   if (input.revokedAtMs !== null) return { allowed: false, reason: "revoked" };
   if (input.status === "revoked") return { allowed: false, reason: "revoked" };
@@ -87,7 +87,7 @@ export function resolveInviteRedemption(input: InviteRedemptionInput): InviteRed
   if (input.usesCount >= input.maxUses) return { allowed: false, reason: "used_up" };
   if (input.isBlockedEitherDirection) return { allowed: false, reason: "blocked" };
   if (input.redeemerId && input.redeemerId === input.creatorId) return { allowed: false, reason: "self" };
-  // Already Muddies: not an error — the caller opens the profile instead of
+  // Already Muddies: not an error, the caller opens the profile instead of
   // creating a duplicate request (spec §64 step 13).
   if (input.alreadyFriends) return { allowed: false, reason: "already_friends" };
   return { allowed: true, reason: "allowed" };
@@ -108,7 +108,7 @@ function qrPayload(userId: string, windowIndex: number): string {
   return `qr:personal:${userId}:${windowIndex}`;
 }
 
-/** Token for the CURRENT window. Carries no private data — just an opaque MAC. */
+/** Token for the CURRENT window. Carries no private data, just an opaque MAC. */
 export function createPersonalQrToken(userId: string, secret: string, nowMs: number): string {
   const index = qrWindowIndex(nowMs);
   const mac = createHmac("sha256", secret).update(qrPayload(userId, index)).digest("base64url");
@@ -122,7 +122,7 @@ export type QrVerifyResult =
 /**
  * Verifies a scanned personal QR. Accepts the current window and the one
  * immediately before it, so a scan that happens as the window rolls over
- * doesn't spuriously fail — but nothing older (spec §33, §37).
+ * doesn't spuriously fail, but nothing older (spec §33, §37).
  */
 export function verifyPersonalQrToken(token: string, secret: string, nowMs: number): QrVerifyResult {
   const parts = token.split(".");

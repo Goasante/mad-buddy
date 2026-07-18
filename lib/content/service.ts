@@ -19,7 +19,7 @@ export const SIGNED_URL_TTL_SECONDS = 60;
 
 /**
  * Mints a short-lived signed URL for a media asset. The caller MUST have
- * already authorized the viewer against the parent object — this function
+ * already authorized the viewer against the parent object, this function
  * deliberately does not know about parents, so it never becomes a way to read
  * arbitrary media by id.
  */
@@ -78,7 +78,7 @@ export type VisibleMoment = {
 /**
  * Builds the viewer's visible Moment feed. Authorization happens here, before
  * anything reaches the client: blocks, ghost mode, expiry, audience membership,
- * report-and-hide, and — for nearby Moments — a fresh, in-band presence
+ * report-and-hide, and, for nearby Moments, a fresh, in-band presence
  * resolved through the existing proximity pipeline.
  *
  * The response never says *why* something was excluded, and never carries

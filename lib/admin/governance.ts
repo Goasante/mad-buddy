@@ -11,7 +11,7 @@
  *  1. Permission keys are granular. There is deliberately no `admin_all` or
  *     `superuser` key to hold (spec §4).
  *  2. No role's permission set includes reading private content. Sensitive
- *     access is not a permission — it is a case-bound, expiring GRANT.
+ *     access is not a permission, it is a case-bound, expiring GRANT.
  *  3. Everything sensitive requires a case reference + a reason, and returns
  *     an audit record. There is no code path that reads private data without
  *     producing one.
@@ -58,7 +58,7 @@ export type AdminRole =
 /**
  * The role → permission matrix (spec §3). Each role gets the narrowest set
  * that lets it do its job. Note what is NOT here: no role grants reading
- * messages, location, or private media — those aren't permissions at all.
+ * messages, location, or private media, those aren't permissions at all.
  */
 export const ROLE_PERMISSIONS: Record<AdminRole, readonly AdminPermission[]> = {
   super_administrator: [
@@ -117,7 +117,7 @@ export function isAssignmentActive(assignment: AdminAssignment, nowMs: number): 
 
 /**
  * Whether an actor holds a permission right now. Expired and revoked
- * assignments grant nothing — this is the only function that should decide.
+ * assignments grant nothing, this is the only function that should decide.
  */
 export function actorHasPermission(input: {
   assignments: AdminAssignment[];
@@ -174,7 +174,7 @@ export type AuthCheck = {
   reason: "mfa_required" | "step_up_required" | "stale_step_up" | "allowed";
 };
 
-/** Step-up is only valid briefly — a morning re-auth can't justify an evening action. */
+/** Step-up is only valid briefly, a morning re-auth can't justify an evening action. */
 export const STEP_UP_VALIDITY_MS = 15 * 60 * 1000;
 
 /**
@@ -210,7 +210,7 @@ export type AccessLevel = "level_1" | "level_2" | "level_3" | "level_4";
 
 /**
  * Fields a Level-1 summary may contain (spec §9). Everything sensitive is
- * absent by construction — this list IS the contract.
+ * absent by construction, this list IS the contract.
  */
 export const SAFE_ACCOUNT_SUMMARY_FIELDS = [
   "user_id",
@@ -370,7 +370,7 @@ export function isReversible(restriction: RestrictionType): boolean {
 }
 
 /**
- * A central suspension must apply everywhere at once — partial enforcement is
+ * A central suspension must apply everywhere at once, partial enforcement is
  * a bypass (spec §19). This is the list the enforcement service checks.
  */
 export const SUSPENSION_BLOCKS = [
@@ -459,7 +459,7 @@ export const SAFE_DIAGNOSTIC_FIELDS = [
 /**
  * Strips a diagnostics blob to the safe allowlist. A support ticket must never
  * become a channel for location, message content, or credentials to reach
- * staff (spec §27) — so this filters rather than trusts the client.
+ * staff (spec §27), so this filters rather than trusts the client.
  */
 export function sanitizeDiagnostics(raw: Record<string, unknown>): Record<string, string> {
   const output: Record<string, string> = {};

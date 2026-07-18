@@ -14,7 +14,7 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
 /**
  * Server pepper for contact matching. Reuses the service-role key as key
- * material — it never leaves the server, and a database leak alone therefore
+ * material, it never leaves the server, and a database leak alone therefore
  * can't reverse a protected identifier.
  */
 export function contactPepper(): string | null {
@@ -26,7 +26,7 @@ export function qrSecret(): string | null {
   return process.env.SUPABASE_SERVICE_ROLE_KEY ?? null;
 }
 
-/** Mutual Muddy count between two users — a count only, never the graph (§55). */
+/** Mutual Muddy count between two users, a count only, never the graph (§55). */
 export async function mutualMuddyCount(admin: Admin, userA: string, userB: string): Promise<number> {
   const [aFriends, bFriends] = await Promise.all([friendIdsOf(admin, userA), friendIdsOf(admin, userB)]);
   let count = 0;
@@ -61,7 +61,7 @@ async function verifiedFlags(admin: Admin, userId: string) {
 
 /**
  * The public trust summary for another user (spec §61). Returns only safe
- * signals — internal risk data never enters this path.
+ * signals, internal risk data never enters this path.
  */
 export async function getPublicTrustSummary(
   admin: Admin,
@@ -145,7 +145,7 @@ export async function resolvePairState(admin: Admin, senderId: string, recipient
 }
 
 /**
- * Records an internal abuse signal. Never surfaced to users (spec §57) —
+ * Records an internal abuse signal. Never surfaced to users (spec §57),
  * writes only, read exclusively by staff tooling.
  */
 export async function recordTrustEvent(

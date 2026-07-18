@@ -252,7 +252,7 @@ export async function endHangoutAction(hangoutId: string): Promise<HangoutAction
 }
 
 // ---------------------------------------------------------------------------
-// Discovery feed (spec §49) — hangouts the viewer may see and ask to join.
+// Discovery feed (spec §49), hangouts the viewer may see and ask to join.
 // ---------------------------------------------------------------------------
 
 export type VisibleHangout = {
@@ -269,7 +269,7 @@ export type VisibleHangout = {
 /**
  * Active hangouts from the viewer's Muddies, filtered through the same
  * server-side eligibility as everything else (block > not-muddies > Ghost
- * Mode > audience narrowing). Broad area text only — never location.
+ * Mode > audience narrowing). Broad area text only, never location.
  */
 export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
   const env = getSupabaseServerEnv();
@@ -361,7 +361,7 @@ export async function requestHangoutAction(
   }
   if (!session.allow_pings) return { ok: false, message: "The host isn't taking requests right now." };
 
-  // Privacy gate — server decides, never the client.
+  // Privacy gate, server decides, never the client.
   if (!(await canViewHangout(admin, userId, session))) {
     return { ok: false, message: "This hangout isn't open to you." };
   }
@@ -461,7 +461,7 @@ export async function respondHangoutRequestAction(
     title: "Hangout update",
     message:
       parsedResponse.data === "accepted"
-        ? "You're in — the host accepted your request."
+        ? "You're in, the host accepted your request."
         : parsedResponse.data === "maybe"
           ? "The host marked your request as Maybe."
           : "The host can't make this one."

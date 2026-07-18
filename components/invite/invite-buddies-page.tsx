@@ -25,7 +25,7 @@ export function InviteBuddiesPage({ initialQr = null }: { initialQr?: PersonalQr
   const [qrImage, setQrImage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // Rendered locally from the opaque token — nothing personal is encoded.
+  // Rendered locally from the opaque token, nothing personal is encoded.
   useEffect(() => {
     if (!qr?.token) {
       setQrImage(null);
@@ -123,7 +123,7 @@ export function InviteBuddiesPage({ initialQr = null }: { initialQr?: PersonalQr
               </Button>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              Save this link now — for your security we only store a fingerprint of it, so it can&apos;t be shown again.
+              Save this link now, for your security we only store a fingerprint of it, so it can&apos;t be shown again.
             </p>
           </>
         ) : (

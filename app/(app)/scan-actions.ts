@@ -22,7 +22,7 @@ export type ScanResultState = {
  * - 8-char short code                              → personal QR fallback
  *
  * This action only ROUTES. Every verification (signature, expiry, window,
- * purpose/context match) happens in the action it dispatches to — the payload
+ * purpose/context match) happens in the action it dispatches to, the payload
  * decode below is for routing only and grants nothing by itself.
  */
 export async function resolveScannedCodeAction(raw: string): Promise<ScanResultState> {
@@ -31,7 +31,7 @@ export async function resolveScannedCodeAction(raw: string): Promise<ScanResultS
 
   // Short code fallback (spec §35): recompute each user's code for the
   // current and previous windows and match. Deterministic, so no lookup
-  // table — bounded and rate-limited instead.
+  // table, bounded and rate-limited instead.
   if (/^[0-9A-F]{8}$/i.test(code)) {
     const token = await tokenFromShortCode(code.toUpperCase());
     if (!token) return { ok: false, message: "That code isn't valid or has expired." };

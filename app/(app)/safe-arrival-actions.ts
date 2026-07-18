@@ -219,7 +219,7 @@ export async function acknowledgeSafeArrivalAction(
 
   return {
     ok: true,
-    message: parsed.data === "watching" ? "You'll be notified about this journey." : "Okay — you won't be asked about this one."
+    message: parsed.data === "watching" ? "You'll be notified about this journey." : "Okay, you won't be asked about this one."
   };
 }
 
@@ -371,7 +371,7 @@ export async function cancelSafeArrivalAction(sessionId: string): Promise<SafeAr
 }
 
 // ---------------------------------------------------------------------------
-// Contact opt-out (spec §17) — silent, never disclosed to the traveller.
+// Contact opt-out (spec §17), silent, never disclosed to the traveller.
 // ---------------------------------------------------------------------------
 
 export async function muteSafeArrivalFromAction(travellerId: string): Promise<SafeArrivalActionState> {

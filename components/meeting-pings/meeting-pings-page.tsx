@@ -48,7 +48,7 @@ function capitalize(value: string): string {
   return value.length > 0 ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }
 
-/** This page's own wording for the shared meetup-request notification —
+/** This page's own wording for the shared meetup-request notification,
  * "meeting ping" reads better here than Pulse's more generic "connection
  * prompt", without changing the stored title used elsewhere. */
 function toPingTitle(rawTitle: string): string {

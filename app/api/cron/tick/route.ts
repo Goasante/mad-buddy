@@ -11,7 +11,7 @@ import { getSupabaseServerEnv } from "@/lib/supabase/env";
  *
  * Auth: a shared secret, compared in constant time. This endpoint runs
  * privileged work with the service role, so it must never be publicly
- * callable. It is NOT in the public route allowlist — but /api/* bypasses the
+ * callable. It is NOT in the public route allowlist, but /api/* bypasses the
  * proxy (each API route self-authenticates), so this check is the only thing
  * standing in front of it.
  */

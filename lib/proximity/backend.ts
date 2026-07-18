@@ -19,12 +19,12 @@ export const safeNearbyFriendSchema = z.object({
   glow_strength: z.number().int().min(0).max(100),
   status_text: z.string(),
   last_active_estimate: z.string(),
-  // Presence Freshness (feature spec batch 4) — coarse recency band only,
+  // Presence Freshness (feature spec batch 4), coarse recency band only,
   // never an exact timestamp or device/permission state.
   freshness_state: z.enum(["live", "recent", "older", "stale"]),
   is_premium_theme_unlocked: z.boolean(),
   confidence: z.enum(["high", "medium", "low"]),
-  // Muddy Status (feature spec batch 1) — availability/activity context,
+  // Muddy Status (feature spec batch 1), availability/activity context,
   // never location data. All nullable: absent when no active status.
   muddy_availability: z.string().nullable(),
   muddy_activity: z.string().nullable(),

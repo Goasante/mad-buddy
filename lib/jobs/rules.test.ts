@@ -91,7 +91,7 @@ describe("job state machine (spec §28)", () => {
 });
 
 describe("schedule (spec §31)", () => {
-  it("prioritises the Safe Arrival alert above everything — lateness there is a safety issue", () => {
+  it("prioritises the Safe Arrival alert above everything, lateness there is a safety issue", () => {
     const safeArrival = SCHEDULE.find((spec) => spec.jobType === "safe_arrival.unconfirmed_alert");
     expect(safeArrival).toBeDefined();
     expect(safeArrival!.priority).toBe(1);

@@ -94,7 +94,7 @@ export function validateDisplayName(name: string): string | null {
     return `Display names are at most ${DISPLAY_NAME_MAX_LENGTH} characters.`;
   }
   if (/[<>]/.test(trimmed)) return "Display names can't contain < or >.";
-  // Reject names made only of invisible characters — they render as blank and
+  // Reject names made only of invisible characters, they render as blank and
   // are a known impersonation trick (spec §8).
   const visible = trimmed.replace(/[​-‍﻿⁠­\s]/g, "");
   if (visible.length < 1) return "Add a display name people can read.";
@@ -138,7 +138,7 @@ export type ViewerRelationship = "self" | "close_friend" | "approved_muddy" | "s
 
 /**
  * Whether `viewer` may see one profile field. The owner always sees their own.
- * A blocked viewer is handled upstream — by the time we get here, blocks have
+ * A blocked viewer is handled upstream, by the time we get here, blocks have
  * already removed the profile from view entirely.
  */
 export function resolveFieldVisibility(input: {
@@ -165,11 +165,11 @@ export function resolveFieldVisibility(input: {
   }
 }
 
-/** Fields a search result may ever show — deliberately tiny (spec §6). */
+/** Fields a search result may ever show, deliberately tiny (spec §6). */
 export const SEARCH_RESULT_FIELDS = ["display_name", "username", "avatar_url"] as const;
 
 // ---------------------------------------------------------------------------
-// Profile completion (spec §10) — private only, never a public score.
+// Profile completion (spec §10), private only, never a public score.
 // ---------------------------------------------------------------------------
 
 export type ProfileCompletionInput = {

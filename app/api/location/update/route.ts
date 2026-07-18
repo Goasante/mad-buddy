@@ -73,7 +73,7 @@ export async function POST(request: Request) {
   }
 
   // Emergency kill switch (batch 13 §46, §47). During a suspected location
-  // exposure we stop ingesting location entirely — this is the switch that
+  // exposure we stop ingesting location entirely, this is the switch that
   // has to actually work, so it is checked before anything is written.
   const serverEnv = getSupabaseServerEnv();
   if (serverEnv.url && serverEnv.serviceRoleKey) {

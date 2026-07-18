@@ -11,7 +11,7 @@ const safetyTools = [
 
 const safetyTips = [
   { title: "Meet in public places", description: "Choose safe meeting spots, especially for new connections.", icon: Users },
-  { title: "Trust your instincts", description: "If something feels off, it probably is — leave anytime.", icon: Eye },
+  { title: "Trust your instincts", description: "If something feels off, it probably is, leave anytime.", icon: Eye },
   { title: "Stay connected", description: "Keep your people in the loop when you're out and about.", icon: MessageCircle }
 ];
 

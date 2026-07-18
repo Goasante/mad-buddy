@@ -48,7 +48,7 @@ export const BASE_BACKOFF_MS = 30 * 1000;
 export const MAX_BACKOFF_MS = 60 * 60 * 1000;
 
 /**
- * Exponential backoff with a cap. Deterministic given `attempt` — jitter is
+ * Exponential backoff with a cap. Deterministic given `attempt`, jitter is
  * added by the caller if needed, so this stays testable.
  */
 export function backoffMs(attempt: number): number {
@@ -93,7 +93,7 @@ export type FailureOutcome = {
 
 /**
  * What to do with a failed job. A permanent error goes straight to the
- * dead-letter queue without burning the remaining attempts — retrying it four
+ * dead-letter queue without burning the remaining attempts, retrying it four
  * more times helps nobody and delays real work.
  */
 export function resolveFailure(input: {

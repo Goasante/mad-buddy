@@ -7,7 +7,7 @@ import type { SubscriptionPlan, VerificationType } from "@/lib/supabase/database
  *
  * Two product stances encoded here:
  *  - Discovery is never proximity-based. There is deliberately no "nearby
- *    people" method in DiscoveryMethod — a stranger cannot be found by being
+ *    people" method in DiscoveryMethod, a stranger cannot be found by being
  *    physically close (spec §2).
  *  - Trust is not a score and not purchasable. Verification levels describe
  *    specific facts; a paid plan grants none of them (spec §58).
@@ -79,7 +79,7 @@ export function canDiscoverUser(input: {
   if (input.isSelf) return { discoverable: false, reason: "self" };
   if (input.isBlockedEitherDirection) return { discoverable: false, reason: "blocked" };
 
-  // A token the target generated is explicit consent — it bypasses the global
+  // A token the target generated is explicit consent, it bypasses the global
   // hide, which exists to stop *search*, not to break the user's own invites.
   if (input.method === "invite" || input.method === "qr") {
     return { discoverable: true, reason: "allowed" };
@@ -116,7 +116,7 @@ export type SearchCandidate = {
 
 /**
  * Ranks by *how you know them*, never by popularity, engagement, proximity, or
- * paid tier (spec §7). mutualCount contributes a small, capped nudge — it is a
+ * paid tier (spec §7). mutualCount contributes a small, capped nudge, it is a
  * tie-breaker, not a popularity ranking.
  */
 export function searchRankScore(candidate: SearchCandidate): number {
@@ -167,7 +167,7 @@ export function isNewAccount(createdAtMs: number, nowMs: number): boolean {
 
 /**
  * Effective daily request cap. A new account is capped low even on a paid
- * plan — anti-spam overrides paid limits (spec §11).
+ * plan, anti-spam overrides paid limits (spec §11).
  */
 export function effectiveRequestLimit(input: {
   plan: SubscriptionPlan;
@@ -206,7 +206,7 @@ export type SendRequestResult = {
 /**
  * Whether a request may be sent. `reciprocal_pending` is the both-sent-at-once
  * case (spec §17): rather than creating a second request, the caller should
- * accept the incoming one — which is what makes the pair converge on exactly
+ * accept the incoming one, which is what makes the pair converge on exactly
  * one friendship.
  */
 export function resolveSendRequest(input: SendRequestInput): SendRequestResult {
@@ -219,7 +219,7 @@ export function resolveSendRequest(input: SendRequestInput): SendRequestResult {
   return { allowed: true, reason: "allowed" };
 }
 
-/** Neutral decline copy — never harsh (spec §12). */
+/** Neutral decline copy, never harsh (spec §12). */
 export const DECLINE_MESSAGE = "Your request was not accepted.";
 
 // ---------------------------------------------------------------------------
@@ -245,7 +245,7 @@ export function resolveVerificationLevel(verified: {
   return null;
 }
 
-/** Badge copy. Never says "unverified" — absence isn't an accusation (§51). */
+/** Badge copy. Never says "unverified", absence isn't an accusation (§51). */
 export function verificationBadgeLabel(level: VerificationLevel): string {
   switch (level) {
     case "official":
@@ -272,7 +272,7 @@ export function verificationTypeLabel(type: VerificationType): string {
   }
 }
 
-/** Coarse account-age label — never an exact signup timestamp (spec §54). */
+/** Coarse account-age label, never an exact signup timestamp (spec §54). */
 export function accountAgeLabel(createdAtMs: number, nowMs: number): string {
   const ageMs = nowMs - createdAtMs;
   if (ageMs < NEW_ACCOUNT_AGE_MS) return "New account";

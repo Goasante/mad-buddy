@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Public invite landing (spec §25). Shows the inviter's identity and the
- * invite's purpose — and nothing else. No friend lists, no circles, no
+ * invite's purpose, and nothing else. No friend lists, no circles, no
  * location. Works logged-out so the recipient can create an account and have
  * the invite still apply.
  */
@@ -37,7 +37,7 @@ export default async function InviteLandingPage({
               {preview.inviterName} invited you to Mad Buddy
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Mad Buddy helps you know when the friends you already have are around — without ever
+              Mad Buddy helps you know when the friends you already have are around, without ever
               sharing your exact location.
             </p>
 

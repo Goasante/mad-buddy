@@ -2,7 +2,7 @@
  * Content-Security-Policy builder (security-header hardening, audit §6/§13).
  *
  * STAGE: Report-Only. This policy is intentionally shipped as
- * Content-Security-Policy-Report-Only first — it cannot block anything, it
+ * Content-Security-Policy-Report-Only first, it cannot block anything, it
  * only reports would-be violations to /api/csp-report. Enforcement (and the
  * nonce upgrade replacing script-src 'unsafe-inline') is a documented
  * follow-up gated on a clean report window across the core user journeys.
@@ -14,7 +14,7 @@
  * - 'unsafe-inline' script/style: the theme bootstrap script in
  *   app/layout.tsx and Next.js runtime inline scripts/styles. To be replaced
  *   by nonces before enforcement.
- * - Everything else is 'self' or 'none' — no analytics, no font CDN, no
+ * - Everything else is 'self' or 'none', no analytics, no font CDN, no
  *   embeds, no workers, no websockets exist in this application.
  */
 
@@ -35,7 +35,7 @@ export function buildContentSecurityPolicy(options: {
   mode: "report-only" | "enforce";
   /**
    * Next.js dev tooling (HMR, eval source maps) requires eval. This must
-   * only ever be true under `next dev` — production policies never include
+   * only ever be true under `next dev`, production policies never include
    * 'unsafe-eval'.
    */
   allowDevEval?: boolean;
@@ -64,7 +64,7 @@ export function buildContentSecurityPolicy(options: {
   ];
 
   // Per spec, upgrade-insecure-requests is ignored in report-only policies
-  // and browsers log a console error about it — include it only when
+  // and browsers log a console error about it, include it only when
   // enforcing.
   if (options.mode === "enforce") {
     directives.push(`upgrade-insecure-requests`);

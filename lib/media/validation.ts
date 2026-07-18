@@ -100,7 +100,7 @@ export type UploadValidationResult =
 
 /**
  * Validates an upload before it reaches storage. Checks type support, size,
- * then — critically — that the real bytes match the claimed type.
+ * then, critically, that the real bytes match the claimed type.
  */
 export function validateImageUpload(input: UploadValidationInput): UploadValidationResult {
   if (input.sizeBytes <= 0) return { valid: false, reason: "empty" };
@@ -113,7 +113,7 @@ export function validateImageUpload(input: UploadValidationInput): UploadValidat
   }
 
   const actualKind = sniffImageKind(input.headerBytes);
-  // A file whose bytes disagree with its claimed type is rejected outright —
+  // A file whose bytes disagree with its claimed type is rejected outright,
   // this is what stops a script or polyglot arriving as "image/png".
   if (!actualKind || actualKind !== claimedKind) {
     return { valid: false, reason: "content_mismatch" };
@@ -162,7 +162,7 @@ export const EXIF_KEYS_TO_STRIP = [
   "DateTimeOriginal"
 ] as const;
 
-/** Only orientation is worth preserving — it is applied, then dropped. */
+/** Only orientation is worth preserving, it is applied, then dropped. */
 export const EXIF_KEYS_TO_APPLY_THEN_DROP = ["Orientation"] as const;
 
 export function exifKeyMustBeStripped(key: string): boolean {

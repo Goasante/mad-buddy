@@ -8,7 +8,7 @@ type SupabaseAdmin = ReturnType<typeof createSupabaseAdminClient>;
  * Web push transport (batch 4 deferred). Fails safe in every direction:
  * missing VAPID env → silent no-op (in-app delivery is unaffected); a gone
  * endpoint (404/410) deletes its subscription row; any other error is
- * swallowed — a push failure must never fail the action that triggered it.
+ * swallowed, a push failure must never fail the action that triggered it.
  *
  * Env: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (mailto: or URL).
  * The client uses NEXT_PUBLIC_VAPID_PUBLIC_KEY (same value as VAPID_PUBLIC_KEY).

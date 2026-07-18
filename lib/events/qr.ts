@@ -3,11 +3,11 @@ import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 /**
  * Signed event QR/invite tokens (feature architecture batch 5, spec §29, §56).
  *
- * A token carries only: a context id, an expiry, and a nonce — never user data,
+ * A token carries only: a context id, an expiry, and a nonce, never user data,
  * never secrets, never database credentials. It is HMAC-signed server-side and
  * verified server-side; a client can neither forge nor extend one.
  *
- * Format: base64url(payloadJson).base64url(hmac) — compact enough for a QR.
+ * Format: base64url(payloadJson).base64url(hmac), compact enough for a QR.
  */
 
 export type EventTokenPayload = {
@@ -57,7 +57,7 @@ export function createEventToken(
 }
 
 /**
- * Verifies signature first, then expiry — an attacker must never learn whether
+ * Verifies signature first, then expiry, an attacker must never learn whether
  * a forged token's payload "would have been" valid. Signature comparison is
  * constant-time.
  */

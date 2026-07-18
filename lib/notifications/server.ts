@@ -79,7 +79,7 @@ export type DeliveryResult = { inApp: boolean; push: boolean; reason: string };
  *
  * Inserts the in-app row only when the preferences allow it, and records
  * budgeted pushes in notification_budget_usage. Preference-read failures fail
- * open to in-app-only delivery — a broken prefs row should never silently
+ * open to in-app-only delivery, a broken prefs row should never silently
  * swallow a Safe Arrival alert, and never interrupt with a push either.
  */
 export async function deliverNotification(
@@ -164,7 +164,7 @@ export async function deliverNotification(
     });
   }
 
-  // Only budgeted pushes consume the budget — critical/high bypass it, so
+  // Only budgeted pushes consume the budget, critical/high bypass it, so
   // counting them would let an emergency alert starve tomorrow's normal ones.
   if (decision.push && priority !== "critical" && priority !== "high") {
     await supabase.from("notification_budget_usage").upsert(
@@ -185,7 +185,7 @@ export async function deliverNotification(
  * Batched replacement for the old one-query-per-friend throttle check
  * (audit I-13): one read for the last hour's nearby notifications, one
  * batched insert for whichever friends haven't been announced yet.
- * Throttle semantics are unchanged — at most one "friend nearby"
+ * Throttle semantics are unchanged, at most one "friend nearby"
  * notification per friend name per hour.
  */
 export async function createNearbyNotificationsIfAllowed(

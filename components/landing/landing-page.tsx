@@ -60,7 +60,7 @@ const howItWorksSteps = [
 const useCases = [
   {
     title: "Campus catch-ups",
-    description: "Know when an approved campus Muddy is nearby—without tracking each other.",
+    description: "Know when an approved campus Muddy is nearby, without tracking each other.",
     icon: GraduationCap
   },
   {
@@ -106,7 +106,7 @@ const safetyControls = [
 const featureItems = [
   {
     title: "Privacy-safe proximity",
-    description: "See Very close, Nearby, or Around—never an exact distance.",
+    description: "See Very close, Nearby, or Around, never an exact distance.",
     icon: Radio
   },
   {
@@ -208,12 +208,12 @@ function Hero() {
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
             A <strong className="font-semibold text-foreground">Muddy</strong> is a friend you both
-            approve. See who&rsquo;s nearby, connect, and make plans&mdash;without sharing exact
+            approve. See who&rsquo;s nearby, connect, and make plans, without sharing exact
             locations.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Button asChild size="lg">
-              <Link href="/signup" aria-label="Get started — create a Mad Buddy account">
+              <Link href="/signup" aria-label="Get started: create a Mad Buddy account">
                 Get started
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
@@ -248,7 +248,7 @@ function Hero() {
             aria-hidden="true"
             className="pointer-events-none absolute inset-[14%] rounded-full bg-orange-400/10 blur-[60px] lg:inset-[12%] lg:bg-orange-400/15 lg:blur-[95px]"
           />
-          {/* A soft, irregular (not circular) orange haze — deliberately
+          {/* A soft, irregular (not circular) orange haze, deliberately
               blob-shaped rather than a perfect ring so it reads as ambient
               light, not a radar/tracking signal. */}
           <div
@@ -262,7 +262,7 @@ function Hero() {
             className="pointer-events-none absolute bottom-0 left-1/2 h-10 w-[55%] -translate-x-1/2 rounded-[100%] bg-black/25 blur-xl lg:bottom-[2%] lg:h-16 lg:w-[60%] lg:bg-black/40 lg:blur-2xl"
           />
           {/* This asset has its background removed (true alpha, not a CSS
-              mask) — the phones and glow lines are the only opaque pixels,
+              mask). The phones and glow lines are the only opaque pixels,
               so nothing here can read as a rectangle. A slight contrast/
               saturation lift keeps the devices reading as sharp as the
               surrounding text without touching the source file. */}
@@ -461,7 +461,7 @@ function FinalCta() {
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Button asChild size="lg" className="bg-background text-primary hover:bg-background/90">
-                <Link href="/signup" aria-label="Get started — create a Mad Buddy account">
+                <Link href="/signup" aria-label="Get started: create a Mad Buddy account">
                   Get started
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Link>

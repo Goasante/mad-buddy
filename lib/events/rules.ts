@@ -9,7 +9,7 @@ import type {
 /**
  * Events domain core (feature architecture batch 5): check-in windows, Event
  * Glow eligibility, and Temporary Event Circle lifecycle/roles. Pure and
- * deterministic — the server services layer supplies the facts, this decides.
+ * deterministic, the server services layer supplies the facts, this decides.
  *
  * Event Glow's defining rule (spec §34) lives here: presence is *asserted* by
  * a voluntary check-in, never inferred from device proximity. Nothing in this
@@ -37,7 +37,7 @@ export type CheckInWindowResult = {
 
 /**
  * Check-in is permitted from `opensMinutesBefore` ahead of the start until the
- * event ends. Deliberately refuses days-in-advance check-in (spec §25) — a
+ * event ends. Deliberately refuses days-in-advance check-in (spec §25), a
  * check-in must mean "I am here now".
  */
 export function resolveCheckInWindow(input: CheckInWindowInput): CheckInWindowResult {
@@ -89,7 +89,7 @@ export type EventGlowResult = {
 /**
  * Decides whether `viewer` may see `target` in an event's Glow list. Strongest
  * deny first, mirroring the batch-2 precedence chain. A target who checked in
- * privately or disabled Glow is simply absent — the caller must not disclose
+ * privately or disabled Glow is simply absent, the caller must not disclose
  * that they are present at all (spec §41).
  */
 export function resolveEventGlow(input: EventGlowInput): EventGlowResult {
@@ -204,7 +204,7 @@ export type JoinCircleResult = {
 };
 
 export function resolveJoinEventCircle(input: JoinCircleInput): JoinCircleResult {
-  // A ban is terminal — rejoining is never allowed (spec §59).
+  // A ban is terminal, rejoining is never allowed (spec §59).
   if (input.memberStatus === "banned") return { allowed: false, reason: "banned" };
   if (input.memberStatus === "joined") return { allowed: false, reason: "already_joined" };
   if (!isEventCircleWritable(input.status)) return { allowed: false, reason: "closed" };

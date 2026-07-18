@@ -10,7 +10,7 @@ import { createHmac } from "crypto";
  *  - The pepper is a server secret, so the identifier space (which is small and
  *    fully enumerable for phone numbers) cannot be brute-forced from a database
  *    dump alone. A plain unsalted SHA-256 of a phone number is effectively
- *    reversible — spec §41 calls this out and this module refuses to do it.
+ *    reversible, spec §41 calls this out and this module refuses to do it.
  *  - Matching returns only accounts that matched. It never reveals which of the
  *    uploaded contacts are NOT on Mad Buddy (spec §41).
  */
@@ -68,7 +68,7 @@ export function normalizeEmail(raw: string): string | null {
 // ---------------------------------------------------------------------------
 
 /**
- * Produces the stored/queried identifier. Peppered HMAC — never a bare hash.
+ * Produces the stored/queried identifier. Peppered HMAC, never a bare hash.
  * The same input always yields the same output for a given pepper, which is
  * what makes equality matching possible without ever holding the raw value.
  */

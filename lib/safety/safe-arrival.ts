@@ -110,7 +110,7 @@ export function isTerminalSafeArrivalStatus(status: SafeArrivalStatus): boolean 
 
 /**
  * Only the traveller may confirm/cancel/extend their own session (spec §14).
- * Every non-terminal status still allows action — including `unconfirmed`, so
+ * Every non-terminal status still allows action, including `unconfirmed`, so
  * a late "I've arrived" always lands rather than being rejected.
  */
 export function canTravellerAct(status: SafeArrivalStatus): boolean {
@@ -135,7 +135,7 @@ export function gracePeriodEndMs(timing: Pick<SafeArrivalTiming, "expectedArriva
 
 /**
  * Where a live session sits relative to its expected arrival. `overdue` means
- * the grace period has fully elapsed without confirmation — the point at which
+ * the grace period has fully elapsed without confirmation, the point at which
  * contacts get the neutral unconfirmed alert.
  */
 export function resolveSafeArrivalPhase(timing: SafeArrivalTiming): SafeArrivalPhase {
@@ -147,7 +147,7 @@ export function resolveSafeArrivalPhase(timing: SafeArrivalTiming): SafeArrivalP
 /**
  * Should the neutral "hasn't confirmed yet" alert fire now? Requires: a live
  * (non-terminal, unconfirmed) session, the grace period fully elapsed, and no
- * prior alert — so it fires at most once per session (spec §9, §16).
+ * prior alert, so it fires at most once per session (spec §9, §16).
  */
 export function shouldSendUnconfirmedAlert(input: {
   status: SafeArrivalStatus;
@@ -177,7 +177,7 @@ export function validateExtension(minutes: number): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Neutral copy (spec §9 — never alarmist, never "missing")
+// Neutral copy (spec §9, never alarmist, never "missing")
 // ---------------------------------------------------------------------------
 
 export function unconfirmedAlertMessage(travellerName: string): string {

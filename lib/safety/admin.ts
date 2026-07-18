@@ -48,7 +48,7 @@ export async function getAdminEmailAccess(email: string) {
     if (envAccess.isDevelopmentFallback) {
       // This branch grants admin access to ANY authenticated user. It only
       // activates when ADMIN_EMAILS is unset outside production, but a
-      // misconfigured NODE_ENV would make it silent — so it is never silent.
+      // misconfigured NODE_ENV would make it silent, so it is never silent.
       logBackendEvent("warn", {
         action: "admin.dev_fallback_access",
         errorType: "AdminDevFallbackUsed"

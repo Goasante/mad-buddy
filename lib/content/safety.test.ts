@@ -59,7 +59,7 @@ describe("exact-location warning (spec §55)", () => {
     expect(detectLocationRisk("I'm alone at the library").signals).toContain("alone_wording");
   });
 
-  it("does NOT warn on ordinary public meeting places — warning on everything trains users to ignore it", () => {
+  it("does NOT warn on ordinary public meeting places, warning on everything trains users to ignore it", () => {
     expect(detectLocationRisk("meet at the Student Centre at 4").warn).toBe(false);
     expect(detectLocationRisk("we're at Accra Mall").warn).toBe(false);
     expect(detectLocationRisk("football at Legon Park").warn).toBe(false);

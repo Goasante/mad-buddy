@@ -12,7 +12,7 @@ const faqItems = [
   {
     question: "Can friends see my exact location?",
     answer:
-      "No. Friends see privacy-safe proximity levels and your profile — not coordinates, maps, street addresses, direction of travel, or exact distance."
+      "No. Friends see privacy-safe proximity levels and your profile, not coordinates, maps, street addresses, direction of travel, or exact distance."
   },
   {
     question: "Do both people have to approve?",
@@ -21,7 +21,7 @@ const faqItems = [
   {
     question: "What's the difference between a Wave and a Plan?",
     answer:
-      "A Wave is a quick signal that you're open to connect — when it's mutual, a chat opens. A Plan is a real event you create and invite Muddies to, with simple RSVPs."
+      "A Wave is a quick signal that you're open to connect, when it's mutual, a chat opens. A Plan is a real event you create and invite Muddies to, with simple RSVPs."
   },
   {
     question: "Can I stop appearing nearby?",
@@ -35,7 +35,7 @@ const faqItems = [
   },
   {
     question: "Does Mad Buddy show a map?",
-    answer: "No. Mad Buddy uses glowing profile cards and proximity levels — there is no map view."
+    answer: "No. Mad Buddy uses glowing profile cards and proximity levels, there is no map view."
   },
   {
     question: "Can I delete my data?",
@@ -45,7 +45,7 @@ const faqItems = [
   {
     question: "Is Mad Buddy free?",
     answer:
-      "Yes. Mad Buddy has a free plan with nearby glow, up to 25 approved friends, and Ghost Mode. Paid plans add more friends and extras — see Pricing for details."
+      "Yes. Mad Buddy has a free plan with nearby glow, up to 25 approved friends, and Ghost Mode. Paid plans add more friends and extras, see Pricing for details."
   }
 ];
 

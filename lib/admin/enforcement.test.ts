@@ -6,7 +6,7 @@ import { GUARDED_SURFACES } from "@/lib/admin/enforcement";
  * Drift guard. `SUSPENSION_BLOCKS` (batch 13 §19, the spec's list of what a
  * suspension must block) and `GUARDED_SURFACES` (what the enforcement gate
  * actually knows how to block) are separate lists. If a future batch adds a
- * surface to one and forgets the other, a suspended user keeps access to it —
+ * surface to one and forgets the other, a suspended user keeps access to it,
  * silently, and exactly the "partial bypass" §19 forbids. This test fails loudly.
  */
 describe("enforcement covers every surface a suspension must block (spec §19)", () => {

@@ -48,7 +48,7 @@ describe("basic safety is never an entitlement (spec §1)", () => {
     }
   });
 
-  it("never paywalls voice notes entirely — accessibility stays free", () => {
+  it("never paywalls voice notes entirely, accessibility stays free", () => {
     expect(PLAN_ENTITLEMENTS.free.voice_notes).toBe(true);
   });
 
@@ -216,7 +216,7 @@ describe("downgrade safety (spec §45, §48)", () => {
     expect(resolveOverLimits({ targetPlan: "free", usage: { personal_circles: 2 } })).toEqual([]);
   });
 
-  it("fails privacy CLOSED — losing paid scheduling never widens the audience", () => {
+  it("fails privacy CLOSED, losing paid scheduling never widens the audience", () => {
     const fallback = safePrivacyFallback();
     expect(fallback.glowAudience).toBe("hidden");
     expect(fallback.advancedSchedulesEnabled).toBe(false);

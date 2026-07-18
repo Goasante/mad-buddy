@@ -53,7 +53,7 @@ describe("no ambient staff access to private data (spec §1, §4)", () => {
     }
   });
 
-  it("makes support the narrowest role — summary + tickets only", () => {
+  it("makes support the narrowest role, summary + tickets only", () => {
     expect(permissionsForRole("customer_support_agent")).toEqual([
       "admin.users.view_summary",
       "admin.support.manage"
@@ -134,7 +134,7 @@ describe("step-up authentication (spec §5)", () => {
     }
   });
 
-  it("expires a stale step-up — a morning re-auth can't justify an evening action", () => {
+  it("expires a stale step-up, a morning re-auth can't justify an evening action", () => {
     expect(
       checkAdminAuth({
         action: "export_user_data",
@@ -167,11 +167,11 @@ describe("case-bound sensitive access (spec §10, §11, §18)", () => {
     };
   }
 
-  it("allows a justified, case-bound, stepped-up read — and always audits", () => {
+  it("allows a justified, case-bound, stepped-up read, and always audits", () => {
     expect(resolveCaseBoundAccess(access())).toEqual({ allowed: true, reason: "allowed", mustAudit: true });
   });
 
-  it("denies 'just having a look' — no case, no reason, no access", () => {
+  it("denies 'just having a look', no case, no reason, no access", () => {
     expect(resolveCaseBoundAccess(access({ caseId: null })).reason).toBe("no_case");
     expect(resolveCaseBoundAccess(access({ reason: "  " })).reason).toBe("no_reason");
   });
@@ -233,7 +233,7 @@ describe("restriction ladder (spec §12, §17, §19)", () => {
     expect(isReversible("suspended_permanent")).toBe(false);
   });
 
-  it("applies a suspension across every surface — no partial bypass", () => {
+  it("applies a suspension across every surface, no partial bypass", () => {
     for (const surface of ["messaging", "waves", "pings", "plans", "moments", "drops", "event_glow", "invite_links"]) {
       expect(SUSPENSION_BLOCKS as readonly string[]).toContain(surface);
     }
@@ -254,7 +254,7 @@ describe("incident response (spec §46, §47)", () => {
     expect(controls).toContain("event_glow");
   });
 
-  it("forces ghost mode for location exposure — safety outranks uptime", () => {
+  it("forces ghost mode for location exposure, safety outranks uptime", () => {
     expect(forcesGhostMode("location_exposure")).toBe(true);
     expect(forcesGhostMode("outage")).toBe(false);
   });

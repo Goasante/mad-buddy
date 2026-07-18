@@ -44,7 +44,7 @@ describe("status visibility (privacy floor)", () => {
     expect(canViewStatus(base)).toBe(true);
   });
 
-  it("denies non-Muddies — no status ever leaks outside approved friendships", () => {
+  it("denies non-Muddies, no status ever leaks outside approved friendships", () => {
     expect(canViewStatus({ ...base, areMutualMuddies: false })).toBe(false);
   });
 
@@ -160,7 +160,7 @@ describe("isPingExpired", () => {
     ).toBe(true);
   });
 
-  it("never re-expires settled pings — an accepted plan survives its ping window", () => {
+  it("never re-expires settled pings, an accepted plan survives its ping window", () => {
     expect(
       isPingExpired({ expires_at: new Date(NOW - 1000).toISOString(), status: "accepted" }, NOW)
     ).toBe(false);

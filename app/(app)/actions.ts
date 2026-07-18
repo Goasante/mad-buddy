@@ -152,7 +152,7 @@ export async function uploadAvatarAction(formData: FormData): Promise<Integratio
   }
 
   // Shared upload validator (feature spec batch 6 §39): type support, size,
-  // and — critically — that the real magic bytes match the claimed MIME type.
+  // and, critically, that the real magic bytes match the claimed MIME type.
   const headerBytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
   const validation = validateImageUpload({
     claimedMimeType: file.type,

@@ -56,7 +56,7 @@ export function Modal({
               </Button>
             </Dialog.Close>
           </div>
-          {/* Only this middle section scrolls — header and footer stay put,
+          {/* Only this middle section scrolls, header and footer stay put,
               so a tall form never hides its own action buttons or clips the
               last invitee row behind them. */}
           <div className={cn("min-h-0 flex-1 overflow-y-auto", compact ? "mt-3" : "mt-5")}>

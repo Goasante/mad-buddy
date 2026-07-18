@@ -21,7 +21,7 @@ declare global {
 
 /**
  * Shared scanner surface (batch 5 event QR + batch 8 personal QR / short
- * code). Camera frames never leave the device — only the decoded token is
+ * code). Camera frames never leave the device, only the decoded token is
  * sent, and the server re-verifies everything.
  */
 export function ScanPageContent() {
@@ -131,7 +131,7 @@ export function ScanPageContent() {
                     ? "Camera access was refused. You can still enter the code below."
                     : cameraState === "unsupported"
                       ? "This browser can't scan QR codes. Enter the code below instead."
-                      : "The camera stays on this device — only the decoded code is checked."}
+                      : "The camera stays on this device, only the decoded code is checked."}
                 </p>
               </div>
             </div>

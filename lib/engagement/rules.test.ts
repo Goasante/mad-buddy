@@ -50,7 +50,7 @@ describe("streak qualification (spec §14, §17)", () => {
     }
   });
 
-  it("requires BOTH people to act — one-sided spam can never sustain a streak", () => {
+  it("requires BOTH people to act, one-sided spam can never sustain a streak", () => {
     const oneSided = periodQualifies({
       events: [
         { actorId: "ama", eventType: "wave_exchanged" },
@@ -110,7 +110,7 @@ describe("streak progression (spec §15, §18, §19)", () => {
     expect(update.milestoneReached).toBe(true); // 4 weeks is a milestone
   });
 
-  it("is idempotent — re-reporting the same period can't inflate it", () => {
+  it("is idempotent, re-reporting the same period can't inflate it", () => {
     const update = advanceStreak({
       state: state(),
       qualifiedPeriod: "2026-W28",
@@ -129,7 +129,7 @@ describe("streak progression (spec §15, §18, §19)", () => {
     expect(update.longestWeeks).toBe(6);
   });
 
-  it("pauses for free — there is no paid path to preserve a streak", () => {
+  it("pauses for free, there is no paid path to preserve a streak", () => {
     // pauseUntilMs takes no plan/subscription argument at all, by design.
     expect(pauseUntilMs(4, NOW)).toBe(NOW + 4 * WEEK);
     expect(pauseUntilMs(999, NOW)).toBe(NOW + 8 * WEEK); // clamped
@@ -150,7 +150,7 @@ describe("streak progression (spec §15, §18, §19)", () => {
 });
 
 describe("recap safety (spec §4)", () => {
-  it("carries aggregated counts only — no content, location, or negatives", () => {
+  it("carries aggregated counts only, no content, location, or negatives", () => {
     for (const field of RECAP_ALLOWED_FIELDS) {
       expect(String(field)).not.toMatch(/message|text|content|location|coordinate|place|address|route/i);
       expect(String(field)).not.toMatch(/rejected|blocked|report/i);
@@ -259,7 +259,7 @@ describe("composition with the batch-4 notification engine (spec §51)", () => {
     expect(applyEngagementGuards(base, context)).toEqual(base);
   });
 
-  it("never turns a 'no push' into a push — guards only remove", () => {
+  it("never turns a 'no push' into a push, guards only remove", () => {
     const suppressed = { inApp: true, push: false, reason: "quiet_hours" };
     expect(
       applyEngagementGuards(suppressed, { ...context, priority: "critical", sentToday: 0 })
@@ -309,7 +309,7 @@ describe("anti-addiction guarantees (spec §35, §44)", () => {
 
   it("exposes no ranking or leaderboard shape at all", () => {
     // If a leaderboard were possible, something here would return a list of
-    // users ordered by a score. Nothing does — this asserts the absence.
+    // users ordered by a score. Nothing does, this asserts the absence.
     const moduleShape = {
       streakSummaryLabel: streakSummaryLabel(1, "x"),
       recapHeadline: recapHeadline(sanitizeRecapSummary({}))

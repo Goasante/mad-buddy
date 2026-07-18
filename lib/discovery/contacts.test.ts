@@ -46,7 +46,7 @@ describe("protectIdentifier (spec §41)", () => {
     expect(hash).not.toBe(protectIdentifier("+233241234567", "different-pepper"));
   });
 
-  it("refuses to run without a pepper — an unpeppered phone hash is reversible", () => {
+  it("refuses to run without a pepper, an unpeppered phone hash is reversible", () => {
     expect(() => protectIdentifier("+233241234567", "")).toThrow(/pepper/i);
   });
 });

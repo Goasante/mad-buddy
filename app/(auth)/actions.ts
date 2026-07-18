@@ -131,7 +131,7 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
   }
 
   // Anti-enumeration behaviour: signing up again with an email that's already
-  // registered and confirmed returns no error, no session, no email sent —
+  // registered and confirmed returns no error, no session, no email sent,
   // and a user object with an empty identities array whose id does NOT match
   // the real account. Without this check we told the caller "Account
   // created" and (before this fix existed) even tried to bootstrap rows
@@ -151,7 +151,7 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
 
   if (data.user) {
     // When email confirmation is required, signUp returns no session, so
-    // auth.uid() is null for the rest of this request — the owner-only RLS
+    // auth.uid() is null for the rest of this request, the owner-only RLS
     // policies on these tables would silently reject an anon-client insert
     // (42501), leaving a confirmed user with no profile/subscription/prefs
     // rows at all. The service role bypasses RLS so bootstrap always
@@ -281,14 +281,14 @@ export async function loginAction(input: unknown): Promise<AuthActionState> {
 
     // Distinct from wrong credentials: the account exists but hasn't
     // confirmed its email yet. The client must not fold this into the
-    // generic "incorrect" message — that's precisely what left new users
+    // generic "incorrect" message, that's precisely what left new users
     // unable to tell "you typed the wrong password" apart from "you haven't
     // confirmed your email," with no way to recover from the second one.
     if (error.code === "email_not_confirmed") {
       return {
         ok: false,
         message:
-          "Confirm your email first — check your inbox (and spam folder) for the link, or request a new one from the signup page."
+          "Confirm your email first, check your inbox (and spam folder) for the link, or request a new one from the signup page."
       };
     }
 

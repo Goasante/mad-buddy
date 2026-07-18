@@ -182,7 +182,7 @@ describe("read receipts (spec §10)", () => {
     expect(senderVisibleState({ status: "read", senderReceiptsEnabled: true, recipientReceiptsEnabled: false })).toBe(
       "delivered"
     );
-    // Turning your own receipts off also costs you Seen — no one-way peeking.
+    // Turning your own receipts off also costs you Seen, no one-way peeking.
     expect(senderVisibleState({ status: "read", senderReceiptsEnabled: false, recipientReceiptsEnabled: true })).toBe(
       "delivered"
     );

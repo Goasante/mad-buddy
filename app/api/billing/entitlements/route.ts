@@ -12,7 +12,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
  * Current entitlements + usage (spec §14). The client may use this to show
- * limits and upgrade prompts, but the server remains authoritative — every
+ * limits and upgrade prompts, but the server remains authoritative, every
  * protected operation re-checks (spec §13).
  */
 export async function GET() {
@@ -48,7 +48,7 @@ export async function GET() {
     usage
   });
 
-  // Entitlements are per-user and change on billing events — never shared.
+  // Entitlements are per-user and change on billing events, never shared.
   response.headers.set("Cache-Control", "private, no-store");
   return response;
 }

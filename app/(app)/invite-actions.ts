@@ -29,7 +29,7 @@ export type InviteActionState = {
   ok: boolean;
   message: string;
   inviteId?: string;
-  /** Raw token — returned once at creation and never stored (spec §26). */
+  /** Raw token, returned once at creation and never stored (spec §26). */
   token?: string;
   url?: string;
 };
@@ -100,7 +100,7 @@ export async function createInviteAction(input: unknown): Promise<InviteActionSt
       creator_id: userId,
       invite_type: parsed.data.inviteType as InviteType,
       context_id: parsed.data.contextId ?? null,
-      // Only the hash is persisted — a DB leak yields no usable links (§26).
+      // Only the hash is persisted, a DB leak yields no usable links (§26).
       token_hash: hashInviteToken(token),
       delivery_type: "link",
       status: "active",
@@ -146,7 +146,7 @@ export async function resolveInviteAction(token: string): Promise<InvitePreview 
     Date.parse(invite.expires_at) > nowMs &&
     invite.uses_count < invite.max_uses;
 
-  // Never expose the creator's private data — name and avatar only (§25).
+  // Never expose the creator's private data, name and avatar only (§25).
   return {
     inviterName: profile?.full_name?.trim() || "A Muddy",
     inviterAvatarUrl: profile?.avatar_url ?? null,
@@ -193,7 +193,7 @@ export async function acceptInviteAction(token: string): Promise<InviteActionSta
   });
 
   if (!decision.allowed) {
-    // Already Muddies isn't a failure — just nothing to do (spec §64).
+    // Already Muddies isn't a failure, just nothing to do (spec §64).
     if (decision.reason === "already_friends") {
       return { ok: true, message: "You're already Muddies." };
     }
@@ -263,7 +263,7 @@ export async function getPersonalQrAction(): Promise<PersonalQr | null> {
   };
 }
 
-/** Scanning shows a preview and creates a REQUEST — never an auto-friendship. */
+/** Scanning shows a preview and creates a REQUEST, never an auto-friendship. */
 export async function scanPersonalQrAction(token: string): Promise<InviteActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
@@ -300,7 +300,7 @@ export async function scanPersonalQrAction(token: string): Promise<InviteActionS
 /**
  * Inserts a pending friend request. The partial unique index
  * (sender_id, receiver_id) WHERE status='pending' makes a concurrent duplicate
- * a constraint violation rather than a second row — we treat that as success,
+ * a constraint violation rather than a second row, we treat that as success,
  * since the user's intent (a request exists) is satisfied either way.
  */
 async function createPendingRequest(
@@ -339,7 +339,7 @@ const contactMatchSchema = z.object({
 
 /**
  * Matches contacts against opted-in accounts. Raw identifiers are normalized
- * and hashed in-request and NEVER persisted — only session counts are stored
+ * and hashed in-request and NEVER persisted, only session counts are stored
  * (spec §41). Returns matches only; it never reveals which contacts are absent.
  */
 export async function matchContactsAction(input: unknown): Promise<{ matches: ContactMatch[]; message: string }> {
@@ -358,7 +358,7 @@ export async function matchContactsAction(input: unknown): Promise<{ matches: Co
   const rateLimit = await consumeRateLimit({ action: "contacts.match", userId });
   if (!rateLimit.allowed) return { matches: [], message: rateLimitMessage(rateLimit.resetAt) };
 
-  // Contact matching has its own kill switch (batch 13 §62) — it processes
+  // Contact matching has its own kill switch (batch 13 §62), it processes
   // personal identifiers, so it must be stoppable without a deploy.
   const guard = await guardFeature(createSupabaseAdminClient(), "contact_matching");
   if (!guard.allowed) return { matches: [], message: guard.message };
@@ -433,7 +433,7 @@ async function recordSession(
   submitted: number,
   matched: number
 ) {
-  // Counts only — the uploaded identifiers themselves are never stored.
+  // Counts only, the uploaded identifiers themselves are never stored.
   await admin.from("contact_match_sessions").insert({
     user_id: userId,
     status: "completed",

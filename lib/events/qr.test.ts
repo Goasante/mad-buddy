@@ -54,7 +54,7 @@ describe("event QR tokens (spec §29)", () => {
     expect(token()).not.toBe(token());
   });
 
-  it("carries no user data — only context, purpose, expiry, nonce", () => {
+  it("carries no user data, only context, purpose, expiry, nonce", () => {
     const payloadPart = token().split(".")[0];
     const decoded = JSON.parse(Buffer.from(payloadPart, "base64url").toString("utf8"));
     expect(Object.keys(decoded).sort()).toEqual(["contextId", "expiresAtMs", "nonce", "purpose"]);

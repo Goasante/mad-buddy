@@ -266,7 +266,7 @@ function CreateSafeArrivalModal({
       open={open}
       onOpenChange={handleOpenChange}
       title="Start Safe Arrival"
-      description="Your contacts see the destination label and time — never your location."
+      description="Your contacts see the destination label and time, never your location."
     >
       <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
         <FormField htmlFor={`${formId}-destination`} label="Where are you heading?">

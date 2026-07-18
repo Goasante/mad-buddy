@@ -12,7 +12,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
  * The Pulse aggregation endpoint (spec §10). One authorized, privacy-safe
  * response combining nearby Muddies, pending Waves, pending Pings, and
  * upcoming/invited Plans. Every item is already authorized by the source
- * query (participants-only, recipient-only) — no coordinates ever leave the
+ * query (participants-only, recipient-only), no coordinates ever leave the
  * nearby service, and only counts/labels reach the client.
  */
 export async function GET() {
@@ -45,7 +45,7 @@ export async function GET() {
   const soonIso = new Date(now + 3 * 60 * 60 * 1000).toISOString();
 
   // The Pulse computes proximity too, so it honours the same kill switch. The
-  // rest of the Pulse (waves, pings, plans) still works — degrade, don't fail.
+  // rest of the Pulse (waves, pings, plans) still works, degrade, don't fail.
   const proximityAvailable = (await guardFeature(admin, "proximity")).allowed;
 
   try {

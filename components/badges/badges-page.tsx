@@ -35,7 +35,7 @@ const recapRows: Array<{ key: string; label: string }> = [
 
 /**
  * Private by design (batch 11): everything on this page is the viewer's own
- * data. No comparisons, no rankings, no "days active" pressure — the copy
+ * data. No comparisons, no rankings, no "days active" pressure, the copy
  * states what happened and stops (spec §6, §26, §44).
  */
 export function BadgesPageContent({ overview }: { overview: EngagementOverview }) {
@@ -92,7 +92,7 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
       {tab === "achievements" ? (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            {earnedCount} of {overview.achievements.length} earned. Criteria are always visible — nothing is random.
+            {earnedCount} of {overview.achievements.length} earned. Criteria are always visible, nothing is random.
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {overview.achievements.map((achievement) => {
@@ -127,7 +127,7 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
         <div className="space-y-3">
           {streaks.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No active streaks yet. A streak starts when you and a Muddy both connect in the same week — and it&apos;s
+              No active streaks yet. A streak starts when you and a Muddy both connect in the same week, and it&apos;s
               always fine to let one end.
             </p>
           ) : (

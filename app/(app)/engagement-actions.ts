@@ -152,7 +152,7 @@ export type EngagementOverview = {
   } | null;
 };
 
-/** Everything here is the viewer's own private data — never anyone else's. */
+/** Everything here is the viewer's own private data, never anyone else's. */
 export async function getEngagementOverviewAction(): Promise<EngagementOverview> {
   const empty: EngagementOverview = { achievements: [], streaks: [], recap: null };
   const env = getSupabaseServerEnv();
@@ -244,7 +244,7 @@ export async function getEngagementOverviewAction(): Promise<EngagementOverview>
   return { achievements, streaks, recap };
 }
 
-/** Pausing is free for everyone — spec §18 forbids monetising streaks. */
+/** Pausing is free for everyone, spec §18 forbids monetising streaks. */
 export async function pauseStreakAction(streakId: string, weeks: number): Promise<EngagementActionState> {
   const missing = missingEnvState();
   if (missing) return missing;

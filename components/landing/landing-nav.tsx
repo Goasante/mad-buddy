@@ -7,7 +7,7 @@ import { BrandMark } from "@/components/brand/brand-mark";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-// Must stay in document order — the scroll tracker picks the last id whose
+// Must stay in document order. The scroll tracker picks the last id whose
 // section top has passed the header.
 const sectionIds = ["how-it-works", "real-life-moments", "privacy", "features"] as const;
 

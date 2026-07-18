@@ -11,7 +11,7 @@ import type {
 /**
  * Messaging domain core (feature architecture batch 7). Pure, deterministic
  * rules for eligibility, validation, roles, delivery/read state, and voice
- * note limits. No I/O — the messaging service supplies facts, this decides.
+ * note limits. No I/O, the messaging service supplies facts, this decides.
  *
  * Honest crypto note (spec §62): nothing here encrypts anything. Messages are
  * protected in transit and access-controlled. That is NOT end-to-end
@@ -34,7 +34,7 @@ export function validateMessageText(text: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Direct conversation key (spec §4) — exactly one per approved pair.
+// Direct conversation key (spec §4), exactly one per approved pair.
 // ---------------------------------------------------------------------------
 
 /**
@@ -233,7 +233,7 @@ export type UserFacingMessageState = "sending" | "sent" | "delivered" | "seen" |
 
 /**
  * What the SENDER may see about a message. Read receipts are mutual by design
- * (spec §10): if either side has them off, the sender sees Delivered at most —
+ * (spec §10): if either side has them off, the sender sees Delivered at most,
  * and no tier can buy its way past that.
  */
 export function senderVisibleState(input: {
@@ -266,7 +266,7 @@ export function shouldShowTypingIndicator(input: {
 }
 
 // ---------------------------------------------------------------------------
-// Presence (spec §12) — coarse only, never an exact last-seen.
+// Presence (spec §12), coarse only, never an exact last-seen.
 // ---------------------------------------------------------------------------
 
 export type PresenceState = "active_now" | "recently_active" | "hidden";
@@ -347,7 +347,7 @@ export function resolveGroupAdd(input: {
       return { allowed: true, requiresConsent: false, reason: "allowed" };
     case "ask_me":
     default:
-      // Default: invited, not added — consent required (spec §55).
+      // Default: invited, not added, consent required (spec §55).
       return { allowed: true, requiresConsent: true, reason: "allowed" };
   }
 }

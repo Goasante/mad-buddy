@@ -12,7 +12,7 @@ import type { SubscriptionPlan, SubscriptionStatus } from "@/lib/supabase/databa
  * Two rules this module enforces structurally:
  *  - Basic safety is never an entitlement. Ghost Mode, blocking, reporting,
  *    removing a Muddy, visibility control, and account deletion are absent
- *    from EntitlementKey by design — there is no key to gate them with (§1).
+ *    from EntitlementKey by design, there is no key to gate them with (§1).
  *  - Privacy fails closed on downgrade (§48): losing a paid privacy feature
  *    never widens an audience.
  */
@@ -63,7 +63,7 @@ export type BooleanEntitlementKey =
 
 export type EntitlementKey = NumericEntitlementKey | BooleanEntitlementKey;
 
-/** Internal convention for "no limit" — a real number, so comparisons are total. */
+/** Internal convention for "no limit", a real number, so comparisons are total. */
 export const UNLIMITED = Number.POSITIVE_INFINITY;
 
 export type Entitlements = Record<NumericEntitlementKey, number> & Record<BooleanEntitlementKey, boolean>;
@@ -304,7 +304,7 @@ export function isUnlimited(value: number): boolean {
   return value === UNLIMITED;
 }
 
-/** JSON can't carry Infinity — the API convention is null for unlimited (§14). */
+/** JSON can't carry Infinity, the API convention is null for unlimited (§14). */
 export function serializeLimit(value: number): number | null {
   return value === UNLIMITED ? null : value;
 }
@@ -314,7 +314,7 @@ export function serializeLimit(value: number): number | null {
 // ---------------------------------------------------------------------------
 
 /**
- * Contextual, specific copy — never "Upgrade now to continue using Mad Buddy".
+ * Contextual, specific copy, never "Upgrade now to continue using Mad Buddy".
  * States the actual limit hit and what the upgrade actually gives.
  */
 export function upgradePromptFor(key: NumericEntitlementKey, currentPlan: SubscriptionPlan): string | null {
@@ -346,7 +346,7 @@ export function upgradePromptFor(key: NumericEntitlementKey, currentPlan: Subscr
 }
 
 // ---------------------------------------------------------------------------
-// Safe downgrade fallback (spec §46, §48) — privacy fails closed.
+// Safe downgrade fallback (spec §46, §48), privacy fails closed.
 // ---------------------------------------------------------------------------
 
 export type OverLimitResource =
@@ -367,7 +367,7 @@ export type OverLimitItem = {
 
 /**
  * What exceeds the target plan's limits. Used to show the user what they must
- * choose BEFORE the downgrade applies — nothing is deleted (spec §45).
+ * choose BEFORE the downgrade applies, nothing is deleted (spec §45).
  */
 export function resolveOverLimits(input: {
   targetPlan: SubscriptionPlan;
@@ -412,7 +412,7 @@ export function safePrivacyFallback(): SafeFallback {
   };
 }
 
-/** Data is never destroyed by a downgrade — only restricted (spec §42, §45). */
+/** Data is never destroyed by a downgrade, only restricted (spec §42, §45). */
 export const DOWNGRADE_NEVER_DELETES = [
   "friendships",
   "messages",

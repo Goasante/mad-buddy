@@ -31,13 +31,13 @@ export class JobError extends Error {
 export type JobHandler = (admin: Admin, payload: Record<string, unknown>) => Promise<number>;
 
 // ---------------------------------------------------------------------------
-// Safe Arrival unconfirmed alert (batch 5 §9) — the safety-critical one.
+// Safe Arrival unconfirmed alert (batch 5 §9), the safety-critical one.
 // ---------------------------------------------------------------------------
 
 /**
  * Notifies trusted contacts when a traveller hasn't confirmed arrival and the
  * grace period has fully elapsed. Without this running, a Safe Arrival session
- * silently does nothing — which is the exact promise the feature makes.
+ * silently does nothing, which is the exact promise the feature makes.
  *
  * `unconfirmed_notified_at` is the latch: it is set before notifying and
  * filtered on read, so the alert fires at most once per session even if two
@@ -73,7 +73,7 @@ export const handleSafeArrivalUnconfirmedAlert: JobHandler = async (admin) => {
     }
 
     // Claim the alert first. The guarded update means a concurrent worker that
-    // already claimed it gets zero rows and skips — the alert can't double-send.
+    // already claimed it gets zero rows and skips, the alert can't double-send.
     const { data: claimed } = await admin
       .from("safe_arrival_sessions")
       .update({
@@ -106,7 +106,7 @@ export const handleSafeArrivalUnconfirmedAlert: JobHandler = async (admin) => {
           priority: "critical",
           type: "safe_arrival:unconfirmed",
           title: "Safe Arrival check",
-          // Neutral by construction — never "missing" (batch 5 §9).
+          // Neutral by construction, never "missing" (batch 5 §9).
           message: unconfirmedAlertMessage(name)
         })
       )
@@ -246,7 +246,7 @@ function expirySweep(config: {
   column: string;
   from: string[];
   to: string;
-  /** The expiry timestamp column — not every table calls it expires_at. */
+  /** The expiry timestamp column, not every table calls it expires_at. */
   timeColumn?: string;
 }): JobHandler {
   return async (admin) => {
@@ -256,7 +256,7 @@ function expirySweep(config: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .update({ [config.column]: config.to } as any)
       // A null time (e.g. a visibility session that lasts "until I turn it
-      // off") is correctly excluded — .lt never matches null.
+      // off") is correctly excluded, .lt never matches null.
       .lt(config.timeColumn ?? "expires_at", nowIso)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .in(config.column as any, config.from as any)
@@ -270,7 +270,7 @@ function expirySweep(config: {
 
 /**
  * Reads already filter on `expires_at`, so these sweeps are about state
- * hygiene rather than correctness of what users see — an expired row is
+ * hygiene rather than correctness of what users see, an expired row is
  * invisible either way. They keep counts and queues honest.
  */
 export const handleExpireVisibilitySessions: JobHandler = expirySweep({
@@ -278,7 +278,7 @@ export const handleExpireVisibilitySessions: JobHandler = expirySweep({
   column: "status",
   from: ["active"],
   to: "ended",
-  // visibility_sessions has ends_at, not expires_at — with the default
+  // visibility_sessions has ends_at, not expires_at, with the default
   // column this job errored on every run since batch 14.
   timeColumn: "ends_at"
 });
@@ -441,7 +441,7 @@ export const handleCloseExpiredStreaks: JobHandler = async (admin) => {
 /**
  * Generates last month's recap for every user who was active in that month,
  * has recaps enabled, and whose plan includes friendship_recaps. Aggregated
- * counts only — every summary passes through sanitizeRecapSummary, so nothing
+ * counts only, every summary passes through sanitizeRecapSummary, so nothing
  * outside RECAP_ALLOWED_FIELDS can be stored (spec §4).
  *
  * Runs daily but is naturally idempotent: the (user, period_type,
@@ -458,7 +458,7 @@ export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
   const startIso = periodStart.toISOString();
   const endIso = periodEnd.toISOString();
 
-  // Pull the month's activity once and aggregate in memory. Bounded reads —
+  // Pull the month's activity once and aggregate in memory. Bounded reads,
   // at current scale these are small; revisit with keyset pagination later.
   const [wavesRes, plansRes, participantsRes, friendshipsRes, hangoutsRes, sessionsRes] = await Promise.all([
     admin

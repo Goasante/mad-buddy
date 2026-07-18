@@ -172,7 +172,7 @@ export async function GET() {
         .from("subscriptions")
         .select("user_id, plan, status")
         .in("user_id", friendIds),
-      // Muddy Status context (MVP: all_muddies visibility). Best-effort —
+      // Muddy Status context (MVP: all_muddies visibility). Best-effort,
       // a missing table or error simply omits statuses rather than failing
       // the proximity feed.
       admin

@@ -78,7 +78,7 @@ export async function resolveViewerRelationship(
 
 /**
  * The batch-9 fields of `targetId` that a viewer with `relationship` may see
- * (spec §12). Hidden fields come back null — they never leave the server.
+ * (spec §12). Hidden fields come back null, they never leave the server.
  */
 export async function getVisibleProfileFields(
   admin: Admin,

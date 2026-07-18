@@ -8,8 +8,8 @@ import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 /**
  * Read-only nearby computation shared by the nearby route and the Pulse
  * aggregator (spec §57 resolveProximityBand / canDisplayProximityCard). Pure
- * of side effects — no rate limiting, no notification writes, no proximity_event
- * inserts — so the Pulse can reuse the exact authorization + privacy pipeline
+ * of side effects, no rate limiting, no notification writes, no proximity_event
+ * inserts, so the Pulse can reuse the exact authorization + privacy pipeline
  * without triggering the route's write side effects.
  */
 

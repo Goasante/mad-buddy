@@ -10,7 +10,7 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
  * - Private: grants write only the user's own row; there is no cross-user
  *   read path, so no leaderboard can exist (spec §26).
  * - Switchable: a user with achievements_enabled=false is never granted
- *   anything (spec §41) — off means off, not hidden.
+ *   anything (spec §41), off means off, not hidden.
  * - Once: the (user_id, achievement_code) unique constraint plus
  *   ignoreDuplicates makes a re-grant a no-op (spec §32).
  *
@@ -36,7 +36,7 @@ export async function grantAchievement(admin: Admin, userId: string, code: strin
 
 /**
  * Count-based grant: awards `code` only once `count` meets the definition's
- * transparent criteria_value (spec §32 — criteria are public reference data).
+ * transparent criteria_value (spec §32, criteria are public reference data).
  */
 export async function grantCountAchievement(
   admin: Admin,

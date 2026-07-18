@@ -17,7 +17,7 @@ type Stat = { key: string; icon: typeof Hand; label: (n: number) => string; coun
 
 /**
  * The Pulse summary strip (feature spec batch 4). Fetches the one aggregated
- * /api/pulse response and shows an action-oriented summary — never raw data,
+ * /api/pulse response and shows an action-oriented summary, never raw data,
  * never a feed. Quiet by design when nothing is happening (spec §7).
  */
 export function PulseSummary() {

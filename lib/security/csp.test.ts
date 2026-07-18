@@ -26,7 +26,7 @@ describe("buildContentSecurityPolicy", () => {
   it("includes the Supabase origin only where the app needs it (img + connect)", () => {
     expect(withSupabase).toContain("img-src 'self' data: https://abc123.supabase.co");
     expect(withSupabase).toContain("connect-src 'self' https://abc123.supabase.co");
-    // Never in script-src — Supabase is data/auth, not a script host.
+    // Never in script-src, Supabase is data/auth, not a script host.
     expect(withSupabase).toContain("script-src 'self' 'unsafe-inline';");
   });
 

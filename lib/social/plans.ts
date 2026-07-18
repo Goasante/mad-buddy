@@ -9,7 +9,7 @@ import type {
 
 /**
  * Pure domain logic for Plans, RSVP, Plan Polls, and Hangout Mode (feature
- * architecture batch 3). No I/O — every rule here is deterministic and unit
+ * architecture batch 3). No I/O, every rule here is deterministic and unit
  * tested, so the shared planning service (spec §60) and server actions can
  * depend on one audited source of truth for state machines, tier limits, and
  * poll resolution.

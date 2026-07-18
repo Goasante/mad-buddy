@@ -428,7 +428,7 @@ function CreateMomentModal({
           </div>
         </div>
 
-        {/* Privacy summary — updates live as settings change (spec §7). */}
+        {/* Privacy summary, updates live as settings change (spec §7). */}
         <div className="rounded-lg border border-border/70 bg-background/60 p-3 text-xs leading-6 text-muted-foreground">
           <p>
             <span className="font-medium text-foreground">Visible to:</span>{" "}

@@ -128,7 +128,7 @@ async function resolveContextMembership(
 }
 
 // ---------------------------------------------------------------------------
-// List (spec §24) — the read surface for the Drops page.
+// List (spec §24), the read surface for the Drops page.
 // ---------------------------------------------------------------------------
 
 export type DropListItem = {
@@ -144,7 +144,7 @@ export type DropListItem = {
 /**
  * Active Drops in every context the viewer belongs to (their circles, plans,
  * joined event circles, and events they're checked in to), plus their own.
- * Content is NOT included — a locked Drop stays locked until unlockDropAction
+ * Content is NOT included, a locked Drop stays locked until unlockDropAction
  * re-verifies membership.
  */
 export async function getMyDropsAction(): Promise<DropListItem[]> {

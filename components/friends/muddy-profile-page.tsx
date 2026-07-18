@@ -86,7 +86,7 @@ export function MuddyProfilePage({
                 <p className="text-sm text-muted-foreground">@{muddy.username}</p>
                 {muddy.proximityLevel ? <div className="mt-1"><ProximityBadge proximityLevel={muddy.proximityLevel} /></div> : null}
                 {trust ? (
-                  // Safe public trust signals only (batch 8 §57) — never
+                  // Safe public trust signals only (batch 8 §57), never
                   // internal risk data.
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     {trust.badgeLabel ? (

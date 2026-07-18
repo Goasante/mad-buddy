@@ -142,7 +142,7 @@ export function PrivacySetupPanel({ onSaved }: { onSaved?: () => void }) {
         </section>
       ) : null}
 
-      {/* The honesty matrix — only claims that are technically true (spec §33). */}
+      {/* The honesty matrix, only claims that are technically true (spec §33). */}
       <section className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-border/70 bg-card/50 p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Friends may see</p>
@@ -196,7 +196,7 @@ export function PrivacySetupPanel({ onSaved }: { onSaved?: () => void }) {
           </p>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
             Mad Buddy uses your location to work out a broad proximity level between approved Muddies. Friends see
-            labels like <strong>Around</strong> or <strong>Nearby</strong> — never a map, coordinates, direction or
+            labels like <strong>Around</strong> or <strong>Nearby</strong>, never a map, coordinates, direction or
             exact distance. Your browser will ask permission while you&apos;re using the app, and you can stop
             visibility at any time.
           </p>

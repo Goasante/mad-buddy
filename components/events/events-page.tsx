@@ -172,7 +172,7 @@ export function EventsPageContent({ initialEvents = [] }: { initialEvents?: Even
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Events</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Check in to see which Muddies are at the same event. Venue names only — never exact location.
+            Check in to see which Muddies are at the same event. Venue names only, never exact location.
           </p>
         </div>
         <Button type="button" onClick={() => setCreateOpen(true)}>

@@ -50,7 +50,7 @@ describe("validateCircleName", () => {
   });
 });
 
-describe("resolveFeatureAccess — precedence chain (spec §24)", () => {
+describe("resolveFeatureAccess, precedence chain (spec §24)", () => {
   it("blocks override everything", () => {
     expect(
       resolveFeatureAccess(access({ isBlockedEitherDirection: true, viewerIsCloseFriend: true })).allowed
@@ -84,13 +84,13 @@ describe("resolveFeatureAccess — precedence chain (spec §24)", () => {
   });
 });
 
-describe("resolveFeatureAccess — default (no session)", () => {
-  it("allows any mutual, unblocked, non-ghosted Muddy — preserves prior behavior", () => {
+describe("resolveFeatureAccess, default (no session)", () => {
+  it("allows any mutual, unblocked, non-ghosted Muddy, preserves prior behavior", () => {
     expect(resolveFeatureAccess(access()).allowed).toBe(true);
   });
 });
 
-describe("resolveFeatureAccess — audience modes", () => {
+describe("resolveFeatureAccess, audience modes", () => {
   it("hidden denies everyone", () => {
     const result = resolveFeatureAccess(
       access({ session: { visibilityMode: "hidden", includedCircleIds: new Set(), endsAtMs: null } })

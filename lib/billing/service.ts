@@ -107,7 +107,7 @@ export async function calculateUsage(admin: Admin, userId: string): Promise<Usag
   };
 }
 
-/** API-safe entitlement payload — Infinity becomes null (spec §14). */
+/** API-safe entitlement payload, Infinity becomes null (spec §14). */
 export function serializeEntitlements(entitlements: Entitlements): Record<string, number | boolean | null> {
   const output: Record<string, number | boolean | null> = {};
   for (const [key, value] of Object.entries(entitlements)) {

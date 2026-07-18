@@ -19,7 +19,7 @@ export default function GlobalError({
         </span>
         <h1 className="mt-5 text-2xl font-semibold tracking-tight">Something went wrong.</h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
-          The page hit an unexpected error. Your data is safe — nothing was lost. Retrying is
+          The page hit an unexpected error. Your data is safe, nothing was lost. Retrying is
           safe, and if it keeps happening, going home usually clears it.
         </p>
         {error.digest ? (

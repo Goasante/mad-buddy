@@ -22,7 +22,7 @@ const sections: Array<{ title: string; body: string[] }> = [
   {
     title: "2. The service",
     body: [
-      "Mad Buddy lets mutually approved friends (\"Muddies\") see privacy-safe proximity signals — never exact locations, maps, or distances. Some features are labeled \"Preview\" in the app; preview features run on sample data and their changes are not saved.",
+      "Mad Buddy lets mutually approved friends (\"Muddies\") see privacy-safe proximity signals, never exact locations, maps, or distances. Some features are labeled \"Preview\" in the app; preview features run on sample data and their changes are not saved.",
       "Proximity signals are estimates. Do not rely on Mad Buddy for safety-critical decisions, navigation, or emergencies."
     ]
   },
@@ -47,7 +47,7 @@ const sections: Array<{ title: string; body: string[] }> = [
   {
     title: "6. Your content",
     body: [
-      "You keep ownership of what you upload (like your profile photo and bio) and grant us the license needed to operate the service — to store and display that content to you and the Muddies you have approved."
+      "You keep ownership of what you upload (like your profile photo and bio) and grant us the license needed to operate the service, to store and display that content to you and the Muddies you have approved."
     ]
   },
   {

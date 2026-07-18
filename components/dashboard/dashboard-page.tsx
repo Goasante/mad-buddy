@@ -126,7 +126,7 @@ export function DashboardPageContent({
   const promptFeedbackTimerRef = useRef<number | null>(null);
   const visibleFriends = !ghostMode ? friends : [];
   // The nearby endpoint also returns friends whose signal is stale ("hidden")
-  // or who are merely within the broader "far" bucket — real data the API
+  // or who are merely within the broader "far" bucket, real data the API
   // legitimately reports, but not what belongs in a "Nearby friends" glance.
   // Only these three levels count toward the proximity pills above, so the
   // card grid must match that same set or the two disagree (the exact bug
@@ -146,7 +146,7 @@ export function DashboardPageContent({
   // A friend's own full_name can be missing (deleted profile, sync gap); the
   // username is the one thing every account always has. Duplicate display
   // names (two friends both "Sam") get their @username shown for
-  // disambiguation — this Set is what decides that per render.
+  // disambiguation, this Set is what decides that per render.
   const duplicateDisplayNames = useMemo(() => {
     const seen = new Map<string, number>();
     for (const friend of nearbyFriends) {
@@ -445,7 +445,7 @@ export function DashboardPageContent({
             // page's 1200px max-width and this section's 65% share, three
             // literal 260px cards plus gaps don't fit (812px needed vs
             // ~770px available). 240px is the largest floor that still
-            // yields three columns here — auto-fill's 1fr stretches each
+            // yields three columns here, auto-fill's 1fr stretches each
             // card to ~250-260px in practice, close to the target width
             // while actually delivering the requested three-per-row.
             <div

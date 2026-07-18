@@ -18,7 +18,7 @@ const examDurations: Array<{ id: "2h" | "until_tonight" | "1w"; label: string }>
   { id: "1w", label: "1 week" }
 ];
 
-// Only ever at or below the default — a stricter budget, never a looser one.
+// Only ever at or below the default, a stricter budget, never a looser one.
 const budgetOptions = [0, 2, 4, 6, DEFAULT_DAILY_NOTIFICATION_BUDGET];
 
 /**

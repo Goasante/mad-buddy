@@ -118,7 +118,7 @@ export function AppShell({
       if (typeof detail?.unreadCount === "number") setUnreadCount(detail.unreadCount);
       else refreshUnreadCount();
     };
-    // 60s background cadence, paused while the tab is hidden — the focus and
+    // 60s background cadence, paused while the tab is hidden, the focus and
     // visibilitychange handlers above refresh immediately on return, so a
     // slower idle poll costs no freshness the user can see (battery/audit).
     const interval = window.setInterval(() => {
@@ -189,7 +189,7 @@ function DesktopSidebar({
   const primaryItems = navigationItems.filter((item) => (PRIMARY_HREFS as readonly string[]).includes(item.href));
   const secondaryItems = navigationItems.filter((item) => (SECONDARY_HREFS as readonly string[]).includes(item.href));
   const adminItem = navigationItems.find((item) => item.href === "/admin");
-  // Both flyouts share this so opening one always closes the other — two
+  // Both flyouts share this so opening one always closes the other, two
   // independent open states would let both sit open simultaneously.
   const [openFlyout, setOpenFlyout] = useState<"more" | "account" | null>(null);
 
@@ -208,7 +208,7 @@ function DesktopSidebar({
       </Link>
 
       {/* More lives in the same list as the primary items (not a separate
-          group behind a divider) so all five icons share identical spacing —
+          group behind a divider) so all five icons share identical spacing,
           a divider here was reading as uneven gaps between Messages and
           More. The empty space this nav's flex-1 leaves before the account
           area at the bottom is the only separator now, by design. */}
@@ -259,8 +259,8 @@ function DesktopSidebar({
 }
 
 /** Shared visual language for both sidebar flyouts (spec: 220-260px wide,
- * 12-16px radius, restrained shadow — not the heavier glass-panel used by
- * centred modals — 8px internal padding, 40-44px rows). */
+ * 12-16px radius, restrained shadow, not the heavier glass-panel used by
+ * centred modals, 8px internal padding, 40-44px rows). */
 const FLYOUT_CONTENT_CLASSNAME =
   "sidebar-flyout z-40 w-60 rounded-xl border border-border/80 bg-card p-2 shadow-lg outline-none dark:border-white/10 dark:bg-[#161617]";
 
@@ -276,8 +276,8 @@ function flyoutItemClassName(isActive: boolean) {
 /**
  * Every sidebar trigger shares this: a 44px hit area (outer, unstyled) around
  * a slightly smaller pill (inner, this component) that actually carries the
- * hover/active colour. Sizing the visible state below the hit area — rather
- * than filling it edge to edge — is what keeps the active item from reading
+ * hover/active colour. Sizing the visible state below the hit area, rather
+ * than filling it edge to edge, is what keeps the active item from reading
  * as "bigger" than its neighbours, and a tinted bg-primary/12 rather than a
  * solid fill plus shadow is the "subtle, not a glow" active treatment.
  */
@@ -366,7 +366,7 @@ function AccountMenu({
   const isCurrentRoute =
     pathname === "/profile" || pathname === "/settings" || pathname === "/billing" || pathname === "/admin";
   // The menu opening is itself a state worth showing, not just which route
-  // you're on — otherwise clicking the avatar gives no visible feedback.
+  // you're on, otherwise clicking the avatar gives no visible feedback.
   const isActive = open || isCurrentRoute;
 
   return (
@@ -503,7 +503,7 @@ function AppHeader({
           </Button>
           {currentUsername ? (
             // Visible only in the sm-md gap, where the desktop sidebar (md+)
-            // isn't rendered yet but the header still is — below sm the
+            // isn't rendered yet but the header still is, below sm the
             // mobile bottom nav covers it; at md+ the sidebar's own account
             // menu already goes here, so showing both would be a duplicate
             // destination in the same viewport.

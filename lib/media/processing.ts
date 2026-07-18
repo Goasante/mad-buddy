@@ -6,14 +6,14 @@ import type { ImageKind } from "@/lib/media/validation";
 /**
  * Image processing at upload time (batch 6 §39, §44). Two jobs:
  *
- * 1. EXIF stripping — privacy-critical. A phone photo carries GPS
+ * 1. EXIF stripping, privacy-critical. A phone photo carries GPS
  *    coordinates; the app's whole promise is that exact location never
  *    leaves the device. Re-encoding through sharp without `withMetadata()`
  *    drops every metadata block, so EXIF_KEYS_TO_STRIP is enforced by
  *    construction rather than by field-by-field filtering. `rotate()` first
  *    bakes in the EXIF orientation so stripping it doesn't sideways photos.
  *
- * 2. Variants — thumb (grid) and feed (timeline) sizes, so the full-size
+ * 2. Variants, thumb (grid) and feed (timeline) sizes, so the full-size
  *    original isn't shipped for every card. `signMediaForAsset` already
  *    prefers a variant row when one exists.
  *

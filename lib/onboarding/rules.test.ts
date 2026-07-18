@@ -32,7 +32,7 @@ describe("onboarding state machine (spec §23, §24)", () => {
     };
   }
 
-  it("only moves forward — a replayed old event can't rewind progress", () => {
+  it("only moves forward, a replayed old event can't rewind progress", () => {
     expect(canAdvanceTo("profile_completed", "privacy_reviewed")).toBe(true);
     expect(canAdvanceTo("privacy_reviewed", "profile_started")).toBe(false);
     expect(canAdvanceTo("completed", "completed")).toBe(false);
@@ -45,7 +45,7 @@ describe("onboarding state machine (spec §23, §24)", () => {
     ).toBe(true);
   });
 
-  it("lets a user finish WITHOUT location or a first Muddy — neither is required", () => {
+  it("lets a user finish WITHOUT location or a first Muddy, neither is required", () => {
     expect(OPTIONAL_STEPS.has("location_prompted")).toBe(true);
     expect(OPTIONAL_STEPS.has("first_muddy_added")).toBe(true);
     expect(
@@ -73,7 +73,7 @@ describe("onboarding state machine (spec §23, §24)", () => {
 });
 
 describe("privacy setup defaults (spec §31)", () => {
-  it("starts glow HIDDEN — visibility is never on by default", () => {
+  it("starts glow HIDDEN, visibility is never on by default", () => {
     expect(SAFE_DEFAULT_PRIVACY_SETUP.glowAudience).toBe("hidden");
   });
 
@@ -114,7 +114,7 @@ describe("location permission (spec §41-§48)", () => {
     expect(permissionAllowsLocation("unsupported")).toBe(false);
   });
 
-  it("never activates visibility on a client's claim alone — presence is required", () => {
+  it("never activates visibility on a client's claim alone, presence is required", () => {
     expect(
       canActivateVisibility({ audience: "close_friends", permission: "granted", hasRecentPresenceUpdate: false })
     ).toEqual({ active: false, reason: "no_presence_yet" });
@@ -142,7 +142,7 @@ describe("location permission (spec §41-§48)", () => {
 });
 
 describe("activation (spec §55, §57)", () => {
-  it("requires a first Muddy PLUS a meaningful action — signup is not activation", () => {
+  it("requires a first Muddy PLUS a meaningful action, signup is not activation", () => {
     const onlyMuddy = new Set<Milestone>(["account_created", "email_verified", "first_muddy_added"]);
     expect(isActivated(onlyMuddy)).toBe(false);
 
@@ -155,7 +155,7 @@ describe("activation (spec §55, §57)", () => {
     expect(isActivated(formOnly)).toBe(false);
   });
 
-  it("recommends a Wave first — low pressure and no location needed (spec §55)", () => {
+  it("recommends a Wave first, low pressure and no location needed (spec §55)", () => {
     const next = recommendNextAction({
       hasFirstMuddy: true,
       milestones: new Set<Milestone>(["first_muddy_added"]),

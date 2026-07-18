@@ -64,7 +64,7 @@ describe("canDiscoverUser (spec §2, §5)", () => {
   it("honours a global hide for search, but not for the user's own invite/QR", () => {
     const hidden = { ...DEFAULT_DISCOVERY_SETTINGS, hiddenFromDiscovery: true };
     expect(canDiscoverUser({ ...base, settings: hidden }).reason).toBe("hidden");
-    // The target handed over the token themselves — that's consent.
+    // The target handed over the token themselves, that's consent.
     expect(canDiscoverUser({ ...base, settings: hidden, method: "invite" }).discoverable).toBe(true);
     expect(canDiscoverUser({ ...base, settings: hidden, method: "qr" }).discoverable).toBe(true);
   });
@@ -93,7 +93,7 @@ describe("search ranking (spec §7)", () => {
     expect(ranked.map((entry) => entry.userId)).toEqual(["exact", "contact", "mutuals"]);
   });
 
-  it("never lets popularity outrank a real signal — mutual count is capped", () => {
+  it("never lets popularity outrank a real signal, mutual count is capped", () => {
     const ranked = rankSearchCandidates([
       candidate({ userId: "popular", mutualCount: 10_000 }),
       candidate({ userId: "contact", contactMatch: true })
@@ -134,7 +134,7 @@ describe("friend requests (spec §11, §16, §17)", () => {
     expect(resolveSendRequest(send({ sentToday: 20, dailyLimit: 20 })).reason).toBe("limit_reached");
   });
 
-  it("caps new accounts low even on a paid plan — anti-spam beats paid limits", () => {
+  it("caps new accounts low even on a paid plan, anti-spam beats paid limits", () => {
     expect(isNewAccount(NOW - DAY, NOW)).toBe(true);
     expect(effectiveRequestLimit({ plan: "buddy_plus", accountCreatedAtMs: NOW - DAY, nowMs: NOW })).toBe(5);
     expect(effectiveRequestLimit({ plan: "buddy_plus", accountCreatedAtMs: NOW - 30 * DAY, nowMs: NOW })).toBe(50);
@@ -173,7 +173,7 @@ describe("account age (spec §54)", () => {
 });
 
 describe("public trust summary (spec §57, §61)", () => {
-  it("exposes only safe signals — no risk data, no timestamps", () => {
+  it("exposes only safe signals, no risk data, no timestamps", () => {
     const summary = buildPublicTrustSummary({
       verified: { email: true, phone: true, institution: true, organisation: false },
       mutualCount: 4,

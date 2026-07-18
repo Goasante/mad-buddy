@@ -18,7 +18,7 @@ import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
  *
  * Invoked by the cron tick. Two properties matter most:
  *  - Claiming is atomic (`claim_jobs` uses FOR UPDATE SKIP LOCKED), so two
- *    overlapping ticks can never run the same job — which is what stops a
+ *    overlapping ticks can never run the same job, which is what stops a
  *    double-sent Safe Arrival alert.
  *  - A handler failure is classified, not blindly retried (spec §29).
  */
@@ -50,7 +50,7 @@ export async function enqueueDueSchedules(admin: Admin, nowMs = Date.now()): Pro
       idempotency_key: key,
       run_at: new Date(nowMs).toISOString()
     });
-    // A unique violation means this period is already enqueued — expected.
+    // A unique violation means this period is already enqueued, expected.
     if (!error) enqueued += 1;
   }
   return enqueued;
@@ -92,7 +92,7 @@ async function failJob(
 
 /**
  * One tick: enqueue what's due, then drain a bounded batch. Bounded so a
- * single invocation can't exceed the platform's function time limit — the next
+ * single invocation can't exceed the platform's function time limit, the next
  * tick picks up the rest.
  */
 export async function runTick(admin: Admin, workerId: string): Promise<TickResult> {
@@ -116,7 +116,7 @@ export async function runTick(admin: Admin, workerId: string): Promise<TickResul
     const handler = JOB_HANDLERS[job.job_type as JobType];
 
     if (!handler) {
-      // An unknown type will never succeed — dead-letter it rather than spin.
+      // An unknown type will never succeed, dead-letter it rather than spin.
       await failJob(admin, job, "RESOURCE_NOT_FOUND");
       result.deadLettered += 1;
       continue;
@@ -130,7 +130,7 @@ export async function runTick(admin: Admin, workerId: string): Promise<TickResul
       logBackendEvent("info", {
         route: "jobs/run",
         latencyMs: Date.now() - startedAt,
-        // Counts only — a job payload may reference private resources.
+        // Counts only, a job payload may reference private resources.
         statusCode: 200
       });
       void count;

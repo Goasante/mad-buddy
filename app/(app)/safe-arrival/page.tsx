@@ -114,7 +114,7 @@ async function loadMuddies(
   );
   if (friendIds.length === 0) return [];
 
-  // Close Friends first — the recommended default audience (spec §4).
+  // Close Friends first, the recommended default audience (spec §4).
   const [{ data: profiles }, { data: closeFriends }] = await Promise.all([
     admin.from("profiles").select("user_id, full_name").in("user_id", friendIds),
     admin.from("close_friend_relationships").select("friend_id").eq("owner_id", userId)

@@ -43,13 +43,13 @@ describe("validateImageUpload", () => {
     expect(validateImageUpload(upload())).toEqual({ valid: true, kind: "png", mimeType: "image/png" });
   });
 
-  it("never trusts the browser MIME type — mismatched bytes are rejected", () => {
+  it("never trusts the browser MIME type, mismatched bytes are rejected", () => {
     // Claims PNG, actually a JPEG.
     expect(validateImageUpload(upload({ headerBytes: JPEG_HEADER }))).toEqual({
       valid: false,
       reason: "content_mismatch"
     });
-    // Claims PNG, actually SVG markup — the polyglot/script case.
+    // Claims PNG, actually SVG markup, the polyglot/script case.
     expect(validateImageUpload(upload({ headerBytes: SVG_HEADER }))).toEqual({
       valid: false,
       reason: "content_mismatch"

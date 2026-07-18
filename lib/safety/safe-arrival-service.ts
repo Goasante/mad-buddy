@@ -15,7 +15,7 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
 /**
  * A trusted contact must be an approved, unblocked Muddy who hasn't opted out
  * of Safe Arrival requests from this traveller (spec §4, §17). The opt-out is
- * silent — the traveller is never told a contact excluded them.
+ * silent, the traveller is never told a contact excluded them.
  */
 export async function canBeTrustedContact(
   admin: Admin,
@@ -77,7 +77,7 @@ export type SafeArrivalAccess = {
 
 /**
  * Resolves who may see a session: the traveller and their chosen contacts only
- * (spec §14). Nobody else, ever — a Safe Arrival is not discoverable.
+ * (spec §14). Nobody else, ever, a Safe Arrival is not discoverable.
  */
 export async function resolveSafeArrivalAccess(
   admin: Admin,

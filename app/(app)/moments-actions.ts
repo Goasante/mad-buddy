@@ -69,7 +69,7 @@ async function getAuthedUserId() {
 
 /**
  * Uploads an image to the PRIVATE media bucket and records the asset. Media is
- * never publicly addressable — viewers only ever receive short-lived signed
+ * never publicly addressable, viewers only ever receive short-lived signed
  * URLs minted after their permission on the parent object is checked (§41).
  */
 export async function uploadMomentMediaAction(formData: FormData): Promise<MomentActionState> {
@@ -118,7 +118,7 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
   const key = storageKeyFor({ ownerId: userId, context: "moment", mediaId: asset.id, kind: validation.kind });
 
   // Strip EXIF (GPS!) and build thumb/feed variants BEFORE anything reaches
-  // storage — the stored original is already the metadata-free re-encode.
+  // storage, the stored original is already the metadata-free re-encode.
   let processed;
   try {
     const { processImageUpload } = await import("@/lib/media/processing");
@@ -269,7 +269,7 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
     }
   }
 
-  // The media must belong to this user (§15) — never trust a client-supplied id.
+  // The media must belong to this user (§15), never trust a client-supplied id.
   if (parsed.data.mediaId) {
     const { data: asset } = await admin
       .from("media_assets")
@@ -389,7 +389,7 @@ export async function getMomentFeedAction(): Promise<VisibleMoment[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Reactions (spec §11) — visible to author and reactor only.
+// Reactions (spec §11), visible to author and reactor only.
 // ---------------------------------------------------------------------------
 
 export async function reactToMomentAction(
@@ -481,7 +481,7 @@ async function canViewMoment(
 }
 
 // ---------------------------------------------------------------------------
-// Reporting (spec §50) — hide immediately, never expose reporter identity.
+// Reporting (spec §50), hide immediately, never expose reporter identity.
 // ---------------------------------------------------------------------------
 
 const reportSchema = z.object({

@@ -77,7 +77,7 @@ async function loadFriendNetwork(): Promise<{
     .in("user_id", [...profileIds]);
   const profilesById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
   // Fallback for users whose profiles row hasn't synced yet. The auth admin
-  // API has no bulk lookup, so this is inherently per-id — bounded to keep a
+  // API has no bulk lookup, so this is inherently per-id, bounded to keep a
   // pathological backlog from fanning out into unbounded admin calls
   // (audit I-13). Ids beyond the cap are omitted until their profile syncs.
   const missingProfileIds = [...profileIds]

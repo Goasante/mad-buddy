@@ -5,7 +5,7 @@ import { logBackendEvent } from "@/lib/observability/logger";
  * CSP violation intake for the Report-Only rollout (audit §13, stage 2).
  * Anonymous by design (browsers post here without credentials). Reports are
  * sanitized before logging: only the violated directive and the ORIGIN of
- * the blocked URI are recorded — never full URLs, which can carry paths or
+ * the blocked URI are recorded, never full URLs, which can carry paths or
  * query strings. Payloads are size-capped to keep this from being a log-spam
  * vector.
  */
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       errorType: `${directive} <- ${blockedOrigin}`
     });
   } catch {
-    // Malformed report — drop silently; this endpoint must never error-loop.
+    // Malformed report, drop silently; this endpoint must never error-loop.
   }
 
   return new NextResponse(null, { status: 204 });

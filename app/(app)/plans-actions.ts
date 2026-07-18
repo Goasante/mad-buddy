@@ -251,7 +251,7 @@ export async function rsvpAction(planId: string, status: string): Promise<PlanAc
   if (error) return { ok: false, message: "Couldn't save your RSVP." };
 
   const message = decision.waitlisted
-    ? "This plan is full — you're on the waitlist."
+    ? "This plan is full, you're on the waitlist."
     : status === "going"
       ? "You're going."
       : status === "maybe"
@@ -328,7 +328,7 @@ export async function leavePlanAction(planId: string): Promise<PlanActionState> 
   if (!plan) return { ok: false, message: "Plan not found." };
   // A lone host must cancel rather than leave (spec §16).
   if (plan.creator_id === userId) {
-    return { ok: false, message: "You're the host — cancel the plan instead." };
+    return { ok: false, message: "You're the host, cancel the plan instead." };
   }
 
   const { error } = await admin
@@ -548,7 +548,7 @@ export async function confirmPollAction(pollId: string): Promise<PlanActionState
   if (!winner.resolved) {
     return {
       ok: false,
-      message: winner.reason === "no_votes" ? "No votes yet." : "There's a tie — pick a winner manually."
+      message: winner.reason === "no_votes" ? "No votes yet." : "There's a tie, pick a winner manually."
     };
   }
 

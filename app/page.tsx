@@ -3,7 +3,7 @@ import { LandingPage } from "@/components/landing/landing-page";
 import { absoluteUrl } from "@/lib/seo";
 
 const description =
-  "Mad Buddy lets mutually approved friends know when they are nearby through privacy-safe glow signals — no maps, coordinates, or exact distances.";
+  "Mad Buddy lets mutually approved friends know when they are nearby through privacy-safe glow signals, no maps, coordinates, or exact distances.";
 
 export const metadata: Metadata = {
   title: "When your Muddies are close, they glow",

@@ -240,8 +240,8 @@ export async function resolveConversationAccess(
   };
 }
 
-/** Full send check: membership, conversation state, posting mode, and — for
- *  direct chats — the live block/relationship state (spec §21: a block mid-chat
+/** Full send check: membership, conversation state, posting mode, and, for
+ *  direct chats, the live block/relationship state (spec §21: a block mid-chat
  *  must stop messages immediately). */
 export async function canSendMessage(
   admin: Admin,
@@ -259,7 +259,7 @@ export async function canSendMessage(
   });
   if (!base.allowed) return base;
 
-  // Re-check the pair on every direct send — relationships change mid-chat.
+  // Re-check the pair on every direct send, relationships change mid-chat.
   const { data: conversation } = await admin
     .from("conversations")
     .select("conversation_type, direct_key")
@@ -276,7 +276,7 @@ export async function canSendMessage(
   return { allowed: true, reason: "allowed" };
 }
 
-/** Server-generated system message (spec §40) — never client-authored. */
+/** Server-generated system message (spec §40), never client-authored. */
 export async function publishSystemMessage(
   admin: Admin,
   conversationId: string,
@@ -348,7 +348,7 @@ export async function createConversationForPlan(
     user_id: participant.user_id,
     role: (participant.role === "host" ? "owner" : "member") as ConversationRole,
     status: "joined" as const,
-    // Plan Chat shows full history to participants — it's a shared context.
+    // Plan Chat shows full history to participants, it's a shared context.
     history_visible_from: new Date(0).toISOString()
   }));
   if (rows.length > 0) await admin.from("conversation_members").insert(rows);
@@ -360,7 +360,7 @@ export async function createConversationForPlan(
 /**
  * Applies a block across conversations (spec §60): the pair's direct
  * conversation is archived so neither side can send. Shared group membership
- * is left intact — group visibility filtering is handled at read time.
+ * is left intact, group visibility filtering is handled at read time.
  */
 export async function applyBlockToConversations(admin: Admin, blockerId: string, blockedId: string) {
   const key = directConversationKey(blockerId, blockedId);

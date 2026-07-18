@@ -76,7 +76,7 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "event_circles.join": { limit: 20, windowSeconds: 60 * 60 },
   "event_announcements.send": { limit: 10, windowSeconds: 60 * 60 },
   // Moments/Drops/media anti-spam (feature spec §16, §32, §54). Reporting is
-  // deliberately generous — never rate-limit a user out of safety tools (§16).
+  // deliberately generous, never rate-limit a user out of safety tools (§16).
   "moments.create": { limit: 25, windowSeconds: 24 * 60 * 60 },
   "moments.react": { limit: 120, windowSeconds: 60 * 60 },
   "drops.create": { limit: 25, windowSeconds: 24 * 60 * 60 },
@@ -84,7 +84,7 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "media.upload": { limit: 40, windowSeconds: 60 * 60 },
   "content.report": { limit: 60, windowSeconds: 60 * 60 },
   // Messaging (feature spec §8): generous enough not to damage normal
-  // conversations — 30/minute is the documented cap.
+  // conversations, 30/minute is the documented cap.
   "messages.send": { limit: 30, windowSeconds: 60 },
   "conversations.create": { limit: 30, windowSeconds: 60 * 60 },
   "groups.create": { limit: 10, windowSeconds: 24 * 60 * 60 },

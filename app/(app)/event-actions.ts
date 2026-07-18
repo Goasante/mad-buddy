@@ -56,7 +56,7 @@ async function getAuthedUserId() {
 }
 
 // ---------------------------------------------------------------------------
-// Events list + creation (spec §24) — the read surface for the events page.
+// Events list + creation (spec §24), the read surface for the events page.
 // ---------------------------------------------------------------------------
 
 export type EventView = {
@@ -76,7 +76,7 @@ export type EventView = {
 
 /**
  * Community/link events that are upcoming or live, plus anything the viewer
- * hosts. Venue is a label only — never coordinates (spec §24).
+ * hosts. Venue is a label only, never coordinates (spec §24).
  */
 export async function getEventsAction(): Promise<EventView[]> {
   const env = getSupabaseServerEnv();

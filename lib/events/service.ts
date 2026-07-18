@@ -28,7 +28,7 @@ export type EventGlowMuddy = {
 /**
  * Builds the Event Glow list for a viewer at an event (spec §39). Returns only
  * users the viewer is authorized to see. Users who are present but private,
- * ghosted, or Glow-disabled are simply absent — the response never discloses
+ * ghosted, or Glow-disabled are simply absent, the response never discloses
  * that they are at the event at all (spec §41).
  *
  * Never touches coordinates: presence here means "has a live check-in".

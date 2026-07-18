@@ -6,7 +6,7 @@ import type { ReportCategory } from "@/lib/supabase/database.types";
  * exact-location warning heuristic.
  *
  * Design stance (spec §55): these checks WARN, they do not block. A public
- * meeting place ("Student Centre", "Accra Mall") is legitimate and common —
+ * meeting place ("Student Centre", "Accra Mall") is legitimate and common,
  * silently refusing to post it would break the product. The user decides.
  */
 
@@ -54,7 +54,7 @@ export const REPORT_CONFIRMATION_MESSAGE =
 
 /**
  * Everything a block must revoke. Enumerated so the block action can be
- * checked against the spec rather than drifting as features are added — if a
+ * checked against the spec rather than drifting as features are added, if a
  * batch adds a new surface, it belongs here.
  */
 export const BLOCK_REVOKES = [
@@ -79,7 +79,7 @@ export type BlockRevokedSurface = (typeof BLOCK_REVOKES)[number];
 
 export type LocationWarning = {
   warn: boolean;
-  /** Which signal tripped — for telemetry/tests, never shown verbatim. */
+  /** Which signal tripped, for telemetry/tests, never shown verbatim. */
   signals: LocationSignal[];
 };
 
@@ -99,7 +99,7 @@ const STREET_ADDRESS_PATTERN =
 const LIVE_LOCATION_PATTERN =
   /\b(my live location|sharing my location|track me|follow my location|here'?s my location|my exact location|my current location)\b/i;
 
-// Vulnerability wording — "I'm alone at/in/on ...".
+// Vulnerability wording, "I'm alone at/in/on ...".
 const ALONE_PATTERN = /\b(i'?m|i am)\s+(all\s+)?alone\s+(at|in|on|here)\b/i;
 
 /**
@@ -143,7 +143,7 @@ export type SpamAssessment = {
 };
 
 /**
- * Cheap signals only — this never auto-removes anything (spec §54: don't rely
+ * Cheap signals only, this never auto-removes anything (spec §54: don't rely
  * solely on automated moderation). It flags for review and rate limiting.
  */
 export function assessSpam(input: SpamSignalInput): SpamAssessment {

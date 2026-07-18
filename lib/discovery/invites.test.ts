@@ -20,7 +20,7 @@ describe("invite tokens (spec §26)", () => {
     expect(generateInviteToken().length).toBeGreaterThan(20);
   });
 
-  it("stores only a hash — the raw token is unrecoverable from the database", () => {
+  it("stores only a hash, the raw token is unrecoverable from the database", () => {
     const token = generateInviteToken();
     const hash = hashInviteToken(token);
     expect(hash).not.toBe(token);
@@ -57,7 +57,7 @@ describe("invite redemption (spec §23, §28)", () => {
     expect(resolveInviteRedemption(redeem())).toEqual({ allowed: true, reason: "allowed" });
   });
 
-  it("enforces purpose binding — an event token is never a friendship invite", () => {
+  it("enforces purpose binding, an event token is never a friendship invite", () => {
     expect(resolveInviteRedemption(redeem({ inviteType: "event", requestedType: "personal" }))).toEqual({
       allowed: false,
       reason: "purpose_mismatch"
@@ -102,7 +102,7 @@ describe("rotating personal QR (spec §33, §37)", () => {
     });
   });
 
-  it("rotates — the token changes as windows advance", () => {
+  it("rotates, the token changes as windows advance", () => {
     expect(createPersonalQrToken("user-1", SECRET, NOW)).not.toBe(
       createPersonalQrToken("user-1", SECRET, NOW + 2 * QR_WINDOW_MS)
     );

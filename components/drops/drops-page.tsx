@@ -21,7 +21,7 @@ export type DropContextOption = { id: string; label: string; contextType: "circl
 
 /**
  * Muddy Drops (batch 6 §22-§33): content that unlocks inside a shared
- * context. Locked content never reaches the client — unlocking re-verifies
+ * context. Locked content never reaches the client, unlocking re-verifies
  * membership server-side.
  */
 export function DropsPageContent({
