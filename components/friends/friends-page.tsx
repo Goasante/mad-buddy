@@ -16,6 +16,7 @@ import {
   X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import * as Popover from "@radix-ui/react-popover";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
@@ -815,36 +816,39 @@ function UserRow({
           <Button type="button" variant="outline" size="icon" aria-label="Message" title="Message" onClick={onMessage}>
             <MessagesSquare className="h-4 w-4" aria-hidden="true" />
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="More"
-            title="More"
-            onClick={() => setMenuOpen(true)}
-          >
-            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-          </Button>
+          <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
+            <Popover.Trigger asChild>
+              <Button type="button" variant="outline" size="icon" aria-label="More" title="More">
+                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                align="end"
+                sideOffset={8}
+                collisionPadding={12}
+                className="z-50 w-[min(240px,calc(100vw-1.5rem))] rounded-xl border border-border/70 bg-card p-1 shadow-lg outline-none"
+              >
+                <div className="grid gap-0.5">
+                  <MenuItem label={isCloseFriend ? "Remove from Close Friends" : "Add to Close Friends"} onClick={() => { onToggleCloseFriend(); setMenuOpen(false); }} />
+                  {otherCircles.map((circle) => (
+                    <MenuItem
+                      key={circle.id}
+                      label={`Add to ${circle.name}`}
+                      onClick={() => { onAddToCircle(circle.id); setMenuOpen(false); }}
+                    />
+                  ))}
+                  <MenuItem label="Add to new circle" onClick={() => { onCreateCircle(); setMenuOpen(false); }} />
+                  <div className="my-1 border-t border-border/70" />
+                  <MenuItem label="Remove Muddy" onClick={() => { onRemove(); setMenuOpen(false); }} icon={UserMinus} />
+                  <MenuItem label="Block" onClick={() => { onBlock(); setMenuOpen(false); }} icon={Ban} />
+                  <MenuItem label="Report" onClick={() => { onReport(); setMenuOpen(false); }} icon={Flag} />
+                </div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
         </div>
       </div>
-
-      <Modal open={menuOpen} onOpenChange={setMenuOpen} title={user.displayName} compact>
-        <div className="grid gap-1">
-          <MenuItem label={isCloseFriend ? "Remove from Close Friends" : "Add to Close Friends"} onClick={() => { onToggleCloseFriend(); setMenuOpen(false); }} />
-          {otherCircles.map((circle) => (
-            <MenuItem
-              key={circle.id}
-              label={`Add to ${circle.name}`}
-              onClick={() => { onAddToCircle(circle.id); setMenuOpen(false); }}
-            />
-          ))}
-          <MenuItem label="Add to new circle" onClick={() => { onCreateCircle(); setMenuOpen(false); }} />
-          <div className="my-1 border-t border-border/70" />
-          <MenuItem label="Remove Muddy" onClick={() => { onRemove(); setMenuOpen(false); }} icon={UserMinus} />
-          <MenuItem label="Block" onClick={() => { onBlock(); setMenuOpen(false); }} icon={Ban} />
-          <MenuItem label="Report" onClick={() => { onReport(); setMenuOpen(false); }} icon={Flag} />
-        </div>
-      </Modal>
     </Card>
   );
 }

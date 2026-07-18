@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Info, MessagesSquare, PenSquare, Search, Send, VolumeX } from "lucide-react";
+import * as Popover from "@radix-ui/react-popover";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   deleteMessageAction,
@@ -420,15 +421,31 @@ export function MessagesPageContent({
                   </button>
                   <GlowAvatar name={selected.title} size="sm" />
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold">{selected.title}</span>
-                  <button
-                    type="button"
-                    onClick={() => setInfoOpen(true)}
-                    aria-label="Message information"
-                    title="Message information"
-                    className="focus-ring safe-motion grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  >
-                    <Info className="h-4 w-4" aria-hidden="true" />
-                  </button>
+                  <Popover.Root open={infoOpen} onOpenChange={setInfoOpen}>
+                    <Popover.Trigger asChild>
+                      <button
+                        type="button"
+                        aria-label="Message information"
+                        title="Message information"
+                        className="focus-ring safe-motion grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      >
+                        <Info className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </Popover.Trigger>
+                    <Popover.Portal>
+                      <Popover.Content
+                        align="end"
+                        sideOffset={8}
+                        collisionPadding={12}
+                        className="z-50 w-[min(280px,calc(100vw-1.5rem))] rounded-xl border border-border/70 bg-card p-3 shadow-lg outline-none"
+                      >
+                        <p className="text-sm font-semibold">Message information</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Messages are protected in transit but aren&apos;t end-to-end encrypted.
+                        </p>
+                      </Popover.Content>
+                    </Popover.Portal>
+                  </Popover.Root>
                   <button
                     type="button"
                     onClick={toggleMute}
@@ -624,15 +641,6 @@ export function MessagesPageContent({
       )}
 
       <NewMessageModal open={newMessageOpen} onOpenChange={setNewMessageOpen} onSelect={startConversationWith} />
-
-      {/* Honest crypto language (spec §62), never claim end-to-end. Lives
-          behind the header's info icon now rather than a standing sentence
-          on every screen. */}
-      <Modal open={infoOpen} onOpenChange={setInfoOpen} title="Message information" compact>
-        <p className="text-sm text-muted-foreground">
-          Messages are protected in transit but aren’t end-to-end encrypted.
-        </p>
-      </Modal>
     </div>
   );
 }

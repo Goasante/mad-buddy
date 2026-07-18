@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarCheck2, HelpCircle, MessageCircle, Plus, Search, Send } from "lucide-react";
+import * as Popover from "@radix-ui/react-popover";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { createMeetupRequestAction, respondToMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { getMessageableFriendsAction, type MessageableFriend } from "@/app/(app)/messaging-actions";
@@ -167,9 +168,36 @@ export function MeetingPingsPage() {
           <p className="mt-2 text-sm text-muted-foreground">Make plans with your Muddies.</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button type="button" variant="ghost" size="icon" title="Meeting Ping settings" aria-label="Meeting Ping settings" onClick={() => setHelpOpen(true)}>
-            <HelpCircle className="h-4 w-4" aria-hidden="true" />
-          </Button>
+          <Popover.Root open={helpOpen} onOpenChange={setHelpOpen}>
+            <Popover.Trigger asChild>
+              <Button type="button" variant="ghost" size="icon" title="How it works" aria-label="How it works">
+                <HelpCircle className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                align="end"
+                sideOffset={8}
+                collisionPadding={12}
+                className="z-50 w-[min(300px,calc(100vw-1.5rem))] rounded-xl border border-border/70 bg-card p-3 shadow-lg outline-none"
+              >
+                <p className="mb-2 text-sm font-semibold">How it works</p>
+                <div className="grid gap-3">
+                  {howItWorks.map((step) => (
+                    <div key={step.step} className="flex items-start gap-2">
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                        {step.step}
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium">{step.title}</p>
+                        <p className="text-xs text-muted-foreground">{step.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
           <Button type="button" title="New ping" aria-label="New ping" onClick={openNewPing}>
             <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
             New ping
@@ -272,22 +300,6 @@ export function MeetingPingsPage() {
           description="Pings you've sent or replied to will move here once they're resolved."
         />
       ) : null}
-
-      <Modal open={helpOpen} onOpenChange={setHelpOpen} title="How it works" compact>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {howItWorks.map((step) => (
-            <div key={step.step} className="flex items-start gap-2">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                {step.step}
-              </span>
-              <div>
-                <p className="text-sm font-medium">{step.title}</p>
-                <p className="text-xs text-muted-foreground">{step.description}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Modal>
 
       <Modal
         open={newPingOpen}

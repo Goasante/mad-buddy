@@ -29,7 +29,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { logoutAction } from "@/app/(auth)/actions";
 import { LocationSignalSync } from "@/components/app-shell/location-signal-sync";
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand/brand-mark";
 
@@ -505,16 +504,34 @@ function AppHeader({
           </h1>
         </div>
         <div className="flex items-center gap-1.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => setCreateOpen(true)}
-            aria-label="Create"
-            title="Create"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-          </Button>
+          <DropdownMenu.Root open={createOpen} onOpenChange={setCreateOpen}>
+            <DropdownMenu.Trigger asChild>
+              <Button type="button" variant="outline" size="icon" aria-label="Create" title="Create">
+                <Plus className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content side="bottom" align="end" sideOffset={8} collisionPadding={8} className={FLYOUT_CONTENT_CLASSNAME}>
+                {createActions.map((action) => (
+                  <DropdownMenu.Item
+                    key={action.title}
+                    asChild
+                    className="focus-ring safe-motion flex w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2.5 text-left outline-none data-[highlighted]:bg-secondary"
+                  >
+                    <Link href={action.href}>
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                        <action.icon className="h-4 w-4" aria-hidden="true" />
+                      </span>
+                      <span className="text-left">
+                        <span className="block text-sm font-semibold">{action.title}</span>
+                        <span className="block text-xs text-muted-foreground">{action.description}</span>
+                      </span>
+                    </Link>
+                  </DropdownMenu.Item>
+                ))}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
           {/* Notifications + account are mobile-only here (md:hidden); on
               desktop the sidebar already provides both, so surfacing them in
               the header too would duplicate destinations in one viewport. */}
@@ -539,7 +556,6 @@ function AppHeader({
           </div>
         </div>
       </div>
-      <CreateMenu open={createOpen} onOpenChange={setCreateOpen} />
     </header>
   );
 }
@@ -641,34 +657,6 @@ const createActions: Array<{
     icon: Sparkles
   }
 ];
-
-function CreateMenu({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Create" compact>
-      <div className="grid gap-2">
-        {createActions.map((action) => (
-          <Button
-            key={action.title}
-            asChild
-            variant="outline"
-            className="h-auto justify-start gap-3 py-3"
-            onClick={() => onOpenChange(false)}
-          >
-            <Link href={action.href}>
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                <action.icon className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <span className="text-left">
-                <span className="block text-sm font-semibold">{action.title}</span>
-                <span className="block text-xs text-muted-foreground">{action.description}</span>
-              </span>
-            </Link>
-          </Button>
-        ))}
-      </div>
-    </Modal>
-  );
-}
 
 // Mobile-only labels for the five primary tabs. The desktop sidebar keeps the
 // navigationItems labels (Friends, Notifications) for its tooltips; the

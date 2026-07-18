@@ -16,7 +16,8 @@
       "Bash(grep -vE \"\\\\.ts$\")",
       "Bash(sed -n '/export type AvailabilityType/,/;/p' lib/supabase/database.types.ts)",
       "Bash(sed -n '/export function formatMuddyStatusLabel/,/^}/p' lib/social/rules.ts)",
-      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); pend=[m['local'] for m in d['migrations'] if not m['remote']]; print\\('Pending \\(unapplied\\) migrations:', pend if pend else 'NONE - fully in sync'\\)\")"
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); pend=[m['local'] for m in d['migrations'] if not m['remote']]; print\\('Pending \\(unapplied\\) migrations:', pend if pend else 'NONE - fully in sync'\\)\")",
+      "Bash(sort -t: -k2 -rn)"
     ]
   }
 }

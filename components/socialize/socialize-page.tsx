@@ -412,7 +412,11 @@ export function SocializePage({
                   reducedMotion={reducedMotion}
                   disabled={isPending}
                   onWave={() => wave(person)}
-                  onMenu={() => setMenuPerson(person)}
+                  onBlock={() => blockPerson(person)}
+                  onReport={() => {
+                    setMenuPerson(person);
+                    setReportOpen(true);
+                  }}
                 />
               ))}
             </div>
@@ -435,32 +439,6 @@ export function SocializePage({
         </section>
       ) : null}
 
-      {/* Safety menu (block / report) */}
-      <Modal
-        open={Boolean(menuPerson) && !reportOpen}
-        onOpenChange={(open) => {
-          if (!open) setMenuPerson(null);
-        }}
-        title={menuPerson ? capitalize(menuPerson.displayName) : "Options"}
-        compact
-      >
-        <div className="grid gap-1">
-          <button
-            type="button"
-            onClick={() => setReportOpen(true)}
-            className="focus-ring safe-motion rounded-lg px-2.5 py-2 text-left text-sm hover:bg-secondary"
-          >
-            Report
-          </button>
-          <button
-            type="button"
-            onClick={() => menuPerson && blockPerson(menuPerson)}
-            className="focus-ring safe-motion rounded-lg px-2.5 py-2 text-left text-sm text-red-500 hover:bg-secondary"
-          >
-            Block
-          </button>
-        </div>
-      </Modal>
 
       <Modal
         open={reportOpen}
@@ -523,14 +501,17 @@ function PersonCard({
   reducedMotion,
   disabled,
   onWave,
-  onMenu
+  onBlock,
+  onReport
 }: {
   person: SocializePerson;
   reducedMotion: boolean;
   disabled: boolean;
   onWave: () => void;
-  onMenu: () => void;
+  onBlock: () => void;
+  onReport: () => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const name = person.displayName || person.username;
   const waved = person.waveState === "sent";
   const received = person.waveState === "received";
@@ -556,14 +537,46 @@ function PersonCard({
         </span>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1.5">
-        <button
-          type="button"
-          onClick={onMenu}
-          aria-label={`More options for ${capitalize(name)}`}
-          className="focus-ring safe-motion rounded-md p-1 text-muted-foreground hover:text-foreground"
-        >
-          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-        </button>
+        <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
+          <Popover.Trigger asChild>
+            <button
+              type="button"
+              aria-label={`More options for ${capitalize(name)}`}
+              className="focus-ring safe-motion rounded-md p-1 text-muted-foreground hover:text-foreground"
+            >
+              <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content
+              align="end"
+              sideOffset={8}
+              collisionPadding={12}
+              className="z-50 w-[min(180px,calc(100vw-1.5rem))] rounded-xl border border-border/70 bg-card p-1 shadow-lg outline-none"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onReport();
+                }}
+                className="focus-ring safe-motion w-full rounded-lg px-2.5 py-2 text-left text-sm hover:bg-secondary"
+              >
+                Report
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onBlock();
+                }}
+                className="focus-ring safe-motion w-full rounded-lg px-2.5 py-2 text-left text-sm text-red-500 hover:bg-secondary"
+              >
+                Block
+              </button>
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
         <Button
           type="button"
           size="sm"
