@@ -63,6 +63,27 @@
   display: none;
 }
 
+/* Mobile Nearby-Muddies strip: a contained, subtler glow (~35-40% smaller
+ * blur/spread than the default halo) so it never bleeds past the item bounds
+ * or clips at the horizontal scroller's edges. Scoped to .glow-strip and left
+ * unlayered so it overrides the layered proximity-halo-* defaults while the
+ * desktop cards and profile modal keep the fuller glow. Proximity hierarchy
+ * is preserved: very-close strongest, around subtlest. */
+.glow-strip .proximity-halo-very-close {
+  --halo-blur: 16px;
+  --halo-spread: 5px;
+}
+
+.glow-strip .proximity-halo-nearby {
+  --halo-blur: 12px;
+  --halo-spread: 4px;
+}
+
+.glow-strip .proximity-halo-around {
+  --halo-blur: 9px;
+  --halo-spread: 2px;
+}
+
 :root {
   --color-brand-orange: #f97316;
   --color-brand-amber: #fb923c;

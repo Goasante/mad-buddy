@@ -462,7 +462,7 @@ export function DashboardPageContent({
                   Hidden scrollbar (touch scrolling preserved), edge-to-edge
                   bleed via -mx-4. */}
               <div
-                className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 md:hidden"
+                className="glow-strip no-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pt-4 pb-2 md:hidden"
                 aria-label="Nearby Muddies"
               >
                 {nearbyFriends.map((friend) => {
