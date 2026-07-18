@@ -2,6 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
+/* One scrollbar style everywhere — page scroll, modal bodies, flyouts,
+ * dropdowns, message/notification lists. Colours use the theme's own
+ * --border / --muted-foreground tokens (not a hardcoded white) so contrast
+ * holds in both the light and dark theme, and across every accent variant
+ * under [data-accent]. Cosmetic only: never forces a scrollbar where content
+ * already fits, never touches overflow/layout. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border) / 0.9) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border) / 0.9);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.6);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+}
+
 :root {
   --color-brand-orange: #f97316;
   --color-brand-amber: #fb923c;
@@ -199,8 +235,8 @@ select {
   .proximity-halo-very-close {
     --halo-color: 251 146 60;
     --halo-ring: linear-gradient(135deg, #fdba74 0%, #f97316 52%, #c2410c 100%);
-    --halo-blur: 22px;
-    --halo-spread: 5px;
+    --halo-blur: 26px;
+    --halo-spread: 8px;
     --halo-scale: 1.055;
     --halo-duration: 2.2s;
   }
@@ -208,8 +244,8 @@ select {
   .proximity-halo-nearby {
     --halo-color: 249 115 22;
     --halo-ring: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
-    --halo-blur: 17px;
-    --halo-spread: 3px;
+    --halo-blur: 20px;
+    --halo-spread: 6px;
     --halo-scale: 1.04;
     --halo-duration: 2.8s;
   }
@@ -217,8 +253,8 @@ select {
   .proximity-halo-around {
     --halo-color: 249 115 22;
     --halo-ring: linear-gradient(135deg, rgb(251 146 60 / 0.72) 0%, rgb(234 88 12 / 0.62) 100%);
-    --halo-blur: 11px;
-    --halo-spread: 1.5px;
+    --halo-blur: 14px;
+    --halo-spread: 3px;
     --halo-scale: 1.025;
     --halo-duration: 3.4s;
   }
@@ -264,6 +300,22 @@ select {
   .landing-demo-panel {
     background: linear-gradient(160deg, hsl(var(--card) / 0.96), hsl(var(--secondary) / 0.35));
   }
+
+  /* Sidebar flyout menus (More / Account): a short fade + slide toward the
+     trigger, direction-aware via Radix's own data-side attribute so it reads
+     as "growing out of" the icon rather than an unrelated pop-in. */
+  .sidebar-flyout[data-state="open"] {
+    animation: sidebar-flyout-in 150ms ease-out;
+  }
+  .sidebar-flyout[data-side="right"] {
+    transform-origin: left center;
+  }
+  .sidebar-flyout[data-side="top"] {
+    transform-origin: bottom left;
+  }
+  .sidebar-flyout[data-side="bottom"] {
+    transform-origin: top left;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -271,6 +323,21 @@ select {
   .proximity-halo-animate::before,
   .proximity-halo-animate::after {
     animation: none;
+  }
+
+  .sidebar-flyout[data-state="open"] {
+    animation: none;
+  }
+}
+
+@keyframes sidebar-flyout-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateX(0);
   }
 }
 

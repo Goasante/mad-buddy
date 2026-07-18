@@ -144,6 +144,7 @@ async function loadPlans(): Promise<{
       status: plan.status,
       startAt: plan.start_at,
       placeText: plan.custom_place_text,
+      organiserName: plan.creator_id === user.id ? "You" : nameById.get(plan.creator_id) ?? "A Muddy",
       isHost,
       myRsvp,
       attendees: participantsByPlan.get(plan.id) ?? [],
@@ -168,10 +169,12 @@ async function loadMuddies(
   if (friendIds.length === 0) return [];
   const { data: profiles } = await admin
     .from("profiles")
-    .select("user_id, full_name")
+    .select("user_id, full_name, username, avatar_url")
     .in("user_id", friendIds);
   return (profiles ?? []).map((profile) => ({
     id: profile.user_id,
-    name: profile.full_name?.trim() || "A Muddy"
+    name: profile.full_name?.trim() || "A Muddy",
+    username: profile.username,
+    avatarUrl: profile.avatar_url
   }));
 }

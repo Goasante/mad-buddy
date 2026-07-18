@@ -1,7 +1,8 @@
 "use client";
 
+import * as Popover from "@radix-ui/react-popover";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarCheck2, MapPin, Plus, Users, Vote } from "lucide-react";
+import { Check, ChevronDown, MapPin, Plus, Search, Users, Vote, X } from "lucide-react";
 import { useId, useMemo, useState, useTransition } from "react";
 import {
   cancelPlanAction,
@@ -13,7 +14,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/auth/form-field";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-export type PlanInvitee = { id: string; name: string };
+export type PlanInvitee = { id: string; name: string; username?: string | null; avatarUrl?: string | null };
 
 export type PlanPollSummary = {
   id: string;
@@ -39,6 +39,7 @@ export type PlanSummary = {
   status: string;
   startAt: string | null;
   placeText: string | null;
+  organiserName: string;
   isHost: boolean;
   myRsvp: string;
   attendees: Array<{ name: string; rsvp: string; isMe: boolean }>;
@@ -49,8 +50,8 @@ type PlanBucket = "upcoming" | "invites" | "hosting" | "past";
 
 const bucketTabs: Array<{ id: PlanBucket; label: string }> = [
   { id: "upcoming", label: "Upcoming" },
-  { id: "invites", label: "Invites" },
-  { id: "hosting", label: "Hosting" },
+  { id: "invites", label: "Invitations" },
+  { id: "hosting", label: "Created by you" },
   { id: "past", label: "Past" }
 ];
 
@@ -168,25 +169,25 @@ export function PlansPageContent({
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] space-y-6 pt-6">
+    <div className="mx-auto max-w-[1050px] pt-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Plans</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Create, manage, and join plans with your people.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Make plans and organise meet-ups with your Muddies.</p>
         </div>
         <Button type="button" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" aria-hidden="true" />
-          New Plan
+          New plan
         </Button>
       </header>
 
       {feedback ? (
-        <div className="rounded-[1rem] border border-orange-400/20 bg-orange-400/10 p-3 text-sm text-orange-800 dark:text-orange-50" role="status">
+        <div className="mt-4 rounded-[1rem] border border-orange-400/20 bg-orange-400/10 p-3 text-sm text-orange-800 dark:text-orange-50" role="status">
           {feedback}
         </div>
       ) : null}
 
-      <nav className="overflow-x-auto border-b border-border/70" aria-label="Plans tabs">
+      <nav className="mt-4 overflow-x-auto border-b border-border/70" aria-label="Plans tabs">
         <div className="flex min-w-max gap-1">
           {bucketTabs.map((tab) => (
             <button
@@ -206,26 +207,23 @@ export function PlansPageContent({
         </div>
       </nav>
 
-      {visiblePlans.length > 0 ? (
-        <div className="grid gap-3 lg:grid-cols-2">
-          {visiblePlans.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} onView={() => setSelectedPlanId(plan.id)} />
-          ))}
-        </div>
-      ) : (
-        <EmptyState
-          icon={CalendarCheck2}
-          className="!min-h-0 !shadow-none p-5"
-          title={emptyCopy[activeBucket].title}
-          description={emptyCopy[activeBucket].description}
-          action={
-            <Button type="button" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              New Plan
-            </Button>
-          }
-        />
-      )}
+      <div className="mt-6">
+        {visiblePlans.length > 0 ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {visiblePlans.map((plan) => (
+              <PlanCard key={plan.id} plan={plan} onView={() => setSelectedPlanId(plan.id)} />
+            ))}
+          </div>
+        ) : (
+          // Compact inline state, not the bordered EmptyState panel — a
+          // full card-style empty state for "nothing here yet" was reading
+          // as an oversized, disconnected block on a tabbed list page.
+          <div className="py-12 text-center">
+            <p className="text-base font-semibold">{emptyCopy[activeBucket].title}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{emptyCopy[activeBucket].description}</p>
+          </div>
+        )}
+      </div>
 
       <CreatePlanModal
         open={createOpen}
@@ -250,42 +248,42 @@ export function PlansPageContent({
 }
 
 const emptyCopy: Record<PlanBucket, { title: string; description: string }> = {
-  upcoming: { title: "No upcoming plans", description: "Plans you're going to will show up here." },
-  invites: { title: "No pending invites", description: "Plan invites from your Muddies will appear here." },
-  hosting: { title: "You're not hosting anything yet", description: "Create a plan and invite your Muddies." },
-  past: { title: "No past plans", description: "Plans that have happened will show up here." }
+  upcoming: { title: "Nothing planned yet", description: "Your upcoming plans will appear here." },
+  invites: { title: "No invitations", description: "New plan invitations will appear here." },
+  hosting: { title: "No plans created yet", description: "Create a plan and invite your Muddies." },
+  past: { title: "No past plans", description: "Plans you've joined will appear here." }
 };
 
 function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
   const goingCount = plan.attendees.filter((attendee) => attendee.rsvp === "going").length;
   const maybeCount = plan.attendees.filter((attendee) => attendee.rsvp === "maybe").length;
 
+  const muddyCount = plan.attendees.length;
+
   return (
-    <Card className="p-5">
-      <div className="flex items-start gap-4">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-          <Users className="h-5 w-5" aria-hidden="true" />
+    <Card className="p-4">
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+          <Users className="h-4 w-4" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate text-base font-semibold">{plan.title}</h3>
-            {plan.isHost ? <Badge variant="orange">Hosting</Badge> : null}
+            {plan.isHost ? <Badge variant="orange">Host</Badge> : null}
             {plan.myRsvp === "invited" ? <Badge variant="violet">Invited</Badge> : null}
             {TERMINAL.has(plan.status) ? <Badge variant="default">{plan.status}</Badge> : null}
           </div>
+          {/* Overview cards intentionally omit exact place text — that's
+              only shown once a Muddy opens the plan's own details. */}
           <p className="mt-1 text-sm text-muted-foreground">{dateLabel(plan)}</p>
-          {plan.placeText ? (
-            <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-              <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              {plan.placeText}
-            </p>
-          ) : null}
-          <p className="mt-3 text-xs text-muted-foreground">
-            {goingCount} going{maybeCount > 0 ? ` · ${maybeCount} maybe` : ""}
+          <p className="mt-1 text-xs text-muted-foreground">
+            Organised by {plan.organiserName} · {muddyCount} {muddyCount === 1 ? "Muddy" : "Muddies"}
+            {goingCount > 0 ? ` · ${goingCount} going` : ""}
+            {maybeCount > 0 ? ` · ${maybeCount} maybe` : ""}
           </p>
         </div>
       </div>
-      <Button type="button" variant="outline" className="mt-4 w-full" onClick={onView}>
+      <Button type="button" variant="outline" className="mt-3 w-full" onClick={onView}>
         View
       </Button>
     </Card>
@@ -312,18 +310,22 @@ function CreatePlanModal({
   }) => void;
 }) {
   const [title, setTitle] = useState("");
-  const [datetime, setDatetime] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
   const [placeText, setPlaceText] = useState("");
   const [description, setDescription] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [nameTouched, setNameTouched] = useState(false);
   const formId = useId();
 
   function reset() {
     setTitle("");
-    setDatetime("");
+    setDate("");
+    setTime("");
     setPlaceText("");
     setDescription("");
     setSelected([]);
+    setNameTouched(false);
   }
 
   function handleOpenChange(next: boolean) {
@@ -336,69 +338,273 @@ function CreatePlanModal({
   }
 
   const canCreate = title.trim().length > 0;
+  const showNameError = nameTouched && title.trim().length === 0;
+  const fieldClassName = "h-12 focus-visible:ring-1 focus-visible:ring-offset-1";
 
   return (
-    <Modal open={open} onOpenChange={handleOpenChange} title="Create a plan" description="Invite your Muddies. Your location is never shared.">
-      <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
-        <FormField htmlFor={`${formId}-title`} label="Plan name">
-          <Input id={`${formId}-title`} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Lunch after class" />
-        </FormField>
-        <FormField htmlFor={`${formId}-datetime`} label="When (optional — leave blank for a quick plan)">
-          <Input id={`${formId}-datetime`} type="datetime-local" value={datetime} onChange={(event) => setDatetime(event.target.value)} />
-        </FormField>
-        <FormField htmlFor={`${formId}-place`} label="Where (optional)">
-          <Input id={`${formId}-place`} value={placeText} onChange={(event) => setPlaceText(event.target.value)} placeholder="e.g. Student Centre" />
-        </FormField>
-        <FormField htmlFor={`${formId}-description`} label="Details (optional)">
-          <Textarea id={`${formId}-description`} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Anything people should know" />
-        </FormField>
-        <div>
-          <p className="mb-2 text-sm font-medium text-foreground">Invite Muddies</p>
-          {invitees.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Add Muddies first to invite them to a plan.</p>
-          ) : (
-            <div className="grid max-h-52 gap-2 overflow-y-auto sm:grid-cols-2">
-              {invitees.map((invitee) => (
-                <button
-                  key={invitee.id}
-                  type="button"
-                  onClick={() => toggle(invitee.id)}
-                  className={cn(
-                    "focus-ring safe-motion flex items-center gap-3 rounded-lg border p-3 text-left text-sm",
-                    selected.includes(invitee.id) ? "border-primary bg-primary/10" : "border-border hover:bg-secondary"
-                  )}
-                >
-                  <GlowAvatar name={invitee.name} size="sm" />
-                  <span className="min-w-0 flex-1 truncate font-medium">{invitee.name}</span>
-                  {selected.includes(invitee.id) ? <Badge variant="orange">Invited</Badge> : null}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-5 flex justify-between gap-3">
-        <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          disabled={!canCreate || pending}
-          onClick={() =>
-            onCreate({
-              title: title.trim(),
-              description: description.trim(),
-              startAt: datetime ? new Date(datetime).toISOString() : null,
-              placeText: placeText.trim(),
-              participantIds: selected
-            })
-          }
+    <Modal
+      open={open}
+      onOpenChange={handleOpenChange}
+      title="Create a plan"
+      description="Add the details and invite your Muddies."
+      widthClassName="max-w-[700px]"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={!canCreate || pending}
+            title={!canCreate ? "Enter a plan name to continue" : undefined}
+            className={
+              !canCreate
+                ? "disabled:border-border disabled:bg-secondary disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none"
+                : undefined
+            }
+            onClick={() => {
+              // Date without a time still means "quick plan, no fixed hour"
+              // wasn't the intent here — a date was deliberately chosen, so
+              // default the time to the very start of that day rather than
+              // silently dropping it.
+              const combined = date ? `${date}T${time || "00:00"}` : null;
+              onCreate({
+                title: title.trim(),
+                description: description.trim(),
+                startAt: combined ? new Date(combined).toISOString() : null,
+                placeText: placeText.trim(),
+                participantIds: selected
+              });
+            }}
+          >
+            Create plan
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4 pb-1 pr-1">
+        <FormField
+          htmlFor={`${formId}-title`}
+          label="Plan name"
+          error={showNameError ? "Enter a plan name." : undefined}
         >
-          Create plan
-        </Button>
+          <Input
+            id={`${formId}-title`}
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            onBlur={() => setNameTouched(true)}
+            placeholder="Lunch after class"
+            className={fieldClassName}
+          />
+        </FormField>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField htmlFor={`${formId}-date`} label="Date (optional)">
+            <Input
+              id={`${formId}-date`}
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+              className={fieldClassName}
+            />
+          </FormField>
+          <FormField htmlFor={`${formId}-time`} label="Time (optional)">
+            <Input
+              id={`${formId}-time`}
+              type="time"
+              value={time}
+              onChange={(event) => setTime(event.target.value)}
+              className={fieldClassName}
+            />
+          </FormField>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField htmlFor={`${formId}-place`} label="Meeting area (optional)">
+            <Input
+              id={`${formId}-place`}
+              value={placeText}
+              onChange={(event) => setPlaceText(event.target.value)}
+              placeholder="Campus café or nearby area"
+              className={fieldClassName}
+            />
+            <p className="mt-1.5 text-xs text-muted-foreground">Use a general area, not an exact address.</p>
+          </FormField>
+          <InviteMuddiesField invitees={invitees} selected={selected} onToggle={toggle} fieldClassName={fieldClassName} />
+        </div>
+
+        <FormField htmlFor={`${formId}-description`} label="Notes (optional)">
+          <Textarea
+            id={`${formId}-description`}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="Add a note for your Muddies"
+            className="min-h-[90px] focus-visible:ring-1 focus-visible:ring-offset-1"
+          />
+        </FormField>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * A searchable, anchored multi-select (spec: "not a modal") built on Popover
+ * rather than DropdownMenu — the search input inside needs to own normal text
+ * editing and caret behaviour, which fights a menu's built-in typeahead and
+ * roving-focus handling.
+ */
+function InviteMuddiesField({
+  invitees,
+  selected,
+  onToggle,
+  fieldClassName
+}: {
+  invitees: PlanInvitee[];
+  selected: string[];
+  onToggle: (id: string) => void;
+  fieldClassName: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selectedInvitees = invitees.filter((invitee) => selected.includes(invitee.id));
+
+  // Duplicate display names get their @username shown for disambiguation,
+  // both in the dropdown list and on the selected chips.
+  const duplicateNames = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const invitee of invitees) {
+      const name = invitee.name.trim().toLowerCase();
+      seen.set(name, (seen.get(name) ?? 0) + 1);
+    }
+    return new Set([...seen.entries()].filter(([, count]) => count > 1).map(([name]) => name));
+  }, [invitees]);
+
+  const visible = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return invitees;
+    return invitees.filter(
+      (invitee) => invitee.name.toLowerCase().includes(term) || invitee.username?.toLowerCase().includes(term)
+    );
+  }, [invitees, query]);
+
+  function usernameSuffixFor(invitee: PlanInvitee) {
+    return invitee.username && duplicateNames.has(invitee.name.trim().toLowerCase()) ? `@${invitee.username}` : null;
+  }
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium leading-none">Invite Muddies</label>
+      <Popover.Root open={open} onOpenChange={setOpen}>
+        <Popover.Trigger asChild>
+          <button
+            type="button"
+            disabled={invitees.length === 0}
+            className={cn(
+              "focus-ring safe-motion flex w-full items-center justify-between gap-2 rounded-md border border-border bg-card/70 px-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50",
+              fieldClassName
+            )}
+          >
+            <span className={cn("truncate", selected.length === 0 && "text-muted-foreground")}>
+              {invitees.length === 0
+                ? "Add Muddies first"
+                : selected.length > 0
+                  ? `${selected.length} selected`
+                  : "Select Muddies"}
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            align="start"
+            sideOffset={6}
+            className="sidebar-flyout z-50 w-[--radix-popover-trigger-width] max-h-72 overflow-y-auto rounded-xl border border-border/80 bg-card p-2 shadow-lg outline-none dark:border-white/10 dark:bg-[#161617]"
+          >
+            <div className="sticky top-0 -m-2 mb-1 border-b border-border/70 bg-card p-2 dark:border-white/10 dark:bg-[#161617]">
+              <div className="relative">
+                <Search
+                  className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search Muddies"
+                  aria-label="Search Muddies"
+                  className="focus-ring safe-motion h-9 w-full rounded-md border border-border bg-background pl-8 pr-2 text-sm"
+                />
+              </div>
+            </div>
+            {visible.length === 0 ? (
+              <p className="p-3 text-center text-xs text-muted-foreground">No Muddies match your search.</p>
+            ) : (
+              <ul className="space-y-0.5 pt-1">
+                {visible.map((invitee) => {
+                  const isSelected = selected.includes(invitee.id);
+                  const usernameSuffix = usernameSuffixFor(invitee);
+                  return (
+                    <li key={invitee.id}>
+                      <button
+                        type="button"
+                        onClick={() => onToggle(invitee.id)}
+                        aria-pressed={isSelected}
+                        className={cn(
+                          "focus-ring safe-motion flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm",
+                          isSelected ? "bg-primary/10 text-primary" : "hover:bg-secondary"
+                        )}
+                      >
+                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-secondary text-[11px] font-semibold text-foreground">
+                          {invitee.name.trim().charAt(0).toUpperCase() || "?"}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">{invitee.name}</span>
+                          {usernameSuffix ? (
+                            <span className="block truncate text-xs text-muted-foreground">{usernameSuffix}</span>
+                          ) : null}
+                        </span>
+                        <span
+                          className={cn(
+                            "grid h-4 w-4 shrink-0 place-items-center rounded border",
+                            isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border"
+                          )}
+                        >
+                          {isSelected ? <Check className="h-3 w-3" aria-hidden="true" strokeWidth={3} /> : null}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+
+      {selectedInvitees.length > 0 ? (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {selectedInvitees.map((invitee) => (
+            <span
+              key={invitee.id}
+              className="inline-flex items-center gap-1 rounded-full bg-secondary py-0.5 pl-1 pr-2 text-xs font-medium text-foreground"
+            >
+              <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-primary/15 text-[9px] font-semibold text-primary">
+                {invitee.name.trim().charAt(0).toUpperCase() || "?"}
+              </span>
+              {invitee.name}
+              <button
+                type="button"
+                onClick={() => onToggle(invitee.id)}
+                aria-label={`Remove ${invitee.name}`}
+                className="focus-ring safe-motion -mr-1 grid h-3.5 w-3.5 place-items-center rounded-full text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" aria-hidden="true" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
