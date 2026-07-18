@@ -1,6 +1,7 @@
 import { DashboardPageContent } from "@/components/dashboard/dashboard-page";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
+import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
@@ -8,7 +9,7 @@ export default async function DashboardPage() {
   const {
     data: { user }
   } = await supabase.auth.getUser();
-  const [access, profile, statusResult] = user
+  const [access, profile, statusResult, upcoming] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -16,9 +17,10 @@ export default async function DashboardPage() {
           .from("user_statuses")
           .select("availability_type, activity_type, custom_text, expires_at")
           .eq("user_id", user.id)
-          .maybeSingle()
+          .maybeSingle(),
+        loadUpcomingPlans(user.id)
       ])
-    : [null, null, null];
+    : [null, null, null, { plans: [], hasMore: false }];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && Date.parse(status.expires_at) > Date.now());
@@ -33,6 +35,8 @@ export default async function DashboardPage() {
       initialStatusAvailability={hasActiveStatus ? status?.availability_type : undefined}
       initialStatusActivity={hasActiveStatus ? status?.activity_type ?? null : null}
       initialStatusNote={hasActiveStatus ? status?.custom_text ?? "" : ""}
+      upcomingPlans={upcoming?.plans ?? []}
+      hasMorePlans={upcoming?.hasMore ?? false}
     />
   );
 }

@@ -4,7 +4,9 @@ import Link from "next/link";
 import {
   Bell,
   CalendarCheck2,
+  CalendarClock,
   CheckCheck,
+  ChevronRight,
   CircleDollarSign,
   Ghost,
   Hand,
@@ -28,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { formatMuddyStatusLabel } from "@/lib/social/rules";
+import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import { type FreshnessState } from "@/lib/proximity/freshness";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import type { ActivityType, AvailabilityType, SubscriptionPlan } from "@/lib/supabase/database.types";
@@ -90,6 +93,8 @@ type DashboardPageContentProps = {
   initialStatusAvailability?: AvailabilityType;
   initialStatusActivity?: ActivityType | null;
   initialStatusNote?: string;
+  upcomingPlans?: HomeUpcomingPlan[];
+  hasMorePlans?: boolean;
 };
 
 const attentionIconByType: Record<string, LucideIcon> = {
@@ -112,7 +117,9 @@ export function DashboardPageContent({
   hasActiveStatus = false,
   initialStatusAvailability,
   initialStatusActivity = null,
-  initialStatusNote = ""
+  initialStatusNote = "",
+  upcomingPlans = [],
+  hasMorePlans = false
 }: DashboardPageContentProps) {
   const reducedMotion = useReducedMotion();
   const [ghostMode, setGhostMode] = useState(initialVisibilityStatus === "ghost");
@@ -346,7 +353,7 @@ export function DashboardPageContent({
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] space-y-7 pt-6">
+    <div className="mx-auto max-w-[1200px] space-y-6 pt-6">
       <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
 
       <div className="flex items-center justify-between gap-3">
@@ -374,7 +381,7 @@ export function DashboardPageContent({
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide",
+                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold tracking-wide",
                 // Orange is reserved for glow/proximity states (the ring and
                 // the chips below); this is a general on/off toggle, so it
                 // gets a distinct blue instead of doubling up on orange.
@@ -431,10 +438,9 @@ export function DashboardPageContent({
         </p>
       </section>
 
-      <QuickActions />
-
-      <div className="grid gap-5 lg:grid-cols-3">
-        <section className="lg:col-span-2">
+      <div className="grid gap-6 lg:grid-cols-[65fr_35fr]">
+        <div className="space-y-6">
+        <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold tracking-tight">Nearby Muddies</h2>
             {hasMoreNearbyFriends ? (
@@ -518,7 +524,13 @@ export function DashboardPageContent({
           )}
         </section>
 
-        <section className="lg:col-span-1">
+          <UpcomingPlans plans={upcomingPlans} hasMore={hasMorePlans} />
+        </div>
+
+        <div className="space-y-6">
+          <QuickActions />
+
+          <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold tracking-tight">Recent activity</h2>
             {unreadActivityCount > attentionItems.length ? (
@@ -546,11 +558,13 @@ export function DashboardPageContent({
               ))}
             </ul>
           ) : (
-            <p className="rounded-2xl border border-border/70 bg-card/40 px-4 py-3 text-sm text-muted-foreground">
-              No recent activity
-            </p>
+            <div className="rounded-2xl border border-border/70 bg-card/40 px-4 py-5 text-center">
+              <p className="text-sm font-medium">No recent activity</p>
+              <p className="mt-1 text-xs text-muted-foreground">Updates from your Muddies will appear here.</p>
+            </div>
           )}
-        </section>
+          </section>
+        </div>
       </div>
 
       {promptFeedback ? (
@@ -636,13 +650,13 @@ const quickActions: Array<{
   {
     href: "/safe-arrival",
     title: "Safe Arrival",
-    description: "Ask trusted Muddies to confirm you arrived safely.",
+    description: "Let trusted Muddies know when you arrive safely.",
     icon: ShieldCheck
   },
   {
     href: "/plans",
     title: "New plan",
-    description: "Invite your Muddies and organise a meet-up.",
+    description: "Create a plan and invite your Muddies.",
     icon: CalendarCheck2
   }
 ];
@@ -651,23 +665,108 @@ function QuickActions() {
   return (
     <section aria-label="Quick actions">
       <h2 className="mb-3 text-lg font-semibold tracking-tight">Quick actions</h2>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <ul className="divide-y divide-border/60 rounded-2xl border border-border/70 bg-card/40">
         {quickActions.map((action) => (
-          <Link
-            key={action.href}
-            href={action.href}
-            className="focus-ring safe-motion flex items-start gap-3 rounded-2xl border border-border/70 bg-card/50 p-4 hover:bg-secondary/40"
-          >
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-              <action.icon className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold">{action.title}</span>
-              <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{action.description}</span>
-            </span>
-          </Link>
+          <li key={action.href}>
+            <Link
+              href={action.href}
+              className="focus-ring safe-motion flex min-h-[64px] items-center gap-3 px-4 py-3 hover:bg-secondary/50"
+            >
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                <action.icon className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">{action.title}</span>
+                <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{action.description}</span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </Link>
+          </li>
         ))}
+      </ul>
+    </section>
+  );
+}
+
+function rsvpLabel(rsvp: string): string {
+  switch (rsvp) {
+    case "going":
+      return "Going";
+    case "maybe":
+      return "Maybe";
+    case "not_going":
+    case "declined":
+      return "Not going";
+    default:
+      return "Invited";
+  }
+}
+
+function UpcomingPlans({ plans, hasMore }: { plans: HomeUpcomingPlan[]; hasMore: boolean }) {
+  return (
+    <section>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-lg font-semibold tracking-tight">Upcoming plans</h2>
+        {hasMore ? (
+          <Link href="/plans" className="text-sm font-medium text-primary hover:underline">
+            View all
+          </Link>
+        ) : null}
       </div>
+
+      {plans.length > 0 ? (
+        <ul className="divide-y divide-border/60 rounded-2xl border border-border/70 bg-card/40">
+          {plans.map((plan) => (
+            <li key={plan.id}>
+              <Link
+                href="/plans"
+                className="focus-ring safe-motion flex min-h-[72px] items-center gap-3 px-4 py-3.5 hover:bg-secondary/50"
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                  <CalendarClock className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">{plan.title}</span>
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground" suppressHydrationWarning>
+                    {new Date(plan.startAt).toLocaleString([], {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit"
+                    })}
+                    {" · "}
+                    {plan.organiserName === "You" ? "You’re hosting" : `by ${capitalize(plan.organiserName)}`}
+                  </span>
+                </span>
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-foreground">
+                    {rsvpLabel(plan.myRsvp)}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {plan.invitedCount} invited
+                  </span>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState
+          icon={CalendarCheck2}
+          className="w-full !border-border/50 !shadow-none p-4 sm:p-5"
+          title="No upcoming plans"
+          description="Create a plan when you’re ready to meet up."
+          action={
+            <Button type="button" asChild>
+              <Link href="/plans">
+                <CalendarCheck2 className="h-4 w-4" aria-hidden="true" />
+                New plan
+              </Link>
+            </Button>
+          }
+        />
+      )}
     </section>
   );
 }
