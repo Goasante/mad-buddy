@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import {
   AlertTriangle,
   Bell,
@@ -32,6 +33,7 @@ import { StatusComposer } from "@/components/social/status-composer";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { resolveNotificationDestination } from "@/lib/notifications/destination";
 import { formatMuddyStatusLabel } from "@/lib/social/rules";
 import type { HomeUpcomingPlan, PlanAttendee } from "@/lib/social/upcoming-plans";
 import { type FreshnessState } from "@/lib/proximity/freshness";
@@ -74,6 +76,8 @@ type NearbyFriendApiItem = {
 
 type AttentionItem = {
   id: string;
+  type: string;
+  href: string;
   title: string;
   preview: string;
   time: string;
@@ -312,6 +316,10 @@ export function DashboardPageContent({
         setAttentionItems(
           unread.slice(0, 3).map((notification) => ({
             id: notification.id,
+            type: notification.type,
+            // Deep link via the shared resolver; fall back to the Pulse hub for
+            // informational notifications with no specific destination.
+            href: resolveNotificationDestination(notification.type)?.href ?? "/notifications",
             title: notification.title,
             preview: notification.message,
             time: formatRelativeTime(notification.created_at),
@@ -612,7 +620,8 @@ export function DashboardPageContent({
               {attentionItems.map((item) => (
                 <li key={item.id}>
                   <Link
-                    href="/notifications"
+                    href={item.href as Route}
+                    aria-label={`Open: ${capitalize(item.title)}`}
                     className="focus-ring safe-motion flex min-h-[60px] items-center gap-3 px-4 py-3 hover:bg-secondary/50"
                   >
                     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">

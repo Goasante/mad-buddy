@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   Bell,
   CheckCheck,
+  ChevronRight,
   CircleDollarSign,
   Hand,
   HeartHandshake,
@@ -23,6 +24,10 @@ import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { PrivacyToggle } from "@/components/settings/privacy-toggle";
 import { connectionResponsesFor } from "@/lib/meetups/connection-prompts";
+import {
+  resolveNotificationDestination,
+  type NotificationDestination
+} from "@/lib/notifications/destination";
 import { cn } from "@/lib/utils";
 
 type NotificationItem = {
@@ -156,11 +161,15 @@ export function NotificationsPageContent({
     });
   }
 
-  function openNotification(notification: NotificationItem) {
-    if (notification.meetupRequestId) {
-      setSelectedRequest(notification);
-    }
+  // Opening a meetup request is an in-place action (reply modal), not a route.
+  function openMeetupRequest(notification: NotificationItem) {
+    setSelectedRequest(notification);
+    markNotificationRead(notification);
+  }
 
+  // Read-state only: used both by the reply-modal action above and by the
+  // deep-link rows (which navigate via a real <Link> after this fires).
+  function markNotificationRead(notification: NotificationItem) {
     if (!notification.unread) return;
 
     const nextUnreadCount = Math.max(0, unreadCount - 1);
@@ -260,7 +269,12 @@ export function NotificationsPageContent({
                       <NotificationCard
                         key={notification.id}
                         notification={notification}
-                        onOpen={() => openNotification(notification)}
+                        destination={resolveNotificationDestination(notification.type)}
+                        onActivate={() =>
+                          notification.meetupRequestId
+                            ? openMeetupRequest(notification)
+                            : markNotificationRead(notification)
+                        }
                       />
                     ))}
                   </div>
@@ -468,26 +482,21 @@ function capitalize(text: string): string {
 
 type NotificationCardProps = {
   notification: NotificationItem;
-  onOpen: () => void;
+  destination: NotificationDestination;
+  onActivate: () => void;
 };
 
-function NotificationCard({ notification, onOpen }: NotificationCardProps) {
+function NotificationCard({ notification, destination, onActivate }: NotificationCardProps) {
   const actionable = Boolean(notification.meetupRequestId);
-  const interactive = actionable || notification.unread;
   const isMuddyActivity = isMuddyActivityType(notification.type);
-  return (
-    <article
-      className={cn(
-        "flex min-h-[80px] items-start gap-3 rounded-xl border-b border-border/60 px-2 py-3 last:border-b-0",
-        interactive && "cursor-pointer transition-colors hover:bg-secondary/50"
-      )}
-      onClick={interactive ? onOpen : undefined}
-      onKeyDown={interactive ? (event) => {
-        if (event.key === "Enter" || event.key === " ") onOpen();
-      } : undefined}
-      role={interactive ? "button" : undefined}
-      tabIndex={interactive ? 0 : undefined}
-    >
+  // Three mutually exclusive shapes: an in-place reply (button), a deep link
+  // (anchor), or a static informational row. meetup_request never has a
+  // resolver destination, so these never collide.
+  const isLink = !actionable && destination !== null;
+  const clickable = actionable || isLink;
+
+  const body = (
+    <>
       <div
         className={cn(
           "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
@@ -509,8 +518,44 @@ function NotificationCard({ notification, onOpen }: NotificationCardProps) {
         {actionable ? <p className="mt-1 text-xs font-medium text-primary">Reply</p> : null}
       </div>
       <span className="mt-0.5 shrink-0 text-[11px] text-muted-foreground">{notification.time}</span>
-    </article>
+      {isLink ? (
+        <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 self-center text-muted-foreground" aria-hidden="true" />
+      ) : null}
+    </>
   );
+
+  const baseClass =
+    "flex min-h-[80px] items-start gap-3 rounded-xl border-b border-border/60 px-2 py-3 last:border-b-0";
+  const interactiveClass =
+    "focus-ring cursor-pointer text-left transition-colors hover:bg-secondary/50 active:bg-secondary/70";
+
+  if (isLink && destination) {
+    return (
+      <Link
+        href={destination.href}
+        onClick={onActivate}
+        aria-label={`Open: ${notification.title}`}
+        className={cn(baseClass, interactiveClass)}
+      >
+        {body}
+      </Link>
+    );
+  }
+
+  if (actionable) {
+    return (
+      <button
+        type="button"
+        onClick={onActivate}
+        aria-label={`Reply to ${notification.title}`}
+        className={cn(baseClass, interactiveClass, "w-full")}
+      >
+        {body}
+      </button>
+    );
+  }
+
+  return <article className={cn(baseClass, !clickable && "cursor-default")}>{body}</article>;
 }
 
 function InlineEmptyState({ title, description }: { title: string; description: string }) {
