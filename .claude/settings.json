@@ -4,7 +4,18 @@
       "Bash('/c/Users/Godfred Ofosu Asante/AppData/Local/Programs/Python/Python313/python' -c ' *)",
       "Bash(echo \"build check: $?\")",
       "Bash(curl -s -o /dev/null -w \"hero image: %{http_code}\\\\n\" https://mad-buddy.vercel.app/brand/mad-buddy-hero-mockup-v2.png)",
-      "Bash(curl -s -o /dev/null -w \"old path \\(should 404\\): %{http_code}\\\\n\" https://mad-buddy.vercel.app/brand/mad-buddy-hero-mockup-transparent.png)"
+      "Bash(curl -s -o /dev/null -w \"old path \\(should 404\\): %{http_code}\\\\n\" https://mad-buddy.vercel.app/brand/mad-buddy-hero-mockup-transparent.png)",
+      "Bash(curl -s https://mad-buddy.vercel.app/)",
+      "Bash(curl -s -o /dev/null -w \"/faq: %{http_code}\\\\n\" https://mad-buddy.vercel.app/faq)",
+      "Bash(curl -s -D - -o /dev/null https://mad-buddy.vercel.app/faq)",
+      "Bash(curl -s -o /dev/null -w \"/about: %{http_code}\\\\n\" https://mad-buddy.vercel.app/about)",
+      "Bash(curl -s https://mad-buddy.vercel.app/faq)",
+      "Bash(curl -s -o /dev/null -w \"local /: %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(echo \"tsc exit: $?\")",
+      "Bash(grep -vE \"\\\\.ts$\")",
+      "Bash(sed -n '/export type AvailabilityType/,/;/p' lib/supabase/database.types.ts)",
+      "Bash(sed -n '/export function formatMuddyStatusLabel/,/^}/p' lib/social/rules.ts)"
     ]
   }
 }
