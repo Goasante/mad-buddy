@@ -571,7 +571,7 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
       className="pointer-events-none fixed inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-50 px-3 md:hidden"
       aria-label="Mobile navigation"
     >
-      <div className="pointer-events-auto mx-auto flex w-full max-w-[34rem] items-center justify-center gap-1.5 rounded-full border border-white/10 bg-black/95 p-2 text-white shadow-[0_22px_65px_rgba(0,0,0,0.42)] backdrop-blur-xl sm:gap-2 sm:p-2.5">
+      <div className="pointer-events-auto mx-auto flex w-full max-w-[26rem] items-center justify-between rounded-full bg-background px-6 py-3.5 shadow-[0_12px_40px_rgba(0,0,0,0.25)] sm:px-8 sm:py-4">
         {mobileItems.map((item) => {
           const isActive = isNavigationItemActive(item, pathname);
 
@@ -583,23 +583,17 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
               title={item.label}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "safe-motion relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
-                "flex h-11 min-w-0 items-center justify-center rounded-full text-sm font-medium sm:h-12 sm:text-base",
-                isActive
-                  ? "flex-1 gap-2 border border-white/5 bg-[#292929] px-3 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] sm:px-5"
-                  : "w-11 shrink-0 text-white/85 hover:bg-white/[0.08] hover:text-white sm:w-12"
+                "safe-motion relative flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                isActive ? "text-primary" : "text-foreground/70 hover:text-foreground"
               )}
             >
-              <span
-                className={cn(
-                  "grid h-8 w-8 shrink-0 place-items-center rounded-xl",
-                  isActive && "bg-white text-black"
-                )}
-              >
-                <item.icon className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden="true" />
-                {item.href === "/notifications" ? <UnreadBadge count={unreadCount} /> : null}
-              </span>
-              {isActive ? <span className="truncate">{item.label}</span> : null}
+              <item.icon
+                className="h-6 w-6"
+                strokeWidth={1.75}
+                fill={isActive ? "currentColor" : "none"}
+                aria-hidden="true"
+              />
+              {item.href === "/notifications" ? <UnreadBadge count={unreadCount} /> : null}
             </Link>
           );
         })}
