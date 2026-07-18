@@ -9,6 +9,7 @@ import {
   Sparkles,
   X
 } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
 import * as Popover from "@radix-ui/react-popover";
 import type { ReactNode } from "react";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
@@ -46,7 +47,7 @@ function capitalize(text: string): string {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
-type Toast = { message: string; error: boolean } | null;
+type Toast = { title?: string; message: string; error: boolean } | null;
 
 export function SocializePage({
   initialSession,
@@ -62,7 +63,7 @@ export function SocializePage({
   const [setupOpen, setSetupOpen] = useState(false);
   const [activity, setActivity] = useState<SocializeActivity | null>(null);
   const [areaTier, setAreaTier] = useState<SocializeAreaTier | null>(null);
-  const [duration, setDuration] = useState<SocializeDuration>("1h");
+  const [duration, setDuration] = useState<SocializeDuration | null>(null);
   const [note, setNote] = useState("");
   const [attempted, setAttempted] = useState(false);
 
@@ -89,8 +90,8 @@ export function SocializePage({
     };
   }, []);
 
-  const showToast = useCallback((message: string, error = false) => {
-    setToast({ message, error });
+  const showToast = useCallback((message: string, error = false, title?: string) => {
+    setToast({ title, message, error });
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 3500);
   }, []);
@@ -111,13 +112,14 @@ export function SocializePage({
       setActivity(session.activity);
       setAreaTier(session.areaTier);
       setNote(session.note ?? "");
-      setDuration("1h");
     } else {
       setActivity(null);
       setAreaTier(null);
       setNote("");
-      setDuration("1h");
     }
+    // Duration is never preselected (no approved default): editing re-sets
+    // expiry, so the user always picks a fresh duration.
+    setDuration(null);
     setAttempted(false);
   }
 
@@ -130,9 +132,11 @@ export function SocializePage({
     setSetupOpen(false);
   }
 
+  const canSubmit = Boolean(activity && areaTier && duration);
+
   function submitSetup() {
     setAttempted(true);
-    if (!activity || !areaTier) return;
+    if (!activity || !areaTier || !duration) return;
     const editing = isActive && session !== null;
 
     startTransition(async () => {
@@ -141,16 +145,16 @@ export function SocializePage({
       if (result.ok && result.session) {
         setSession(result.session);
         setSetupOpen(false);
-        showToast(
-          editing
-            ? "Socialize updated"
-            : `Visible to people using Socialize until ${formatTime(result.session.expiresAt)}.`
-        );
+        if (editing) {
+          showToast("", false, "Socialize updated");
+        } else {
+          showToast(`Visible until ${formatTime(result.session.expiresAt)}.`, false, "Socialize is on");
+        }
         // Pull fresh discovery results for the (possibly new) area tier.
         const next = await discoverSocializePeopleAction();
         setPeople(next);
       } else {
-        showToast(result.message, true);
+        showToast("Couldn’t turn on Socialize. Try again.", true);
       }
     });
   }
@@ -218,32 +222,54 @@ export function SocializePage({
   const selectClass =
     "focus-ring safe-motion h-11 w-full rounded-md border border-border bg-card/70 px-3 text-sm";
 
-  // The setup panel is an anchored dropdown (not a modal). Its trigger is
-  // whichever state button is currently shown (Turn on / Edit). Each field is
-  // itself a dropdown (native select) so the whole flow reads as nested menus.
+  // Setup is a centered modal on desktop and a bottom sheet on mobile, so it
+  // always stays fully on-screen. Trigger is whichever state button is shown.
+  // Radix Dialog handles focus trap, scroll lock, Escape and focus return.
   function renderSetup(trigger: ReactNode) {
     return (
-      <Popover.Root
+      <Dialog.Root
         open={setupOpen}
         onOpenChange={(open) => {
           if (open) prepareForm();
           setSetupOpen(open);
         }}
       >
-        <Popover.Trigger asChild>{trigger}</Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content
-            align="start"
-            sideOffset={8}
-            collisionPadding={12}
-            className="z-50 max-h-[min(560px,80vh)] w-[min(360px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-border/70 bg-card p-4 shadow-lg outline-none"
+        <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+          <Dialog.Content
+            aria-describedby={undefined}
+            className={cn(
+              "fixed z-50 flex flex-col bg-card outline-none",
+              // Mobile: bottom sheet.
+              "inset-x-0 bottom-0 max-h-[90svh] rounded-t-2xl border-t border-border/70 pb-[env(safe-area-inset-bottom)]",
+              // Desktop (>=sm): centered compact modal.
+              "sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[min(520px,calc(100%-2rem))] sm:max-h-[calc(100svh-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border sm:shadow-xl"
+            )}
           >
-            <p className="text-base font-semibold">{isActive ? "Edit Socialize" : "Turn on Socialize"}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Choose what you&apos;re open to and how long you want to be visible.
-            </p>
+            {/* Sticky header */}
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border/60 px-5 py-4">
+              <div>
+                <Dialog.Title className="text-lg font-semibold">
+                  {isActive ? "Edit Socialize" : "Turn on Socialize"}
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 text-xs text-muted-foreground">
+                  Choose what you&apos;re open to, your area, and how long you&apos;ll be visible.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  aria-label="Close Socialize setup"
+                  className="focus-ring safe-motion -mr-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </Dialog.Close>
+            </div>
 
-            <div className="mt-4 space-y-4">
+            {/* Scrollable body */}
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
               <div>
                 <label htmlFor="socialize-activity" className="mb-1.5 block text-sm font-medium">
                   What are you open to?
@@ -268,7 +294,7 @@ export function SocializePage({
 
               <div>
                 <label htmlFor="socialize-area" className="mb-1.5 block text-sm font-medium">
-                  Area
+                  Search area
                 </label>
                 <select
                   id="socialize-area"
@@ -277,7 +303,7 @@ export function SocializePage({
                   className={selectClass}
                 >
                   <option value="" disabled>
-                    Choose an area
+                    Select an area
                   </option>
                   {SOCIALIZE_AREA_TIERS.map((option) => (
                     <option key={option.id} value={option.id}>
@@ -285,7 +311,7 @@ export function SocializePage({
                     </option>
                   ))}
                 </select>
-                {attempted && !areaTier ? <p className="mt-1 text-xs text-red-500">Choose an area.</p> : null}
+                {attempted && !areaTier ? <p className="mt-1 text-xs text-red-500">Select a search area.</p> : null}
               </div>
 
               <div>
@@ -294,21 +320,25 @@ export function SocializePage({
                 </label>
                 <select
                   id="socialize-duration"
-                  value={duration}
+                  value={duration ?? ""}
                   onChange={(event) => setDuration(event.target.value as SocializeDuration)}
                   className={selectClass}
                 >
+                  <option value="" disabled>
+                    Choose a duration
+                  </option>
                   {SOCIALIZE_DURATIONS.map((option) => (
                     <option key={option.id} value={option.id}>
                       {option.label}
                     </option>
                   ))}
                 </select>
+                {attempted && !duration ? <p className="mt-1 text-xs text-red-500">Choose a duration.</p> : null}
               </div>
 
               <div>
                 <label htmlFor="socialize-note" className="mb-1.5 block text-sm font-medium">
-                  Add a note
+                  Add a note <span className="font-normal text-muted-foreground">(optional)</span>
                 </label>
                 <input
                   id="socialize-note"
@@ -316,7 +346,7 @@ export function SocializePage({
                   value={note}
                   maxLength={140}
                   onChange={(event) => setNote(event.target.value)}
-                  placeholder="Coffee after class, anyone around?"
+                  placeholder="Free later, anyone around?"
                   className={selectClass}
                 />
               </div>
@@ -325,19 +355,26 @@ export function SocializePage({
                 <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
                 Only your profile, activity, and broad proximity are shared. Your exact location stays private.
               </p>
+
+              {attempted && !canSubmit ? (
+                <p className="text-xs font-medium text-red-500" role="alert">
+                  Choose an activity and search area to continue.
+                </p>
+              ) : null}
             </div>
 
-            <div className="mt-4 flex justify-end gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={closeSetup} disabled={isPending}>
+            {/* Sticky footer */}
+            <div className="flex shrink-0 justify-end gap-2 border-t border-border/60 px-5 py-4">
+              <Button type="button" variant="outline" onClick={closeSetup} disabled={isPending}>
                 Cancel
               </Button>
-              <Button type="button" size="sm" onClick={submitSetup} disabled={isPending}>
+              <Button type="button" onClick={submitSetup} disabled={isPending || !canSubmit}>
                 {isPending ? "Saving..." : isActive ? "Save changes" : "Start Socializing"}
               </Button>
             </div>
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     );
   }
 
@@ -351,22 +388,23 @@ export function SocializePage({
       </div>
 
       {isActive && session ? (
-        <section
-          className={cn(
-            "relative isolate overflow-hidden rounded-2xl border border-primary/40 bg-primary/5 p-5",
-            !reducedMotion && "proximity-halo proximity-halo-around"
-          )}
-          style={{ "--halo-active-opacity": 0.35, "--halo-rest-opacity": 0.2 } as CSSProperties}
-        >
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-base font-semibold text-primary">Socialize is on</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Open to {activityLabel.toLowerCase()} until {formatTime(session.expiresAt)}.
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">Area: {SOCIALIZE_AREA_LABELS[session.areaTier]}</p>
-            </div>
-            <div className="flex gap-2">
+        <div className="grid gap-8 lg:grid-cols-[40fr_60fr] lg:items-start">
+          {/* Left: active status + controls */}
+          <section
+            className={cn(
+              "relative isolate overflow-hidden rounded-2xl border border-primary/40 bg-primary/5 p-5",
+              !reducedMotion && "proximity-halo proximity-halo-around"
+            )}
+            style={{ "--halo-active-opacity": 0.35, "--halo-rest-opacity": 0.2 } as CSSProperties}
+          >
+            <p className="text-base font-semibold text-primary">Socialize is on</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Open to {activityLabel.toLowerCase()} until {formatTime(session.expiresAt)}.
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Search area: {SOCIALIZE_AREA_LABELS[session.areaTier]}
+            </p>
+            <div className="mt-4 flex gap-2">
               {renderSetup(
                 <Button type="button" variant="outline" size="sm" disabled={isPending}>
                   Edit
@@ -376,13 +414,60 @@ export function SocializePage({
                 Turn off
               </Button>
             </div>
-          </div>
-        </section>
+          </section>
+
+          {/* Right: people open to connect */}
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold tracking-tight">People open to connect</h2>
+              <Button type="button" variant="ghost" size="sm" onClick={refresh} disabled={isRefreshing || isPending}>
+                {isRefreshing ? "Checking..." : "Check again"}
+              </Button>
+            </div>
+
+            {people.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {people.map((person) => (
+                  <PersonCard
+                    key={person.userId}
+                    person={person}
+                    reducedMotion={reducedMotion}
+                    disabled={isPending}
+                    onWave={() => wave(person)}
+                    onBlock={() => blockPerson(person)}
+                    onReport={() => {
+                      setMenuPerson(person);
+                      setReportOpen(true);
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-card/40 px-4 py-4">
+                <div>
+                  <p className="text-sm font-medium">No one is open to connect nearby</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Try again later or expand your search area.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={refresh} disabled={isRefreshing}>
+                    Check again
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={openSetup}>
+                    Edit area
+                  </Button>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
       ) : (
-        <section className="rounded-2xl border border-border/70 bg-card/50 p-5">
+        // Inactive: compact panel only, no people shown before opt-in.
+        <section className="max-w-md rounded-2xl border border-border/70 bg-card/50 p-5">
           <p className="text-base font-semibold">Socialize is off</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Turn it on when you&apos;re open to meeting new people nearby.
+            Turn it on when you&apos;re open to connecting with people nearby.
           </p>
           <div className="mt-4">
             {renderSetup(
@@ -393,51 +478,6 @@ export function SocializePage({
           </div>
         </section>
       )}
-
-      {isActive ? (
-        <section>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold tracking-tight">People open to connect</h2>
-            <Button type="button" variant="ghost" size="sm" onClick={refresh} disabled={isRefreshing || isPending}>
-              {isRefreshing ? "Checking..." : "Check again"}
-            </Button>
-          </div>
-
-          {people.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {people.map((person) => (
-                <PersonCard
-                  key={person.userId}
-                  person={person}
-                  reducedMotion={reducedMotion}
-                  disabled={isPending}
-                  onWave={() => wave(person)}
-                  onBlock={() => blockPerson(person)}
-                  onReport={() => {
-                    setMenuPerson(person);
-                    setReportOpen(true);
-                  }}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-card/40 px-4 py-4">
-              <div>
-                <p className="text-sm font-medium">No one is open to connect nearby</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">Try again later or expand your area.</p>
-              </div>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={refresh} disabled={isRefreshing}>
-                  Check again
-                </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={openSetup}>
-                  Edit area
-                </Button>
-              </div>
-            </div>
-          )}
-        </section>
-      ) : null}
 
 
       <Modal
@@ -480,7 +520,12 @@ export function SocializePage({
             ) : (
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
             )}
-            <p className="min-w-0 flex-1 text-sm">{toast.message}</p>
+            <div className="min-w-0 flex-1">
+              {toast.title ? <p className="text-sm font-semibold">{toast.title}</p> : null}
+              {toast.message ? (
+                <p className={cn(toast.title ? "text-xs text-white/70" : "text-sm")}>{toast.message}</p>
+              ) : null}
+            </div>
             <button
               type="button"
               onClick={() => setToast(null)}
