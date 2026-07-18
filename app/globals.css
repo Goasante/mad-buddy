@@ -63,6 +63,31 @@
   display: none;
 }
 
+/* Toast/snackbar entry: a subtle upward slide + fade. Keeps the -50% X so the
+ * element stays horizontally centred throughout (its resting transform is the
+ * -translate-x-1/2 utility). No fill-forwards, so it settles on that utility
+ * transform. Disabled under reduced motion. */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.toast-in {
+  animation: toast-in 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-in {
+    animation: none;
+  }
+}
+
 /* Mobile Nearby-Muddies strip: a contained, subtler glow (~35-40% smaller
  * blur/spread than the default halo) so it never bleeds past the item bounds
  * or clips at the horizontal scroller's edges. Scoped to .glow-strip and left

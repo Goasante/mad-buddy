@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 export type StatusComposerProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSaved?: (message: string) => void;
+  onSaved?: (result: { message: string; expiresAt?: string }) => void;
   initialAvailability?: AvailabilityType;
   initialActivity?: ActivityType | null;
   initialNote?: string;
@@ -57,15 +57,16 @@ export function StatusComposer({
     const preset = STATUS_DURATION_PRESETS.find((option) => option.id === durationId);
     if (!preset) return;
     setFeedback("");
+    const expiresAt = resolveExpiry(preset.ms);
     startTransition(async () => {
       const result = await setStatusAction({
         availabilityType: availability,
         activityType: activity,
         customText: note.trim() || undefined,
-        expiresAt: resolveExpiry(preset.ms)
+        expiresAt
       });
       if (result.ok) {
-        onSaved?.(result.message);
+        onSaved?.({ message: result.message, expiresAt });
         onOpenChange(false);
       } else {
         setFeedback(result.message);
@@ -78,7 +79,7 @@ export function StatusComposer({
     startTransition(async () => {
       const result = await clearStatusAction();
       if (result.ok) {
-        onSaved?.(result.message);
+        onSaved?.({ message: result.message });
         onOpenChange(false);
       } else {
         setFeedback(result.message);

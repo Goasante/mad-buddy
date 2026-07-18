@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import {
+  AlertTriangle,
   Bell,
   CalendarCheck2,
   CheckCheck,
+  CheckCircle2,
   CircleDollarSign,
   Ghost,
   Hand,
@@ -14,7 +16,8 @@ import {
   RefreshCcw,
   ShieldCheck,
   UserPlus,
-  Users
+  Users,
+  X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -125,7 +128,9 @@ export function DashboardPageContent({
   const [ghostMode, setGhostMode] = useState(initialVisibilityStatus === "ghost");
   const [friends, setFriends] = useState<DashboardFriend[]>([]);
   const [statusMessage, setStatusMessage] = useState("");
-  const [promptFeedback, setPromptFeedback] = useState<{ message: string; error: boolean } | null>(null);
+  const [promptFeedback, setPromptFeedback] = useState<{ title?: string; message: string; error: boolean } | null>(
+    null
+  );
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [statusComposerOpen, setStatusComposerOpen] = useState(false);
   const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([]);
@@ -179,12 +184,26 @@ export function DashboardPageContent({
     return counts;
   }, [friends, ghostMode]);
 
-  const showPromptFeedback = useCallback((message: string, error = false) => {
-    if (promptFeedbackTimerRef.current) {
-      window.clearTimeout(promptFeedbackTimerRef.current);
-    }
-    setPromptFeedback({ message, error });
-    promptFeedbackTimerRef.current = window.setTimeout(() => setPromptFeedback(null), 3200);
+  const scheduleToastDismiss = useCallback(() => {
+    if (promptFeedbackTimerRef.current) window.clearTimeout(promptFeedbackTimerRef.current);
+    promptFeedbackTimerRef.current = window.setTimeout(() => setPromptFeedback(null), 3500);
+  }, []);
+
+  const showPromptFeedback = useCallback(
+    (message: string, error = false, title?: string) => {
+      setPromptFeedback({ title, message, error });
+      scheduleToastDismiss();
+    },
+    [scheduleToastDismiss]
+  );
+
+  const pauseToastDismiss = useCallback(() => {
+    if (promptFeedbackTimerRef.current) window.clearTimeout(promptFeedbackTimerRef.current);
+  }, []);
+
+  const dismissToast = useCallback(() => {
+    if (promptFeedbackTimerRef.current) window.clearTimeout(promptFeedbackTimerRef.current);
+    setPromptFeedback(null);
   }, []);
 
   const loadNearbyFriends = useCallback(() => {
@@ -602,14 +621,42 @@ export function DashboardPageContent({
       {promptFeedback ? (
         <div
           role="status"
-          className={cn(
-            "fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full border px-4 py-2 text-sm font-medium shadow-lg md:bottom-6",
-            promptFeedback.error
-              ? "border-red-300/30 bg-red-950 text-red-50"
-              : "border-border bg-foreground text-background"
-          )}
+          aria-live="polite"
+          onMouseEnter={pauseToastDismiss}
+          onMouseLeave={scheduleToastDismiss}
+          onFocus={pauseToastDismiss}
+          onBlur={scheduleToastDismiss}
+          // Sits above the mobile bottom nav (its 88px + safe-area) so it never
+          // covers it; on desktop there is no bottom nav, so a small offset.
+          // A fixed dark surface in every theme, per the toast spec, rather
+          // than bg-card which would be near-white in the light theme.
+          className="toast-in fixed bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-2rem)] max-w-[320px] -translate-x-1/2 md:bottom-6"
         >
-          {promptFeedback.message}
+          <div className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-[#1b1b1d] px-4 py-3 text-white shadow-lg">
+            <span className={cn("mt-0.5 shrink-0", promptFeedback.error ? "text-red-400" : "text-emerald-400")}>
+              {promptFeedback.error ? (
+                <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+              )}
+            </span>
+            <div className="min-w-0 flex-1">
+              {promptFeedback.title ? (
+                <p className="text-sm font-semibold leading-5">{promptFeedback.title}</p>
+              ) : null}
+              <p className={cn("leading-5", promptFeedback.title ? "text-xs text-white/70" : "text-sm font-medium")}>
+                {promptFeedback.message}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={dismissToast}
+              aria-label="Dismiss notification"
+              className="focus-ring -mr-1 -mt-0.5 shrink-0 rounded-md p-1 text-white/60 hover:text-white"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       ) : null}
       <MuddyProfileModal
@@ -637,7 +684,14 @@ export function DashboardPageContent({
       <StatusComposer
         open={statusComposerOpen}
         onOpenChange={setStatusComposerOpen}
-        onSaved={(message) => showPromptFeedback(message)}
+        onSaved={({ message, expiresAt }) => {
+          if (expiresAt) {
+            const time = new Date(expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+            showPromptFeedback(`Visible to your Muddies until ${time}.`, false, "Status updated");
+          } else {
+            showPromptFeedback(message);
+          }
+        }}
         hasActiveStatus={hasActiveStatus}
         initialAvailability={initialStatusAvailability}
         initialActivity={initialStatusActivity}
