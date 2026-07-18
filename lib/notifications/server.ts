@@ -249,7 +249,7 @@ export async function createNearbyNotificationsIfAllowed(
     namesToAnnounce.map((name) => ({
       user_id: input.userId,
       type: "friend_nearby",
-      title: "Friend nearby",
+      title: `${name} is nearby`,
       message: `${name} is glowing nearby. Exact location stays private.`,
       is_read: false
     }))

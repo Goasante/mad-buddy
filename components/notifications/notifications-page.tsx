@@ -18,7 +18,6 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { respondToMeetupRequestAction } from "@/app/(app)/premium-actions";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
@@ -148,7 +147,7 @@ export function NotificationsPageContent({
 
         setFeedback(
           response.ok
-            ? "Notifications marked read."
+            ? "All updates marked as read"
             : "Could not mark notifications read."
         );
       } catch {
@@ -203,7 +202,7 @@ export function NotificationsPageContent({
   }
 
   return (
-    <div className="max-w-[1050px] space-y-5 pt-6">
+    <div className="mx-auto max-w-[1050px] space-y-4 pt-6">
       <section>
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Pulse</h1>
@@ -214,12 +213,6 @@ export function NotificationsPageContent({
                 {isPending ? "Marking..." : "Mark all as read"}
               </Button>
             ) : null}
-            <Button type="button" variant="outline" size="sm" asChild>
-              <Link href="/meeting-pings">
-                <Hand className="h-4 w-4" aria-hidden="true" />
-                Meeting Pings
-              </Link>
-            </Button>
             <Button
               type="button"
               variant="outline"
@@ -232,10 +225,7 @@ export function NotificationsPageContent({
             </Button>
           </div>
         </div>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Friend requests, nearby alerts, and account updates.
-        </p>
-        {unreadCount > 0 ? <Badge className="mt-3" variant="orange">{unreadCount} unread</Badge> : null}
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">Updates from your Muddies and account.</p>
       </section>
 
       {feedback ? (
@@ -248,13 +238,15 @@ export function NotificationsPageContent({
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-2">
           <div className="flex gap-1" aria-label="Notification filters">
             <Button type="button" size="sm" variant={filter === "all" ? "secondary" : "ghost"} onClick={() => setFilter("all")}>All</Button>
-            <Button type="button" size="sm" variant={filter === "unread" ? "secondary" : "ghost"} onClick={() => setFilter("unread")}>Unread</Button>
+            <Button type="button" size="sm" variant={filter === "unread" ? "secondary" : "ghost"} onClick={() => setFilter("unread")}>
+              {unreadCount > 0 ? `Unread (${unreadCount})` : "Unread"}
+            </Button>
           </div>
         </div>
 
         <div>
           {visibleNotifications.length > 0 ? (
-            <div className="space-y-6 pt-8">
+            <div className="space-y-5 pt-6">
               {notificationGroups.map((group) => (
                 <section key={group.label} aria-labelledby={`notification-group-${group.key}`}>
                   <h2
@@ -277,8 +269,8 @@ export function NotificationsPageContent({
             </div>
           ) : (
             <InlineEmptyState
-              title={filter === "unread" ? "No unread notifications" : "You’re all caught up"}
-              description={filter === "unread" ? "You’ve read all your updates." : "New updates will appear here."}
+              title={filter === "unread" ? "No unread updates" : "You’re all caught up"}
+              description={filter === "unread" ? "You’ve seen everything for now." : "New updates will appear here."}
             />
           )}
         </div>
@@ -311,6 +303,14 @@ export function NotificationsPageContent({
               if (checked) setNearbyAlerts(false);
             }}
           />
+          <Link
+            href="/meeting-pings"
+            onClick={() => setSettingsOpen(false)}
+            className="focus-ring safe-motion flex min-h-[4.25rem] items-center gap-3 px-2 py-3 text-sm font-semibold text-foreground hover:bg-secondary/40"
+          >
+            <Hand className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            Plan alerts
+          </Link>
         </div>
       </Modal>
 
@@ -452,9 +452,18 @@ function ResponseGroup({
 
 function connectionModalTitle(title: string) {
   return title
-    .replace(/ sent a connection prompt$/i, " wants to connect")
+    .replace(/ sent you a connection prompt$/i, " wants to connect")
     .replace(/ says hello$/i, " wants to connect")
     .replace(/ replied$/i, " wants to connect");
+}
+
+/** Notification titles interpolate a profile's stored full_name verbatim —
+ * some accounts have that saved in lowercase. Capitalising once here, at the
+ * point every notification enters the page's state, fixes display
+ * everywhere the title is shown (card, unread dot context, reply modal)
+ * without rewriting the stored value or every creation call site. */
+function capitalize(text: string): string {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
 type NotificationCardProps = {
@@ -465,11 +474,12 @@ type NotificationCardProps = {
 function NotificationCard({ notification, onOpen }: NotificationCardProps) {
   const actionable = Boolean(notification.meetupRequestId);
   const interactive = actionable || notification.unread;
+  const isMuddyActivity = isMuddyActivityType(notification.type);
   return (
     <article
       className={cn(
-        "border-b border-border/60 px-1 py-4 last:border-b-0 sm:px-2",
-        interactive && "cursor-pointer rounded-lg transition-colors hover:bg-secondary/60"
+        "flex min-h-[80px] items-start gap-3 rounded-xl border-b border-border/60 px-2 py-3 last:border-b-0",
+        interactive && "cursor-pointer transition-colors hover:bg-secondary/50"
       )}
       onClick={interactive ? onOpen : undefined}
       onKeyDown={interactive ? (event) => {
@@ -478,27 +488,34 @@ function NotificationCard({ notification, onOpen }: NotificationCardProps) {
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
     >
-      <div className="flex gap-4">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-white/[0.08] text-accent">
-          <notification.icon className="h-5 w-5" aria-hidden="true" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold">{notification.title}</h3>
-            {notification.unread ? <Badge variant="green">New</Badge> : null}
-          </div>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">{notification.message}</p>
-          <p className="mt-2 text-xs text-muted-foreground">{notification.time}</p>
-          {actionable ? <p className="mt-2 text-xs font-medium text-accent">Open connection options</p> : null}
-        </div>
+      <div
+        className={cn(
+          "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+          isMuddyActivity ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground"
+        )}
+      >
+        <notification.icon className="h-4 w-4" aria-hidden="true" />
       </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <h3 className="truncate text-sm font-semibold">{notification.title}</h3>
+          {notification.unread ? (
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-label="Unread" />
+          ) : null}
+        </div>
+        {notification.message ? (
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">{notification.message}</p>
+        ) : null}
+        {actionable ? <p className="mt-1 text-xs font-medium text-primary">Reply</p> : null}
+      </div>
+      <span className="mt-0.5 shrink-0 text-[11px] text-muted-foreground">{notification.time}</span>
     </article>
   );
 }
 
 function InlineEmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <section className="flex items-center gap-3 px-1 pb-2 pt-8 text-left sm:px-2" aria-labelledby="empty-notifications-heading">
+    <section className="flex items-center gap-3 px-2 pb-2 pt-6 text-left" aria-labelledby="empty-notifications-heading">
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
         <Bell className="h-4 w-4" aria-hidden="true" />
       </div>
@@ -517,7 +534,7 @@ function toNotificationItem(notification: ApiNotification): NotificationItem {
   return {
     id: notification.id,
     type: notification.type,
-    title: notification.title,
+    title: capitalize(notification.title),
     message: notification.message,
     time: formatNotificationTime(notification.created_at),
     createdAt: notification.created_at,
@@ -578,6 +595,22 @@ function iconForType(type: string): LucideIcon {
   };
 
   return iconsByType[type.split(":")[0]] ?? Bell;
+}
+
+const MUDDY_ACTIVITY_TYPES = new Set([
+  "friend_request_received",
+  "friend_request_accepted",
+  "friend_nearby",
+  "best_buddy_nearby",
+  "circle_nearby",
+  "meetup_request",
+  "wave"
+]);
+
+/** Orange is reserved for Muddy activity and proximity — billing/system
+ * notifications get a neutral icon treatment instead. */
+function isMuddyActivityType(type: string): boolean {
+  return MUDDY_ACTIVITY_TYPES.has(type.split(":")[0]);
 }
 
 function formatNotificationTime(createdAt: string) {

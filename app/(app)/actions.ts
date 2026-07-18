@@ -553,8 +553,8 @@ export async function acceptFriendRequestAction(requestId: string): Promise<Inte
     userId: request.sender_id,
     senderId: userId,
     type: "friend_request_accepted",
-    title: "Muddy request accepted",
-    message: `${receiverProfile?.full_name ?? "A Muddy"} approved your request.`
+    title: `${receiverProfile?.full_name ?? "A Muddy"} is now your Muddy`,
+    message: "Your Muddy request was accepted."
   });
 
   revalidatePath("/friends");

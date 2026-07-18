@@ -260,7 +260,7 @@ export async function createMeetupRequestAction(input: unknown): Promise<Premium
       category: "pings",
       priority: "high",
       type: `meetup_request:${meetupRequest.id}`,
-      title: `${senderName} sent a connection prompt`,
+      title: `${senderName} sent you a connection prompt`,
       message:
         parsed.data.message === "Quick hello"
           ? `${senderName} sent you a quick hello.`
