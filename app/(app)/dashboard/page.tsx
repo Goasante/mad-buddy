@@ -8,16 +8,31 @@ export default async function DashboardPage() {
   const {
     data: { user }
   } = await supabase.auth.getUser();
-  const [access, profile] = user
-    ? await Promise.all([getCurrentSubscriptionAccess(user.id), ensureProfileForUser(user)])
-    : [null, null];
+  const [access, profile, statusResult] = user
+    ? await Promise.all([
+        getCurrentSubscriptionAccess(user.id),
+        ensureProfileForUser(user),
+        supabase
+          .from("user_statuses")
+          .select("availability_type, activity_type, custom_text, expires_at")
+          .eq("user_id", user.id)
+          .maybeSingle()
+      ])
+    : [null, null, null];
+
+  const status = statusResult?.data;
+  const hasActiveStatus = Boolean(status && Date.parse(status.expires_at) > Date.now());
 
   return (
     <DashboardPageContent
       subscriptionPlan={access?.plan}
       hasPremium={access?.hasPremium}
       initialVisibilityStatus={profile?.visibility_status ?? "visible"}
-      displayName={profile?.full_name?.split(" ")[0] || "there"}
+      displayName={profile?.full_name?.split(" ")[0] || ""}
+      hasActiveStatus={hasActiveStatus}
+      initialStatusAvailability={hasActiveStatus ? status?.availability_type : undefined}
+      initialStatusActivity={hasActiveStatus ? status?.activity_type ?? null : null}
+      initialStatusNote={hasActiveStatus ? status?.custom_text ?? "" : ""}
     />
   );
 }

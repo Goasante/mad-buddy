@@ -12,7 +12,7 @@ import {
   RefreshCcw,
   Sparkles,
   UserPlus,
-  WifiOff
+  Users
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -22,14 +22,13 @@ import { updateVisibilityStatusAction } from "@/app/(app)/settings-actions";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { StatusComposer } from "@/components/social/status-composer";
-import { PulseSummary } from "@/components/dashboard/pulse-summary";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { formatMuddyStatusLabel } from "@/lib/social/rules";
-import { freshnessLabel, type FreshnessState } from "@/lib/proximity/freshness";
+import { type FreshnessState } from "@/lib/proximity/freshness";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
-import type { SubscriptionPlan } from "@/lib/supabase/database.types";
+import type { ActivityType, AvailabilityType, SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
 type DashboardFriend = {
@@ -85,6 +84,10 @@ type DashboardPageContentProps = {
   hasPremium?: boolean;
   initialVisibilityStatus?: "visible" | "ghost" | "app_open_only";
   displayName?: string;
+  hasActiveStatus?: boolean;
+  initialStatusAvailability?: AvailabilityType;
+  initialStatusActivity?: ActivityType | null;
+  initialStatusNote?: string;
 };
 
 const attentionIconByType: Record<string, LucideIcon> = {
@@ -95,25 +98,63 @@ const attentionIconByType: Record<string, LucideIcon> = {
   wave: Hand
 };
 
+function capitalize(name: string) {
+  return name ? name.charAt(0).toUpperCase() + name.slice(1) : name;
+}
+
 export function DashboardPageContent({
   subscriptionPlan = "free",
   hasPremium = false,
   initialVisibilityStatus = "visible",
-  displayName = "there"
+  displayName = "",
+  hasActiveStatus = false,
+  initialStatusAvailability,
+  initialStatusActivity = null,
+  initialStatusNote = ""
 }: DashboardPageContentProps) {
   const reducedMotion = useReducedMotion();
   const [ghostMode, setGhostMode] = useState(initialVisibilityStatus === "ghost");
   const [friends, setFriends] = useState<DashboardFriend[]>([]);
-  const [statusMessage, setStatusMessage] = useState("Checking for nearby friends...");
+  const [statusMessage, setStatusMessage] = useState("");
   const [promptFeedback, setPromptFeedback] = useState<{ message: string; error: boolean } | null>(null);
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [statusComposerOpen, setStatusComposerOpen] = useState(false);
   const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([]);
+  const [unreadActivityCount, setUnreadActivityCount] = useState(0);
   const [isPending, startTransition] = useTransition();
   const locationUpdateInFlightRef = useRef(false);
   const promptFeedbackTimerRef = useRef<number | null>(null);
   const visibleFriends = !ghostMode ? friends : [];
-  const selectedFriend = visibleFriends.find((friend) => friend.friendId === selectedFriendId) ?? null;
+  // The nearby endpoint also returns friends whose signal is stale ("hidden")
+  // or who are merely within the broader "far" bucket — real data the API
+  // legitimately reports, but not what belongs in a "Nearby friends" glance.
+  // Only these three levels count toward the proximity pills above, so the
+  // card grid must match that same set or the two disagree (the exact bug
+  // this filter fixes: "1 nearby" while two cards render).
+  const nearbyFriends = visibleFriends.filter(
+    (friend) =>
+      friend.proximityLevel === "very_close" || friend.proximityLevel === "nearby" || friend.proximityLevel === "around"
+  );
+  const selectedFriend = nearbyFriends.find((friend) => friend.friendId === selectedFriendId) ?? null;
+
+  // The dashboard never truncates this list (every nearby friend is always
+  // rendered), so "View all" would only ever be a redundant link to the same
+  // set. Kept as an explicit flag rather than deleted outright so it's ready
+  // to flip on if the list ever gains a display cap.
+  const hasMoreNearbyFriends = false;
+
+  // A friend's own full_name can be missing (deleted profile, sync gap); the
+  // username is the one thing every account always has. Duplicate display
+  // names (two friends both "Sam") get their @username shown for
+  // disambiguation — this Set is what decides that per render.
+  const duplicateDisplayNames = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const friend of nearbyFriends) {
+      const name = (friend.displayName || friend.username).toLowerCase();
+      seen.set(name, (seen.get(name) ?? 0) + 1);
+    }
+    return new Set([...seen.entries()].filter(([, count]) => count > 1).map(([name]) => name));
+  }, [nearbyFriends]);
 
   const proximityCounts = useMemo(() => {
     const counts = { very_close: 0, nearby: 0, around: 0 };
@@ -153,7 +194,7 @@ export function DashboardPageContent({
 
         const data = (await response.json()) as { friends: NearbyFriendApiItem[] };
         setFriends(data.friends.map(toDashboardFriend));
-        setStatusMessage(data.friends.length > 0 ? "Nearby friends updated." : "");
+        setStatusMessage("");
       } catch {
         setFriends([]);
         setStatusMessage("Could not reach the nearby friends service.");
@@ -225,16 +266,15 @@ export function DashboardPageContent({
         const response = await fetch("/api/notifications", { credentials: "include", cache: "no-store" });
         if (!response.ok || !isMounted) return;
         const data = (await response.json()) as { notifications: ApiNotification[] };
+        const unread = data.notifications.filter((notification) => !notification.is_read);
+        setUnreadActivityCount(unread.length);
         setAttentionItems(
-          data.notifications
-            .filter((notification) => !notification.is_read)
-            .slice(0, 4)
-            .map((notification) => ({
-              id: notification.id,
-              title: notification.title,
-              time: formatRelativeTime(notification.created_at),
-              icon: attentionIconByType[notification.type.split(":")[0]] ?? Bell
-            }))
+          unread.slice(0, 4).map((notification) => ({
+            id: notification.id,
+            title: notification.title,
+            time: formatRelativeTime(notification.created_at),
+            icon: attentionIconByType[notification.type.split(":")[0]] ?? Bell
+          }))
         );
       } catch {
         // Leave attention items empty if the request fails.
@@ -274,7 +314,7 @@ export function DashboardPageContent({
 
     startTransition(async () => {
       const result = await updateVisibilityStatusAction(nextGhostMode ? "ghost" : "visible");
-      setStatusMessage(result.message);
+      setStatusMessage(result.ok ? "" : result.message);
 
       if (result.ok) {
         setGhostMode(nextGhostMode);
@@ -304,46 +344,61 @@ export function DashboardPageContent({
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] space-y-8 pt-6">
+    <div className="mx-auto max-w-[1200px] space-y-7 pt-6">
       <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
 
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl" suppressHydrationWarning>
-            {getGreeting()}, {displayName} 👋
+            {getGreeting()}
+            {displayName ? `, ${capitalize(displayName)}` : ""}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">Here&apos;s what&apos;s happening around your people.</p>
+          <p className="mt-1 text-sm text-muted-foreground">See which approved friends are nearby.</p>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => setStatusComposerOpen(true)}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setStatusComposerOpen(true)}
+          title={hasActiveStatus ? "Update your status" : undefined}
+        >
           <Sparkles className="h-4 w-4" aria-hidden="true" />
-          Set status
+          {hasActiveStatus ? "Update status" : "Set status"}
         </Button>
       </div>
 
-      <PulseSummary />
-
-      <section className="rounded-2xl bg-card/55 p-4 shadow-sm dark:bg-white/[0.035] sm:p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+      <section className="rounded-2xl bg-card/55 p-2.5 shadow-sm dark:bg-white/[0.035] sm:p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide",
-                ghostMode
-                  ? "bg-secondary text-muted-foreground"
-                  : "bg-primary/10 text-primary"
+                // Orange is reserved for glow/proximity states (the ring and
+                // the chips below); this is a general on/off toggle, so it
+                // gets a distinct blue instead of doubling up on orange.
+                ghostMode ? "bg-secondary text-muted-foreground" : "bg-blue-500/10 text-blue-700 dark:text-blue-300"
               )}
             >
-              <span className={cn("h-1.5 w-1.5 rounded-full", ghostMode ? "bg-muted-foreground" : "bg-primary")} />
-              {ghostMode ? "Glow paused" : "Glow active"}
+              <span className={cn("h-1.5 w-1.5 rounded-full", ghostMode ? "bg-muted-foreground" : "bg-blue-500")} />
+              {ghostMode ? "Visibility paused" : "Visibility on"}
             </span>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Approved Muddies · Updated {isPending ? "now" : "just now"}
-            </p>
+
+            {!ghostMode ? (
+              <div className="flex flex-wrap gap-1.5">
+                {proximityCounts.very_close > 0 ? (
+                  <CountPill count={proximityCounts.very_close} label="very close" />
+                ) : null}
+                {proximityCounts.nearby > 0 ? <CountPill count={proximityCounts.nearby} label="nearby" /> : null}
+                {proximityCounts.around > 0 ? <CountPill count={proximityCounts.around} label="around" /> : null}
+              </div>
+            ) : null}
           </div>
-          <div className="flex flex-wrap gap-2">
+
+          <div className="flex shrink-0 flex-wrap gap-2">
             <Button
               type="button"
               variant={ghostMode ? "primary" : "outline"}
+              className={ghostMode ? undefined : "border-border bg-secondary/60 hover:bg-secondary"}
               onClick={toggleVisibility}
               disabled={isPending}
               aria-label={ghostMode ? "Resume visibility" : "Pause visibility"}
@@ -355,149 +410,144 @@ export function DashboardPageContent({
               type="button"
               variant="outline"
               size="icon"
-              className="w-auto px-4 sm:w-10 sm:px-0"
+              className="border-border bg-secondary/60 hover:bg-secondary"
               onClick={updatePrivateLocation}
               disabled={isPending}
               aria-label="Check again"
               title="Check again"
             >
               <RefreshCcw className={cn("h-4 w-4", isPending && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
-              <span className="sm:hidden">Refresh</span>
             </Button>
           </div>
         </div>
 
-        {!ghostMode ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            <CountPill label="Very Close" count={proximityCounts.very_close} tone="strong" />
-            <CountPill label="Nearby" count={proximityCounts.nearby} tone="medium" />
-            <CountPill label="Around You" count={proximityCounts.around} tone="soft" />
-          </div>
-        ) : null}
-
-        {isPending || statusMessage ? (
-          <p className="mt-3 text-xs text-muted-foreground" role="status">
-            {isPending ? "Checking for nearby friends..." : statusMessage}
-          </p>
-        ) : null}
-        {!ghostMode ? (
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            Your exact location is never shown to friends. Mad Buddy converts it into a general glow signal.
-          </p>
-        ) : (
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            You won&apos;t appear nearby until you turn visibility back on.
-          </p>
-        )}
+        <p className="mt-1.5 truncate text-xs text-muted-foreground" role="status">
+          {statusMessage ||
+            (ghostMode
+              ? "You won’t appear nearby until you turn visibility back on."
+              : "Approved friends can see when you’re nearby.")}
+        </p>
       </section>
 
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">Nearby Muddies</h2>
-          <Link href="/friends" className="text-sm font-medium text-primary hover:underline">
-            See all
-          </Link>
-        </div>
-
-        {visibleFriends.length > 0 ? (
-          // overflow-x-auto forces the browser to also clip vertically
-          // (overflow-y computes to "auto" once overflow-x isn't "visible"),
-          // which was hard-cutting the glow ring's blurred halo at the row's
-          // top edge, and at the left edge of the first avatar. Padding
-          // gives the blur room to render; the matching negative margin
-          // keeps the row's visible position unchanged.
-          <div
-            className="-mx-8 -mt-8 flex gap-4 overflow-x-auto px-8 pb-3 pt-8"
-            aria-label="Nearby Muddies"
-          >
-            {visibleFriends.map((friend) => (
-              <button
-                key={friend.friendId}
-                type="button"
-                onClick={() => setSelectedFriendId(friend.friendId)}
-                className="focus-ring safe-motion flex w-16 shrink-0 flex-col items-center gap-1.5 rounded-lg"
-              >
-                <GlowAvatar
-                  name={friend.displayName}
-                  src={friend.avatarUrl}
-                  proximityLevel={friend.proximityLevel}
-                  glowStrength={friend.glowStrength}
-                  confidence={friend.confidence}
-                  size="md"
-                  reducedMotion={reducedMotion}
-                />
-                <span className="w-full truncate text-center text-xs font-medium">
-                  {friend.displayName.split(" ")[0]}
-                </span>
-                <span className="w-full truncate text-center text-[10px] text-muted-foreground">
-                  {friend.muddyStatusLabel ?? proximityLabels[friend.proximityLevel]}
-                </span>
-                <span
-                  className={cn(
-                    "w-full truncate text-center text-[9px]",
-                    friend.freshnessState === "stale" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground/70"
-                  )}
-                >
-                  {freshnessLabel(friend.freshnessState)}
-                </span>
-              </button>
-            ))}
+      <div className="grid gap-5 lg:grid-cols-3">
+        <section className="lg:col-span-2">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold tracking-tight">Nearby friends</h2>
+            {hasMoreNearbyFriends ? (
+              <Link href="/friends" className="text-sm font-medium text-primary hover:underline">
+                View all
+              </Link>
+            ) : null}
           </div>
-        ) : (
-          <EmptyState
-            icon={ghostMode ? Ghost : WifiOff}
-            className="w-full !border-border/50 !shadow-none p-4 sm:p-5"
-            title={ghostMode ? "Visibility is paused" : "No Muddies nearby"}
-            description={
-              ghostMode
-                ? "You won’t appear nearby until you turn visibility back on."
-                : "Friends will appear here when they're nearby."
-            }
-            action={
-              <Button type="button" asChild>
-                <Link href="/friends">
-                  <UserPlus className="h-4 w-4" aria-hidden="true" />
-                  Add Muddies
-                </Link>
-              </Button>
-            }
-          />
-        )}
-      </section>
 
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">Needs your attention</h2>
+          {nearbyFriends.length > 0 ? (
+            // minmax(240px) rather than the requested 260-280px: at the
+            // page's 1200px max-width and this section's 65% share, three
+            // literal 260px cards plus gaps don't fit (812px needed vs
+            // ~770px available). 240px is the largest floor that still
+            // yields three columns here — auto-fill's 1fr stretches each
+            // card to ~250-260px in practice, close to the target width
+            // while actually delivering the requested three-per-row.
+            <div
+              className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]"
+              aria-label="Nearby friends"
+            >
+              {nearbyFriends.map((friend) => {
+                // The username is the reliable fallback if a profile has no
+                // full_name; it's also shown for disambiguation when two
+                // friends share the same display name.
+                const name = friend.displayName || friend.username;
+                const showUsername = duplicateDisplayNames.has(name.toLowerCase());
+                return (
+                  <button
+                    key={friend.friendId}
+                    type="button"
+                    onClick={() => setSelectedFriendId(friend.friendId)}
+                    className="focus-ring safe-motion flex min-h-[104px] items-center gap-3 rounded-2xl border border-border/70 bg-card/50 p-4 text-left hover:bg-secondary/40"
+                  >
+                    <GlowAvatar
+                      name={name}
+                      src={friend.avatarUrl}
+                      proximityLevel={friend.proximityLevel}
+                      glowStrength={friend.glowStrength}
+                      confidence={friend.confidence}
+                      size="md"
+                      reducedMotion={reducedMotion}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{capitalize(name)}</p>
+                      {showUsername ? (
+                        <p className="truncate text-xs text-foreground/70">@{friend.username}</p>
+                      ) : null}
+                      <span className="mt-1 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                        {proximityLabels[friend.proximityLevel]}
+                      </span>
+                      {friend.muddyStatusLabel ? (
+                        <p className="mt-1 truncate text-xs text-muted-foreground">{friend.muddyStatusLabel}</p>
+                      ) : null}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              icon={ghostMode ? Ghost : Users}
+              className="w-full !border-border/50 !shadow-none p-4 sm:p-5"
+              title={ghostMode ? "Visibility is paused" : "No friends nearby"}
+              description={
+                ghostMode
+                  ? "You won’t appear nearby until you turn visibility back on."
+                  : "Approved friends will appear here when they’re nearby."
+              }
+              action={
+                !ghostMode ? (
+                  <Button type="button" asChild>
+                    <Link href="/friends?tab=add">
+                      <UserPlus className="h-4 w-4" aria-hidden="true" />
+                      Add friends
+                    </Link>
+                  </Button>
+                ) : undefined
+              }
+            />
+          )}
+        </section>
+
+        <section className="lg:col-span-1">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold tracking-tight">Recent activity</h2>
+            {unreadActivityCount > attentionItems.length ? (
+              <Link href="/notifications" className="text-sm font-medium text-primary hover:underline">
+                View all
+              </Link>
+            ) : null}
+          </div>
+
           {attentionItems.length > 0 ? (
-            <Link href="/notifications" className="text-sm font-medium text-primary hover:underline">
-              See all
-            </Link>
-          ) : null}
-        </div>
-
-        {attentionItems.length > 0 ? (
-          <ul className="divide-y divide-border/60 rounded-2xl border border-border/70 bg-card/40">
-            {attentionItems.map((item) => (
-              <li key={item.id}>
-                <Link
-                  href="/notifications"
-                  className="focus-ring safe-motion flex items-center gap-3 px-4 py-3 hover:bg-secondary/50"
-                >
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                    <item.icon className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm">{item.title}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{item.time}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="rounded-2xl border border-border/70 bg-card/40 px-4 py-3 text-sm text-muted-foreground">
-            You&apos;re all caught up.
-          </p>
-        )}
-      </section>
+            <ul className="divide-y divide-border/60 rounded-2xl border border-border/70 bg-card/40">
+              {attentionItems.map((item) => (
+                <li key={item.id}>
+                  <Link
+                    href="/notifications"
+                    className="focus-ring safe-motion flex min-h-[68px] items-center gap-3 px-4 py-3.5 hover:bg-secondary/50"
+                  >
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                      <item.icon className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm">{capitalize(item.title)}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{item.time}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="rounded-2xl border border-border/70 bg-card/40 px-4 py-3 text-sm text-muted-foreground">
+              No recent activity
+            </p>
+          )}
+        </section>
+      </div>
 
       {promptFeedback ? (
         <div
@@ -538,6 +588,10 @@ export function DashboardPageContent({
         open={statusComposerOpen}
         onOpenChange={setStatusComposerOpen}
         onSaved={(message) => showPromptFeedback(message)}
+        hasActiveStatus={hasActiveStatus}
+        initialAvailability={initialStatusAvailability}
+        initialActivity={initialStatusActivity}
+        initialNote={initialStatusNote}
       />
     </div>
   );
@@ -550,16 +604,9 @@ function getGreeting() {
   return "Good evening";
 }
 
-function CountPill({ label, count, tone }: { label: string; count: number; tone: "strong" | "medium" | "soft" }) {
+function CountPill({ label, count }: { label: string; count: number }) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium",
-        tone === "strong" && "border-orange-400/40 bg-orange-400/15 text-orange-700 dark:text-orange-200",
-        tone === "medium" && "border-orange-400/25 bg-orange-400/10 text-orange-700 dark:text-orange-100",
-        tone === "soft" && "border-border bg-secondary text-muted-foreground"
-      )}
-    >
+    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-1 text-xs font-medium text-foreground">
       {count} {label}
     </span>
   );

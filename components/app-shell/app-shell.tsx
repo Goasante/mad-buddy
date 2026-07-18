@@ -1,5 +1,6 @@
 "use client";
 
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
@@ -12,6 +13,7 @@ import {
   Home,
   LogOut,
   MessagesSquare,
+  MoreHorizontal,
   PartyPopper,
   Sparkles,
   Plus,
@@ -22,7 +24,7 @@ import {
   UsersRound
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { logoutAction } from "@/app/(auth)/actions";
 import { LocationSignalSync } from "@/components/app-shell/location-signal-sync";
 import { Button } from "@/components/ui/button";
@@ -30,18 +32,21 @@ import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand/brand-mark";
 
+// Order matters for MobileNav, which just takes the first five (minus
+// admin/billing). Primary destinations are listed first so the bottom bar's
+// slice keeps showing the same four the desktop sidebar treats as primary.
 const navigationItems: Array<{
   href:
     | "/dashboard"
     | "/friends"
     | "/notifications"
+    | "/messages"
     | "/plans"
     | "/moments"
-    | "/profile"
-    | "/messages"
     | "/events"
     | "/groups"
     | "/discover"
+    | "/profile"
     | "/settings"
     | "/billing"
     | "/admin";
@@ -49,18 +54,21 @@ const navigationItems: Array<{
   icon: LucideIcon;
 }> = [
   { href: "/dashboard", label: "Home", icon: Home },
-  { href: "/friends", label: "Muddies", icon: UsersRound },
-  { href: "/notifications", label: "Pulse", icon: Bell },
+  { href: "/friends", label: "Friends", icon: UsersRound },
+  { href: "/notifications", label: "Notifications", icon: Bell },
+  { href: "/messages", label: "Messages", icon: MessagesSquare },
   { href: "/plans", label: "Plans", icon: CalendarCheck2 },
   { href: "/moments", label: "Moments", icon: Sparkles },
-  { href: "/profile", label: "You", icon: UserRound },
-  { href: "/messages", label: "Messages", icon: MessagesSquare },
   { href: "/events", label: "Events", icon: PartyPopper },
   { href: "/groups", label: "Groups", icon: Users2 },
   { href: "/discover", label: "Discover", icon: Compass },
+  { href: "/profile", label: "Profile", icon: UserRound },
   { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/billing", label: "Billing", icon: CircleDollarSign }
+  { href: "/billing", label: "Plan and billing", icon: CircleDollarSign }
 ];
+
+const PRIMARY_HREFS = ["/dashboard", "/friends", "/notifications", "/messages"] as const;
+const SECONDARY_HREFS = ["/plans", "/moments", "/events", "/groups", "/discover"] as const;
 
 export type AppShellProps = {
   children: ReactNode;
@@ -140,7 +148,7 @@ export function AppShell({
         Skip to content
       </a>
       <LocationSignalSync initiallyEnabled={locationSyncEnabled} />
-      <div className="md:grid md:h-[calc(100vh-2rem)] md:grid-cols-[5.25rem_minmax(0,1fr)] md:overflow-hidden md:rounded-[1.35rem] md:border md:border-border/80 md:bg-background md:shadow-[0_28px_90px_hsl(var(--shadow)/0.24)] dark:md:border-white/10 dark:md:bg-[#101011]">
+      <div className="md:grid md:h-[calc(100vh-2rem)] md:grid-cols-[4.75rem_minmax(0,1fr)] md:overflow-hidden md:rounded-[1.35rem] md:border md:border-border/80 md:bg-background md:shadow-[0_28px_90px_hsl(var(--shadow)/0.24)] dark:md:border-white/10 dark:md:bg-[#101011]">
       <DesktopSidebar
         navigationItems={visibleNavigationItems}
         unreadCount={unreadCount}
@@ -149,7 +157,6 @@ export function AppShell({
         <div className="flex min-w-0 flex-col bg-background dark:bg-[#111112] md:min-h-0">
         <AppHeader
           navigationItems={visibleNavigationItems}
-          unreadCount={unreadCount}
           currentUsername={currentUsername}
         />
           <main id="app-main-content" className="mx-auto w-full max-w-[1200px] px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
@@ -179,95 +186,275 @@ function DesktopSidebar({
   currentUsername: string | null;
 }) {
   const pathname = usePathname();
-  const socialItems = navigationItems.filter((item) =>
-    [
-      "/dashboard",
-      "/friends",
-      "/notifications",
-      "/plans",
-      "/profile",
-      "/messages",
-      "/events",
-      "/groups",
-      "/discover",
-      "/settings"
-    ].includes(item.href)
-  );
+  const primaryItems = navigationItems.filter((item) => (PRIMARY_HREFS as readonly string[]).includes(item.href));
+  const secondaryItems = navigationItems.filter((item) => (SECONDARY_HREFS as readonly string[]).includes(item.href));
   const adminItem = navigationItems.find((item) => item.href === "/admin");
+  // Both flyouts share this so opening one always closes the other — two
+  // independent open states would let both sit open simultaneously.
+  const [openFlyout, setOpenFlyout] = useState<"more" | "account" | null>(null);
 
   return (
-    <aside className="hidden border-r border-border/80 bg-card/70 dark:border-white/10 dark:bg-[#09090a] md:flex md:min-h-0 md:flex-col" aria-label="Main navigation">
+    <aside
+      className="hidden border-r border-border/80 bg-card/70 dark:border-white/10 dark:bg-[#09090a] md:flex md:min-h-0 md:flex-col"
+      aria-label="Main navigation"
+    >
       <Link
         href="/dashboard"
-        aria-label="Mad Buddy dashboard"
+        aria-label="Mad Buddy home"
+        title="Mad Buddy home"
         className="focus-ring grid h-14 shrink-0 place-items-center border-b border-border/70 dark:border-white/10"
       >
         <BrandMark className="h-9 w-9" priority />
       </Link>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-2" aria-label="Social navigation">
-            <ul className="flex flex-col items-center space-y-1">
-              {socialItems.map((item) => {
-                const isActive = isNavigationItemActive(item, pathname);
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      aria-current={isActive ? "page" : undefined}
-                      aria-label={item.label}
-                      title={
-                        item.href === "/profile" && currentUsername
-                          ? `Profile, signed in as @${currentUsername}`
-                          : item.label
-                      }
-                      className={cn(
-                        "focus-ring relative grid h-9 w-9 place-items-center rounded-xl transition-colors motion-reduce:transition-none",
-                        isActive
-                          ? "bg-primary text-primary-foreground shadow-[0_8px_24px_hsl(var(--primary)/0.28)]"
-                          : "text-muted-foreground hover:bg-secondary hover:text-foreground dark:hover:bg-white/[0.05]"
-                      )}
-                    >
-                      <item.icon className="h-[18px] w-[18px]" strokeWidth={1.8} aria-hidden="true" />
-                      {item.href === "/notifications" ? <UnreadBadge count={unreadCount} /> : null}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+      {/* More lives in the same list as the primary items (not a separate
+          group behind a divider) so all five icons share identical spacing —
+          a divider here was reading as uneven gaps between Messages and
+          More. The empty space this nav's flex-1 leaves before the account
+          area at the bottom is the only separator now, by design. */}
+      <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-3" aria-label="Primary navigation">
+        <ul className="flex flex-col items-center gap-3">
+          {primaryItems.map((item) => {
+            const isActive = isNavigationItemActive(item, pathname);
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
+                  aria-label={item.label}
+                  title={item.label}
+                  className="focus-ring grid h-11 w-11 place-items-center rounded-xl"
+                >
+                  <NavIconPill isActive={isActive}>
+                    <item.icon className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+                    {item.href === "/notifications" ? <UnreadBadge count={unreadCount} /> : null}
+                  </NavIconPill>
+                </Link>
+              </li>
+            );
+          })}
+          <li>
+            <MoreMenu
+              items={secondaryItems}
+              pathname={pathname}
+              open={openFlyout === "more"}
+              onOpenChange={(next) => setOpenFlyout(next ? "more" : null)}
+            />
+          </li>
+        </ul>
       </nav>
 
-      <div className="flex shrink-0 flex-col items-center space-y-1 border-t border-border/70 p-2 dark:border-white/10">
-        <div id="sidebar-subscription-status" />
-        {adminItem ? (
-          <Link
-            href="/admin"
-            aria-label="Admin"
-            title="Admin"
-            className={cn(
-              "focus-ring grid h-9 w-9 place-items-center rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground",
-              pathname === "/admin" && "bg-primary text-primary-foreground"
-            )}
-          >
-            <Gauge className="h-[18px] w-[18px]" aria-hidden="true" />
-          </Link>
-        ) : null}
-        <form action={logoutAction}>
-          <Button type="submit" variant="ghost" size="icon" className="h-9 w-9" aria-label="Log out" title="Log out">
-            <LogOut className="h-[18px] w-[18px]" aria-hidden="true" />
-          </Button>
-        </form>
+      <div className="shrink-0 border-t border-border/70 p-2 dark:border-white/10">
+        <div id="sidebar-subscription-status" className="sr-only" />
+        <AccountMenu
+          currentUsername={currentUsername}
+          adminItem={adminItem}
+          pathname={pathname}
+          open={openFlyout === "account"}
+          onOpenChange={(next) => setOpenFlyout(next ? "account" : null)}
+        />
       </div>
     </aside>
   );
 }
 
+/** Shared visual language for both sidebar flyouts (spec: 220-260px wide,
+ * 12-16px radius, restrained shadow — not the heavier glass-panel used by
+ * centred modals — 8px internal padding, 40-44px rows). */
+const FLYOUT_CONTENT_CLASSNAME =
+  "sidebar-flyout z-40 w-60 rounded-xl border border-border/80 bg-card p-2 shadow-lg outline-none dark:border-white/10 dark:bg-[#161617]";
+
+function flyoutItemClassName(isActive: boolean) {
+  return cn(
+    "flex h-11 cursor-pointer select-none items-center gap-3 rounded-lg px-3 text-sm font-medium outline-none transition-colors",
+    isActive
+      ? "bg-primary/10 text-primary"
+      : "text-foreground data-[highlighted]:bg-secondary dark:data-[highlighted]:bg-white/[0.06]"
+  );
+}
+
+/**
+ * Every sidebar trigger shares this: a 44px hit area (outer, unstyled) around
+ * a slightly smaller pill (inner, this component) that actually carries the
+ * hover/active colour. Sizing the visible state below the hit area — rather
+ * than filling it edge to edge — is what keeps the active item from reading
+ * as "bigger" than its neighbours, and a tinted bg-primary/12 rather than a
+ * solid fill plus shadow is the "subtle, not a glow" active treatment.
+ */
+function NavIconPill({ isActive, children }: { isActive: boolean; children: ReactNode }) {
+  return (
+    <span
+      className={cn(
+        "relative grid h-9 w-9 place-items-center rounded-xl transition-colors motion-reduce:transition-none",
+        isActive
+          ? "bg-primary/12 text-primary"
+          : "text-muted-foreground hover:bg-secondary hover:text-foreground dark:hover:bg-white/[0.05]"
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function MoreMenu({
+  items,
+  pathname,
+  open,
+  onOpenChange
+}: {
+  items: NavigationItem[];
+  pathname: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const isAnyActive = open || items.some((item) => isNavigationItemActive(item, pathname));
+
+  return (
+    <DropdownMenu.Root open={open} onOpenChange={onOpenChange}>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          aria-label="More"
+          title="More"
+          className="focus-ring grid h-11 w-11 place-items-center rounded-xl"
+        >
+          <NavIconPill isActive={isAnyActive}>
+            <MoreHorizontal className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+          </NavIconPill>
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          side="right"
+          align="start"
+          sideOffset={10}
+          collisionPadding={8}
+          className={FLYOUT_CONTENT_CLASSNAME}
+        >
+          {items.map((item) => {
+            const isActive = isNavigationItemActive(item, pathname);
+            return (
+              <DropdownMenu.Item key={item.href} asChild className={flyoutItemClassName(isActive)}>
+                <Link href={item.href} aria-current={isActive ? "page" : undefined}>
+                  <item.icon className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                  {item.label}
+                </Link>
+              </DropdownMenu.Item>
+            );
+          })}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+function AccountMenu({
+  currentUsername,
+  adminItem,
+  pathname,
+  open,
+  onOpenChange
+}: {
+  currentUsername: string | null;
+  adminItem: NavigationItem | undefined;
+  pathname: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const initial = currentUsername?.[0]?.toUpperCase() ?? "?";
+  const logoutFormRef = useRef<HTMLFormElement>(null);
+  const isCurrentRoute =
+    pathname === "/profile" || pathname === "/settings" || pathname === "/billing" || pathname === "/admin";
+  // The menu opening is itself a state worth showing, not just which route
+  // you're on — otherwise clicking the avatar gives no visible feedback.
+  const isActive = open || isCurrentRoute;
+
+  return (
+    <DropdownMenu.Root open={open} onOpenChange={onOpenChange}>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          aria-label="Account"
+          title="Account"
+          className="focus-ring mx-auto grid h-11 w-11 place-items-center rounded-full"
+        >
+          <span
+            className={cn(
+              "grid h-9 w-9 place-items-center rounded-full text-sm font-semibold transition-colors",
+              isActive
+                ? "bg-primary/12 text-primary"
+                : "bg-secondary text-foreground hover:bg-secondary/80 dark:bg-white/[0.06]"
+            )}
+          >
+            {initial}
+          </span>
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          side="right"
+          align="end"
+          sideOffset={10}
+          collisionPadding={8}
+          className={FLYOUT_CONTENT_CLASSNAME}
+        >
+          {currentUsername ? (
+            <p className="truncate px-3 pb-1.5 pt-1 text-xs font-medium text-muted-foreground">
+              @{currentUsername}
+            </p>
+          ) : null}
+          <AccountMenuItem href="/profile" label="Profile" icon={UserRound} isActive={pathname === "/profile"} />
+          <AccountMenuItem href="/settings" label="Settings" icon={Settings} isActive={pathname === "/settings"} />
+          <AccountMenuItem
+            href="/billing"
+            label="Plan and billing"
+            icon={CircleDollarSign}
+            isActive={pathname === "/billing"}
+          />
+          {adminItem ? (
+            <AccountMenuItem href="/admin" label="Admin" icon={Gauge} isActive={pathname === "/admin"} />
+          ) : null}
+          <DropdownMenu.Separator className="my-2 h-px bg-border/70 dark:bg-white/10" />
+          <DropdownMenu.Item
+            className={cn(flyoutItemClassName(false), "text-destructive")}
+            onSelect={() => logoutFormRef.current?.requestSubmit()}
+          >
+            <LogOut className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+            Log out
+          </DropdownMenu.Item>
+          <form ref={logoutFormRef} action={logoutAction} className="hidden" />
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+function AccountMenuItem({
+  href,
+  label,
+  icon: Icon,
+  isActive
+}: {
+  href: NavigationItem["href"];
+  label: string;
+  icon: LucideIcon;
+  isActive: boolean;
+}) {
+  return (
+    <DropdownMenu.Item asChild className={flyoutItemClassName(isActive)}>
+      <Link href={href} aria-current={isActive ? "page" : undefined}>
+        <Icon className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+        {label}
+      </Link>
+    </DropdownMenu.Item>
+  );
+}
+
 function AppHeader({
   navigationItems,
-  unreadCount,
   currentUsername
 }: {
   navigationItems: NavigationItem[];
-  unreadCount: number;
   currentUsername: string | null;
 }) {
   const pathname = usePathname();
@@ -283,7 +470,8 @@ function AppHeader({
     pathname === "/messages" ||
     pathname === "/events" ||
     pathname === "/groups" ||
-    pathname === "/discover"
+    pathname === "/discover" ||
+    pathname === "/meeting-pings"
   ) {
     return null;
   }
@@ -299,7 +487,7 @@ function AppHeader({
             </p>
           ) : null}
           <h1 className="truncate text-lg font-semibold sm:text-xl">
-            {pathname === "/dashboard" ? "Home" : pathname === "/friends" ? "Muddies" : "Mad Buddy"}
+            {pathname === "/dashboard" ? "Home" : pathname === "/friends" ? "Friends" : "Mad Buddy"}
           </h1>
         </div>
         <div className="flex items-center gap-2">
@@ -314,23 +502,22 @@ function AppHeader({
             <Plus className="h-4 w-4" aria-hidden="true" />
           </Button>
           {currentUsername ? (
+            // Visible only in the sm-md gap, where the desktop sidebar (md+)
+            // isn't rendered yet but the header still is — below sm the
+            // mobile bottom nav covers it; at md+ the sidebar's own account
+            // menu already goes here, so showing both would be a duplicate
+            // destination in the same viewport.
             <Link
               href="/profile"
-              className="focus-ring hidden h-10 w-10 place-items-center rounded-full border border-border/70 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground sm:grid"
+              className="focus-ring hidden h-10 w-10 place-items-center rounded-full border border-border/70 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground sm:grid md:hidden"
               aria-label={`Signed in as @${currentUsername}`}
               title={`Signed in as @${currentUsername}`}
             >
               <UserRound className="h-4 w-4" aria-hidden="true" />
             </Link>
           ) : null}
-          <Button type="button" variant="outline" size="sm" asChild>
-            <Link className="relative" href="/notifications" aria-label={unreadCount > 0 ? `Pulse, ${unreadCount} unread` : "Pulse"} title="Pulse">
-              <Bell className="h-4 w-4" aria-hidden="true" />
-              <UnreadBadge count={unreadCount} />
-            </Link>
-          </Button>
           <form action={logoutAction} className="md:hidden">
-            <Button type="submit" variant="ghost" size="sm">
+            <Button type="submit" variant="ghost" size="sm" aria-label="Log out" title="Log out">
               <LogOut className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Log out</span>
             </Button>
@@ -393,6 +580,7 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
               key={item.href}
               href={item.href}
               aria-label={item.label}
+              title={item.label}
               aria-current={isActive ? "page" : undefined}
               className={cn(
                 "safe-motion relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
@@ -408,7 +596,7 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
                   isActive && "bg-white text-black"
                 )}
               >
-                <item.icon className="h-[18px] w-[18px]" strokeWidth={1.9} aria-hidden="true" />
+                <item.icon className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden="true" />
                 {item.href === "/notifications" ? <UnreadBadge count={unreadCount} /> : null}
               </span>
               {isActive ? <span className="truncate">{item.label}</span> : null}

@@ -87,7 +87,12 @@ export function StatusComposer({
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Set your status" description="Let your Muddies know if you're around.">
+    <Modal
+      open={open}
+      onOpenChange={onOpenChange}
+      title={hasActiveStatus ? "Update your status" : "Set your status"}
+      description="Let your Muddies know if you're around."
+    >
       <div className="max-h-[65vh] space-y-5 overflow-y-auto pr-1">
         <fieldset>
           <legend className="mb-2 text-sm font-medium">Availability</legend>
@@ -197,7 +202,7 @@ export function StatusComposer({
             Cancel
           </Button>
           <Button type="button" onClick={save} disabled={isPending}>
-            {isPending ? "Saving..." : "Set status"}
+            {isPending ? "Saving..." : hasActiveStatus ? "Update status" : "Set status"}
           </Button>
         </div>
       </div>
