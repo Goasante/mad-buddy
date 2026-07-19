@@ -39,6 +39,7 @@ const DESTINATION_BY_BASE: Record<string, Route> = {
   moment: "/moments" as Route,
   drop: "/drops" as Route,
   message: "/messages" as Route,
+  group: "/groups" as Route,
   // Account
   subscription_update: "/billing" as Route
 };

@@ -1,8 +1,7 @@
 "use client";
 
-import * as Popover from "@radix-ui/react-popover";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, ChevronDown, MapPin, Plus, Search, Users, Vote, X } from "lucide-react";
+import { MapPin, Plus, Users, Vote, X } from "lucide-react";
 import { useId, useMemo, useState, useTransition } from "react";
 import {
   cancelPlanAction,
@@ -13,6 +12,7 @@ import {
 } from "@/app/(app)/plans-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AppMultiSelect, AppSelect } from "@/components/ui/app-dropdown";
 import { Card } from "@/components/ui/card";
 import { FormField } from "@/components/auth/form-field";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
@@ -447,12 +447,6 @@ function CreatePlanModal({
   );
 }
 
-/**
- * A searchable, anchored multi-select (spec: "not a modal") built on Popover
- * rather than DropdownMenu, the search input inside needs to own normal text
- * editing and caret behaviour, which fights a menu's built-in typeahead and
- * roving-focus handling.
- */
 function InviteMuddiesField({
   invitees,
   selected,
@@ -464,8 +458,6 @@ function InviteMuddiesField({
   onToggle: (id: string) => void;
   fieldClassName: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
   const selectedInvitees = invitees.filter((invitee) => selected.includes(invitee.id));
 
   // Duplicate display names get their @username shown for disambiguation,
@@ -479,107 +471,37 @@ function InviteMuddiesField({
     return new Set([...seen.entries()].filter(([, count]) => count > 1).map(([name]) => name));
   }, [invitees]);
 
-  const visible = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return invitees;
-    return invitees.filter(
-      (invitee) => invitee.name.toLowerCase().includes(term) || invitee.username?.toLowerCase().includes(term)
-    );
-  }, [invitees, query]);
-
   function usernameSuffixFor(invitee: PlanInvitee) {
     return invitee.username && duplicateNames.has(invitee.name.trim().toLowerCase()) ? `@${invitee.username}` : null;
   }
 
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium leading-none">Invite Muddies</label>
-      <Popover.Root open={open} onOpenChange={setOpen}>
-        <Popover.Trigger asChild>
-          <button
-            type="button"
-            disabled={invitees.length === 0}
-            className={cn(
-              "focus-ring safe-motion flex w-full items-center justify-between gap-2 rounded-md border border-border bg-card/70 px-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50",
-              fieldClassName
-            )}
-          >
-            <span className={cn("truncate", selected.length === 0 && "text-muted-foreground")}>
-              {invitees.length === 0
-                ? "Add Muddies first"
-                : selected.length > 0
-                  ? `${selected.length} selected`
-                  : "Select Muddies"}
+      <AppMultiSelect
+        label="Invite Muddies"
+        value={selected}
+        options={invitees.map((invitee) => ({
+          value: invitee.id,
+          label: invitee.name,
+          description: usernameSuffixFor(invitee) ?? undefined,
+          keywords: invitee.username ? [invitee.username] : undefined,
+          icon: (
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-secondary text-[11px] font-semibold text-foreground">
+              {invitee.name.trim().charAt(0).toUpperCase() || "?"}
             </span>
-            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          </button>
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content
-            align="start"
-            sideOffset={6}
-            className="sidebar-flyout z-50 w-[--radix-popover-trigger-width] max-h-72 overflow-y-auto rounded-xl border border-border/80 bg-card p-2 shadow-lg outline-none dark:border-white/10 dark:bg-[#161617]"
-          >
-            <div className="sticky top-0 -m-2 mb-1 border-b border-border/70 bg-card p-2 dark:border-white/10 dark:bg-[#161617]">
-              <div className="relative">
-                <Search
-                  className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <input
-                  autoFocus
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search Muddies"
-                  aria-label="Search Muddies"
-                  className="focus-ring safe-motion h-9 w-full rounded-md border border-border bg-background pl-8 pr-2 text-sm"
-                />
-              </div>
-            </div>
-            {visible.length === 0 ? (
-              <p className="p-3 text-center text-xs text-muted-foreground">No Muddies match your search.</p>
-            ) : (
-              <ul className="space-y-0.5 pt-1">
-                {visible.map((invitee) => {
-                  const isSelected = selected.includes(invitee.id);
-                  const usernameSuffix = usernameSuffixFor(invitee);
-                  return (
-                    <li key={invitee.id}>
-                      <button
-                        type="button"
-                        onClick={() => onToggle(invitee.id)}
-                        aria-pressed={isSelected}
-                        className={cn(
-                          "focus-ring safe-motion flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm",
-                          isSelected ? "bg-primary/10 text-primary" : "hover:bg-secondary"
-                        )}
-                      >
-                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-secondary text-[11px] font-semibold text-foreground">
-                          {invitee.name.trim().charAt(0).toUpperCase() || "?"}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-medium">{invitee.name}</span>
-                          {usernameSuffix ? (
-                            <span className="block truncate text-xs text-muted-foreground">{usernameSuffix}</span>
-                          ) : null}
-                        </span>
-                        <span
-                          className={cn(
-                            "grid h-4 w-4 shrink-0 place-items-center rounded border",
-                            isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border"
-                          )}
-                        >
-                          {isSelected ? <Check className="h-3 w-3" aria-hidden="true" strokeWidth={3} /> : null}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
+          )
+        }))}
+        placeholder={invitees.length === 0 ? "Add Muddies first" : "Select Muddies"}
+        searchable
+        searchPlaceholder="Search Muddies"
+        emptyText="No Muddies found"
+        disabled={invitees.length === 0}
+        triggerClassName={fieldClassName}
+        onChange={(next) => {
+          const changed = [...selected, ...next].find((id) => selected.includes(id) !== next.includes(id));
+          if (changed) onToggle(changed);
+        }}
+      />
 
       {selectedInvitees.length > 0 ? (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -773,17 +695,18 @@ function AddPollForm({
           aria-label="Poll question"
           className="focus-ring safe-motion h-10 min-w-0 flex-1 rounded-md border border-border bg-card/70 px-3 text-sm"
         />
-        <select
+        <AppSelect
           value={pollType}
-          onChange={(event) => setPollType(event.target.value)}
-          aria-label="Poll type"
-          className="focus-ring safe-motion h-10 rounded-md border border-border bg-card/70 px-2 text-sm"
-        >
-          <option value="time">Time</option>
-          <option value="date">Date</option>
-          <option value="place">Place</option>
-          <option value="activity">Activity</option>
-        </select>
+          options={[
+            { value: "time", label: "Time" },
+            { value: "date", label: "Date" },
+            { value: "place", label: "Place" },
+            { value: "activity", label: "Activity" }
+          ]}
+          size="compact"
+          triggerClassName="min-w-28"
+          onChange={setPollType}
+        />
       </div>
       <textarea
         value={optionsText}

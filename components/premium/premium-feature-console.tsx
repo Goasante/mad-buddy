@@ -24,8 +24,8 @@ import {
   type PremiumActionState
 } from "@/app/(app)/premium-actions";
 import { Button } from "@/components/ui/button";
+import { AppSelect } from "@/components/ui/app-dropdown";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -322,19 +322,11 @@ type SelectFieldProps = {
 };
 
 function SelectField({ name, label, options }: SelectFieldProps) {
+  const [value, setValue] = useState(options[0]?.value ?? "");
   return (
-    <Label className="grid gap-1 text-xs text-muted-foreground">
-      {label}
-      <select
-        name={name}
-        className="focus-ring safe-motion h-11 w-full rounded-md border border-white/15 bg-background px-3 text-sm text-foreground"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </Label>
+    <>
+      <input type="hidden" name={name} value={value} />
+      <AppSelect label={label} value={value} options={[...options]} onChange={setValue} />
+    </>
   );
 }

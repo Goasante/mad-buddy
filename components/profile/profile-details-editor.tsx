@@ -4,6 +4,7 @@ import { Eye } from "lucide-react";
 import { useState, useTransition } from "react";
 import { updateProfileDetailsAction, type ProfileDetails } from "@/app/(app)/profile-actions";
 import { Button } from "@/components/ui/button";
+import { AppSelect } from "@/components/ui/app-dropdown";
 import { Card } from "@/components/ui/card";
 import { FormField } from "@/components/auth/form-field";
 import { Input } from "@/components/ui/input";
@@ -89,19 +90,16 @@ export function ProfileDetailsEditor({ initialDetails }: { initialDetails: Profi
         <div className="flex items-center gap-2 text-xs">
           <Eye className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
           <span className="text-muted-foreground">View as</span>
-          <select
+          <AppSelect
             value={previewAs ?? ""}
-            onChange={(event) => setPreviewAs((event.target.value || null) as ViewerRelationship | null)}
-            aria-label="Preview profile as"
-            className="focus-ring safe-motion h-8 rounded-md border border-border bg-card/70 px-2 text-xs"
-          >
-            <option value="">myself</option>
-            {previewOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: "", label: "myself" },
+              ...previewOptions.map((option) => ({ value: option.id, label: option.label }))
+            ]}
+            size="compact"
+            triggerClassName="min-h-8 min-w-32 py-0 text-xs"
+            onChange={(next) => setPreviewAs((next || null) as ViewerRelationship | null)}
+          />
         </div>
       </div>
 

@@ -437,7 +437,7 @@ export function MessagesPageContent({
                         align="end"
                         sideOffset={8}
                         collisionPadding={12}
-                        className="z-50 w-[min(280px,calc(100vw-1.5rem))] rounded-xl border border-border/70 bg-card p-3 shadow-lg outline-none"
+                        className="compact-drop-popover app-dropdown-content w-[min(280px,calc(100vw-1.5rem))] p-3"
                       >
                         <p className="text-sm font-semibold">Message information</p>
                         <p className="mt-1 text-xs text-muted-foreground">

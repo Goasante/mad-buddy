@@ -263,11 +263,11 @@ function DesktopSidebar({
  * 12-16px radius, restrained shadow, not the heavier glass-panel used by
  * centred modals, 8px internal padding, 40-44px rows). */
 const FLYOUT_CONTENT_CLASSNAME =
-  "sidebar-flyout z-40 w-60 rounded-xl border border-border/80 bg-card p-2 shadow-lg outline-none dark:border-white/10 dark:bg-[#161617]";
+  "app-dropdown-content sidebar-flyout w-60";
 
 function flyoutItemClassName(isActive: boolean) {
   return cn(
-    "flex h-11 cursor-pointer select-none items-center gap-3 rounded-lg px-3 text-sm font-medium outline-none transition-colors",
+    "app-dropdown-option h-11 cursor-pointer text-sm font-medium",
     isActive
       ? "bg-primary/10 text-primary"
       : "text-foreground data-[highlighted]:bg-secondary dark:data-[highlighted]:bg-white/[0.06]"

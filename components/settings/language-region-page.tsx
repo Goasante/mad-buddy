@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { AppSelect } from "@/components/ui/app-dropdown";
 import { FormField } from "@/components/auth/form-field";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
 import { PreviewNotice } from "@/components/ui/preview-notice";
@@ -81,17 +82,11 @@ function SelectField({
   options: string[];
 }) {
   return (
-    <select
+    <AppSelect
       id={id}
       value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className="focus-ring safe-motion h-11 w-full rounded-md border border-border bg-card/70 px-3 text-sm text-foreground"
-    >
-      {options.map((option) => (
-        <option key={option} value={option}>
-          {option}
-        </option>
-      ))}
-    </select>
+      options={options.map((option) => ({ value: option, label: option }))}
+      onChange={onChange}
+    />
   );
 }

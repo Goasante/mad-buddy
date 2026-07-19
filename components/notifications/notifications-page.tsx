@@ -8,7 +8,6 @@ import {
   Check,
   CheckCheck,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   CircleDollarSign,
   Hand,
@@ -28,6 +27,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { respondToMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { Button } from "@/components/ui/button";
+import { AppMenu, AppSelect } from "@/components/ui/app-dropdown";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { PrivacyToggle } from "@/components/settings/privacy-toggle";
@@ -81,7 +81,6 @@ export function NotificationsPageContent({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<NotificationItem | null>(null);
   const [filter, setFilter] = useState<FilterValue>("all");
-  const [filterOpen, setFilterOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -348,7 +347,7 @@ export function NotificationsPageContent({
                   align="end"
                   sideOffset={8}
                   collisionPadding={12}
-                  className="z-50 w-[min(320px,calc(100vw-1.5rem))] rounded-2xl border border-border/70 bg-card p-2 shadow-lg outline-none"
+                  className="compact-drop-popover app-dropdown-content w-[min(320px,calc(100vw-1.5rem))] p-2"
                 >
                   <p className="px-2 pb-1 pt-1.5 text-sm font-semibold">Notification settings</p>
                   <div className="grid gap-0.5">
@@ -396,99 +395,49 @@ export function NotificationsPageContent({
 
       <section>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-2">
-          {/* Filter dropdown: trigger always shows the active filter. */}
-          <Popover.Root open={filterOpen} onOpenChange={setFilterOpen}>
-            <Popover.Trigger asChild>
-              <Button type="button" size="sm" variant="outline" aria-label="Filter updates">
-                {FILTER_OPTIONS.find((option) => option.value === filter)?.label}
-                {filter === "unread" && unreadCount > 0 ? ` (${unreadCount})` : ""}
-                <ChevronDown className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </Popover.Trigger>
-            <Popover.Portal>
-              <Popover.Content
-                align="start"
-                sideOffset={8}
-                collisionPadding={12}
-                className="z-50 w-[min(190px,calc(100vw-1.5rem))] rounded-xl border border-border/70 bg-card p-1 shadow-lg outline-none"
-              >
-                {FILTER_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={filter === option.value}
-                    onClick={() => {
-                      setFilter(option.value);
-                      setFilterOpen(false);
-                    }}
-                    className="focus-ring flex min-h-[40px] w-full items-center justify-between gap-2 rounded-lg px-3 text-sm hover:bg-secondary/60"
-                  >
-                    <span className={cn(filter === option.value && "font-medium text-primary")}>{option.label}</span>
-                    {filter === option.value ? <Check className="h-4 w-4 text-primary" aria-hidden="true" /> : null}
-                  </button>
-                ))}
-              </Popover.Content>
-            </Popover.Portal>
-          </Popover.Root>
+          <AppSelect
+            value={filter}
+            options={FILTER_OPTIONS.map((option) => ({
+              value: option.value,
+              label: option.value === "unread" && unreadCount > 0 ? `${option.label} (${unreadCount})` : option.label
+            }))}
+            size="compact"
+            triggerClassName="min-w-40"
+            onChange={setFilter}
+          />
 
           {/* Bulk selection control. */}
           {selectionMode ? (
             <div className="flex items-center gap-1.5">
-              <Popover.Root
-                open={actionsOpen && selectedCount > 0}
-                onOpenChange={(open) => setActionsOpen(open)}
-              >
-                <Popover.Trigger asChild>
+              {selectedCount > 0 ? (
+                <AppMenu
+                  open={actionsOpen}
+                  onOpenChange={setActionsOpen}
+                  label="Selected update actions"
+                  trigger={
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
                     aria-label={selectedCount > 0 ? `Bulk actions, ${selectedCount} selected` : "Select updates"}
-                    onClick={(event) => {
-                      // With nothing selected there are no actions to show, so
-                      // the trigger just leaves selection mode instead.
-                      if (selectedCount === 0) {
-                        event.preventDefault();
-                        exitSelection();
-                      }
-                    }}
                   >
                     <ListChecks className="h-4 w-4" aria-hidden="true" />
                     <span aria-live="polite">{selectedCount > 0 ? `${selectedCount} selected` : "Select"}</span>
                   </Button>
-                </Popover.Trigger>
-                <Popover.Portal>
-                  <Popover.Content
-                    align="end"
-                    sideOffset={8}
-                    collisionPadding={12}
-                    className="z-50 w-[min(210px,calc(100vw-1.5rem))] rounded-xl border border-border/70 bg-card p-1 shadow-lg outline-none"
-                  >
-                    {!allVisibleSelected ? (
-                      <BulkMenuItem label="Select all" onClick={() => selectAllVisible()} />
-                    ) : null}
-                    <BulkMenuItem
-                      label="Mark as read"
-                      disabled={allSelectedRead}
-                      onClick={() => applyBulkRead(true)}
-                    />
-                    <BulkMenuItem
-                      label="Mark as unread"
-                      disabled={allSelectedUnread}
-                      onClick={() => applyBulkRead(false)}
-                    />
-                    <div className="my-1 border-t border-border/70" />
-                    <BulkMenuItem
-                      label="Clear selection"
-                      onClick={() => {
-                        setSelectedIds(new Set());
-                        setActionsOpen(false);
-                      }}
-                    />
-                  </Popover.Content>
-                </Popover.Portal>
-              </Popover.Root>
+                  }
+                  items={[
+                    ...(!allVisibleSelected ? [{ id: "select-all", label: "Select all", onSelect: selectAllVisible }] : []),
+                    { id: "mark-read", label: "Mark as read", disabled: allSelectedRead, onSelect: () => applyBulkRead(true) },
+                    { id: "mark-unread", label: "Mark as unread", disabled: allSelectedUnread, onSelect: () => applyBulkRead(false) },
+                    { id: "clear", label: "Clear selection", separatorBefore: true, onSelect: () => setSelectedIds(new Set()) }
+                  ]}
+                />
+              ) : (
+                <Button type="button" size="sm" variant="outline" onClick={exitSelection}>
+                  <ListChecks className="h-4 w-4" aria-hidden="true" />
+                  Select
+                </Button>
+              )}
               <Button type="button" size="sm" variant="ghost" onClick={exitSelection}>
                 Done
               </Button>
@@ -844,30 +793,6 @@ function NotificationCard({
   }
 
   return <article className={cn(baseClass, !clickable && "cursor-default")}>{body}</article>;
-}
-
-function BulkMenuItem({
-  label,
-  onClick,
-  disabled = false
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "focus-ring flex min-h-[40px] w-full items-center rounded-lg px-3 text-left text-sm",
-        disabled ? "cursor-not-allowed text-muted-foreground/50" : "hover:bg-secondary/60"
-      )}
-    >
-      {label}
-    </button>
-  );
 }
 
 function InlineEmptyState({ title, description }: { title: string; description: string }) {

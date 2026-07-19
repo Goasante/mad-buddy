@@ -179,7 +179,7 @@ export function MeetingPingsPage() {
                 align="end"
                 sideOffset={8}
                 collisionPadding={12}
-                className="z-50 w-[min(300px,calc(100vw-1.5rem))] rounded-xl border border-border/70 bg-card p-3 shadow-lg outline-none"
+                className="compact-drop-popover app-dropdown-content w-[min(300px,calc(100vw-1.5rem))] p-3"
               >
                 <p className="mb-2 text-sm font-semibold">How it works</p>
                 <div className="grid gap-3">

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, CheckCircle2, Loader2, UserPlus } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import {
   createAdminUserAction,
@@ -11,6 +11,7 @@ import {
 } from "@/app/(admin)/admin/admins/actions";
 import { FormField } from "@/components/auth/form-field";
 import { Button } from "@/components/ui/button";
+import { AppSelect } from "@/components/ui/app-dropdown";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +33,7 @@ export function CreateAdminForm() {
   const [state, setState] = useState<CreateAdminState>(readyState);
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors }
@@ -63,16 +65,24 @@ export function CreateAdminForm() {
       <FormField htmlFor="new-admin-password" label="Temporary password" error={errors.password?.message}>
         <Input id="new-admin-password" type="password" autoComplete="new-password" {...register("password")} />
       </FormField>
-      <FormField htmlFor="new-admin-role" label="Role" error={errors.role?.message}>
-        <select
-          id="new-admin-role"
-          className="focus-ring h-11 w-full rounded-md border border-white/10 bg-white/[0.05] px-3 text-sm outline-none"
-          {...register("role")}
-        >
-          <option value="admin">Admin</option>
-          <option value="support">Support</option>
-          <option value="owner">Owner</option>
-        </select>
+      <FormField htmlFor="new-admin-role" label="Role">
+        <Controller
+          name="role"
+          control={control}
+          render={({ field }) => (
+            <AppSelect
+              id="new-admin-role"
+              value={field.value}
+              options={[
+                { value: "admin", label: "Admin" },
+                { value: "support", label: "Support" },
+                { value: "owner", label: "Owner" }
+              ]}
+              error={errors.role?.message}
+              onChange={field.onChange}
+            />
+          )}
+        />
       </FormField>
       <div
         className={cn(

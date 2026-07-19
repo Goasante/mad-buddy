@@ -393,7 +393,10 @@ export function DashboardPageContent({
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] space-y-6 pt-6">
+    // The app shell supplies 16px mobile, 24px tablet, and 32px desktop
+    // horizontal padding. This single wrapper caps and centres Home without
+    // adding a second padded full-width layer.
+    <div className="mx-auto w-full max-w-[1200px] space-y-6 pt-6">
       <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
 
       <div className="min-w-0">
@@ -430,7 +433,7 @@ export function DashboardPageContent({
         </div>
       </div>
 
-      <section className="rounded-2xl bg-card/55 p-4 shadow-sm dark:bg-white/[0.035]">
+      <section className="rounded-2xl bg-card/55 p-5 shadow-sm dark:bg-white/[0.035] lg:max-h-[124px] lg:px-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             {/* A simple status dot, not a filled pill: green when visible,
@@ -493,9 +496,10 @@ export function DashboardPageContent({
         </p>
       </section>
 
-      {/* Row 2: nearby Muddies (65) beside quick actions (35) */}
-      <div className="grid gap-6 lg:grid-cols-[65fr_35fr]">
-        <section>
+      {/* One dashboard grid. Explicit desktop positions retain the existing
+          mobile feed order while forming independent 2:1 desktop columns. */}
+      <div className="grid min-w-0 gap-y-8 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)] lg:gap-x-8">
+        <section className="min-w-0 self-start lg:col-start-1 lg:row-start-1">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold tracking-tight">Nearby Muddies</h2>
             {hasMoreNearbyFriends ? (
@@ -550,7 +554,7 @@ export function DashboardPageContent({
               {/* Desktop/tablet: standalone glowing avatars (no card, no
                   border), the same visual language as the mobile strip but
                   wrapping. Padding keeps the contained glow from being clipped. */}
-              <div className="hidden flex-wrap gap-6 pt-3 pb-1 md:flex" aria-label="Nearby Muddies">
+              <div className="hidden flex-wrap gap-x-6 gap-y-5 pt-3 pb-1 md:flex" aria-label="Nearby Muddies">
                 {nearbyPreview.map((friend) => {
                   const name = friend.displayName || friend.username;
                   return (
@@ -558,7 +562,7 @@ export function DashboardPageContent({
                       key={friend.friendId}
                       type="button"
                       onClick={() => setSelectedFriendId(friend.friendId)}
-                      className="focus-ring safe-motion flex w-[104px] shrink-0 flex-col items-center text-center"
+                      className="focus-ring safe-motion flex min-w-0 shrink-0 flex-col items-center text-center"
                       aria-label={`${capitalize(name)}, ${proximityLabels[friend.proximityLevel]}`}
                     >
                       <GlowAvatar
@@ -570,7 +574,7 @@ export function DashboardPageContent({
                         size="lg"
                         reducedMotion={reducedMotion}
                       />
-                      <span className="mt-2 w-full truncate text-sm font-medium">{capitalize(name)}</span>
+                      <span className="mt-2 max-w-24 truncate text-sm font-medium">{capitalize(name)}</span>
                       <span className="mt-1.5 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
                         {proximityLabels[friend.proximityLevel]}
                       </span>
@@ -608,17 +612,16 @@ export function DashboardPageContent({
           )}
         </section>
 
-        <QuickActions />
-      </div>
+        <div className="min-w-0 self-start lg:col-start-2 lg:row-start-1">
+          <QuickActions />
+        </div>
 
-      {/* Row 3: featured plan (65) beside recent activity (35). Recent activity
-          is omitted entirely when empty so no bordered placeholder is rendered
-          and the right column simply collapses. */}
-      <div className="grid gap-6 lg:grid-cols-[65fr_35fr]">
-        <FeaturedPlan plan={upcomingPlans[0]} hasMore={hasMorePlans || upcomingPlans.length > 1} />
+        <div className="min-w-0 self-start lg:col-start-1 lg:row-start-2">
+          <FeaturedPlan plan={upcomingPlans[0]} hasMore={hasMorePlans || upcomingPlans.length > 1} />
+        </div>
 
         {attentionItems.length > 0 ? (
-          <section>
+          <section className="min-w-0 self-start lg:col-start-2 lg:row-start-2">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-semibold tracking-tight">Recent activity</h2>
               {unreadActivityCount > attentionItems.length ? (
@@ -656,10 +659,10 @@ export function DashboardPageContent({
             </ul>
           </section>
         ) : null}
+        <div className="min-w-0 self-start lg:col-start-1 lg:row-start-3">
+          <MuddiesOpenToPlans muddies={openToPlansMuddies} onSelect={setSelectedFriendId} />
+        </div>
       </div>
-
-      {/* Row 4: Muddies open to plans, full width below the grid */}
-      <MuddiesOpenToPlans muddies={openToPlansMuddies} onSelect={setSelectedFriendId} />
 
       {promptFeedback ? (
         <div
@@ -772,16 +775,16 @@ const quickActions: Array<{
 
 function QuickActions() {
   return (
-    <section aria-label="Quick actions">
+    <section className="min-w-0" aria-label="Quick actions">
       <h2 className="mb-3 text-lg font-semibold tracking-tight">Quick actions</h2>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid min-w-0 grid-cols-3 gap-3">
         {quickActions.map((action) => (
           <Link
             key={action.href}
             href={action.href}
             aria-label={action.description}
             title={action.description}
-            className="focus-ring safe-motion flex min-h-[84px] flex-col items-center justify-center gap-2 rounded-2xl border border-border/70 bg-card/50 p-3 text-center hover:bg-secondary/40"
+            className="focus-ring safe-motion flex h-[88px] min-w-0 flex-col items-center justify-center gap-2 rounded-2xl border border-border/70 bg-card/50 p-2 text-center hover:bg-secondary/40"
           >
             <span className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-primary">
               <action.icon className="h-4 w-4" aria-hidden="true" />
@@ -854,7 +857,7 @@ function FeaturedPlan({ plan, hasMore }: { plan: HomeUpcomingPlan | undefined; h
       </div>
 
       {plan ? (
-        <div className="rounded-2xl border border-border/70 bg-card/50 p-4">
+        <div className="max-h-[190px] rounded-2xl border border-border/70 bg-card/50 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-base font-semibold">{capitalize(plan.title)}</p>
@@ -966,7 +969,7 @@ function MuddiesOpenToPlans({
       ) : (
         // Compact inline state, not a large bordered panel: keeps Home short
         // when nobody is available and stays left-aligned on desktop.
-        <div className="flex flex-col items-start gap-2 rounded-xl bg-card/40 px-4 py-4">
+        <div className="flex max-w-[820px] flex-col items-start gap-3 rounded-xl bg-card/40 px-5 py-5 sm:px-6">
           <div>
             <p className="text-sm font-medium">No Muddies are available right now</p>
             <p className="mt-0.5 text-xs text-muted-foreground">Check again later or start a new plan.</p>

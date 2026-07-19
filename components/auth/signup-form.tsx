@@ -12,8 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/auth/form-field";
 import { PasswordStrength } from "@/components/auth/password-strength";
+import { startOAuth, type MadBuddyOAuthProvider } from "@/lib/auth/oauth";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const signupSchema = z
   .object({
@@ -38,16 +38,23 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 
 const reservedUsernames = new Set(["admin", "support", "madbuddy", "billing"]);
 
-export function SignupForm() {
+type SignupFormProps = {
+  initialError?: string | null;
+};
+
+export function SignupForm({ initialError = null }: SignupFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [actionState, setActionState] = useState<AuthActionState | null>(null);
+  const [actionState, setActionState] = useState<AuthActionState | null>(
+    initialError ? { ok: false, message: initialError } : null
+  );
   const [isGooglePending, setIsGooglePending] = useState(false);
   const [isApplePending, setIsApplePending] = useState(false);
   const {
     register,
     handleSubmit,
     control,
+    setError,
     formState: { errors }
   } = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -64,6 +71,7 @@ export function SignupForm() {
 
   const username = useWatch({ control, name: "username" });
   const password = useWatch({ control, name: "password" });
+  const acceptedPolicy = useWatch({ control, name: "acceptedPolicy" });
   const usernameState = useMemo(() => {
     if (!username || username.length < 3) {
       return "Type at least 3 characters";
@@ -91,24 +99,19 @@ export function SignupForm() {
     });
   }
 
-  async function signUpWithProvider(provider: "google" | "apple") {
+  async function signUpWithProvider(provider: MadBuddyOAuthProvider) {
     setActionState(null);
+
+    if (!acceptedPolicy) {
+      setError("acceptedPolicy", { message: "You must agree before creating an account." });
+      return;
+    }
+
     const setPending = provider === "google" ? setIsGooglePending : setIsApplePending;
     setPending(true);
 
     try {
-      const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=/onboarding`
-        }
-      });
-
-      if (error) {
-        setActionState({ ok: false, message: `${provider === "google" ? "Google" : "Apple"} sign-up could not start. Please try again.` });
-        setPending(false);
-      }
+      await startOAuth(provider, "/onboarding");
     } catch {
       setActionState({ ok: false, message: `${provider === "google" ? "Google" : "Apple"} sign-up could not start. Please try again.` });
       setPending(false);

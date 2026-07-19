@@ -9,7 +9,6 @@ import {
   Sparkles,
   X
 } from "lucide-react";
-import * as Dialog from "@radix-ui/react-dialog";
 import * as Popover from "@radix-ui/react-popover";
 import type { ReactNode } from "react";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
@@ -22,6 +21,7 @@ import {
   type SocializeSession
 } from "@/app/(app)/socialize-actions";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
+import { AppMenu, AppSelect } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
@@ -222,119 +222,75 @@ export function SocializePage({
   const selectClass =
     "focus-ring safe-motion h-11 w-full rounded-md border border-border bg-card/70 px-3 text-sm";
 
-  // Setup is a centered modal on desktop and a bottom sheet on mobile, so it
-  // always stays fully on-screen. Trigger is whichever state button is shown.
-  // Radix Dialog handles focus trap, scroll lock, Escape and focus return.
+  // Keep setup anchored to the action that opened it. Radix handles collision
+  // detection, Escape, and focus return while the compact body stays scrollable.
   function renderSetup(trigger: ReactNode) {
     return (
-      <Dialog.Root
+      <Popover.Root
         open={setupOpen}
         onOpenChange={(open) => {
           if (open) prepareForm();
           setSetupOpen(open);
         }}
       >
-        <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
-          <Dialog.Content
-            aria-describedby={undefined}
-            className={cn(
-              "fixed z-50 flex flex-col bg-card outline-none",
-              // Mobile: bottom sheet.
-              "inset-x-0 bottom-0 max-h-[90svh] rounded-t-2xl border-t border-border/70 pb-[env(safe-area-inset-bottom)]",
-              // Desktop (>=sm): centered compact modal.
-              "sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[min(520px,calc(100%-2rem))] sm:max-h-[calc(100svh-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border sm:shadow-xl"
-            )}
+        <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            align="end"
+            sideOffset={8}
+            collisionPadding={12}
+            className="compact-drop-popover flex max-h-[calc(100svh-24px)] w-[min(430px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-xl outline-none supports-[backdrop-filter]:bg-card/90"
           >
-            {/* Sticky header */}
-            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border/60 px-5 py-4">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border/60 px-4 py-3.5">
               <div>
-                <Dialog.Title className="text-lg font-semibold">
+                <p className="text-base font-semibold">
                   {isActive ? "Edit Socialize" : "Turn on Socialize"}
-                </Dialog.Title>
-                <Dialog.Description className="mt-1 text-xs text-muted-foreground">
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
                   Choose what you&apos;re open to, your area, and how long you&apos;ll be visible.
-                </Dialog.Description>
+                </p>
               </div>
-              <Dialog.Close asChild>
+              <Popover.Close asChild>
                 <button
                   type="button"
                   aria-label="Close Socialize setup"
-                  className="focus-ring safe-motion -mr-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  className="focus-ring safe-motion -mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
                 >
                   <X className="h-4 w-4" aria-hidden="true" />
                 </button>
-              </Dialog.Close>
+              </Popover.Close>
             </div>
 
-            {/* Scrollable body */}
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-              <div>
-                <label htmlFor="socialize-activity" className="mb-1.5 block text-sm font-medium">
-                  What are you open to?
-                </label>
-                <select
-                  id="socialize-activity"
-                  value={activity ?? ""}
-                  onChange={(event) => setActivity(event.target.value as SocializeActivity)}
-                  className={selectClass}
-                >
-                  <option value="" disabled>
-                    Choose an activity
-                  </option>
-                  {SOCIALIZE_ACTIVITIES.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                {attempted && !activity ? <p className="mt-1 text-xs text-red-500">Choose an activity.</p> : null}
-              </div>
+            <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-4 py-3.5">
+              <AppSelect
+                id="socialize-activity"
+                label="What are you open to?"
+                value={activity}
+                options={SOCIALIZE_ACTIVITIES.map((option) => ({ value: option.id, label: option.label }))}
+                placeholder="Choose an activity"
+                error={attempted && !activity ? "Choose an activity." : undefined}
+                onChange={setActivity}
+              />
 
-              <div>
-                <label htmlFor="socialize-area" className="mb-1.5 block text-sm font-medium">
-                  Search area
-                </label>
-                <select
-                  id="socialize-area"
-                  value={areaTier ?? ""}
-                  onChange={(event) => setAreaTier(event.target.value as SocializeAreaTier)}
-                  className={selectClass}
-                >
-                  <option value="" disabled>
-                    Select an area
-                  </option>
-                  {SOCIALIZE_AREA_TIERS.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                {attempted && !areaTier ? <p className="mt-1 text-xs text-red-500">Select a search area.</p> : null}
-              </div>
+              <AppSelect
+                id="socialize-area"
+                label="Search area"
+                value={areaTier}
+                options={SOCIALIZE_AREA_TIERS.map((option) => ({ value: option.id, label: option.label }))}
+                placeholder="Select an area"
+                error={attempted && !areaTier ? "Select a search area." : undefined}
+                onChange={setAreaTier}
+              />
 
-              <div>
-                <label htmlFor="socialize-duration" className="mb-1.5 block text-sm font-medium">
-                  Duration
-                </label>
-                <select
-                  id="socialize-duration"
-                  value={duration ?? ""}
-                  onChange={(event) => setDuration(event.target.value as SocializeDuration)}
-                  className={selectClass}
-                >
-                  <option value="" disabled>
-                    Choose a duration
-                  </option>
-                  {SOCIALIZE_DURATIONS.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                {attempted && !duration ? <p className="mt-1 text-xs text-red-500">Choose a duration.</p> : null}
-              </div>
+              <AppSelect
+                id="socialize-duration"
+                label="Duration"
+                value={duration}
+                options={SOCIALIZE_DURATIONS.map((option) => ({ value: option.id, label: option.label }))}
+                placeholder="Choose a duration"
+                error={attempted && !duration ? "Choose a duration." : undefined}
+                onChange={setDuration}
+              />
 
               <div>
                 <label htmlFor="socialize-note" className="mb-1.5 block text-sm font-medium">
@@ -363,8 +319,7 @@ export function SocializePage({
               ) : null}
             </div>
 
-            {/* Sticky footer */}
-            <div className="flex shrink-0 justify-end gap-2 border-t border-border/60 px-5 py-4">
+            <div className="flex shrink-0 justify-end gap-2 border-t border-border/60 px-4 py-3.5">
               <Button type="button" variant="outline" onClick={closeSetup} disabled={isPending}>
                 Cancel
               </Button>
@@ -372,9 +327,9 @@ export function SocializePage({
                 {isPending ? "Saving..." : isActive ? "Save changes" : "Start Socializing"}
               </Button>
             </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
     );
   }
 
@@ -588,8 +543,11 @@ function PersonCard({
         </span>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1.5">
-        <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
-          <Popover.Trigger asChild>
+        <AppMenu
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          label={`Actions for ${capitalize(name)}`}
+          trigger={
             <button
               type="button"
               aria-label={`More options for ${capitalize(name)}`}
@@ -597,37 +555,12 @@ function PersonCard({
             >
               <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
             </button>
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Content
-              align="end"
-              sideOffset={8}
-              collisionPadding={12}
-              className="z-50 w-[min(180px,calc(100vw-1.5rem))] rounded-xl border border-border/70 bg-card p-1 shadow-lg outline-none"
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onReport();
-                }}
-                className="focus-ring safe-motion w-full rounded-lg px-2.5 py-2 text-left text-sm hover:bg-secondary"
-              >
-                Report
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onBlock();
-                }}
-                className="focus-ring safe-motion w-full rounded-lg px-2.5 py-2 text-left text-sm text-red-500 hover:bg-secondary"
-              >
-                Block
-              </button>
-            </Popover.Content>
-          </Popover.Portal>
-        </Popover.Root>
+          }
+          items={[
+            { id: "report", label: "Report", onSelect: onReport },
+            { id: "block", label: "Block", destructive: true, separatorBefore: true, onSelect: onBlock }
+          ]}
+        />
         <Button
           type="button"
           size="sm"

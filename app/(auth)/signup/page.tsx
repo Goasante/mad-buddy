@@ -1,8 +1,15 @@
 import Link from "next/link";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { SignupForm } from "@/components/auth/signup-form";
+import { oauthErrorMessage } from "@/lib/auth/oauth-redirect";
 
-export default function SignupPage() {
+type SignupPageProps = {
+  searchParams: Promise<{ oauth_error?: string }>;
+};
+
+export default async function SignupPage({ searchParams }: SignupPageProps) {
+  const { oauth_error: oauthError } = await searchParams;
+
   return (
     <AuthLayout
       title="Create your Mad Buddy account"
@@ -16,7 +23,7 @@ export default function SignupPage() {
         </>
       }
     >
-      <SignupForm />
+      <SignupForm initialError={oauthErrorMessage(oauthError)} />
     </AuthLayout>
   );
 }

@@ -11,7 +11,7 @@ import { loginAction, type AuthActionState } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/auth/form-field";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { startOAuth, type MadBuddyOAuthProvider } from "@/lib/auth/oauth";
 
 const loginSchema = z.object({
   email: z.string().email("Enter your email address."),
@@ -21,10 +21,16 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-export function LoginForm() {
+type LoginFormProps = {
+  initialError?: string | null;
+};
+
+export function LoginForm({ initialError = null }: LoginFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [actionState, setActionState] = useState<AuthActionState | null>(null);
+  const [actionState, setActionState] = useState<AuthActionState | null>(
+    initialError ? { ok: false, message: initialError } : null
+  );
   const [isGooglePending, setIsGooglePending] = useState(false);
   const [isApplePending, setIsApplePending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -61,49 +67,19 @@ export function LoginForm() {
     });
   }
 
-  async function signInWithGoogle() {
+  async function signInWithProvider(provider: MadBuddyOAuthProvider) {
     setActionState(null);
-    setIsGooglePending(true);
+    const setPending = provider === "google" ? setIsGooglePending : setIsApplePending;
+    setPending(true);
 
     try {
-      const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`
-        }
-      });
-
-      if (error) {
-        setActionState({ ok: false, message: "Google sign-in could not start. Please try again." });
-        setIsGooglePending(false);
-      }
+      await startOAuth(provider, "/dashboard");
     } catch {
-      setActionState({ ok: false, message: "Google sign-in could not start. Please try again." });
-      setIsGooglePending(false);
-    }
-  }
-
-  async function signInWithApple() {
-    setActionState(null);
-    setIsApplePending(true);
-
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "apple",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`
-        }
+      setActionState({
+        ok: false,
+        message: `${provider === "google" ? "Google" : "Apple"} sign-in could not start. Please try again.`
       });
-
-      if (error) {
-        setActionState({ ok: false, message: "Apple sign-in could not start. Please try again." });
-        setIsApplePending(false);
-      }
-    } catch {
-      setActionState({ ok: false, message: "Apple sign-in could not start. Please try again." });
-      setIsApplePending(false);
+      setPending(false);
     }
   }
 
@@ -187,7 +163,7 @@ export function LoginForm() {
         type="button"
         variant="outline"
         className="w-full border-white/12 bg-white/[0.045] text-white hover:border-white/20 hover:bg-white/[0.09] hover:text-white"
-        onClick={signInWithGoogle}
+        onClick={() => signInWithProvider("google")}
         disabled={isPending || isGooglePending || isApplePending}
       >
         {isGooglePending ? (
@@ -207,7 +183,7 @@ export function LoginForm() {
         type="button"
         variant="outline"
         className="w-full border-white/12 bg-white/[0.045] text-white hover:border-white/20 hover:bg-white/[0.09] hover:text-white"
-        onClick={signInWithApple}
+        onClick={() => signInWithProvider("apple")}
         disabled={isPending || isGooglePending || isApplePending}
       >
         {isApplePending ? (

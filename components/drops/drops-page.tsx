@@ -10,6 +10,7 @@ import {
   type UnlockedDrop
 } from "@/app/(app)/drops-actions";
 import { Button } from "@/components/ui/button";
+import { AppSelect } from "@/components/ui/app-dropdown";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/auth/form-field";
@@ -206,18 +207,17 @@ function CreateDropModal({
     <Modal open={open} onOpenChange={onOpenChange} title="New Drop" description="Only people inside the context can unlock it.">
       <div className="space-y-4">
         <FormField htmlFor="drop-context" label="Where does it live?">
-          <select
+          <AppSelect
             id="drop-context"
             value={context?.id ?? ""}
-            onChange={(event) => setContextId(event.target.value)}
-            className="focus-ring safe-motion h-11 w-full rounded-md border border-border bg-card/70 px-3 text-sm"
-          >
-            {contexts.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label} ({option.contextType === "circle" ? "circle" : "plan"})
-              </option>
-            ))}
-          </select>
+            options={contexts.map((option) => ({
+              value: option.id,
+              label: option.label,
+              description: option.contextType === "circle" ? "Circle" : "Plan"
+            }))}
+            placeholder="Choose a circle or plan"
+            onChange={setContextId}
+          />
         </FormField>
         <FormField htmlFor="drop-text" label="Message">
           <Textarea
