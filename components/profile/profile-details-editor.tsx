@@ -21,7 +21,7 @@ const audienceOptions: Array<{ id: FieldVisibility; label: string }> = [
 const previewOptions: Array<{ id: ViewerRelationship; label: string }> = [
   { id: "close_friend", label: "a Close Friend" },
   { id: "approved_muddy", label: "a Muddy" },
-  { id: "shared_community", label: "same campus" },
+  { id: "shared_community", label: "same community" },
   { id: "stranger", label: "a stranger" }
 ];
 

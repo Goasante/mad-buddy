@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   NEARBY_STALE_AFTER_MS,
+  AROUND_MAX_METERS,
+  NEARBY_MAX_METERS,
+  VERY_CLOSE_MAX_METERS,
   assertPrivacySafeResponse,
   bucketProximity,
+  bucketProximityWithConfidence,
   buildSafeNearbyFriends,
   confidenceFromAccuracy,
-  downgradeForConfidence,
   haversineMeters,
   nearbyFriendsResponseSchema,
   weakerConfidence,
@@ -95,30 +98,35 @@ describe("assertPrivacySafeResponse", () => {
 describe("bucketProximity", () => {
   it.each([
     [0, "very_close"],
-    [100, "very_close"],
-    [101, "nearby"],
-    [500, "nearby"],
-    [501, "around"],
-    [1500, "around"],
-    [1501, "far"],
-    [50000, "far"]
+    [2_000, "very_close"],
+    [VERY_CLOSE_MAX_METERS, "very_close"],
+    [VERY_CLOSE_MAX_METERS + 1, "nearby"],
+    [NEARBY_MAX_METERS, "nearby"],
+    [NEARBY_MAX_METERS + 1, "around"],
+    [AROUND_MAX_METERS, "around"],
+    [AROUND_MAX_METERS + 1, "far"]
   ])("%d meters -> %s", (meters, level) => {
     expect(bucketProximity(meters)).toBe(level);
   });
 });
 
-describe("downgradeForConfidence", () => {
-  it("keeps levels intact at high confidence", () => {
-    expect(downgradeForConfidence("very_close", "high")).toBe("very_close");
+describe("bucketProximityWithConfidence", () => {
+  it.each(["high", "medium", "low"] as const)(
+    "keeps two readings at the same place very close with %s confidence",
+    (confidence) => {
+      expect(bucketProximityWithConfidence(0, confidence)).toBe("very_close");
+    }
+  );
+
+  it("only moves a medium-confidence reading outward near a boundary", () => {
+    expect(bucketProximityWithConfidence(20_000, "medium")).toBe("very_close");
+    expect(bucketProximityWithConfidence(24_500, "medium")).toBe("nearby");
   });
 
-  it("downgrades very_close to nearby at medium confidence", () => {
-    expect(downgradeForConfidence("very_close", "medium")).toBe("nearby");
-  });
-
-  it("downgrades close tiers to around at low confidence", () => {
-    expect(downgradeForConfidence("very_close", "low")).toBe("around");
-    expect(downgradeForConfidence("nearby", "low")).toBe("around");
+  it("uses a wider safety margin for a weak signal", () => {
+    expect(bucketProximityWithConfidence(5_000, "low")).toBe("very_close");
+    expect(bucketProximityWithConfidence(10_000, "low")).toBe("nearby");
+    expect(bucketProximityWithConfidence(40_000, "low")).toBe("around");
   });
 });
 
@@ -267,7 +275,7 @@ describe("buildSafeNearbyFriends", () => {
     expect(result[0].glow_strength).toBe(0);
   });
 
-  it("downgrades precision when either side's confidence is weak", () => {
+  it("keeps same-place readings very close while preserving weak confidence", () => {
     const result = build({
       viewer: { latitude: 5.6037, longitude: -0.187, confidence: "high" },
       friendIds: ["fuzzy"],
@@ -275,8 +283,7 @@ describe("buildSafeNearbyFriends", () => {
       profileByUserId: new Map([["fuzzy", profile("fuzzy")]])
     });
 
-    // Physically very close, but low confidence must not claim "very_close".
-    expect(result[0].proximity_level).toBe("around");
+    expect(result[0].proximity_level).toBe("very_close");
     expect(result[0].confidence).toBe("low");
   });
 

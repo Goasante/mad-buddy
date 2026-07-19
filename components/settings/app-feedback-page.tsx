@@ -2,9 +2,10 @@
 
 import { Star } from "lucide-react";
 import { useState } from "react";
+import { useTransition } from "react";
+import { submitAppFeedbackAction } from "@/app/(app)/settings-actions";
 import { Button } from "@/components/ui/button";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
-import { PreviewNotice } from "@/components/ui/preview-notice";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -15,12 +16,12 @@ export function AppFeedbackPage() {
   const [rating, setRating] = useState(0);
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [isPending, startTransition] = useTransition();
 
   return (
     <div className="mr-auto max-w-[560px] space-y-6 pt-6">
       <SettingsSubHeader title="Send feedback" description="Help us build a better Mad Buddy." />
-
-      <PreviewNotice />
 
       <div className="flex gap-1 border-b border-border/70">
         {(["feedback", "suggestions"] as const).map((id) => (
@@ -73,14 +74,24 @@ export function AppFeedbackPage() {
             maxLength={500}
           />
           <p className="text-xs text-muted-foreground">{message.length}/500</p>
+          {feedback ? <p className="text-sm text-red-600 dark:text-red-300" role="alert">{feedback}</p> : null}
 
           <Button
             type="button"
             className="w-full"
-            disabled={tab === "feedback" ? rating === 0 : message.trim().length < 3}
-            onClick={() => setSubmitted(true)}
+            disabled={isPending || (tab === "feedback" ? rating === 0 : message.trim().length < 3)}
+            onClick={() => startTransition(async () => {
+              setFeedback("");
+              const result = await submitAppFeedbackAction({
+                category: tab === "suggestions" ? "suggestion" : "feedback",
+                rating: tab === "feedback" ? rating : null,
+                message
+              });
+              if (result.ok) setSubmitted(true);
+              else setFeedback(result.message);
+            })}
           >
-            Send {tab}
+            {isPending ? "Sending..." : `Send ${tab}`}
           </Button>
         </div>
       )}

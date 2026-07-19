@@ -1,11 +1,11 @@
 "use client";
 
-import * as Popover from "@radix-ui/react-popover";
-import { Sparkles, X } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useState, useTransition, type ReactNode } from "react";
 import { clearStatusAction, setStatusAction } from "@/app/(app)/social-actions";
 import { Button } from "@/components/ui/button";
 import { AppSelect } from "@/components/ui/app-dropdown";
+import { ResponsiveFormPopover } from "@/components/ui/responsive-form-popover";
 import {
   ACTIVITY_TYPES,
   AVAILABILITY_TYPES,
@@ -117,22 +117,12 @@ export function StatusComposer({
     });
   }
 
-  const closeButton = (
-    <button
-      type="button"
-      onClick={() => setOpen(false)}
-      aria-label="Close status"
-      className="focus-ring safe-motion -mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-    >
-      <X className="h-4 w-4" aria-hidden="true" />
-    </button>
-  );
-
   const body = (
-    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+    <>
       <AppSelect
         id="status-availability"
         label="Availability"
+        size="compact"
         value={availability}
         options={AVAILABILITY_TYPES.map((option) => ({ value: option, label: availabilityLabels[option] }))}
         placeholder="Choose availability"
@@ -143,6 +133,7 @@ export function StatusComposer({
       <AppSelect
         id="status-activity"
         label="Activity (optional)"
+        size="compact"
         value={activity ?? "none"}
         options={[
           { value: "none", label: "None" },
@@ -154,6 +145,7 @@ export function StatusComposer({
       <AppSelect
         id="status-duration"
         label="Clear after"
+        size="compact"
         value={durationId}
         options={STATUS_DURATION_PRESETS.map((option) => ({ value: option.id, label: durationLabel(option.id, option.label) }))}
         placeholder="Choose a duration"
@@ -193,50 +185,41 @@ export function StatusComposer({
           {feedback}
         </p>
       ) : null}
-    </div>
+    </>
   );
 
   const footer = (
-    <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border/60 px-5 py-4">
+    <>
       {hasActiveStatus ? (
         <Button type="button" variant="ghost" size="sm" onClick={clear} disabled={isPending}>
           Clear status
         </Button>
       ) : (
-        <span />
-      )}
-      <div className="flex gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)} disabled={isPending}>
           Cancel
         </Button>
-        <Button type="button" size="sm" onClick={save} disabled={isPending || !canSubmit}>
-          {isPending ? "Saving..." : hasActiveStatus ? "Save changes" : "Save status"}
-        </Button>
-      </div>
-    </div>
+      )}
+      <Button type="button" size="sm" onClick={save} disabled={isPending || !canSubmit}>
+        {isPending ? "Saving..." : hasActiveStatus ? "Save changes" : "Save status"}
+      </Button>
+    </>
   );
 
   return (
-    <Popover.Root open={open} onOpenChange={handleOpenChange}>
-      <Popover.Trigger asChild>{trigger}</Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          align="start"
-          sideOffset={8}
-          collisionPadding={16}
-          className="compact-drop-popover flex max-h-[calc(100svh-24px)] w-[min(390px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-xl outline-none supports-[backdrop-filter]:bg-card/90"
-        >
-          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border/60 px-5 py-4">
-            <div>
-              <p className="text-base font-semibold">Set your status</p>
-              <p className="mt-1 text-xs text-muted-foreground">Let your Muddies know what you&apos;re up to.</p>
-            </div>
-            {closeButton}
-          </div>
-          {body}
-          {footer}
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+    <ResponsiveFormPopover
+      open={open}
+      onOpenChange={handleOpenChange}
+      trigger={trigger}
+      title="Set your status"
+      description="Let your Muddies know what you're up to."
+      closeLabel="Close status form"
+      footer={footer}
+      align="start"
+      widthClassName="w-[360px]"
+      compact
+      alwaysPopover
+    >
+      {body}
+    </ResponsiveFormPopover>
   );
 }

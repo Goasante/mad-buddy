@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { updateSmartNotificationPreferencesAction } from "@/app/(app)/settings-actions";
 import { Button } from "@/components/ui/button";
+import { AppSwitch } from "@/components/ui/app-switch";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
 import {
   type CategorySetting,
@@ -93,21 +94,17 @@ export function NotificationPreferencesPage({
       </section>
 
       <section className="rounded-xl border border-border/70 bg-card/50 p-4">
-        <label className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <span>
             <span className="block text-sm font-semibold">Quiet hours</span>
             <span className="block text-xs text-muted-foreground">Pause pushes overnight. Critical account alerts still come through.</span>
           </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={prefs.quietHoursEnabled}
-            onClick={() => setPrefs((current) => ({ ...current, quietHoursEnabled: !current.quietHoursEnabled }))}
-            className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors", prefs.quietHoursEnabled ? "bg-primary" : "bg-muted")}
-          >
-            <span className={cn("absolute top-1 h-4 w-4 rounded-full bg-white transition-transform", prefs.quietHoursEnabled ? "translate-x-6" : "translate-x-1")} />
-          </button>
-        </label>
+          <AppSwitch
+            label="Quiet hours"
+            checked={prefs.quietHoursEnabled}
+            onCheckedChange={(checked) => setPrefs((current) => ({ ...current, quietHoursEnabled: checked }))}
+          />
+        </div>
         {prefs.quietHoursEnabled ? (
           <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
             <label className="flex items-center gap-2">

@@ -54,7 +54,7 @@ const navigationItems: Array<{
   icon: LucideIcon;
 }> = [
   { href: "/dashboard", label: "Home", icon: Home },
-  { href: "/friends", label: "Friends", icon: UsersRound },
+  { href: "/friends", label: "Muddies", icon: UsersRound },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/messages", label: "Messages", icon: MessagesSquare },
   { href: "/plans", label: "Plans", icon: CalendarCheck2 },
@@ -76,6 +76,7 @@ export type AppShellProps = {
   initialUnreadCount?: number;
   locationSyncEnabled?: boolean;
   currentUsername?: string | null;
+  currentAvatarUrl?: string | null;
 };
 
 export function AppShell({
@@ -83,10 +84,12 @@ export function AppShell({
   showAdminLink = false,
   initialUnreadCount = 0,
   locationSyncEnabled = true,
-  currentUsername = null
+  currentUsername = null,
+  currentAvatarUrl = null
 }: AppShellProps) {
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
+  const hasCompletedInitialRender = useRef(false);
   const refreshUnreadCount = useCallback(async () => {
     try {
       const response = await fetch("/api/notifications", {
@@ -102,6 +105,11 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
+    if (!hasCompletedInitialRender.current) {
+      hasCompletedInitialRender.current = true;
+      return;
+    }
+
     const frame = window.requestAnimationFrame(() => {
       void refreshUnreadCount();
     });
@@ -140,7 +148,7 @@ export function AppShell({
     : navigationItems;
 
   return (
-    <div className="min-h-screen bg-secondary/25 pb-[calc(88px+env(safe-area-inset-bottom))] dark:bg-[#353537] md:p-4 md:pb-4">
+    <div className="flex min-h-screen min-h-[100dvh] flex-col bg-background pb-[calc(88px+env(safe-area-inset-bottom))] dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]">
       <a
         href="#app-main-content"
         className="focus-ring sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:shadow-lg"
@@ -148,19 +156,21 @@ export function AppShell({
         Skip to content
       </a>
       <LocationSignalSync initiallyEnabled={locationSyncEnabled} />
-      <div className="md:grid md:h-[calc(100vh-2rem)] md:grid-cols-[4.75rem_minmax(0,1fr)] md:overflow-hidden md:rounded-[1.35rem] md:border md:border-border/80 md:bg-background md:shadow-[0_28px_90px_hsl(var(--shadow)/0.24)] dark:md:border-white/10 dark:md:bg-[#101011]">
+      <div className="flex min-h-0 flex-1 flex-col bg-background dark:bg-[#111112] md:grid md:h-[calc(100vh-2rem)] md:grid-cols-[4.75rem_minmax(0,1fr)] md:overflow-hidden md:rounded-[1.35rem] md:border md:border-border/80 md:bg-background md:shadow-[0_28px_90px_hsl(var(--shadow)/0.24)] dark:md:border-white/10 dark:md:bg-[#101011]">
       <DesktopSidebar
         navigationItems={visibleNavigationItems}
         unreadCount={unreadCount}
         currentUsername={currentUsername}
+        currentAvatarUrl={currentAvatarUrl}
       />
-        <div className="flex min-w-0 flex-col bg-background dark:bg-[#111112] md:min-h-0">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background dark:bg-[#111112]">
         <AppHeader
           navigationItems={visibleNavigationItems}
           currentUsername={currentUsername}
+          currentAvatarUrl={currentAvatarUrl}
           showAdminLink={showAdminLink}
         />
-          <main id="app-main-content" className="mx-auto w-full max-w-[1200px] px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
+          <main id="app-main-content" className="mx-auto w-full max-w-[1200px] flex-1 px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:overflow-y-auto">
           {children}
         </main>
         </div>
@@ -173,18 +183,27 @@ export function AppShell({
 type NavigationItem = (typeof navigationItems)[number];
 
 function isNavigationItemActive(item: NavigationItem, pathname: string) {
-  return pathname === item.href ||
-    (item.href === "/settings" && ["/settings", "/upgrade"].includes(pathname));
+  return (
+    pathname === item.href ||
+    pathname.startsWith(`${item.href}/`) ||
+    (item.href === "/settings" && pathname === "/upgrade")
+  );
+}
+
+function notificationAriaLabel(label: string, unreadCount: number) {
+  return unreadCount > 0 ? `${label}, ${unreadCount} unread` : label;
 }
 
 function DesktopSidebar({
   navigationItems,
   unreadCount,
-  currentUsername
+  currentUsername,
+  currentAvatarUrl
 }: {
   navigationItems: NavigationItem[];
   unreadCount: number;
   currentUsername: string | null;
+  currentAvatarUrl: string | null;
 }) {
   const pathname = usePathname();
   const primaryItems = navigationItems.filter((item) => (PRIMARY_HREFS as readonly string[]).includes(item.href));
@@ -217,12 +236,16 @@ function DesktopSidebar({
         <ul className="flex flex-col items-center gap-3">
           {primaryItems.map((item) => {
             const isActive = isNavigationItemActive(item, pathname);
+            const ariaLabel =
+              item.href === "/notifications"
+                ? notificationAriaLabel(item.label, unreadCount)
+                : item.label;
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
                   aria-current={isActive ? "page" : undefined}
-                  aria-label={item.label}
+                  aria-label={ariaLabel}
                   title={item.label}
                   className="focus-ring grid h-11 w-11 place-items-center rounded-xl"
                 >
@@ -249,6 +272,7 @@ function DesktopSidebar({
         <div id="sidebar-subscription-status" className="sr-only" />
         <AccountMenu
           currentUsername={currentUsername}
+          currentAvatarUrl={currentAvatarUrl}
           adminItem={adminItem}
           pathname={pathname}
           open={openFlyout === "account"}
@@ -351,12 +375,14 @@ function MoreMenu({
 
 function AccountMenu({
   currentUsername,
+  currentAvatarUrl,
   adminItem,
   pathname,
   open,
   onOpenChange
 }: {
   currentUsername: string | null;
+  currentAvatarUrl: string | null;
   adminItem: NavigationItem | undefined;
   pathname: string;
   open: boolean;
@@ -365,7 +391,12 @@ function AccountMenu({
   const initial = currentUsername?.[0]?.toUpperCase() ?? "?";
   const logoutFormRef = useRef<HTMLFormElement>(null);
   const isCurrentRoute =
-    pathname === "/profile" || pathname === "/settings" || pathname === "/billing" || pathname === "/admin";
+    pathname === "/profile" ||
+    pathname === "/settings" ||
+    pathname.startsWith("/settings/") ||
+    pathname === "/billing" ||
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/");
   // The menu opening is itself a state worth showing, not just which route
   // you're on, otherwise clicking the avatar gives no visible feedback.
   const isActive = open || isCurrentRoute;
@@ -381,13 +412,13 @@ function AccountMenu({
         >
           <span
             className={cn(
-              "grid h-9 w-9 place-items-center rounded-full text-sm font-semibold transition-colors",
+              "relative grid h-9 w-9 place-items-center overflow-hidden rounded-full text-sm font-semibold transition-colors",
               isActive
                 ? "bg-primary/12 text-primary"
                 : "bg-secondary text-foreground hover:bg-secondary/80 dark:bg-white/[0.06]"
             )}
           >
-            {initial}
+            <AccountAvatar src={currentAvatarUrl} initial={initial} />
           </span>
         </button>
       </DropdownMenu.Trigger>
@@ -405,7 +436,12 @@ function AccountMenu({
             </p>
           ) : null}
           <AccountMenuItem href="/profile" label="Profile" icon={UserRound} isActive={pathname === "/profile"} />
-          <AccountMenuItem href="/settings" label="Settings" icon={Settings} isActive={pathname === "/settings"} />
+          <AccountMenuItem
+            href="/settings"
+            label="Settings"
+            icon={Settings}
+            isActive={pathname === "/settings" || pathname.startsWith("/settings/")}
+          />
           <AccountMenuItem
             href="/billing"
             label="Plan and billing"
@@ -413,7 +449,12 @@ function AccountMenu({
             isActive={pathname === "/billing"}
           />
           {adminItem ? (
-            <AccountMenuItem href="/admin" label="Admin" icon={Gauge} isActive={pathname === "/admin"} />
+            <AccountMenuItem
+              href="/admin"
+              label="Admin"
+              icon={Gauge}
+              isActive={pathname === "/admin" || pathname.startsWith("/admin/")}
+            />
           ) : null}
           <DropdownMenu.Separator className="my-2 h-px bg-border/70 dark:bg-white/10" />
           <DropdownMenu.Item
@@ -454,10 +495,12 @@ function AccountMenuItem({
 function AppHeader({
   navigationItems,
   currentUsername,
+  currentAvatarUrl,
   showAdminLink
 }: {
   navigationItems: NavigationItem[];
   currentUsername: string | null;
+  currentAvatarUrl: string | null;
   showAdminLink: boolean;
 }) {
   const pathname = usePathname();
@@ -465,17 +508,19 @@ function AppHeader({
   const pageLabel = activeItem?.label ?? "App";
   const [createOpen, setCreateOpen] = useState(false);
 
-  if (
-    pathname === "/notifications" ||
-    pathname === "/profile" ||
-    pathname === "/settings" ||
-    pathname === "/plans" ||
-    pathname === "/messages" ||
-    pathname === "/events" ||
-    pathname === "/groups" ||
-    pathname === "/discover" ||
-    pathname === "/meeting-pings"
-  ) {
+  const pagesWithOwnHeader = [
+    "/notifications",
+    "/profile",
+    "/settings",
+    "/plans",
+    "/messages",
+    "/events",
+    "/groups",
+    "/discover",
+    "/meeting-pings"
+  ];
+
+  if (pagesWithOwnHeader.some((href) => pathname === href || pathname.startsWith(`${href}/`))) {
     return null;
   }
 
@@ -550,6 +595,7 @@ function AppHeader({
           <div className="md:hidden">
             <MobileAccountMenu
               currentUsername={currentUsername}
+              currentAvatarUrl={currentAvatarUrl}
               showAdminLink={showAdminLink}
               pathname={pathname}
             />
@@ -562,10 +608,12 @@ function AppHeader({
 
 function MobileAccountMenu({
   currentUsername,
+  currentAvatarUrl,
   showAdminLink,
   pathname
 }: {
   currentUsername: string | null;
+  currentAvatarUrl: string | null;
   showAdminLink: boolean;
   pathname: string;
 }) {
@@ -582,8 +630,8 @@ function MobileAccountMenu({
           title="Account"
           className="focus-ring grid h-10 w-10 place-items-center rounded-full border border-border/70"
         >
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-secondary text-sm font-semibold text-foreground dark:bg-white/[0.06]">
-            {initial}
+          <span className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-secondary text-sm font-semibold text-foreground dark:bg-white/[0.06]">
+            <AccountAvatar src={currentAvatarUrl} initial={initial} />
           </span>
         </button>
       </DropdownMenu.Trigger>
@@ -601,7 +649,12 @@ function MobileAccountMenu({
             </p>
           ) : null}
           <AccountMenuItem href="/profile" label="Profile" icon={UserRound} isActive={pathname === "/profile"} />
-          <AccountMenuItem href="/settings" label="Settings" icon={Settings} isActive={pathname === "/settings"} />
+          <AccountMenuItem
+            href="/settings"
+            label="Settings"
+            icon={Settings}
+            isActive={pathname === "/settings" || pathname.startsWith("/settings/")}
+          />
           <AccountMenuItem
             href="/billing"
             label="Plan and billing"
@@ -615,7 +668,12 @@ function MobileAccountMenu({
             isActive={pathname === "/help"}
           />
           {showAdminLink ? (
-            <AccountMenuItem href="/admin" label="Admin" icon={Gauge} isActive={pathname === "/admin"} />
+            <AccountMenuItem
+              href="/admin"
+              label="Admin"
+              icon={Gauge}
+              isActive={pathname === "/admin" || pathname.startsWith("/admin/")}
+            />
           ) : null}
           <DropdownMenu.Separator className="my-2 h-px bg-border/70 dark:bg-white/10" />
           <DropdownMenu.Item
@@ -629,6 +687,26 @@ function MobileAccountMenu({
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
+  );
+}
+
+function AccountAvatar({ src, initial }: { src: string | null; initial: string }) {
+  return (
+    <>
+      <span aria-hidden="true">{initial}</span>
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={src}
+          src={src}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={(event) => {
+            event.currentTarget.style.display = "none";
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -684,12 +762,16 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
         {mobileItems.map((item) => {
           const isActive = isNavigationItemActive(item, pathname);
           const label = MOBILE_NAV_LABELS[item.href] ?? item.label;
+          const ariaLabel =
+            item.href === "/notifications"
+              ? notificationAriaLabel(label, unreadCount)
+              : label;
 
           return (
             <li key={item.href} className="flex-1">
               <Link
                 href={item.href}
-                aria-label={label}
+                aria-label={ariaLabel}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
                   "safe-motion flex min-h-[56px] flex-col items-center justify-center gap-1 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",

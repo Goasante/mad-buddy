@@ -2,8 +2,8 @@
 
 import { CalendarCheck2, HelpCircle, MessageCircle, Plus, Search, Send } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { createMeetupRequestAction, respondToMeetupRequestAction } from "@/app/(app)/premium-actions";
+import { useMemo, useState, useTransition } from "react";
+import { createMeetupRequestAction, dismissMeetupRequestAction, respondToMeetupRequestAction, type MeetingPingListItem } from "@/app/(app)/premium-actions";
 import { getMessageableFriendsAction, type MessageableFriend } from "@/app/(app)/messaging-actions";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Button } from "@/components/ui/button";
@@ -16,22 +16,7 @@ import { cn } from "@/lib/utils";
 
 type PingTab = "received" | "sent" | "history";
 
-type ReceivedPing = {
-  id: string;
-  requestId: string;
-  title: string;
-  message: string;
-  time: string;
-};
-
-type ApiNotification = {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  is_read: boolean;
-  created_at: string;
-};
+type ReceivedPing = MeetingPingListItem;
 
 const pingTabs: Array<{ id: PingTab; label: string }> = [
   { id: "received", label: "Received" },
@@ -45,20 +30,9 @@ const howItWorks = [
   { step: "3", title: "Plan it", description: "Turn it into a plan." }
 ];
 
-function capitalize(value: string): string {
-  return value.length > 0 ? value.charAt(0).toUpperCase() + value.slice(1) : value;
-}
-
-/** This page's own wording for the shared meetup-request notification,
- * "meeting ping" reads better here than Pulse's more generic "connection
- * prompt", without changing the stored title used elsewhere. */
-function toPingTitle(rawTitle: string): string {
-  return capitalize(rawTitle).replace(" sent you a connection prompt", " sent you a meeting ping");
-}
-
-export function MeetingPingsPage() {
+export function MeetingPingsPage({ initialPings }: { initialPings: MeetingPingListItem[] }) {
   const [tab, setTab] = useState<PingTab>("received");
-  const [pings, setPings] = useState<ReceivedPing[]>([]);
+  const [pings, setPings] = useState<ReceivedPing[]>(initialPings);
   const [respondingTo, setRespondingTo] = useState<ReceivedPing | null>(null);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -73,44 +47,22 @@ export function MeetingPingsPage() {
   const [isSendingPing, startSendPing] = useTransition();
   const [sendPingError, setSendPingError] = useState("");
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadPings() {
-      try {
-        const response = await fetch("/api/notifications", { credentials: "include", cache: "no-store" });
-        if (!response.ok || !isMounted) return;
-        const data = (await response.json()) as { notifications: ApiNotification[] };
-        setPings(
-          data.notifications
-            .filter((notification) => notification.type.startsWith("meetup_request:"))
-            .map((notification) => ({
-              id: notification.id,
-              requestId: notification.type.slice("meetup_request:".length),
-              title: toPingTitle(notification.title),
-              message: notification.message,
-              time: formatRelativeTime(notification.created_at)
-            }))
-        );
-      } catch {
-        // Keep the list empty if the request fails.
-      }
-    }
-
-    void loadPings();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
   function respond(ping: ReceivedPing, message: string) {
     startTransition(async () => {
-      const result = await respondToMeetupRequestAction({ requestId: ping.requestId, message });
+      const result = await respondToMeetupRequestAction({ requestId: ping.id, message });
       setFeedback(result.ok ? "Reply sent" : "Couldn’t send your reply. Try again.");
       if (result.ok) {
         setPings((current) => current.filter((item) => item.id !== ping.id));
         setRespondingTo(null);
       }
+    });
+  }
+
+  function dismiss(ping: ReceivedPing) {
+    startTransition(async () => {
+      const result = await dismissMeetupRequestAction(ping.id);
+      setFeedback(result.message);
+      if (result.ok) setPings((current) => current.map((item) => item.id === ping.id ? { ...item, status: "declined" } : item));
     });
   }
 
@@ -224,16 +176,16 @@ export function MeetingPingsPage() {
       {feedback ? <p className="text-sm text-muted-foreground" role="status">{feedback}</p> : null}
 
       {tab === "received" ? (
-        pings.length > 0 ? (
+        pings.filter((ping) => ping.direction === "received" && ping.status === "pending").length > 0 ? (
           <div className="divide-y divide-border/70">
-            {pings.map((ping) => (
+            {pings.filter((item) => item.direction === "received" && item.status === "pending").map((ping) => (
               <div key={ping.id} className="min-h-[96px] py-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold">{ping.title}</p>
+                    <p className="text-sm font-semibold">{ping.counterpartyName} wants to connect</p>
                     <p className="mt-1 truncate text-sm text-muted-foreground">&ldquo;{ping.message}&rdquo;</p>
                   </div>
-                  <span className="shrink-0 text-xs text-muted-foreground">{ping.time}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{formatRelativeTime(ping.createdAt)}</span>
                 </div>
                 <div className="mt-2 flex gap-2">
                   {respondingTo?.id === ping.id ? null : (
@@ -246,7 +198,7 @@ export function MeetingPingsPage() {
                         size="sm"
                         variant="outline"
                         disabled={isPending}
-                        onClick={() => setPings((current) => current.filter((item) => item.id !== ping.id))}
+                        onClick={() => dismiss(ping)}
                       >
                         Dismiss
                       </Button>
@@ -284,7 +236,9 @@ export function MeetingPingsPage() {
       ) : null}
 
       {tab === "sent" ? (
-        <EmptyState
+        pings.filter((ping) => ping.direction === "sent" && ping.status === "pending").length > 0 ? (
+          <PingRows pings={pings.filter((ping) => ping.direction === "sent" && ping.status === "pending")} />
+        ) : <EmptyState
           icon={MessageCircle}
           className="!shadow-none"
           title="You haven't sent a ping yet"
@@ -293,7 +247,9 @@ export function MeetingPingsPage() {
       ) : null}
 
       {tab === "history" ? (
-        <EmptyState
+        pings.filter((ping) => ping.status !== "pending").length > 0 ? (
+          <PingRows pings={pings.filter((ping) => ping.status !== "pending")} />
+        ) : <EmptyState
           icon={CalendarCheck2}
           className="!shadow-none"
           title="No past pings"
@@ -382,4 +338,13 @@ export function MeetingPingsPage() {
       </Modal>
     </div>
   );
+}
+
+function PingRows({ pings }: { pings: MeetingPingListItem[] }) {
+  return <div className="divide-y divide-border/70">{pings.map((ping) => (
+    <article key={ping.id} className="flex items-start justify-between gap-4 py-4">
+      <div><p className="text-sm font-semibold">{ping.direction === "sent" ? `To ${ping.counterpartyName}` : `From ${ping.counterpartyName}`}</p><p className="mt-1 text-sm text-muted-foreground">{ping.message}</p></div>
+      <div className="shrink-0 text-right"><p className="text-xs capitalize text-muted-foreground">{ping.status}</p><p className="mt-1 text-xs text-muted-foreground">{formatRelativeTime(ping.createdAt)}</p></div>
+    </article>
+  ))}</div>;
 }

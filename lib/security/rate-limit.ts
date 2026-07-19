@@ -41,7 +41,9 @@ export type RateLimitAction =
   | "invites.create"
   | "invites.resolve"
   | "contacts.match"
-  | "verify.phone";
+  | "verify.phone"
+  | "feedback.submit"
+  | "support.request";
 
 export type RateLimitResult = {
   allowed: boolean;
@@ -93,7 +95,9 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "invites.create": { limit: 20, windowSeconds: 60 * 60 },
   "invites.resolve": { limit: 30, windowSeconds: 10 * 60 },
   "contacts.match": { limit: 5, windowSeconds: 24 * 60 * 60 },
-  "verify.phone": { limit: 5, windowSeconds: 60 * 60 }
+  "verify.phone": { limit: 5, windowSeconds: 60 * 60 },
+  "feedback.submit": { limit: 5, windowSeconds: 60 * 60 },
+  "support.request": { limit: 5, windowSeconds: 60 * 60 }
 };
 
 function hashIp(value: string | null) {

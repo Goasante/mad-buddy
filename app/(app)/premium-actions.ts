@@ -13,6 +13,15 @@ export type PremiumActionState = {
   message: string;
 };
 
+export type MeetingPingListItem = {
+  id: string;
+  direction: "received" | "sent";
+  counterpartyName: string;
+  message: string;
+  status: "pending" | "accepted" | "declined" | "expired";
+  createdAt: string;
+};
+
 const uuidSchema = z.string().uuid();
 
 const glowThemeSchema = z.object({
@@ -328,6 +337,53 @@ export async function respondToMeetupRequestAction(input: unknown): Promise<Prem
 
     revalidatePath("/notifications");
     return { ok: true, message: "Response sent." };
+  });
+}
+
+export async function dismissMeetupRequestAction(requestId: string): Promise<PremiumActionState> {
+  if (!uuidSchema.safeParse(requestId).success) return { ok: false, message: "Meeting ping not found." };
+  return withPremiumAccess("buddy_plus", async (userId) => {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("meetup_requests")
+      .update({ status: "declined" })
+      .eq("id", requestId)
+      .eq("receiver_id", userId)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle();
+    if (error || !data) return { ok: false, message: "This meeting ping is no longer available." };
+    revalidatePath("/meeting-pings");
+    return { ok: true, message: "Meeting ping declined." };
+  });
+}
+
+export async function loadMeetingPingsAction(): Promise<MeetingPingListItem[]> {
+  const userId = await getAuthedUserId();
+  if (!userId || missingSupabaseState()) return [];
+  const admin = createSupabaseAdminClient();
+  const { data: rows } = await admin
+    .from("meetup_requests")
+    .select("id, sender_id, receiver_id, message, status, expires_at, created_at")
+    .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  const counterpartIds = [...new Set((rows ?? []).map((row) => row.sender_id === userId ? row.receiver_id : row.sender_id))];
+  const { data: profiles } = counterpartIds.length
+    ? await admin.from("profiles").select("user_id, full_name").in("user_id", counterpartIds)
+    : { data: [] };
+  const names = new Map((profiles ?? []).map((profile) => [profile.user_id, profile.full_name?.trim() || "A Muddy"]));
+  const now = Date.now();
+  return (rows ?? []).map((row) => {
+    const otherId = row.sender_id === userId ? row.receiver_id : row.sender_id;
+    return {
+      id: row.id,
+      direction: row.sender_id === userId ? "sent" as const : "received" as const,
+      counterpartyName: names.get(otherId) ?? "A Muddy",
+      message: row.message?.trim() || "Wants to connect",
+      status: row.status === "pending" && Date.parse(row.expires_at) <= now ? "expired" as const : row.status,
+      createdAt: row.created_at
+    };
   });
 }
 

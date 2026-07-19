@@ -239,6 +239,18 @@ export function FriendsPageContent({
     setFeedback(message);
   }
 
+  function promoteUserToFriend(userId: string, message: string) {
+    setUsers((currentUsers) => {
+      const selected = currentUsers.find((user) => user.id === userId);
+      if (!selected) return currentUsers;
+      return [
+        ...currentUsers.filter((user) => user.id !== userId),
+        { ...selected, requestId: undefined, status: "friend" as const, note: "Approved Muddy" }
+      ];
+    });
+    setFeedback(message);
+  }
+
   function removeUser(userId: string, message: string) {
     setUsers((currentUsers) => currentUsers.filter((user) => user.id !== userId));
     setFeedback(message);
@@ -251,6 +263,7 @@ export function FriendsPageContent({
 
       if (result.ok) {
         onLocalSuccess();
+        router.refresh();
       }
     });
   }
@@ -385,16 +398,16 @@ export function FriendsPageContent({
   );
 
   return (
-    <div className="mx-auto max-w-[1200px] space-y-6 pt-6">
-      <header className="flex items-center justify-between gap-3">
-        <p className="text-sm leading-6 text-muted-foreground">Your people, your circles, and quick ways to connect.</p>
-        <Button type="button" onClick={() => setAddOpen(true)}>
+    <div className="mx-auto w-full min-w-0 max-w-[1200px] space-y-6 overflow-x-clip pt-6">
+      <header className="flex min-w-0 items-center justify-between gap-3">
+        <p className="min-w-0 text-sm leading-6 text-muted-foreground">Your people, your circles, and quick ways to connect.</p>
+        <Button type="button" className="shrink-0 whitespace-nowrap" onClick={() => setAddOpen(true)}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           Add Muddy
         </Button>
       </header>
 
-      <nav className="overflow-x-auto border-b border-border/70" aria-label="Muddies tabs">
+      <nav className="max-w-full overflow-x-auto border-b border-border/70" aria-label="Muddies tabs">
         <div className="flex min-w-max gap-1">
           {tabs.map((tab) => (
             <button
@@ -529,7 +542,7 @@ export function FriendsPageContent({
                   onAccept={() =>
                     runFriendAction(
                       () => acceptFriendRequestAction(user.requestId ?? user.id),
-                      () => updateUserStatus(user.id, "friend", `${user.displayName} is now your friend.`)
+                      () => promoteUserToFriend(user.id, `${user.displayName} is now your friend.`)
                     )
                   }
                   onDecline={() =>
@@ -671,7 +684,7 @@ export function FriendsPageContent({
         <Input
           value={newCircleName}
           onChange={(event) => setNewCircleName(event.target.value)}
-          placeholder="e.g. Law School '24"
+          placeholder="e.g. Weekend Crew"
           aria-label="Circle name"
         />
       </Modal>
@@ -787,8 +800,8 @@ function UserRow({
   const otherCircles = circles.filter((circle) => circle.id !== "close-friends");
 
   return (
-    <Card className="p-4">
-      <div className="flex items-center gap-4">
+    <Card className="min-w-0 overflow-hidden p-4">
+      <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-3 sm:flex sm:gap-4">
         <button type="button" onClick={onViewProfile} className="focus-ring safe-motion shrink-0 rounded-full">
           <GlowAvatar
             name={user.displayName}
@@ -799,7 +812,7 @@ function UserRow({
           />
         </button>
         <div className="min-w-0 flex-1">
-          <button type="button" onClick={onViewProfile} className="focus-ring truncate rounded font-semibold hover:underline">
+          <button type="button" onClick={onViewProfile} className="focus-ring block max-w-full truncate rounded text-left font-semibold hover:underline">
             {user.displayName}
           </button>
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
@@ -808,20 +821,46 @@ function UserRow({
           </div>
           <p className="mt-1 truncate text-xs text-muted-foreground">{user.note}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Button type="button" variant="outline" size="icon" aria-label="Wave" title="Wave" onClick={onWave}>
+        <div className="col-span-2 -mx-4 -mb-4 mt-1 grid min-w-0 grid-cols-3 border-t border-border/70 sm:col-auto sm:m-0 sm:flex sm:shrink-0 sm:items-center sm:gap-1.5 sm:border-0">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Wave"
+            title="Wave"
+            onClick={onWave}
+            className="h-12 w-full gap-2 rounded-none border-0 shadow-none hover:translate-y-0 sm:h-10 sm:w-10 sm:rounded-full sm:border sm:border-border sm:bg-card/60"
+          >
             <Hand className="h-4 w-4" aria-hidden="true" />
+            <span className="text-xs sm:sr-only">Wave</span>
           </Button>
-          <Button type="button" variant="outline" size="icon" aria-label="Message" title="Message" onClick={onMessage}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Message"
+            title="Message"
+            onClick={onMessage}
+            className="h-12 w-full gap-2 rounded-none border-x border-y-0 border-border/70 shadow-none hover:translate-y-0 sm:h-10 sm:w-10 sm:rounded-full sm:border sm:border-border sm:bg-card/60"
+          >
             <MessagesSquare className="h-4 w-4" aria-hidden="true" />
+            <span className="text-xs sm:sr-only">Message</span>
           </Button>
           <AppMenu
             open={menuOpen}
             onOpenChange={setMenuOpen}
             label={`Actions for ${user.displayName}`}
             trigger={
-              <Button type="button" variant="outline" size="icon" aria-label="More" title="More">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="More"
+                title="More"
+                className="h-12 w-full gap-2 rounded-none border-0 shadow-none hover:translate-y-0 sm:h-10 sm:w-10 sm:rounded-full sm:border sm:border-border sm:bg-card/60"
+              >
                 <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                <span className="text-xs sm:sr-only">More</span>
               </Button>
             }
             items={[

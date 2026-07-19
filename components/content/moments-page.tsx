@@ -20,6 +20,7 @@ import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { audienceSummaryLabel, EXPIRY_PRESETS, type ExpiryPresetId } from "@/lib/content/moments";
 import { detectLocationRisk, LOCATION_WARNING_MESSAGE, REPORT_CATEGORIES } from "@/lib/content/safety";
+import { validateImageSelection } from "@/lib/media/validation";
 import type { VisibleMoment } from "@/lib/content/service";
 import type { MomentAudienceType, ReactionType } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
@@ -287,6 +288,13 @@ function CreateMomentModal({
   }
 
   function upload(file: File) {
+    const selectionError = validateImageSelection(file, "moment");
+    if (selectionError) {
+      setError(selectionError);
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+
     const formData = new FormData();
     formData.set("media", file);
     startUpload(async () => {
@@ -298,6 +306,7 @@ function CreateMomentModal({
       } else {
         setError(result.message);
       }
+      if (fileRef.current) fileRef.current.value = "";
     });
   }
 

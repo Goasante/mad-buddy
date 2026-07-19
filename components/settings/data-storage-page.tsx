@@ -1,89 +1,61 @@
-"use client";
-
-import { Archive, Cookie, FileText, Image as ImageIcon, Trash2, Video } from "lucide-react";
-import { useState } from "react";
+import { FileAudio, FileText, Image as ImageIcon, Video } from "lucide-react";
 import { DataExportButton } from "@/components/settings/data-export-button";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
-import { PreviewNotice } from "@/components/ui/preview-notice";
-import { Button } from "@/components/ui/button";
 
-const storageBreakdown = [
-  { label: "Photos", value: "620 MB", icon: ImageIcon },
-  { label: "Videos", value: "340 MB", icon: Video },
-  { label: "Files", value: "180 MB", icon: FileText },
-  { label: "Other", value: "60 MB", icon: Archive }
-];
+export type StorageUsage = {
+  totalBytes: number;
+  assetCount: number;
+  imageBytes: number;
+  videoBytes: number;
+  audioBytes: number;
+  otherBytes: number;
+};
 
-export function DataStoragePage() {
-  const [feedback, setFeedback] = useState("");
-
-  return (
-    <div className="mr-auto max-w-[720px] space-y-6 pt-6">
-      <SettingsSubHeader title="Data & Storage" description="Manage your data, exports, and storage." />
-
-      <PreviewNotice />
-
-      <section className="rounded-xl border border-border/70 bg-card/50 p-4">
-        <div className="flex items-center justify-between text-sm">
-          <p className="font-semibold">Storage overview</p>
-          <p className="text-muted-foreground">1.2 GB of 5 GB used</p>
-        </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary">
-          <div className="h-full rounded-full bg-primary" style={{ width: "24%" }} />
-        </div>
-        <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {storageBreakdown.map((item) => (
-            <div key={item.label} className="rounded-lg border border-border/70 p-3 text-center">
-              <item.icon className="mx-auto h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              <dd className="mt-1 text-sm font-semibold">{item.value}</dd>
-              <dt className="text-[11px] text-muted-foreground">{item.label}</dt>
-            </div>
-          ))}
-        </dl>
-      </section>
-
-      <SettingsSection title="Data & privacy">
-        <DataExportButton />
-        <SettingsRow title="Export my activity" description="Plans, chats, and activity history." onAction={() => setFeedback("Activity export requested.")} />
-        <SettingsRow title="Account activity" description="Review recent account activity." onAction={() => setFeedback("Coming soon.")} />
-      </SettingsSection>
-
-      <SettingsSection title="Manage storage">
-        <SettingsRow icon={FileText} title="Review and delete large files" description="Free up space." onAction={() => setFeedback("Coming soon.")} />
-        <SettingsRow icon={Trash2} title="Clear chat media" description="Remove media from chats." onAction={() => setFeedback("Chat media cleared.")} />
-        <SettingsRow icon={Archive} title="Archived items" description="View and manage archived content." onAction={() => setFeedback("Coming soon.")} />
-        <SettingsRow icon={Cookie} title="Manage cookies" description="Manage app cookie preferences." onAction={() => setFeedback("Coming soon.")} />
-      </SettingsSection>
-
-      {feedback ? <p className="text-sm text-muted-foreground" role="status">{feedback}</p> : null}
-    </div>
-  );
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unit = units[0];
+  for (let index = 1; index < units.length && value >= 1024; index += 1) {
+    value /= 1024;
+    unit = units[index];
+  }
+  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
 }
 
-function SettingsRow({
-  icon: Icon,
-  title,
-  description,
-  onAction
-}: {
-  icon?: typeof FileText;
-  title: string;
-  description: string;
-  onAction: () => void;
-}) {
+export function DataStoragePage({ usage }: { usage: StorageUsage }) {
+  const breakdown = [
+    { label: "Photos", bytes: usage.imageBytes, icon: ImageIcon },
+    { label: "Videos", bytes: usage.videoBytes, icon: Video },
+    { label: "Audio", bytes: usage.audioBytes, icon: FileAudio },
+    { label: "Other", bytes: usage.otherBytes, icon: FileText }
+  ];
   return (
-    <div className="flex min-h-[4.25rem] items-center justify-between gap-4 px-2 py-3">
-      <div className="flex gap-3">
-        {Icon ? <Icon className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" /> : null}
-        <div>
-          <p className="text-sm font-semibold">{title}</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+    <div className="mr-auto max-w-[720px] space-y-6 pt-6">
+      <SettingsSubHeader title="Data & storage" description="Review your stored media and download your account data." />
+      <section className="rounded-xl border border-border/70 bg-card/50 p-4" aria-labelledby="storage-overview-title">
+        <div className="flex items-center justify-between gap-4 text-sm">
+          <p id="storage-overview-title" className="font-semibold">Storage overview</p>
+          <p className="text-muted-foreground">{formatBytes(usage.totalBytes)} across {usage.assetCount} {usage.assetCount === 1 ? "item" : "items"}</p>
         </div>
-      </div>
-      <Button type="button" variant="outline" size="sm" onClick={onAction}>
-        View
-      </Button>
+        {usage.assetCount > 0 ? (
+          <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {breakdown.map((item) => (
+              <div key={item.label} className="rounded-lg border border-border/70 p-3 text-center">
+                <item.icon className="mx-auto h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <dd className="mt-1 text-sm font-semibold">{formatBytes(item.bytes)}</dd>
+                <dt className="text-[11px] text-muted-foreground">{item.label}</dt>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="mt-3 text-sm text-muted-foreground">You do not have any stored media.</p>
+        )}
+      </section>
+      <SettingsSection title="Your data">
+        <DataExportButton />
+      </SettingsSection>
     </div>
   );
 }

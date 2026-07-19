@@ -120,7 +120,6 @@ export function ScanPageContent() {
 
       <Card className="space-y-4 p-5">
         <div className="relative overflow-hidden rounded-xl border border-border/70 bg-black/80">
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption -- silent camera preview */}
           <video ref={videoRef} playsInline muted className={cn("aspect-square w-full object-cover", cameraState !== "running" && "hidden")} />
           {cameraState !== "running" ? (
             <div className="grid aspect-square w-full place-items-center p-6 text-center">

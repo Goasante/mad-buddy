@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { toNotificationResponse } from "@/lib/notifications/server";
 
 const notificationResponseSchema = z.object({
@@ -23,6 +24,10 @@ const notificationResponseSchema = z.object({
 const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   before: z.string().datetime({ offset: true }).optional()
+});
+
+const deleteNotificationsSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(200)
 });
 
 export async function GET(request: Request) {
@@ -85,4 +90,58 @@ export async function GET(request: Request) {
     ...response,
     next_before: response.notifications.length === parsedPagination.data.limit ? oldest : null
   });
+}
+
+export async function DELETE(request: Request) {
+  const env = getSupabaseServerEnv();
+
+  if (!env.url || !env.anonKey || !env.serviceRoleKey) {
+    return NextResponse.json({ error: "Supabase is not configured yet." }, { status: 503 });
+  }
+
+  const body = deleteNotificationsSchema.safeParse(await request.json().catch(() => null));
+  if (!body.success) {
+    return NextResponse.json({ error: "Choose between 1 and 200 notifications to delete." }, { status: 400 });
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  }
+
+  // Authenticate with the user's session, then perform the mutation through
+  // the trusted server client. The verified user id remains a mandatory
+  // filter, so ids belonging to another account can never be deleted.
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("notifications")
+    .delete()
+    .eq("user_id", user.id)
+    .in("id", body.data.ids)
+    .select("id");
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const deletedIds = (data ?? []).map((notification) => notification.id);
+  const deletedIdSet = new Set(deletedIds);
+  const notDeleted = body.data.ids.filter((id) => !deletedIdSet.has(id));
+
+  if (notDeleted.length > 0) {
+    return NextResponse.json(
+      { error: "Some notifications could not be deleted.", deletedIds },
+      { status: 409 }
+    );
+  }
+
+  return NextResponse.json(
+    { deletedIds },
+    { headers: { "Cache-Control": "private, no-store" } }
+  );
 }

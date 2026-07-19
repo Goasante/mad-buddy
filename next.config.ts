@@ -8,6 +8,14 @@ const contentSecurityPolicy = buildContentSecurityPolicy({
 });
 
 const nextConfig: NextConfig = {
+  experimental: {
+    serverActions: {
+      // Profile and Moment images are submitted as multipart Server Actions.
+      // Keep this below the deployed function request limit while allowing
+      // enough room for the app's 3 MB image cap plus multipart metadata.
+      bodySizeLimit: "4mb"
+    }
+  },
   turbopack: {
     root: process.cwd()
   },

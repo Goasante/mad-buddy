@@ -185,8 +185,8 @@ function PlanCard({
   return (
     <Card
       className={cn(
-        "flex h-full min-h-[clamp(18rem,26vw,21rem)] flex-col p-[clamp(0.9rem,1.15vw,1.25rem)]",
-        isFeatured && "border-blue-400/30 bg-primary/10 shadow-[0_14px_38px_hsl(var(--primary)/0.14)]"
+        "billing-plan-card flex h-full min-h-[clamp(18rem,26vw,21rem)] flex-col p-[clamp(0.9rem,1.15vw,1.25rem)]",
+        isFeatured && "billing-plan-card-featured border-blue-400/30 shadow-[0_14px_38px_hsl(var(--primary)/0.14)]"
       )}
     >
       <div className="flex items-start justify-between gap-3">

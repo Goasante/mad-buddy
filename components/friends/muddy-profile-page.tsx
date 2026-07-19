@@ -1,21 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { BadgeCheck, CalendarCheck2, ChevronLeft, Hand, Image as ImageIcon, MessagesSquare, MoreHorizontal, Users } from "lucide-react";
+import { BadgeCheck, ChevronLeft, Hand, MessagesSquare } from "lucide-react";
 import { useState, useTransition } from "react";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
+import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
 import { CONNECTION_PROMPTS } from "@/lib/meetups/connection-prompts";
 import type { PublicTrustSummary } from "@/lib/discovery/trust";
 import type { VisibleProfileFields } from "@/lib/profile/service";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
-import { cn } from "@/lib/utils";
-
-type ProfileTab = "about" | "status" | "circles" | "photos";
 
 export type MuddyProfileData = {
   friendId: string;
@@ -29,13 +26,6 @@ export type MuddyProfileData = {
   confidence?: ConfidenceLevel;
 };
 
-const profileTabs: Array<{ id: ProfileTab; label: string }> = [
-  { id: "about", label: "About" },
-  { id: "status", label: "Status" },
-  { id: "circles", label: "Circles" },
-  { id: "photos", label: "Photos" }
-];
-
 export function MuddyProfilePage({
   muddy,
   trust = null,
@@ -45,17 +35,25 @@ export function MuddyProfilePage({
   trust?: PublicTrustSummary | null;
   fields?: VisibleProfileFields | null;
 }) {
-  const [activeTab, setActiveTab] = useState<ProfileTab>("about");
   const [pingOpen, setPingOpen] = useState(false);
   const [waveSent, setWaveSent] = useState(false);
   const [waveFeedback, setWaveFeedback] = useState("");
   const [isWavePending, startWaveTransition] = useTransition();
+  const [isPingPending, startPingTransition] = useTransition();
 
   function sendWave() {
     startWaveTransition(async () => {
       const result = await sendWaveV2Action(muddy.friendId, "profile");
       setWaveFeedback(result.message);
       if (result.ok) setWaveSent(true);
+    });
+  }
+
+  function sendPing(message: string) {
+    startPingTransition(async () => {
+      const result = await createMeetupRequestAction({ receiverId: muddy.friendId, message });
+      setWaveFeedback(result.message);
+      if (result.ok) setPingOpen(false);
     });
   }
 
@@ -106,9 +104,6 @@ export function MuddyProfilePage({
                 ) : null}
               </div>
             </div>
-            <Button type="button" variant="outline" size="icon" aria-label="More options">
-              <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-            </Button>
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
@@ -137,7 +132,7 @@ export function MuddyProfilePage({
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Send a ping</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {CONNECTION_PROMPTS.map((prompt) => (
-                  <Button key={prompt.label} type="button" variant="outline" size="sm" className="justify-start" onClick={() => setPingOpen(false)}>
+                  <Button key={prompt.label} type="button" variant="outline" size="sm" className="justify-start" disabled={isPingPending} onClick={() => sendPing(prompt.message)}>
                     {prompt.label}
                   </Button>
                 ))}
@@ -147,26 +142,7 @@ export function MuddyProfilePage({
         </div>
       </Card>
 
-      <nav className="overflow-x-auto border-b border-border/70" aria-label="Muddy profile tabs">
-        <div className="flex min-w-max gap-1">
-          {profileTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "focus-ring safe-motion border-b-2 px-4 py-3 text-sm font-medium",
-                activeTab === tab.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </nav>
-
-      {activeTab === "about" ? (
-        <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-xl border border-border/70 bg-card/50 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">About</p>
             <p className="mt-2 text-sm leading-6">{muddy.bio || "No bio yet."}</p>
@@ -200,35 +176,12 @@ export function MuddyProfilePage({
               </div>
             </div>
           ) : null}
-        </div>
-      ) : null}
-
-      {activeTab === "status" ? (
+        {muddy.moodStatus ? (
         <div className="rounded-xl border border-border/70 bg-card/50 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</p>
-          <p className="mt-2 text-sm leading-6">{muddy.moodStatus || "No status set."}</p>
+          <p className="mt-2 text-sm leading-6">{muddy.moodStatus}</p>
         </div>
-      ) : null}
-
-      {activeTab === "circles" ? (
-        <EmptyState
-          icon={Users}
-          className="!shadow-none"
-          title="No shared circles yet"
-          description="Circles you both belong to will show up here."
-        />
-      ) : null}
-
-      {activeTab === "photos" ? (
-        <EmptyState icon={ImageIcon} className="!shadow-none" title="No photos yet" description="Shared photos will appear here." />
-      ) : null}
-
-      <div className="rounded-xl border border-border/70 bg-card/50 p-4">
-        <div className="mb-2 flex items-center gap-2">
-          <CalendarCheck2 className="h-4 w-4 text-primary" aria-hidden="true" />
-          <p className="text-sm font-semibold">Recent plans together</p>
-        </div>
-        <p className="text-sm text-muted-foreground">No shared plans yet.</p>
+        ) : null}
       </div>
     </div>
   );

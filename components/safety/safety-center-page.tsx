@@ -3,10 +3,9 @@ import { Ban, Eye, MapPin, MessageCircle, ShieldCheck, Users } from "lucide-reac
 import { Button } from "@/components/ui/button";
 
 const safetyTools = [
-  { title: "Safe Arrival", description: "Share your trip and let friends know when you arrive safely.", icon: MapPin, comingSoon: true },
-  { title: "Live Location", description: "Temporarily share a more precise location with chosen people.", icon: MapPin, comingSoon: true },
-  { title: "Block & Report", description: "Easily block or report anyone who breaks the rules.", icon: Ban, href: "/friends" as const },
-  { title: "Muddy Score", description: "Real people, real profiles, real accountability.", icon: ShieldCheck, comingSoon: true }
+  { title: "Safe Arrival", description: "Ask approved friends to check on you and confirm when you arrive safely.", icon: MapPin, href: "/safe-arrival" as const },
+  { title: "Block & report", description: "Block an account or report behaviour that breaks the rules.", icon: Ban, href: "/friends?tab=blocked" as const },
+  { title: "Buddy Score", description: "Review your private activity summary and earned achievements.", icon: ShieldCheck, href: "/buddy-score" as const }
 ];
 
 const safetyTips = [
@@ -32,7 +31,7 @@ export function SafetyCenterPage() {
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Safety tools</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {safetyTools.map((tool) =>
-            tool.href ? (
+            (
               <Link
                 key={tool.title}
                 href={tool.href}
@@ -44,17 +43,6 @@ export function SafetyCenterPage() {
                 <h3 className="mt-3 text-sm font-semibold">{tool.title}</h3>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">{tool.description}</p>
               </Link>
-            ) : (
-              <div key={tool.title} className="rounded-xl border border-dashed border-border/70 bg-card/30 p-4 opacity-80">
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-secondary text-muted-foreground">
-                  <tool.icon className="h-4 w-4" aria-hidden="true" />
-                </span>
-                <div className="mt-3 flex items-center gap-2">
-                  <h3 className="text-sm font-semibold">{tool.title}</h3>
-                  <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Coming soon</span>
-                </div>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">{tool.description}</p>
-              </div>
             )
           )}
         </div>

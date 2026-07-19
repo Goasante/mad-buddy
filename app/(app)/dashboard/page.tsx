@@ -4,6 +4,10 @@ import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
 import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+function isStatusActiveAtRequestTime(expiresAt: string) {
+  return Date.parse(expiresAt) > Date.now();
+}
+
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
   const {
@@ -23,7 +27,7 @@ export default async function DashboardPage() {
     : [null, null, null, { plans: [], hasMore: false }];
 
   const status = statusResult?.data;
-  const hasActiveStatus = Boolean(status && Date.parse(status.expires_at) > Date.now());
+  const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
 
   return (
     <DashboardPageContent

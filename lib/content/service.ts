@@ -15,7 +15,7 @@ import type { MediaVariantType, ReportableContentType } from "@/lib/supabase/dat
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
 /** Signed read URLs are short-lived by design (spec §41, §42). */
-export const SIGNED_URL_TTL_SECONDS = 60;
+export const SIGNED_URL_TTL_SECONDS = 5 * 60;
 
 /**
  * Mints a short-lived signed URL for a media asset. The caller MUST have

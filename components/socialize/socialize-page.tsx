@@ -9,7 +9,6 @@ import {
   Sparkles,
   X
 } from "lucide-react";
-import * as Popover from "@radix-ui/react-popover";
 import type { ReactNode } from "react";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
 import {
@@ -24,6 +23,7 @@ import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { AppMenu, AppSelect } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { ResponsiveFormPopover } from "@/components/ui/responsive-form-popover";
 import { Textarea } from "@/components/ui/textarea";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { proximityLabels } from "@/lib/proximity";
@@ -222,46 +222,35 @@ export function SocializePage({
   const selectClass =
     "focus-ring safe-motion h-11 w-full rounded-md border border-border bg-card/70 px-3 text-sm";
 
-  // Keep setup anchored to the action that opened it. Radix handles collision
-  // detection, Escape, and focus return while the compact body stays scrollable.
+  // The shared form overlay handles desktop collision detection, mobile sheet
+  // behavior, Escape, focus return, and a footer that remains reachable.
   function renderSetup(trigger: ReactNode) {
     return (
-      <Popover.Root
+      <ResponsiveFormPopover
         open={setupOpen}
         onOpenChange={(open) => {
           if (open) prepareForm();
           setSetupOpen(open);
         }}
+        trigger={trigger}
+        title={isActive ? "Edit Socialize" : "Turn on Socialize"}
+        description="Choose what you're open to, your area, and how long you'll be visible."
+        closeLabel="Close Socialize setup"
+        align="start"
+        widthClassName="w-[400px]"
+        compact
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={closeSetup} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={submitSetup} disabled={isPending || !canSubmit}>
+              {isPending ? "Saving..." : isActive ? "Save changes" : "Start Socializing"}
+            </Button>
+          </>
+        }
       >
-        <Popover.Trigger asChild>{trigger}</Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content
-            align="end"
-            sideOffset={8}
-            collisionPadding={12}
-            className="compact-drop-popover flex max-h-[calc(100svh-24px)] w-[min(430px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-xl outline-none supports-[backdrop-filter]:bg-card/90"
-          >
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border/60 px-4 py-3.5">
-              <div>
-                <p className="text-base font-semibold">
-                  {isActive ? "Edit Socialize" : "Turn on Socialize"}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Choose what you&apos;re open to, your area, and how long you&apos;ll be visible.
-                </p>
-              </div>
-              <Popover.Close asChild>
-                <button
-                  type="button"
-                  aria-label="Close Socialize setup"
-                  className="focus-ring safe-motion -mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </Popover.Close>
-            </div>
-
-            <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-4 py-3.5">
+        <div className="space-y-2.5">
               <AppSelect
                 id="socialize-activity"
                 label="What are you open to?"
@@ -269,6 +258,8 @@ export function SocializePage({
                 options={SOCIALIZE_ACTIVITIES.map((option) => ({ value: option.id, label: option.label }))}
                 placeholder="Choose an activity"
                 error={attempted && !activity ? "Choose an activity." : undefined}
+                size="compact"
+                triggerClassName="!w-full"
                 onChange={setActivity}
               />
 
@@ -279,6 +270,8 @@ export function SocializePage({
                 options={SOCIALIZE_AREA_TIERS.map((option) => ({ value: option.id, label: option.label }))}
                 placeholder="Select an area"
                 error={attempted && !areaTier ? "Select a search area." : undefined}
+                size="compact"
+                triggerClassName="!w-full"
                 onChange={setAreaTier}
               />
 
@@ -289,6 +282,8 @@ export function SocializePage({
                 options={SOCIALIZE_DURATIONS.map((option) => ({ value: option.id, label: option.label }))}
                 placeholder="Choose a duration"
                 error={attempted && !duration ? "Choose a duration." : undefined}
+                size="compact"
+                triggerClassName="!w-full"
                 onChange={setDuration}
               />
 
@@ -317,19 +312,8 @@ export function SocializePage({
                   Choose an activity and search area to continue.
                 </p>
               ) : null}
-            </div>
-
-            <div className="flex shrink-0 justify-end gap-2 border-t border-border/60 px-4 py-3.5">
-              <Button type="button" variant="outline" onClick={closeSetup} disabled={isPending}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={submitSetup} disabled={isPending || !canSubmit}>
-                {isPending ? "Saving..." : isActive ? "Save changes" : "Start Socializing"}
-              </Button>
-            </div>
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
+        </div>
+      </ResponsiveFormPopover>
     );
   }
 

@@ -34,7 +34,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
     user
       ? supabase
           .from("profiles")
-          .select("username, visibility_status")
+          .select("username, avatar_url, visibility_status")
           .eq("user_id", user.id)
           .maybeSingle()
       : Promise.resolve({ data: null })
@@ -46,6 +46,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
       initialUnreadCount={unreadResult.count ?? 0}
       locationSyncEnabled={profileResult.data?.visibility_status !== "ghost"}
       currentUsername={profileResult.data?.username ?? null}
+      currentAvatarUrl={profileResult.data?.avatar_url ?? null}
     >
       {children}
     </AppShell>

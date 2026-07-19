@@ -9,6 +9,7 @@ import {
   CheckCheck,
   CheckCircle2,
   CircleDollarSign,
+  Compass,
   Eye,
   EyeOff,
   Ghost,
@@ -16,10 +17,13 @@ import {
   MapPinOff,
   MessageCircle,
   MessageSquareText,
+  Moon,
+  PartyPopper,
   RefreshCcw,
   ShieldCheck,
   UserPlus,
   Users,
+  Users2,
   X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -517,10 +521,11 @@ export function DashboardPageContent({
             <>
               {/* Mobile: a horizontal avatar strip so several Muddies are
                   visible at a glance without pushing the feed below the fold.
-                  Hidden scrollbar (touch scrolling preserved), edge-to-edge
-                  bleed via -mx-4. */}
+                  Hidden scrollbar keeps touch scrolling. The larger leading
+                  and top insets contain the animated halo at peak scale so
+                  the scroll boundary never cuts it into a sharp line. */}
               <div
-                className="glow-strip no-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pt-4 pb-2 md:hidden"
+                className="glow-strip no-scrollbar -mx-4 flex gap-4 overflow-x-auto pb-3 pl-12 pr-7 pt-7 md:hidden"
                 aria-label="Nearby Muddies"
               >
                 {nearbyPreview.map((friend) => {
@@ -554,7 +559,7 @@ export function DashboardPageContent({
               {/* Desktop/tablet: standalone glowing avatars (no card, no
                   border), the same visual language as the mobile strip but
                   wrapping. Padding keeps the contained glow from being clipped. */}
-              <div className="hidden flex-wrap gap-x-6 gap-y-5 pt-3 pb-1 md:flex" aria-label="Nearby Muddies">
+              <div className="hidden flex-wrap gap-x-6 gap-y-5 pb-1 pl-6 pt-3 md:flex" aria-label="Nearby Muddies">
                 {nearbyPreview.map((friend) => {
                   const name = friend.displayName || friend.username;
                   return (
@@ -744,11 +749,20 @@ function formatNearbyCount(total: number): string {
   return `${total} Muddies nearby`;
 }
 
-// Three compact tiles, short labels only (the full description lives in the
+// Compact tiles with short labels only (the full description lives in the
 // tooltip / aria-label and the opened flow, not permanently on Home). Each
 // links to its existing route; nothing here duplicates that feature's logic.
 const quickActions: Array<{
-  href: "/hangout-mode" | "/safe-arrival" | "/plans";
+  href:
+    | "/hangout-mode"
+    | "/safe-arrival"
+    | "/plans"
+    | "/events"
+    | "/groups"
+    | "/discover"
+    | "/invites"
+    | "/reminders"
+    | "/settings/engagement";
   label: string;
   description: string;
   icon: LucideIcon;
@@ -770,6 +784,42 @@ const quickActions: Array<{
     label: "New plan",
     description: "Create a plan and invite your Muddies.",
     icon: CalendarCheck2
+  },
+  {
+    href: "/events",
+    label: "Events",
+    description: "View events and see what is coming up.",
+    icon: PartyPopper
+  },
+  {
+    href: "/groups",
+    label: "Groups",
+    description: "Open your groups and group invitations.",
+    icon: Users2
+  },
+  {
+    href: "/discover",
+    label: "Socialize",
+    description: "Find people who are open to socializing.",
+    icon: Compass
+  },
+  {
+    href: "/invites",
+    label: "Invites",
+    description: "Review invitations and invite your Muddies.",
+    icon: UserPlus
+  },
+  {
+    href: "/reminders",
+    label: "Reminders",
+    description: "Review reminders for plans and connections.",
+    icon: Bell
+  },
+  {
+    href: "/settings/engagement",
+    label: "Focus",
+    description: "Manage Focus Mode and notification limits.",
+    icon: Moon
   }
 ];
 
@@ -777,19 +827,19 @@ function QuickActions() {
   return (
     <section className="min-w-0" aria-label="Quick actions">
       <h2 className="mb-3 text-lg font-semibold tracking-tight">Quick actions</h2>
-      <div className="grid min-w-0 grid-cols-3 gap-3">
+      <div className="grid min-w-0 grid-cols-3 gap-2">
         {quickActions.map((action) => (
           <Link
             key={action.href}
             href={action.href}
             aria-label={action.description}
             title={action.description}
-            className="focus-ring safe-motion flex h-[88px] min-w-0 flex-col items-center justify-center gap-2 rounded-2xl border border-border/70 bg-card/50 p-2 text-center hover:bg-secondary/40"
+            className="focus-ring safe-motion flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl border border-border/70 bg-card/50 p-1.5 text-center hover:bg-secondary/40"
           >
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-primary">
-              <action.icon className="h-4 w-4" aria-hidden="true" />
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/10 text-primary">
+              <action.icon className="h-3.5 w-3.5" aria-hidden="true" />
             </span>
-            <span className="text-xs font-medium leading-tight">{action.label}</span>
+            <span className="truncate text-[11px] font-medium leading-tight">{action.label}</span>
           </Link>
         ))}
       </div>

@@ -393,7 +393,7 @@ function CreatePlanModal({
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             onBlur={() => setNameTouched(true)}
-            placeholder="Lunch after class"
+            placeholder="Lunch later"
             className={fieldClassName}
           />
         </FormField>
@@ -425,7 +425,7 @@ function CreatePlanModal({
               id={`${formId}-place`}
               value={placeText}
               onChange={(event) => setPlaceText(event.target.value)}
-              placeholder="Campus café or nearby area"
+              placeholder="A café or nearby area"
               className={fieldClassName}
             />
             <p className="mt-1.5 text-xs text-muted-foreground">Use a general area, not an exact address.</p>

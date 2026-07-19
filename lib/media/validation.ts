@@ -75,8 +75,10 @@ export function sniffImageKind(bytes: Uint8Array): ImageKind | null {
 
 // Size caps by context (spec §40).
 export const MAX_UPLOAD_BYTES: Record<MediaContextType, number> = {
-  profile: 10 * 1024 * 1024,
-  moment: 15 * 1024 * 1024,
+  // These two contexts currently upload through Server Actions. Staying at
+  // 3 MB leaves room for multipart metadata within the deployed request cap.
+  profile: 3 * 1024 * 1024,
+  moment: 3 * 1024 * 1024,
   drop: 15 * 1024 * 1024,
   event: 15 * 1024 * 1024,
   plan: 15 * 1024 * 1024,
@@ -85,6 +87,22 @@ export const MAX_UPLOAD_BYTES: Record<MediaContextType, number> = {
 
 export function maxUploadBytesFor(context: MediaContextType): number {
   return MAX_UPLOAD_BYTES[context] ?? MAX_UPLOAD_BYTES.moment;
+}
+
+/** Fast browser-side feedback before a file is sent to the server. */
+export function validateImageSelection(
+  file: { size: number; type: string },
+  context: MediaContextType
+): string | null {
+  if (file.size <= 0) return "Choose an image first.";
+  if (!kindForMimeType(file.type)) return "Upload a PNG, JPG, or WebP image.";
+
+  const maximumBytes = maxUploadBytesFor(context);
+  if (file.size > maximumBytes) {
+    return `Use an image smaller than ${Math.floor(maximumBytes / (1024 * 1024))} MB.`;
+  }
+
+  return null;
 }
 
 export type UploadValidationInput = {

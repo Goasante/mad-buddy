@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { CalendarPlus, MapPin, Sparkles, Users } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   checkInToEventAction,
   checkOutAction,
@@ -56,9 +56,22 @@ export function EventsPageContent({ initialEvents = [] }: { initialEvents?: Even
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  const nowMs = Date.now();
+  const [nowMs, setNowMs] = useState(0);
+
+  useEffect(() => {
+    const updateClock = () => setNowMs(Date.now());
+    const frame = window.requestAnimationFrame(updateClock);
+    const interval = window.setInterval(updateClock, 30_000);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearInterval(interval);
+    };
+  }, []);
+
   const visibleEvents = useMemo(() => {
     if (activeTab === "mine") return events.filter((event) => event.isHost);
+    if (nowMs === 0) return activeTab === "live" ? [] : events;
     if (activeTab === "live") return events.filter((event) => isLive(event, nowMs));
     return events.filter((event) => !isLive(event, nowMs));
   }, [events, activeTab, nowMs]);

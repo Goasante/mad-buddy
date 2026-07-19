@@ -263,7 +263,13 @@ export function MessagesPageContent({
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Messages</h1>
           <p className="mt-2 text-sm text-muted-foreground">Chat privately with your approved Muddies.</p>
         </div>
-        <Button type="button" onClick={() => setNewMessageOpen(true)} aria-label="New message" title="New message">
+        <Button
+          type="button"
+          className="shrink-0 whitespace-nowrap"
+          onClick={() => setNewMessageOpen(true)}
+          aria-label="New message"
+          title="New message"
+        >
           <PenSquare className="h-4 w-4" aria-hidden="true" />
           New message
         </Button>
@@ -284,7 +290,7 @@ export function MessagesPageContent({
           title="No conversations yet"
           description="Message an approved Muddy to start one."
           action={
-            <Button type="button" onClick={() => setNewMessageOpen(true)} aria-label="New message">
+            <Button type="button" className="whitespace-nowrap" onClick={() => setNewMessageOpen(true)} aria-label="New message">
               <PenSquare className="h-4 w-4" aria-hidden="true" />
               New message
             </Button>

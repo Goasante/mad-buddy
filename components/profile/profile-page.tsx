@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell, Camera, Edit3, Image as ImageIcon, UserRound, Users } from "lucide-react";
 import { useRef, useState, useTransition } from "react";
 import { updateProfileAction, uploadAvatarAction } from "@/app/(app)/actions";
@@ -10,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/auth/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { validateImageSelection } from "@/lib/media/validation";
 import { cn } from "@/lib/utils";
 import type { VisibilityStatus } from "@/lib/supabase/database.types";
 
@@ -41,6 +43,7 @@ export function ProfilePageContent({
   initialVisibilityStatus,
   muddyCount = 0
 }: ProfilePageContentProps) {
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>("about");
   const [displayName, setDisplayName] = useState(initialDisplayName);
@@ -48,6 +51,7 @@ export function ProfilePageContent({
   const [bio, setBio] = useState(initialBio);
   const [moodStatus, setMoodStatus] = useState(initialMoodStatus);
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -74,6 +78,13 @@ export function ProfilePageContent({
       return;
     }
 
+    const selectionError = validateImageSelection(file, "profile");
+    if (selectionError) {
+      setFeedback(selectionError);
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+      return;
+    }
+
     const formData = new FormData();
     formData.append("avatar", file);
 
@@ -82,8 +93,12 @@ export function ProfilePageContent({
       setFeedback(result.message);
 
       if (result.ok && result.avatarUrl) {
+        setAvatarLoadFailed(false);
         setAvatarUrl(result.avatarUrl);
+        router.refresh();
       }
+
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
     });
   }
 
@@ -117,9 +132,17 @@ export function ProfilePageContent({
           <div className="-mt-12 flex flex-col items-start gap-4 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-end">
               <div className="grid h-24 w-24 shrink-0 place-items-center rounded-full border-4 border-card bg-secondary shadow-[0_8px_24px_hsl(var(--shadow)/0.24)] sm:h-28 sm:w-28">
-                {avatarUrl ? (
+                {avatarUrl && !avatarLoadFailed ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={avatarUrl} alt={displayName} className="h-full w-full rounded-full object-cover" />
+                  <img
+                    src={avatarUrl}
+                    alt={displayName}
+                    className="h-full w-full rounded-full object-cover"
+                    onError={() => {
+                      setAvatarLoadFailed(true);
+                      setFeedback("Your profile photo could not be displayed. Try uploading it again.");
+                    }}
+                  />
                 ) : (
                   <div className="grid h-full w-full place-items-center rounded-full bg-gradient-to-br from-orange-500/30 via-amber-400/20 to-lime-300/30">
                     <UserRound className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
@@ -240,7 +263,7 @@ export function ProfilePageContent({
           icon={Users}
           className="!shadow-none"
           title="Manage circles from Muddies"
-          description="Group your Muddies into circles (like Close Friends or Law School) from the Muddies tab."
+          description="Group your Muddies into circles, like Close Friends or Weekend Crew, from the Muddies tab."
           action={
             <Button type="button" asChild>
               <Link href="/friends?tab=circles">Go to Circles</Link>

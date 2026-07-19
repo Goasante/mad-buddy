@@ -24,16 +24,16 @@ export const privacyPolicyMarkdown = `
 
 ## Introduction
 
-Mad Buddy ("we", "us") is a private social proximity app operated by ${legalContactPlaceholders.companyName}, ${legalContactPlaceholders.businessAddress}. It lets friends you have mutually approved ("Muddies") know roughly when you are nearby — without ever sharing your exact location. This policy explains what we collect, why, what your friends can and cannot see, and what control you have.
+Mad Buddy ("we", "us") is a private social proximity app operated by ${legalContactPlaceholders.companyName}, ${legalContactPlaceholders.businessAddress}. It lets friends you have mutually approved ("Muddies") know roughly when you are nearby without ever sharing your exact location. This policy explains what we collect, why, what your friends can and cannot see, and what control you have.
 
 ## What we collect
 
-* **Account information** — your email address, display name, username, and password (stored as a hash by our authentication provider; we never see your plain-text password).
-* **Profile information you choose to add** — a bio, a mood status, and a profile photo.
-* **A single location signal** — when your glow is on, your device sends your current coordinates over an encrypted connection. We store only your most recent signal: each update overwrites the previous one. We do not keep a location history.
-* **Derived proximity signals** — short-lived records of which proximity tier (Very close, Nearby, Around you) applied between you and a Muddy, kept for the app's recent-activity features and designed to expire after 15 minutes.
-* **Notifications and social activity** — friend requests, waves, meet-up pings, and in-app notifications you send or receive.
-* **Billing information** — if you subscribe, our payment provider (Paystack) processes your payment. We store a reference to your subscription status and plan, never your card number.
+* **Account information:** your email address, display name, username, and password (stored as a hash by our authentication provider; we never see your plain-text password).
+* **Profile information you choose to add:** a bio, a mood status, and a profile photo.
+* **A single location signal:** when your glow is on, your device sends your current coordinates over an encrypted connection. We store only your most recent signal: each update overwrites the previous one. We do not keep a location history.
+* **Derived proximity signals:** short-lived records of which proximity tier (Very close, Nearby, Around you) applied between you and a Muddy, kept for the app's recent-activity features and designed to expire after 15 minutes.
+* **Notifications and social activity:** friend requests, waves, meet-up pings, and in-app notifications you send or receive.
+* **Billing information:** if you subscribe, our payment provider (Paystack) processes your payment. We store a reference to your subscription status and plan, never your card number.
 
 ## How location actually works
 
@@ -78,7 +78,7 @@ Subscriptions are processed by Paystack. Payment webhooks from Paystack are cryp
 
 ## Logging and analytics
 
-Our server logs record request metadata (route, status, timing, error category) for reliability and abuse prevention. Our logging layer is built to refuse location fields — coordinates are not written to logs. We do not currently use third-party analytics.
+Our server logs record request metadata (route, status, timing, error category) for reliability and abuse prevention. Our logging layer is built to refuse location fields, so coordinates are not written to logs. We do not currently use third-party analytics.
 
 ## Your rights and choices
 

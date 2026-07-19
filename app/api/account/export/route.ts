@@ -42,7 +42,10 @@ export async function GET() {
     meetupRequestsSent,
     meetupRequestsReceived,
     bestBuddies,
-    eventModes
+    eventModes,
+    appFeedback,
+    supportRequests,
+    mediaAssets
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
     supabase.from("subscriptions").select("*").eq("user_id", userId).maybeSingle(),
@@ -63,7 +66,10 @@ export async function GET() {
     supabase.from("meetup_requests").select("*").eq("sender_id", userId),
     supabase.from("meetup_requests").select("*").eq("receiver_id", userId),
     supabase.from("best_buddies").select("*").eq("user_id", userId),
-    supabase.from("event_modes").select("*").eq("user_id", userId)
+    supabase.from("event_modes").select("*").eq("user_id", userId),
+    supabase.from("app_feedback").select("category, rating, message, status, created_at, updated_at").eq("user_id", userId),
+    supabase.from("support_requests").select("full_name, email, message, status, created_at, updated_at").eq("user_id", userId),
+    supabase.from("media_assets").select("id, content_type, size_bytes, context_type, processing_status, moderation_status, created_at, updated_at, deleted_at").eq("owner_id", userId)
   ]);
 
   const failed = [
@@ -86,7 +92,10 @@ export async function GET() {
     meetupRequestsSent,
     meetupRequestsReceived,
     bestBuddies,
-    eventModes
+    eventModes,
+    appFeedback,
+    supportRequests,
+    mediaAssets
   ].find((result) => result.error);
 
   if (failed?.error) {
@@ -141,7 +150,10 @@ export async function GET() {
         received: meetupRequestsReceived.data ?? []
       },
       bestBuddies: bestBuddies.data ?? [],
-      eventModes: eventModes.data ?? []
+      eventModes: eventModes.data ?? [],
+      appFeedback: appFeedback.data ?? [],
+      supportRequests: supportRequests.data ?? [],
+      mediaAssets: mediaAssets.data ?? []
     }
   };
 

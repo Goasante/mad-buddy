@@ -22,6 +22,20 @@ const notificationPreferenceSchema = z.object({
   nearbyAlerts: z.boolean()
 });
 
+const appPreferencesSchema = z.object({
+  language: z.enum(["English (US)", "English (UK)", "Twi", "French"]),
+  region: z.enum(["Ghana (GH)", "Nigeria (NG)", "United States (US)", "United Kingdom (UK)"]),
+  timeZone: z.enum(["Africa/Accra", "Africa/Lagos", "America/New_York", "Europe/London"]),
+  dateFormat: z.enum(["DD MMM YYYY", "MM/DD/YYYY", "DD/MM/YYYY"]),
+  timeFormat: z.enum(["12h", "24h"])
+});
+
+const feedbackSchema = z.object({
+  category: z.enum(["feedback", "suggestion"]),
+  rating: z.number().int().min(1).max(5).nullable(),
+  message: z.string().trim().max(500)
+}).refine((value) => value.rating !== null || value.message.length >= 3);
+
 function missingSupabaseState(): SettingsActionState | null {
   const browserEnv = getSupabaseBrowserEnv();
   const serverEnv = getSupabaseServerEnv();
@@ -50,14 +64,52 @@ async function getAuthedUser() {
   return user;
 }
 
-async function removeAvatarFolder(userId: string) {
+async function removeAvatarFolder(userId: string): Promise<string | null> {
   const admin = createSupabaseAdminClient();
-  const { data } = await admin.storage.from("avatars").list(userId);
+  const { data, error: listError } = await admin.storage.from("avatars").list(userId);
+  if (listError) return listError.message;
+
   const files = data?.map((file) => `${userId}/${file.name}`) ?? [];
 
   if (files.length > 0) {
-    await admin.storage.from("avatars").remove(files);
+    const { error: removeError } = await admin.storage.from("avatars").remove(files);
+    if (removeError) return removeError.message;
   }
+
+  return null;
+}
+
+async function removePrivateMedia(userId: string): Promise<string | null> {
+  const admin = createSupabaseAdminClient();
+  const { data: assets, error: assetError } = await admin
+    .from("media_assets")
+    .select("id, storage_key")
+    .eq("owner_id", userId);
+
+  if (assetError) return assetError.message;
+  if (!assets || assets.length === 0) return null;
+
+  const assetIds = assets.map((asset) => asset.id);
+  const { data: variants, error: variantError } = await admin
+    .from("media_variants")
+    .select("storage_key")
+    .in("media_asset_id", assetIds);
+
+  if (variantError) return variantError.message;
+
+  const keys = [
+    ...assets.map((asset) => asset.storage_key),
+    ...(variants ?? []).map((variant) => variant.storage_key)
+  ];
+
+  for (let index = 0; index < keys.length; index += 100) {
+    const { error: removeError } = await admin.storage
+      .from("media")
+      .remove(keys.slice(index, index + 100));
+    if (removeError) return removeError.message;
+  }
+
+  return null;
 }
 
 export async function deleteAccountAction(input: unknown): Promise<SettingsActionState> {
@@ -92,8 +144,21 @@ export async function deleteAccountAction(input: unknown): Promise<SettingsActio
     .eq("user_id", userId)
     .maybeSingle();
 
-  await admin.rpc("prepare_deleted_user_reports", { target_user_id: userId });
-  await removeAvatarFolder(userId);
+  const { error: reportPreparationError } = await admin.rpc("prepare_deleted_user_reports", {
+    target_user_id: userId
+  });
+  if (reportPreparationError) {
+    return { ok: false, message: reportPreparationError.message };
+  }
+
+  const [avatarRemovalError, mediaRemovalError] = await Promise.all([
+    removeAvatarFolder(userId),
+    removePrivateMedia(userId)
+  ]);
+  const storageRemovalError = avatarRemovalError ?? mediaRemovalError;
+  if (storageRemovalError) {
+    return { ok: false, message: storageRemovalError };
+  }
 
   const deletions = await Promise.all([
     admin.from("proximity_events").delete().or(`user_id.eq.${userId},friend_id.eq.${userId}`),
@@ -198,20 +263,64 @@ export async function updateNotificationPreferenceAction(input: unknown): Promis
     return { ok: false, message: "Log in before changing notification settings." };
   }
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("user_preferences").upsert({
+  const admin = createSupabaseAdminClient();
+  const { data: existing } = await admin
+    .from("user_preferences")
+    .select("notification_preferences")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const prior = existing?.notification_preferences && typeof existing.notification_preferences === "object" && !Array.isArray(existing.notification_preferences)
+    ? existing.notification_preferences
+    : {};
+  const { error } = await admin.from("user_preferences").upsert({
     user_id: user.id,
-    notification_preferences: {
-      nearbyAlerts: parsed.data.nearbyAlerts,
-      updatedAt: new Date().toISOString()
-    }
-  });
+    notification_preferences: { ...prior, nearbyAlerts: parsed.data.nearbyAlerts, updatedAt: new Date().toISOString() }
+  }, { onConflict: "user_id" });
 
   if (error) {
     return { ok: false, message: error.message };
   }
 
   return { ok: true, message: "Notification preference saved." };
+}
+
+export async function updateAppPreferencesAction(input: unknown): Promise<SettingsActionState> {
+  const parsed = appPreferencesSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check your preferences and try again." };
+  const user = await getAuthedUser();
+  if (!user) return { ok: false, message: "Log in before saving preferences." };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("user_preferences").upsert(
+    { user_id: user.id, app_preferences: parsed.data },
+    { onConflict: "user_id" }
+  );
+  return error ? { ok: false, message: "Couldn't save your preferences." } : { ok: true, message: "Preferences saved." };
+}
+
+export async function submitAppFeedbackAction(input: unknown): Promise<SettingsActionState> {
+  const parsed = feedbackSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Add a rating or at least three characters." };
+  const user = await getAuthedUser();
+  if (!user) return { ok: false, message: "Log in before sending feedback." };
+  const { consumeRateLimit, rateLimitMessage } = await import("@/lib/security/rate-limit");
+  const limit = await consumeRateLimit({ action: "feedback.submit", userId: user.id });
+  if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("app_feedback").insert({
+    user_id: user.id,
+    category: parsed.data.category,
+    rating: parsed.data.category === "feedback" ? parsed.data.rating : null,
+    message: parsed.data.message
+  });
+  return error ? { ok: false, message: "Couldn't send your feedback. Try again." } : { ok: true, message: "Thanks, your feedback was sent." };
+}
+
+export async function revokeOtherSessionsAction(): Promise<SettingsActionState> {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Log in before managing sessions." };
+  const { error } = await supabase.auth.signOut({ scope: "others" });
+  return error ? { ok: false, message: "Couldn't log out the other sessions." } : { ok: true, message: "Other sessions logged out." };
 }
 
 const smartNotificationPreferencesSchema = z.object({

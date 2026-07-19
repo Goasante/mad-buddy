@@ -6,13 +6,18 @@ import { useEffect } from "react";
 import {
   ArrowRight,
   Bell,
+  CalendarDays,
   CalendarCheck2,
   Check,
+  Coffee,
   Eye,
   EyeOff,
   Ghost,
-  GraduationCap,
   Hand,
+  History,
+  LockKeyhole,
+  Map,
+  MapPinOff,
   MessageCircle,
   Music2,
   Radio,
@@ -59,20 +64,55 @@ const howItWorksSteps = [
 
 const useCases = [
   {
-    title: "Campus catch-ups",
-    description: "Know when an approved campus Muddy is nearby, without tracking each other.",
-    icon: GraduationCap
+    title: "Easy catch-ups",
+    description: "Turn a quick break into a hello.",
+    icon: Coffee
   },
   {
     title: "Same event",
-    description: "Find approved Muddies who are at the same event or venue.",
+    description: "Notice approved friends at the same venue.",
     icon: Music2
   },
   {
-    title: "Close friends",
-    description: "Stay loosely connected without sharing exact locations.",
+    title: "Everyday plans",
+    description: "Coffee, food, walks, or spontaneous meetups.",
+    icon: Users
+  },
+  {
+    title: "Privacy-first",
+    description: "Everything is designed around your privacy.",
+    icon: ShieldCheck
+  }
+];
+
+const momentSteps = [
+  {
+    title: "Glow",
+    description: "See an approved Muddy nearby.",
+    icon: Sparkles
+  },
+  {
+    title: "Wave",
+    description: "Start a simple conversation.",
+    icon: Hand
+  },
+  {
+    title: "Plan",
+    description: "Agree on a place and time.",
+    icon: CalendarDays
+  },
+  {
+    title: "Meet",
+    description: "Turn digital proximity into real moments.",
     icon: Users
   }
+];
+
+const momentTrustPoints = [
+  { label: "Approved friends only", icon: LockKeyhole },
+  { label: "No exact location", icon: MapPinOff },
+  { label: "No maps", icon: Map },
+  { label: "No location history", icon: History }
 ];
 
 const muddiesMaySee = [
@@ -320,24 +360,102 @@ function RealLifeMomentsSection() {
   return (
     <section
       id="real-life-moments"
-      className="landing-section relative flex min-h-[calc(100svh-var(--header-height))] items-center overflow-clip bg-secondary/20 px-4 py-10 sm:px-6 lg:px-10"
+      className="landing-section relative flex min-h-[calc(100svh-var(--header-height))] items-center overflow-clip bg-secondary/20 px-4 py-16 sm:px-6 sm:py-20 lg:px-10"
     >
-      <div className="landing-reveal mx-auto w-full max-w-7xl">
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_42%,hsl(var(--primary)/0.08),transparent_30%),radial-gradient(circle_at_82%_58%,hsl(var(--primary)/0.05),transparent_28%)]"
+        aria-hidden="true"
+      />
+      <div className="landing-reveal moment-story relative mx-auto w-full max-w-7xl">
         <SectionHeading
           eyebrow="Real-life moments"
           title="Made for moments that happen offline."
+          description="See who's around. Say hello. Make plans. Meet in real life."
           align="center"
         />
-        <div className="mx-auto mt-10 grid max-w-5xl gap-4 md:grid-cols-3">
-          {useCases.map((item) => (
-            <article key={item.title} className="rounded-2xl border border-border/80 bg-card/60 p-5">
-              <span className="grid h-10 w-10 place-items-center rounded-full bg-primary/10 text-primary">
-                <item.icon className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <h3 className="mt-3 text-base font-semibold">{item.title}</h3>
-              <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{item.description}</p>
-            </article>
+        <div className="mx-auto mt-12 grid max-w-6xl items-start gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:gap-10">
+          <div className="rounded-[1.75rem] border border-border/70 bg-card/45 p-5 shadow-[0_24px_70px_hsl(var(--shadow)/0.1)] sm:p-7">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Nearby to real life</p>
+            <ol className="mt-6" aria-label="How a nearby moment becomes a real-life meeting">
+              {momentSteps.map((step, index) => (
+                <li key={step.title} className="moment-step relative flex gap-4 pb-5 last:pb-0 sm:gap-5">
+                  <div className="relative z-10 flex w-11 shrink-0 justify-center">
+                    <span className="grid h-11 w-11 place-items-center rounded-full border border-primary/35 bg-primary/10 text-primary shadow-[0_0_24px_hsl(var(--primary)/0.12)]">
+                      <step.icon className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                  </div>
+                  <article className="group min-h-[104px] flex-1 rounded-2xl border border-border/70 bg-background/60 p-4 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_18px_40px_hsl(var(--primary)/0.1)] sm:p-5">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-semibold tabular-nums text-primary">0{index + 1}</span>
+                      <h3 className="text-base font-semibold">{step.title}</h3>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{step.description}</p>
+                  </article>
+                </li>
+              ))}
+            </ol>
+
+            <div className="moment-trust mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                Privacy built in
+              </div>
+              <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                {momentTrustPoints.map((point) => (
+                  <li key={point.label} className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                    {point.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Made for everyday connection</p>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              {useCases.map((item) => (
+                <article
+                  key={item.title}
+                  className="moment-benefit group relative min-h-[156px] overflow-hidden rounded-2xl border border-border/70 bg-card/60 p-5 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-[0_18px_45px_hsl(var(--primary)/0.1)]"
+                >
+                  <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full border border-primary/10 transition-transform duration-500 group-hover:scale-125" aria-hidden="true" />
+                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary transition-colors duration-300 group-hover:bg-primary group-hover:text-primary-foreground">
+                    <item.icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <h3 className="mt-4 text-base font-semibold">{item.title}</h3>
+                  <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{item.description}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <ul className="moment-trust mx-auto mt-8 flex max-w-5xl flex-wrap items-center justify-center gap-x-6 gap-y-3 border-y border-border/60 py-4" aria-label="Mad Buddy privacy protections">
+          {momentTrustPoints.map((point) => (
+            <li key={point.label} className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground sm:text-sm">
+              <point.icon className="h-4 w-4 text-primary" aria-hidden="true" />
+              {point.label}
+            </li>
           ))}
+        </ul>
+
+        <div className="moment-cta mx-auto mt-10 flex max-w-3xl flex-col items-center text-center">
+          <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">Ready to meet naturally?</h3>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+            Join Mad Buddy and turn nearby moments into real connections.
+          </p>
+          <div className="mt-6 flex w-full flex-col justify-center gap-3 sm:w-auto sm:flex-row">
+            <Button asChild size="lg">
+              <Link href="/signup" aria-label="Join Mad Buddy">
+                Join Mad Buddy
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline">
+              <a href="#how-it-works" aria-label="See how Mad Buddy works">See how it works</a>
+            </Button>
+          </div>
         </div>
       </div>
     </section>
@@ -564,7 +682,7 @@ function Footer() {
         </div>
 
         <div className="mt-10 flex flex-col gap-3 border-t border-border/70 pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <p>© {new Date().getFullYear()} Mad Buddy. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} Mad Buddy. All rights reserved.</p>
         </div>
       </div>
     </footer>

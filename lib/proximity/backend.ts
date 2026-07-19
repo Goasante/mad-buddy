@@ -84,38 +84,45 @@ export function haversineMeters(a: Pick<LocationUpdateRequest, "latitude" | "lon
   return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(centralAngle), Math.sqrt(1 - centralAngle));
 }
 
+// Broad area bands. These are intentionally computed only on the server and
+// never returned as distances. The client receives the derived label only.
+export const VERY_CLOSE_MAX_METERS = 25_000;
+export const NEARBY_MAX_METERS = 50_000;
+export const AROUND_MAX_METERS = 100_000;
+
 export function bucketProximity(distanceMeters: number): ProximityLevel {
-  if (distanceMeters <= 100) {
+  if (distanceMeters <= VERY_CLOSE_MAX_METERS) {
     return "very_close";
   }
 
-  if (distanceMeters <= 500) {
+  if (distanceMeters <= NEARBY_MAX_METERS) {
     return "nearby";
   }
 
-  if (distanceMeters <= 1500) {
+  if (distanceMeters <= AROUND_MAX_METERS) {
     return "around";
   }
 
   return "far";
 }
 
-export function downgradeForConfidence(level: ProximityLevel, confidence: ConfidenceLevel): ProximityLevel {
-  if (confidence === "high") {
-    return level;
-  }
+const confidenceUncertaintyMeters: Record<ConfidenceLevel, number> = {
+  high: 0,
+  medium: 1_000,
+  low: 20_000
+};
 
-  if (confidence === "medium" && level === "very_close") {
-    return "nearby";
-  }
-
-  if (confidence === "low") {
-    if (level === "very_close" || level === "nearby") {
-      return "around";
-    }
-  }
-
-  return level;
+/**
+ * Applies uncertainty at a band boundary instead of blindly downgrading the
+ * whole band. Two readings at the same place remain Very close even when the
+ * device reports a soft signal, while a reading close to a boundary resolves
+ * outward rather than making an overconfident claim.
+ */
+export function bucketProximityWithConfidence(
+  distanceMeters: number,
+  confidence: ConfidenceLevel
+): ProximityLevel {
+  return bucketProximity(distanceMeters + confidenceUncertaintyMeters[confidence]);
 }
 
 export function glowStrengthForLevel(level: ProximityLevel) {
@@ -266,8 +273,8 @@ export function buildSafeNearbyFriends(input: {
     }
 
     const pairConfidence = weakerConfidence(input.viewer.confidence, location.confidence);
-    const rawLevel = bucketProximity(haversineMeters(input.viewer, location));
-    const proximityLevel = downgradeForConfidence(rawLevel, pairConfidence);
+    const measuredDistance = haversineMeters(input.viewer, location);
+    const proximityLevel = bucketProximityWithConfidence(measuredDistance, pairConfidence);
     const glowStrength = glowStrengthForLevel(proximityLevel);
 
     return [

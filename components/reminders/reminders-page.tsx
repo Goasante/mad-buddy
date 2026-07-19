@@ -1,107 +1,44 @@
-"use client";
-
 import Link from "next/link";
-import { AtSign, Bell, CalendarClock, MessageSquare, UserPlus } from "lucide-react";
-import { useState } from "react";
-import { PrivacyToggle } from "@/components/settings/privacy-toggle";
+import { Bell, CalendarClock, Settings } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { cn } from "@/lib/utils";
-import { PreviewNotice } from "@/components/ui/preview-notice";
+import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 
-type ReminderTab = "upcoming" | "snoozed" | "completed";
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(value));
+}
 
-type Reminder = {
-  id: string;
-  title: string;
-  dateLabel: string;
-  location: string;
-  countdown: string;
-};
-
-const seedReminders: Reminder[] = [
-  { id: "r1", title: "Dinner Night", dateLabel: "Tomorrow · 7:00 PM", location: "East Legon", countdown: "In 1h 30m" },
-  { id: "r2", title: "Football Match", dateLabel: "Sat, 24 May · 6:00 PM", location: "Legon Park", countdown: "In 2 days" },
-  { id: "r3", title: "Movie Night", dateLabel: "Sun, 25 May · 8:00 PM", location: "Accra Mall", countdown: "In 3 days" },
-  { id: "r4", title: "Study Session", dateLabel: "Mon, 26 May · 7:30 PM", location: "Legon Library", countdown: "In 4 days" }
-];
-
-const reminderTabs: Array<{ id: ReminderTab; label: string }> = [
-  { id: "upcoming", label: "Upcoming" },
-  { id: "snoozed", label: "Snoozed" },
-  { id: "completed", label: "Completed" }
-];
-
-export function RemindersPage() {
-  const [tab, setTab] = useState<ReminderTab>("upcoming");
-  const [planReminders, setPlanReminders] = useState(true);
-  const [messages, setMessages] = useState(true);
-  const [mentions, setMentions] = useState(true);
-  const [newConnections, setNewConnections] = useState(false);
-
+export function RemindersPage({ plans, hasMore }: { plans: HomeUpcomingPlan[]; hasMore: boolean }) {
   return (
-    <div className="mx-auto max-w-[1000px] space-y-6 pt-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Reminders</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Stay informed on what matters.</p>
-      </div>
-
-      <PreviewNotice />
-
-      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-        <div className="space-y-4">
-          <div className="flex gap-1 border-b border-border/70">
-            {reminderTabs.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setTab(item.id)}
-                className={cn(
-                  "focus-ring safe-motion border-b-2 px-4 py-3 text-sm font-medium",
-                  tab === item.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          {tab === "upcoming" ? (
-            <div className="space-y-2">
-              {seedReminders.map((reminder) => (
-                <div key={reminder.id} className="flex items-center gap-3 rounded-xl border border-border/70 bg-card/50 p-4">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                    <CalendarClock className="h-5 w-5" aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{reminder.title}</p>
-                    <p className="text-xs text-muted-foreground">{reminder.dateLabel} · {reminder.location}</p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-xs font-medium text-primary">{reminder.countdown}</p>
-                    <Link href="/plans" className="text-xs text-muted-foreground hover:underline">
-                      View plan
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : tab === "snoozed" ? (
-            <EmptyState icon={Bell} className="!shadow-none" title="No snoozed reminders" description="Reminders you snooze will appear here." />
-          ) : (
-            <EmptyState icon={CalendarClock} className="!shadow-none" title="No completed reminders" description="Past reminders will show up here." />
-          )}
+    <div className="mx-auto max-w-[900px] space-y-6 pt-6">
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Reminders</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Upcoming plans that need your attention.</p>
         </div>
-
-        <div className="rounded-2xl border border-border/70 bg-card/50 p-2">
-          <p className="px-3 pt-2 text-sm font-semibold">Notification settings</p>
-          <div className="mt-1 divide-y divide-border/70">
-            <PrivacyToggle icon={CalendarClock} title="Plan reminders" description="Get reminded of upcoming plans." checked={planReminders} onCheckedChange={setPlanReminders} />
-            <PrivacyToggle icon={MessageSquare} title="Messages" description="Get notified for new messages." checked={messages} onCheckedChange={setMessages} />
-            <PrivacyToggle icon={AtSign} title="Mentions & replies" description="When someone mentions you." checked={mentions} onCheckedChange={setMentions} />
-            <PrivacyToggle icon={UserPlus} title="New connections" description="When someone connects with you." checked={newConnections} onCheckedChange={setNewConnections} />
-          </div>
-        </div>
-      </div>
+        <Button asChild type="button" variant="outline" size="icon" aria-label="Notification settings" title="Notification settings">
+          <Link href="/settings/notifications"><Settings className="h-4 w-4" aria-hidden="true" /></Link>
+        </Button>
+      </header>
+      {plans.length > 0 ? (
+        <section className="space-y-2" aria-label="Upcoming plan reminders">
+          {plans.map((plan) => (
+            <article key={plan.id} className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card/50 p-4 sm:flex-row sm:items-center">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                <CalendarClock className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-sm font-semibold">{plan.title}</h2>
+                <p className="text-xs text-muted-foreground">{formatDate(plan.startAt)}{plan.placeText ? ` · ${plan.placeText}` : ""}</p>
+              </div>
+              <Button asChild type="button" variant="outline" size="sm"><Link href="/plans">View plan</Link></Button>
+            </article>
+          ))}
+          {hasMore ? <Button asChild type="button" variant="ghost"><Link href="/plans">View all plans</Link></Button> : null}
+        </section>
+      ) : (
+        <EmptyState icon={Bell} className="!min-h-0 !shadow-none p-6" title="No upcoming reminders" description="Confirmed and invited plans with a future date will appear here." action={<Button asChild type="button" size="sm"><Link href="/plans">Create a plan</Link></Button>} />
+      )}
     </div>
   );
 }

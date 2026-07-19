@@ -165,7 +165,7 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
     })
   );
 
-  await admin
+  const { error: readyError } = await admin
     .from("media_assets")
     .update({
       storage_key: key,
@@ -177,6 +177,13 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
     })
     .eq("id", asset.id)
     .eq("owner_id", userId);
+
+  if (readyError) {
+    const storedPaths = [key, ...variantRows.map((row) => row.key)];
+    await admin.storage.from("media").remove(storedPaths);
+    await admin.from("media_assets").delete().eq("id", asset.id).eq("owner_id", userId);
+    return { ok: false, message: "Couldn't finish processing that image. Try again." };
+  }
 
   return { ok: true, message: "Image ready.", mediaId: asset.id };
 }

@@ -15,8 +15,6 @@ import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 
-type Admin = ReturnType<typeof createSupabaseAdminClient>;
-
 export type SocializeSession = {
   id: string;
   activity: SocializeActivity;

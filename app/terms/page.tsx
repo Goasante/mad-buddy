@@ -22,7 +22,7 @@ const sections: Array<{ title: string; body: string[] }> = [
   {
     title: "2. The service",
     body: [
-      "Mad Buddy lets mutually approved friends (\"Muddies\") see privacy-safe proximity signals, never exact locations, maps, or distances. Some features are labeled \"Preview\" in the app; preview features run on sample data and their changes are not saved.",
+      "Mad Buddy lets mutually approved friends (\"Muddies\") see privacy-safe proximity signals, never exact locations, maps, or distances.",
       "Proximity signals are estimates. Do not rely on Mad Buddy for safety-critical decisions, navigation, or emergencies."
     ]
   },

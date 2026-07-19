@@ -652,6 +652,7 @@ export type Database = {
           notification_preferences: Json;
           // Added by the batch-7 messaging migration.
           communication_preferences: Json;
+          app_preferences: Json;
         };
         Insert: {
           id?: string;
@@ -662,10 +663,55 @@ export type Database = {
           scheduled_visibility?: Json;
           notification_preferences?: Json;
           communication_preferences?: Json;
+          app_preferences?: Json;
           created_at?: string;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["user_preferences"]["Insert"]>;
+        Relationships: [];
+      };
+      app_feedback: {
+        Row: RowWithTimestamps & {
+          id: string;
+          user_id: string;
+          category: "feedback" | "suggestion";
+          rating: number | null;
+          message: string;
+          status: "new" | "reviewing" | "resolved" | "closed";
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          category: "feedback" | "suggestion";
+          rating?: number | null;
+          message?: string;
+          status?: "new" | "reviewing" | "resolved" | "closed";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["app_feedback"]["Insert"]>;
+        Relationships: [];
+      };
+      support_requests: {
+        Row: RowWithTimestamps & {
+          id: string;
+          user_id: string;
+          full_name: string;
+          email: string;
+          message: string;
+          status: "open" | "in_progress" | "resolved" | "closed";
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          full_name: string;
+          email: string;
+          message: string;
+          status?: "open" | "in_progress" | "resolved" | "closed";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["support_requests"]["Insert"]>;
         Relationships: [];
       };
       best_buddies: {
@@ -2910,6 +2956,10 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      accept_friend_request: {
+        Args: { p_request_id: string };
+        Returns: Array<{ sender_id: string; receiver_id: string }>;
+      };
       consume_rate_limit: {
         Args: {
           p_user_id: string | null;

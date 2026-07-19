@@ -18,6 +18,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.4
     },
     {
+      url: absoluteUrl("/about"),
+      lastModified,
+      changeFrequency: "yearly",
+      priority: 0.5
+    },
+    {
+      url: absoluteUrl("/faq"),
+      lastModified,
+      changeFrequency: "monthly",
+      priority: 0.5
+    },
+    {
       url: absoluteUrl("/pricing"),
       lastModified,
       changeFrequency: "monthly",

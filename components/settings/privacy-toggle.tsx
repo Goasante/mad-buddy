@@ -1,6 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
+import { SwitchTrack } from "@/components/ui/app-switch";
 import { cn } from "@/lib/utils";
 
 export type PrivacyToggleProps = {
@@ -31,7 +32,8 @@ export function PrivacyToggle({
       onClick={() => {
         if (!disabled) onCheckedChange(!checked);
       }}
-      aria-pressed={checked}
+      role="switch"
+      aria-checked={checked}
       aria-label={title}
       title={title}
     >
@@ -42,19 +44,7 @@ export function PrivacyToggle({
           <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
         </div>
       </div>
-      <span
-        className={cn(
-          "relative h-6 w-11 shrink-0 rounded-full transition-colors motion-reduce:transition-none",
-          checked ? "bg-accent" : "bg-muted"
-        )}
-      >
-        <span
-          className={cn(
-            "absolute top-1 h-4 w-4 rounded-full bg-white transition-transform motion-reduce:transition-none",
-            checked ? "translate-x-6" : "translate-x-1"
-          )}
-        />
-      </span>
+      <SwitchTrack checked={checked} disabled={disabled} />
     </button>
   );
 }

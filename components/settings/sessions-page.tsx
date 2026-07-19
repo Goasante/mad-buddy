@@ -1,51 +1,43 @@
 "use client";
 
-import { Laptop, Smartphone } from "lucide-react";
+import { Laptop, Loader2 } from "lucide-react";
+import { useState, useTransition } from "react";
 import { logoutAction } from "@/app/(auth)/actions";
+import { revokeOtherSessionsAction } from "@/app/(app)/settings-actions";
 import { Button } from "@/components/ui/button";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
-import { PreviewNotice } from "@/components/ui/preview-notice";
 
-const sessions = [
-  { id: "s1", device: "Windows · Chrome", location: "This device", active: true, icon: Laptop },
-  { id: "s2", device: "iPhone · Mad Buddy App", location: "2 hours ago", active: true, icon: Smartphone },
-  { id: "s3", device: "MacBook Pro · Safari", location: "1 day ago", active: true, icon: Laptop },
-  { id: "s4", device: "Android · Samsung S23", location: "3 days ago", active: false, icon: Smartphone }
-];
-
-export function SessionsPage() {
+export function SessionsPage({ deviceLabel, signedInAt }: { deviceLabel: string; signedInAt: string | null }) {
+  const [feedback, setFeedback] = useState("");
+  const [isPending, startTransition] = useTransition();
   return (
     <div className="mr-auto max-w-[640px] space-y-6 pt-6">
-      <SettingsSubHeader title="Sessions" description="You're currently logged in on these devices." />
-
-      <PreviewNotice />
-
-      <ul className="divide-y divide-border/70 rounded-xl border border-border/70">
-        {sessions.map((session) => (
-          <li key={session.id} className="flex items-center gap-3 px-4 py-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground">
-              <session.icon className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{session.device}</p>
-              <p className="text-xs text-muted-foreground">{session.location}</p>
-            </div>
-            <span className={session.active ? "text-xs font-medium text-emerald-600 dark:text-emerald-400" : "text-xs text-muted-foreground"}>
-              {session.active ? "Active now" : "Logged out"}
-            </span>
-          </li>
-        ))}
-      </ul>
-
+      <SettingsSubHeader title="Sessions" description="Review this session or log out other active sessions." />
+      <section className="rounded-xl border border-border/70" aria-labelledby="current-session-title">
+        <div className="flex items-center gap-3 px-4 py-4">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground">
+            <Laptop className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p id="current-session-title" className="truncate text-sm font-medium">{deviceLabel}</p>
+            <p className="text-xs text-muted-foreground">
+              {signedInAt ? `Signed in ${new Date(signedInAt).toLocaleString()}` : "Current browser session"}
+            </p>
+          </div>
+          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Active now</span>
+        </div>
+      </section>
+      {feedback ? <p className="text-sm text-muted-foreground" role="status">{feedback}</p> : null}
       <div className="space-y-3">
-        <Button type="button" variant="outline" className="w-full border-red-400/40 text-red-700 hover:bg-red-400/10 dark:text-red-200">
+        <Button type="button" variant="outline" className="w-full" disabled={isPending} onClick={() => startTransition(async () => {
+          const result = await revokeOtherSessionsAction();
+          setFeedback(result.message);
+        })}>
+          {isPending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
           Log out all other sessions
         </Button>
         <form action={logoutAction}>
-          <Button type="submit" variant="danger" className="w-full">
-            Log out of this account
-          </Button>
-          <p className="mt-2 text-center text-xs text-muted-foreground">You&apos;ll need your password to log back in.</p>
+          <Button type="submit" variant="danger" className="w-full">Log out of this account</Button>
         </form>
       </div>
     </div>

@@ -22,23 +22,24 @@ export function InviteBuddiesPage({ initialQr = null }: { initialQr?: PersonalQr
   const [qr, setQr] = useState<PersonalQr | null>(initialQr);
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [qrImage, setQrImage] = useState<string | null>(null);
+  const [qrImage, setQrImage] = useState<{ token: string; url: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   // Rendered locally from the opaque token, nothing personal is encoded.
   useEffect(() => {
-    if (!qr?.token) {
-      setQrImage(null);
-      return;
-    }
+    if (!qr?.token) return;
+
+    const token = qr.token;
     let cancelled = false;
-    void toDataURL(qr.token, { margin: 1, width: 220 }).then((url) => {
-      if (!cancelled) setQrImage(url);
+    void toDataURL(token, { margin: 1, width: 220 }).then((url) => {
+      if (!cancelled) setQrImage({ token, url });
     });
     return () => {
       cancelled = true;
     };
   }, [qr?.token]);
+
+  const currentQrImage = qr?.token && qrImage?.token === qr.token ? qrImage.url : null;
 
   const fullUrl = invite ? `${typeof window !== "undefined" ? window.location.origin : ""}${invite.url}` : "";
 
@@ -147,9 +148,9 @@ export function InviteBuddiesPage({ initialQr = null }: { initialQr?: PersonalQr
           <div className="mt-4 space-y-3">
             <div className="grid place-items-center rounded-xl border border-border/70 bg-white p-4">
               {/* The token itself is opaque and carries no personal data. */}
-              {qrImage ? (
+              {currentQrImage ? (
                 // eslint-disable-next-line @next/next/no-img-element -- local data URL, not a remote asset
-                <img src={qrImage} alt="Your personal QR code" width={220} height={220} />
+                <img src={currentQrImage} alt="Your personal QR code" width={220} height={220} />
               ) : (
                 <p className="break-all text-center font-mono text-[10px] text-muted-foreground">{qr.token}</p>
               )}

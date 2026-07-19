@@ -16,7 +16,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export type EngagementActionState = { ok: boolean; message: string };
+export type EngagementActionState = { ok: boolean; message: string; endsAt?: string };
 
 export type EngagementSettings = {
   recapsEnabled: boolean;
@@ -304,11 +304,12 @@ export async function startExamModeAction(input: unknown): Promise<EngagementAct
     },
     { onConflict: "user_id" }
   );
-  if (error) return { ok: false, message: "Couldn't start Exam Mode." };
+  if (error) return { ok: false, message: "Couldn't start Focus Mode." };
 
   return {
     ok: true,
-    message: `Exam Mode is on until ${new Date(endsAtMs).toLocaleString([], {
+    endsAt: new Date(endsAtMs).toISOString(),
+    message: `Focus Mode is on until ${new Date(endsAtMs).toLocaleString([], {
       weekday: "short",
       hour: "numeric",
       minute: "2-digit"
@@ -330,6 +331,6 @@ export async function endExamModeAction(): Promise<EngagementActionState> {
       { user_id: userId, exam_mode_until: null, updated_at: new Date().toISOString() },
       { onConflict: "user_id" }
     );
-  if (error) return { ok: false, message: "Couldn't end Exam Mode." };
-  return { ok: true, message: "Exam Mode is off." };
+  if (error) return { ok: false, message: "Couldn't end Focus Mode." };
+  return { ok: true, message: "Focus Mode is off." };
 }

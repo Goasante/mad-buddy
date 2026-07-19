@@ -315,7 +315,7 @@ function CreateSafeArrivalModal({
             value={note}
             maxLength={200}
             onChange={(event) => setNote(event.target.value)}
-            placeholder="Taking a trotro from campus"
+            placeholder="Taking a ride from work"
           />
         </FormField>
         <div>

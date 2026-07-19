@@ -4,15 +4,15 @@ import {
   CreditCard,
   Eye,
   LifeBuoy,
-  Mail,
   MessageSquare,
-  Phone,
   Rocket,
   Search,
   Settings,
   Shield
 } from "lucide-react";
 import { useState } from "react";
+import { useTransition } from "react";
+import { submitSupportRequestAction } from "@/app/(app)/help-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,6 +33,8 @@ export function HelpCenterPage() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [isPending, startTransition] = useTransition();
 
   return (
     <div className="mx-auto max-w-[900px] space-y-8 pt-6">
@@ -84,22 +86,19 @@ export function HelpCenterPage() {
             </FormField>
             <Button
               type="button"
-              disabled={!name.trim() || !email.trim() || message.trim().length < 3}
-              onClick={() => setSent(true)}
+              disabled={isPending || !name.trim() || !email.trim() || message.trim().length < 3}
+              onClick={() => startTransition(async () => {
+                setFeedback("");
+                const result = await submitSupportRequestAction({ fullName: name, email, message });
+                if (result.ok) setSent(true);
+                else setFeedback(result.message);
+              })}
             >
-              Send message
+              {isPending ? "Sending..." : "Send message"}
             </Button>
+            {feedback ? <p className="text-sm text-red-600 dark:text-red-300" role="alert">{feedback}</p> : null}
           </div>
         )}
-
-        <div className="mt-5 grid gap-3 border-t border-border/70 pt-4 text-sm sm:grid-cols-2">
-          <p className="flex items-center gap-2 text-muted-foreground">
-            <Mail className="h-4 w-4 shrink-0" aria-hidden="true" /> support@madbuddy.app
-          </p>
-          <p className="flex items-center gap-2 text-muted-foreground">
-            <Phone className="h-4 w-4 shrink-0" aria-hidden="true" /> +233 55 550 1626
-          </p>
-        </div>
       </section>
     </div>
   );

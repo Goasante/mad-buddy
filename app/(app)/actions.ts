@@ -418,6 +418,27 @@ export async function sendFriendRequestAction(targetUserId: string): Promise<Int
     );
   const existingRequest = pendingRequests?.[0];
 
+  const pair = orderedPair(userId, parsedTarget.data);
+  const [{ data: existingFriendship }, { data: existingBlock }] = await Promise.all([
+    admin.from("friendships").select("id").match(pair).maybeSingle(),
+    admin
+      .from("blocked_users")
+      .select("id")
+      .or(
+        `and(blocker_id.eq.${userId},blocked_id.eq.${parsedTarget.data}),and(blocker_id.eq.${parsedTarget.data},blocked_id.eq.${userId})`
+      )
+      .limit(1)
+      .maybeSingle()
+  ]);
+
+  if (existingFriendship) {
+    return { ok: false, message: "This person is already your Muddy." };
+  }
+
+  if (existingBlock) {
+    return { ok: false, message: "A Muddy request cannot be sent for this account." };
+  }
+
   if (existingRequest) {
     if (existingRequest.sender_id === userId) {
       revalidatePath("/friends");
@@ -506,27 +527,23 @@ export async function acceptFriendRequestAction(requestId: string): Promise<Inte
     return { ok: false, message: "Log in before accepting Muddy requests." };
   }
 
+  const supabase = await createSupabaseServerClient();
+  const { data: settledRows, error: settleError } = await supabase.rpc("accept_friend_request", {
+    p_request_id: parsedRequest.data
+  });
+  const request = settledRows?.[0];
+
+  if (settleError || !request) {
+    return {
+      ok: false,
+      message:
+        settleError?.code === "P0002"
+          ? "This request has already been handled."
+          : settleError?.message ?? "Request not found."
+    };
+  }
+
   const admin = createSupabaseAdminClient();
-  const { data: request, error: requestError } = await admin
-    .from("friend_requests")
-    .select("sender_id, receiver_id")
-    .eq("id", parsedRequest.data)
-    .eq("receiver_id", userId)
-    .eq("status", "pending")
-    .single();
-
-  if (requestError || !request) {
-    return { ok: false, message: requestError?.message ?? "Request not found." };
-  }
-
-  const pair = orderedPair(request.sender_id, request.receiver_id);
-  const { error } = await admin.from("friendships").upsert(pair);
-
-  if (error) {
-    return { ok: false, message: error.message };
-  }
-
-  await admin.from("friend_requests").update({ status: "accepted" }).eq("id", parsedRequest.data);
 
   // Both sides now have a Muddy; the sender's request was also accepted.
   {
@@ -577,11 +594,28 @@ export async function updateFriendRequestStatusAction(
     return { ok: false, message: "Select a real request first." };
   }
 
+  const userId = await getAuthedUserId();
+  if (!userId) {
+    return { ok: false, message: "Log in before updating Muddy requests." };
+  }
+
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("friend_requests").update({ status }).eq("id", parsedRequest.data);
+  const participantColumn = status === "declined" ? "receiver_id" : "sender_id";
+  const { data: updatedRequest, error } = await supabase
+    .from("friend_requests")
+    .update({ status, responded_at: new Date().toISOString() })
+    .eq("id", parsedRequest.data)
+    .eq("status", "pending")
+    .eq(participantColumn, userId)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     return { ok: false, message: error.message };
+  }
+
+  if (!updatedRequest) {
+    return { ok: false, message: "This request has already been handled." };
   }
 
   revalidatePath("/friends");
@@ -589,7 +623,7 @@ export async function updateFriendRequestStatusAction(
 }
 
 export async function removeFriendAction(friendId: string): Promise<IntegrationActionState> {
-  const missingEnv = missingSupabaseState();
+  const missingEnv = missingSupabaseState() ?? missingServiceRoleState();
 
   if (missingEnv) {
     return missingEnv;
@@ -603,22 +637,37 @@ export async function removeFriendAction(friendId: string): Promise<IntegrationA
   }
 
   const pair = orderedPair(userId, parsedFriend.data);
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
+  const admin = createSupabaseAdminClient();
+  const { data: removed, error } = await admin
     .from("friendships")
     .delete()
     .eq("user_one_id", pair.user_one_id)
-    .eq("user_two_id", pair.user_two_id);
+    .eq("user_two_id", pair.user_two_id)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     return { ok: false, message: error.message };
   }
 
+  if (!removed) {
+    return { ok: false, message: "This person is no longer in your Muddies." };
+  }
+
+  await admin
+    .from("close_friend_relationships")
+    .delete()
+    .or(
+      `and(owner_id.eq.${userId},friend_id.eq.${parsedFriend.data}),and(owner_id.eq.${parsedFriend.data},friend_id.eq.${userId})`
+    );
+
+  revalidatePath("/friends");
+  revalidatePath("/dashboard");
   return { ok: true, message: "Muddy removed." };
 }
 
 export async function blockUserAction(targetUserId: string): Promise<IntegrationActionState> {
-  const missingEnv = missingSupabaseState();
+  const missingEnv = missingSupabaseState() ?? missingServiceRoleState();
 
   if (missingEnv) {
     return missingEnv;
@@ -641,12 +690,33 @@ export async function blockUserAction(targetUserId: string): Promise<Integration
     return { ok: false, message: error.message };
   }
 
+  const admin = createSupabaseAdminClient();
+  const pair = orderedPair(userId, parsedTarget.data);
+  await Promise.all([
+    admin.from("friendships").delete().match(pair),
+    admin
+      .from("friend_requests")
+      .update({ status: "blocked", responded_at: new Date().toISOString() })
+      .eq("status", "pending")
+      .or(
+        `and(sender_id.eq.${userId},receiver_id.eq.${parsedTarget.data}),and(sender_id.eq.${parsedTarget.data},receiver_id.eq.${userId})`
+      ),
+    admin
+      .from("close_friend_relationships")
+      .delete()
+      .or(
+        `and(owner_id.eq.${userId},friend_id.eq.${parsedTarget.data}),and(owner_id.eq.${parsedTarget.data},friend_id.eq.${userId})`
+      )
+  ]);
+
   // Blocking archives the pair's direct conversation immediately (batch 7):
   // sends were already refused via per-send block checks; this removes the
   // thread from both inboxes too.
   const { applyBlockToConversations } = await import("@/lib/messaging/service");
-  await applyBlockToConversations(createSupabaseAdminClient(), userId, parsedTarget.data);
+  await applyBlockToConversations(admin, userId, parsedTarget.data);
 
+  revalidatePath("/friends");
+  revalidatePath("/dashboard");
   return { ok: true, message: "User blocked." };
 }
 

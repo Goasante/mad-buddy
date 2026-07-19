@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { updateCommunicationPreferencesAction } from "@/app/(app)/messaging-actions";
+import { AppSwitch } from "@/components/ui/app-switch";
 import type { CommunicationPreferences } from "@/lib/messaging/service";
 import { cn } from "@/lib/utils";
 
@@ -114,25 +115,12 @@ export function CommunicationSettingsPage({ initialPreferences }: { initialPrefe
             <p className="text-sm font-semibold">{toggle.title}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">{toggle.description}</p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={prefs[toggle.key]}
+          <AppSwitch
+            label={toggle.title}
+            checked={prefs[toggle.key]}
             disabled={isPending}
-            onClick={() => save({ ...prefs, [toggle.key]: !prefs[toggle.key] })}
-            className={cn(
-              "focus-ring safe-motion relative h-6 w-11 shrink-0 rounded-full transition-colors",
-              prefs[toggle.key] ? "bg-primary" : "bg-border"
-            )}
-          >
-            <span
-              className={cn(
-                "absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform",
-                prefs[toggle.key] ? "translate-x-[22px]" : "translate-x-0.5"
-              )}
-              aria-hidden="true"
-            />
-          </button>
+            onCheckedChange={(checked) => save({ ...prefs, [toggle.key]: checked })}
+          />
         </div>
       ))}
     </div>

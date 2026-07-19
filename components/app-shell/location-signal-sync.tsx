@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+// Foreground-only web cadence. This keeps a moving device's broad proximity
+// signal current without claiming background tracking the browser cannot
+// guarantee after the tab or screen is suspended.
+const REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 const MINIMUM_REFRESH_GAP_MS = 60 * 1000;
 
 type LocationSignalSyncProps = {

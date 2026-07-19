@@ -5,6 +5,7 @@ import {
 } from "@/components/friends/friends-page";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { actionableFriendRequests } from "@/lib/friends/relationship-state";
 
 export const dynamic = "force-dynamic";
 
@@ -49,9 +50,11 @@ async function loadFriendNetwork(): Promise<{
     admin.from("blocked_users").select("blocked_id").eq("blocker_id", user.id)
   ]);
 
-  const requests = requestsResult.data ?? [];
+  const allPendingRequests = requestsResult.data ?? [];
   const friendships = friendshipsResult.data ?? [];
   const blocked = blockedResult.data ?? [];
+  const blockedIds = new Set(blocked.map((entry) => entry.blocked_id));
+  const requests = actionableFriendRequests(user.id, allPendingRequests, friendships, blockedIds);
   const profileIds = new Set<string>();
 
   requests.forEach((request) => {

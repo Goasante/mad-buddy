@@ -18,6 +18,7 @@ import {
   Send,
   Settings2,
   ShieldAlert,
+  Trash2,
   UserPlus,
   UsersRound,
   X
@@ -318,6 +319,48 @@ export function NotificationsPageContent({
     });
   }
 
+  function deleteNotifications(ids: string[]) {
+    if (ids.length === 0) return;
+
+    const idSet = new Set(ids);
+    const previous = notifications;
+    const next = notifications.filter((item) => !idSet.has(item.id));
+    setNotifications(next);
+    setSelectedIds(new Set());
+    setActionsOpen(false);
+    setSelectionMode(false);
+    if (selectedRequest && idSet.has(selectedRequest.id)) setSelectedRequest(null);
+    window.dispatchEvent(
+      new CustomEvent("mad-buddy:notifications-updated", {
+        detail: { unreadCount: next.filter((item) => item.unread).length }
+      })
+    );
+
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/notifications", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids })
+        });
+        const result = (await response.json().catch(() => null)) as { deletedIds?: string[] } | null;
+        const deletedIds = new Set(result?.deletedIds ?? []);
+        if (!response.ok || ids.some((id) => !deletedIds.has(id))) {
+          throw new Error("delete failed");
+        }
+        showToast(ids.length === 1 ? "Update deleted" : `${ids.length} updates deleted`);
+      } catch {
+        setNotifications(previous);
+        window.dispatchEvent(
+          new CustomEvent("mad-buddy:notifications-updated", {
+            detail: { unreadCount: previous.filter((item) => item.unread).length }
+          })
+        );
+        showToast(ids.length === 1 ? "Couldn’t delete this update. Try again." : "Couldn’t delete these updates. Try again.", true);
+      }
+    });
+  }
+
   return (
     <div className="mx-auto max-w-[1050px] space-y-4 pt-6">
       <section>
@@ -429,6 +472,14 @@ export function NotificationsPageContent({
                     ...(!allVisibleSelected ? [{ id: "select-all", label: "Select all", onSelect: selectAllVisible }] : []),
                     { id: "mark-read", label: "Mark as read", disabled: allSelectedRead, onSelect: () => applyBulkRead(true) },
                     { id: "mark-unread", label: "Mark as unread", disabled: allSelectedUnread, onSelect: () => applyBulkRead(false) },
+                    {
+                      id: "delete",
+                      label: selectedCount === 1 ? "Delete update" : "Delete selected",
+                      icon: <Trash2 className="h-4 w-4" />,
+                      destructive: true,
+                      separatorBefore: true,
+                      onSelect: () => deleteNotifications([...selectedIds])
+                    },
                     { id: "clear", label: "Clear selection", separatorBefore: true, onSelect: () => setSelectedIds(new Set()) }
                   ]}
                 />
@@ -470,6 +521,7 @@ export function NotificationsPageContent({
                         selectionMode={selectionMode}
                         selected={selectedIds.has(notification.id)}
                         onToggleSelect={() => toggleSelected(notification.id)}
+                        onDelete={() => deleteNotifications([notification.id])}
                         onActivate={() =>
                           notification.meetupRequestId
                             ? openMeetupRequest(notification)
@@ -685,6 +737,7 @@ type NotificationCardProps = {
   selectionMode: boolean;
   selected: boolean;
   onToggleSelect: () => void;
+  onDelete: () => void;
   onActivate: () => void;
 };
 
@@ -694,6 +747,7 @@ function NotificationCard({
   selectionMode,
   selected,
   onToggleSelect,
+  onDelete,
   onActivate
 }: NotificationCardProps) {
   const actionable = Boolean(notification.meetupRequestId);
@@ -744,55 +798,81 @@ function NotificationCard({
     </>
   );
 
+  const wrapperClass = "flex items-stretch border-b border-border/60 last:border-b-0";
   const baseClass =
-    "flex min-h-[80px] items-start gap-3 rounded-xl border-b border-border/60 px-2 py-3 last:border-b-0";
+    "flex min-h-[80px] min-w-0 flex-1 items-start gap-3 rounded-xl px-2 py-3";
   const interactiveClass =
     "focus-ring cursor-pointer text-left transition-colors hover:bg-secondary/50 active:bg-secondary/70";
+  const deleteControl = !selectionMode ? (
+    <button
+      type="button"
+      onClick={onDelete}
+      disabled={false}
+      aria-label={`Delete: ${notification.title}`}
+      title="Delete update"
+      className="focus-ring my-auto mr-1 grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+    >
+      <Trash2 className="h-4 w-4" aria-hidden="true" />
+    </button>
+  ) : null;
 
   // Selection mode wins: the whole row toggles selection (checkbox semantics),
   // and no navigation happens until selection mode is closed.
   if (selectionMode) {
     return (
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={selected}
-        aria-label={`Select: ${notification.title}`}
-        onClick={onToggleSelect}
-        className={cn(baseClass, interactiveClass, "w-full")}
-      >
-        {body}
-      </button>
+      <div className={wrapperClass}>
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={selected}
+          aria-label={`Select: ${notification.title}`}
+          onClick={onToggleSelect}
+          className={cn(baseClass, interactiveClass, "w-full")}
+        >
+          {body}
+        </button>
+      </div>
     );
   }
 
   if (isLink && destination) {
     return (
-      <Link
-        href={destination.href}
-        onClick={onActivate}
-        aria-label={`Open: ${notification.title}`}
-        className={cn(baseClass, interactiveClass)}
-      >
-        {body}
-      </Link>
+      <div className={wrapperClass}>
+        <Link
+          href={destination.href}
+          onClick={onActivate}
+          aria-label={`Open: ${notification.title}`}
+          className={cn(baseClass, interactiveClass)}
+        >
+          {body}
+        </Link>
+        {deleteControl}
+      </div>
     );
   }
 
   if (actionable) {
     return (
-      <button
-        type="button"
-        onClick={onActivate}
-        aria-label={`Reply to ${notification.title}`}
-        className={cn(baseClass, interactiveClass, "w-full")}
-      >
-        {body}
-      </button>
+      <div className={wrapperClass}>
+        <button
+          type="button"
+          onClick={onActivate}
+          aria-label={`Reply to ${notification.title}`}
+          className={cn(baseClass, interactiveClass, "w-full")}
+        >
+          {body}
+        </button>
+        {deleteControl}
+      </div>
     );
   }
 
-  return <article className={cn(baseClass, !clickable && "cursor-default")}>{body}</article>;
+  return (
+    <div className={wrapperClass}>
+      <article className={cn(baseClass, !clickable && "cursor-default")}>{body}</article>
+      {deleteControl}
+    </div>
+  );
 }
 
 function InlineEmptyState({ title, description }: { title: string; description: string }) {

@@ -26,11 +26,16 @@ export function PushToggle() {
 
   useEffect(() => {
     if (!publicKey || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
-    setSupported(true);
-    void navigator.serviceWorker.getRegistration().then(async (registration) => {
-      const subscription = await registration?.pushManager.getSubscription();
-      setSubscribed(Boolean(subscription));
+
+    const frame = window.requestAnimationFrame(() => {
+      setSupported(true);
+      void navigator.serviceWorker.getRegistration().then(async (registration) => {
+        const subscription = await registration?.pushManager.getSubscription();
+        setSubscribed(Boolean(subscription));
+      });
     });
+
+    return () => window.cancelAnimationFrame(frame);
   }, [publicKey]);
 
   if (!supported) return null;
@@ -74,7 +79,7 @@ export function PushToggle() {
             Browser push notifications
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Get pushes even when Mad Buddy isn&apos;t open. Your category settings, quiet hours, Exam Mode, and daily
+            Get pushes even when Mad Buddy isn&apos;t open. Your category settings, quiet hours, Focus Mode, and daily
             budget all still apply.
           </p>
         </div>

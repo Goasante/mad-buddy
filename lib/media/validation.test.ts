@@ -63,10 +63,10 @@ describe("validateImageUpload", () => {
   });
 
   it("enforces per-context size caps", () => {
-    expect(maxUploadBytesFor("profile")).toBe(10 * 1024 * 1024);
-    expect(maxUploadBytesFor("moment")).toBe(15 * 1024 * 1024);
-    expect(validateImageUpload(upload({ sizeBytes: 16 * 1024 * 1024 })).valid).toBe(false);
-    expect(validateImageUpload(upload({ sizeBytes: 11 * 1024 * 1024, context: "profile" })).valid).toBe(false);
+    expect(maxUploadBytesFor("profile")).toBe(3 * 1024 * 1024);
+    expect(maxUploadBytesFor("moment")).toBe(3 * 1024 * 1024);
+    expect(validateImageUpload(upload({ sizeBytes: 4 * 1024 * 1024 })).valid).toBe(false);
+    expect(validateImageUpload(upload({ sizeBytes: 4 * 1024 * 1024, context: "profile" })).valid).toBe(false);
   });
 
   it("rejects an empty file", () => {
