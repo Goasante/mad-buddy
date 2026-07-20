@@ -55,6 +55,77 @@ export type AdminRole =
   | "privacy_administrator"
   | "read_only_auditor";
 
+// ---------------------------------------------------------------------------
+// Team-access role grants (spec §2). The consumer-facing staff hierarchy is a
+// coarse three-tier model (owner/admin/support) on top of the granular
+// governance roles above. This is the ONE place that decides whether an actor
+// may change another user's staff role — the server action calls it, never the
+// client. It is pure so the full grant matrix is unit-tested.
+// ---------------------------------------------------------------------------
+
+export type StaffRole = "owner" | "admin" | "support";
+/** A target's current staff standing, including "standard" (not staff). */
+export type StaffStanding = StaffRole | "standard";
+
+export type StaffGrantResult = {
+  allowed: boolean;
+  reason:
+    | "owner_not_assignable"
+    | "cannot_modify_owner"
+    | "not_permitted"
+    | "admin_cannot_grant_admin"
+    | "admin_cannot_manage_admin"
+    | "self"
+    | "no_change"
+    | "allowed";
+};
+
+/**
+ * Whether `actorRole` may set `targetCurrentRole` → `requestedRole`.
+ *
+ * The rules, straight from spec §2:
+ *  - Owner is NEVER assignable through this flow (owner is bootstrap-only), so a
+ *    spoofed `requestedRole: "owner"` from the client is rejected here, on the
+ *    server — not merely hidden in the UI.
+ *  - Owners cannot be modified through the Team UI (not removable/downgradable);
+ *    the "last active owner" data check is a separate guard in the action.
+ *  - Only Owner and Admin manage staff. Support and standard users cannot.
+ *  - Admin may only manage Support (grant Support to a standard user, or remove
+ *    a Support user). Admin cannot grant Admin, nor touch an existing Admin.
+ *  - Owner may grant Admin or Support, or remove staff access (→ standard).
+ *  - Nobody edits their own privileged role.
+ */
+export function canAssignStaffRole(input: {
+  actorRole: StaffStanding;
+  isSelf: boolean;
+  targetCurrentRole: StaffStanding;
+  /** The raw requested standing from the client — validated here, not trusted. */
+  requestedRole: StaffStanding;
+}): StaffGrantResult {
+  // Owner can never be granted through Team access.
+  if (input.requestedRole === "owner") return { allowed: false, reason: "owner_not_assignable" };
+  // Owners are untouchable via the UI.
+  if (input.targetCurrentRole === "owner") return { allowed: false, reason: "cannot_modify_owner" };
+  // Only owner/admin manage staff.
+  if (input.actorRole !== "owner" && input.actorRole !== "admin") {
+    return { allowed: false, reason: "not_permitted" };
+  }
+  // No self privilege edits.
+  if (input.isSelf) return { allowed: false, reason: "self" };
+  // No-op.
+  if (input.targetCurrentRole === input.requestedRole) return { allowed: false, reason: "no_change" };
+
+  if (input.actorRole === "admin") {
+    // Admin may only ever manage Support.
+    if (input.requestedRole === "admin") return { allowed: false, reason: "admin_cannot_grant_admin" };
+    if (input.targetCurrentRole === "admin") return { allowed: false, reason: "admin_cannot_manage_admin" };
+    return { allowed: true, reason: "allowed" };
+  }
+
+  // Owner may grant admin/support or remove access.
+  return { allowed: true, reason: "allowed" };
+}
+
 /**
  * The role → permission matrix (spec §3). Each role gets the narrowest set
  * that lets it do its job. Note what is NOT here: no role grants reading

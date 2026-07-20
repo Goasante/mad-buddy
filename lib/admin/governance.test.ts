@@ -8,6 +8,7 @@ import {
   SENSITIVE_CATEGORIES,
   SUSPENSION_BLOCKS,
   actorHasPermission,
+  canAssignStaffRole,
   canReviewAppeal,
   checkAdminAuth,
   controlsForIncident,
@@ -29,6 +30,67 @@ import {
 const NOW = Date.parse("2026-07-17T12:00:00.000Z");
 const MIN = 60 * 1000;
 const DAY = 24 * 60 * 60 * 1000;
+
+describe("team-access role grants (spec §2, §18)", () => {
+  const base = {
+    actorRole: "owner" as const,
+    isSelf: false,
+    targetCurrentRole: "standard" as const,
+    requestedRole: "support" as const
+  };
+
+  it("Owner can add an existing user as Admin or Support", () => {
+    expect(canAssignStaffRole({ ...base, requestedRole: "admin" })).toEqual({ allowed: true, reason: "allowed" });
+    expect(canAssignStaffRole({ ...base, requestedRole: "support" })).toEqual({ allowed: true, reason: "allowed" });
+  });
+
+  it("Owner can downgrade Admin→Support and remove staff (→ standard)", () => {
+    expect(canAssignStaffRole({ ...base, targetCurrentRole: "admin", requestedRole: "support" }).allowed).toBe(true);
+    expect(canAssignStaffRole({ ...base, targetCurrentRole: "support", requestedRole: "standard" }).allowed).toBe(true);
+  });
+
+  it("Admin can add Support but CANNOT grant Admin (default policy)", () => {
+    expect(canAssignStaffRole({ ...base, actorRole: "admin", requestedRole: "support" }).allowed).toBe(true);
+    expect(canAssignStaffRole({ ...base, actorRole: "admin", requestedRole: "admin" })).toEqual({
+      allowed: false,
+      reason: "admin_cannot_grant_admin"
+    });
+  });
+
+  it("Admin cannot manage an existing Admin", () => {
+    expect(
+      canAssignStaffRole({ ...base, actorRole: "admin", targetCurrentRole: "admin", requestedRole: "support" }).reason
+    ).toBe("admin_cannot_manage_admin");
+  });
+
+  it("nobody can grant Owner through the UI — even a spoofed client payload", () => {
+    expect(canAssignStaffRole({ ...base, requestedRole: "owner" as never })).toEqual({
+      allowed: false,
+      reason: "owner_not_assignable"
+    });
+  });
+
+  it("Owners cannot be modified through the Team UI", () => {
+    expect(canAssignStaffRole({ ...base, targetCurrentRole: "owner", requestedRole: "support" }).reason).toBe(
+      "cannot_modify_owner"
+    );
+  });
+
+  it("Support and standard users cannot assign any role", () => {
+    expect(canAssignStaffRole({ ...base, actorRole: "support" }).reason).toBe("not_permitted");
+    expect(canAssignStaffRole({ ...base, actorRole: "standard" }).reason).toBe("not_permitted");
+  });
+
+  it("nobody edits their own privileged role", () => {
+    expect(canAssignStaffRole({ ...base, isSelf: true, requestedRole: "admin" }).reason).toBe("self");
+  });
+
+  it("a no-op change is rejected", () => {
+    expect(canAssignStaffRole({ ...base, targetCurrentRole: "support", requestedRole: "support" }).reason).toBe(
+      "no_change"
+    );
+  });
+});
 
 describe("no ambient staff access to private data (spec §1, §4)", () => {
   it("has no wildcard permission to hold", () => {
