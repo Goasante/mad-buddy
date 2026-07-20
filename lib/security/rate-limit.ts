@@ -50,7 +50,8 @@ export type RateLimitAction =
   | "notifications.mutate"
   | "account.export"
   | "account.delete"
-  | "admin.mutate";
+  | "admin.mutate"
+  | "admin.search";
 
 export type RateLimitResult = {
   allowed: boolean;
@@ -111,7 +112,8 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "notifications.mutate": { limit: 120, windowSeconds: 60 * 60 },
   "account.export": { limit: 3, windowSeconds: 60 * 60 },
   "account.delete": { limit: 3, windowSeconds: 24 * 60 * 60 },
-  "admin.mutate": { limit: 120, windowSeconds: 60 * 60 }
+  "admin.mutate": { limit: 120, windowSeconds: 60 * 60 },
+  "admin.search": { limit: 120, windowSeconds: 60 }
 };
 
 function hashIp(value: string | null) {
