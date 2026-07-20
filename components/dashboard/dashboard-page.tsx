@@ -21,6 +21,7 @@ import {
   PartyPopper,
   RefreshCcw,
   ShieldCheck,
+  Sparkles,
   UserPlus,
   Users,
   Users2,
@@ -758,7 +759,7 @@ const quickActions: Array<{
   href:
     | "/hangout-mode"
     | "/safe-arrival"
-    | "/plans"
+    | "/moments"
     | "/events"
     | "/groups"
     | "/discover"
@@ -782,10 +783,10 @@ const quickActions: Array<{
     icon: ShieldCheck
   },
   {
-    href: "/plans",
-    label: "New plan",
-    description: "Create a plan and invite your Muddies.",
-    icon: CalendarCheck2
+    href: "/moments",
+    label: "Memories",
+    description: "Share a moment with your Muddies before it disappears.",
+    icon: Sparkles
   },
   {
     href: "/events",
