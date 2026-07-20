@@ -16,6 +16,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/auth/form-field";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { MomentImage } from "@/components/ui/moment-image";
 import { Textarea } from "@/components/ui/textarea";
 
 export type DropContextOption = { id: string; label: string; contextType: "circle" | "plan" };
@@ -49,6 +50,15 @@ export function DropsPageContent({
         );
       }
       setOpenDrop(await getUnlockedDropAction(drop.id));
+    });
+  }
+
+  // Regenerate the Drop's signed media URL when it fails to load (likely an
+  // expired signed URL). MomentImage calls this once before falling back.
+  function refreshOpenDropMedia(dropId: string) {
+    startTransition(async () => {
+      const refreshed = await getUnlockedDropAction(dropId);
+      if (refreshed?.mediaUrl) setOpenDrop(refreshed);
     });
   }
 
@@ -168,8 +178,13 @@ export function DropsPageContent({
           <div className="space-y-3">
             {openDrop.textContent ? <p className="text-sm leading-6">{openDrop.textContent}</p> : null}
             {openDrop.mediaUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL
-              <img src={openDrop.mediaUrl} alt="Drop" className="w-full rounded-xl" />
+              <MomentImage
+                src={openDrop.mediaUrl}
+                alt={`Drop from ${openDrop.creatorName}`}
+                className="max-h-[420px] rounded-xl"
+                fallbackClassName="min-h-48 rounded-xl"
+                onRetry={() => refreshOpenDropMedia(openDrop.id)}
+              />
             ) : null}
             <p className="text-xs text-muted-foreground">
               Disappears{" "}
