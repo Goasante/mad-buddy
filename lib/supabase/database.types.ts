@@ -2658,6 +2658,64 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["support_ticket_messages"]["Insert"]>;
         Relationships: [];
       };
+      support_internal_notes: {
+        Row: {
+          id: string;
+          ticket_id: string;
+          author_id: string | null;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          ticket_id: string;
+          author_id?: string | null;
+          body: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["support_internal_notes"]["Insert"]>;
+        Relationships: [];
+      };
+      support_ticket_events: {
+        Row: {
+          id: string;
+          ticket_id: string;
+          actor_id: string | null;
+          event_type:
+            | "status_changed"
+            | "priority_changed"
+            | "assigned"
+            | "unassigned"
+            | "transferred"
+            | "reopened"
+            | "response_sent"
+            | "note_added";
+          from_value: string | null;
+          to_value: string | null;
+          note: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          ticket_id: string;
+          actor_id?: string | null;
+          event_type:
+            | "status_changed"
+            | "priority_changed"
+            | "assigned"
+            | "unassigned"
+            | "transferred"
+            | "reopened"
+            | "response_sent"
+            | "note_added";
+          from_value?: string | null;
+          to_value?: string | null;
+          note?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["support_ticket_events"]["Insert"]>;
+        Relationships: [];
+      };
       appeals: {
         Row: {
           id: string;
