@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { toNotificationResponse } from "@/lib/notifications/server";
+import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 
 const notificationResponseSchema = z.object({
   notifications: z.array(
@@ -77,7 +78,7 @@ export async function GET(request: Request) {
   const { data, error } = await query;
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Could not load notifications." }, { status: 500 });
   }
 
   const response = notificationResponseSchema.parse({
@@ -114,6 +115,11 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
+  const rateLimit = await consumeRateLimit({ action: "notifications.mutate", userId: user.id });
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ error: rateLimitMessage(rateLimit.resetAt) }, { status: 429 });
+  }
+
   // Authenticate with the user's session, then perform the mutation through
   // the trusted server client. The verified user id remains a mandatory
   // filter, so ids belonging to another account can never be deleted.
@@ -126,7 +132,7 @@ export async function DELETE(request: Request) {
     .select("id");
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Could not delete those notifications." }, { status: 500 });
   }
 
   const deletedIds = (data ?? []).map((notification) => notification.id);

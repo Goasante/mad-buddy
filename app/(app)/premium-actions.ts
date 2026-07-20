@@ -141,10 +141,10 @@ async function withPremiumAccess(
   try {
     await requirePremiumPlan(userId, requiredPlan);
     return await work(userId);
-  } catch (error) {
+  } catch {
     return {
       ok: false,
-      message: error instanceof Error ? error.message : "Premium access could not be verified."
+      message: `An active ${requiredPlan === "buddy_pro" ? "Buddy Pro" : "Buddy Plus"} plan is required.`
     };
   }
 }
@@ -164,7 +164,7 @@ export async function updateGlowThemeAction(input: unknown): Promise<PremiumActi
     });
 
     if (error) {
-      return { ok: false, message: error.message };
+      return { ok: false, message: "The glow theme could not be saved." };
     }
 
     revalidatePath("/billing");
@@ -192,7 +192,7 @@ export async function updateMoodStatusAction(input: unknown): Promise<PremiumAct
     if (preferencesResult.error || profileResult.error) {
       return {
         ok: false,
-        message: preferencesResult.error?.message ?? profileResult.error?.message ?? "Mood was not saved."
+        message: "Mood was not saved."
       };
     }
 
@@ -222,7 +222,7 @@ export async function setBestBuddyAction(friendId: string): Promise<PremiumActio
     });
 
     if (error) {
-      return { ok: false, message: error.message };
+      return { ok: false, message: "The Best Buddy setting could not be saved." };
     }
 
     return { ok: true, message: "Best Buddy saved." };
@@ -239,9 +239,9 @@ export async function createMeetupRequestAction(input: unknown): Promise<Premium
   return withPremiumAccess("buddy_plus", async (userId) => {
     await requireFriendship(userId, parsed.data.receiverId);
 
-    const supabase = await createSupabaseServerClient();
+    const admin = createSupabaseAdminClient();
     const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
-    const { data: meetupRequest, error } = await supabase
+    const { data: meetupRequest, error } = await admin
       .from("meetup_requests")
       .insert({
         sender_id: userId,
@@ -253,10 +253,9 @@ export async function createMeetupRequestAction(input: unknown): Promise<Premium
       .single();
 
     if (error) {
-      return { ok: false, message: error.message };
+      return { ok: false, message: "The connection prompt could not be sent." };
     }
 
-    const admin = createSupabaseAdminClient();
     const { data: senderProfile } = await admin
       .from("profiles")
       .select("full_name")
@@ -315,7 +314,7 @@ export async function respondToMeetupRequestAction(input: unknown): Promise<Prem
       .single();
 
     if (replyError) {
-      return { ok: false, message: replyError.message };
+      return { ok: false, message: "Your reply could not be sent." };
     }
 
     await admin.from("meetup_requests").update({ status: "accepted" }).eq("id", parsed.data.requestId);
@@ -404,7 +403,7 @@ export async function createFriendCircleAction(input: unknown): Promise<PremiumA
     });
 
     if (error) {
-      return { ok: false, message: error.message };
+      return { ok: false, message: "The Muddy Circle could not be created." };
     }
 
     return { ok: true, message: "Muddy Circle created." };
@@ -428,7 +427,7 @@ export async function addCircleMemberAction(input: unknown): Promise<PremiumActi
     });
 
     if (error) {
-      return { ok: false, message: error.message };
+      return { ok: false, message: "The Muddy could not be added to that circle." };
     }
 
     return { ok: true, message: "Muddy added to circle." };
@@ -454,7 +453,7 @@ export async function createPrivacyZoneAction(input: unknown): Promise<PremiumAc
     });
 
     if (error) {
-      return { ok: false, message: error.message };
+      return { ok: false, message: "The Privacy Zone could not be created." };
     }
 
     return { ok: true, message: "Privacy Zone created." };
@@ -482,7 +481,7 @@ export async function updateGhostModeProAction(input: unknown): Promise<PremiumA
     });
 
     if (error) {
-      return { ok: false, message: error.message };
+      return { ok: false, message: "The Ghost Mode schedule could not be saved." };
     }
 
     return { ok: true, message: "Ghost Mode Pro schedule saved." };
@@ -508,7 +507,7 @@ export async function createEventModeAction(input: unknown): Promise<PremiumActi
     });
 
     if (error) {
-      return { ok: false, message: error.message };
+      return { ok: false, message: "The Event Mode could not be saved." };
     }
 
     return { ok: true, message: "Event Mode saved." };

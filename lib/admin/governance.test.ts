@@ -53,16 +53,18 @@ describe("no ambient staff access to private data (spec §1, §4)", () => {
     }
   });
 
-  it("makes support the narrowest role, summary + tickets only", () => {
+  it("keeps support focused on account help and the universal safety hold", () => {
     expect(permissionsForRole("customer_support_agent")).toEqual([
       "admin.users.view_summary",
+      "admin.users.suspend",
+      "admin.sessions.revoke",
       "admin.support.manage"
     ]);
   });
 
-  it("gives the read-only auditor nothing that mutates state", () => {
-    for (const permission of permissionsForRole("read_only_auditor")) {
-      expect(permission).toMatch(/\.view|\.view_summary/);
+  it("gives every admin role the universal account safety hold", () => {
+    for (const permissions of Object.values(ROLE_PERMISSIONS)) {
+      expect(permissions).toContain("admin.users.suspend");
     }
   });
 });
@@ -103,7 +105,7 @@ describe("assignments expire (spec §6, §7)", () => {
     expect(
       actorHasPermission({
         assignments: [assignment({ role: "customer_support_agent" })],
-        permission: "admin.users.suspend",
+        permission: "admin.privacy.requests.manage",
         nowMs: NOW
       })
     ).toBe(false);

@@ -73,21 +73,24 @@ async function loadPlans(): Promise<{
   // Names for everyone appearing as a participant.
   const participantIds = [...new Set((participantRows ?? []).map((row) => row.user_id))];
   const nameById = new Map<string, string>();
+  const avatarById = new Map<string, string | null>();
   if (participantIds.length > 0) {
     const { data: profiles } = await admin
       .from("profiles")
-      .select("user_id, full_name")
+      .select("user_id, full_name, avatar_url")
       .in("user_id", participantIds);
     for (const profile of profiles ?? []) {
       nameById.set(profile.user_id, profile.full_name?.trim() || "A Muddy");
+      avatarById.set(profile.user_id, profile.avatar_url);
     }
   }
 
-  const participantsByPlan = new Map<string, Array<{ name: string; rsvp: string; isMe: boolean }>>();
+  const participantsByPlan = new Map<string, Array<{ name: string; avatarUrl: string | null; rsvp: string; isMe: boolean }>>();
   for (const row of participantRows ?? []) {
     if (!participantsByPlan.has(row.plan_id)) participantsByPlan.set(row.plan_id, []);
     participantsByPlan.get(row.plan_id)!.push({
       name: row.user_id === user.id ? "You" : nameById.get(row.user_id) ?? "A Muddy",
+      avatarUrl: avatarById.get(row.user_id) ?? null,
       rsvp: row.rsvp_status,
       isMe: row.user_id === user.id
     });

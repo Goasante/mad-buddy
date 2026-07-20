@@ -2,20 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Camera, Edit3, Image as ImageIcon, UserRound, Users } from "lucide-react";
-import { useRef, useState, useTransition } from "react";
+import { Bell, Camera, Edit3, UsersRound } from "lucide-react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { updateProfileAction, uploadAvatarAction } from "@/app/(app)/actions";
+import { FormField } from "@/components/auth/form-field";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
-import { FormField } from "@/components/auth/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { validateImageSelection } from "@/lib/media/validation";
-import { cn } from "@/lib/utils";
 import type { VisibilityStatus } from "@/lib/supabase/database.types";
-
-type ProfileTab = "about" | "status" | "circles" | "photos";
 
 type ProfilePageContentProps = {
   initialDisplayName: string;
@@ -27,12 +24,12 @@ type ProfilePageContentProps = {
   muddyCount?: number;
 };
 
-const profileTabs: Array<{ id: ProfileTab; label: string }> = [
-  { id: "about", label: "About" },
-  { id: "status", label: "Status" },
-  { id: "circles", label: "Circles" },
-  { id: "photos", label: "Photos" }
-];
+type SavedProfile = {
+  displayName: string;
+  username: string;
+  bio: string;
+  moodStatus: string;
+};
 
 export function ProfilePageContent({
   initialDisplayName,
@@ -44,39 +41,99 @@ export function ProfilePageContent({
   muddyCount = 0
 }: ProfilePageContentProps) {
   const router = useRouter();
+  const initialProfile: SavedProfile = {
+    displayName: initialDisplayName,
+    username: initialUsername,
+    bio: initialBio,
+    moodStatus: initialMoodStatus
+  };
+  const [savedProfile, setSavedProfile] = useState(initialProfile);
   const [editing, setEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<ProfileTab>("about");
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [username, setUsername] = useState(initialUsername);
   const [bio, setBio] = useState(initialBio);
   const [moodStatus, setMoodStatus] = useState(initialMoodStatus);
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
+  const [avatarRevision, setAvatarRevision] = useState(0);
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [isAvatarPending, startAvatarTransition] = useTransition();
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const isProfileIncomplete = !avatarUrl || !moodStatus.trim() || !bio.trim();
+  const isProfileIncomplete = !avatarUrl || !savedProfile.moodStatus.trim() || !savedProfile.bio.trim();
+  const avatarSrc = avatarPreviewUrl ?? (
+    avatarUrl && !avatarLoadFailed
+      ? `/api/profile/avatar${avatarRevision ? `?v=${avatarRevision}` : ""}`
+      : null
+  );
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    };
+  }, [avatarPreviewUrl]);
+
+  function beginEditing() {
+    setDisplayName(savedProfile.displayName);
+    setUsername(savedProfile.username);
+    setBio(savedProfile.bio);
+    setMoodStatus(savedProfile.moodStatus);
+    setFeedback("");
+    setEditing(true);
+  }
+
+  function cancelEditing() {
+    setDisplayName(savedProfile.displayName);
+    setUsername(savedProfile.username);
+    setBio(savedProfile.bio);
+    setMoodStatus(savedProfile.moodStatus);
+    setFeedback("");
+    setEditing(false);
+  }
 
   function saveProfile() {
+    const nextProfile = {
+      displayName: displayName.trim(),
+      username: username.trim().toLowerCase(),
+      bio: bio.trim(),
+      moodStatus: moodStatus.trim()
+    };
+
+    if (nextProfile.displayName.length < 2) {
+      setFeedback("Enter a display name with at least 2 characters.");
+      return;
+    }
+
+    if (!/^[a-z0-9_]{3,24}$/.test(nextProfile.username)) {
+      setFeedback("Use 3 to 24 lowercase letters, numbers, or underscores for your username.");
+      return;
+    }
+
     startTransition(async () => {
       const result = await updateProfileAction({
-        fullName: displayName,
-        username,
-        bio,
-        moodStatus
+        fullName: nextProfile.displayName,
+        username: nextProfile.username,
+        bio: nextProfile.bio,
+        moodStatus: nextProfile.moodStatus
       });
       setFeedback(result.message);
 
       if (result.ok) {
+        setSavedProfile(nextProfile);
+        setDisplayName(nextProfile.displayName);
+        setUsername(nextProfile.username);
+        setBio(nextProfile.bio);
+        setMoodStatus(nextProfile.moodStatus);
         setEditing(false);
+        router.refresh();
       }
     });
   }
 
-  function uploadAvatar(file: File | null) {
-    if (!file) {
-      return;
-    }
+  function selectAvatar(file: File | null) {
+    if (!file) return;
 
     const selectionError = validateImageSelection(file, "profile");
     if (selectionError) {
@@ -85,210 +142,199 @@ export function ProfilePageContent({
       return;
     }
 
-    const formData = new FormData();
-    formData.append("avatar", file);
+    setAvatarLoadFailed(false);
+    setSelectedAvatarFile(file);
+    setAvatarPreviewUrl(URL.createObjectURL(file));
+    setFeedback("Preview ready. Save the photo when it looks right.");
+    if (avatarInputRef.current) avatarInputRef.current.value = "";
+  }
 
-    startTransition(async () => {
+  function cancelAvatarPreview() {
+    setSelectedAvatarFile(null);
+    setAvatarPreviewUrl(null);
+    setAvatarLoadFailed(false);
+    setFeedback("");
+    if (avatarInputRef.current) avatarInputRef.current.value = "";
+  }
+
+  function saveAvatar() {
+    if (!selectedAvatarFile) return;
+
+    const formData = new FormData();
+    formData.append("avatar", selectedAvatarFile);
+    setFeedback("Optimizing and uploading your profile photo...");
+
+    startAvatarTransition(async () => {
       const result = await uploadAvatarAction(formData);
       setFeedback(result.message);
 
       if (result.ok && result.avatarUrl) {
-        setAvatarLoadFailed(false);
         setAvatarUrl(result.avatarUrl);
+        setAvatarRevision(Date.now());
+        setAvatarLoadFailed(false);
+        setAvatarPreviewUrl(null);
+        setSelectedAvatarFile(null);
+        window.dispatchEvent(new CustomEvent("madbuddy:avatar-updated", { detail: result.avatarUrl }));
         router.refresh();
       }
-
-      if (avatarInputRef.current) avatarInputRef.current.value = "";
     });
   }
 
   return (
-    <div className="mx-auto max-w-[1080px] space-y-6 pt-6">
-      <div className="flex items-center justify-end gap-2">
-        <Button type="button" variant="outline" size="icon" asChild>
-          <Link href="/notifications" aria-label="Pulse" title="Pulse">
-            <Bell className="h-4 w-4" aria-hidden="true" />
-          </Link>
-        </Button>
-        <Button
-          type="button"
-          onClick={() => {
-            setEditing((current) => !current);
-            setActiveTab("about");
-          }}
-          aria-label="Edit profile"
-          title="Edit profile"
-        >
-          <Edit3 className="h-4 w-4" aria-hidden="true" />
-          {editing ? "Preview" : "Edit profile"}
-        </Button>
-      </div>
+    <div className="mx-auto w-full max-w-[1040px] space-y-5 pt-6">
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border/70 pb-5">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Profile</h1>
+          <p className="mt-1 text-sm text-muted-foreground">How approved friends see you.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" size="icon" asChild>
+            <Link href="/notifications" aria-label="Notifications" title="Notifications">
+              <Bell className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </Button>
+          {!editing ? (
+            <Button type="button" onClick={beginEditing} aria-label="Edit profile" title="Edit profile">
+              <Edit3 className="h-4 w-4" aria-hidden="true" />
+              Edit profile
+            </Button>
+          ) : null}
+        </div>
+      </header>
 
-      {feedback ? <p className="text-sm text-muted-foreground" role="status">{feedback}</p> : null}
+      {feedback ? (
+        <p className="rounded-xl border border-border/70 bg-card/55 px-4 py-3 text-sm text-muted-foreground" role="status">
+          {feedback}
+        </p>
+      ) : null}
 
-      <Card className="overflow-hidden p-0">
-        <div className="h-28 bg-[linear-gradient(135deg,hsl(var(--primary)/0.55),hsl(24_90%_35%/0.85))] sm:h-36" />
-        <div className="px-5 pb-5 sm:px-6">
-          <div className="-mt-12 flex flex-col items-start gap-4 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-end">
-              <div className="grid h-24 w-24 shrink-0 place-items-center rounded-full border-4 border-card bg-secondary shadow-[0_8px_24px_hsl(var(--shadow)/0.24)] sm:h-28 sm:w-28">
-                {avatarUrl && !avatarLoadFailed ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={avatarUrl}
-                    alt={displayName}
-                    className="h-full w-full rounded-full object-cover"
-                    onError={() => {
-                      setAvatarLoadFailed(true);
-                      setFeedback("Your profile photo could not be displayed. Try uploading it again.");
-                    }}
-                  />
-                ) : (
-                  <div className="grid h-full w-full place-items-center rounded-full bg-gradient-to-br from-orange-500/30 via-amber-400/20 to-lime-300/30">
-                    <UserRound className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
-                  </div>
-                )}
-              </div>
-              <div className="pb-1">
-                <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{displayName}</h1>
-                <p className="text-sm text-muted-foreground">@{username}</p>
-              </div>
-            </div>
+      <div className="grid items-start gap-5 md:grid-cols-[280px_minmax(0,1fr)]">
+        <Card className="p-5">
+          <div className="flex flex-col items-center text-center">
+            <UserAvatar
+              src={avatarSrc}
+              name={savedProfile.displayName}
+              size="profile"
+              className="border-4 border-background shadow-[0_14px_36px_hsl(var(--shadow)/0.22)]"
+              onImageError={() => {
+                if (selectedAvatarFile) {
+                  setFeedback(
+                    selectedAvatarFile.type === "image/heic" || selectedAvatarFile.type === "image/heif"
+                      ? "This browser cannot preview the HEIC photo, but Mad Buddy can try to convert it when you save."
+                      : "This photo could not be previewed. Choose another image."
+                  );
+                  return;
+                }
+                setAvatarLoadFailed(true);
+                setFeedback("Your profile photo could not be displayed. Choose another photo or try again.");
+              }}
+            />
+
+            <h2 className="mt-4 text-xl font-semibold tracking-tight">{savedProfile.displayName}</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">@{savedProfile.username}</p>
+
             <input
               ref={avatarInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
               className="hidden"
-              onChange={(event) => uploadAvatar(event.target.files?.[0] ?? null)}
+              onChange={(event) => selectAvatar(event.target.files?.[0] ?? null)}
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={isPending}
-              onClick={() => avatarInputRef.current?.click()}
-              aria-label="Change profile photo"
-              title="Change profile photo"
-            >
-              <Camera className="h-4 w-4" aria-hidden="true" />
-              Change photo
-            </Button>
+            {isAvatarPending ? (
+              <div className="mt-4 w-full" role="progressbar" aria-label="Uploading profile photo">
+                <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                  <span className="block h-full w-2/3 animate-pulse rounded-full bg-primary" />
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">Preparing your photo...</p>
+              </div>
+            ) : null}
+
+            {selectedAvatarFile ? (
+              <div className="mt-4 grid w-full grid-cols-2 gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={cancelAvatarPreview} disabled={isAvatarPending}>
+                  Cancel
+                </Button>
+                <Button type="button" size="sm" onClick={saveAvatar} disabled={isAvatarPending}>
+                  Save photo
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-4 w-full"
+                disabled={isAvatarPending}
+                onClick={() => avatarInputRef.current?.click()}
+                aria-label="Change profile photo"
+                title="Change profile photo"
+              >
+                <Camera className="h-4 w-4" aria-hidden="true" />
+                {avatarUrl ? "Change photo" : "Add photo"}
+              </Button>
+            )}
+
+            <div className="mt-5 flex w-full items-center justify-center gap-2 border-t border-border/70 pt-4 text-sm text-muted-foreground">
+              <UsersRound className="h-4 w-4" aria-hidden="true" />
+              <span className="font-semibold text-foreground">{muddyCount}</span>
+              <span>{muddyCount === 1 ? "Muddy" : "Muddies"}</span>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold">Profile details</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Information visible to approved friends.</p>
+            </div>
           </div>
 
-          {isProfileIncomplete ? (
-            <div className="mt-4 rounded-xl border border-border/70 bg-card/45 px-4 py-3">
+          {isProfileIncomplete && !editing ? (
+            <div className="mt-4 rounded-xl bg-secondary/55 px-4 py-3">
               <p className="text-sm font-semibold">Complete your profile</p>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 Add a photo, mood, or bio to help friends recognise you.
               </p>
             </div>
           ) : null}
 
-          <div className="mt-5 grid grid-cols-4 divide-x divide-border/70 rounded-xl border border-border/70">
-            <StatTile label="Muddies" value={muddyCount} />
-            <StatTile label="Close Friends" value={0} />
-            <StatTile label="Plans" value={0} />
-            <StatTile label="Events" value={0} />
-          </div>
-        </div>
-      </Card>
-
-      <nav className="overflow-x-auto border-b border-border/70" aria-label="Profile tabs">
-        <div className="flex min-w-max gap-1">
-          {profileTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "focus-ring safe-motion border-b-2 px-4 py-3 text-sm font-medium",
-                activeTab === tab.id
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </nav>
-
-      {activeTab === "about" ? (
-        <Card className="p-4 sm:p-5">
           {editing ? (
-            <div className="grid gap-4">
-              <div className="grid gap-4 md:grid-cols-2">
+            <div className="mt-5 grid gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <FormField htmlFor="displayName" label="Display name">
-                  <Input id="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
+                  <Input id="displayName" value={displayName} maxLength={80} onChange={(event) => setDisplayName(event.target.value)} />
                 </FormField>
-                <FormField htmlFor="username" label="Username">
-                  <Input id="username" value={username} onChange={(event) => setUsername(event.target.value)} />
+                <FormField htmlFor="username" label="Username" hint="Lowercase letters, numbers, and underscores.">
+                  <Input id="username" value={username} maxLength={24} autoCapitalize="none" onChange={(event) => setUsername(event.target.value)} />
                 </FormField>
               </div>
-              <FormField htmlFor="bio" label="Bio">
-                <Textarea id="bio" value={bio} onChange={(event) => setBio(event.target.value)} />
+              <FormField htmlFor="moodStatus" label="Mood">
+                <Input id="moodStatus" value={moodStatus} maxLength={80} placeholder="What is your mood?" onChange={(event) => setMoodStatus(event.target.value)} />
               </FormField>
-              <Button type="button" disabled={isPending} onClick={saveProfile}>
-                {isPending ? "Saving..." : "Save profile"}
-              </Button>
+              <FormField htmlFor="bio" label="Bio" hint={`${bio.length}/160`}>
+                <Textarea id="bio" value={bio} maxLength={160} placeholder="Share a little about yourself" onChange={(event) => setBio(event.target.value)} />
+              </FormField>
+              <div className="flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
+                <Button type="button" variant="outline" onClick={cancelEditing} disabled={isPending}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={saveProfile} disabled={isPending}>
+                  {isPending ? "Saving..." : "Save profile"}
+                </Button>
+              </div>
             </div>
           ) : (
-            <div className="grid gap-x-8 md:grid-cols-2">
-              <ProfileField label="Display name" value={displayName} />
-              <ProfileField label="Username" value={`@${username}`} />
+            <div className="mt-5 divide-y divide-border/70 border-y border-border/70">
+              <ProfileField label="Display name" value={savedProfile.displayName} />
+              <ProfileField label="Username" value={`@${savedProfile.username}`} />
+              <ProfileField label="Mood" value={savedProfile.moodStatus || "Add a mood"} />
+              <ProfileField label="Bio" value={savedProfile.bio || "Add a short bio"} />
               <ProfileField label="Visibility" value={visibilityLabel(initialVisibilityStatus)} />
-              <ProfileField label="Bio" value={bio || "Add a short bio"} wide />
             </div>
           )}
         </Card>
-      ) : null}
-
-      {activeTab === "status" ? (
-        <Card className="p-4 sm:p-5">
-          {editing ? (
-            <FormField htmlFor="moodStatus" label="Mood status" hint="Shown next to your name to approved Muddies.">
-              <Input id="moodStatus" value={moodStatus} onChange={(event) => setMoodStatus(event.target.value)} />
-              <Button type="button" className="mt-3" disabled={isPending} onClick={saveProfile}>
-                {isPending ? "Saving..." : "Save status"}
-              </Button>
-            </FormField>
-          ) : (
-            <ProfileField label="Mood" value={moodStatus || "Add a mood"} />
-          )}
-        </Card>
-      ) : null}
-
-      {activeTab === "circles" ? (
-        <EmptyState
-          icon={Users}
-          className="!shadow-none"
-          title="Manage circles from Muddies"
-          description="Group your Muddies into circles, like Close Friends or Weekend Crew, from the Muddies tab."
-          action={
-            <Button type="button" asChild>
-              <Link href="/friends?tab=circles">Go to Circles</Link>
-            </Button>
-          }
-        />
-      ) : null}
-
-      {activeTab === "photos" ? (
-        <EmptyState
-          icon={ImageIcon}
-          className="!shadow-none"
-          title="No photos yet"
-          description="Photos you share to your profile will appear here."
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function StatTile({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="px-3 py-3 text-center">
-      <p className="text-lg font-semibold tabular-nums">{value}</p>
-      <p className="text-[11px] text-muted-foreground">{label}</p>
+      </div>
     </div>
   );
 }
@@ -303,17 +349,11 @@ function visibilityLabel(status: VisibilityStatus) {
   return labels[status];
 }
 
-type ProfileFieldProps = {
-  label: string;
-  value: string;
-  wide?: boolean;
-};
-
-function ProfileField({ label, value, wide }: ProfileFieldProps) {
+function ProfileField({ label, value }: { label: string; value: string }) {
   return (
-    <div className={wide ? "border-t border-border py-3 md:col-span-2" : "border-t border-border py-3"}>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-semibold">{value}</p>
+    <div className="grid gap-1 py-3 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-start sm:gap-4">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="break-words text-sm font-medium">{value}</p>
     </div>
   );
 }

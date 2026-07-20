@@ -23,11 +23,15 @@ export async function submitSupportRequestAction(input: unknown): Promise<HelpAc
   const limit = await consumeRateLimit({ action: "support.request", userId: user.id });
   if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
 
-  const { error } = await supabase.from("support_requests").insert({
+  const subject = `Help request from ${parsed.data.fullName}`.slice(0, 160);
+  const { error } = await supabase.from("support_tickets").insert({
     user_id: user.id,
-    full_name: parsed.data.fullName,
-    email: parsed.data.email,
-    message: parsed.data.message
+    category: "other",
+    subject,
+    description: parsed.data.message,
+    diagnostics: { route: "/help" },
+    priority: "normal",
+    status: "new"
   });
   return error
     ? { ok: false, message: "Couldn't send your message. Try again." }

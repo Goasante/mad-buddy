@@ -1,84 +1,37 @@
-import { ShieldCheck, UserPlus } from "lucide-react";
+import { UserPlus, UsersRound } from "lucide-react";
+import { AdminAccessControl } from "@/components/admin/admin-access-control";
 import { CreateAdminForm } from "@/components/admin/create-admin-form";
-import { Badge } from "@/components/ui/badge";
+import { AdminEmptyState, AdminPageHeader, AdminQueryError, AdminSection, AdminStatus, formatAdminDate, humanizeAdminValue } from "@/components/admin/admin-ui";
 import { Card } from "@/components/ui/card";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getSafetyAdminContext } from "@/lib/safety/admin";
+import { getAdminAccess } from "@/lib/admin/access";
+import { redirect } from "next/navigation";
 
 export default async function AdminUsersManagementPage() {
   const admin = createSupabaseAdminClient();
-  const { data: admins, error } = await admin
-    .from("admin_users")
-    .select("email, role, auth_user_id, disabled_at, created_at")
-    .order("created_at", { ascending: false });
+  const [context, adminsResult] = await Promise.all([
+    getSafetyAdminContext(),
+    admin.from("admin_users").select("email, role, auth_user_id, disabled_at, created_at").order("created_at", { ascending: false })
+  ]);
+  const admins = adminsResult.data ?? [];
+  if (!context.ok) redirect("/admin/login");
+  const access = await getAdminAccess(admin, context);
+  if (!access.permissions.has("admin.roles.manage")) redirect("/admin");
 
   return (
-    <div className="space-y-6">
-      <section>
-        <Badge variant="orange">
-          <ShieldCheck className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-          Admins
-        </Badge>
-        <h1 className="mt-4 text-3xl font-semibold">Admin access</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Create management accounts and review who can enter the admin console.
-          Passwords are sent to Supabase Auth and are not stored in Mad Buddy tables.
-        </p>
-      </section>
-
-      <section className="grid gap-5 lg:grid-cols-[420px_1fr]">
-        <Card className="p-5">
-          <div className="mb-5 flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-md bg-orange-400/10 text-orange-200">
-              <UserPlus className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <div>
-              <h2 className="text-lg font-semibold">Add admin</h2>
-              <p className="text-sm text-muted-foreground">Email and temporary password.</p>
-            </div>
-          </div>
-          <CreateAdminForm />
-        </Card>
-
-        <div className="grid content-start gap-3">
-          <h2 className="text-xl font-semibold">Current database admins</h2>
-          {error ? (
-            <Card className="p-5 text-sm text-amber-100">
-              Admin table is not available yet. Run the new Supabase migration first.
-            </Card>
-          ) : null}
-          {(admins ?? []).map((item) => (
-            <Card key={item.email} className="p-4">
-              <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-                <div className="min-w-0">
-                  <p className="truncate font-semibold">{item.email}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Added {formatDate(item.created_at)}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 md:justify-end">
-                  <Badge variant={item.disabled_at ? "warning" : "green"}>
-                    {item.disabled_at ? "Disabled" : "Active"}
-                  </Badge>
-                  <Badge variant="orange">{item.role}</Badge>
-                  <Badge>{item.auth_user_id ? "Auth linked" : "Email only"}</Badge>
-                </div>
-              </div>
-            </Card>
-          ))}
-          {!error && (admins ?? []).length === 0 ? (
-            <Card className="p-5 text-sm text-muted-foreground">
-              No database admins yet. Your `.env` admin still works as the bootstrap account.
-            </Card>
-          ) : null}
-        </div>
-      </section>
+    <div className="space-y-7">
+      <AdminPageHeader title="Admin team" description="Manage restricted staff access. Passwords remain in Supabase Auth and every access change is audited." meta={<AdminStatus label={`${admins.filter((item) => !item.disabled_at).length} active`} tone="success" />} />
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(320px,0.72fr)_minmax(0,1.28fr)]">
+        <AdminSection title="Add team member" description="Create a staff login and assign its governance role.">
+          <Card className="p-5"><div className="mb-5 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-orange-500/10 text-orange-400"><UserPlus className="h-5 w-5" aria-hidden="true" /></span><div><p className="text-sm font-semibold">New admin account</p><p className="text-xs text-muted-foreground">Use a temporary password.</p></div></div><CreateAdminForm allowOwner={access.role === "owner"} /></Card>
+        </AdminSection>
+        <AdminSection title="Current access" description="Disable access immediately or restore a suspended staff account.">
+          {adminsResult.error ? <AdminQueryError message="The admin access table could not be loaded." /> : null}
+          {!adminsResult.error && admins.length === 0 ? <AdminEmptyState icon={UsersRound} title="No database admins" description="The environment bootstrap admin remains available." /> : null}
+          <div className="grid gap-3">{admins.map((item) => <Card key={item.email} className="p-4"><div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate text-sm font-semibold">{item.email}</p>{context.ok && item.email === context.email ? <AdminStatus label="You" /> : null}</div><p className="mt-1 text-xs text-muted-foreground">{humanizeAdminValue(item.role)} · Added {formatAdminDate(item.created_at)}</p><div className="mt-2 flex flex-wrap gap-2"><AdminStatus label={item.disabled_at ? "Disabled" : "Active"} tone={item.disabled_at ? "warning" : "success"} /><AdminStatus label={item.auth_user_id ? "Auth linked" : "Email only"} /></div></div><AdminAccessControl email={item.email} disabled={Boolean(item.disabled_at)} isCurrent={Boolean(context.ok && item.email === context.email)} /></div></Card>)}</div>
+        </AdminSection>
+      </div>
     </div>
   );
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(new Date(value));
 }

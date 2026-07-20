@@ -55,7 +55,7 @@ export async function setDevelopmentPlanAction(input: unknown): Promise<Developm
   });
 
   if (upsertError) {
-    return { ok: false, message: upsertError.message };
+    return { ok: false, message: "The development subscription could not be saved." };
   }
 
   revalidatePath("/billing");

@@ -42,7 +42,7 @@ export type PlanSummary = {
   organiserName: string;
   isHost: boolean;
   myRsvp: string;
-  attendees: Array<{ name: string; rsvp: string; isMe: boolean }>;
+  attendees: Array<{ name: string; avatarUrl: string | null; rsvp: string; isMe: boolean }>;
   polls: PlanPollSummary[];
 };
 
@@ -566,7 +566,7 @@ function PlanDetailsModal({
             <ul className="space-y-2">
               {plan.attendees.map((attendee) => (
                 <li key={attendee.name} className="flex items-center gap-3 rounded-lg border border-border/70 bg-background/60 px-3 py-2">
-                  <GlowAvatar name={attendee.name} size="sm" />
+                  <GlowAvatar name={attendee.name} src={attendee.avatarUrl} size="sm" />
                   <span className="text-sm font-medium">{attendee.name}</span>
                   <RsvpBadge rsvp={attendee.rsvp} className="ml-auto" />
                 </li>

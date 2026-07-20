@@ -42,7 +42,7 @@ export default async function ProfilePage() {
         muddyCount={muddyCount}
       />
       {details ? (
-        <div className="mx-auto max-w-[900px] pb-8">
+        <div className="mx-auto w-full max-w-[1040px] pb-8">
           <ProfileDetailsEditor initialDetails={details} />
         </div>
       ) : null}

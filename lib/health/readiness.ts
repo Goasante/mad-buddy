@@ -47,11 +47,8 @@ export async function getReadinessReport(): Promise<ReadinessReport> {
     },
     {
       name: "admin_emails",
-      ok: hasValue(process.env.ADMIN_EMAILS) || process.env.NODE_ENV !== "production",
-      message:
-        hasValue(process.env.ADMIN_EMAILS) || process.env.NODE_ENV !== "production"
-          ? "Configured or local fallback available"
-          : "Missing ADMIN_EMAILS"
+      ok: hasValue(process.env.ADMIN_EMAILS),
+      message: hasValue(process.env.ADMIN_EMAILS) ? "Configured" : "Missing ADMIN_EMAILS"
     }
   ];
 

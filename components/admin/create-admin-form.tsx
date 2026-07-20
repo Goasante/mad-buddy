@@ -28,7 +28,7 @@ const readyState: CreateAdminState = {
   message: "Ready to create an admin."
 };
 
-export function CreateAdminForm() {
+export function CreateAdminForm({ allowOwner = false }: { allowOwner?: boolean }) {
   const [isPending, startTransition] = useTransition();
   const [state, setState] = useState<CreateAdminState>(readyState);
   const {
@@ -76,7 +76,7 @@ export function CreateAdminForm() {
               options={[
                 { value: "admin", label: "Admin" },
                 { value: "support", label: "Support" },
-                { value: "owner", label: "Owner" }
+                ...(allowOwner ? [{ value: "owner" as const, label: "Owner" }] : [])
               ]}
               error={errors.role?.message}
               onChange={field.onChange}

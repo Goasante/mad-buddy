@@ -12,18 +12,21 @@ import type { MediaContextType } from "@/lib/supabase/database.types";
  * here now so avatars and Moment/Drop media share one audited implementation.
  */
 
-export type ImageKind = "jpg" | "png" | "webp";
+export type ImageKind = "jpg" | "png" | "webp" | "heic";
 
 export const MIME_BY_KIND: Record<ImageKind, string> = {
   jpg: "image/jpeg",
   png: "image/png",
-  webp: "image/webp"
+  webp: "image/webp",
+  heic: "image/heic"
 };
 
 const KIND_BY_MIME = new Map<string, ImageKind>([
   ["image/jpeg", "jpg"],
   ["image/png", "png"],
-  ["image/webp", "webp"]
+  ["image/webp", "webp"],
+  ["image/heic", "heic"],
+  ["image/heif", "heic"]
 ]);
 
 export function kindForMimeType(mimeType: string): ImageKind | null {
@@ -70,14 +73,23 @@ export function sniffImageKind(bytes: Uint8Array): ImageKind | null {
     return "webp";
   }
 
+  // HEIC/HEIF: ISO base media container with a HEIF-compatible brand.
+  if (
+    bytes.length >= 12 &&
+    bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70
+  ) {
+    const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]).toLowerCase();
+    if (["heic", "heix", "hevc", "hevx", "mif1", "msf1"].includes(brand)) return "heic";
+  }
+
   return null;
 }
 
 // Size caps by context (spec §40).
 export const MAX_UPLOAD_BYTES: Record<MediaContextType, number> = {
-  // These two contexts currently upload through Server Actions. Staying at
-  // 3 MB leaves room for multipart metadata within the deployed request cap.
-  profile: 3 * 1024 * 1024,
+  // These contexts currently upload through Server Actions. The profile limit
+  // leaves multipart headroom beneath the configured 6 MB request cap.
+  profile: 5 * 1024 * 1024,
   moment: 3 * 1024 * 1024,
   drop: 15 * 1024 * 1024,
   event: 15 * 1024 * 1024,
@@ -91,11 +103,18 @@ export function maxUploadBytesFor(context: MediaContextType): number {
 
 /** Fast browser-side feedback before a file is sent to the server. */
 export function validateImageSelection(
-  file: { size: number; type: string },
+  file: { size: number; type: string; name?: string },
   context: MediaContextType
 ): string | null {
   if (file.size <= 0) return "Choose an image first.";
-  if (!kindForMimeType(file.type)) return "Upload a PNG, JPG, or WebP image.";
+  const extension = file.name?.split(".").pop()?.toLowerCase();
+  const extensionKind = extension === "jpg" || extension === "jpeg"
+    ? "jpg"
+    : extension === "png" || extension === "webp" || extension === "heic" || extension === "heif"
+      ? extension === "heif" ? "heic" : extension
+      : null;
+  const kind = kindForMimeType(file.type) ?? extensionKind;
+  if (!kind || (kind === "heic" && context !== "profile")) return "Upload a JPG, JPEG, PNG, WebP, or HEIC image.";
 
   const maximumBytes = maxUploadBytesFor(context);
   if (file.size > maximumBytes) {
@@ -123,17 +142,23 @@ export type UploadValidationResult =
 export function validateImageUpload(input: UploadValidationInput): UploadValidationResult {
   if (input.sizeBytes <= 0) return { valid: false, reason: "empty" };
 
+  const actualKind = sniffImageKind(input.headerBytes);
   const claimedKind = kindForMimeType(input.claimedMimeType);
-  if (!claimedKind) return { valid: false, reason: "unsupported_type" };
+  // Some iOS/browser combinations submit HEIC files without a MIME type. In
+  // that narrow case, the verified magic bytes remain authoritative.
+  const hasGenericMime = input.claimedMimeType === "" || input.claimedMimeType === "application/octet-stream";
+  const effectiveKind = claimedKind ?? (hasGenericMime ? actualKind : null);
+  if (!effectiveKind || (effectiveKind === "heic" && input.context !== "profile")) {
+    return { valid: false, reason: "unsupported_type" };
+  }
 
   if (input.sizeBytes > maxUploadBytesFor(input.context)) {
     return { valid: false, reason: "too_large" };
   }
 
-  const actualKind = sniffImageKind(input.headerBytes);
   // A file whose bytes disagree with its claimed type is rejected outright,
   // this is what stops a script or polyglot arriving as "image/png".
-  if (!actualKind || actualKind !== claimedKind) {
+  if (!actualKind || actualKind !== effectiveKind) {
     return { valid: false, reason: "content_mismatch" };
   }
 
@@ -143,13 +168,13 @@ export function validateImageUpload(input: UploadValidationInput): UploadValidat
 export function uploadValidationMessage(reason: Exclude<UploadValidationResult, { valid: true }>["reason"]): string {
   switch (reason) {
     case "unsupported_type":
-      return "Upload a PNG, JPG, or WebP image.";
+      return "Upload a JPG, JPEG, PNG, WebP, or HEIC image.";
     case "too_large":
       return "That image is too large.";
     case "empty":
       return "Choose an image first.";
     case "content_mismatch":
-      return "That file doesn't look like a PNG, JPG, or WebP image.";
+      return "That file doesn't look like a supported JPG, PNG, WebP, or HEIC image.";
   }
 }
 

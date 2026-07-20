@@ -29,6 +29,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { logoutAction } from "@/app/(auth)/actions";
 import { LocationSignalSync } from "@/components/app-shell/location-signal-sync";
 import { Button } from "@/components/ui/button";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand/brand-mark";
 
@@ -517,7 +518,8 @@ function AppHeader({
     "/events",
     "/groups",
     "/discover",
-    "/meeting-pings"
+    "/meeting-pings",
+    "/moments"
   ];
 
   if (pagesWithOwnHeader.some((href) => pathname === href || pathname.startsWith(`${href}/`))) {
@@ -691,23 +693,18 @@ function MobileAccountMenu({
 }
 
 function AccountAvatar({ src, initial }: { src: string | null; initial: string }) {
-  return (
-    <>
-      <span aria-hidden="true">{initial}</span>
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={src}
-          src={src}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-          onError={(event) => {
-            event.currentTarget.style.display = "none";
-          }}
-        />
-      ) : null}
-    </>
-  );
+  const [updatedAvatarSrc, setUpdatedAvatarSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleAvatarUpdate = (event: Event) => {
+      const nextSrc = (event as CustomEvent<string>).detail;
+      if (nextSrc) setUpdatedAvatarSrc(nextSrc);
+    };
+    window.addEventListener("madbuddy:avatar-updated", handleAvatarUpdate);
+    return () => window.removeEventListener("madbuddy:avatar-updated", handleAvatarUpdate);
+  }, []);
+
+  return <UserAvatar src={updatedAvatarSrc ?? src} name={initial} size="sm" decorative className="h-full w-full" />;
 }
 
 const createActions: Array<{

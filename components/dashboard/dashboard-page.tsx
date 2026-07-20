@@ -36,6 +36,7 @@ import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { StatusComposer } from "@/components/social/status-composer";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { resolveNotificationDestination } from "@/lib/notifications/destination";
 import { formatMuddyStatusLabel } from "@/lib/social/rules";
@@ -717,7 +718,8 @@ export function DashboardPageContent({
                 friendId: selectedFriend.friendId,
                 displayName: selectedFriend.displayName,
                 username: selectedFriend.username,
-                about: selectedFriend.statusText,
+                avatarUrl: selectedFriend.avatarUrl,
+                statusText: selectedFriend.statusText,
                 proximityLevel: selectedFriend.proximityLevel,
                 glowStrength: selectedFriend.glowStrength,
                 confidence: selectedFriend.confidence
@@ -863,26 +865,13 @@ function rsvpLabel(rsvp: string): string {
 
 function PlanFace({ attendee }: { attendee: PlanAttendee }) {
   const name = attendee.name || "Muddy";
-  const initials = name
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-  return attendee.avatarUrl ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+  return (
+    <UserAvatar
       src={attendee.avatarUrl}
-      alt={capitalize(name)}
-      className="h-6 w-6 rounded-full border-2 border-card object-cover"
+      name={capitalize(name)}
+      size="xs"
+      className="border-2 border-card bg-primary/15 text-primary"
     />
-  ) : (
-    <span
-      className="grid h-6 w-6 place-items-center rounded-full border-2 border-card bg-primary/15 text-[9px] font-semibold text-primary"
-      aria-label={capitalize(name)}
-    >
-      {initials}
-    </span>
   );
 }
 

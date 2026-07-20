@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { deliverNotification } from "@/lib/notifications/server";
 import type { Database, SubscriptionPlan, SubscriptionStatus } from "@/lib/supabase/database.types";
 import { paidPlanToSubscriptionPlan, paystackPlanFromPlanCode, mapPaystackSubscriptionStatus } from "@/lib/paystack/subscriptions";
+import { paystackPlans } from "@/lib/paystack/config";
 
 type PaystackCustomerLike = {
   customer_code?: string;
@@ -32,6 +33,7 @@ export type PaystackSyncInput = {
   reference?: string | null;
   paidAt?: string | null;
   amount?: number | null;
+  currency?: string | null;
   customer?: PaystackCustomerLike | null;
   authorization?: PaystackAuthorizationLike | null;
   subscription?: PaystackSubscriptionLike | null;
@@ -39,6 +41,14 @@ export type PaystackSyncInput = {
 };
 
 export function appPlanFromPaystack(input: Pick<PaystackSyncInput, "plan" | "planCode" | "subscription">) {
+  const subscriptionPlan = input.subscription?.plan;
+  const suppliedPlanCode =
+    input.planCode ??
+    (typeof subscriptionPlan === "string" ? subscriptionPlan : subscriptionPlan?.plan_code);
+  const planFromCode = paystackPlanFromPlanCode(suppliedPlanCode);
+
+  if (suppliedPlanCode) return planFromCode;
+
   if (input.plan === "plus" || input.plan === "pro") {
     return paidPlanToSubscriptionPlan(input.plan);
   }
@@ -47,19 +57,37 @@ export function appPlanFromPaystack(input: Pick<PaystackSyncInput, "plan" | "pla
     return input.plan;
   }
 
+  return "free";
+}
+
+export function validatePaystackSyncInput(input: PaystackSyncInput) {
+  const plan = appPlanFromPaystack(input);
+  if (plan === "free") throw new Error("Unrecognized Paystack plan.");
+
+  const configured = plan === "buddy_plus" ? paystackPlans.plus : paystackPlans.pro;
+  const metadataPlan =
+    input.plan === "plus" || input.plan === "pro"
+      ? paidPlanToSubscriptionPlan(input.plan)
+      : input.plan;
+
+  if (metadataPlan && metadataPlan !== plan) throw new Error("Paystack plan metadata does not match the billed plan.");
+  if (input.amount != null && input.amount !== configured.amount) throw new Error("Paystack amount does not match the configured plan.");
+  if (input.currency && input.currency.toUpperCase() !== configured.currency) throw new Error("Paystack currency is not supported.");
+
   const subscriptionPlan = input.subscription?.plan;
-  const planCode =
+  const suppliedPlanCode =
     input.planCode ??
     (typeof subscriptionPlan === "string" ? subscriptionPlan : subscriptionPlan?.plan_code);
+  if (!suppliedPlanCode && input.amount == null) throw new Error("Paystack plan could not be verified.");
 
-  return paystackPlanFromPlanCode(planCode);
+  return plan;
 }
 
 export async function syncPaystackSubscription(
   admin: SupabaseClient<Database>,
   input: PaystackSyncInput
 ) {
-  const plan = appPlanFromPaystack(input);
+  const plan = validatePaystackSyncInput(input);
   const status = mapPaystackSubscriptionStatus(input.subscription?.status ?? input.status);
   const paidAt = input.paidAt ? new Date(input.paidAt) : new Date();
   const periodEnd = input.subscription?.next_payment_date
@@ -84,9 +112,9 @@ export async function syncPaystackSubscription(
       paystack_email_token: emailToken,
       paystack_authorization_code: authorizationCode,
       plan,
-      status: status === "free" && plan !== "free" ? "active" : status,
-      current_period_start: plan === "free" ? null : paidAt.toISOString(),
-      current_period_end: plan === "free" ? null : periodEnd.toISOString(),
+      status: status === "free" ? "active" : status,
+      current_period_start: paidAt.toISOString(),
+      current_period_end: periodEnd.toISOString(),
       // A successful payment sync ends any grace window and un-cancels
       // (batch 10 §61): the renewal went through.
       grace_ends_at: null,

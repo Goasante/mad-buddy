@@ -89,17 +89,30 @@ export async function updateProfileDetailsAction(input: unknown): Promise<Profil
 
   const admin = createSupabaseAdminClient();
   const nowIso = new Date().toISOString();
+  const profileUpdates: {
+    bio?: string | null;
+    institution: string | null;
+    programme: string | null;
+    graduation_year: number | null;
+    general_area: string | null;
+    pronouns: string | null;
+  } = {
+    institution: parsed.data.institution?.trim() || null,
+    programme: parsed.data.programme?.trim() || null,
+    graduation_year: parsed.data.graduationYear ?? null,
+    general_area: parsed.data.generalArea?.trim() || null,
+    pronouns: parsed.data.pronouns?.trim() || null
+  };
+
+  // Bio is edited in the main profile form. Do not erase it when this
+  // optional-details form submits without a bio field.
+  if (parsed.data.bio !== undefined) {
+    profileUpdates.bio = parsed.data.bio.trim() || null;
+  }
 
   const { error } = await admin
     .from("profiles")
-    .update({
-      bio: parsed.data.bio?.trim() || null,
-      institution: parsed.data.institution?.trim() || null,
-      programme: parsed.data.programme?.trim() || null,
-      graduation_year: parsed.data.graduationYear ?? null,
-      general_area: parsed.data.generalArea?.trim() || null,
-      pronouns: parsed.data.pronouns?.trim() || null
-    })
+    .update(profileUpdates)
     .eq("user_id", userId);
   if (error) return { ok: false, message: "Couldn't save your profile." };
 
@@ -125,4 +138,3 @@ export async function updateProfileDetailsAction(input: unknown): Promise<Profil
 
   return { ok: true, message: "Profile saved." };
 }
-

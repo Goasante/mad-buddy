@@ -49,6 +49,7 @@ export type ChatMessageView = {
 export type ConversationView = {
   id: string;
   title: string;
+  avatarUrl: string | null;
   /** The other person's username for a direct chat, used to disambiguate
    * when two conversations share the same display name. Null for
    * group/plan chats, which have no single "other person." */
@@ -348,16 +349,18 @@ export async function getConversationsAction(): Promise<ConversationView[]> {
     // Title: the other person for direct chats, else the group name.
     let title = "Conversation";
     let otherUsername: string | null = null;
+    let avatarUrl: string | null = null;
     if (conversation.conversation_type === "direct" && conversation.direct_key) {
       const otherId = conversation.direct_key.split(":").find((id) => id !== userId);
       if (otherId) {
         const { data: profile } = await admin
           .from("profiles")
-          .select("full_name, username")
+          .select("full_name, username, avatar_url")
           .eq("user_id", otherId)
           .maybeSingle();
         title = profile?.full_name?.trim() || "A Muddy";
         otherUsername = profile?.username ?? null;
+        avatarUrl = profile?.avatar_url ?? null;
       }
     } else {
       const { data: settings } = await admin
@@ -392,6 +395,7 @@ export async function getConversationsAction(): Promise<ConversationView[]> {
     views.push({
       id: conversation.id,
       title,
+      avatarUrl,
       otherUsername,
       kind: conversation.conversation_type,
       lastMessagePreview:

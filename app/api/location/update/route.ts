@@ -85,7 +85,10 @@ export async function POST(request: Request) {
   }
 
   const confidence = confidenceFromAccuracy(parsedBody.data.accuracy);
-  const { error } = await supabase.from("user_locations").upsert(
+  // Only this authenticated, rate-limited server boundary may persist raw
+  // coordinates. Authenticated browser roles have no direct table-write grant.
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("user_locations").upsert(
     {
       user_id: user.id,
       latitude: parsedBody.data.latitude,

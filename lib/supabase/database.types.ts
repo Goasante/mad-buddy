@@ -1586,6 +1586,7 @@ export type Database = {
           status: ContentReportStatus;
           created_at: string;
           resolved_at: string | null;
+          legacy_support_request_id: string | null;
         };
         Insert: {
           id?: string;
@@ -1598,6 +1599,7 @@ export type Database = {
           status?: ContentReportStatus;
           created_at?: string;
           resolved_at?: string | null;
+          legacy_support_request_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["content_reports"]["Insert"]>;
         Relationships: [];

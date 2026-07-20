@@ -466,7 +466,7 @@ function EventDetailsModal({
                   key={muddy.userId}
                   className="flex items-center gap-2 rounded-full border border-border/70 bg-background/60 py-1 pl-1 pr-3"
                 >
-                  <GlowAvatar name={muddy.displayName} size="sm" reducedMotion={reducedMotion} />
+                  <GlowAvatar name={muddy.displayName} src={muddy.avatarUrl} size="sm" reducedMotion={reducedMotion} />
                   <span className="text-xs font-medium">{muddy.displayName}</span>
                 </div>
               ))}

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -8,82 +9,137 @@ import {
   ArrowLeft,
   ClipboardList,
   CreditCard,
+  FileKey2,
   Gauge,
+  Headphones,
   ShieldAlert,
   ShieldCheck,
   UsersRound
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { Badge } from "@/components/ui/badge";
+import type { AdminPermission } from "@/lib/admin/governance";
+import type { AdminAccessRole } from "@/lib/admin/access";
+import { BrandMark } from "@/components/brand/brand-mark";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const adminNavigationItems: Array<{
-  href:
-    | "/admin"
-    | "/admin/users"
-    | "/admin/reports"
-    | "/admin/billing"
-    | "/admin/system"
-    | "/admin/audit"
-    | "/admin/admins";
+type AdminHref =
+  | "/admin"
+  | "/admin/users"
+  | "/admin/reports"
+  | "/admin/support"
+  | "/admin/billing"
+  | "/admin/privacy"
+  | "/admin/system"
+  | "/admin/audit"
+  | "/admin/admins";
+
+type AdminNavigationItem = {
+  href: AdminHref;
   label: string;
   icon: LucideIcon;
-}> = [
-  { href: "/admin", label: "Overview", icon: Gauge },
-  { href: "/admin/users", label: "Users", icon: UsersRound },
-  { href: "/admin/reports", label: "Reports", icon: ShieldAlert },
-  { href: "/admin/billing", label: "Billing", icon: CreditCard },
-  { href: "/admin/system", label: "System", icon: Activity },
-  { href: "/admin/audit", label: "Audit", icon: ClipboardList },
-  { href: "/admin/admins", label: "Admins", icon: ShieldCheck }
+  permission?: AdminPermission;
+};
+
+const adminNavigationGroups: Array<{ label: string; items: AdminNavigationItem[] }> = [
+  {
+    label: "Operations",
+    items: [
+      { href: "/admin", label: "Overview", icon: Gauge },
+      { href: "/admin/users", label: "Users", icon: UsersRound, permission: "admin.users.view_summary" },
+      { href: "/admin/reports", label: "Reports", icon: ShieldAlert, permission: "admin.reports.review" },
+      { href: "/admin/support", label: "Support", icon: Headphones, permission: "admin.support.manage" }
+    ]
+  },
+  {
+    label: "Platform",
+    items: [
+      { href: "/admin/billing", label: "Billing", icon: CreditCard, permission: "admin.billing.view" },
+      { href: "/admin/privacy", label: "Privacy", icon: FileKey2, permission: "admin.privacy.requests.manage" },
+      { href: "/admin/system", label: "System", icon: Activity, permission: "admin.security.events.view" }
+    ]
+  },
+  {
+    label: "Governance",
+    items: [
+      { href: "/admin/audit", label: "Audit log", icon: ClipboardList, permission: "admin.audit.view" },
+      { href: "/admin/admins", label: "Admin team", icon: ShieldCheck, permission: "admin.roles.manage" }
+    ]
+  }
 ];
+
+const adminNavigationItems = adminNavigationGroups.flatMap((group) => group.items);
 
 export type AdminShellProps = {
   children: ReactNode;
   email: string;
   isDevelopmentFallback: boolean;
+  permissions: AdminPermission[];
+  role: AdminAccessRole;
 };
 
-export function AdminShell({ children, email, isDevelopmentFallback }: AdminShellProps) {
+export function AdminShell({ children, email, isDevelopmentFallback, permissions, role }: AdminShellProps) {
   const pathname = usePathname();
+  const allowedGroups = adminNavigationGroups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !item.permission || permissions.includes(item.permission))
+  })).filter((group) => group.items.length > 0);
+  const allowedItems = allowedGroups.flatMap((group) => group.items);
 
   return (
-    <div className="min-h-screen bg-background">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r border-border bg-background/80 px-5 py-6 backdrop-blur-xl lg:block">
-        <div className="flex h-full flex-col">
-          <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Management</p>
-            <h1 className="mt-2 text-xl font-semibold">Mad Buddy Admin</h1>
-            <Badge variant={isDevelopmentFallback ? "warning" : "blue"} className="mt-4">
-              {isDevelopmentFallback ? "Local fallback" : "Restricted"}
-            </Badge>
+    <div className="min-h-screen bg-[#0d0e10] text-foreground">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[252px] border-r border-white/[0.08] bg-[#0a0b0d] lg:flex lg:flex-col">
+        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-white/[0.08] px-5">
+          <BrandMark className="h-9 w-9" priority />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">Mad Buddy</p>
+            <p className="text-[11px] text-muted-foreground">Admin operations</p>
           </div>
-          <nav className="mt-8 grid gap-2" aria-label="Admin navigation">
-            {adminNavigationItems.map((item) => {
-              const isActive = pathname === item.href;
+        </div>
 
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "focus-ring safe-motion flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium",
-                    isActive
-                      ? "bg-secondary text-foreground"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                >
-                  <item.icon className="h-4 w-4" aria-hidden="true" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-          <div className="mt-auto space-y-3 rounded-lg border border-border bg-card/60 p-4">
-            <p className="truncate text-xs text-muted-foreground">Signed in as</p>
-            <p className="truncate text-sm font-semibold">{email}</p>
-            <Button type="button" variant="outline" size="sm" className="w-full" asChild>
+        <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4" aria-label="Admin navigation">
+          <div className="space-y-5">
+            {allowedGroups.map((group) => (
+              <div key={group.label}>
+                <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
+                  {group.label}
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {group.items.map((item) => {
+                    const isActive = isAdminItemActive(item.href, pathname);
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href as Route}
+                          aria-current={isActive ? "page" : undefined}
+                          className={cn(
+                            "focus-ring safe-motion flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium",
+                            isActive
+                              ? "bg-white/[0.08] text-white"
+                              : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
+                          )}
+                        >
+                          <item.icon className={cn("h-4 w-4", isActive && "text-orange-400")} strokeWidth={1.8} aria-hidden="true" />
+                          {item.label}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </nav>
+
+        <div className="shrink-0 border-t border-white/[0.08] p-3">
+          <div className="rounded-xl bg-white/[0.035] p-3">
+            <div className="flex items-center gap-2">
+              <span className={cn("h-2 w-2 rounded-full", isDevelopmentFallback ? "bg-amber-400" : "bg-emerald-400")} aria-hidden="true" />
+              <p className="text-xs font-medium">{isDevelopmentFallback ? "Local access" : "Restricted access"}</p>
+            </div>
+            <p className="mt-2 truncate text-xs text-muted-foreground" title={email}>{email}</p>
+            <p className="mt-1 text-[11px] capitalize text-muted-foreground">{role}</p>
+            <Button type="button" variant="ghost" size="sm" className="mt-2 w-full justify-start px-2 shadow-none" asChild>
               <Link href="/dashboard">
                 <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                 Back to app
@@ -92,46 +148,52 @@ export function AdminShell({ children, email, isDevelopmentFallback }: AdminShel
           </div>
         </div>
       </aside>
-      <div className="lg:pl-72">
-        <header className="sticky top-0 z-30 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Admin</p>
-              <h2 className="text-lg font-semibold">{activeLabel(pathname)}</h2>
+
+      <div className="lg:pl-[252px]">
+        <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-[#0d0e10]/90 backdrop-blur-xl">
+          <div className="flex min-h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Admin</p>
+              <h2 className="truncate text-base font-semibold">{activeLabel(pathname)}</h2>
             </div>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" size="sm" asChild>
-                <Link href="/dashboard">
-                  <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                  App
-                </Link>
-              </Button>
-            </div>
-          </div>
-          <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden" aria-label="Admin mobile navigation">
-            {adminNavigationItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "focus-ring safe-motion inline-flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium",
-                  pathname === item.href
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                )}
-              >
-                <item.icon className="h-4 w-4" aria-hidden="true" />
-                {item.label}
+            <Button type="button" variant="outline" size="sm" asChild>
+              <Link href="/dashboard">
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden sm:inline">Back to app</span>
+                <span className="sm:hidden">App</span>
               </Link>
-            ))}
+            </Button>
+          </div>
+          <nav className="no-scrollbar flex gap-1 overflow-x-auto border-t border-white/[0.06] px-3 py-2 lg:hidden" aria-label="Admin mobile navigation">
+            {allowedItems.map((item) => {
+              const isActive = isAdminItemActive(item.href, pathname);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href as Route}
+                  aria-current={isActive ? "page" : undefined}
+                  className={cn(
+                    "focus-ring safe-motion inline-flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-medium",
+                    isActive ? "bg-white/[0.08] text-white" : "text-muted-foreground hover:bg-white/[0.04]"
+                  )}
+                >
+                  <item.icon className={cn("h-3.5 w-3.5", isActive && "text-orange-400")} aria-hidden="true" />
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
         </header>
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
       </div>
     </div>
   );
 }
 
+function isAdminItemActive(href: AdminHref, pathname: string) {
+  return href === "/admin" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+}
+
 function activeLabel(pathname: string) {
-  return adminNavigationItems.find((item) => item.href === pathname)?.label ?? "Admin";
+  return adminNavigationItems.find((item) => isAdminItemActive(item.href, pathname))?.label ?? "Admin";
 }

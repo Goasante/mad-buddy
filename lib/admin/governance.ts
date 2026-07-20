@@ -61,20 +61,7 @@ export type AdminRole =
  * messages, location, or private media, those aren't permissions at all.
  */
 export const ROLE_PERMISSIONS: Record<AdminRole, readonly AdminPermission[]> = {
-  super_administrator: [
-    "admin.users.view_summary",
-    "admin.users.restrict",
-    "admin.users.suspend",
-    "admin.users.restore",
-    "admin.sessions.revoke",
-    "admin.reports.review",
-    "admin.appeals.review",
-    "admin.security.incidents.manage",
-    "admin.audit.view",
-    "admin.feature_flags.manage",
-    "admin.emergency_controls.manage",
-    "admin.roles.manage"
-  ],
+  super_administrator: ADMIN_PERMISSIONS,
   trust_safety_administrator: [
     "admin.users.view_summary",
     "admin.users.restrict",
@@ -83,21 +70,25 @@ export const ROLE_PERMISSIONS: Record<AdminRole, readonly AdminPermission[]> = {
     "admin.reports.review",
     "admin.appeals.review",
     "admin.organisations.restrict",
-    "admin.audit.view"
+    "admin.audit.view",
+    "admin.roles.manage",
+    "admin.support.manage",
+    "admin.sessions.revoke"
   ],
-  customer_support_agent: ["admin.users.view_summary", "admin.support.manage"],
-  billing_support_agent: ["admin.users.view_summary", "admin.billing.view", "admin.billing.refund"],
-  verification_reviewer: ["admin.users.view_summary", "admin.verification.review"],
+  customer_support_agent: ["admin.users.view_summary", "admin.users.suspend", "admin.sessions.revoke", "admin.support.manage"],
+  billing_support_agent: ["admin.users.view_summary", "admin.users.suspend", "admin.billing.view", "admin.billing.refund"],
+  verification_reviewer: ["admin.users.view_summary", "admin.users.suspend", "admin.verification.review"],
   security_engineer: [
     "admin.users.view_summary",
     "admin.sessions.revoke",
     "admin.security.events.view",
     "admin.security.incidents.manage",
-    "admin.audit.view"
+    "admin.audit.view",
+    "admin.users.suspend"
   ],
-  privacy_administrator: ["admin.users.view_summary", "admin.privacy.requests.manage", "admin.audit.view"],
-  // Read-only by definition: view permissions only, nothing that mutates.
-  read_only_auditor: ["admin.audit.view", "admin.users.view_summary"]
+  privacy_administrator: ["admin.users.view_summary", "admin.users.suspend", "admin.privacy.requests.manage", "admin.audit.view"],
+  // Audit-only staff may still apply the universal account safety hold.
+  read_only_auditor: ["admin.audit.view", "admin.users.view_summary", "admin.users.suspend"]
 };
 
 export type AdminAssignment = {

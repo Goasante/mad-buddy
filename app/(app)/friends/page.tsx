@@ -76,7 +76,7 @@ async function loadFriendNetwork(): Promise<{
 
   const { data: profiles } = await admin
     .from("profiles")
-    .select("user_id, full_name, username")
+    .select("user_id, full_name, username, avatar_url")
     .in("user_id", [...profileIds]);
   const profilesById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
   // Fallback for users whose profiles row hasn't synced yet. The auth admin
@@ -97,7 +97,8 @@ async function loadFriendNetwork(): Promise<{
       profilesById.set(profileId, {
         user_id: profileId,
         full_name: metadataName?.trim() || "Mad Buddy user",
-        username: metadataUsername || `muddy_${profileId.slice(0, 8)}`
+        username: metadataUsername || `muddy_${profileId.slice(0, 8)}`,
+        avatar_url: typeof metadata?.avatar_url === "string" ? metadata.avatar_url : null
       });
     })
   );
@@ -117,6 +118,7 @@ async function loadFriendNetwork(): Promise<{
         requestId: request.id,
         displayName: profile.full_name,
         username: profile.username,
+        avatarUrl: profile.avatar_url,
         mutualFriends: 0,
         status: isReceived ? "received" : "sent",
         note: isReceived ? "Wants to connect with you" : "Waiting for a response"
@@ -133,6 +135,7 @@ async function loadFriendNetwork(): Promise<{
         id: profileId,
         displayName: profile.full_name,
         username: profile.username,
+        avatarUrl: profile.avatar_url,
         mutualFriends: 0,
         status: "friend",
         note: "Approved Muddy"
@@ -148,6 +151,7 @@ async function loadFriendNetwork(): Promise<{
         id: profile.user_id,
         displayName: profile.full_name,
         username: profile.username,
+        avatarUrl: profile.avatar_url,
         mutualFriends: 0,
         status: "blocked",
         note: "Blocked user"

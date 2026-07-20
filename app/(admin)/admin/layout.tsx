@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
+import { getAdminAccess } from "@/lib/admin/access";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false }
@@ -20,8 +22,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     redirect("/admin/login");
   }
 
+  const access = await getAdminAccess(createSupabaseAdminClient(), context);
+
   return (
-    <AdminShell email={context.email} isDevelopmentFallback={context.isDevelopmentFallback}>
+    <AdminShell email={context.email} isDevelopmentFallback={context.isDevelopmentFallback} permissions={[...access.permissions]} role={access.role}>
       {children}
     </AdminShell>
   );

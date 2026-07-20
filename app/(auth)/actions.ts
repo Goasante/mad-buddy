@@ -127,25 +127,23 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
       latencyMs: Date.now() - startedAt,
       errorType: error.name
     });
-    return { ok: false, message: error.message };
+    return { ok: false, message: "Your account could not be created. Check the form and try again." };
   }
 
-  // Anti-enumeration behaviour: signing up again with an email that's already
-  // registered and confirmed returns no error, no session, no email sent,
-  // and a user object with an empty identities array whose id does NOT match
-  // the real account. Without this check we told the caller "Account
-  // created" and (before this fix existed) even tried to bootstrap rows
-  // against that fake id. Tell them the truth instead: this email is taken.
+  // Supabase intentionally returns an obfuscated user for an existing email.
+  // Keep this indistinguishable from a confirmation-required signup so the
+  // action cannot be used to discover registered addresses.
   if (data.user && data.user.identities?.length === 0 && !data.session) {
     logBackendEvent("info", {
       requestId,
       action: "auth.signup",
-      statusCode: 409,
+      statusCode: 200,
       latencyMs: Date.now() - startedAt
     });
     return {
-      ok: false,
-      message: "An account with this email already exists. Log in, or use “Forgot password” if you don't remember it."
+      ok: true,
+      message: "Check your email to continue.",
+      redirectTo: "/login"
     };
   }
 
@@ -292,7 +290,7 @@ export async function loginAction(input: unknown): Promise<AuthActionState> {
       };
     }
 
-    return { ok: false, message: error.message };
+    return { ok: false, message: "Email address or password is incorrect." };
   }
 
   logBackendEvent("info", {
@@ -356,7 +354,7 @@ export async function adminLoginAction(input: unknown): Promise<AuthActionState>
       latencyMs: Date.now() - startedAt,
       errorType: error ? errorType(error) : "missing_user"
     });
-    return { ok: false, message: error?.message ?? "Admin login failed." };
+    return { ok: false, message: "Admin email address or password is incorrect." };
   }
 
   const access = await getAdminEmailAccess(data.user.email);
@@ -398,16 +396,26 @@ export async function forgotPasswordAction(input: unknown): Promise<AuthActionSt
     return { ok: false, message: "Enter a valid email address." };
   }
 
+  const rateLimit = await consumeRateLimit({
+    action: "auth.password_recovery",
+    ipHash: await getClientIpHashFromHeaders()
+  });
+  if (!rateLimit.allowed) {
+    return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
+  }
+
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
     redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/auth/callback?next=/reset-password`
   });
 
+  // Keep the response identical whether or not the address exists. The
+  // provider error is intentionally not returned to avoid account discovery.
   if (error) {
-    return { ok: false, message: error.message };
+    logBackendEvent("warn", { action: "auth.password_recovery", statusCode: 400, errorType: errorType(error) });
   }
 
-  return { ok: true, message: "Password reset email sent." };
+  return { ok: true, message: "If an account exists for that email, a reset link has been sent." };
 }
 
 export async function resetPasswordAction(input: unknown): Promise<AuthActionState> {
@@ -435,13 +443,20 @@ export async function resetPasswordAction(input: unknown): Promise<AuthActionSta
     };
   }
 
+  const rateLimit = await consumeRateLimit({
+    action: "auth.password_reset",
+    userId: user.id,
+    ipHash: await getClientIpHashFromHeaders()
+  });
+  if (!rateLimit.allowed) {
+    return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
+  }
+
   const { error } = await supabase.auth.updateUser({
     password: parsed.data.password
   });
 
-  if (error) {
-    return { ok: false, message: error.message };
-  }
+  if (error) return { ok: false, message: "Your password could not be updated. Request a new reset link and try again." };
 
   return { ok: true, message: "Password updated. You can now log in with the new password.", redirectTo: "/login" };
 }

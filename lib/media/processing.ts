@@ -38,9 +38,26 @@ export type ProcessedUpload = {
   variants: { thumb: ProcessedImage; feed: ProcessedImage };
 };
 
+/**
+ * Returns a tightly sized ArrayBuffer for Storage uploads.
+ *
+ * Node Buffers are Uint8Array views and may reference a larger pooled backing
+ * buffer. More importantly, some server runtimes/fetch adapters can coerce a
+ * Buffer body through text encoding. Copying into a real ArrayBuffer keeps the
+ * request body binary and prevents image signatures from becoming U+FFFD
+ * replacement bytes in Storage.
+ */
+export function toStorageArrayBuffer(input: Uint8Array): ArrayBuffer {
+  return Uint8Array.from(input).buffer;
+}
+
+export const PROFILE_AVATAR_DIMENSION = 512;
+export const PROFILE_AVATAR_TARGET_MIN_BYTES = 150 * 1024;
+export const PROFILE_AVATAR_TARGET_MAX_BYTES = 250 * 1024;
+
 function encoderFor(kind: ImageKind) {
   return (pipeline: Sharp) =>
-    kind === "png" ? pipeline.png() : kind === "webp" ? pipeline.webp() : pipeline.jpeg({ quality: 85 });
+    kind === "png" ? pipeline.png() : kind === "webp" || kind === "heic" ? pipeline.webp({ quality: 84 }) : pipeline.jpeg({ quality: 85 });
 }
 
 async function encode(input: Buffer, kind: ImageKind, maxDimension?: number): Promise<ProcessedImage> {
@@ -60,6 +77,45 @@ export async function processImageUpload(input: Buffer, kind: ImageKind): Promis
     encode(input, kind, VARIANT_DIMENSIONS.feed)
   ]);
   return { original, variants: { thumb, feed } };
+}
+
+async function encodeProfileAvatar(input: Buffer, quality: number): Promise<Buffer> {
+  return sharp(input, { failOn: "error" })
+    .rotate()
+    .resize(PROFILE_AVATAR_DIMENSION, PROFILE_AVATAR_DIMENSION, {
+      fit: "cover",
+      // Sharp's attention strategy favours salient regions and skin tones. It
+      // behaves like a face-aware crop when possible and gracefully falls back
+      // to the visual centre when no face is detectable.
+      position: sharp.strategy.attention
+    })
+    .webp({ quality, effort: 5, smartSubsample: true })
+    .toBuffer();
+}
+
+/**
+ * Produces the single canonical profile image stored by Mad Buddy: a square,
+ * metadata-free 512px WebP. The quality ladder aims for 150-250 KB without
+ * padding naturally small images or keeping an oversized upload.
+ */
+export async function optimizeProfileAvatar(input: Buffer): Promise<Buffer> {
+  let output = await encodeProfileAvatar(input, 84);
+
+  if (output.length > PROFILE_AVATAR_TARGET_MAX_BYTES) {
+    for (const quality of [80, 76, 72, 68, 64, 60, 56, 52]) {
+      output = await encodeProfileAvatar(input, quality);
+      if (output.length <= PROFILE_AVATAR_TARGET_MAX_BYTES) break;
+    }
+  } else if (output.length < PROFILE_AVATAR_TARGET_MIN_BYTES) {
+    // Flat illustrations often compress far below the target. Prefer a little
+    // more detail when it still stays within the upper storage target.
+    for (const quality of [90, 94]) {
+      const candidate = await encodeProfileAvatar(input, quality);
+      if (candidate.length <= PROFILE_AVATAR_TARGET_MAX_BYTES) output = candidate;
+    }
+  }
+
+  return output;
 }
 
 /** Variant keys live beside the original: `<originalKey>` → `<stem>.thumb.<ext>`. */

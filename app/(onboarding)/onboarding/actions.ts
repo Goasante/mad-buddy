@@ -4,6 +4,7 @@ import { z } from "zod";
 import { deliverNotification } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export type OnboardingActionState = {
   ok: boolean;
@@ -59,8 +60,9 @@ export async function completeOnboardingAction(input: unknown): Promise<Onboardi
   if (userError || !user) {
     return { ok: false, message: "Log in before finishing onboarding." };
   }
+  const admin = createSupabaseAdminClient();
 
-  const { error: profileError } = await supabase.from("profiles").upsert({
+  const { error: profileError } = await admin.from("profiles").upsert({
     user_id: user.id,
     full_name: parsed.data.fullName,
     username: parsed.data.username,
@@ -71,10 +73,10 @@ export async function completeOnboardingAction(input: unknown): Promise<Onboardi
   });
 
   if (profileError) {
-    return { ok: false, message: profileError.message };
+    return { ok: false, message: "Your profile could not be saved." };
   }
 
-  const { error: preferencesError } = await supabase.from("user_preferences").upsert({
+  const { error: preferencesError } = await admin.from("user_preferences").upsert({
     user_id: user.id,
     mood_status: parsed.data.moodStatus || null,
     notification_preferences: {
@@ -86,7 +88,7 @@ export async function completeOnboardingAction(input: unknown): Promise<Onboardi
   });
 
   if (preferencesError) {
-    return { ok: false, message: preferencesError.message };
+    return { ok: false, message: "Your preferences could not be saved." };
   }
 
   const friendUsername = parsed.data.firstFriend;
@@ -101,28 +103,33 @@ export async function completeOnboardingAction(input: unknown): Promise<Onboardi
       return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
     }
 
-    const { data: friendProfile, error: friendError } = await supabase
+    const { data: friendProfile, error: friendError } = await admin
       .from("profiles")
       .select("user_id, full_name")
       .eq("username", friendUsername)
       .maybeSingle();
 
     if (friendError) {
-      return { ok: false, message: friendError.message };
+      return { ok: false, message: "That username could not be checked." };
     }
 
     if (friendProfile?.user_id) {
-      const { error: requestError } = await supabase.from("friend_requests").insert({
+      const { data: blocked } = await admin.from("blocked_users").select("id").or(
+        `and(blocker_id.eq.${user.id},blocked_id.eq.${friendProfile.user_id}),and(blocker_id.eq.${friendProfile.user_id},blocked_id.eq.${user.id})`
+      ).limit(1).maybeSingle();
+      if (blocked) return { ok: false, message: "That account is not available to connect." };
+
+      const { error: requestError } = await admin.from("friend_requests").insert({
         sender_id: user.id,
         receiver_id: friendProfile.user_id,
         status: "pending"
       });
 
       if (requestError) {
-        return { ok: false, message: requestError.message };
+        return { ok: false, message: "The Muddy request could not be sent." };
       }
 
-      await deliverNotification(supabase, {
+      await deliverNotification(admin, {
         userId: friendProfile.user_id,
         senderId: user.id,
         type: "friend_request_received",

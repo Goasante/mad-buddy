@@ -14,8 +14,7 @@
  * - 'unsafe-inline' script/style: the theme bootstrap script in
  *   app/layout.tsx and Next.js runtime inline scripts/styles. To be replaced
  *   by nonces before enforcement.
- * - Everything else is 'self' or 'none', no analytics, no font CDN, no
- *   embeds, no workers, no websockets exist in this application.
+ * - The same-origin service worker is used only to display web-push events.
  */
 
 export function supabaseOriginFromEnv(supabaseUrl: string | undefined): string | null {
@@ -58,7 +57,7 @@ export function buildContentSecurityPolicy(options: {
     `object-src 'none'`,
     `base-uri 'self'`,
     `form-action 'self'`,
-    `worker-src 'none'`,
+    `worker-src 'self'`,
     `media-src 'none'`,
     `manifest-src 'self'`
   ];

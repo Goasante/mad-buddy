@@ -1,85 +1,41 @@
-import { CreditCard } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { CircleDollarSign, CreditCard, UserRoundCheck, WalletCards } from "lucide-react";
+import { AdminEmptyState, AdminMetricCard, AdminPageHeader, AdminQueryError, AdminSection, AdminStatus, formatAdminDate, humanizeAdminValue } from "@/components/admin/admin-ui";
 import { Card } from "@/components/ui/card";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import type { SubscriptionPlan, SubscriptionStatus } from "@/lib/supabase/database.types";
-
-const statuses: SubscriptionStatus[] = ["free", "trialing", "active", "past_due", "cancelled", "expired"];
-const plans: SubscriptionPlan[] = ["free", "buddy_plus", "buddy_pro"];
+import { requireAdminPagePermission } from "@/lib/admin/access";
 
 export default async function AdminBillingPage() {
-  const admin = createSupabaseAdminClient();
+  const { admin } = await requireAdminPagePermission("admin.billing.view");
   const [subscriptionsResult, profilesResult] = await Promise.all([
-    admin
-      .from("subscriptions")
-        .select("user_id, provider, plan, status, paystack_subscription_code, current_period_end, updated_at")
-      .order("updated_at", { ascending: false })
-      .limit(50),
+    admin.from("subscriptions").select("user_id, provider, plan, status, current_period_end, updated_at").order("updated_at", { ascending: false }).limit(100),
     admin.from("profiles").select("user_id, full_name, username")
   ]);
-
   const subscriptions = subscriptionsResult.data ?? [];
-  const labels = new Map(
-    (profilesResult.data ?? []).map((profile) => [
-      profile.user_id,
-      `${profile.full_name} (@${profile.username})`
-    ])
-  );
+  const labels = new Map((profilesResult.data ?? []).map((profile) => [profile.user_id, profile.full_name || `@${profile.username}`]));
+  const active = subscriptions.filter((item) => ["active", "trialing"].includes(item.status));
 
   return (
-    <div className="space-y-6">
-      <section>
-        <Badge variant="orange">
-          <CreditCard className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-          Billing
-        </Badge>
-        <h1 className="mt-4 text-3xl font-semibold">Subscription management</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Paystack-linked subscription state. Secret keys and raw payment details are never shown here.
-        </p>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {plans.map((plan) => (
-          <Card key={plan} className="p-4">
-            <p className="text-sm text-muted-foreground">{plan}</p>
-            <p className="mt-2 text-3xl font-semibold">
-              {subscriptions.filter((subscription) => subscription.plan === plan).length}
-            </p>
+    <div className="space-y-7">
+      <AdminPageHeader title="Billing" description="Monitor Paystack subscription state without exposing payment credentials or raw transaction details." />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminMetricCard icon={UserRoundCheck} label="Active premium" value={active.length} hint="Active and trialing accounts" tone="success" />
+        <AdminMetricCard icon={WalletCards} label="Buddy Plus" value={active.filter((item) => item.plan === "buddy_plus").length} hint="Current premium accounts" tone="orange" />
+        <AdminMetricCard icon={CircleDollarSign} label="Buddy Pro" value={active.filter((item) => item.plan === "buddy_pro").length} hint="Current premium accounts" tone="orange" />
+        <AdminMetricCard icon={CreditCard} label="Needs attention" value={subscriptions.filter((item) => item.status === "past_due").length} hint="Past due subscriptions" tone={subscriptions.some((item) => item.status === "past_due") ? "warning" : "success"} />
+      </div>
+      <AdminSection title="Recent subscription records" description="Latest plan and lifecycle state reported by the billing integration.">
+        {subscriptionsResult.error || profilesResult.error ? <AdminQueryError /> : null}
+        {!subscriptionsResult.error && subscriptions.length === 0 ? <AdminEmptyState icon={CreditCard} title="No subscriptions" description="Subscription records will appear after a plan is started." /> : null}
+        {subscriptions.length ? (
+          <Card className="overflow-x-auto p-0">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="border-b border-border/70 text-xs text-muted-foreground"><tr><th className="px-4 py-3 font-medium">Account</th><th className="px-4 py-3 font-medium">Plan</th><th className="px-4 py-3 font-medium">Status</th><th className="px-4 py-3 font-medium">Provider</th><th className="px-4 py-3 font-medium">Period end</th><th className="px-4 py-3 text-right font-medium">Updated</th></tr></thead>
+              <tbody className="divide-y divide-border/70">
+                {subscriptions.map((item) => <tr key={`${item.user_id}-${item.updated_at}`}><td className="max-w-64 truncate px-4 py-3.5 font-medium">{labels.get(item.user_id) ?? "Account unavailable"}</td><td className="px-4 py-3.5">{humanizeAdminValue(item.plan)}</td><td className="px-4 py-3.5"><AdminStatus label={humanizeAdminValue(item.status)} tone={item.status === "active" ? "success" : item.status === "past_due" ? "warning" : "default"} /></td><td className="px-4 py-3.5 text-muted-foreground">{humanizeAdminValue(item.provider ?? "paystack")}</td><td className="px-4 py-3.5 text-muted-foreground">{formatAdminDate(item.current_period_end)}</td><td className="px-4 py-3.5 text-right text-muted-foreground">{formatAdminDate(item.updated_at, true)}</td></tr>)}
+              </tbody>
+            </table>
           </Card>
-        ))}
-      </section>
-
-      <section className="grid gap-3">
-        {statuses.map((status) => (
-          <div key={status} className="flex items-center justify-between rounded-md border border-white/10 p-3">
-            <span className="text-sm text-muted-foreground">{status}</span>
-            <span className="font-semibold">
-              {subscriptions.filter((subscription) => subscription.status === status).length}
-            </span>
-          </div>
-        ))}
-      </section>
-
-      <section className="grid gap-3">
-        <h2 className="text-xl font-semibold">Recent subscription records</h2>
-        {subscriptions.map((subscription) => (
-          <Card key={`${subscription.user_id}-${subscription.updated_at}`} className="p-4">
-            <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-              <div className="min-w-0">
-                <p className="truncate font-semibold">{labels.get(subscription.user_id) ?? "Unknown user"}</p>
-                <p className="mt-1 truncate text-xs text-muted-foreground">
-                  {subscription.provider ?? "paystack"} subscription {subscription.paystack_subscription_code ? "linked" : "not linked"}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2 md:justify-end">
-                <Badge variant={subscription.status === "active" ? "green" : "default"}>{subscription.status}</Badge>
-                <Badge variant="orange">{subscription.plan}</Badge>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </section>
+        ) : null}
+      </AdminSection>
     </div>
   );
 }

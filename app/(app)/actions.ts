@@ -6,7 +6,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { deliverNotification } from "@/lib/notifications/server";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
-import { uploadValidationMessage, validateImageUpload } from "@/lib/media/validation";
+import { sniffImageKind, uploadValidationMessage, validateImageUpload } from "@/lib/media/validation";
+import { optimizeProfileAvatar, toStorageArrayBuffer } from "@/lib/media/processing";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -20,20 +21,23 @@ export type SearchUserResult = {
   id: string;
   displayName: string;
   username: string;
+  avatarUrl: string | null;
   mutualFriends: number;
   status: "available";
   note: string;
 };
 
 const profileSchema = z.object({
-  fullName: z.string().min(2, "Display name is too short."),
+  fullName: z.string().trim().min(2, "Display name is too short.").max(80),
   username: z
     .string()
+    .trim()
+    .toLowerCase()
     .min(3)
     .max(24)
     .regex(/^[a-z0-9_]+$/),
-  bio: z.string().max(160).optional(),
-  moodStatus: z.string().max(80).optional()
+  bio: z.string().trim().max(160).optional(),
+  moodStatus: z.string().trim().max(80).optional()
 });
 
 const uuidSchema = z.string().uuid();
@@ -104,20 +108,33 @@ export async function updateProfileAction(input: unknown): Promise<IntegrationAc
   }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
+  const { data: savedProfile, error } = await supabase
     .from("profiles")
-    .update({
+    .upsert({
+      user_id: userId,
       full_name: parsed.data.fullName,
       username: parsed.data.username,
+      username_normalized: parsed.data.username,
       bio: parsed.data.bio ?? null,
       mood_status: parsed.data.moodStatus ?? null
-    })
-    .eq("user_id", userId);
+    }, { onConflict: "user_id" })
+    .select("user_id")
+    .maybeSingle();
 
   if (error) {
-    return { ok: false, message: error.message };
+    if (error.code === "23505") {
+      return { ok: false, message: "That username is already in use." };
+    }
+    return { ok: false, message: "Couldn't update your profile. Try again." };
   }
 
+  if (!savedProfile) {
+    return { ok: false, message: "Couldn't update your profile. Try again." };
+  }
+
+  revalidatePath("/profile");
+  revalidatePath("/dashboard");
+  revalidatePath("/friends");
   return { ok: true, message: "Profile updated." };
 }
 
@@ -153,7 +170,7 @@ export async function uploadAvatarAction(formData: FormData): Promise<Integratio
 
   // Shared upload validator (feature spec batch 6 §39): type support, size,
   // and, critically, that the real magic bytes match the claimed MIME type.
-  const headerBytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const headerBytes = new Uint8Array(await file.slice(0, 32).arrayBuffer());
   const validation = validateImageUpload({
     claimedMimeType: file.type,
     headerBytes,
@@ -162,45 +179,49 @@ export async function uploadAvatarAction(formData: FormData): Promise<Integratio
   });
 
   if (!validation.valid) {
-    // Avatars keep their tighter 3 MB limit; other reasons use shared copy.
-    return { ok: false, message: uploadValidationMessage(validation.reason) };
+    return {
+      ok: false,
+      message: validation.reason === "too_large"
+        ? "Use a profile photo smaller than 5 MB."
+        : uploadValidationMessage(validation.reason)
+    };
   }
 
-  if (file.size > 3 * 1024 * 1024) {
-    return { ok: false, message: "Use an image smaller than 3 MB." };
-  }
-
-  const extension = validation.kind;
   const admin = createSupabaseAdminClient();
   const uploadedAt = Date.now();
-  const path = `${userId}/avatar-${uploadedAt}.${extension}`;
+  const path = `${userId}/avatar-${uploadedAt}.webp`;
 
   // Avatars are on a public bucket, so EXIF stripping matters even more here:
   // re-encode (drops GPS and all metadata) and cap the dimensions.
   let avatarBuffer: Buffer;
   try {
-    const sharp = (await import("sharp")).default;
-    const pipeline = sharp(Buffer.from(await file.arrayBuffer()), { failOn: "error" })
-      .rotate()
-      .resize(512, 512, { fit: "inside", withoutEnlargement: true });
-    avatarBuffer = await (extension === "png"
-      ? pipeline.png()
-      : extension === "webp"
-        ? pipeline.webp()
-        : pipeline.jpeg({ quality: 85 })
-    ).toBuffer();
+    avatarBuffer = await optimizeProfileAvatar(Buffer.from(await file.arrayBuffer()));
   } catch {
-    return { ok: false, message: "That image couldn't be processed. Try a different photo." };
+    return {
+      ok: false,
+      message: validation.kind === "heic"
+        ? "This HEIC photo could not be converted. Export it as JPG or PNG and try again."
+        : "That image couldn't be processed. Try a different photo."
+    };
   }
 
-  const { error } = await admin.storage.from("avatars").upload(path, avatarBuffer, {
-    contentType: validation.mimeType,
+  const { error } = await admin.storage.from("avatars").upload(path, toStorageArrayBuffer(avatarBuffer), {
+    contentType: "image/webp",
     cacheControl: "31536000",
     upsert: false
   });
 
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: "Profile photo upload failed. Please try again." };
+  }
+
+  const { data: storedAvatar, error: verifyError } = await admin.storage.from("avatars").download(path);
+  const storedKind = storedAvatar
+    ? sniffImageKind(new Uint8Array(await storedAvatar.slice(0, 12).arrayBuffer()))
+    : null;
+  if (verifyError || storedKind !== "webp") {
+    await admin.storage.from("avatars").remove([path]);
+    return { ok: false, message: "Your profile photo was not stored correctly. Please try again." };
   }
 
   const { data } = admin.storage.from("avatars").getPublicUrl(path);
@@ -213,7 +234,8 @@ export async function uploadAvatarAction(formData: FormData): Promise<Integratio
     .maybeSingle();
 
   if (profileError) {
-    return { ok: false, message: profileError.message };
+    await admin.storage.from("avatars").remove([path]);
+    return { ok: false, message: "Your profile photo could not be saved. Please try again." };
   }
 
   if (!savedProfile) {
@@ -235,7 +257,8 @@ export async function uploadAvatarAction(formData: FormData): Promise<Integratio
     });
 
     if (insertError) {
-      return { ok: false, message: insertError.message };
+      await admin.storage.from("avatars").remove([path]);
+      return { ok: false, message: "Your profile photo could not be saved. Please try again." };
     }
   }
 
@@ -267,7 +290,7 @@ export async function uploadAvatarAction(formData: FormData): Promise<Integratio
   revalidatePath("/dashboard");
   revalidatePath("/friends");
 
-  return { ok: true, message: "Avatar uploaded.", avatarUrl: `${avatarUrl}?v=${Date.now()}` };
+  return { ok: true, message: "Profile photo updated.", avatarUrl: `${avatarUrl}?v=${Date.now()}` };
 }
 
 export async function searchUsersAction(query: string): Promise<{
@@ -310,7 +333,7 @@ export async function searchUsersAction(query: string): Promise<{
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from("profiles")
-    .select("user_id, full_name, username")
+    .select("user_id, full_name, username, avatar_url")
     .or(`username.ilike.%${normalizedQuery}%,full_name.ilike.%${normalizedQuery}%`)
     .is("deleted_at", null)
     .limit(10);
@@ -324,7 +347,7 @@ export async function searchUsersAction(query: string): Promise<{
       userId,
       errorType: errorType(error)
     });
-    return { ok: false, message: error.message, users: [] };
+    return { ok: false, message: "Search is unavailable right now.", users: [] };
   }
 
   const otherProfiles = data.filter((profile) => profile.user_id !== userId);
@@ -348,6 +371,7 @@ export async function searchUsersAction(query: string): Promise<{
       id: profile.user_id,
       displayName: profile.full_name,
       username: profile.username,
+      avatarUrl: profile.avatar_url,
       mutualFriends: 0,
       status: "available",
       note: "Search result"
@@ -474,7 +498,7 @@ export async function sendFriendRequestAction(targetUserId: string): Promise<Int
       userId,
       errorType: errorType(error)
     });
-    return { ok: false, message: error.message };
+    return { ok: false, message: "The Muddy request could not be sent." };
   }
 
   const { data: senderProfile } = await supabase
@@ -539,7 +563,7 @@ export async function acceptFriendRequestAction(requestId: string): Promise<Inte
       message:
         settleError?.code === "P0002"
           ? "This request has already been handled."
-          : settleError?.message ?? "Request not found."
+          : "Request not found."
     };
   }
 
@@ -599,9 +623,9 @@ export async function updateFriendRequestStatusAction(
     return { ok: false, message: "Log in before updating Muddy requests." };
   }
 
-  const supabase = await createSupabaseServerClient();
+  const admin = createSupabaseAdminClient();
   const participantColumn = status === "declined" ? "receiver_id" : "sender_id";
-  const { data: updatedRequest, error } = await supabase
+  const { data: updatedRequest, error } = await admin
     .from("friend_requests")
     .update({ status, responded_at: new Date().toISOString() })
     .eq("id", parsedRequest.data)
@@ -611,7 +635,7 @@ export async function updateFriendRequestStatusAction(
     .maybeSingle();
 
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: "The request could not be updated." };
   }
 
   if (!updatedRequest) {
@@ -647,7 +671,7 @@ export async function removeFriendAction(friendId: string): Promise<IntegrationA
     .maybeSingle();
 
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: "That Muddy could not be removed." };
   }
 
   if (!removed) {
@@ -687,7 +711,7 @@ export async function blockUserAction(targetUserId: string): Promise<Integration
   });
 
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: "That user could not be blocked." };
   }
 
   const admin = createSupabaseAdminClient();
@@ -742,7 +766,7 @@ export async function unblockUserAction(targetUserId: string): Promise<Integrati
     .eq("blocked_id", parsedTarget.data);
 
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: "That user could not be unblocked." };
   }
 
   return { ok: true, message: "User unblocked." };
@@ -795,7 +819,7 @@ export async function reportUserAction(input: {
       userId,
       errorType: errorType(error)
     });
-    return { ok: false, message: error.message };
+    return { ok: false, message: "The report could not be submitted." };
   }
 
   logBackendEvent("info", {

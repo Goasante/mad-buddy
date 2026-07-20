@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 
 export type SettingsActionState = {
   ok: boolean;
@@ -131,6 +132,9 @@ export async function deleteAccountAction(input: unknown): Promise<SettingsActio
     return { ok: false, message: "Log in before deleting your account." };
   }
 
+  const rateLimit = await consumeRateLimit({ action: "account.delete", userId: user.id });
+  if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
+
   const admin = createSupabaseAdminClient();
   const userId = user.id;
   const { data: profile } = await admin
@@ -148,7 +152,7 @@ export async function deleteAccountAction(input: unknown): Promise<SettingsActio
     target_user_id: userId
   });
   if (reportPreparationError) {
-    return { ok: false, message: reportPreparationError.message };
+    return { ok: false, message: "Your account could not be prepared for deletion." };
   }
 
   const [avatarRemovalError, mediaRemovalError] = await Promise.all([
@@ -157,7 +161,7 @@ export async function deleteAccountAction(input: unknown): Promise<SettingsActio
   ]);
   const storageRemovalError = avatarRemovalError ?? mediaRemovalError;
   if (storageRemovalError) {
-    return { ok: false, message: storageRemovalError };
+    return { ok: false, message: "Your stored media could not be removed." };
   }
 
   const deletions = await Promise.all([
@@ -182,7 +186,7 @@ export async function deleteAccountAction(input: unknown): Promise<SettingsActio
   const failedDeletion = deletions.find((result) => result.error);
 
   if (failedDeletion?.error) {
-    return { ok: false, message: failedDeletion.error.message };
+    return { ok: false, message: "Your account data could not be removed." };
   }
 
   const billingReference = subscription
@@ -212,13 +216,13 @@ export async function deleteAccountAction(input: unknown): Promise<SettingsActio
   });
 
   if (auditError) {
-    return { ok: false, message: auditError.message };
+    return { ok: false, message: "The deletion audit record could not be saved." };
   }
 
   const { error: authDeleteError } = await admin.auth.admin.deleteUser(userId);
 
   if (authDeleteError) {
-    return { ok: false, message: authDeleteError.message };
+    return { ok: false, message: "Your sign-in account could not be removed." };
   }
 
   redirect("/signup");
@@ -244,7 +248,7 @@ export async function updateVisibilityStatusAction(input: unknown): Promise<Sett
     .eq("user_id", user.id);
 
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: "The visibility setting could not be saved." };
   }
 
   return { ok: true, message: "Visibility setting saved." };
@@ -278,7 +282,7 @@ export async function updateNotificationPreferenceAction(input: unknown): Promis
   }, { onConflict: "user_id" });
 
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: "The notification preference could not be saved." };
   }
 
   return { ok: true, message: "Notification preference saved." };
@@ -371,6 +375,6 @@ export async function updateSmartNotificationPreferencesAction(
     { onConflict: "user_id" }
   );
 
-  if (error) return { ok: false, message: error.message };
+  if (error) return { ok: false, message: "The notification settings could not be saved." };
   return { ok: true, message: "Notification settings saved." };
 }

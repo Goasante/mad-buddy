@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 
 type ExportBundle = {
   exportedAt: string;
@@ -22,6 +23,10 @@ export async function GET() {
   }
 
   const userId = user.id;
+  const rateLimit = await consumeRateLimit({ action: "account.export", userId });
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ error: rateLimitMessage(rateLimit.resetAt) }, { status: 429 });
+  }
   const [
     profile,
     subscription,
@@ -47,9 +52,9 @@ export async function GET() {
     supportRequests,
     mediaAssets
   ] = await Promise.all([
-    supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
-    supabase.from("subscriptions").select("*").eq("user_id", userId).maybeSingle(),
-    supabase.from("user_preferences").select("*").eq("user_id", userId).maybeSingle(),
+    supabase.from("profiles").select("user_id, full_name, username, avatar_url, bio, mood_status, visibility_status, onboarding_complete, created_at, updated_at").eq("user_id", userId).maybeSingle(),
+    supabase.from("subscriptions").select("provider, plan, status, current_period_start, current_period_end, cancel_at_period_end, grace_ends_at, created_at, updated_at").eq("user_id", userId).maybeSingle(),
+    supabase.from("user_preferences").select("user_id, notification_preferences, app_preferences, created_at, updated_at").eq("user_id", userId).maybeSingle(),
     supabase.from("user_locations").select("confidence, last_updated").eq("user_id", userId).maybeSingle(),
     supabase.from("friendships").select("*").eq("user_one_id", userId),
     supabase.from("friendships").select("*").eq("user_two_id", userId),
@@ -99,7 +104,7 @@ export async function GET() {
   ].find((result) => result.error);
 
   if (failed?.error) {
-    return NextResponse.json({ error: failed.error.message }, { status: 500 });
+    return NextResponse.json({ error: "Your data export could not be prepared." }, { status: 500 });
   }
 
   const bundle: ExportBundle = {

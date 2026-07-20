@@ -109,6 +109,23 @@
   --halo-spread: 2px;
 }
 
+/* Keep profile-preview halos within the compact drop panel so their soft
+ * edges never meet a scroll boundary and turn into a sharp rectangle. */
+.muddy-profile-preview .proximity-halo-very-close {
+  --halo-blur: 17px;
+  --halo-spread: 5px;
+}
+
+.muddy-profile-preview .proximity-halo-nearby {
+  --halo-blur: 14px;
+  --halo-spread: 4px;
+}
+
+.muddy-profile-preview .proximity-halo-around {
+  --halo-blur: 10px;
+  --halo-spread: 2px;
+}
+
 :root {
   --color-brand-orange: #f97316;
   --color-brand-amber: #fb923c;

@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Camera, Clock, Flag, Plus, ShieldAlert, Sparkles, Trash2 } from "lucide-react";
+import { Camera, Clock, Flag, ImageOff, Plus, ShieldAlert, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { useRef, useState, useTransition } from "react";
 import {
   createMomentAction,
   deleteMomentAction,
+  getMomentFeedAction,
   reactToMomentAction,
   removeMomentReactionAction,
   reportContentAction,
@@ -13,11 +14,10 @@ import {
 } from "@/app/(app)/moments-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { audienceSummaryLabel, EXPIRY_PRESETS, type ExpiryPresetId } from "@/lib/content/moments";
 import { detectLocationRisk, LOCATION_WARNING_MESSAGE, REPORT_CATEGORIES } from "@/lib/content/safety";
 import { validateImageSelection } from "@/lib/media/validation";
@@ -61,7 +61,29 @@ export function MomentsPage({
   const [createOpen, setCreateOpen] = useState(false);
   const [reportFor, setReportFor] = useState<VisibleMoment | null>(null);
   const [feedback, setFeedback] = useState("");
+  const [failedMediaIds, setFailedMediaIds] = useState<Set<string>>(() => new Set());
+  const mediaRetryIds = useRef(new Set<string>());
   const [isPending, startTransition] = useTransition();
+
+  function retryMomentMedia(moment: VisibleMoment) {
+    if (mediaRetryIds.current.has(moment.id)) {
+      setFailedMediaIds((current) => new Set(current).add(moment.id));
+      return;
+    }
+
+    mediaRetryIds.current.add(moment.id);
+    startTransition(async () => {
+      const refreshed = await getMomentFeedAction();
+      const replacement = refreshed.find((entry) => entry.id === moment.id);
+      if (replacement?.mediaUrl && replacement.mediaUrl !== moment.mediaUrl) {
+        setMoments((current) =>
+          current.map((entry) => (entry.id === replacement.id ? replacement : entry))
+        );
+        return;
+      }
+      setFailedMediaIds((current) => new Set(current).add(moment.id));
+    });
+  }
 
   function react(moment: VisibleMoment, reaction: ReactionType) {
     const isSame = moment.myReaction === reaction;
@@ -76,7 +98,11 @@ export function MomentsPage({
         : await reactToMomentAction(moment.id, reaction);
       if (!result.ok) {
         setFeedback(result.message);
-        router.refresh();
+        setMoments((current) =>
+          current.map((entry) =>
+            entry.id === moment.id ? { ...entry, myReaction: moment.myReaction } : entry
+          )
+        );
       }
     });
   }
@@ -92,17 +118,18 @@ export function MomentsPage({
   }
 
   return (
-    <div className="mx-auto max-w-[640px] space-y-6 pt-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Moments</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Share with the people who matter, for a limited time. Everything expires.
+    <div className="mx-auto w-full max-w-[760px] space-y-7 py-5 sm:py-7">
+      <header className="flex items-start justify-between gap-4 border-b border-border/70 pb-5 dark:border-white/10">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-[2rem]">Moments</h1>
+          <p className="mt-1.5 max-w-xl text-sm leading-6 text-muted-foreground">
+            Temporary updates shared with the people you choose.
           </p>
         </div>
-        <Button type="button" onClick={() => setCreateOpen(true)}>
+        <Button type="button" size="sm" className="shrink-0" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" aria-hidden="true" />
-          Share
+          <span className="hidden sm:inline">Share Moment</span>
+          <span className="sm:hidden">Share</span>
         </Button>
       </header>
 
@@ -126,43 +153,90 @@ export function MomentsPage({
           }
         />
       ) : (
-        <div className="space-y-3">
+        <section className="space-y-4" aria-label="Shared Moments">
           {moments.map((moment) => (
-            <Card key={moment.id} className="p-4">
-              <div className="flex items-start gap-3">
-                <GlowAvatar name={moment.authorName} src={moment.authorAvatarUrl} size="sm" />
+            <article
+              key={moment.id}
+              className="overflow-hidden rounded-[1.35rem] border border-border/75 bg-card/65 shadow-[0_18px_50px_hsl(var(--shadow)/0.10)] dark:border-white/10 dark:bg-white/[0.035]"
+            >
+              <header className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+                <UserAvatar name={moment.authorName} src={moment.authorAvatarUrl} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-semibold">{moment.authorName}</span>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-foreground">{moment.authorName}</p>
                     {moment.isAuthor && moment.audienceLabel ? (
-                      <Badge variant="orange">
+                      <Badge variant="orange" className="hidden shrink-0 sm:inline-flex">
                         {audienceSummaryLabel(moment.audienceLabel as MomentAudienceType, [])}
                       </Badge>
                     ) : null}
-                    <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <Clock className="h-3 w-3" aria-hidden="true" />
-                      {expiryLabel(moment.expiresAt)}
-                    </span>
                   </div>
+                  <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="h-3 w-3" aria-hidden="true" />
+                    Disappears in {expiryLabel(moment.expiresAt).replace(" left", "")}
+                  </p>
+                </div>
+                {moment.isAuthor ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                    aria-label="Delete Moment"
+                    title="Delete Moment"
+                    onClick={() => remove(moment)}
+                    disabled={isPending}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 text-muted-foreground"
+                    aria-label="Report Moment"
+                    title="Report Moment"
+                    onClick={() => setReportFor(moment)}
+                  >
+                    <Flag className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                )}
+              </header>
 
-                  {moment.textContent ? (
-                    <p className="mt-2 text-sm leading-6">{moment.textContent}</p>
-                  ) : null}
+              {moment.textContent ? (
+                <p className="whitespace-pre-wrap px-4 pb-4 text-[0.95rem] leading-6 text-foreground sm:px-5">
+                  {moment.textContent}
+                </p>
+              ) : null}
 
-                  {moment.mediaUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={moment.mediaUrl}
-                      alt={moment.caption ?? `Moment from ${moment.authorName}`}
-                      className="mt-2 max-h-[420px] w-full rounded-xl object-cover"
-                      draggable={false}
-                    />
-                  ) : null}
-                  {moment.caption ? (
-                    <p className="mt-1.5 text-xs text-muted-foreground">{moment.caption}</p>
-                  ) : null}
+              {moment.mediaUrl && !failedMediaIds.has(moment.id) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={moment.mediaUrl}
+                  src={moment.mediaUrl}
+                  alt={moment.caption ?? `Moment from ${moment.authorName}`}
+                  className="block max-h-[560px] min-h-[220px] w-full bg-secondary/40 object-cover object-center sm:min-h-[300px]"
+                  draggable={false}
+                  loading="lazy"
+                  decoding="async"
+                  onError={() => retryMomentMedia(moment)}
+                />
+              ) : moment.contentType === "photo" ? (
+                <div className="grid min-h-56 place-items-center bg-secondary/35 px-6 text-center">
+                  <div>
+                    <ImageOff className="mx-auto h-7 w-7 text-muted-foreground" aria-hidden="true" />
+                    <p className="mt-2 text-sm font-medium">Photo unavailable</p>
+                    <p className="mt-1 text-xs text-muted-foreground">This photo could not be loaded.</p>
+                  </div>
+                </div>
+              ) : null}
 
-                  <div className="mt-3 flex flex-wrap items-center gap-1">
+              {moment.caption ? (
+                <p className="px-4 pt-3 text-sm leading-6 text-muted-foreground sm:px-5">{moment.caption}</p>
+              ) : null}
+
+              <footer className="mt-3 flex items-center gap-2 border-t border-border/60 px-3 py-2.5 dark:border-white/10 sm:px-4">
+                <div className="flex min-w-0 flex-1 items-center gap-0.5" aria-label="React to this Moment">
                     {reactions.map((reaction) => (
                       <button
                         key={reaction.id}
@@ -172,7 +246,7 @@ export function MomentsPage({
                         onClick={() => react(moment, reaction.id)}
                         disabled={isPending}
                         className={cn(
-                          "focus-ring safe-motion rounded-full border px-2 py-1 text-sm",
+                          "focus-ring safe-motion grid h-9 w-9 place-items-center rounded-full border text-base transition-colors",
                           moment.myReaction === reaction.id
                             ? "border-primary bg-primary/10"
                             : "border-transparent hover:bg-secondary"
@@ -181,30 +255,22 @@ export function MomentsPage({
                         {reaction.emoji}
                       </button>
                     ))}
-                    <span className="ml-auto flex gap-1">
-                      {moment.isAuthor ? (
-                        <Button type="button" variant="ghost" size="sm" onClick={() => remove(moment)} disabled={isPending}>
-                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                          Delete
-                        </Button>
-                      ) : (
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setReportFor(moment)}>
-                          <Flag className="h-3.5 w-3.5" aria-hidden="true" />
-                          Report
-                        </Button>
-                      )}
-                    </span>
-                  </div>
                 </div>
-              </div>
-            </Card>
+                <span className="hidden text-xs text-muted-foreground sm:inline">
+                  {moment.isAuthor && moment.audienceLabel
+                    ? audienceSummaryLabel(moment.audienceLabel as MomentAudienceType, [])
+                    : "Shared privately"}
+                </span>
+              </footer>
+            </article>
           ))}
-        </div>
+        </section>
       )}
 
-      <p className="text-center text-xs text-muted-foreground">
-        Anyone who can see a Moment can screenshot it. Share accordingly.
-      </p>
+      <div className="flex items-start gap-2.5 rounded-xl bg-secondary/45 px-4 py-3 text-xs leading-5 text-muted-foreground">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+        <p>Moments expire, but viewers can still take screenshots. Share thoughtfully.</p>
+      </div>
 
       <CreateMomentModal
         open={createOpen}
@@ -214,7 +280,10 @@ export function MomentsPage({
         onCreated={(message) => {
           setFeedback(message);
           setCreateOpen(false);
-          router.refresh();
+          startTransition(async () => {
+            setMoments(await getMomentFeedAction());
+            router.refresh();
+          });
         }}
       />
 
@@ -223,10 +292,14 @@ export function MomentsPage({
         onOpenChange={(open) => {
           if (!open) setReportFor(null);
         }}
-        onReported={(message) => {
+        onReported={(message, ok) => {
+          const reportedId = reportFor?.id;
           setFeedback(message);
-          setReportFor(null);
-          router.refresh();
+          if (ok) setReportFor(null);
+          if (ok && reportedId) {
+            setMoments((current) => current.filter((entry) => entry.id !== reportedId));
+          }
+          if (ok) router.refresh();
         }}
       />
     </div>
@@ -480,7 +553,7 @@ function ReportModal({
 }: {
   moment: VisibleMoment | null;
   onOpenChange: (open: boolean) => void;
-  onReported: (message: string) => void;
+  onReported: (message: string, ok: boolean) => void;
 }) {
   const [category, setCategory] = useState<string>("harassment");
   const [details, setDetails] = useState("");
@@ -498,10 +571,12 @@ function ReportModal({
         alsoHide: true,
         alsoBlock
       });
-      onReported(result.message);
-      setCategory("harassment");
-      setDetails("");
-      setAlsoBlock(false);
+      onReported(result.message, result.ok);
+      if (result.ok) {
+        setCategory("harassment");
+        setDetails("");
+        setAlsoBlock(false);
+      }
     });
   }
 

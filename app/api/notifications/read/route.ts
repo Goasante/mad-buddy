@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
+import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 
 // Backward compatible: an empty body still marks every notification read.
 // Additively supports a bounded set of ids and an explicit read state so the
@@ -39,9 +41,15 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
+  const rateLimit = await consumeRateLimit({ action: "notifications.mutate", userId: user.id });
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ error: rateLimitMessage(rateLimit.resetAt) }, { status: 429 });
+  }
+
   const isRead = body.data.isRead ?? true;
 
-  let query = supabase
+  const admin = createSupabaseAdminClient();
+  let query = admin
     .from("notifications")
     .update({ is_read: isRead })
     .eq("user_id", user.id);
@@ -55,7 +63,7 @@ export async function PATCH(request: Request) {
   const { error } = await query;
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Could not update notification status." }, { status: 500 });
   }
 
   return NextResponse.json({ isRead });

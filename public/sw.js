@@ -19,7 +19,14 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || "/notifications";
+  const candidate = (event.notification.data && event.notification.data.url) || "/notifications";
+  let url = "/notifications";
+  try {
+    const parsed = new URL(candidate, self.location.origin);
+    if (parsed.origin === self.location.origin) url = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    /* keep the safe same-origin fallback */
+  }
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
       for (const client of windows) {

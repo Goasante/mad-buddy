@@ -48,6 +48,10 @@ describe("buildContentSecurityPolicy", () => {
     }
   });
 
+  it("allows only the same-origin push service worker", () => {
+    expect(withSupabase).toContain("worker-src 'self'");
+  });
+
   it("never contains unsafe-eval or wildcard sources", () => {
     expect(withSupabase).not.toContain("unsafe-eval");
     expect(withSupabase).not.toMatch(/-src[^;]*\*/);

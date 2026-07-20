@@ -41,6 +41,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
@@ -55,6 +56,7 @@ export type UserSummary = {
   requestId?: string;
   displayName: string;
   username: string;
+  avatarUrl: string | null;
   mutualFriends: number;
   status: "friend" | "available" | "received" | "sent" | "blocked";
   note: string;
@@ -577,7 +579,7 @@ export function FriendsPageContent({
             {blockedUsers.map((user) => (
               <Card key={user.id} className="p-5">
                 <div className="flex items-center gap-4">
-                  <InitialsAvatar name={user.displayName} />
+                  <InitialsAvatar name={user.displayName} src={user.avatarUrl} />
                   <div className="min-w-0 flex-1">
                     <h3 className="truncate font-semibold">{user.displayName}</h3>
                     <p className="truncate text-sm text-muted-foreground">@{user.username}</p>
@@ -696,7 +698,8 @@ export function FriendsPageContent({
                 friendId: profileUser.id,
                 displayName: profileUser.displayName,
                 username: profileUser.username,
-                about: profileUser.note,
+                avatarUrl: profileUser.avatarUrl,
+                statusText: profileUser.note,
                 mutualMuddies: profileUser.mutualFriends,
                 proximityLevel: proximityByFriendId[profileUser.id]?.proximityLevel,
                 glowStrength: proximityByFriendId[profileUser.id]?.glowStrength,
@@ -805,6 +808,7 @@ function UserRow({
         <button type="button" onClick={onViewProfile} className="focus-ring safe-motion shrink-0 rounded-full">
           <GlowAvatar
             name={user.displayName}
+            src={user.avatarUrl}
             proximityLevel={level}
             glowStrength={proximity?.glowStrength ?? 0}
             confidence={proximity?.confidence ?? "low"}
@@ -894,7 +898,7 @@ function RequestCard({
   return (
     <Card className="p-5">
       <div className="flex items-start gap-4">
-        <InitialsAvatar name={user.displayName} />
+        <InitialsAvatar name={user.displayName} src={user.avatarUrl} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate font-semibold">{user.displayName}</h3>
@@ -987,7 +991,7 @@ function AddMuddyModal({
         {results.length > 0
           ? results.map((user) => (
               <div key={user.id} className="flex items-center gap-3 rounded-lg border border-border/70 p-3">
-                <InitialsAvatar name={user.displayName} size="sm" />
+                <InitialsAvatar name={user.displayName} src={user.avatarUrl} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{user.displayName}</p>
                   <p className="truncate text-xs text-muted-foreground">@{user.username}</p>
@@ -1047,19 +1051,13 @@ function ReportModal({
   );
 }
 
-function InitialsAvatar({ name, size = "md" }: { name: string; size?: "sm" | "md" }) {
+function InitialsAvatar({ name, src, size = "md" }: { name: string; src?: string | null; size?: "sm" | "md" }) {
   return (
-    <div
-      className={cn(
-        "flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-300 to-amber-500 text-sm font-bold text-slate-950",
-        size === "sm" ? "h-10 w-10" : "h-12 w-12"
-      )}
-    >
-      {name
-        .split(" ")
-        .map((part) => part[0])
-        .join("")
-        .slice(0, 2)}
-    </div>
+    <UserAvatar
+      name={name}
+      src={src}
+      size={size === "sm" ? "sm" : "md"}
+      className={cn("bg-gradient-to-br from-orange-300 to-amber-500 text-slate-950", size === "md" && "h-12 w-12")}
+    />
   );
 }

@@ -11,9 +11,9 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
       // Profile and Moment images are submitted as multipart Server Actions.
-      // Keep this below the deployed function request limit while allowing
-      // enough room for the app's 3 MB image cap plus multipart metadata.
-      bodySizeLimit: "4mb"
+      // Allow the 5 MB avatar source cap plus multipart metadata. Stored
+      // avatars are always reduced to a compact 512 px WebP.
+      bodySizeLimit: "6mb"
     }
   },
   turbopack: {
@@ -21,6 +21,9 @@ const nextConfig: NextConfig = {
   },
   typedRoutes: true,
   async headers() {
+    const productionOnlyHeaders = process.env.NODE_ENV === "production"
+      ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]
+      : [];
     return [
       {
         source: "/(.*)",
@@ -28,6 +31,7 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
           // Geolocation is the only sensitive capability this app uses, and
           // only from its own origin. Everything else is explicitly denied.
           {
@@ -40,7 +44,8 @@ const nextConfig: NextConfig = {
           {
             key: "Content-Security-Policy-Report-Only",
             value: contentSecurityPolicy
-          }
+          },
+          ...productionOnlyHeaders
         ]
       },
       {

@@ -1,120 +1,142 @@
 import Link from "next/link";
-import { Activity, CreditCard, ShieldAlert, UsersRound } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import type { Route } from "next";
+import { Activity, ArrowRight, CreditCard, Headphones, ShieldAlert, UsersRound } from "lucide-react";
+import {
+  AdminEmptyState,
+  AdminMetricCard,
+  AdminPageHeader,
+  AdminQueryError,
+  AdminSection,
+  AdminStatus,
+  formatAdminDate,
+  humanizeAdminValue
+} from "@/components/admin/admin-ui";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getSafetyDashboardData } from "@/lib/admin/safety-dashboard-data";
 import { getReadinessReport } from "@/lib/health/readiness";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export default async function AdminOverviewPage() {
   const admin = createSupabaseAdminClient();
   const [
-    safety,
     readiness,
     usersResult,
+    reportsResult,
     premiumResult,
-    notificationsResult,
-    pendingRequestsResult
+    supportResult,
+    privacyResult,
+    pendingRequestsResult,
+    controlsResult,
+    auditResult
   ] = await Promise.all([
-    getSafetyDashboardData(),
     getReadinessReport(),
     admin.from("profiles").select("id", { count: "exact", head: true }).is("deleted_at", null),
-    admin
-      .from("subscriptions")
-      .select("id", { count: "exact", head: true })
-      .in("status", ["trialing", "active"]),
-    admin.from("notifications").select("id", { count: "exact", head: true }).eq("is_read", false),
-    admin.from("friend_requests").select("id", { count: "exact", head: true }).eq("status", "pending")
+    admin.from("reports").select("id", { count: "exact", head: true }).in("status", ["open", "reviewing"]),
+    admin.from("subscriptions").select("id", { count: "exact", head: true }).in("status", ["trialing", "active"]),
+    admin.from("support_tickets").select("id", { count: "exact", head: true }).not("status", "in", "(resolved,closed)"),
+    admin.from("privacy_requests").select("id", { count: "exact", head: true }).not("status", "in", "(completed,rejected)"),
+    admin.from("friend_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    admin.from("emergency_controls").select("control_key, is_disabled").order("control_key"),
+    admin.from("admin_audit_events").select("id, action, target_type, created_at").order("created_at", { ascending: false }).limit(6)
   ]);
 
-  const openReports = safety.metrics.find((metric) => metric.label === "Open reports")?.value ?? "0";
+  const disabledControls = (controlsResult.data ?? []).filter((control) => control.is_disabled);
+  const hasQueryError = [usersResult, reportsResult, premiumResult, supportResult, privacyResult].some((result) => result.error);
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:p-6">
-        <Badge variant={readiness.ok ? "green" : "warning"}>
-          <Activity className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-          {readiness.ok ? "Ready" : "Needs setup"}
-        </Badge>
-        <h1 className="mt-4 text-3xl font-semibold">Management overview</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-          High-level account, safety, billing, and backend health signals for operating Mad Buddy.
-        </p>
+    <div className="space-y-7">
+      <AdminPageHeader
+        title="Overview"
+        description="A live operational summary of accounts, safety, support, billing, privacy, and platform readiness."
+        meta={<AdminStatus label={readiness.ok ? "Systems ready" : "Needs attention"} tone={readiness.ok ? "success" : "warning"} />}
+      />
+
+      {hasQueryError ? <AdminQueryError message="Some overview metrics could not be loaded. Available data is still shown." /> : null}
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminMetricCard icon={UsersRound} label="Total users" value={usersResult.count ?? 0} hint="Non-deleted profiles" href="/admin/users" />
+        <AdminMetricCard icon={ShieldAlert} label="Safety queue" value={reportsResult.count ?? 0} hint="Open and reviewing reports" tone={(reportsResult.count ?? 0) > 0 ? "danger" : "success"} href="/admin/reports" />
+        <AdminMetricCard icon={Headphones} label="Support queue" value={supportResult.count ?? 0} hint="Tickets awaiting resolution" tone={(supportResult.count ?? 0) > 0 ? "warning" : "success"} href="/admin/support" />
+        <AdminMetricCard icon={CreditCard} label="Premium accounts" value={premiumResult.count ?? 0} hint="Active or trialing" tone="orange" href="/admin/billing" />
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={UsersRound} label="Active users" value={usersResult.count ?? 0} href="/admin/users" />
-        <MetricCard icon={ShieldAlert} label="Open reports" value={openReports} href="/admin/reports" tone="danger" />
-        <MetricCard icon={CreditCard} label="Premium users" value={premiumResult.count ?? 0} href="/admin/billing" tone="orange" />
-        <MetricCard icon={Activity} label="Unread alerts" value={notificationsResult.count ?? 0} tone="warning" />
-      </section>
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+        <AdminSection title="Operations queues" description="Current work that may require staff attention.">
+          <Card className="divide-y divide-border/70 overflow-hidden p-0">
+            <QueueRow label="Friend requests in progress" value={pendingRequestsResult.count ?? 0} href="/admin/users" />
+            <QueueRow label="Privacy requests" value={privacyResult.count ?? 0} href="/admin/privacy" />
+            <QueueRow label="Support tickets" value={supportResult.count ?? 0} href="/admin/support" />
+            <QueueRow label="Safety reports" value={reportsResult.count ?? 0} href="/admin/reports" />
+          </Card>
+        </AdminSection>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <Card className="p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-xl font-semibold">Backend readiness</h2>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/admin/system">System</Link>
+        <AdminSection
+          title="Platform readiness"
+          description="Environment checks and emergency-control state."
+          action={
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/admin/system">Open system <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
             </Button>
-          </div>
-          <div className="mt-4 grid gap-3">
-            {readiness.checks.slice(0, 5).map((check) => (
-              <div key={check.name} className="flex items-center justify-between gap-3 rounded-md border border-white/10 p-3">
-                <div>
-                  <p className="text-sm font-medium">{check.name}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{check.message}</p>
+          }
+        >
+          <Card className="space-y-3 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-muted-foreground">Readiness checks</span>
+              <AdminStatus label={readiness.ok ? "Passing" : "Review"} tone={readiness.ok ? "success" : "warning"} />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-muted-foreground">Disabled controls</span>
+              <span className="text-sm font-semibold tabular-nums">{disabledControls.length}</span>
+            </div>
+            {disabledControls.length > 0 ? (
+              <div className="flex flex-wrap gap-2 border-t border-border/70 pt-3">
+                {disabledControls.map((control) => (
+                  <AdminStatus key={control.control_key} label={humanizeAdminValue(control.control_key)} tone="danger" />
+                ))}
+              </div>
+            ) : null}
+          </Card>
+        </AdminSection>
+      </div>
+
+      <AdminSection
+        title="Recent admin activity"
+        description="Append-only operational actions. Private content is not shown."
+        action={
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/admin/audit">View audit log <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+          </Button>
+        }
+      >
+        {auditResult.error ? <AdminQueryError /> : null}
+        {!auditResult.error && (auditResult.data ?? []).length === 0 ? (
+          <AdminEmptyState icon={Activity} title="No admin activity yet" description="Audited staff actions will appear here." />
+        ) : (
+          <Card className="divide-y divide-border/70 overflow-hidden p-0">
+            {(auditResult.data ?? []).map((event) => (
+              <div key={event.id} className="flex items-center justify-between gap-4 px-4 py-3.5">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{humanizeAdminValue(event.action)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{event.target_type ? humanizeAdminValue(event.target_type) : "Platform"}</p>
                 </div>
-                <Badge variant={check.ok ? "green" : "warning"}>{check.ok ? "OK" : "Check"}</Badge>
+                <time className="shrink-0 text-xs text-muted-foreground">{formatAdminDate(event.created_at, true)}</time>
               </div>
             ))}
-          </div>
-        </Card>
-
-        <Card className="p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-xl font-semibold">Queue snapshot</h2>
-            <Badge variant="orange">Live</Badge>
-          </div>
-          <div className="mt-4 grid gap-3">
-            <QueueLine label="Pending friend requests" value={pendingRequestsResult.count ?? 0} />
-            <QueueLine label="Recent report cards" value={safety.reports.length} />
-            <QueueLine label="Deletion audits" value={safety.deletionAudits.length} />
-          </div>
-        </Card>
-      </section>
+          </Card>
+        )}
+      </AdminSection>
     </div>
   );
 }
 
-type MetricCardProps = {
-  icon: typeof UsersRound;
-  label: string;
-  value: number | string;
-  href?: "/admin/users" | "/admin/reports" | "/admin/billing";
-  tone?: "default" | "orange" | "danger" | "warning";
-};
-
-function MetricCard({ icon: Icon, label, value, href, tone = "default" }: MetricCardProps) {
-  const content = (
-    <Card className="safe-motion p-4 hover:bg-white/[0.06]">
-      <Icon className="h-5 w-5 text-accent" aria-hidden="true" />
-      <p className="mt-3 text-sm text-muted-foreground">{label}</p>
-      <p className="mt-2 text-3xl font-semibold">{value}</p>
-      <Badge variant={tone} className="mt-3">
-        View
-      </Badge>
-    </Card>
-  );
-
-  return href ? <Link href={href}>{content}</Link> : content;
-}
-
-function QueueLine({ label, value }: { label: string; value: number }) {
+function QueueRow({ label, value, href }: { label: string; value: number; href: "/admin/users" | "/admin/privacy" | "/admin/support" | "/admin/reports" }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-white/10 p-3">
+    <Link href={href as Route} className="focus-ring safe-motion flex items-center justify-between gap-4 px-4 py-3.5 hover:bg-secondary/35">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-lg font-semibold">{value}</span>
-    </div>
+      <span className="flex items-center gap-3 text-sm font-semibold tabular-nums">
+        {value}
+        <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      </span>
+    </Link>
   );
 }

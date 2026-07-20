@@ -355,7 +355,7 @@ export function MessagesPageContent({
                             : "border-transparent border-l-transparent hover:bg-secondary"
                         )}
                       >
-                        <GlowAvatar name={conversation.title} size="sm" />
+                        <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" />
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-1.5">
                             <span className="truncate text-sm font-semibold">{conversation.title}</span>
@@ -425,7 +425,7 @@ export function MessagesPageContent({
                   >
                     <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                   </button>
-                  <GlowAvatar name={selected.title} size="sm" />
+                  <GlowAvatar name={selected.title} src={selected.avatarUrl} size="sm" />
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold">{selected.title}</span>
                   <Popover.Root open={infoOpen} onOpenChange={setInfoOpen}>
                     <Popover.Trigger asChild>

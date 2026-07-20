@@ -21,7 +21,12 @@ import {
   requiresHumanReview
 } from "@/lib/content/safety";
 import { guardAction } from "@/lib/admin/enforcement";
-import { storageKeyFor, uploadValidationMessage, validateImageUpload } from "@/lib/media/validation";
+import {
+  sniffImageKind,
+  storageKeyFor,
+  uploadValidationMessage,
+  validateImageUpload
+} from "@/lib/media/validation";
 import { upgradePromptFor } from "@/lib/billing/entitlements";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
@@ -128,11 +133,15 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
     return { ok: false, message: "That image couldn't be processed. Try a different photo." };
   }
 
-  const { variantStorageKey } = await import("@/lib/media/processing");
-  const { error: uploadError } = await admin.storage.from("media").upload(key, processed.original.buffer, {
+  const { toStorageArrayBuffer, variantStorageKey } = await import("@/lib/media/processing");
+  const { error: uploadError } = await admin.storage.from("media").upload(
+    key,
+    toStorageArrayBuffer(processed.original.buffer),
+    {
     contentType: validation.mimeType,
     upsert: false
-  });
+    }
+  );
 
   // Compensating cleanup: an orphaned asset row must not survive a failed
   // upload (spec §18, §46).
@@ -149,7 +158,7 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
   ];
   await Promise.all(
     variantRows.map(async ({ variant, key: variantKey, image }) => {
-      const { error } = await admin.storage.from("media").upload(variantKey, image.buffer, {
+      const { error } = await admin.storage.from("media").upload(variantKey, toStorageArrayBuffer(image.buffer), {
         contentType: validation.mimeType,
         upsert: false
       });
@@ -164,6 +173,19 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
       });
     })
   );
+
+  // Storage can acknowledge an upload even when a runtime has transformed its
+  // request body. Verify the persisted signature before exposing the asset.
+  const { data: storedOriginal, error: verifyError } = await admin.storage.from("media").download(key);
+  const storedKind = storedOriginal
+    ? sniffImageKind(new Uint8Array(await storedOriginal.slice(0, 12).arrayBuffer()))
+    : null;
+  if (verifyError || storedKind !== validation.kind) {
+    const storedPaths = [key, ...variantRows.map((row) => row.key)];
+    await admin.storage.from("media").remove(storedPaths);
+    await admin.from("media_assets").delete().eq("id", asset.id).eq("owner_id", userId);
+    return { ok: false, message: "That photo was not stored correctly. Please try again." };
+  }
 
   const { error: readyError } = await admin
     .from("media_assets")

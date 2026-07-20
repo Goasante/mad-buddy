@@ -1,10 +1,13 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { GRACE_PERIOD_DAYS } from "@/lib/billing/entitlements";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { markPaystackSubscriptionStatus, syncPaystackSubscription } from "@/lib/paystack/sync";
 import { getMissingPaystackWebhookConfig, getPaystackWebhookSecret } from "@/lib/paystack/config";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { consumeRateLimit, getClientIpHashFromRequest } from "@/lib/security/rate-limit";
+
+const MAX_WEBHOOK_BYTES = 256 * 1024;
 
 type PaystackWebhookEvent = {
   event: string;
@@ -14,6 +17,7 @@ type PaystackWebhookEvent = {
     status?: string;
     paid_at?: string | null;
     amount?: number;
+    currency?: string;
     metadata?: {
       user_id?: string;
       plan?: "plus" | "pro";
@@ -49,13 +53,20 @@ export async function POST(request: Request) {
   const route = "/api/paystack/webhook";
   const missingConfig = getMissingPaystackWebhookConfig();
   const webhookSecret = getPaystackWebhookSecret();
+  const declaredSize = Number(request.headers.get("content-length") ?? 0);
+  if (Number.isFinite(declaredSize) && declaredSize > MAX_WEBHOOK_BYTES) {
+    return NextResponse.json({ error: "Webhook payload is too large." }, { status: 413 });
+  }
   const body = await request.text();
+  if (Buffer.byteLength(body, "utf8") > MAX_WEBHOOK_BYTES) {
+    return NextResponse.json({ error: "Webhook payload is too large." }, { status: 413 });
+  }
   const signature = request.headers.get("x-paystack-signature");
 
   if (missingConfig.length > 0 || !webhookSecret) {
     logBackendEvent("warn", { requestId, route, statusCode: 503, latencyMs: Date.now() - startedAt });
     return NextResponse.json(
-      { error: `Paystack webhook is not configured. Missing: ${missingConfig.join(", ")}.` },
+      { error: "Payment notifications are temporarily unavailable." },
       { status: 503 }
     );
   }
@@ -65,9 +76,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid Paystack signature." }, { status: 400 });
   }
 
-  const event = JSON.parse(body) as PaystackWebhookEvent;
+  const rateLimit = await consumeRateLimit({
+    action: "paystack.webhook",
+    ipHash: getClientIpHashFromRequest(request),
+    requestId
+  });
+  if (!rateLimit.allowed) return NextResponse.json({ error: "Too many webhook requests." }, { status: 429 });
+
+  let event: PaystackWebhookEvent;
+  try {
+    event = JSON.parse(body) as PaystackWebhookEvent;
+  } catch {
+    return NextResponse.json({ error: "Invalid webhook payload." }, { status: 400 });
+  }
+  if (!event || typeof event.event !== "string" || !event.data || typeof event.data !== "object") {
+    return NextResponse.json({ error: "Invalid webhook payload." }, { status: 400 });
+  }
   const admin = createSupabaseAdminClient();
-  const eventId = buildEventId(event);
+  const eventId = buildEventId(event, body);
   const { data: existingEvent } = await admin
     .from("paystack_webhook_events")
     .select("id")
@@ -83,6 +109,10 @@ export async function POST(request: Request) {
     type: event.event
   });
 
+  if (insertEventError?.code === "23505") {
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+
   if (insertEventError) {
     logBackendEvent("error", {
       requestId,
@@ -91,12 +121,15 @@ export async function POST(request: Request) {
       latencyMs: Date.now() - startedAt,
       errorType: errorType(insertEventError)
     });
-    return NextResponse.json({ error: insertEventError.message }, { status: 500 });
+    return NextResponse.json({ error: "Webhook receipt could not be recorded." }, { status: 500 });
   }
 
   try {
     await handlePaystackEvent(event);
   } catch (error) {
+    // A failed attempt must not poison the idempotency ledger. Paystack can
+    // safely retry and the next verified delivery will be processed again.
+    await admin.from("paystack_webhook_events").delete().eq("id", eventId);
     logBackendEvent("error", {
       requestId,
       route,
@@ -138,6 +171,7 @@ async function handlePaystackEvent(event: PaystackWebhookEvent) {
         reference: data.reference ?? null,
         paidAt: data.paid_at ?? null,
         amount: data.amount ?? null,
+        currency: data.currency ?? null,
         customer: data.customer ?? null,
         authorization: data.authorization ?? null,
         subscription:
@@ -199,8 +233,8 @@ function isValidPaystackSignature(body: string, signature: string, secret: strin
   return expectedBuffer.length === signatureBuffer.length && timingSafeEqual(expectedBuffer, signatureBuffer);
 }
 
-function buildEventId(event: PaystackWebhookEvent) {
-  return [
+function buildEventId(event: PaystackWebhookEvent, rawBody: string) {
+  const stableId = [
     event.event,
     event.data.id,
     event.data.reference,
@@ -209,4 +243,5 @@ function buildEventId(event: PaystackWebhookEvent) {
   ]
     .filter(Boolean)
     .join(":");
+  return stableId || `${event.event}:${createHash("sha256").update(rawBody).digest("hex")}`;
 }

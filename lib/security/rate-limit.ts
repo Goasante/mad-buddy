@@ -9,12 +9,15 @@ import { errorType, logBackendEvent } from "@/lib/observability/logger";
 export type RateLimitAction =
   | "auth.signup"
   | "auth.login"
+  | "auth.password_recovery"
+  | "auth.password_reset"
   | "friends.search"
   | "friends.request"
   | "location.update"
   | "friends.nearby"
   | "reports.create"
   | "paystack.initialize"
+  | "paystack.webhook"
   | "waves.send"
   | "waves.send.daily"
   | "pings.create"
@@ -43,7 +46,11 @@ export type RateLimitAction =
   | "contacts.match"
   | "verify.phone"
   | "feedback.submit"
-  | "support.request";
+  | "support.request"
+  | "notifications.mutate"
+  | "account.export"
+  | "account.delete"
+  | "admin.mutate";
 
 export type RateLimitResult = {
   allowed: boolean;
@@ -54,12 +61,15 @@ export type RateLimitResult = {
 export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeconds: number }> = {
   "auth.signup": { limit: 5, windowSeconds: 15 * 60 },
   "auth.login": { limit: 10, windowSeconds: 15 * 60 },
+  "auth.password_recovery": { limit: 5, windowSeconds: 60 * 60 },
+  "auth.password_reset": { limit: 5, windowSeconds: 60 * 60 },
   "friends.search": { limit: 30, windowSeconds: 60 },
   "friends.request": { limit: 10, windowSeconds: 24 * 60 * 60 },
   "location.update": { limit: 60, windowSeconds: 60 },
   "friends.nearby": { limit: 60, windowSeconds: 60 },
   "reports.create": { limit: 5, windowSeconds: 60 * 60 },
   "paystack.initialize": { limit: 5, windowSeconds: 15 * 60 },
+  "paystack.webhook": { limit: 1200, windowSeconds: 60 },
   // Wave/Ping anti-spam (feature spec §20, §41).
   "waves.send": { limit: 20, windowSeconds: 60 * 60 },
   "waves.send.daily": { limit: 50, windowSeconds: 24 * 60 * 60 },
@@ -97,7 +107,11 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "contacts.match": { limit: 5, windowSeconds: 24 * 60 * 60 },
   "verify.phone": { limit: 5, windowSeconds: 60 * 60 },
   "feedback.submit": { limit: 5, windowSeconds: 60 * 60 },
-  "support.request": { limit: 5, windowSeconds: 60 * 60 }
+  "support.request": { limit: 5, windowSeconds: 60 * 60 },
+  "notifications.mutate": { limit: 120, windowSeconds: 60 * 60 },
+  "account.export": { limit: 3, windowSeconds: 60 * 60 },
+  "account.delete": { limit: 3, windowSeconds: 24 * 60 * 60 },
+  "admin.mutate": { limit: 120, windowSeconds: 60 * 60 }
 };
 
 function hashIp(value: string | null) {
