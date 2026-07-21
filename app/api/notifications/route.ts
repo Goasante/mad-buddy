@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { toNotificationResponse } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import { resolveApiUser } from "@/lib/api/auth";
+import { preflightResponse, withCors } from "@/lib/api/cors";
 
 const notificationResponseSchema = z.object({
   notifications: z.array(
@@ -31,25 +32,24 @@ const deleteNotificationsSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(200)
 });
 
+// CORS preflight for the native app; a no-op for same-origin web.
+export function OPTIONS(request: Request) {
+  return preflightResponse(request);
+}
+
 export async function GET(request: Request) {
   const env = getSupabaseBrowserEnv();
 
   if (!env.url || !env.anonKey) {
-    return NextResponse.json(
-      { error: "Supabase is not configured yet." },
-      { status: 503 }
-    );
+    return withCors(NextResponse.json({ error: "Supabase is not configured yet." }, { status: 503 }), request);
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  // Web cookie session or mobile bearer token — same user, same RLS.
+  const auth = await resolveApiUser(request);
+  if (!auth) {
+    return withCors(NextResponse.json({ error: "Authentication required." }, { status: 401 }), request);
   }
+  const { user, supabase } = auth;
 
   const url = new URL(request.url);
   const parsedPagination = paginationSchema.safeParse({
@@ -58,9 +58,12 @@ export async function GET(request: Request) {
   });
 
   if (!parsedPagination.success) {
-    return NextResponse.json(
-      { error: "Invalid pagination. Use limit=1..100 and before=<ISO timestamp>." },
-      { status: 400 }
+    return withCors(
+      NextResponse.json(
+        { error: "Invalid pagination. Use limit=1..100 and before=<ISO timestamp>." },
+        { status: 400 }
+      ),
+      request
     );
   }
 
@@ -78,7 +81,7 @@ export async function GET(request: Request) {
   const { data, error } = await query;
 
   if (error) {
-    return NextResponse.json({ error: "Could not load notifications." }, { status: 500 });
+    return withCors(NextResponse.json({ error: "Could not load notifications." }, { status: 500 }), request);
   }
 
   const response = notificationResponseSchema.parse({
@@ -87,37 +90,39 @@ export async function GET(request: Request) {
 
   const oldest = response.notifications.at(-1)?.created_at ?? null;
 
-  return NextResponse.json({
-    ...response,
-    next_before: response.notifications.length === parsedPagination.data.limit ? oldest : null
-  });
+  return withCors(
+    NextResponse.json({
+      ...response,
+      next_before: response.notifications.length === parsedPagination.data.limit ? oldest : null
+    }),
+    request
+  );
 }
 
 export async function DELETE(request: Request) {
   const env = getSupabaseServerEnv();
 
   if (!env.url || !env.anonKey || !env.serviceRoleKey) {
-    return NextResponse.json({ error: "Supabase is not configured yet." }, { status: 503 });
+    return withCors(NextResponse.json({ error: "Supabase is not configured yet." }, { status: 503 }), request);
   }
 
   const body = deleteNotificationsSchema.safeParse(await request.json().catch(() => null));
   if (!body.success) {
-    return NextResponse.json({ error: "Choose between 1 and 200 notifications to delete." }, { status: 400 });
+    return withCors(
+      NextResponse.json({ error: "Choose between 1 and 200 notifications to delete." }, { status: 400 }),
+      request
+    );
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  const auth = await resolveApiUser(request);
+  if (!auth) {
+    return withCors(NextResponse.json({ error: "Authentication required." }, { status: 401 }), request);
   }
+  const { user } = auth;
 
   const rateLimit = await consumeRateLimit({ action: "notifications.mutate", userId: user.id });
   if (!rateLimit.allowed) {
-    return NextResponse.json({ error: rateLimitMessage(rateLimit.resetAt) }, { status: 429 });
+    return withCors(NextResponse.json({ error: rateLimitMessage(rateLimit.resetAt) }, { status: 429 }), request);
   }
 
   // Authenticate with the user's session, then perform the mutation through
@@ -132,7 +137,7 @@ export async function DELETE(request: Request) {
     .select("id");
 
   if (error) {
-    return NextResponse.json({ error: "Could not delete those notifications." }, { status: 500 });
+    return withCors(NextResponse.json({ error: "Could not delete those notifications." }, { status: 500 }), request);
   }
 
   const deletedIds = (data ?? []).map((notification) => notification.id);
@@ -140,14 +145,14 @@ export async function DELETE(request: Request) {
   const notDeleted = body.data.ids.filter((id) => !deletedIdSet.has(id));
 
   if (notDeleted.length > 0) {
-    return NextResponse.json(
-      { error: "Some notifications could not be deleted.", deletedIds },
-      { status: 409 }
+    return withCors(
+      NextResponse.json({ error: "Some notifications could not be deleted.", deletedIds }, { status: 409 }),
+      request
     );
   }
 
-  return NextResponse.json(
-    { deletedIds },
-    { headers: { "Cache-Control": "private, no-store" } }
+  return withCors(
+    NextResponse.json({ deletedIds }, { headers: { "Cache-Control": "private, no-store" } }),
+    request
   );
 }
