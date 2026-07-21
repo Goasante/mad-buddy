@@ -6,6 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import { updateNotificationPreference, updateVisibilityStatus } from "@/lib/settings/service";
 
 export type SettingsActionState = {
   ok: boolean;
@@ -15,12 +16,6 @@ export type SettingsActionState = {
 const deleteAccountSchema = z.object({
   confirmed: z.literal(true),
   reason: z.string().trim().max(240).optional()
-});
-
-const visibilitySchema = z.enum(["visible", "ghost", "app_open_only"]);
-
-const notificationPreferenceSchema = z.object({
-  nearbyAlerts: z.boolean()
 });
 
 const appPreferencesSchema = z.object({
@@ -229,12 +224,6 @@ export async function deleteAccountAction(input: unknown): Promise<SettingsActio
 }
 
 export async function updateVisibilityStatusAction(input: unknown): Promise<SettingsActionState> {
-  const parsed = visibilitySchema.safeParse(input);
-
-  if (!parsed.success) {
-    return { ok: false, message: "Choose a valid visibility setting." };
-  }
-
   const user = await getAuthedUser();
 
   if (!user) {
@@ -242,50 +231,17 @@ export async function updateVisibilityStatusAction(input: unknown): Promise<Sett
   }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
-    .from("profiles")
-    .update({ visibility_status: parsed.data })
-    .eq("user_id", user.id);
-
-  if (error) {
-    return { ok: false, message: "The visibility setting could not be saved." };
-  }
-
-  return { ok: true, message: "Visibility setting saved." };
+  return updateVisibilityStatus(supabase, user.id, input);
 }
 
 export async function updateNotificationPreferenceAction(input: unknown): Promise<SettingsActionState> {
-  const parsed = notificationPreferenceSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return { ok: false, message: "Choose a valid notification setting." };
-  }
-
   const user = await getAuthedUser();
 
   if (!user) {
     return { ok: false, message: "Log in before changing notification settings." };
   }
 
-  const admin = createSupabaseAdminClient();
-  const { data: existing } = await admin
-    .from("user_preferences")
-    .select("notification_preferences")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  const prior = existing?.notification_preferences && typeof existing.notification_preferences === "object" && !Array.isArray(existing.notification_preferences)
-    ? existing.notification_preferences
-    : {};
-  const { error } = await admin.from("user_preferences").upsert({
-    user_id: user.id,
-    notification_preferences: { ...prior, nearbyAlerts: parsed.data.nearbyAlerts, updatedAt: new Date().toISOString() }
-  }, { onConflict: "user_id" });
-
-  if (error) {
-    return { ok: false, message: "The notification preference could not be saved." };
-  }
-
-  return { ok: true, message: "Notification preference saved." };
+  return updateNotificationPreference(user.id, input);
 }
 
 export async function updateAppPreferencesAction(input: unknown): Promise<SettingsActionState> {
