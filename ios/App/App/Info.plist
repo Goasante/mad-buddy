@@ -47,5 +47,7 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Mad Buddy uses your location only when you tap “Share my location”, to show which of your Muddies are nearby.</string>
 </dict>
 </plist>
