@@ -190,6 +190,27 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
           });
         }
       }
+
+      // Sign-up must never depend on email delivery. When confirmation is
+      // required (no session returned), confirm the address with the service
+      // role so the new user is not stranded waiting for an email that may be
+      // slow, rate-limited, or misdelivered. Getting people into the app is the
+      // whole point of sign-up.
+      if (!data.session) {
+        const { error: confirmError } = await admin.auth.admin.updateUserById(data.user.id, {
+          email_confirm: true
+        });
+        if (confirmError) {
+          logBackendEvent("error", {
+            requestId,
+            action: "auth.signup",
+            statusCode: 500,
+            latencyMs: Date.now() - startedAt,
+            userId: data.user.id,
+            errorType: "email_confirm_failed"
+          });
+        }
+      }
     } else {
       logBackendEvent("error", {
         requestId,
@@ -202,6 +223,33 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     }
   }
 
+  // If confirmation was required (no session), sign the freshly-confirmed user
+  // in now so they go straight into onboarding rather than a login wall.
+  if (data.user && !data.session) {
+    const { error: sessionError } = await supabase.auth.signInWithPassword({ email, password });
+    if (!sessionError) {
+      logBackendEvent("info", {
+        requestId,
+        action: "auth.signup",
+        statusCode: 200,
+        latencyMs: Date.now() - startedAt,
+        userId: data.user.id
+      });
+      return { ok: true, message: "Account created. Continue onboarding.", redirectTo: "/onboarding" };
+    }
+    // Very rare: confirmed but couldn't establish a session. They can still log
+    // in normally (the email is confirmed), so no one is locked out.
+    logBackendEvent("warn", {
+      requestId,
+      action: "auth.signup",
+      statusCode: 200,
+      latencyMs: Date.now() - startedAt,
+      userId: data.user.id,
+      errorType: "auto_signin_failed"
+    });
+    return { ok: true, message: "Account created. Log in to continue.", redirectTo: "/login" };
+  }
+
   logBackendEvent("info", {
     requestId,
     action: "auth.signup",
@@ -212,10 +260,8 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
 
   return {
     ok: true,
-    message: data.session
-      ? "Account created. Continue onboarding."
-      : "Account created. Check your email if confirmation is enabled.",
-    redirectTo: data.session ? "/onboarding" : "/login"
+    message: "Account created. Continue onboarding.",
+    redirectTo: "/onboarding"
   };
 }
 
