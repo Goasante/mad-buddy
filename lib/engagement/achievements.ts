@@ -1,5 +1,7 @@
 import "server-only";
 
+import { ACHIEVEMENT_BY_CODE } from "@/lib/achievements/achievement-catalog";
+import { createNotification } from "@/lib/notifications/server";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -26,9 +28,32 @@ export async function grantAchievement(admin: Admin, userId: string, code: strin
       .maybeSingle();
     if (prefs && !prefs.achievements_enabled) return;
 
-    await admin
+    // ignoreDuplicates + the (user_id, achievement_code) unique constraint make
+    // a re-grant a no-op that returns NO row. .select() therefore returns a row
+    // only for a genuinely new unlock — which is exactly when (and the only
+    // time) we notify, so an award and its notification can never duplicate,
+    // even under concurrent grants.
+    const { data: inserted } = await admin
       .from("user_achievements")
-      .upsert({ user_id: userId, achievement_code: code }, { onConflict: "user_id,achievement_code", ignoreDuplicates: true });
+      .upsert({ user_id: userId, achievement_code: code }, { onConflict: "user_id,achievement_code", ignoreDuplicates: true })
+      .select("id");
+
+    if (inserted && inserted.length > 0) {
+      const definition = ACHIEVEMENT_BY_CODE.get(code);
+      if (definition) {
+        // A real in-app notification for the user's own milestone. It opens the
+        // Achievements page via the "achievement:" destination convention. Sent
+        // directly (not through the preference/budget engine) because it's a
+        // one-off milestone the person opted into via achievements_enabled, and
+        // it must not be silently dropped by a daily budget.
+        await createNotification(admin, {
+          userId,
+          type: `achievement:${code}`,
+          title: definition.notification.title,
+          message: definition.notification.body
+        });
+      }
+    }
   } catch {
     // Best-effort by design.
   }

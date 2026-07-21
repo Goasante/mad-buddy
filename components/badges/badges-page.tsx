@@ -5,6 +5,7 @@ import type { LucideIcon } from "lucide-react";
 import { useState, useTransition } from "react";
 import { pauseStreakAction, type EngagementOverview } from "@/app/(app)/engagement-actions";
 import { Button } from "@/components/ui/button";
+import { achievementIconPath } from "@/lib/achievements/achievement-catalog";
 import { cn } from "@/lib/utils";
 
 type BadgesTab = "achievements" | "streaks" | "recap";
@@ -97,6 +98,7 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {overview.achievements.map((achievement) => {
               const Icon = categoryIcons[achievement.category] ?? Award;
+              const iconPath = achievementIconPath(achievement.code);
               return (
                 <div
                   key={achievement.code}
@@ -105,10 +107,27 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
                     achievement.earned ? "border-primary/40 bg-primary/5" : "border-border/70 bg-card/50 opacity-70"
                   )}
                 >
-                  <Icon
-                    className={cn("h-5 w-5", achievement.earned ? "text-primary" : "text-muted-foreground")}
-                    aria-hidden="true"
-                  />
+                  {iconPath ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={iconPath}
+                      alt=""
+                      width={48}
+                      height={48}
+                      loading="lazy"
+                      decoding="async"
+                      draggable={false}
+                      className={cn(
+                        "h-12 w-12 object-contain transition-[filter,opacity] duration-200 motion-reduce:transition-none",
+                        !achievement.earned && "opacity-60 grayscale"
+                      )}
+                    />
+                  ) : (
+                    <Icon
+                      className={cn("h-5 w-5", achievement.earned ? "text-primary" : "text-muted-foreground")}
+                      aria-hidden="true"
+                    />
+                  )}
                   <p className="mt-2 text-sm font-semibold">{achievement.name}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{achievement.description}</p>
                   {achievement.earned && achievement.earnedAt ? (
