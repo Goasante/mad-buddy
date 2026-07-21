@@ -101,4 +101,98 @@ body {
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
+  /* Proximity glow rings (ported from web globals.css) so the reused GlowAvatar
+   * renders identically in the app. */
+  .proximity-halo {
+    --halo-color: 148 163 184;
+    --halo-blur: 0px;
+    --halo-spread: 0px;
+    --halo-scale: 1;
+    --halo-duration: 3s;
+    background: var(--halo-ring, rgb(71 85 105 / 0.28));
+  }
+  .proximity-halo::before {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    border-radius: inherit;
+    border: 2px solid rgb(var(--halo-color) / 0.78);
+    box-shadow: 0 0 var(--halo-blur) var(--halo-spread) rgb(var(--halo-color) / 0.9);
+    content: "";
+    opacity: var(--halo-active-opacity, 0);
+    pointer-events: none;
+  }
+  .proximity-halo::after {
+    position: absolute;
+    z-index: -1;
+    inset: calc(var(--halo-spread) * -1);
+    border-radius: inherit;
+    border: 1px solid rgb(var(--halo-color) / 0.55);
+    box-shadow:
+      0 0 var(--halo-blur) var(--halo-spread) rgb(var(--halo-color) / 0.8),
+      0 0 calc(var(--halo-blur) * 1.55) 0 rgb(var(--halo-color) / 0.42);
+    content: "";
+    opacity: var(--halo-aura-active-opacity, 0);
+    pointer-events: none;
+  }
+  .proximity-halo-very-close {
+    --halo-color: 251 146 60;
+    --halo-ring: linear-gradient(135deg, #fdba74 0%, #f97316 52%, #c2410c 100%);
+    --halo-blur: 26px;
+    --halo-spread: 8px;
+    --halo-scale: 1.055;
+    --halo-duration: 2.2s;
+  }
+  .proximity-halo-nearby {
+    --halo-color: 249 115 22;
+    --halo-ring: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+    --halo-blur: 20px;
+    --halo-spread: 6px;
+    --halo-scale: 1.04;
+    --halo-duration: 2.8s;
+  }
+  .proximity-halo-around {
+    --halo-color: 249 115 22;
+    --halo-ring: linear-gradient(135deg, rgb(251 146 60 / 0.72) 0%, rgb(234 88 12 / 0.62) 100%);
+    --halo-blur: 14px;
+    --halo-spread: 3px;
+    --halo-scale: 1.025;
+    --halo-duration: 3.4s;
+  }
+  .proximity-halo-muted {
+    --halo-ring: linear-gradient(135deg, rgb(71 85 105 / 0.42), rgb(51 65 85 / 0.24));
+  }
+  .proximity-halo-animate::before,
+  .proximity-halo-animate::after {
+    animation: proximity-halo-breathe var(--halo-duration) ease-in-out infinite;
+    will-change: opacity, transform;
+  }
+  .proximity-halo-animate::after {
+    animation-name: proximity-halo-aura-breathe;
+  }
+}
+
+@keyframes proximity-halo-aura-breathe {
+  0%,
+  100% {
+    opacity: var(--halo-aura-rest-opacity, 0);
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: var(--halo-aura-active-opacity, 0);
+    transform: scale(var(--halo-scale));
+  }
+}
+
+@keyframes proximity-halo-breathe {
+  0%,
+  100% {
+    opacity: var(--halo-rest-opacity, 0);
+    transform: scale(0.985);
+  }
+  50% {
+    opacity: var(--halo-active-opacity, 0);
+    transform: scale(var(--halo-scale));
+  }
 }

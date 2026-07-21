@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Sparkles, X, MapPin, CalendarPlus, UserPlus, CalendarDays } from "lucide-react";
+import { Sparkles, X, MapPin, CalendarPlus, UserPlus, CalendarDays, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { AVAILABILITY_TYPES, availabilityLabels } from "@/lib/social/rules";
 import type { AvailabilityType } from "@/lib/supabase/database.types";
+import type { ProximityLevel, ConfidenceLevel } from "@/lib/proximity";
 import { cn } from "@/lib/utils";
-import { Screen } from "../components/AppShell";
 import { Spinner } from "../components/Spinner";
 import { useAuth } from "../auth/AuthProvider";
 import { supabase } from "../lib/supabase";
@@ -17,8 +18,9 @@ type NearbyFriend = {
   display_name: string;
   username: string;
   avatar_url: string | null;
-  proximity_level: "very_close" | "nearby" | "around" | "far" | "hidden";
+  proximity_level: ProximityLevel;
   glow_strength: number;
+  confidence?: ConfidenceLevel;
 };
 
 type Plan = {
@@ -29,14 +31,6 @@ type Plan = {
   organiserName: string;
   status: string;
   goingCount: number;
-};
-
-const proximityLabels: Record<NearbyFriend["proximity_level"], string> = {
-  very_close: "Very close",
-  nearby: "Nearby",
-  around: "Around",
-  far: "Far",
-  hidden: "Hidden"
 };
 
 function greeting(): string {
@@ -91,11 +85,12 @@ export function HomeScreen() {
   const loadPlans = useCallback(async () => {
     const result = await api.get<{ plans: Plan[] }>("/api/plans");
     if (result.ok) {
-      const upcoming = result.data.plans
-        .filter((plan) => plan.status !== "cancelled" && plan.status !== "completed")
-        .sort((a, b) => (a.startAt ?? "").localeCompare(b.startAt ?? ""))
-        .slice(0, 3);
-      setPlans(upcoming);
+      setPlans(
+        result.data.plans
+          .filter((plan) => plan.status !== "cancelled" && plan.status !== "completed")
+          .sort((a, b) => (a.startAt ?? "").localeCompare(b.startAt ?? ""))
+          .slice(0, 3)
+      );
     }
   }, []);
 
@@ -134,17 +129,28 @@ export function HomeScreen() {
     setStatusMessage(result.ok ? "Status cleared." : result.error);
   }
 
+  const visibleFriends = friends.filter((friend) => friend.proximity_level !== "hidden" && friend.proximity_level !== "far");
+
   return (
-    <Screen title={firstName ? `${greeting()}, ${firstName}` : "Home"}>
+    <div className="mx-auto w-full max-w-lg px-4 pb-4 pt-6">
+      {/* Greeting header (mirrors the web dashboard) */}
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          {greeting()}
+          {firstName ? `, ${firstName}` : ""}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">See which approved Muddies are nearby.</p>
+      </header>
+
       {/* Quick actions */}
-      <div className="mb-5 grid grid-cols-3 gap-2">
+      <div className="mt-5 grid grid-cols-3 gap-2">
         <QuickAction icon={CalendarPlus} label="New plan" onClick={() => navigate("/plans")} />
         <QuickAction icon={UserPlus} label="Add Muddy" onClick={() => navigate("/muddies")} />
         <QuickAction icon={CalendarDays} label="Plans" onClick={() => navigate("/plans")} />
       </div>
 
-      {/* Glow */}
-      <section className="glass-panel rounded-2xl p-5">
+      {/* Glow / status composer */}
+      <section className="mt-5 glass-panel rounded-2xl p-5">
         <div className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
           <h2 className="text-lg font-semibold">Your glow</h2>
@@ -152,7 +158,6 @@ export function HomeScreen() {
         <p className="mt-1 text-sm text-muted-foreground">
           Let your Muddies know you're around. Nothing shows until you set it.
         </p>
-
         <div className="mt-4 flex flex-wrap gap-2">
           {AVAILABILITY_TYPES.map((type) => (
             <button
@@ -168,18 +173,10 @@ export function HomeScreen() {
             </button>
           ))}
         </div>
-
         <div className="mt-4">
-          <Input
-            placeholder="Add a note (optional)"
-            maxLength={60}
-            value={customText}
-            onChange={(event) => setCustomText(event.target.value)}
-          />
+          <Input placeholder="Add a note (optional)" maxLength={60} value={customText} onChange={(e) => setCustomText(e.target.value)} />
         </div>
-
         {statusMessage ? <p className="mt-3 text-sm text-primary">{statusMessage}</p> : null}
-
         <div className="mt-4 flex gap-2">
           <Button className="flex-1" onClick={setStatus} disabled={statusBusy}>
             {statusBusy ? "Saving…" : "Turn glow on"}
@@ -190,12 +187,63 @@ export function HomeScreen() {
         </div>
       </section>
 
+      {/* Nearby Muddies — real glow strip (reuses the web GlowAvatar) */}
+      <section className="mt-6">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold tracking-tight">Nearby Muddies</h2>
+          <button
+            type="button"
+            onClick={() => void loadNearby()}
+            className="focus-ring safe-motion inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/70 bg-card/50 text-muted-foreground hover:bg-secondary/60"
+            aria-label="Refresh"
+          >
+            <RefreshCcw className={cn("h-4 w-4", loadingNearby && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
+          </button>
+        </div>
+
+        {loadingNearby ? (
+          <div className="flex justify-center py-8">
+            <Spinner />
+          </div>
+        ) : visibleFriends.length > 0 ? (
+          <div className="glow-strip no-scrollbar -mx-4 flex gap-5 overflow-x-auto px-4 pb-3 pt-6" aria-label="Nearby Muddies">
+            {visibleFriends.map((friend) => (
+              <button
+                key={friend.friend_id}
+                type="button"
+                onClick={() => navigate(`/u/${friend.friend_id}`)}
+                className="focus-ring flex w-20 shrink-0 flex-col items-center gap-2"
+              >
+                <GlowAvatar
+                  name={friend.display_name}
+                  src={friend.avatar_url}
+                  proximityLevel={friend.proximity_level}
+                  glowStrength={friend.glow_strength}
+                  confidence={friend.confidence ?? "medium"}
+                  size="lg"
+                />
+                <span className="max-w-full truncate text-xs font-medium">{friend.display_name.split(" ")[0]}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-border bg-card/40 p-4">
+            <p className="text-sm text-muted-foreground">{nearbyMessage || "No Muddies around right now."}</p>
+          </div>
+        )}
+
+        <Button variant="outline" className="mt-3 w-full" onClick={() => void shareLocation()} disabled={sharingLocation}>
+          <MapPin className="h-4 w-4" aria-hidden="true" />
+          {sharingLocation ? "Getting your location…" : "Share my location to see who's near"}
+        </Button>
+      </section>
+
       {/* Upcoming plans */}
       {plans.length > 0 ? (
         <section className="mt-6">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Upcoming plans</h2>
-            <button type="button" onClick={() => navigate("/plans")} className="focus-ring text-sm text-primary">
+            <h2 className="text-lg font-semibold tracking-tight">Upcoming plans</h2>
+            <button type="button" onClick={() => navigate("/plans")} className="text-sm font-medium text-primary hover:underline">
               See all
             </button>
           </div>
@@ -215,68 +263,11 @@ export function HomeScreen() {
           </ul>
         </section>
       ) : null}
-
-      {/* Around you */}
-      <section className="mt-6">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Around you</h2>
-          <button type="button" onClick={() => void loadNearby()} className="focus-ring text-sm text-primary">
-            Refresh
-          </button>
-        </div>
-
-        <Button variant="outline" className="mb-3 w-full" onClick={() => void shareLocation()} disabled={sharingLocation}>
-          <MapPin className="h-4 w-4" aria-hidden="true" />
-          {sharingLocation ? "Getting your location…" : "Share my location to see who's near"}
-        </Button>
-
-        {loadingNearby ? (
-          <div className="flex justify-center py-8">
-            <Spinner />
-          </div>
-        ) : friends.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">
-            {nearbyMessage || "No Muddies around right now."}
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {friends.map((friend) => (
-              <li key={friend.friend_id}>
-                <button
-                  type="button"
-                  onClick={() => navigate(`/u/${friend.friend_id}`)}
-                  className="focus-ring flex w-full items-center gap-3 rounded-xl border border-border bg-card/40 p-3 text-left active:bg-secondary"
-                >
-                  <div
-                    className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary text-sm font-semibold"
-                    style={{ boxShadow: `0 0 ${8 + friend.glow_strength / 4}px hsl(var(--primary) / ${friend.glow_strength / 130})` }}
-                  >
-                    {friend.display_name.slice(0, 1).toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{friend.display_name}</p>
-                    <p className="truncate text-xs text-muted-foreground">@{friend.username}</p>
-                  </div>
-                  <span className="text-xs font-medium text-primary">{proximityLabels[friend.proximity_level]}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </Screen>
+    </div>
   );
 }
 
-function QuickAction({
-  icon: Icon,
-  label,
-  onClick
-}: {
-  icon: typeof CalendarPlus;
-  label: string;
-  onClick: () => void;
-}) {
+function QuickAction({ icon: Icon, label, onClick }: { icon: typeof CalendarPlus; label: string; onClick: () => void }) {
   return (
     <button
       type="button"
