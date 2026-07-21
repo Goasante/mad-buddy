@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { resolveInviteAction } from "@/app/(app)/invite-actions";
 import { AcceptInviteButton } from "@/components/discovery/accept-invite-button";
+import { InviteGuestActions } from "@/components/discovery/invite-guest-actions";
 import { BrandMark } from "@/components/brand/brand-mark";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +20,10 @@ export default async function InviteLandingPage({
 }) {
   const { token } = await params;
   const preview = await resolveInviteAction(token);
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
 
   return (
     <main className="mx-auto grid min-h-dvh max-w-[520px] place-items-center px-5 py-10">
@@ -44,10 +50,14 @@ export default async function InviteLandingPage({
             {preview.valid ? (
               <>
                 <p className="mt-4 text-xs text-muted-foreground">
-                  Accepting sends {preview.inviterName} a request. They still choose to accept.
+                  Connecting sends {preview.inviterName} a request. They still choose to accept.
                 </p>
                 <div className="mt-5">
-                  <AcceptInviteButton token={token} inviterName={preview.inviterName} />
+                  {user ? (
+                    <AcceptInviteButton token={token} inviterName={preview.inviterName} />
+                  ) : (
+                    <InviteGuestActions token={token} inviterName={preview.inviterName} />
+                  )}
                 </div>
                 <p className="mt-3 text-xs text-muted-foreground">
                   Expires {new Date(preview.expiresAt).toLocaleDateString()}

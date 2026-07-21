@@ -34,6 +34,7 @@ import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { updateVisibilityStatusAction } from "@/app/(app)/settings-actions";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
+import { PendingInvitePrompt } from "@/components/discovery/pending-invite-prompt";
 import { StatusComposer } from "@/components/social/status-composer";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -406,6 +407,10 @@ export function DashboardPageContent({
     // adding a second padded full-width layer.
     <div className="mx-auto w-full max-w-[1200px] space-y-6 pt-6">
       <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
+
+      {/* If this account arrived from an invite while logged out, offer to
+          connect them with the inviter now that they're signed in. */}
+      <PendingInvitePrompt />
 
       <div className="min-w-0">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl" suppressHydrationWarning>
