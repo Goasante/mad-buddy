@@ -244,24 +244,10 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
     );
   }
 
-  // Mirror Hangout Mode into the availability signal so the host also appears in
-  // "Muddies open to plans". Only for all-Muddies hangouts, so a narrower
-  // audience is never widened by this broadcast signal.
-  if (parsed.data.audienceType === "all_muddies") {
-    await admin.from("user_statuses").upsert(
-      {
-        user_id: userId,
-        availability_type: "open_to_hang_out",
-        activity_type: null,
-        custom_text: parsed.data.message?.trim().slice(0, 60) || null,
-        visibility_type: "all_muddies",
-        starts_at: new Date().toISOString(),
-        expires_at: parsed.data.endsAt,
-        updated_at: new Date().toISOString()
-      },
-      { onConflict: "user_id" }
-    );
-  }
+  // Note: the host appears in every eligible viewer's "Muddies open to plans"
+  // through getVisibleHangoutsAction, which enforces each hangout's own audience
+  // (all-Muddies, Close Friends, circles, selected). No status mirroring is
+  // needed, so a narrower audience is never widened.
 
   return { ok: true, message: "You're open to hang out.", hangoutId: session.id };
 }
@@ -348,10 +334,6 @@ export async function endHangoutAction(hangoutId: string): Promise<HangoutAction
     .update({ status: "cancelled", updated_at: new Date().toISOString() })
     .eq("id", hangoutId)
     .eq("owner_id", userId);
-
-  // Clear the mirrored "open to hang out" availability signal (only if it's
-  // still the hangout-derived one, so a manually set status isn't touched).
-  await admin.from("user_statuses").delete().eq("user_id", userId).eq("availability_type", "open_to_hang_out");
 
   return { ok: true, message: "Hangout ended." };
 }

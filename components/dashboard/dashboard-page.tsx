@@ -31,7 +31,9 @@ import type { LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
+import { getVisibleHangoutsAction, requestHangoutAction, type VisibleHangout } from "@/app/(app)/hangout-actions";
 import { updateVisibilityStatusAction } from "@/app/(app)/settings-actions";
+import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { PendingInvitePrompt } from "@/components/discovery/pending-invite-prompt";
@@ -150,6 +152,7 @@ export function DashboardPageContent({
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([]);
   const [unreadActivityCount, setUnreadActivityCount] = useState(0);
+  const [openHangouts, setOpenHangouts] = useState<VisibleHangout[]>([]);
   const [isPending, startTransition] = useTransition();
   const locationUpdateInFlightRef = useRef(false);
   const promptFeedbackTimerRef = useRef<number | null>(null);
@@ -352,6 +355,38 @@ export function DashboardPageContent({
       }
     };
   }, []);
+
+  // Hangouts the viewer is eligible to see (audience-gated server-side, incl.
+  // Close Friends / circles) so a Muddy's active hangout shows up in "open to
+  // plans" — not only inside Hangout Mode.
+  useEffect(() => {
+    let mounted = true;
+    getVisibleHangoutsAction()
+      .then((list) => {
+        if (mounted) setOpenHangouts(list);
+      })
+      .catch(() => {
+        // Leave hangouts empty if the request fails.
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  function requestHangout(hangoutId: string) {
+    setOpenHangouts((current) =>
+      current.map((item) => (item.id === hangoutId ? { ...item, myRequestStatus: "pending" } : item))
+    );
+    startTransition(async () => {
+      const result = await requestHangoutAction(hangoutId);
+      if (!result.ok) {
+        setOpenHangouts((current) =>
+          current.map((item) => (item.id === hangoutId ? { ...item, myRequestStatus: null } : item))
+        );
+        showPromptFeedback(result.message, true);
+      }
+    });
+  }
 
   useEffect(() => {
     const handleLocationUpdated = () => loadNearbyFriends();
@@ -698,7 +733,13 @@ export function DashboardPageContent({
           </section>
         ) : null}
         <div className="min-w-0 self-start lg:col-start-1 lg:row-start-3">
-          <MuddiesOpenToPlans muddies={openToPlansMuddies} onSelect={setSelectedFriendId} />
+          <MuddiesOpenToPlans
+            muddies={openToPlansMuddies}
+            hangouts={openHangouts}
+            onSelect={setSelectedFriendId}
+            onRequestHangout={requestHangout}
+            isPending={isPending}
+          />
         </div>
       </div>
 
@@ -1004,14 +1045,50 @@ const NEARBY_LEVELS = new Set<ProximityLevel>(["very_close", "nearby", "around"]
 
 function MuddiesOpenToPlans({
   muddies,
-  onSelect
+  hangouts,
+  onSelect,
+  onRequestHangout,
+  isPending
 }: {
   muddies: DashboardFriend[];
+  hangouts: VisibleHangout[];
   onSelect: (friendId: string) => void;
+  onRequestHangout: (hangoutId: string) => void;
+  isPending: boolean;
 }) {
+  const hasContent = muddies.length > 0 || hangouts.length > 0;
   return (
     <section>
       <h2 className="mb-3 text-lg font-semibold tracking-tight">Muddies open to plans</h2>
+
+      {hangouts.length > 0 ? (
+        <ul className="mb-3 divide-y divide-border/60 rounded-2xl border border-primary/25 bg-primary/[0.04]">
+          {hangouts.map((hangout) => (
+            <li key={hangout.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">
+                  {capitalize(hangout.ownerName)} is open to{" "}
+                  {(HANGOUT_ACTIVITY_LABELS[hangout.activityType] ?? "hang out").toLowerCase()}
+                </span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {hangout.message ? `“${hangout.message}” · ` : ""}
+                  Until {new Date(hangout.endsAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                </span>
+              </span>
+              {hangout.myRequestStatus ? (
+                <span className="shrink-0 text-xs font-medium capitalize text-muted-foreground">
+                  {hangout.myRequestStatus === "pending" ? "Requested" : hangout.myRequestStatus}
+                </span>
+              ) : (
+                <Button type="button" size="sm" className="shrink-0" disabled={isPending} onClick={() => onRequestHangout(hangout.id)}>
+                  I&apos;m interested
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
       {muddies.length > 0 ? (
         <ul className="divide-y divide-border/60 rounded-2xl border border-border/70 bg-card/40">
           {muddies.map((muddy) => {
@@ -1047,7 +1124,9 @@ function MuddiesOpenToPlans({
             );
           })}
         </ul>
-      ) : (
+      ) : null}
+
+      {!hasContent ? (
         // Compact inline state, not a large bordered panel: keeps Home short
         // when nobody is available and stays left-aligned on desktop.
         <div className="flex max-w-[820px] items-start justify-between gap-4 rounded-xl bg-card/40 px-5 py-5 sm:px-6">
@@ -1059,7 +1138,7 @@ function MuddiesOpenToPlans({
             <Link href="/plans">New plan</Link>
           </Button>
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
