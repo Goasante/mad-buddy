@@ -41,7 +41,10 @@ export function SignInCard({ title, description, children, footer }: SignInCardP
         aria-hidden="true"
       />
 
-      <Link href="/" className="absolute left-4 top-4 z-20 flex items-center gap-2.5 text-sm font-semibold text-white sm:left-6 sm:top-6">
+      {/* The card already carries its own logo, so the top-left home mark is
+          hidden on mobile (where it overlaps the centred card) and kept on
+          larger screens. */}
+      <Link href="/" className="absolute left-4 top-4 z-20 hidden items-center gap-2.5 text-sm font-semibold text-white sm:left-6 sm:top-6 sm:flex">
         <BrandMark className="h-9 w-9" priority />
         Mad Buddy
       </Link>

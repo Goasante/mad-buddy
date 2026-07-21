@@ -20,6 +20,26 @@ declare global {
 }
 
 /**
+ * Normalises a scanned value to the code the server expects. A QR may encode a
+ * full URL (…/scan?c=<code> or …/invite/<token>) or the bare code; either way
+ * we hand the server just the code. Non-URL values pass through unchanged.
+ */
+function extractScanCode(raw: string): string {
+  const value = raw.trim();
+  try {
+    const url = new URL(value);
+    const query = url.searchParams.get("c") ?? url.searchParams.get("code");
+    if (query) return query;
+    const segments = url.pathname.split("/").filter(Boolean);
+    if (segments[0] === "invite" && segments[1]) return segments[1];
+    if (segments[0] === "scan" && segments[1]) return segments[1];
+  } catch {
+    // Not a URL — treat it as a raw code / short code.
+  }
+  return value;
+}
+
+/**
  * Shared scanner surface (batch 5 event QR + batch 8 personal QR / short
  * code). Camera frames never leave the device, only the decoded token is
  * sent, and the server re-verifies everything.
@@ -39,7 +59,7 @@ export function ScanPageContent() {
       handledRef.current = true;
       startTransition(async () => {
         try {
-          const outcome = await resolveScannedCodeAction(code);
+          const outcome = await resolveScannedCodeAction(extractScanCode(code));
           setResult(outcome);
         } catch {
           setResult({ ok: false, message: "Couldn't check that code. Try again." });
@@ -94,6 +114,17 @@ export function ScanPageContent() {
   }, [submitCode]);
 
   useEffect(() => stopCamera, [stopCamera]);
+
+  // If we arrived from a scanned QR link (…/scan?c=<code>), resolve it straight
+  // away so a native-camera scan of a personal QR just works. Scheduled so the
+  // state update doesn't run synchronously during the effect.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("c") ?? params.get("code");
+    if (!code) return;
+    const timer = setTimeout(() => submitCode(code), 0);
+    return () => clearTimeout(timer);
+  }, [submitCode]);
 
   return (
     <div className="mx-auto max-w-[480px] space-y-5 pt-6">

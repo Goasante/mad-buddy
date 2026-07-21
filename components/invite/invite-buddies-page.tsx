@@ -25,13 +25,17 @@ export function InviteBuddiesPage({ initialQr = null }: { initialQr?: PersonalQr
   const [qrImage, setQrImage] = useState<{ token: string; url: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // Rendered locally from the opaque token, nothing personal is encoded.
+  // Encode a real scan URL (not the bare token) so a phone's native camera
+  // opens the app's scanner, which resolves the code server-side. The token
+  // itself is opaque and carries no personal data.
   useEffect(() => {
     if (!qr?.token) return;
 
     const token = qr.token;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const payload = `${origin}/scan?c=${encodeURIComponent(token)}`;
     let cancelled = false;
-    void toDataURL(token, { margin: 1, width: 220 }).then((url) => {
+    void toDataURL(payload, { margin: 1, width: 220 }).then((url) => {
       if (!cancelled) setQrImage({ token, url });
     });
     return () => {
