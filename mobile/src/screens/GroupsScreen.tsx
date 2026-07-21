@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Users2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Users2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,10 +24,14 @@ type GroupsData = {
 };
 
 export function GroupsScreen() {
+  const navigate = useNavigate();
   const [data, setData] = useState<GroupsData>({ groups: [], discoverableGroups: [], invitations: [] });
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [feedback, setFeedback] = useState("");
+
+  // A group IS a conversation, so opening one is the group chat.
+  const openGroup = (group: GroupSummary) => navigate(`/messages/${group.id}`, { state: { title: group.name } });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,7 +78,7 @@ export function GroupsScreen() {
         </div>
       ) : (
         <div className="space-y-6">
-          <GroupList title="Your groups" groups={data.groups} emptyText="You're not in any groups yet." />
+          <GroupList title="Your groups" groups={data.groups} emptyText="You're not in any groups yet." onOpen={openGroup} />
 
           {data.discoverableGroups.length > 0 ? (
             <section>
@@ -100,7 +105,17 @@ export function GroupsScreen() {
   );
 }
 
-function GroupList({ title, groups, emptyText }: { title: string; groups: GroupSummary[]; emptyText: string }) {
+function GroupList({
+  title,
+  groups,
+  emptyText,
+  onOpen
+}: {
+  title: string;
+  groups: GroupSummary[];
+  emptyText: string;
+  onOpen: (group: GroupSummary) => void;
+}) {
   return (
     <section>
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
@@ -109,19 +124,26 @@ function GroupList({ title, groups, emptyText }: { title: string; groups: GroupS
       ) : (
         <ul className="space-y-2">
           {groups.map((group) => (
-            <li key={group.id} className="flex items-center gap-3 rounded-xl border border-border bg-card/40 p-3">
-              <GroupIcon />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{group.name}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {group.lastMessagePreview ?? `${group.memberCount} members`}
-                </p>
-              </div>
-              {group.role === "owner" ? (
-                <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
-                  Owner
-                </span>
-              ) : null}
+            <li key={group.id}>
+              <button
+                type="button"
+                onClick={() => onOpen(group)}
+                className="focus-ring flex w-full items-center gap-3 rounded-xl border border-border bg-card/40 p-3 text-left active:bg-secondary"
+              >
+                <GroupIcon />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{group.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {group.lastMessagePreview ?? `${group.memberCount} members`}
+                  </p>
+                </div>
+                {group.role === "owner" ? (
+                  <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
+                    Owner
+                  </span>
+                ) : null}
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </button>
             </li>
           ))}
         </ul>

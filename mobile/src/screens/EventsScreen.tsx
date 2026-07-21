@@ -17,6 +17,7 @@ type Event = {
   status: string;
   hostName: string;
   isHost: boolean;
+  myCheckInId: string | null;
 };
 
 export function EventsScreen() {
@@ -36,6 +37,21 @@ export function EventsScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function checkIn(event: Event) {
+    const result = await api.post<{ ok: boolean; message: string }>(`/api/events/${event.id}/checkin`);
+    setFeedback(result.ok ? result.data.message : result.error);
+    if (result.ok) void load();
+  }
+
+  async function checkOut(event: Event) {
+    if (!event.myCheckInId) return;
+    const result = await api.del<{ ok: boolean; message: string }>(`/api/events/${event.id}/checkin`, {
+      checkInId: event.myCheckInId
+    });
+    setFeedback(result.ok ? result.data.message : result.error);
+    if (result.ok) void load();
+  }
 
   return (
     <Screen
@@ -88,6 +104,20 @@ export function EventsScreen() {
                 </p>
               ) : null}
               {event.description ? <p className="mt-2 text-sm text-muted-foreground">{event.description}</p> : null}
+
+              {!event.isHost ? (
+                event.myCheckInId ? (
+                  <Button size="sm" variant="outline" className="mt-3" onClick={() => void checkOut(event)}>
+                    Checked in · Check out
+                  </Button>
+                ) : (
+                  <Button size="sm" className="mt-3" onClick={() => void checkIn(event)}>
+                    Check in
+                  </Button>
+                )
+              ) : (
+                <p className="mt-3 text-xs font-medium text-primary">You're hosting</p>
+              )}
             </li>
           ))}
         </ul>

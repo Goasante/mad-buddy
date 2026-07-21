@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -19,13 +19,17 @@ type ChatMessage = {
 export function ChatScreen() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const passedTitle = (location.state as { title?: string } | null)?.title;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const title = messages.find((message) => !message.isMine)?.senderName ?? "Chat";
+  // Prefer the title handed in by the caller (group name / DM name); fall back
+  // to the first other participant's name.
+  const title = passedTitle ?? messages.find((message) => !message.isMine)?.senderName ?? "Chat";
 
   const load = useCallback(async () => {
     const result = await api.get<{ messages: ChatMessage[] }>(`/api/messages/conversations/${id}`);

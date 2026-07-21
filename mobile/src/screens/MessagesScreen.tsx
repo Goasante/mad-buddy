@@ -64,7 +64,7 @@ export function MessagesScreen() {
             <li key={conversation.id}>
               <button
                 type="button"
-                onClick={() => navigate(`/messages/${conversation.id}`)}
+                onClick={() => navigate(`/messages/${conversation.id}`, { state: { title: conversation.title } })}
                 className={`focus-ring flex w-full items-center gap-3 bg-card/40 px-4 py-3 text-left active:bg-secondary ${
                   index > 0 ? "border-t border-border" : ""
                 }`}

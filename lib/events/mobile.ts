@@ -1,9 +1,12 @@
 import "server-only";
 
 import { z } from "zod";
+import { resolveCheckInWindow } from "@/lib/events/rules";
+import { liveCheckIn } from "@/lib/events/service";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
+import type { CheckInVisibility } from "@/lib/events/types";
 
 /**
  * Transport-agnostic Events read/create (mobile v1: list + create). Check-in,
@@ -25,7 +28,9 @@ export type EventView = {
   myGlowEnabled: boolean;
 };
 
-export type EventResult = { ok: boolean; message: string; eventId?: string };
+export type EventResult = { ok: boolean; message: string; eventId?: string; checkInId?: string };
+
+const uuidSchema = z.string().uuid();
 
 export const createEventSchema = z.object({
   name: z.string().min(2).max(120),
@@ -128,4 +133,82 @@ export async function createEvent(userId: string, input: unknown): Promise<Event
   if (error || !event) return { ok: false, message: "Couldn't create the event." };
 
   return { ok: true, message: `${parsed.data.name.trim()} created.`, eventId: event.id };
+}
+
+/** Simple manual check-in (no QR). Mobile v1 of checkInToEventAction. */
+export async function checkInToEvent(userId: string, eventId: string): Promise<EventResult> {
+  if (!hasServiceRoleEnv()) return { ok: false, message: "This action needs the server database configuration." };
+  if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
+
+  const admin = createSupabaseAdminClient();
+  const { data: event } = await admin
+    .from("events")
+    .select("id, name, host_id, visibility, status, starts_at, ends_at, checkin_opens_minutes_before")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event || (event.visibility === "invite" && event.host_id !== userId)) {
+    return { ok: false, message: "Event not found." };
+  }
+
+  const window = resolveCheckInWindow({
+    eventStatus: event.status,
+    startsAtMs: Date.parse(event.starts_at),
+    endsAtMs: Date.parse(event.ends_at),
+    opensMinutesBefore: event.checkin_opens_minutes_before,
+    nowMs: Date.now()
+  });
+  if (!window.allowed) {
+    return {
+      ok: false,
+      message:
+        window.reason === "too_early"
+          ? "Check-in isn't open yet."
+          : window.reason === "event_ended"
+            ? "This event has ended."
+            : "This event isn't available."
+    };
+  }
+
+  const existing = await liveCheckIn(admin, userId, "event", eventId);
+  if (existing) return { ok: true, message: `You're already checked in to ${event.name}.`, checkInId: existing.id };
+
+  const { data: checkIn, error } = await admin
+    .from("check_ins")
+    .insert({
+      user_id: userId,
+      context_type: "event",
+      context_id: eventId,
+      method: "manual",
+      visibility: "participants" as CheckInVisibility,
+      event_glow_enabled: true,
+      status: "checked_in"
+    })
+    .select("id")
+    .single();
+
+  if (error || !checkIn) {
+    const retry = await liveCheckIn(admin, userId, "event", eventId);
+    if (retry) return { ok: true, message: `You're already checked in to ${event.name}.`, checkInId: retry.id };
+    return { ok: false, message: "Couldn't check you in. Try again." };
+  }
+
+  return { ok: true, message: `Checked in to ${event.name}.`, checkInId: checkIn.id };
+}
+
+export async function checkOutEvent(userId: string, checkInId: string): Promise<EventResult> {
+  if (!hasServiceRoleEnv()) return { ok: false, message: "This action needs the server database configuration." };
+  if (!uuidSchema.safeParse(checkInId).success) return { ok: false, message: "Check-in not found." };
+
+  const admin = createSupabaseAdminClient();
+  const { data: updated, error } = await admin
+    .from("check_ins")
+    .update({ status: "checked_out", checked_out_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", checkInId)
+    .eq("user_id", userId)
+    .eq("status", "checked_in")
+    .select("id");
+
+  if (error) return { ok: false, message: "Couldn't check you out." };
+  if (!updated?.length) return { ok: false, message: "You're not checked in." };
+  return { ok: true, message: "Checked out." };
 }
