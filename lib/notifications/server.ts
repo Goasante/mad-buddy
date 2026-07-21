@@ -164,6 +164,20 @@ export async function deliverNotification(
       body: input.message,
       url: "/notifications"
     });
+
+    // Native push (FCM/APNs) to the user's mobile devices. Best-effort and a
+    // silent no-op until FIREBASE_SERVICE_ACCOUNT_BASE64 is configured; never
+    // let a push transport error interrupt in-app delivery.
+    try {
+      const { sendNativePushToUser } = await import("@/lib/notifications/fcm");
+      await sendNativePushToUser(input.userId, {
+        title: input.title,
+        body: input.message,
+        data: { url: "/notifications", type: input.type }
+      });
+    } catch {
+      // swallow — the in-app notification already landed
+    }
   }
 
   // Only budgeted pushes consume the budget, critical/high bypass it, so
