@@ -12,8 +12,8 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
 
   return (
     <AuthLayout
-      title="Create your Mad Buddy account"
-      description="Set up your profile basics, then choose private proximity settings in onboarding."
+      title="Create your account"
+      description="Set up the basics — you’ll choose your privacy settings next."
       footer={
         <>
           Need the overview?{" "}

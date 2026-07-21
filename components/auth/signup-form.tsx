@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertTriangle, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -49,6 +49,8 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
     initialError ? { ok: false, message: initialError } : null
   );
   const [isGooglePending, setIsGooglePending] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const {
     register,
     handleSubmit,
@@ -73,7 +75,7 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
   const acceptedPolicy = useWatch({ control, name: "acceptedPolicy" });
   const usernameState = useMemo(() => {
     if (!username || username.length < 3) {
-      return "Type at least 3 characters";
+      return "At least 3 characters";
     }
 
     if (reservedUsernames.has(username.toLowerCase())) {
@@ -84,7 +86,7 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
       return "Checking paused";
     }
 
-    return "Username looks available";
+    return "Looks available";
   }, [username]);
 
   function onSubmit(values: SignupFormValues) {
@@ -116,86 +118,12 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
     }
   }
 
+  const busy = isPending || isGooglePending;
+
   return (
     <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
-      <FormField htmlFor="fullName" label="Full name" error={errors.fullName?.message}>
-        <Input id="fullName" autoComplete="name" placeholder="Godfred Ofosu Asante" {...register("fullName")} />
-      </FormField>
-      <FormField
-        htmlFor="username"
-        label="Username"
-        hint={usernameState}
-        error={errors.username?.message}
-      >
-        <Input id="username" autoComplete="username" placeholder="godfred" {...register("username")} />
-      </FormField>
-      <FormField htmlFor="email" label="Email" error={errors.email?.message}>
-        <Input id="email" type="email" autoComplete="email" placeholder="you@example.com" {...register("email")} />
-      </FormField>
-      <FormField htmlFor="password" label="Password" error={errors.password?.message}>
-        <Input id="password" type="password" autoComplete="new-password" {...register("password")} />
-        <PasswordStrength password={password} />
-      </FormField>
-      <FormField
-        htmlFor="confirmPassword"
-        label="Confirm password"
-        error={errors.confirmPassword?.message}
-      >
-        <Input id="confirmPassword" type="password" autoComplete="new-password" {...register("confirmPassword")} />
-      </FormField>
-      <div className="flex gap-2.5 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.08] p-3 text-sm leading-6 text-emerald-50">
-        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-        <span>
-          <span className="font-medium">Privacy comes first.</span> Your exact location is never shared —
-          we only show approved Muddies when they’re nearby.
-        </span>
-      </div>
-      <input type="hidden" {...register("policyVersion")} />
-      <div>
-        <label className="flex items-start gap-3 text-sm leading-6 text-muted-foreground">
-          <input
-            type="checkbox"
-            className="mt-1 h-4 w-4 shrink-0 rounded border-border accent-primary"
-            aria-invalid={Boolean(errors.acceptedPolicy)}
-            {...register("acceptedPolicy")}
-          />
-          <span>
-            I agree to the <Link href="/terms" className="font-semibold text-foreground hover:text-accent">Terms</Link> and acknowledge the{" "}
-            <Link href="/privacy" className="font-semibold text-foreground hover:text-accent">Privacy Policy</Link>.
-          </span>
-        </label>
-        {errors.acceptedPolicy?.message ? <p className="mt-1 text-sm text-red-300" role="alert">{errors.acceptedPolicy.message}</p> : null}
-      </div>
-      {actionState ? (
-        <div className={`flex items-center gap-2 rounded-md border p-3 text-sm ${actionState.ok ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-50" : "border-amber-300/20 bg-amber-300/10 text-amber-50"}`}>
-          {actionState.ok ? (
-            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          ) : (
-            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-          )}
-          {actionState.message}
-        </div>
-      ) : null}
-      <Button type="submit" className="w-full" disabled={isPending || isGooglePending}>
-        {isPending ? (
-          <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-        ) : null}
-        Create account
-      </Button>
-
-      <div className="flex items-center gap-3" aria-hidden="true">
-        <span className="h-px flex-1 bg-border" />
-        <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">or</span>
-        <span className="h-px flex-1 bg-border" />
-      </div>
-
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={signUpWithGoogle}
-        disabled={isPending || isGooglePending}
-      >
+      {/* OAuth first — the fastest path leads. */}
+      <Button type="button" variant="outline" className="w-full" onClick={signUpWithGoogle} disabled={busy}>
         {isGooglePending ? (
           <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
         ) : (
@@ -207,6 +135,121 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
           </svg>
         )}
         Continue with Google
+      </Button>
+
+      <div className="flex items-center gap-3" aria-hidden="true">
+        <span className="h-px flex-1 bg-border" />
+        <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">or sign up with email</span>
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      {/* Row 1: name + username */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField htmlFor="fullName" label="Full name" error={errors.fullName?.message}>
+          <Input id="fullName" autoComplete="name" placeholder="Godfred Ofosu Asante" {...register("fullName")} />
+        </FormField>
+        <FormField htmlFor="username" label="Username" hint={usernameState} error={errors.username?.message}>
+          <Input id="username" autoComplete="username" placeholder="godfred" {...register("username")} />
+        </FormField>
+      </div>
+
+      {/* Row 2: email */}
+      <FormField htmlFor="email" label="Email" error={errors.email?.message}>
+        <Input id="email" type="email" autoComplete="email" placeholder="you@example.com" {...register("email")} />
+      </FormField>
+
+      {/* Row 3: password + confirm */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField htmlFor="password" label="Password" error={errors.password?.message}>
+          <div className="relative">
+            <Input id="password" type={showPassword ? "text" : "password"} autoComplete="new-password" className="pr-10" {...register("password")} />
+            <button
+              type="button"
+              onClick={() => setShowPassword((current) => !current)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              title={showPassword ? "Hide password" : "Show password"}
+              className="focus-ring absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+            </button>
+          </div>
+        </FormField>
+        <FormField htmlFor="confirmPassword" label="Confirm password" error={errors.confirmPassword?.message}>
+          <div className="relative">
+            <Input id="confirmPassword" type={showConfirm ? "text" : "password"} autoComplete="new-password" className="pr-10" {...register("confirmPassword")} />
+            <button
+              type="button"
+              onClick={() => setShowConfirm((current) => !current)}
+              aria-label={showConfirm ? "Hide password" : "Show password"}
+              title={showConfirm ? "Hide password" : "Show password"}
+              className="focus-ring absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {showConfirm ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+            </button>
+          </div>
+        </FormField>
+      </div>
+
+      <PasswordStrength password={password} />
+
+      {/* Privacy card */}
+      <div className="flex gap-2.5 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.06] p-3.5">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" aria-hidden="true" />
+        <div className="text-xs leading-6 text-emerald-50/90">
+          <p className="font-semibold text-emerald-50">Privacy comes first.</p>
+          <p className="mt-0.5">
+            Your exact location is never shared. Only approved Muddies can see when you’re nearby — no maps,
+            no pins, no history.
+          </p>
+        </div>
+      </div>
+
+      <input type="hidden" {...register("policyVersion")} />
+
+      {/* Terms */}
+      <div>
+        <label className="flex items-start gap-3 text-sm leading-6 text-muted-foreground">
+          <input
+            type="checkbox"
+            className="focus-ring mt-1 h-4 w-4 shrink-0 rounded border-border accent-primary"
+            aria-invalid={Boolean(errors.acceptedPolicy)}
+            {...register("acceptedPolicy")}
+          />
+          <span>
+            I agree to the{" "}
+            <Link href="/terms" className="focus-ring rounded font-semibold text-foreground underline decoration-border underline-offset-2 hover:text-accent hover:decoration-accent">
+              Terms
+            </Link>{" "}
+            and acknowledge the{" "}
+            <Link href="/privacy" className="focus-ring rounded font-semibold text-foreground underline decoration-border underline-offset-2 hover:text-accent hover:decoration-accent">
+              Privacy Policy
+            </Link>
+            .
+          </span>
+        </label>
+        {errors.acceptedPolicy?.message ? (
+          <p className="mt-1.5 text-sm text-red-300" role="alert">{errors.acceptedPolicy.message}</p>
+        ) : null}
+      </div>
+
+      {actionState ? (
+        <div className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${actionState.ok ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-50" : "border-amber-300/20 bg-amber-300/10 text-amber-50"}`} role="status">
+          {actionState.ok ? (
+            <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+          ) : (
+            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          )}
+          {actionState.message}
+        </div>
+      ) : null}
+
+      <Button
+        type="submit"
+        className="w-full shadow-[0_12px_30px_hsl(var(--primary)/0.28)] transition-shadow hover:shadow-[0_16px_38px_hsl(var(--primary)/0.4)]"
+        disabled={busy}
+      >
+        {isPending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
+        {isPending ? "Creating your account…" : "Create account"}
       </Button>
 
       <p className="text-center text-sm text-muted-foreground">
