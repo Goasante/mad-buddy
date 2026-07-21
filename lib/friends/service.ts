@@ -70,6 +70,49 @@ function orderedPair(userId: string, friendId: string) {
     : { user_one_id: friendId, user_two_id: userId };
 }
 
+export type MuddyListItem = {
+  id: string;
+  displayName: string;
+  username: string;
+  avatarUrl: string | null;
+};
+
+/** The user's approved Muddies (friends), alphabetical. Read-only; the mobile
+ * Muddies screen merges these with /api/friends/nearby for live proximity. */
+export async function listMuddies(userId: string): Promise<ServiceResult & { muddies: MuddyListItem[] }> {
+  const envMessage = browserEnvMessage() ?? serviceRoleEnvMessage();
+  if (envMessage) return { ok: false, message: envMessage, muddies: [] };
+
+  const admin = createSupabaseAdminClient();
+  const { data: friendships } = await admin
+    .from("friendships")
+    .select("user_one_id, user_two_id")
+    .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)
+    .is("ended_at", null);
+
+  const friendIds = (friendships ?? []).map((row) => (row.user_one_id === userId ? row.user_two_id : row.user_one_id));
+  if (friendIds.length === 0) return { ok: true, message: "ok", muddies: [] };
+
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("user_id, full_name, username, avatar_url")
+    .in("user_id", friendIds)
+    .is("deleted_at", null);
+
+  return {
+    ok: true,
+    message: "ok",
+    muddies: (profiles ?? [])
+      .map((profile) => ({
+        id: profile.user_id,
+        displayName: profile.full_name,
+        username: profile.username,
+        avatarUrl: profile.avatar_url
+      }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName))
+  };
+}
+
 /** Search public profile fields by username or name (server-side, rate limited). */
 export async function searchUsers(userId: string, query: string): Promise<SearchUsersResult> {
   const requestId = createRequestId();
