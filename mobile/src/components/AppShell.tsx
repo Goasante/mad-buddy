@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Home, Users, CalendarDays, Bell, Settings } from "lucide-react";
+import { Home, Users, CalendarDays, Bell, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
@@ -7,7 +7,7 @@ const tabs = [
   { to: "/muddies", label: "Muddies", icon: Users },
   { to: "/plans", label: "Plans", icon: CalendarDays },
   { to: "/notifications", label: "Alerts", icon: Bell },
-  { to: "/settings", label: "Settings", icon: Settings }
+  { to: "/more", label: "More", icon: LayoutGrid }
 ];
 
 /** The signed-in app frame: scrollable content + a fixed bottom tab bar. */

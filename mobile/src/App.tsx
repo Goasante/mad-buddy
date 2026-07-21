@@ -10,6 +10,8 @@ import { MuddiesScreen } from "./screens/MuddiesScreen";
 import { PlansScreen } from "./screens/PlansScreen";
 import { NotificationsScreen } from "./screens/NotificationsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
+import { MoreScreen } from "./screens/MoreScreen";
+import { ProfileScreen } from "./screens/ProfileScreen";
 import type { ReactNode } from "react";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -44,6 +46,8 @@ export default function App() {
         <Route path="/muddies" element={<MuddiesScreen />} />
         <Route path="/plans" element={<PlansScreen />} />
         <Route path="/notifications" element={<NotificationsScreen />} />
+        <Route path="/more" element={<MoreScreen />} />
+        <Route path="/profile" element={<ProfileScreen />} />
         <Route path="/settings" element={<SettingsScreen />} />
       </Route>
 
