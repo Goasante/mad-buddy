@@ -157,21 +157,33 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     const env = getSupabaseServerEnv();
     if (env.url && env.serviceRoleKey) {
       const admin = createSupabaseAdminClient();
+      // onConflict on user_id: these tables key rows by user_id (the PK is a
+      // separate id), so upserting on the default id target would insert a
+      // duplicate and violate the user_id unique constraint on any re-run.
       const [profileResult, subscriptionResult, preferencesResult] = await Promise.all([
-        admin.from("profiles").upsert({
-          user_id: data.user.id,
-          full_name: fullName,
-          username,
-          is_onboarded: false
-        }),
-        admin.from("subscriptions").upsert({
-          user_id: data.user.id,
-          plan: "free",
-          status: "free"
-        }),
-        admin.from("user_preferences").upsert({
-          user_id: data.user.id
-        })
+        admin.from("profiles").upsert(
+          {
+            user_id: data.user.id,
+            full_name: fullName,
+            username,
+            is_onboarded: false
+          },
+          { onConflict: "user_id" }
+        ),
+        admin.from("subscriptions").upsert(
+          {
+            user_id: data.user.id,
+            plan: "free",
+            status: "free"
+          },
+          { onConflict: "user_id" }
+        ),
+        admin.from("user_preferences").upsert(
+          {
+            user_id: data.user.id
+          },
+          { onConflict: "user_id" }
+        )
       ]);
 
       for (const [label, result] of [

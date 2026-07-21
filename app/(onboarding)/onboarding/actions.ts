@@ -62,30 +62,44 @@ export async function completeOnboardingAction(input: unknown): Promise<Onboardi
   }
   const admin = createSupabaseAdminClient();
 
-  const { error: profileError } = await admin.from("profiles").upsert({
-    user_id: user.id,
-    full_name: parsed.data.fullName,
-    username: parsed.data.username,
-    bio: parsed.data.bio || null,
-    mood_status: parsed.data.moodStatus || null,
-    ...(parsed.data.visibility ? { visibility_status: visibilityMap[parsed.data.visibility] } : {}),
-    is_onboarded: true
-  });
+  // Upsert on user_id: the profile row already exists (created at sign-up / by
+  // ensureProfileForUser for OAuth), so without this the default id-PK conflict
+  // target would try to INSERT a second row and violate the user_id unique
+  // constraint — which is what surfaced as "Your profile could not be saved."
+  const { error: profileError } = await admin.from("profiles").upsert(
+    {
+      user_id: user.id,
+      full_name: parsed.data.fullName,
+      username: parsed.data.username,
+      bio: parsed.data.bio || null,
+      mood_status: parsed.data.moodStatus || null,
+      ...(parsed.data.visibility ? { visibility_status: visibilityMap[parsed.data.visibility] } : {}),
+      is_onboarded: true
+    },
+    { onConflict: "user_id" }
+  );
 
   if (profileError) {
+    // 23505 here means the chosen username belongs to someone else.
+    if (profileError.code === "23505") {
+      return { ok: false, message: "That username is already taken. Try another one." };
+    }
     return { ok: false, message: "Your profile could not be saved." };
   }
 
-  const { error: preferencesError } = await admin.from("user_preferences").upsert({
-    user_id: user.id,
-    mood_status: parsed.data.moodStatus || null,
-    notification_preferences: {
-      nearbyAlerts: parsed.data.notifications === "smart",
-      requestAlertsOnly: parsed.data.notifications === "requests",
-      quietMode: parsed.data.notifications === "quiet",
-      updatedAt: new Date().toISOString()
-    }
-  });
+  const { error: preferencesError } = await admin.from("user_preferences").upsert(
+    {
+      user_id: user.id,
+      mood_status: parsed.data.moodStatus || null,
+      notification_preferences: {
+        nearbyAlerts: parsed.data.notifications === "smart",
+        requestAlertsOnly: parsed.data.notifications === "requests",
+        quietMode: parsed.data.notifications === "quiet",
+        updatedAt: new Date().toISOString()
+      }
+    },
+    { onConflict: "user_id" }
+  );
 
   if (preferencesError) {
     return { ok: false, message: "Your preferences could not be saved." };
