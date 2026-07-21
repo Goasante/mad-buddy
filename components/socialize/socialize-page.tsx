@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState, useTransition, type CSSProper
 import {
   AlertTriangle,
   CheckCircle2,
-  Hand,
   MoreHorizontal,
   Sparkles,
   X
@@ -22,6 +21,7 @@ import {
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { AppMenu, AppSelect } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";
+import { FeatureIcon } from "@/components/ui/feature-icon";
 import { Modal } from "@/components/ui/modal";
 import { ResponsiveFormPopover } from "@/components/ui/responsive-form-popover";
 import { Textarea } from "@/components/ui/textarea";
@@ -552,7 +552,7 @@ function PersonCard({
           disabled={disabled || waved}
           onClick={onWave}
         >
-          <Hand className="h-4 w-4" aria-hidden="true" />
+          <FeatureIcon feature="wave" size={18} decorative />
           {waved ? "Wave sent" : received ? "Wave back" : "Wave"}
         </Button>
       </div>

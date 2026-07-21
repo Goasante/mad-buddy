@@ -37,7 +37,9 @@ import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { StatusComposer } from "@/components/social/status-composer";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FeatureIcon } from "@/components/ui/feature-icon";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { resolveNotificationDestination } from "@/lib/notifications/destination";
 import { formatMuddyStatusLabel } from "@/lib/social/rules";
@@ -769,60 +771,70 @@ const quickActions: Array<{
   label: string;
   description: string;
   icon: LucideIcon;
+  featureIcon: FeatureIconKey;
 }> = [
   {
     href: "/hangout-mode",
     label: "Hangout",
     description: "Let your Muddies know you’re open to meeting.",
-    icon: Hand
+    icon: Hand,
+    featureIcon: "hangout"
   },
   {
     href: "/safe-arrival",
     label: "Safe Arrival",
     description: "Let trusted Muddies know when you arrive safely.",
-    icon: ShieldCheck
+    icon: ShieldCheck,
+    featureIcon: "safeArrival"
   },
   {
     href: "/moments",
     label: "Memories",
     description: "Share a moment with your Muddies before it disappears.",
-    icon: Sparkles
+    icon: Sparkles,
+    featureIcon: "moments"
   },
   {
     href: "/events",
     label: "Events",
     description: "View events and see what is coming up.",
-    icon: PartyPopper
+    icon: PartyPopper,
+    featureIcon: "events"
   },
   {
     href: "/groups",
     label: "Groups",
     description: "Open your groups and group invitations.",
-    icon: Users2
+    icon: Users2,
+    featureIcon: "groups"
   },
   {
     href: "/discover",
     label: "Socialize",
     description: "Find people who are open to socializing.",
-    icon: Compass
+    icon: Compass,
+    featureIcon: "socialize"
   },
   {
     href: "/invites",
     label: "Invites",
     description: "Review invitations and invite your Muddies.",
-    icon: UserPlus
+    icon: UserPlus,
+    featureIcon: "invites"
   },
   {
     href: "/reminders",
     label: "Reminders",
     description: "Review reminders for plans and connections.",
-    icon: Bell
+    icon: Bell,
+    featureIcon: "reminders"
   },
   {
     href: "/settings/engagement",
     label: "Focus",
     description: "Manage Focus Mode and notification limits.",
-    icon: Moon
+    icon: Moon,
+    featureIcon: "focus"
   }
 ];
 
@@ -839,8 +851,8 @@ function QuickActions() {
             title={action.description}
             className="focus-ring safe-motion flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl border border-border/70 bg-card/50 p-1.5 text-center hover:bg-secondary/40"
           >
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/10 text-primary">
-              <action.icon className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/10">
+              <FeatureIcon feature={action.featureIcon} size={20} decorative />
             </span>
             <span className="truncate text-[11px] font-medium leading-tight">{action.label}</span>
           </Link>

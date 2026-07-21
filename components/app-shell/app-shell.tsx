@@ -29,8 +29,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { logoutAction } from "@/app/(auth)/actions";
 import { LocationSignalSync } from "@/components/app-shell/location-signal-sync";
 import { Button } from "@/components/ui/button";
+import { FeatureIcon } from "@/components/ui/feature-icon";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { cn } from "@/lib/utils";
+import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import { BrandMark } from "@/components/brand/brand-mark";
 
 // Order matters for MobileNav, which just takes the first five (minus
@@ -53,16 +55,18 @@ const navigationItems: Array<{
     | "/admin";
   label: string;
   icon: LucideIcon;
+  /** Owner-selected feature icon; overrides the lucide fallback when present. */
+  featureIcon?: FeatureIconKey;
 }> = [
   { href: "/dashboard", label: "Home", icon: Home },
   { href: "/friends", label: "Muddies", icon: UsersRound },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/messages", label: "Messages", icon: MessagesSquare },
-  { href: "/plans", label: "Plans", icon: CalendarCheck2 },
-  { href: "/moments", label: "Moments", icon: Sparkles },
-  { href: "/events", label: "Events", icon: PartyPopper },
-  { href: "/groups", label: "Groups", icon: Users2 },
-  { href: "/discover", label: "Socialize", icon: Compass },
+  { href: "/plans", label: "Plans", icon: CalendarCheck2, featureIcon: "plans" },
+  { href: "/moments", label: "Moments", icon: Sparkles, featureIcon: "moments" },
+  { href: "/events", label: "Events", icon: PartyPopper, featureIcon: "events" },
+  { href: "/groups", label: "Groups", icon: Users2, featureIcon: "groups" },
+  { href: "/discover", label: "Socialize", icon: Compass, featureIcon: "socialize" },
   { href: "/profile", label: "Profile", icon: UserRound },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/billing", label: "Plan and billing", icon: CircleDollarSign }
@@ -251,7 +255,7 @@ function DesktopSidebar({
                   className="focus-ring grid h-11 w-11 place-items-center rounded-xl"
                 >
                   <NavIconPill isActive={isActive}>
-                    <item.icon className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+                    <NavItemIcon item={item} lucideClass="h-5 w-5" size={20} isActive={isActive} />
                     {item.href === "/notifications" ? <UnreadBadge count={unreadCount} /> : null}
                   </NavIconPill>
                 </Link>
@@ -307,6 +311,36 @@ function flyoutItemClassName(isActive: boolean) {
  * as "bigger" than its neighbours, and a tinted bg-primary/12 rather than a
  * solid fill plus shadow is the "subtle, not a glow" active treatment.
  */
+/** Renders a nav item's icon: the owner-selected feature asset when present,
+ *  otherwise the lucide fallback (which keeps the currentColor/active-fill
+ *  behaviour the monochrome chrome relies on). */
+function NavItemIcon({
+  item,
+  lucideClass,
+  size,
+  isActive,
+  fillActive = false
+}: {
+  item: NavigationItem;
+  lucideClass: string;
+  size: number;
+  isActive: boolean;
+  fillActive?: boolean;
+}) {
+  if (item.featureIcon) {
+    return <FeatureIcon feature={item.featureIcon} size={size} active={isActive} decorative />;
+  }
+  const Icon = item.icon;
+  return (
+    <Icon
+      className={lucideClass}
+      strokeWidth={1.75}
+      fill={fillActive && isActive ? "currentColor" : "none"}
+      aria-hidden="true"
+    />
+  );
+}
+
 function NavIconPill({ isActive, children }: { isActive: boolean; children: ReactNode }) {
   return (
     <span
@@ -362,7 +396,7 @@ function MoreMenu({
             return (
               <DropdownMenu.Item key={item.href} asChild className={flyoutItemClassName(isActive)}>
                 <Link href={item.href} aria-current={isActive ? "page" : undefined}>
-                  <item.icon className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                  <NavItemIcon item={item} lucideClass="h-5 w-5 shrink-0" size={20} isActive={isActive} />
                   {item.label}
                 </Link>
               </DropdownMenu.Item>
@@ -567,7 +601,7 @@ function AppHeader({
                   >
                     <Link href={action.href}>
                       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                        <action.icon className="h-4 w-4" aria-hidden="true" />
+                        <FeatureIcon feature={action.featureIcon} size={20} decorative />
                       </span>
                       <span className="text-left">
                         <span className="block text-sm font-semibold">{action.title}</span>
@@ -712,24 +746,28 @@ const createActions: Array<{
   title: string;
   description: string;
   icon: LucideIcon;
+  featureIcon: FeatureIconKey;
 }> = [
   {
     href: "/plans?create=1",
     title: "New plan",
     description: "Create a hangout and invite Muddies",
-    icon: CalendarCheck2
+    icon: CalendarCheck2,
+    featureIcon: "plans"
   },
   {
     href: "/meeting-pings",
     title: "Meeting ping",
     description: "Ask a Muddy to meet up nearby",
-    icon: Hand
+    icon: Hand,
+    featureIcon: "ping"
   },
   {
     href: "/moments",
     title: "Share a Moment",
     description: "Post a moment for your Muddies",
-    icon: Sparkles
+    icon: Sparkles,
+    featureIcon: "moments"
   }
 ];
 
@@ -776,12 +814,7 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
                 )}
               >
                 <span className="relative">
-                  <item.icon
-                    className="h-6 w-6"
-                    strokeWidth={1.75}
-                    fill={isActive ? "currentColor" : "none"}
-                    aria-hidden="true"
-                  />
+                  <NavItemIcon item={item} lucideClass="h-6 w-6" size={24} isActive={isActive} fillActive />
                   {item.href === "/notifications" ? <UnreadBadge count={unreadCount} /> : null}
                 </span>
                 <span className="text-[11px] font-medium leading-none">{label}</span>

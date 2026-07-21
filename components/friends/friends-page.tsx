@@ -5,7 +5,6 @@ import {
   Check,
   Clock,
   Flag,
-  Hand,
   MessagesSquare,
   MoreHorizontal,
   Plus,
@@ -38,6 +37,7 @@ import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { Badge } from "@/components/ui/badge";
 import { AppMenu } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";
+import { FeatureIcon } from "@/components/ui/feature-icon";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
@@ -835,7 +835,7 @@ function UserRow({
             onClick={onWave}
             className="h-12 w-full gap-2 rounded-none border-0 shadow-none hover:translate-y-0 sm:h-10 sm:w-10 sm:rounded-full sm:border sm:border-border sm:bg-card/60"
           >
-            <Hand className="h-4 w-4" aria-hidden="true" />
+            <FeatureIcon feature="wave" size={18} decorative />
             <span className="text-xs sm:sr-only">Wave</span>
           </Button>
           <Button
