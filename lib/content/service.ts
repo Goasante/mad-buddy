@@ -70,6 +70,8 @@ export type VisibleMoment = {
   expiresAt: string;
   createdAt: string;
   myReaction: string | null;
+  /** Total reactions on this Moment (aggregate only — never who reacted). */
+  reactionCount: number;
   isAuthor: boolean;
   /** Author-only: what audience this went to (spec §9). */
   audienceLabel: string | null;
@@ -130,14 +132,20 @@ export async function buildMomentFeed(
   const momentIds = candidates.map((moment) => moment.id);
   const otherAuthorIds = [...new Set(candidates.map((m) => m.author_id))];
 
-  const [{ data: targets }, { data: profiles }, { data: myReactions }] = await Promise.all([
+  const [{ data: targets }, { data: profiles }, { data: myReactions }, { data: allReactions }] = await Promise.all([
     admin.from("moment_audience_targets").select("moment_id, target_type, target_id").in("moment_id", momentIds),
     admin.from("profiles").select("user_id, full_name, avatar_url, visibility_status").in("user_id", otherAuthorIds),
-    admin.from("moment_reactions").select("moment_id, reaction_type").eq("user_id", viewerId).in("moment_id", momentIds)
+    admin.from("moment_reactions").select("moment_id, reaction_type").eq("user_id", viewerId).in("moment_id", momentIds),
+    // Aggregate reaction totals per Moment — the count only, never who reacted.
+    admin.from("moment_reactions").select("moment_id").in("moment_id", momentIds)
   ]);
 
   const profileById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
   const reactionByMoment = new Map((myReactions ?? []).map((row) => [row.moment_id, row.reaction_type]));
+  const reactionCountByMoment = new Map<string, number>();
+  for (const row of allReactions ?? []) {
+    reactionCountByMoment.set(row.moment_id, (reactionCountByMoment.get(row.moment_id) ?? 0) + 1);
+  }
 
   const targetsByMoment = new Map<string, Array<{ target_type: string; target_id: string }>>();
   for (const target of targets ?? []) {
@@ -240,6 +248,7 @@ export async function buildMomentFeed(
       expiresAt: moment.expires_at,
       createdAt: moment.created_at,
       myReaction: reactionByMoment.get(moment.id) ?? null,
+      reactionCount: reactionCountByMoment.get(moment.id) ?? 0,
       isAuthor,
       audienceLabel: isAuthor ? moment.audience_type : null
     });

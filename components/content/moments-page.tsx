@@ -87,9 +87,14 @@ export function MomentsPage({
 
   function react(moment: VisibleMoment, reaction: ReactionType) {
     const isSame = moment.myReaction === reaction;
+    // Count delta: +1 when going from no reaction to one, -1 when toggling the
+    // same one off, 0 when switching type (still one reaction from this user).
+    const delta = (isSame ? 0 : 1) - (moment.myReaction ? 1 : 0);
     setMoments((current) =>
       current.map((entry) =>
-        entry.id === moment.id ? { ...entry, myReaction: isSame ? null : reaction } : entry
+        entry.id === moment.id
+          ? { ...entry, myReaction: isSame ? null : reaction, reactionCount: Math.max(0, entry.reactionCount + delta) }
+          : entry
       )
     );
     startTransition(async () => {
@@ -98,9 +103,12 @@ export function MomentsPage({
         : await reactToMomentAction(moment.id, reaction);
       if (!result.ok) {
         setFeedback(result.message);
+        // Restore the canonical pre-click state on failure.
         setMoments((current) =>
           current.map((entry) =>
-            entry.id === moment.id ? { ...entry, myReaction: moment.myReaction } : entry
+            entry.id === moment.id
+              ? { ...entry, myReaction: moment.myReaction, reactionCount: moment.reactionCount }
+              : entry
           )
         );
       }
@@ -255,6 +263,14 @@ export function MomentsPage({
                         {reaction.emoji}
                       </button>
                     ))}
+                  {moment.reactionCount > 0 ? (
+                    <span
+                      className="ml-1.5 text-xs font-medium tabular-nums text-muted-foreground"
+                      aria-label={`${moment.reactionCount} ${moment.reactionCount === 1 ? "reaction" : "reactions"}`}
+                    >
+                      {moment.reactionCount}
+                    </span>
+                  ) : null}
                 </div>
                 <span className="hidden text-xs text-muted-foreground sm:inline">
                   {moment.isAuthor && moment.audienceLabel
