@@ -32,7 +32,7 @@ const sections: { title: string; items: Entry[] }[] = [
       { label: "Events", description: "Plan bigger get-togethers", icon: CalendarHeart, to: "/events" },
       { label: "Groups", description: "Your circles and crews", icon: Users2, to: "/groups" },
       { label: "Socialize", description: "Discover people nearby", icon: Compass, to: "/socialize" },
-      { label: "Safety", description: "Safe arrival and check-ins", icon: ShieldCheck, soon: true }
+      { label: "Safety", description: "Safe arrival and check-ins", icon: ShieldCheck, to: "/safety" }
     ]
   }
 ];

@@ -19,6 +19,7 @@ import { SocializeScreen } from "./screens/SocializeScreen";
 import { EventsScreen } from "./screens/EventsScreen";
 import { GroupsScreen } from "./screens/GroupsScreen";
 import { UserProfileScreen } from "./screens/UserProfileScreen";
+import { SafetyScreen } from "./screens/SafetyScreen";
 import type { ReactNode } from "react";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -60,6 +61,7 @@ export default function App() {
         <Route path="/socialize" element={<SocializeScreen />} />
         <Route path="/events" element={<EventsScreen />} />
         <Route path="/groups" element={<GroupsScreen />} />
+        <Route path="/safety" element={<SafetyScreen />} />
         <Route path="/settings" element={<SettingsScreen />} />
       </Route>
 
