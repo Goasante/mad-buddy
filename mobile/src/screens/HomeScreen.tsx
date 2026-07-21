@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Sparkles, X } from "lucide-react";
+import { Sparkles, X, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AVAILABILITY_TYPES, availabilityLabels } from "@/lib/social/rules";
@@ -7,7 +7,7 @@ import type { AvailabilityType } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { Screen } from "../components/AppShell";
 import { Spinner } from "../components/Spinner";
-import { api } from "../lib/api";
+import { api, postCurrentLocation } from "../lib/api";
 
 type NearbyFriend = {
   friend_id: string;
@@ -35,6 +35,7 @@ export function HomeScreen() {
   const [friends, setFriends] = useState<NearbyFriend[]>([]);
   const [loadingNearby, setLoadingNearby] = useState(true);
   const [nearbyMessage, setNearbyMessage] = useState("");
+  const [sharingLocation, setSharingLocation] = useState(false);
 
   const loadNearby = useCallback(async () => {
     setLoadingNearby(true);
@@ -51,6 +52,18 @@ export function HomeScreen() {
   useEffect(() => {
     void loadNearby();
   }, [loadNearby]);
+
+  async function shareLocation() {
+    setSharingLocation(true);
+    setNearbyMessage("");
+    const result = await postCurrentLocation();
+    setSharingLocation(false);
+    if (result.ok) {
+      await loadNearby();
+    } else {
+      setNearbyMessage(result.error);
+    }
+  }
 
   async function setStatus() {
     setStatusBusy(true);
@@ -129,6 +142,11 @@ export function HomeScreen() {
             Refresh
           </button>
         </div>
+
+        <Button variant="outline" className="mb-3 w-full" onClick={() => void shareLocation()} disabled={sharingLocation}>
+          <MapPin className="h-4 w-4" aria-hidden="true" />
+          {sharingLocation ? "Getting your location…" : "Share my location to see who's near"}
+        </Button>
 
         {loadingNearby ? (
           <div className="flex justify-center py-8">

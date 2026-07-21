@@ -5,14 +5,20 @@ import { locationUpdateRequestSchema, confidenceFromAccuracy } from "@/lib/proxi
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { guardFeature } from "@/lib/admin/enforcement";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
+import { resolveApiUser } from "@/lib/api/auth";
+import { preflightResponse, withCors } from "@/lib/api/cors";
 
 const responseSchema = z.object({
   received: z.boolean(),
   expiresInSeconds: z.number().int().positive(),
   confidence: z.enum(["high", "medium", "low"])
 });
+
+// CORS preflight for the native app; a no-op for same-origin web.
+export function OPTIONS(request: Request) {
+  return preflightResponse(request);
+}
 
 export async function POST(request: Request) {
   const requestId = createRequestId();
@@ -27,10 +33,7 @@ export async function POST(request: Request) {
       statusCode: 503,
       latencyMs: Date.now() - startedAt
     });
-    return NextResponse.json(
-      { error: "Supabase is not configured yet." },
-      { status: 503 }
-    );
+    return withCors(NextResponse.json({ error: "Supabase is not configured yet." }, { status: 503 }), request);
   }
 
   const parsedBody = locationUpdateRequestSchema.safeParse(await request.json().catch(() => null));
@@ -42,25 +45,22 @@ export async function POST(request: Request) {
       statusCode: 400,
       latencyMs: Date.now() - startedAt
     });
-    return NextResponse.json({ error: "Invalid location update." }, { status: 400 });
+    return withCors(NextResponse.json({ error: "Invalid location update." }, { status: 400 }), request);
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError
-  } = await supabase.auth.getUser();
+  // Web cookie session or mobile bearer token — same user, same RLS.
+  const auth = await resolveApiUser(request);
 
-  if (userError || !user) {
+  if (!auth) {
     logBackendEvent("warn", {
       requestId,
       route,
       statusCode: 401,
-      latencyMs: Date.now() - startedAt,
-      errorType: userError ? errorType(userError) : undefined
+      latencyMs: Date.now() - startedAt
     });
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    return withCors(NextResponse.json({ error: "Authentication required." }, { status: 401 }), request);
   }
+  const { user } = auth;
 
   const rateLimit = await consumeRateLimit({
     action: "location.update",
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
   });
 
   if (!rateLimit.allowed) {
-    return NextResponse.json({ error: rateLimitMessage(rateLimit.resetAt) }, { status: 429 });
+    return withCors(NextResponse.json({ error: rateLimitMessage(rateLimit.resetAt) }, { status: 429 }), request);
   }
 
   // Emergency kill switch (batch 13 §46, §47). During a suspected location
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     const guard = await guardFeature(createSupabaseAdminClient(), "location_collection");
     if (!guard.allowed) {
       logBackendEvent("warn", { requestId, route, statusCode: 503, latencyMs: Date.now() - startedAt });
-      return NextResponse.json({ error: guard.message }, { status: 503 });
+      return withCors(NextResponse.json({ error: guard.message }, { status: 503 }), request);
     }
   }
 
@@ -109,9 +109,9 @@ export async function POST(request: Request) {
       userId: user.id,
       errorType: errorType(error)
     });
-    return NextResponse.json(
-      { error: "Could not update your private proximity signal." },
-      { status: 500 }
+    return withCors(
+      NextResponse.json({ error: "Could not update your private proximity signal." }, { status: 500 }),
+      request
     );
   }
 
@@ -129,5 +129,5 @@ export async function POST(request: Request) {
     userId: user.id
   });
 
-  return NextResponse.json(response);
+  return withCors(NextResponse.json(response), request);
 }
