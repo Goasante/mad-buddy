@@ -14,10 +14,9 @@ import {
   deactivateSocializeAction,
   discoverSocializePeopleAction,
   activateSocializeAction,
-  updateSocializeAction,
-  type SocializePerson,
-  type SocializeSession
+  updateSocializeAction
 } from "@/app/(app)/socialize-actions";
+import type { SocializePerson, SocializeSession } from "@/lib/social/socialize-mobile";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { AppMenu, AppSelect } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";

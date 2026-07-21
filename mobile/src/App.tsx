@@ -15,6 +15,7 @@ import { ProfileScreen } from "./screens/ProfileScreen";
 import { MessagesScreen } from "./screens/MessagesScreen";
 import { ChatScreen } from "./screens/ChatScreen";
 import { MomentsScreen } from "./screens/MomentsScreen";
+import { SocializeScreen } from "./screens/SocializeScreen";
 import type { ReactNode } from "react";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="/profile" element={<ProfileScreen />} />
         <Route path="/messages" element={<MessagesScreen />} />
         <Route path="/moments" element={<MomentsScreen />} />
+        <Route path="/socialize" element={<SocializeScreen />} />
         <Route path="/settings" element={<SettingsScreen />} />
       </Route>
 

@@ -31,7 +31,7 @@ const sections: { title: string; items: Entry[] }[] = [
       { label: "Moments", description: "Share what you're up to", icon: Camera, to: "/moments" },
       { label: "Events", description: "Plan bigger get-togethers", icon: CalendarHeart, soon: true },
       { label: "Groups", description: "Your circles and crews", icon: Users2, soon: true },
-      { label: "Socialize", description: "Discover people nearby", icon: Compass, soon: true },
+      { label: "Socialize", description: "Discover people nearby", icon: Compass, to: "/socialize" },
       { label: "Safety", description: "Safe arrival and check-ins", icon: ShieldCheck, soon: true }
     ]
   }
