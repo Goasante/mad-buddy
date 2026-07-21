@@ -482,8 +482,12 @@ export async function sendFriendRequestAction(targetUserId: string): Promise<Int
     return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
   }
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("friend_requests").insert({
+  // Friend-request inserts (and the notification below) must use the service
+  // role: client-exposure hardening revoked INSERT on friend_requests and
+  // notifications from the authenticated role, so the anon/cookie client is
+  // denied. The sender is already resolved from the authenticated session, so
+  // this is safe — sender_id can't be forged.
+  const { error } = await admin.from("friend_requests").insert({
     sender_id: userId,
     receiver_id: parsedTarget.data,
     status: "pending"
@@ -501,7 +505,7 @@ export async function sendFriendRequestAction(targetUserId: string): Promise<Int
     return { ok: false, message: "The Muddy request could not be sent." };
   }
 
-  const { data: senderProfile } = await supabase
+  const { data: senderProfile } = await admin
     .from("profiles")
     .select("full_name")
     .eq("user_id", userId)
@@ -509,10 +513,10 @@ export async function sendFriendRequestAction(targetUserId: string): Promise<Int
 
   {
     const { recordMilestone } = await import("@/lib/onboarding/service");
-    await recordMilestone(createSupabaseAdminClient(), userId, "first_request_sent");
+    await recordMilestone(admin, userId, "first_request_sent");
   }
 
-  await deliverNotification(supabase, {
+  await deliverNotification(admin, {
     userId: parsedTarget.data,
     senderId: userId,
     type: "friend_request_received",
