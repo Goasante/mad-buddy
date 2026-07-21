@@ -13,11 +13,22 @@ import {
 } from "@/components/admin/admin-ui";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { BarList } from "@/components/admin/overview/bar-list";
+import { TrendChart } from "@/components/admin/overview/trend-chart";
 import { getReadinessReport } from "@/lib/health/readiness";
+import { bucketDailyCounts, bucketTotal, planMix } from "@/lib/admin/overview";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+
+// Validated reference palette — ordinal blue ramp for the plan tiers (dark surface).
+const PLAN_COLORS: Record<string, string> = {
+  free: "#86b6ef",
+  buddy_plus: "#3987e5",
+  buddy_pro: "#184f95"
+};
 
 export default async function AdminOverviewPage() {
   const admin = createSupabaseAdminClient();
+  const since = new Date(new Date().getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
   const [
     readiness,
     usersResult,
@@ -27,7 +38,9 @@ export default async function AdminOverviewPage() {
     privacyResult,
     pendingRequestsResult,
     controlsResult,
-    auditResult
+    auditResult,
+    signupsResult,
+    planMixResult
   ] = await Promise.all([
     getReadinessReport(),
     admin.from("profiles").select("id", { count: "exact", head: true }).is("deleted_at", null),
@@ -37,10 +50,20 @@ export default async function AdminOverviewPage() {
     admin.from("privacy_requests").select("id", { count: "exact", head: true }).not("status", "in", "(completed,rejected)"),
     admin.from("friend_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
     admin.from("emergency_controls").select("control_key, is_disabled").order("control_key"),
-    admin.from("admin_audit_events").select("id, action, target_type, created_at").order("created_at", { ascending: false }).limit(6)
+    admin.from("admin_audit_events").select("id, action, target_type, created_at").order("created_at", { ascending: false }).limit(6),
+    // Safe aggregates only — timestamps and plan labels, no identifiers.
+    admin.from("profiles").select("created_at").is("deleted_at", null).gte("created_at", since).limit(10000),
+    admin.from("subscriptions").select("plan").in("status", ["active", "trialing"]).neq("plan", "free").limit(10000)
   ]);
 
   const disabledControls = (controlsResult.data ?? []).filter((control) => control.is_disabled);
+  const signupBuckets = bucketDailyCounts((signupsResult.data ?? []).map((row) => row.created_at), 14);
+  const signupTotal = bucketTotal(signupBuckets);
+  const planRows = planMix((planMixResult.data ?? []).map((row) => row.plan)).map((row) => ({
+    label: row.label,
+    value: row.count,
+    color: PLAN_COLORS[row.plan] ?? "#3987e5"
+  }));
   const hasQueryError = [usersResult, reportsResult, premiumResult, supportResult, privacyResult].some((result) => result.error);
 
   return (
@@ -59,6 +82,34 @@ export default async function AdminOverviewPage() {
         <AdminMetricCard icon={Headphones} label="Support queue" value={supportResult.count ?? 0} hint="Tickets awaiting resolution" tone={(supportResult.count ?? 0) > 0 ? "warning" : "success"} href="/admin/support" />
         <AdminMetricCard icon={CreditCard} label="Premium accounts" value={premiumResult.count ?? 0} hint="Active or trialing" tone="orange" href="/admin/billing" />
       </section>
+
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,0.9fr)]">
+        <AdminSection title="New accounts" description="Sign-ups per day over the last 14 days. Counts only.">
+          <Card className="p-4">
+            <div className="mb-2 flex items-baseline gap-2">
+              <span className="text-2xl font-semibold tabular-nums">{signupTotal}</span>
+              <span className="text-xs text-muted-foreground">in the last 14 days</span>
+            </div>
+            {signupsResult.error ? (
+              <AdminQueryError message="The sign-up trend could not be loaded." />
+            ) : (
+              <TrendChart points={signupBuckets.map((bucket) => ({ label: bucket.label, value: bucket.count }))} unitLabel="sign-ups" ariaLabel="New accounts per day over the last 14 days" />
+            )}
+          </Card>
+        </AdminSection>
+
+        <AdminSection title="Premium plan mix" description="Active and trialing paid subscriptions.">
+          <Card className="p-4">
+            {planMixResult.error ? (
+              <AdminQueryError message="The plan mix could not be loaded." />
+            ) : planRows.every((row) => row.value === 0) ? (
+              <AdminEmptyState icon={CreditCard} title="No paid subscriptions yet" description="Active plans will appear here." />
+            ) : (
+              <BarList rows={planRows} unitLabel="accounts" />
+            )}
+          </Card>
+        </AdminSection>
+      </div>
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
         <AdminSection title="Operations queues" description="Current work that may require staff attention.">
