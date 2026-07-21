@@ -7,8 +7,6 @@ import {
   MessagesSquare,
   CalendarCheck2,
   Plus,
-  Hand,
-  Sparkles,
   UserRound,
   Settings,
   CircleDollarSign,
@@ -16,6 +14,8 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FeatureIcon } from "@/components/ui/feature-icon";
+import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import { useAuth } from "../auth/AuthProvider";
 import { supabase } from "../lib/supabase";
 import { api } from "../lib/api";
@@ -29,10 +29,10 @@ const tabs = [
   { to: "/plans", label: "Plans", icon: CalendarCheck2 }
 ];
 
-const createActions: { to: string; title: string; description: string; icon: LucideIcon }[] = [
-  { to: "/plans", title: "New plan", description: "Create a hangout and invite Muddies", icon: CalendarCheck2 },
-  { to: "/socialize", title: "Meeting ping", description: "Ask a Muddy to meet up nearby", icon: Hand },
-  { to: "/moments", title: "Share a Moment", description: "Post a moment for your Muddies", icon: Sparkles }
+const createActions: { to: string; title: string; description: string; feature: FeatureIconKey }[] = [
+  { to: "/plans", title: "New plan", description: "Create a hangout and invite Muddies", feature: "plans" },
+  { to: "/socialize", title: "Meeting ping", description: "Ask a Muddy to meet up nearby", feature: "ping" },
+  { to: "/moments", title: "Share a Moment", description: "Post a moment for your Muddies", feature: "moments" }
 ];
 
 export function AppShell() {
@@ -93,7 +93,7 @@ export function AppShell() {
                     className="focus-ring flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left active:bg-secondary"
                   >
                     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                      <action.icon className="h-5 w-5" aria-hidden="true" />
+                      <FeatureIcon feature={action.feature} size={20} />
                     </span>
                     <span>
                       <span className="block text-sm font-semibold">{action.title}</span>

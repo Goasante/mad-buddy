@@ -1,25 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  MessageSquareText,
-  EyeOff,
-  Eye,
-  RefreshCcw,
-  Smile,
-  ShieldCheck,
-  Image as ImageIcon,
-  PartyPopper,
-  Users,
-  Share2,
-  UserPlus,
-  AlarmClock,
-  Target,
-  MapPinOff,
-  Bell
-} from "lucide-react";
+import { MessageSquareText, EyeOff, Eye, RefreshCcw, MapPinOff, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
+import { FeatureIcon } from "@/components/ui/feature-icon";
+import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import { AVAILABILITY_TYPES, availabilityLabels } from "@/lib/social/rules";
 import type { AvailabilityType } from "@/lib/supabase/database.types";
 import type { ProximityLevel, ConfidenceLevel } from "@/lib/proximity";
@@ -41,16 +27,16 @@ type NearbyFriend = {
 type Plan = { id: string; title: string; startAt: string | null; placeText: string | null; status: string; goingCount: number; myRsvp: string };
 type Activity = { id: string; type: string; title: string; message: string; created_at: string };
 
-const quickActions = [
-  { label: "Hangout", icon: Smile, to: "/socialize" },
-  { label: "Safe Arrival", icon: ShieldCheck, to: "/safety" },
-  { label: "Moments", icon: ImageIcon, to: "/moments" },
-  { label: "Events", icon: PartyPopper, to: "/events" },
-  { label: "Groups", icon: Users, to: "/groups" },
-  { label: "Socialize", icon: Share2, to: "/socialize" },
-  { label: "Invites", icon: UserPlus, to: "/muddies" },
-  { label: "Reminders", icon: AlarmClock, to: "/plans" },
-  { label: "Focus", icon: Target, to: "/settings" }
+const quickActions: { label: string; feature: FeatureIconKey; to: string }[] = [
+  { label: "Hangout", feature: "hangout", to: "/socialize" },
+  { label: "Safe Arrival", feature: "safeArrival", to: "/safety" },
+  { label: "Moments", feature: "moments", to: "/moments" },
+  { label: "Events", feature: "events", to: "/events" },
+  { label: "Groups", feature: "groups", to: "/groups" },
+  { label: "Socialize", feature: "socialize", to: "/socialize" },
+  { label: "Invites", feature: "invites", to: "/muddies" },
+  { label: "Reminders", feature: "reminders", to: "/plans" },
+  { label: "Focus", feature: "focus", to: "/settings" }
 ];
 
 function greeting(): string {
@@ -267,7 +253,7 @@ export function HomeScreen() {
               className="focus-ring flex flex-col items-center gap-2 rounded-2xl border border-border bg-card/40 py-4 active:bg-secondary"
             >
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
-                <action.icon className="h-5 w-5" aria-hidden="true" />
+                <FeatureIcon feature={action.feature} size={22} />
               </span>
               <span className="text-sm font-medium">{action.label}</span>
             </button>
