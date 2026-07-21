@@ -851,7 +851,7 @@ function QuickActions() {
             title={action.description}
             className="focus-ring safe-motion flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl border border-border/70 bg-card/50 p-1.5 text-center hover:bg-secondary/40"
           >
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/10">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/10 text-primary">
               <FeatureIcon feature={action.featureIcon} size={20} decorative />
             </span>
             <span className="truncate text-[11px] font-medium leading-tight">{action.label}</span>
