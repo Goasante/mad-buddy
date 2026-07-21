@@ -8,9 +8,9 @@ import {
   checkOutAction,
   createEventAction,
   getEventGlowAction,
-  setEventGlowAction,
-  type EventView
+  setEventGlowAction
 } from "@/app/(app)/event-actions";
+import type { EventView } from "@/lib/events/mobile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
