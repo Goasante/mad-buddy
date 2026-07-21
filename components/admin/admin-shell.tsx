@@ -14,7 +14,8 @@ import {
   Headphones,
   ShieldAlert,
   ShieldCheck,
-  UsersRound
+  UsersRound,
+  Wrench
 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { AdminPermission } from "@/lib/admin/governance";
@@ -28,6 +29,7 @@ type AdminHref =
   | "/admin/users"
   | "/admin/reports"
   | "/admin/support"
+  | "/admin/repairs"
   | "/admin/billing"
   | "/admin/privacy"
   | "/admin/system"
@@ -48,7 +50,8 @@ const adminNavigationGroups: Array<{ label: string; items: AdminNavigationItem[]
       { href: "/admin", label: "Overview", icon: Gauge },
       { href: "/admin/users", label: "Users", icon: UsersRound, permission: "admin.users.view_summary" },
       { href: "/admin/reports", label: "Reports", icon: ShieldAlert, permission: "admin.reports.review" },
-      { href: "/admin/support", label: "Support", icon: Headphones, permission: "admin.support.manage" }
+      { href: "/admin/support", label: "Support", icon: Headphones, permission: "admin.support.manage" },
+      { href: "/admin/repairs", label: "Repairs", icon: Wrench, permission: "admin.support.manage" }
     ]
   },
   {
