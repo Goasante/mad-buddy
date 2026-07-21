@@ -509,8 +509,9 @@ export function DashboardPageContent({
             </section>
 
             {/* Tablet + web: a compact single-row status bar — no card container,
-                so the feed below sits higher. Detail collapses onto one line. */}
-            <div className="hidden items-center justify-between gap-3 md:flex">
+                so the feed below sits higher. The pause/refresh buttons sit
+                right next to the status text rather than pushed to the edge. */}
+            <div className="hidden items-center gap-3 md:flex">
               <div className="flex min-w-0 items-center gap-2.5">
                 {statusDot}
                 <span className="shrink-0 text-sm font-semibold">{ghostMode ? "Visibility paused" : "Visible"}</span>
