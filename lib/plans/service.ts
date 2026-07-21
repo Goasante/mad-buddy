@@ -35,6 +35,23 @@ import type { PlanType } from "@/lib/supabase/database.types";
 
 export type ServiceResult = { ok: boolean; message: string; planId?: string };
 
+export type PlanListItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  planType: string;
+  status: string;
+  startAt: string | null;
+  placeText: string | null;
+  organiserName: string;
+  isHost: boolean;
+  myRsvp: string;
+  goingCount: number;
+  attendeeCount: number;
+};
+
+export type PlanInviteeItem = { id: string; name: string; username: string };
+
 const uuidSchema = z.string().uuid();
 
 const createPlanSchema = z.object({
@@ -62,6 +79,113 @@ function serviceRoleEnvMessage(): string | null {
 async function senderName(admin: ReturnType<typeof createSupabaseAdminClient>, userId: string) {
   const { data } = await admin.from("profiles").select("full_name").eq("user_id", userId).maybeSingle();
   return data?.full_name?.trim() || "A Muddy";
+}
+
+/**
+ * The user's plans (participant or creator) plus their Muddies for the invite
+ * picker. Read-only, service-role resolved (mirrors the web plans page loader,
+ * trimmed for the mobile list: no polls/avatars). Shared by `/api/plans` GET.
+ */
+export async function listPlansForUser(
+  userId: string
+): Promise<ServiceResult & { plans: PlanListItem[]; invitees: PlanInviteeItem[] }> {
+  const envMessage = serviceRoleEnvMessage();
+  if (envMessage) return { ok: false, message: envMessage, plans: [], invitees: [] };
+
+  const admin = createSupabaseAdminClient();
+
+  const [{ data: myRows }, { data: createdPlans }, { data: friendships }] = await Promise.all([
+    admin
+      .from("plan_participants")
+      .select("plan_id, role, rsvp_status")
+      .eq("user_id", userId)
+      .neq("rsvp_status", "removed"),
+    admin.from("plans").select("id").eq("creator_id", userId),
+    admin
+      .from("friendships")
+      .select("user_one_id, user_two_id")
+      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)
+  ]);
+
+  const friendIds = (friendships ?? []).map((friendship) =>
+    friendship.user_one_id === userId ? friendship.user_two_id : friendship.user_one_id
+  );
+  const invitees: PlanInviteeItem[] = friendIds.length
+    ? (
+        (
+          await admin
+            .from("profiles")
+            .select("user_id, full_name, username")
+            .in("user_id", friendIds)
+        ).data ?? []
+      ).map((profile) => ({
+        id: profile.user_id,
+        name: profile.full_name?.trim() || "A Muddy",
+        username: profile.username
+      }))
+    : [];
+
+  const planIds = [
+    ...new Set([
+      ...(myRows ?? []).map((row) => row.plan_id),
+      ...(createdPlans ?? []).map((row) => row.id)
+    ])
+  ];
+  const myRowByPlan = new Map((myRows ?? []).map((row) => [row.plan_id, row]));
+
+  if (planIds.length === 0) {
+    return { ok: true, message: "ok", plans: [], invitees };
+  }
+
+  const [{ data: planRows }, { data: participantRows }] = await Promise.all([
+    admin
+      .from("plans")
+      .select("id, creator_id, title, description, plan_type, status, start_at, custom_place_text")
+      .in("id", planIds),
+    admin.from("plan_participants").select("plan_id, user_id, role, rsvp_status").in("plan_id", planIds)
+  ]);
+
+  const organiserIds = [...new Set((planRows ?? []).map((plan) => plan.creator_id))];
+  const nameById = new Map<string, string>();
+  if (organiserIds.length > 0) {
+    const { data: profiles } = await admin
+      .from("profiles")
+      .select("user_id, full_name")
+      .in("user_id", organiserIds);
+    for (const profile of profiles ?? []) {
+      nameById.set(profile.user_id, profile.full_name?.trim() || "A Muddy");
+    }
+  }
+
+  const countsByPlan = new Map<string, { going: number; total: number }>();
+  for (const row of participantRows ?? []) {
+    const counts = countsByPlan.get(row.plan_id) ?? { going: 0, total: 0 };
+    counts.total += 1;
+    if (row.rsvp_status === "going") counts.going += 1;
+    countsByPlan.set(row.plan_id, counts);
+  }
+
+  const plans: PlanListItem[] = (planRows ?? []).map((plan) => {
+    const myRow = myRowByPlan.get(plan.id);
+    const isHost = plan.creator_id === userId || myRow?.role === "host" || myRow?.role === "co_host";
+    const counts = countsByPlan.get(plan.id) ?? { going: 0, total: 0 };
+    return {
+      id: plan.id,
+      title: plan.title,
+      description: plan.description,
+      planType: plan.plan_type,
+      status: plan.status,
+      startAt: plan.start_at,
+      placeText: plan.custom_place_text,
+      organiserName: plan.creator_id === userId ? "You" : nameById.get(plan.creator_id) ?? "A Muddy",
+      isHost,
+      myRsvp: isHost ? "going" : myRow?.rsvp_status ?? "invited",
+      goingCount: counts.going,
+      attendeeCount: counts.total
+    };
+  });
+
+  return { ok: true, message: "ok", plans, invitees };
 }
 
 export async function createPlan(userId: string, input: unknown): Promise<ServiceResult> {

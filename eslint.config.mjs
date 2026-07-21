@@ -5,7 +5,7 @@ const eslintConfig = [
   // Generated build output — not application source. The Android build bundles
   // a native-bridge.js that otherwise produced 32 spurious lint warnings.
   {
-    ignores: [".next/**", "android/**", "ios/**", "dist/**", "build/**", "coverage/**"]
+    ignores: [".next/**", "android/**", "ios/**", "dist/**", "build/**", "coverage/**", "mobile/**"]
   },
   ...nextVitals,
   ...nextTypescript

@@ -13,7 +13,8 @@ import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import type { LocationConfidence } from "@/lib/supabase/database.types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { resolveApiUser } from "@/lib/api/auth";
+import { preflightResponse, withCors } from "@/lib/api/cors";
 
 type LocationRow = {
   user_id: string;
@@ -31,7 +32,12 @@ type ProfileRow = {
   visibility_status: "visible" | "ghost" | "app_open_only";
 };
 
-export async function GET() {
+// CORS preflight for the native app; a no-op for same-origin web.
+export function OPTIONS(request: Request) {
+  return preflightResponse(request);
+}
+
+export async function GET(request: Request) {
   const requestId = createRequestId();
   const startedAt = Date.now();
   const route = "/api/friends/nearby";
@@ -44,28 +50,25 @@ export async function GET() {
       statusCode: 503,
       latencyMs: Date.now() - startedAt
     });
-    return NextResponse.json(
-      { error: "Supabase service role is not configured yet." },
-      { status: 503 }
+    return withCors(
+      NextResponse.json({ error: "Supabase service role is not configured yet." }, { status: 503 }),
+      request
     );
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError
-  } = await supabase.auth.getUser();
+  // Web cookie session or mobile bearer token — same user, same RLS.
+  const auth = await resolveApiUser(request);
 
-  if (userError || !user) {
+  if (!auth) {
     logBackendEvent("warn", {
       requestId,
       route,
       statusCode: 401,
-      latencyMs: Date.now() - startedAt,
-      errorType: userError ? errorType(userError) : undefined
+      latencyMs: Date.now() - startedAt
     });
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    return withCors(NextResponse.json({ error: "Authentication required." }, { status: 401 }), request);
   }
+  const { user } = auth;
 
   const rateLimit = await consumeRateLimit({
     action: "friends.nearby",
@@ -74,7 +77,7 @@ export async function GET() {
   });
 
   if (!rateLimit.allowed) {
-    return NextResponse.json({ error: rateLimitMessage(rateLimit.resetAt) }, { status: 429 });
+    return withCors(NextResponse.json({ error: rateLimitMessage(rateLimit.resetAt) }, { status: 429 }), request);
   }
 
   const admin = createSupabaseAdminClient();
@@ -84,7 +87,7 @@ export async function GET() {
   const guard = await guardFeature(admin, "proximity");
   if (!guard.allowed) {
     logBackendEvent("warn", { requestId, route, statusCode: 503, latencyMs: Date.now() - startedAt });
-    return NextResponse.json({ error: guard.message }, { status: 503 });
+    return withCors(NextResponse.json({ error: guard.message }, { status: 503 }), request);
   }
   const { data: viewerLocation, error: viewerLocationError } = await admin
     .from("user_locations")
@@ -101,9 +104,9 @@ export async function GET() {
       userId: user.id,
       errorType: errorType(viewerLocationError)
     });
-    return NextResponse.json(
-      { error: "Nearby friends could not be refreshed." },
-      { status: 500 }
+    return withCors(
+      NextResponse.json({ error: "Nearby friends could not be refreshed." }, { status: 500 }),
+      request
     );
   }
 
@@ -116,7 +119,7 @@ export async function GET() {
       latencyMs: Date.now() - startedAt,
       userId: user.id
     });
-    return NextResponse.json(emptyResponse);
+    return withCors(NextResponse.json(emptyResponse), request);
   }
 
   const { data: friendships, error: friendshipsError } = await admin
@@ -133,9 +136,9 @@ export async function GET() {
       userId: user.id,
       errorType: errorType(friendshipsError)
     });
-    return NextResponse.json(
-      { error: "Nearby friends could not be refreshed." },
-      { status: 500 }
+    return withCors(
+      NextResponse.json({ error: "Nearby friends could not be refreshed." }, { status: 500 }),
+      request
     );
   }
 
@@ -151,7 +154,7 @@ export async function GET() {
       latencyMs: Date.now() - startedAt,
       userId: user.id
     });
-    return NextResponse.json(nearbyFriendsResponseSchema.parse({ friends: [] }));
+    return withCors(NextResponse.json(nearbyFriendsResponseSchema.parse({ friends: [] })), request);
   }
 
   const [locationsResult, profilesResult, blocksResult, subscriptionsResult, statusesResult] =
@@ -192,9 +195,9 @@ export async function GET() {
       userId: user.id,
       errorType: "NearbyQueryError"
     });
-    return NextResponse.json(
-      { error: "Nearby friends could not be refreshed." },
-      { status: 500 }
+    return withCors(
+      NextResponse.json({ error: "Nearby friends could not be refreshed." }, { status: 500 }),
+      request
     );
   }
 
@@ -273,5 +276,5 @@ export async function GET() {
     userId: user.id
   });
 
-  return NextResponse.json(response);
+  return withCors(NextResponse.json(response), request);
 }

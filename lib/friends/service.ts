@@ -37,6 +37,15 @@ export type SearchUserResult = {
 
 export type SearchUsersResult = ServiceResult & { users: SearchUserResult[] };
 
+export type IncomingRequest = {
+  id: string;
+  senderId: string;
+  displayName: string;
+  username: string;
+  avatarUrl: string | null;
+  createdAt: string;
+};
+
 const uuidSchema = z.string().uuid();
 
 function browserEnvMessage(): string | null {
@@ -129,6 +138,61 @@ export async function searchUsers(userId: string, query: string): Promise<Search
       status: "available",
       note: "Search result"
     }))
+  };
+}
+
+/**
+ * Pending Muddy requests addressed to `userId`, newest first, with each
+ * sender's public profile resolved server-side (the narrow profile RLS makes a
+ * direct client read unreliable — same reason searchUsers uses the admin
+ * client). Read-only; shared by the mobile `/api/friends/requests` route.
+ */
+export async function listIncomingRequests(
+  userId: string
+): Promise<ServiceResult & { requests: IncomingRequest[] }> {
+  const envMessage = browserEnvMessage() ?? serviceRoleEnvMessage();
+  if (envMessage) {
+    return { ok: false, message: envMessage, requests: [] };
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { data: requests, error } = await admin
+    .from("friend_requests")
+    .select("id, sender_id, created_at")
+    .eq("receiver_id", userId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (error) {
+    return { ok: false, message: "Couldn't load your requests.", requests: [] };
+  }
+
+  const senderIds = [...new Set((requests ?? []).map((row) => row.sender_id))];
+  const profiles = senderIds.length
+    ? (
+        await admin
+          .from("profiles")
+          .select("user_id, full_name, username, avatar_url")
+          .in("user_id", senderIds)
+      ).data ?? []
+    : [];
+  const byId = new Map(profiles.map((profile) => [profile.user_id, profile]));
+
+  return {
+    ok: true,
+    message: "ok",
+    requests: (requests ?? []).map((row) => {
+      const profile = byId.get(row.sender_id);
+      return {
+        id: row.id,
+        senderId: row.sender_id,
+        displayName: profile?.full_name ?? "Someone",
+        username: profile?.username ?? "",
+        avatarUrl: profile?.avatar_url ?? null,
+        createdAt: row.created_at
+      };
+    })
   };
 }
 
