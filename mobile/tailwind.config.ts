@@ -8,7 +8,11 @@ const config: Config = {
   content: [
     "./index.html",
     "./src/**/*.{ts,tsx}",
-    "../components/ui/**/*.{ts,tsx}"
+    // Scan every shared web module the SPA imports (glow avatars, lib helpers
+    // like getGlowClass, etc.) so Tailwind doesn't purge classes/CSS that only
+    // those files reference — which is what was killing the proximity glow.
+    "../components/**/*.{ts,tsx}",
+    "../lib/**/*.{ts,tsx}"
   ],
   theme: {
     extend: {
