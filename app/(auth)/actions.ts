@@ -9,6 +9,7 @@ import {
   rateLimitMessage
 } from "@/lib/security/rate-limit";
 import { getAdminEmailAccess } from "@/lib/safety/admin";
+import { bootstrapNewUser } from "@/lib/auth/bootstrap";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -157,41 +158,16 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     const env = getSupabaseServerEnv();
     if (env.url && env.serviceRoleKey) {
       const admin = createSupabaseAdminClient();
-      // onConflict on user_id: these tables key rows by user_id (the PK is a
-      // separate id), so upserting on the default id target would insert a
-      // duplicate and violate the user_id unique constraint on any re-run.
-      const [profileResult, subscriptionResult, preferencesResult] = await Promise.all([
-        admin.from("profiles").upsert(
-          {
-            user_id: data.user.id,
-            full_name: fullName,
-            username,
-            is_onboarded: false
-          },
-          { onConflict: "user_id" }
-        ),
-        admin.from("subscriptions").upsert(
-          {
-            user_id: data.user.id,
-            plan: "free",
-            status: "free"
-          },
-          { onConflict: "user_id" }
-        ),
-        admin.from("user_preferences").upsert(
-          {
-            user_id: data.user.id
-          },
-          { onConflict: "user_id" }
-        )
-      ]);
+      // Shared with the mobile /api/auth/signup path (lib/auth/bootstrap) so the
+      // two never drift. Keyed on user_id (onConflict) → idempotent on re-run.
+      const bootstrapResults = await bootstrapNewUser(admin, {
+        userId: data.user.id,
+        fullName,
+        username
+      });
 
-      for (const [label, result] of [
-        ["profile", profileResult],
-        ["subscription", subscriptionResult],
-        ["preferences", preferencesResult]
-      ] as const) {
-        if (result.error) {
+      for (const { label, error: rowError } of bootstrapResults) {
+        if (rowError) {
           logBackendEvent("error", {
             requestId,
             action: "auth.signup",
