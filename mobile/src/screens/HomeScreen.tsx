@@ -241,18 +241,24 @@ export function HomeScreen() {
         ) : (
           <ul className="space-y-2">
             {friends.map((friend) => (
-              <li key={friend.friend_id} className="flex items-center gap-3 rounded-xl border border-border bg-card/40 p-3">
-                <div
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary text-sm font-semibold"
-                  style={{ boxShadow: `0 0 ${8 + friend.glow_strength / 4}px hsl(var(--primary) / ${friend.glow_strength / 130})` }}
+              <li key={friend.friend_id}>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/u/${friend.friend_id}`)}
+                  className="focus-ring flex w-full items-center gap-3 rounded-xl border border-border bg-card/40 p-3 text-left active:bg-secondary"
                 >
-                  {friend.display_name.slice(0, 1).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{friend.display_name}</p>
-                  <p className="truncate text-xs text-muted-foreground">@{friend.username}</p>
-                </div>
-                <span className="text-xs font-medium text-primary">{proximityLabels[friend.proximity_level]}</span>
+                  <div
+                    className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary text-sm font-semibold"
+                    style={{ boxShadow: `0 0 ${8 + friend.glow_strength / 4}px hsl(var(--primary) / ${friend.glow_strength / 130})` }}
+                  >
+                    {friend.display_name.slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{friend.display_name}</p>
+                    <p className="truncate text-xs text-muted-foreground">@{friend.username}</p>
+                  </div>
+                  <span className="text-xs font-medium text-primary">{proximityLabels[friend.proximity_level]}</span>
+                </button>
               </li>
             ))}
           </ul>

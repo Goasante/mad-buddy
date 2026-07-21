@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Search, UserPlus, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,7 @@ type IncomingRequest = {
 };
 
 export function MuddiesScreen() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchUser[]>([]);
   const [searching, setSearching] = useState(false);
@@ -103,11 +105,17 @@ export function MuddiesScreen() {
         <ul className="mt-4 space-y-2">
           {results.map((user) => (
             <li key={user.id} className="flex items-center gap-3 rounded-xl border border-border bg-card/40 p-3">
-              <Avatar name={user.displayName} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{user.displayName}</p>
-                <p className="truncate text-xs text-muted-foreground">@{user.username}</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => navigate(`/u/${user.id}`)}
+                className="focus-ring flex min-w-0 flex-1 items-center gap-3 text-left"
+              >
+                <Avatar name={user.displayName} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{user.displayName}</p>
+                  <p className="truncate text-xs text-muted-foreground">@{user.username}</p>
+                </div>
+              </button>
               <Button size="sm" variant="outline" onClick={() => void sendRequest(user)}>
                 <UserPlus className="h-4 w-4" aria-hidden="true" />
                 Add

@@ -18,6 +18,7 @@ import { MomentsScreen } from "./screens/MomentsScreen";
 import { SocializeScreen } from "./screens/SocializeScreen";
 import { EventsScreen } from "./screens/EventsScreen";
 import { GroupsScreen } from "./screens/GroupsScreen";
+import { UserProfileScreen } from "./screens/UserProfileScreen";
 import type { ReactNode } from "react";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -62,8 +63,9 @@ export default function App() {
         <Route path="/settings" element={<SettingsScreen />} />
       </Route>
 
-      {/* Full-screen chat (own header, no bottom tabs). */}
+      {/* Full-screen chat + profile (own header, no bottom tabs). */}
       <Route path="/messages/:id" element={<RequireAuth><ChatScreen /></RequireAuth>} />
+      <Route path="/u/:id" element={<RequireAuth><UserProfileScreen /></RequireAuth>} />
 
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
