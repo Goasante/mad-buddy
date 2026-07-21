@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Sparkles, X, MapPin } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Sparkles, X, MapPin, CalendarPlus, UserPlus, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AVAILABILITY_TYPES, availabilityLabels } from "@/lib/social/rules";
@@ -7,6 +8,8 @@ import type { AvailabilityType } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { Screen } from "../components/AppShell";
 import { Spinner } from "../components/Spinner";
+import { useAuth } from "../auth/AuthProvider";
+import { supabase } from "../lib/supabase";
 import { api, postCurrentLocation } from "../lib/api";
 
 type NearbyFriend = {
@@ -18,6 +21,16 @@ type NearbyFriend = {
   glow_strength: number;
 };
 
+type Plan = {
+  id: string;
+  title: string;
+  startAt: string | null;
+  placeText: string | null;
+  organiserName: string;
+  status: string;
+  goingCount: number;
+};
+
 const proximityLabels: Record<NearbyFriend["proximity_level"], string> = {
   very_close: "Very close",
   nearby: "Nearby",
@@ -26,7 +39,18 @@ const proximityLabels: Record<NearbyFriend["proximity_level"], string> = {
   hidden: "Hidden"
 };
 
+function greeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 export function HomeScreen() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const [firstName, setFirstName] = useState("");
   const [availability, setAvailability] = useState<AvailabilityType>("free");
   const [customText, setCustomText] = useState("");
   const [statusBusy, setStatusBusy] = useState(false);
@@ -36,6 +60,21 @@ export function HomeScreen() {
   const [loadingNearby, setLoadingNearby] = useState(true);
   const [nearbyMessage, setNearbyMessage] = useState("");
   const [sharingLocation, setSharingLocation] = useState(false);
+
+  const [plans, setPlans] = useState<Plan[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    void supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        const name = (data as { full_name?: string } | null)?.full_name ?? "";
+        setFirstName(name.split(" ")[0] ?? "");
+      });
+  }, [user]);
 
   const loadNearby = useCallback(async () => {
     setLoadingNearby(true);
@@ -49,26 +88,34 @@ export function HomeScreen() {
     }
   }, []);
 
+  const loadPlans = useCallback(async () => {
+    const result = await api.get<{ plans: Plan[] }>("/api/plans");
+    if (result.ok) {
+      const upcoming = result.data.plans
+        .filter((plan) => plan.status !== "cancelled" && plan.status !== "completed")
+        .sort((a, b) => (a.startAt ?? "").localeCompare(b.startAt ?? ""))
+        .slice(0, 3);
+      setPlans(upcoming);
+    }
+  }, []);
+
   useEffect(() => {
     void loadNearby();
-  }, [loadNearby]);
+    void loadPlans();
+  }, [loadNearby, loadPlans]);
 
   async function shareLocation() {
     setSharingLocation(true);
     setNearbyMessage("");
     const result = await postCurrentLocation();
     setSharingLocation(false);
-    if (result.ok) {
-      await loadNearby();
-    } else {
-      setNearbyMessage(result.error);
-    }
+    if (result.ok) await loadNearby();
+    else setNearbyMessage(result.error);
   }
 
   async function setStatus() {
     setStatusBusy(true);
     setStatusMessage("");
-    // Glow for the next 4 hours (server clamps/validates the window).
     const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
     const result = await api.post<{ ok: boolean; message: string }>("/api/status", {
       availabilityType: availability,
@@ -88,7 +135,15 @@ export function HomeScreen() {
   }
 
   return (
-    <Screen title="Home">
+    <Screen title={firstName ? `${greeting()}, ${firstName}` : "Home"}>
+      {/* Quick actions */}
+      <div className="mb-5 grid grid-cols-3 gap-2">
+        <QuickAction icon={CalendarPlus} label="New plan" onClick={() => navigate("/plans")} />
+        <QuickAction icon={UserPlus} label="Add Muddy" onClick={() => navigate("/muddies")} />
+        <QuickAction icon={CalendarDays} label="Plans" onClick={() => navigate("/plans")} />
+      </div>
+
+      {/* Glow */}
       <section className="glass-panel rounded-2xl p-5">
         <div className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
@@ -135,6 +190,33 @@ export function HomeScreen() {
         </div>
       </section>
 
+      {/* Upcoming plans */}
+      {plans.length > 0 ? (
+        <section className="mt-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Upcoming plans</h2>
+            <button type="button" onClick={() => navigate("/plans")} className="focus-ring text-sm text-primary">
+              See all
+            </button>
+          </div>
+          <ul className="space-y-2">
+            {plans.map((plan) => (
+              <li key={plan.id} className="rounded-xl border border-border bg-card/40 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-semibold">{plan.title}</p>
+                  <span className="shrink-0 text-xs text-muted-foreground">{plan.goingCount} going</span>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {plan.startAt ? new Date(plan.startAt).toLocaleString() : "Anytime"}
+                  {plan.placeText ? ` · ${plan.placeText}` : ""}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {/* Around you */}
       <section className="mt-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Around you</h2>
@@ -177,5 +259,26 @@ export function HomeScreen() {
         )}
       </section>
     </Screen>
+  );
+}
+
+function QuickAction({
+  icon: Icon,
+  label,
+  onClick
+}: {
+  icon: typeof CalendarPlus;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="focus-ring flex flex-col items-center gap-1.5 rounded-xl border border-border bg-card/40 py-3 active:bg-secondary"
+    >
+      <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
+      <span className="text-xs font-medium">{label}</span>
+    </button>
   );
 }
