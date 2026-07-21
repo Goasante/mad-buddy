@@ -813,7 +813,7 @@ const quickActions: Array<{
   },
   {
     href: "/moments",
-    label: "Memories",
+    label: "Moments",
     description: "Share a moment with your Muddies before it disappears.",
     icon: Sparkles,
     featureIcon: "moments"
