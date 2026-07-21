@@ -170,7 +170,6 @@ export function AppShell({
       />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background dark:bg-[#111112]">
         <AppHeader
-          navigationItems={visibleNavigationItems}
           currentUsername={currentUsername}
           currentAvatarUrl={currentAvatarUrl}
           showAdminLink={showAdminLink}
@@ -528,19 +527,15 @@ function AccountMenuItem({
 }
 
 function AppHeader({
-  navigationItems,
   currentUsername,
   currentAvatarUrl,
   showAdminLink
 }: {
-  navigationItems: NavigationItem[];
   currentUsername: string | null;
   currentAvatarUrl: string | null;
   showAdminLink: boolean;
 }) {
   const pathname = usePathname();
-  const activeItem = navigationItems.find((item) => item.href === pathname);
-  const pageLabel = activeItem?.label ?? "App";
   const [createOpen, setCreateOpen] = useState(false);
 
   const pagesWithOwnHeader = [
@@ -574,15 +569,15 @@ function AppHeader({
         >
           <BrandMark className="h-9 w-9" priority />
         </Link>
+        {/* Home and Friends get a header title here; every other page carries
+            its own H1 in its content, so the generic "App / Mad Buddy" fallback
+            is omitted rather than duplicated on top of the page's real title. */}
         <div className="mr-auto hidden min-w-0 md:block">
-          {pathname !== "/dashboard" && pathname !== "/friends" ? (
-            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              {pageLabel}
-            </p>
+          {pathname === "/dashboard" || pathname === "/friends" ? (
+            <h1 className="truncate text-lg font-semibold sm:text-xl">
+              {pathname === "/dashboard" ? "Home" : "Friends"}
+            </h1>
           ) : null}
-          <h1 className="truncate text-lg font-semibold sm:text-xl">
-            {pathname === "/dashboard" ? "Home" : pathname === "/friends" ? "Friends" : "Mad Buddy"}
-          </h1>
         </div>
         <div className="flex items-center gap-1.5">
           <DropdownMenu.Root open={createOpen} onOpenChange={setCreateOpen}>
