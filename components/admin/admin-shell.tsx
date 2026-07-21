@@ -59,7 +59,7 @@ const adminNavigationGroups: Array<{ label: string; items: AdminNavigationItem[]
     items: [
       { href: "/admin/billing", label: "Billing", icon: CreditCard, permission: "admin.billing.view" },
       { href: "/admin/privacy", label: "Privacy", icon: FileKey2, permission: "admin.privacy.requests.manage" },
-      { href: "/admin/system", label: "System", icon: Activity, permission: "admin.security.events.view" }
+      { href: "/admin/system", label: "App health", icon: Activity, permission: "admin.security.events.view" }
     ]
   },
   {

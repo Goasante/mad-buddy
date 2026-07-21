@@ -172,6 +172,38 @@ export async function activateEmergencyControl(
   return !error;
 }
 
+/**
+ * Restores a killed feature. Like activation, it refuses to run if the audit
+ * write fails, so a control is never flipped without a trail.
+ */
+export async function deactivateEmergencyControl(
+  admin: Admin,
+  input: { control: EmergencyControl; actorId: string; reason: string }
+): Promise<boolean> {
+  const logged = await recordAdminAuditEvent(admin, {
+    actorId: input.actorId,
+    action: "deactivate_emergency_control",
+    targetType: "emergency_control",
+    reason: input.reason,
+    newState: { control: input.control, disabled: false },
+    authStrength: "step_up"
+  });
+  if (!logged) return false;
+
+  const { error } = await admin
+    .from("emergency_controls")
+    .update({
+      is_disabled: false,
+      reason: null,
+      incident_id: null,
+      disabled_by: null,
+      disabled_at: null,
+      updated_at: new Date().toISOString()
+    })
+    .eq("control_key", input.control);
+  return !error;
+}
+
 // ---------------------------------------------------------------------------
 // Restrictions (spec §12, §19)
 // ---------------------------------------------------------------------------
