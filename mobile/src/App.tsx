@@ -14,6 +14,7 @@ import { MoreScreen } from "./screens/MoreScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { MessagesScreen } from "./screens/MessagesScreen";
 import { ChatScreen } from "./screens/ChatScreen";
+import { MomentsScreen } from "./screens/MomentsScreen";
 import type { ReactNode } from "react";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -51,6 +52,7 @@ export default function App() {
         <Route path="/more" element={<MoreScreen />} />
         <Route path="/profile" element={<ProfileScreen />} />
         <Route path="/messages" element={<MessagesScreen />} />
+        <Route path="/moments" element={<MomentsScreen />} />
         <Route path="/settings" element={<SettingsScreen />} />
       </Route>
 

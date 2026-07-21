@@ -28,7 +28,7 @@ const sections: { title: string; items: Entry[] }[] = [
     title: "More features",
     items: [
       { label: "Messages", description: "Chat with your Muddies", icon: MessageCircle, to: "/messages" },
-      { label: "Moments", description: "Share what you're up to", icon: Camera, soon: true },
+      { label: "Moments", description: "Share what you're up to", icon: Camera, to: "/moments" },
       { label: "Events", description: "Plan bigger get-togethers", icon: CalendarHeart, soon: true },
       { label: "Groups", description: "Your circles and crews", icon: Users2, soon: true },
       { label: "Socialize", description: "Discover people nearby", icon: Compass, soon: true },
