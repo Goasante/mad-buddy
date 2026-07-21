@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
+import { registerPushNotifications, removeCurrentDeviceToken } from "../lib/push";
 
 type AuthState = {
   loading: boolean;
@@ -36,12 +37,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Register this device for native push once a user is present (no-op on web).
+  const userId = session?.user?.id ?? null;
+  useEffect(() => {
+    if (userId) void registerPushNotifications();
+  }, [userId]);
+
   const value = useMemo<AuthState>(
     () => ({
       loading,
       session,
       user: session?.user ?? null,
       signOut: async () => {
+        await removeCurrentDeviceToken();
         await supabase.auth.signOut();
       }
     }),

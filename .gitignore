@@ -18,3 +18,7 @@ pnpm-debug.log*
 .dev-server.err.log
 .dev-server.pid
 tmp/
+
+# Firebase Android config — contains an API key. Keep it local; each dev/CI
+# supplies their own. Remove this line if you deliberately commit it (private repo).
+android/app/google-services.json
