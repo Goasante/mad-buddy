@@ -1045,12 +1045,12 @@ function MuddiesOpenToPlans({
       ) : (
         // Compact inline state, not a large bordered panel: keeps Home short
         // when nobody is available and stays left-aligned on desktop.
-        <div className="flex max-w-[820px] flex-col items-start gap-3 rounded-xl bg-card/40 px-5 py-5 sm:px-6">
-          <div>
+        <div className="flex max-w-[820px] items-start justify-between gap-4 rounded-xl bg-card/40 px-5 py-5 sm:px-6">
+          <div className="min-w-0">
             <p className="text-sm font-medium">No Muddies are available right now</p>
             <p className="mt-0.5 text-xs text-muted-foreground">Check again later or start a new plan.</p>
           </div>
-          <Button type="button" variant="outline" size="sm" asChild>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" asChild>
             <Link href="/plans">New plan</Link>
           </Button>
         </div>
