@@ -1,17 +1,13 @@
 import "server-only";
 
 import { z } from "zod";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 
 /**
  * Native (FCM/APNs) device push tokens. Shared by the mobile `/api/push/register`
  * route. The web app has no native tokens, so there is no Server Action here.
- *
- * NOTE: `device_push_tokens` is newer than the generated Database types, so this
- * module talks to an untyped admin client. Once the migration is applied and
- * `lib/supabase/database.types.ts` is regenerated, swap `untypedAdmin()` for the
- * normal typed `createSupabaseAdminClient()`.
+ * Distinct from push_subscriptions, which is Web Push (VAPID) shaped.
  */
 
 export type ServiceResult = { ok: boolean; message: string };
@@ -29,15 +25,6 @@ function serviceRoleEnvMessage(): string | null {
   return null;
 }
 
-// The typed admin client doesn't know about device_push_tokens yet; borrow its
-// URL/key to build an untyped client just for this table.
-function untypedAdmin(): SupabaseClient {
-  const env = getSupabaseServerEnv();
-  return createClient(env.url as string, env.serviceRoleKey as string, {
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
-}
-
 export async function registerDeviceToken(userId: string, input: unknown): Promise<ServiceResult> {
   const envMessage = serviceRoleEnvMessage();
   if (envMessage) return { ok: false, message: envMessage };
@@ -47,19 +34,18 @@ export async function registerDeviceToken(userId: string, input: unknown): Promi
     return { ok: false, message: "Invalid push token." };
   }
 
+  const admin = createSupabaseAdminClient();
   // onConflict(token): the same device re-registering under a new account moves
   // the token to that account rather than duplicating it.
-  const { error } = await untypedAdmin()
-    .from("device_push_tokens")
-    .upsert(
-      {
-        user_id: userId,
-        token: parsed.data.token,
-        platform: parsed.data.platform,
-        last_seen_at: new Date().toISOString()
-      },
-      { onConflict: "token" }
-    );
+  const { error } = await admin.from("device_push_tokens").upsert(
+    {
+      user_id: userId,
+      token: parsed.data.token,
+      platform: parsed.data.platform,
+      last_seen_at: new Date().toISOString()
+    },
+    { onConflict: "token" }
+  );
 
   if (error) {
     return { ok: false, message: "Could not register this device for notifications." };
@@ -74,8 +60,9 @@ export async function removeDeviceToken(userId: string, token: string): Promise<
 
   if (!token) return { ok: false, message: "No token provided." };
 
+  const admin = createSupabaseAdminClient();
   // Scope to the owner so a token can only be removed by the account it's on.
-  const { error } = await untypedAdmin()
+  const { error } = await admin
     .from("device_push_tokens")
     .delete()
     .eq("token", token)
