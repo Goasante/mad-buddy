@@ -20,6 +20,7 @@ import {
 import {
   convertHangoutToPlanAction,
   endHangoutAction,
+  getOwnerHangoutRequestsAction,
   requestHangoutAction,
   respondHangoutRequestAction,
   startHangoutAction,
@@ -29,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
+import { countActiveRequests } from "@/lib/social/hangout-requests";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
 import type {
   HangoutActivityType,
@@ -131,6 +133,42 @@ export function HangoutModePage({
     const timer = setInterval(() => setNowMs(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
+
+  // Canonical refetch of the owner's join requests — the database is the source
+  // of truth, never client-side arithmetic. Adopts the server list only for the
+  // current active Hangout, so requests from an unrelated session never leak in.
+  const activeHangoutId = activeHangout?.id ?? null;
+  const refreshRequests = useCallback(async () => {
+    try {
+      const state = await getOwnerHangoutRequestsAction();
+      if (state.hangoutId && state.hangoutId === activeHangoutId) {
+        setRequests(state.requests);
+      } else if (!state.hangoutId) {
+        setRequests([]);
+      }
+    } catch {
+      // A failed refetch simply leaves the last known canonical state in place.
+    }
+  }, [activeHangoutId]);
+
+  // Live count updates for the owner: refetch on an interval while the Hangout
+  // is active and whenever the tab regains focus. Reuses the project's server-
+  // action data pattern rather than introducing a new realtime framework. The
+  // interval and listener are cleaned up on unmount or when the Hangout ends.
+  useEffect(() => {
+    if (!isActive) return;
+    // Initial refetch is scheduled (not called synchronously in the effect body)
+    // so it never triggers a cascading render on mount.
+    const initial = setTimeout(() => void refreshRequests(), 0);
+    const interval = setInterval(() => void refreshRequests(), 15_000);
+    const onFocus = () => void refreshRequests();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [isActive, refreshRequests]);
 
   useEffect(() => {
     return () => {
@@ -252,13 +290,9 @@ export function HangoutModePage({
     startTransition(async () => {
       const result = await respondHangoutRequestAction(requestId, response);
       setFeedback(result.message);
-      if (result.ok) {
-        setRequests((current) =>
-          current.map((request) =>
-            request.id === requestId ? { ...request, status: response } : request
-          )
-        );
-      }
+      // Re-derive the list from the database rather than trusting a local edit,
+      // so the count stays canonical after accept/maybe/decline.
+      if (result.ok) await refreshRequests();
     });
   }
 
@@ -360,7 +394,7 @@ export function HangoutModePage({
 
           {isActive && activeHangout ? (
             <div className="rounded-2xl border border-border/70 bg-card/50 p-4">
-              <p className="mb-2 text-sm font-semibold">Requests to join ({requests.length})</p>
+              <p className="mb-2 text-sm font-semibold">Requests to join ({countActiveRequests(requests)})</p>
               {requests.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No requests yet. We&apos;ll let you know.</p>
               ) : (

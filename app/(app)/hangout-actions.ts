@@ -21,7 +21,7 @@ import { activeHangoutCount } from "@/lib/social/planning";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { HangoutActivityType, HangoutAudienceType } from "@/lib/supabase/database.types";
+import type { HangoutActivityType, HangoutAudienceType, HangoutRequestStatus } from "@/lib/supabase/database.types";
 
 export type HangoutActionState = {
   ok: boolean;
@@ -379,27 +379,43 @@ export async function requestHangoutAction(
     return { ok: false, message: "This hangout is full." };
   }
 
-  const { error } = await admin.from("hangout_requests").upsert(
-    {
+  // Idempotent create: the unique constraint (hangout_session_id, requester_id)
+  // guarantees one row per requester. A brand-new INSERT is the ONLY path that
+  // notifies the owner, so a repeat tap — or a rapid double-click racing on the
+  // constraint — can never create a second request or a second notification.
+  const { data: inserted, error } = await admin
+    .from("hangout_requests")
+    .insert({
       hangout_session_id: hangoutId,
       requester_id: userId,
       status: "pending",
       message: message?.trim() || null
-    },
-    { onConflict: "hangout_session_id,requester_id" }
-  );
-  if (error) return { ok: false, message: "Couldn't send your request." };
+    })
+    .select("id")
+    .maybeSingle();
 
+  if (error) {
+    // 23505 = unique violation: the request already exists. Idempotent success,
+    // and no duplicate notification for the same existing request.
+    if (error.code === "23505") return { ok: true, message: "You've already asked to join.", hangoutId };
+    return { ok: false, message: "Couldn't send your request. Try again." };
+  }
+  if (!inserted) return { ok: false, message: "Couldn't send your request. Try again." };
+
+  // The request is persisted. Notification is best-effort from here: a delivery
+  // failure must not roll back a valid request (spec §14). Exactly one owner
+  // notification for the newly created request, carrying the session id so it
+  // opens the right Hangout.
   const name = await displayName(admin, userId);
   await deliverNotification(admin, {
     userId: session.owner_id,
     senderId: userId,
     category: "plans",
-    type: `hangout:request`,
-    title: "Someone wants to join",
-    message: `${name} is interested in your hangout.`
+    type: `hangout:${hangoutId}`,
+    title: "New Hangout request",
+    message: `${name} is interested in joining your Hangout.`
   });
-  return { ok: true, message: "Request sent." };
+  return { ok: true, message: "Request sent.", hangoutId };
 }
 
 const respondSchema = z.enum(["accepted", "maybe", "declined"]);
@@ -560,4 +576,68 @@ export async function convertHangoutToPlanAction(
   );
 
   return { ok: true, message: "Plan created from your hangout.", planId: plan.id };
+}
+
+// ---------------------------------------------------------------------------
+// Canonical owner request refetch — the single source of truth for the owner's
+// "Requests to join" list and count. Used to update the owner's view live
+// (polling / focus) and after the owner's own actions, so the count is always
+// re-derived from the database rather than from client-side arithmetic.
+// ---------------------------------------------------------------------------
+
+export type OwnerHangoutRequest = {
+  id: string;
+  requesterName: string;
+  status: HangoutRequestStatus;
+  message: string | null;
+};
+export type OwnerHangoutRequestsState = {
+  hangoutId: string | null;
+  requests: OwnerHangoutRequest[];
+};
+
+export async function getOwnerHangoutRequestsAction(): Promise<OwnerHangoutRequestsState> {
+  const empty: OwnerHangoutRequestsState = { hangoutId: null, requests: [] };
+  const env = getSupabaseServerEnv();
+  if (!env.url || !env.serviceRoleKey) return empty;
+
+  const userId = await getAuthedUserId();
+  if (!userId) return empty;
+
+  const admin = createSupabaseAdminClient();
+  // The owner is resolved from the session record (owner_id = the authed user),
+  // never from the client — so this can only ever return the caller's own
+  // Hangout requests and never leaks requests from an unrelated Hangout.
+  const { data: session } = await admin
+    .from("hangout_sessions")
+    .select("id")
+    .eq("owner_id", userId)
+    .in("status", ["active", "paused", "full"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!session) return empty;
+
+  const { data: rows } = await admin
+    .from("hangout_requests")
+    .select("id, requester_id, status, message, created_at")
+    .eq("hangout_session_id", session.id)
+    .order("created_at", { ascending: true });
+
+  const requesterIds = [...new Set((rows ?? []).map((row) => row.requester_id))];
+  const nameById = new Map<string, string>();
+  if (requesterIds.length > 0) {
+    const { data: profiles } = await admin.from("profiles").select("user_id, full_name").in("user_id", requesterIds);
+    for (const profile of profiles ?? []) nameById.set(profile.user_id, profile.full_name?.trim() || "A Muddy");
+  }
+
+  return {
+    hangoutId: session.id,
+    requests: (rows ?? []).map((row) => ({
+      id: row.id,
+      requesterName: nameById.get(row.requester_id) ?? "A Muddy",
+      status: row.status,
+      message: row.message
+    }))
+  };
 }
