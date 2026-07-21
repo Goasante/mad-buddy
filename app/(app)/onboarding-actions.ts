@@ -2,20 +2,17 @@
 
 import { z } from "zod";
 import {
-  CURRENT_POLICY_VERSION,
   canAdvanceTo,
   canCompleteOnboarding,
-  glowDurationMs,
   isActivated,
-  normalizePrivacySetup,
   recommendNextAction,
   resumeStep,
   type Milestone,
   type NextAction,
-  type OnboardingStep,
-  type PrivacySetup
+  type OnboardingStep
 } from "@/lib/onboarding/rules";
 import { recordMilestone } from "@/lib/onboarding/service";
+import { savePrivacySetup } from "@/lib/onboarding/complete";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -261,100 +258,9 @@ export async function completeOnboardingV2Action(): Promise<OnboardingActionStat
 // Privacy setup (spec §32, §36)
 // ---------------------------------------------------------------------------
 
-const privacySetupSchema = z.object({
-  glowAudience: z.enum(["hidden", "close_friends", "selected_circles", "all_muddies"]),
-  glowDuration: z.enum(["1h", "4h", "until_tonight", "until_off"]),
-  wavesFrom: z.enum(["all_muddies", "close_friends", "nobody"]),
-  pingsFrom: z.enum(["all_muddies", "close_friends", "nobody"]),
-  onlineStatusVisible: z.boolean(),
-  contactMatchingEnabled: z.boolean()
-});
-
-/**
- * Saves the initial privacy setup. Glow is only ever activated later, after a
- * real presence update, saving "close_friends" here does NOT make the user
- * visible (spec §32 step 7).
- */
 export async function savePrivacySetupAction(input: unknown): Promise<OnboardingActionState> {
-  const missing = missingEnvState();
-  if (missing) return missing;
-
-  const parsed = privacySetupSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Check your privacy choices and try again." };
-  const setup: PrivacySetup = normalizePrivacySetup(parsed.data);
-
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
-  const admin = createSupabaseAdminClient();
-  const nowMs = Date.now();
-  const nowIso = new Date(nowMs).toISOString();
-
-  // Hidden means Ghost Mode: the user is not visible at all until they choose
-  // otherwise. Anything else stays "visible" but glow still needs presence.
-  await admin
-    .from("profiles")
-    .update({ visibility_status: setup.glowAudience === "hidden" ? "ghost" : "visible" })
-    .eq("user_id", userId);
-
-  // Record the chosen glow session (batch-2 machinery), except for hidden.
-  if (setup.glowAudience !== "hidden") {
-    const durationMs = glowDurationMs(setup.glowDuration, nowMs);
-    await admin
-      .from("visibility_sessions")
-      .update({ status: "ended", updated_at: nowIso })
-      .eq("user_id", userId)
-      .eq("feature_type", "glow")
-      .eq("status", "active");
-
-    await admin.from("visibility_sessions").insert({
-      user_id: userId,
-      feature_type: "glow",
-      visibility_mode:
-        setup.glowAudience === "all_muddies"
-          ? "all_muddies"
-          : setup.glowAudience === "close_friends"
-            ? "close_friends"
-            : "selected_circles",
-      ends_at: durationMs ? new Date(nowMs + durationMs).toISOString() : null,
-      source: "manual",
-      status: "active"
-    });
-  }
-
-  await Promise.all([
-    admin.from("privacy_setup_versions").upsert(
-      {
-        user_id: userId,
-        policy_version: CURRENT_POLICY_VERSION,
-        setup_completed_at: nowIso,
-        last_reviewed_at: nowIso,
-        updated_at: nowIso
-      },
-      { onConflict: "user_id" }
-    ),
-    admin
-      .from("onboarding_progress")
-      .upsert(
-        {
-          user_id: userId,
-          privacy_reviewed_at: nowIso,
-          visibility_configured_at: nowIso,
-          updated_at: nowIso
-        },
-        { onConflict: "user_id" }
-      ),
-    recordMilestone(admin, userId, "privacy_setup_completed"),
-    import("@/lib/engagement/achievements").then(({ grantAchievement }) =>
-      grantAchievement(admin, userId, "privacy_pro")
-    )
-  ]);
-
-  return {
-    ok: true,
-    message:
-      setup.glowAudience === "hidden"
-        ? "Saved. You're hidden until you choose to turn your glow on."
-        : "Saved. Your glow turns on once your location updates."
-  };
+  return savePrivacySetup(userId, input);
 }

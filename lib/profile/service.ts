@@ -1,5 +1,7 @@
 import "server-only";
 
+import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   DEFAULT_FIELD_PRIVACY,
   resolveFieldVisibility,
@@ -8,6 +10,7 @@ import {
 } from "@/lib/profile/rules";
 import type { ViewerRelationship } from "@/lib/profile/rules";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { Database } from "@/lib/supabase/database.types";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -106,4 +109,69 @@ export async function getVisibleProfileFields(
     pronouns: can("pronouns") ? (profile?.pronouns ?? null) : null,
     interests: can("interests") ? (interests ?? []).map((row) => row.interest) : null
   };
+}
+
+// ---------------------------------------------------------------------------
+// Core profile edit (name / username / bio / mood)
+// ---------------------------------------------------------------------------
+
+export type ProfileUpdateResult = { ok: boolean; message: string };
+
+export const profileSchema = z.object({
+  fullName: z.string().trim().min(2, "Display name is too short.").max(80),
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(3)
+    .max(24)
+    .regex(/^[a-z0-9_]+$/),
+  bio: z.string().trim().max(160).optional(),
+  moodStatus: z.string().trim().max(80).optional()
+});
+
+/**
+ * Update the core profile fields. Takes an already-authenticated `userId` and
+ * the caller's RLS-scoped client (cookie for web, bearer for mobile) so the
+ * profile row is self-owned. Shared by `updateProfileAction` and `/api/profile`;
+ * `revalidatePath` stays in the web wrapper.
+ */
+export async function updateProfile(
+  rlsClient: SupabaseClient<Database>,
+  userId: string,
+  input: unknown
+): Promise<ProfileUpdateResult> {
+  const parsed = profileSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: "Check your profile fields and try again." };
+  }
+
+  const { data: savedProfile, error } = await rlsClient
+    .from("profiles")
+    .upsert(
+      {
+        user_id: userId,
+        full_name: parsed.data.fullName,
+        username: parsed.data.username,
+        username_normalized: parsed.data.username,
+        bio: parsed.data.bio ?? null,
+        mood_status: parsed.data.moodStatus ?? null
+      },
+      { onConflict: "user_id" }
+    )
+    .select("user_id")
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "23505") {
+      return { ok: false, message: "That username is already in use." };
+    }
+    return { ok: false, message: "Couldn't update your profile. Try again." };
+  }
+
+  if (!savedProfile) {
+    return { ok: false, message: "Couldn't update your profile. Try again." };
+  }
+
+  return { ok: true, message: "Profile updated." };
 }

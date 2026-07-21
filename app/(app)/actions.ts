@@ -16,6 +16,7 @@ import {
   updateFriendRequestStatus,
   type SearchUserResult
 } from "@/lib/friends/service";
+import { updateProfile } from "@/lib/profile/service";
 
 export type IntegrationActionState = {
   ok: boolean;
@@ -24,19 +25,6 @@ export type IntegrationActionState = {
 };
 
 export type { SearchUserResult };
-
-const profileSchema = z.object({
-  fullName: z.string().trim().min(2, "Display name is too short.").max(80),
-  username: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .min(3)
-    .max(24)
-    .regex(/^[a-z0-9_]+$/),
-  bio: z.string().trim().max(160).optional(),
-  moodStatus: z.string().trim().max(80).optional()
-});
 
 const uuidSchema = z.string().uuid();
 
@@ -87,18 +75,6 @@ function orderedPair(userId: string, friendId: string) {
 }
 
 export async function updateProfileAction(input: unknown): Promise<IntegrationActionState> {
-  const missingEnv = missingSupabaseState();
-
-  if (missingEnv) {
-    return missingEnv;
-  }
-
-  const parsed = profileSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return { ok: false, message: "Check your profile fields and try again." };
-  }
-
   const userId = await getAuthedUserId();
 
   if (!userId) {
@@ -106,34 +82,15 @@ export async function updateProfileAction(input: unknown): Promise<IntegrationAc
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data: savedProfile, error } = await supabase
-    .from("profiles")
-    .upsert({
-      user_id: userId,
-      full_name: parsed.data.fullName,
-      username: parsed.data.username,
-      username_normalized: parsed.data.username,
-      bio: parsed.data.bio ?? null,
-      mood_status: parsed.data.moodStatus ?? null
-    }, { onConflict: "user_id" })
-    .select("user_id")
-    .maybeSingle();
+  const result = await updateProfile(supabase, userId, input);
 
-  if (error) {
-    if (error.code === "23505") {
-      return { ok: false, message: "That username is already in use." };
-    }
-    return { ok: false, message: "Couldn't update your profile. Try again." };
+  if (result.ok) {
+    revalidatePath("/profile");
+    revalidatePath("/dashboard");
+    revalidatePath("/friends");
   }
 
-  if (!savedProfile) {
-    return { ok: false, message: "Couldn't update your profile. Try again." };
-  }
-
-  revalidatePath("/profile");
-  revalidatePath("/dashboard");
-  revalidatePath("/friends");
-  return { ok: true, message: "Profile updated." };
+  return result;
 }
 
 export async function uploadAvatarAction(formData: FormData): Promise<IntegrationActionState> {
