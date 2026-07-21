@@ -13,11 +13,9 @@ import {
   muteConversationAction,
   openDirectConversationAction,
   reactToMessageAction,
-  sendMessageAction,
-  type ChatMessageView,
-  type ConversationView,
-  type MessageableFriend
+  sendMessageAction
 } from "@/app/(app)/messaging-actions";
+import type { ChatMessageView, ConversationView, MessageableFriend } from "@/lib/messaging/mobile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";

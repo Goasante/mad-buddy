@@ -4,7 +4,8 @@ import { CalendarCheck2, HelpCircle, MessageCircle, Plus, Search, Send } from "l
 import * as Popover from "@radix-ui/react-popover";
 import { useMemo, useState, useTransition } from "react";
 import { createMeetupRequestAction, dismissMeetupRequestAction, respondToMeetupRequestAction, type MeetingPingListItem } from "@/app/(app)/premium-actions";
-import { getMessageableFriendsAction, type MessageableFriend } from "@/app/(app)/messaging-actions";
+import { getMessageableFriendsAction } from "@/app/(app)/messaging-actions";
+import type { MessageableFriend } from "@/lib/messaging/mobile";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";

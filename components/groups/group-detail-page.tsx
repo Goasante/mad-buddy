@@ -4,11 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Loader2, LogOut, Send, UserPlus, Users2 } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
-import {
-  getMessagesAction,
-  sendMessageAction,
-  type ChatMessageView
-} from "@/app/(app)/messaging-actions";
+import { getMessagesAction, sendMessageAction } from "@/app/(app)/messaging-actions";
+import type { ChatMessageView } from "@/lib/messaging/mobile";
 import { inviteGroupMemberAction, leaveGroupAction } from "@/app/(app)/group-actions";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Button } from "@/components/ui/button";
