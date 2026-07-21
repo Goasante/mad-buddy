@@ -441,20 +441,17 @@ export function DashboardPageContent({
         </div>
       </div>
 
-      <section className="rounded-2xl bg-card/55 p-5 shadow-sm dark:bg-white/[0.035] lg:max-h-[124px] lg:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            {/* A simple status dot, not a filled pill: green when visible,
-                muted when paused. */}
-            <span
-              className={cn("h-2 w-2 shrink-0 rounded-full", ghostMode ? "bg-muted-foreground" : "bg-emerald-500")}
-              aria-hidden="true"
-            />
-            <span className="text-sm font-semibold">{ghostMode ? "Visibility paused" : "Visible"}</span>
-          </div>
-
-          {/* Pause is the primary action (subtle bordered emphasis); refresh
-              is a neutral ghost icon so the two don't read as equal weight. */}
+      {(() => {
+        const nearbyTotal = proximityCounts.very_close + proximityCounts.nearby + proximityCounts.around;
+        const statusDot = (
+          <span
+            className={cn("h-2 w-2 shrink-0 rounded-full", ghostMode ? "bg-muted-foreground" : "bg-emerald-500")}
+            aria-hidden="true"
+          />
+        );
+        // Pause is the primary action (subtle bordered emphasis); refresh is a
+        // neutral ghost icon so the two don't read as equal weight.
+        const statusActions = (
           <div className="flex shrink-0 items-center gap-1">
             <Button
               type="button"
@@ -465,11 +462,7 @@ export function DashboardPageContent({
               aria-label={ghostMode ? "Resume visibility" : "Pause visibility"}
               title={ghostMode ? "Resume visibility" : "Pause visibility"}
             >
-              {ghostMode ? (
-                <Eye className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <EyeOff className="h-4 w-4" aria-hidden="true" />
-              )}
+              {ghostMode ? <Eye className="h-4 w-4" aria-hidden="true" /> : <EyeOff className="h-4 w-4" aria-hidden="true" />}
             </Button>
             <Button
               type="button"
@@ -486,23 +479,53 @@ export function DashboardPageContent({
               />
             </Button>
           </div>
-        </div>
+        );
 
-        {!ghostMode ? (
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            {formatNearbyCount(proximityCounts.very_close + proximityCounts.nearby + proximityCounts.around)}
-          </p>
-        ) : null}
+        return (
+          <div>
+            {/* Mobile: the full card with the helper line, so the meaning is
+                spelled out on the smallest screen. */}
+            <section className="rounded-2xl bg-card/55 p-5 shadow-sm dark:bg-white/[0.035] md:hidden">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  {statusDot}
+                  <span className="text-sm font-semibold">{ghostMode ? "Visibility paused" : "Visible"}</span>
+                </div>
+                {statusActions}
+              </div>
 
-        <p className="mt-1 text-xs text-muted-foreground" role="status">
-          {isCheckingNearby
-            ? "Checking nearby Muddies…"
-            : statusMessage ||
-              (ghostMode
-                ? "You won’t appear nearby until you turn visibility back on."
-                : "Approved Muddies can see when you’re nearby.")}
-        </p>
-      </section>
+              {!ghostMode ? (
+                <p className="mt-1.5 text-sm text-muted-foreground">{formatNearbyCount(nearbyTotal)}</p>
+              ) : null}
+
+              <p className="mt-1 text-xs text-muted-foreground" role="status">
+                {isCheckingNearby
+                  ? "Checking nearby Muddies…"
+                  : statusMessage ||
+                    (ghostMode
+                      ? "You won’t appear nearby until you turn visibility back on."
+                      : "Approved Muddies can see when you’re nearby.")}
+              </p>
+            </section>
+
+            {/* Tablet + web: a compact single-row status bar — no card container,
+                so the feed below sits higher. Detail collapses onto one line. */}
+            <div className="hidden items-center justify-between gap-3 md:flex">
+              <div className="flex min-w-0 items-center gap-2.5">
+                {statusDot}
+                <span className="shrink-0 text-sm font-semibold">{ghostMode ? "Visibility paused" : "Visible"}</span>
+                <span className="truncate text-sm text-muted-foreground" role="status">
+                  {isCheckingNearby
+                    ? "Checking nearby Muddies…"
+                    : statusMessage ||
+                      (ghostMode ? "Turn visibility on to appear nearby" : formatNearbyCount(nearbyTotal))}
+                </span>
+              </div>
+              {statusActions}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* One dashboard grid. Explicit desktop positions retain the existing
           mobile feed order while forming independent 2:1 desktop columns. */}
