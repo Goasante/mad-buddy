@@ -253,7 +253,7 @@ function Hero() {
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Button asChild size="lg">
-              <Link href="/signup" aria-label="Get started: create a Mad Buddy account">
+              <Link href="/login" aria-label="Get started: create a Mad Buddy account">
                 Get started
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
@@ -447,7 +447,7 @@ function RealLifeMomentsSection() {
           </p>
           <div className="mt-6 flex w-full flex-col justify-center gap-3 sm:w-auto sm:flex-row">
             <Button asChild size="lg">
-              <Link href="/signup" aria-label="Join Mad Buddy">
+              <Link href="/login" aria-label="Join Mad Buddy">
                 Join Mad Buddy
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
@@ -579,7 +579,7 @@ function FinalCta() {
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Button asChild size="lg" className="bg-background text-primary hover:bg-background/90">
-                <Link href="/signup" aria-label="Get started: create a Mad Buddy account">
+                <Link href="/login" aria-label="Get started: create a Mad Buddy account">
                   Get started
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Link>
@@ -626,9 +626,14 @@ function Footer() {
                 </a>
               </li>
               <li>
-                <a href="#privacy" className="transition-colors hover:text-foreground">
+                <Link href="/privacy" className="transition-colors hover:text-foreground">
                   Privacy
-                </a>
+                </Link>
+              </li>
+              <li>
+                <Link href="/about" className="transition-colors hover:text-foreground">
+                  About
+                </Link>
               </li>
               <li>
                 <a href="#features" className="transition-colors hover:text-foreground">
@@ -652,7 +657,7 @@ function Footer() {
             <h2 className="text-sm font-semibold text-foreground">Account</h2>
             <ul className="mt-4 flex flex-col gap-3 text-sm text-muted-foreground">
               <li>
-                <Link href="/signup" className="transition-colors hover:text-foreground">
+                <Link href="/login" className="transition-colors hover:text-foreground">
                   Get started
                 </Link>
               </li>

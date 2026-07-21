@@ -23,8 +23,9 @@ export function AuthLayout({ title, description, children, footer }: AuthLayoutP
             Your friends can glow without giving away where they are.
           </h1>
           <p className="mt-4 text-sm leading-7 text-muted-foreground">
-            Exact locations, maps, distance, and GPS accuracy never belong in the
-            social feed. Mad Buddy only uses safe proximity signals.
+            Exact locations, maps, and precise distance never belong in a social
+            feed. Mad Buddy only ever uses soft proximity signals — and you stay
+            visible only when you choose.
           </p>
         </div>
         <div className="grid gap-3 text-sm text-muted-foreground">

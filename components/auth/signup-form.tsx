@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/auth/form-field";
 import { PasswordStrength } from "@/components/auth/password-strength";
-import { startOAuth, type MadBuddyOAuthProvider } from "@/lib/auth/oauth";
+import { startOAuth } from "@/lib/auth/oauth";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
 
 const signupSchema = z
@@ -49,7 +49,6 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
     initialError ? { ok: false, message: initialError } : null
   );
   const [isGooglePending, setIsGooglePending] = useState(false);
-  const [isApplePending, setIsApplePending] = useState(false);
   const {
     register,
     handleSubmit,
@@ -99,7 +98,7 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
     });
   }
 
-  async function signUpWithProvider(provider: MadBuddyOAuthProvider) {
+  async function signUpWithGoogle() {
     setActionState(null);
 
     if (!acceptedPolicy) {
@@ -107,14 +106,13 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
       return;
     }
 
-    const setPending = provider === "google" ? setIsGooglePending : setIsApplePending;
-    setPending(true);
+    setIsGooglePending(true);
 
     try {
-      await startOAuth(provider, "/onboarding");
+      await startOAuth("google", "/onboarding");
     } catch {
-      setActionState({ ok: false, message: `${provider === "google" ? "Google" : "Apple"} sign-up could not start. Please try again.` });
-      setPending(false);
+      setActionState({ ok: false, message: "Google sign-up could not start. Please try again." });
+      setIsGooglePending(false);
     }
   }
 
@@ -145,8 +143,12 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
       >
         <Input id="confirmPassword" type="password" autoComplete="new-password" {...register("confirmPassword")} />
       </FormField>
-      <div className="rounded-md border border-emerald-300/20 bg-emerald-300/10 p-3 text-sm leading-6 text-emerald-50">
-        Your exact location is never shared. Friends only see your glow level.
+      <div className="flex gap-2.5 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.08] p-3 text-sm leading-6 text-emerald-50">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <span>
+          <span className="font-medium">Privacy comes first.</span> Your exact location is never shared —
+          we only show approved Muddies when they’re nearby.
+        </span>
       </div>
       <input type="hidden" {...register("policyVersion")} />
       <div>
@@ -174,7 +176,7 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
           {actionState.message}
         </div>
       ) : null}
-      <Button type="submit" className="w-full" disabled={isPending || isGooglePending || isApplePending}>
+      <Button type="submit" className="w-full" disabled={isPending || isGooglePending}>
         {isPending ? (
           <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
         ) : null}
@@ -191,8 +193,8 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
         type="button"
         variant="outline"
         className="w-full"
-        onClick={() => signUpWithProvider("google")}
-        disabled={isPending || isGooglePending || isApplePending}
+        onClick={signUpWithGoogle}
+        disabled={isPending || isGooglePending}
       >
         {isGooglePending ? (
           <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -205,23 +207,6 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
           </svg>
         )}
         Continue with Google
-      </Button>
-
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={() => signUpWithProvider("apple")}
-        disabled={isPending || isGooglePending || isApplePending}
-      >
-        {isApplePending ? (
-          <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-        ) : (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-foreground" aria-hidden="true">
-            <path d="M16.365 1.43c0 1.14-.415 2.19-1.24 3.02-.87.88-2.15 1.56-3.19 1.48-.14-1.1.42-2.27 1.24-3.08.83-.83 2.24-1.42 3.19-1.42Zm4.19 15.86c-.44 1.03-.65 1.49-1.22 2.39-.79 1.26-1.9 2.83-3.28 2.84-1.22.02-1.54-.79-3.2-.78-1.66.01-2.01.8-3.23.78-1.38-.02-2.44-1.44-3.23-2.7-2.21-3.5-2.44-7.6-1.08-9.79.97-1.55 2.5-2.46 3.94-2.46 1.47 0 2.39.81 3.61.81 1.18 0 1.9-.81 3.61-.81 1.28 0 2.64.7 3.6 1.91-3.17 1.74-2.66 6.25.28 7.81Z" />
-          </svg>
-        )}
-        Continue with Apple
       </Button>
 
       <p className="text-center text-sm text-muted-foreground">

@@ -93,18 +93,13 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
           >
             How it works
           </NavAnchor>
-          <NavAnchor
-            href="#privacy"
-            isActive={activeSection === "privacy"}
-            onClick={() => onSectionChange("privacy")}
-          >
+          <Link className={navLinkClass(false)} href="/about" onClick={() => onSectionChange(null)}>
+            About
+          </Link>
+          <Link className={navLinkClass(false)} href="/privacy" onClick={() => onSectionChange(null)}>
             Privacy
-          </NavAnchor>
-          <Link
-            className={navLinkClass(false)}
-            href="/pricing"
-            onClick={() => onSectionChange(null)}
-          >
+          </Link>
+          <Link className={navLinkClass(false)} href="/pricing" onClick={() => onSectionChange(null)}>
             Pricing
           </Link>
         </div>
@@ -114,7 +109,7 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
             <Link href="/login">Log in</Link>
           </Button>
           <Button asChild size="sm">
-            <Link href="/signup">Get started</Link>
+            <Link href="/login">Get started</Link>
           </Button>
         </div>
 
@@ -144,7 +139,10 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
             <MobileNavLink href="#how-it-works" onNavigate={closeMobile}>
               How it works
             </MobileNavLink>
-            <MobileNavLink href="#privacy" onNavigate={closeMobile}>
+            <MobileNavLink href="/about" onNavigate={closeMobile}>
+              About
+            </MobileNavLink>
+            <MobileNavLink href="/privacy" onNavigate={closeMobile}>
               Privacy
             </MobileNavLink>
             <MobileNavLink href="/faq" onNavigate={closeMobile}>
@@ -158,7 +156,7 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
             </MobileNavLink>
           </div>
           <Button asChild className="mt-4 w-full" size="lg">
-            <Link href="/signup" onClick={closeMobile}>
+            <Link href="/login" onClick={closeMobile}>
               Get started
             </Link>
           </Button>
@@ -242,7 +240,7 @@ function MobileNavLink({
   onNavigate,
   children
 }: {
-  href: `#${string}` | "/pricing" | "/faq" | "/login" | "/signup";
+  href: `#${string}` | "/about" | "/privacy" | "/pricing" | "/faq" | "/login" | "/signup";
   onNavigate: () => void;
   children: ReactNode;
 }) {
