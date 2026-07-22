@@ -124,6 +124,28 @@ export function PlansPageContent({
   }
 
   function vote(pollId: string, optionId: string) {
+    // Optimistic single-choice update so the tally moves the instant you tap;
+    // router.refresh() then reconciles with authoritative counts (incl. other
+    // voters and multi-choice polls). votePollAction always makes the clicked
+    // option your vote — clicking your current option is a no-op, not an un-vote.
+    setPlans((current) =>
+      current.map((plan) => ({
+        ...plan,
+        polls: plan.polls.map((poll) => {
+          if (poll.id !== pollId) return poll;
+          const wasMine = new Set(poll.myOptionIds);
+          return {
+            ...poll,
+            myOptionIds: [optionId],
+            options: poll.options.map((option) => {
+              const lost = wasMine.has(option.id) && option.id !== optionId;
+              const gained = !wasMine.has(option.id) && option.id === optionId;
+              return { ...option, votes: Math.max(0, option.votes + (gained ? 1 : 0) - (lost ? 1 : 0)) };
+            })
+          };
+        })
+      }))
+    );
     startTransition(async () => {
       const result = await votePollAction(pollId, [optionId]);
       setFeedback(result.message);
