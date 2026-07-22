@@ -4,6 +4,7 @@ import { Plus, Users2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { Screen } from "../components/AppShell";
 import { Spinner } from "../components/Spinner";
 import { api } from "../lib/api";
@@ -28,6 +29,7 @@ export function GroupsScreen() {
   const [data, setData] = useState<GroupsData>({ groups: [], discoverableGroups: [], invitations: [] });
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [tab, setTab] = useState<"mine" | "discover" | "requests">("mine");
   const [feedback, setFeedback] = useState("");
 
   // A group IS a conversation, so opening one is the group chat.
@@ -70,36 +72,66 @@ export function GroupsScreen() {
         />
       ) : null}
 
+      <nav className="mb-4 overflow-x-auto border-b border-border/70" aria-label="Groups tabs">
+        <div className="flex min-w-max gap-1">
+          {([{ id: "mine", label: "My Groups" }, { id: "discover", label: "Discover" }, { id: "requests", label: "Invitations" }] as const).map((groupTab) => (
+            <button
+              key={groupTab.id}
+              type="button"
+              onClick={() => setTab(groupTab.id)}
+              className={cn(
+                "focus-ring safe-motion border-b-2 px-4 py-3 text-sm font-medium",
+                tab === groupTab.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground"
+              )}
+            >
+              {groupTab.label}
+              {groupTab.id === "requests" && data.invitations.length > 0 ? (
+                <span className="ml-1.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">{data.invitations.length}</span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      </nav>
+
       {feedback ? <p className="mb-3 text-sm text-primary">{feedback}</p> : null}
 
       {loading ? (
         <div className="flex justify-center py-10">
           <Spinner />
         </div>
+      ) : tab === "mine" ? (
+        <GroupList title="" groups={data.groups} emptyText="You're not in any groups yet." onOpen={openGroup} />
+      ) : tab === "discover" ? (
+        data.discoverableGroups.length === 0 ? (
+          <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">No groups to discover right now.</p>
+        ) : (
+          <ul className="space-y-2">
+            {data.discoverableGroups.map((group) => (
+              <li key={group.id} className="flex items-center gap-3 rounded-xl border border-border bg-card/40 p-3">
+                <GroupIcon />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{group.name}</p>
+                  <p className="text-xs text-muted-foreground">{group.memberCount} members</p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => void join(group)}>Join</Button>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : data.invitations.length === 0 ? (
+        <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">No group invitations.</p>
       ) : (
-        <div className="space-y-6">
-          <GroupList title="Your groups" groups={data.groups} emptyText="You're not in any groups yet." onOpen={openGroup} />
-
-          {data.discoverableGroups.length > 0 ? (
-            <section>
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Discover</h2>
-              <ul className="space-y-2">
-                {data.discoverableGroups.map((group) => (
-                  <li key={group.id} className="flex items-center gap-3 rounded-xl border border-border bg-card/40 p-3">
-                    <GroupIcon />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{group.name}</p>
-                      <p className="text-xs text-muted-foreground">{group.memberCount} members</p>
-                    </div>
-                    <Button size="sm" variant="outline" onClick={() => void join(group)}>
-                      Join
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-        </div>
+        <ul className="space-y-2">
+          {data.invitations.map((group) => (
+            <li key={group.id} className="flex items-center gap-3 rounded-xl border border-border bg-card/40 p-3">
+              <GroupIcon />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{group.name}</p>
+                <p className="truncate text-xs text-muted-foreground">Invited by {group.invitedByName}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </Screen>
   );

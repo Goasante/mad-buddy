@@ -3,6 +3,7 @@ import { CalendarPlus, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { Screen } from "../components/AppShell";
 import { Spinner } from "../components/Spinner";
 import { api } from "../lib/api";
@@ -20,10 +21,18 @@ type Event = {
   myCheckInId: string | null;
 };
 
+type EventTab = "upcoming" | "live" | "mine";
+const eventTabs: { id: EventTab; label: string }[] = [
+  { id: "upcoming", label: "Upcoming" },
+  { id: "live", label: "Happening now" },
+  { id: "mine", label: "Hosting" }
+];
+
 export function EventsScreen() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [tab, setTab] = useState<EventTab>("upcoming");
   const [feedback, setFeedback] = useState("");
 
   const load = useCallback(async () => {
@@ -53,6 +62,10 @@ export function EventsScreen() {
     if (result.ok) void load();
   }
 
+  const filteredEvents = events.filter((event) =>
+    tab === "mine" ? event.isHost : tab === "live" ? event.status === "active" : event.status === "scheduled"
+  );
+
   return (
     <Screen
       title="Events"
@@ -72,19 +85,37 @@ export function EventsScreen() {
         />
       ) : null}
 
+      <nav className="mb-4 overflow-x-auto border-b border-border/70" aria-label="Events tabs">
+        <div className="flex min-w-max gap-1">
+          {eventTabs.map((eventTab) => (
+            <button
+              key={eventTab.id}
+              type="button"
+              onClick={() => setTab(eventTab.id)}
+              className={cn(
+                "focus-ring safe-motion border-b-2 px-4 py-3 text-sm font-medium",
+                tab === eventTab.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground"
+              )}
+            >
+              {eventTab.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
       {feedback ? <p className="mb-3 text-sm text-primary">{feedback}</p> : null}
 
       {loading ? (
         <div className="flex justify-center py-10">
           <Spinner />
         </div>
-      ) : events.length === 0 ? (
+      ) : filteredEvents.length === 0 ? (
         <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">
-          No upcoming events. Create one with “New”.
+          {tab === "mine" ? "You're not hosting any events." : tab === "live" ? "Nothing happening right now." : "No upcoming events. Create one with “New”."}
         </p>
       ) : (
         <ul className="space-y-3">
-          {events.map((event) => (
+          {filteredEvents.map((event) => (
             <li key={event.id} className="glass-panel rounded-2xl p-4">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-base font-semibold">{event.name}</p>
