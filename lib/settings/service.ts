@@ -48,6 +48,41 @@ export async function updateVisibilityStatus(
   return { ok: true, message: "Visibility setting saved." };
 }
 
+/**
+ * Save the smart-notification preferences (per-category settings + quiet hours)
+ * into `user_preferences.notification_preferences.smart`. Shared with
+ * updateSmartNotificationPreferencesAction; the input is normalized so a partial
+ * or legacy blob is merged onto the defaults.
+ */
+export async function saveSmartNotificationPreferences(userId: string, input: unknown): Promise<ServiceResult> {
+  const { normalizePreferences } = await import("@/lib/notifications/preferences");
+  const normalized = normalizePreferences(input);
+
+  const admin = createSupabaseAdminClient();
+  const { data: existing } = await admin
+    .from("user_preferences")
+    .select("notification_preferences")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const prior =
+    existing?.notification_preferences &&
+    typeof existing.notification_preferences === "object" &&
+    !Array.isArray(existing.notification_preferences)
+      ? existing.notification_preferences
+      : {};
+
+  const { error } = await admin.from("user_preferences").upsert(
+    {
+      user_id: userId,
+      notification_preferences: { ...prior, smart: normalized, updatedAt: new Date().toISOString() }
+    },
+    { onConflict: "user_id" }
+  );
+
+  if (error) return { ok: false, message: "The notification settings could not be saved." };
+  return { ok: true, message: "Notification settings saved." };
+}
+
 export async function updateNotificationPreference(
   userId: string,
   input: unknown

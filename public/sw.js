@@ -1,5 +1,10 @@
-/* Mad Buddy service worker: web push display only. No caching, no fetch
- * interception — the page behaves identically with or without it. */
+/* Mad Buddy service worker. It stores no page or user data. Requests remain
+ * network-only while the worker supports PWA installation and web push. */
+
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET" || event.request.mode === "navigate") return;
+  event.respondWith(fetch(event.request));
+});
 
 self.addEventListener("push", (event) => {
   let payload = { title: "Mad Buddy", body: "You have a new notification.", url: "/notifications" };
@@ -11,7 +16,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      icon: "/favicon.ico",
+      icon: "/icons/pwa/icon-192.png",
+      badge: "/icons/pwa/icon-192.png",
       data: { url: payload.url }
     })
   );

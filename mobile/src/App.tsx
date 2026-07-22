@@ -18,6 +18,7 @@ import { MomentsScreen } from "./screens/MomentsScreen";
 import { SocializeScreen } from "./screens/SocializeScreen";
 import { MeetingPingsScreen } from "./screens/MeetingPingsScreen";
 import { HelpScreen } from "./screens/HelpScreen";
+import { NotificationPreferencesScreen } from "./screens/NotificationPreferencesScreen";
 import { EventsScreen } from "./screens/EventsScreen";
 import { GroupsScreen } from "./screens/GroupsScreen";
 import { UserProfileScreen } from "./screens/UserProfileScreen";
@@ -71,6 +72,7 @@ export default function App() {
         <Route path="/subscription" element={<SubscriptionScreen />} />
         <Route path="/settings" element={<SettingsScreen />} />
         <Route path="/help" element={<HelpScreen />} />
+        <Route path="/settings/notifications" element={<NotificationPreferencesScreen />} />
       </Route>
 
       {/* Full-screen chat + profile (own header, no bottom tabs). */}
