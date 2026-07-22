@@ -107,6 +107,14 @@ function NumericEditor({ entitlementKey, plan, cell, canManage, onFeedback }: { 
   const [unlimited, setUnlimited] = useState(cell.unlimited);
   const [value, setValue] = useState(String(cell.value));
   const [pending, start] = useTransition();
+  // Reconcile the fields when the server value changes (after save/reset or a
+  // concurrent edit) so e.g. a reset shows the restored default.
+  const [syncedFrom, setSyncedFrom] = useState(cell);
+  if (syncedFrom !== cell) {
+    setSyncedFrom(cell);
+    setUnlimited(cell.unlimited);
+    setValue(String(cell.value));
+  }
   const dirty = unlimited !== cell.unlimited || (!unlimited && Number(value) !== cell.value);
 
   function save() {
@@ -168,11 +176,22 @@ function NumericEditor({ entitlementKey, plan, cell, canManage, onFeedback }: { 
 
 function BooleanEditor({ entitlementKey, plan, cell, canManage, onFeedback }: { entitlementKey: string; plan: SubscriptionTier; cell: BooleanCell; canManage: boolean; onFeedback: FeedbackFn }) {
   const [pending, start] = useTransition();
+  // Optimistic switch state so the toggle flips instantly; reconciles from the
+  // server value once revalidation lands (adjust-state-during-render pattern).
+  const [value, setValue] = useState(cell.value);
+  const [syncedValue, setSyncedValue] = useState(cell.value);
+  if (syncedValue !== cell.value) {
+    setSyncedValue(cell.value);
+    setValue(cell.value);
+  }
 
   function toggle(next: boolean) {
+    if (!canManage || pending) return;
+    setValue(next); // optimistic
     start(async () => {
       const result = await setTierEntitlementAction({ plan, key: entitlementKey, booleanValue: next });
       onFeedback({ ok: result.ok, text: result.message });
+      if (!result.ok) setValue(!next); // revert on failure
     });
   }
   function reset() {
@@ -187,13 +206,13 @@ function BooleanEditor({ entitlementKey, plan, cell, canManage, onFeedback }: { 
       <button
         type="button"
         role="switch"
-        aria-checked={cell.value}
+        aria-checked={value}
         aria-label={`${entitlementKey} for ${plan}`}
         disabled={!canManage || pending}
-        onClick={() => toggle(!cell.value)}
-        className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60", cell.value ? "bg-primary" : "bg-secondary")}
+        onClick={() => toggle(!value)}
+        className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60", value ? "bg-primary" : "bg-secondary")}
       >
-        <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform", cell.value ? "translate-x-5" : "translate-x-0.5")} />
+        <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform", value ? "translate-x-5" : "translate-x-0.5")} />
       </button>
       {canManage && cell.overridden ? (
         <button type="button" disabled={pending} onClick={reset} className="focus-ring flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
