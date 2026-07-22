@@ -17,6 +17,7 @@ import { FormField } from "@/components/auth/form-field";
 import { ProfileUploader } from "@/components/onboarding/profile-uploader";
 import { MoodStatusSelector, type MoodStatus } from "@/components/onboarding/mood-status-selector";
 import { PrivacySetupPanel } from "@/components/onboarding/privacy-setup-panel";
+import { validateUsername } from "@/lib/profile/rules";
 import { cn } from "@/lib/utils";
 
 type OnboardingStep = {
@@ -57,7 +58,18 @@ export function OnboardingFlow({
   const progress = useMemo(() => ((stepIndex + 1) / steps.length) * 100, [stepIndex]);
 
   function goNext() {
-    if (steps[stepIndex].id === "profile" && displayName.trim().length >= 2) {
+    // Validate the profile step before advancing so the user gets a specific,
+    // actionable reason rather than a generic failure at the final submit.
+    if (steps[stepIndex].id === "profile") {
+      if (displayName.trim().length < 2) {
+        setFeedback("Add your name (at least 2 characters).");
+        return;
+      }
+      const usernameError = validateUsername(username);
+      if (usernameError) {
+        setFeedback(usernameError);
+        return;
+      }
       void completeOnboardingStepAction("profile_completed");
     }
     setFeedback("");
@@ -172,7 +184,12 @@ export function OnboardingFlow({
                     id="firstFriend"
                     placeholder="muddy_username"
                     value={firstFriend}
-                    onChange={(event) => setFirstFriend(event.target.value)}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    // Usernames are stored lowercase; match that so the lookup
+                    // doesn't silently miss on a capitalised entry.
+                    onChange={(event) => setFirstFriend(event.target.value.toLowerCase().replace(/\s+/g, ""))}
                   />
                 </FormField>
                 <p className="rounded-lg border border-white/10 bg-white/[0.04] p-3 text-xs leading-6 text-muted-foreground">
@@ -235,8 +252,24 @@ function ProfileStep({
       <FormField htmlFor="displayName" label="Display name">
         <Input id="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
       </FormField>
-      <FormField htmlFor="username" label="Username" hint="Lowercase, numbers, underscores">
-        <Input id="username" value={username} onChange={(event) => setUsername(event.target.value)} />
+      <FormField
+        htmlFor="username"
+        label="Username"
+        hint="3–24 chars · lowercase, numbers, underscores"
+        error={username.length > 0 ? validateUsername(username) ?? undefined : undefined}
+      >
+        <Input
+          id="username"
+          value={username}
+          placeholder="muddy_username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          inputMode="text"
+          // Usernames are stored lowercase, so lowercase as you type (no
+          // surprise uppercase→lowercase at save) and drop spaces.
+          onChange={(event) => setUsername(event.target.value.toLowerCase().replace(/\s+/g, ""))}
+        />
       </FormField>
       <FormField htmlFor="bio" label="Bio">
         <Textarea id="bio" placeholder="Say something friendly." value={bio} onChange={(event) => setBio(event.target.value)} />
