@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Heart, Send } from "lucide-react";
+import { Heart, Send, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn, formatRelativeTime } from "@/lib/utils";
@@ -30,6 +30,7 @@ export function MomentsScreen() {
   const [text, setText] = useState("");
   const [audience, setAudience] = useState<Audience>("all_muddies");
   const [posting, setPosting] = useState(false);
+  const [composing, setComposing] = useState(false);
   const [feedback, setFeedback] = useState("");
 
   const load = useCallback(async () => {
@@ -54,6 +55,7 @@ export function MomentsScreen() {
     setPosting(false);
     if (result.ok) {
       setText("");
+      setComposing(false);
       setFeedback(result.data.locationWarning ?? "Shared!");
       await load();
     } else {
@@ -80,7 +82,16 @@ export function MomentsScreen() {
   }
 
   return (
-    <Screen title="Moments">
+    <Screen
+      title="Moments"
+      action={
+        <Button size="sm" onClick={() => setComposing((v) => !v)}>
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Share a Moment
+        </Button>
+      }
+    >
+      {composing ? (
       <section className="glass-panel mb-5 rounded-2xl p-4">
         <Textarea
           placeholder="Share a moment… (disappears in 24h)"
@@ -109,6 +120,9 @@ export function MomentsScreen() {
         </div>
         {feedback ? <p className="mt-2 text-xs text-primary">{feedback}</p> : null}
       </section>
+      ) : feedback ? (
+        <p className="mb-4 text-sm text-primary">{feedback}</p>
+      ) : null}
 
       {loading ? (
         <div className="flex justify-center py-10">
