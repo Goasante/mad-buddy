@@ -14,6 +14,7 @@ import {
   HeartHandshake,
   ListChecks,
   MapPinOff,
+  Megaphone,
   MessageCircle,
   Send,
   Settings2,
@@ -953,7 +954,8 @@ function iconForType(type: string): LucideIcon {
     meetup_request: MessageCircle,
     wave: Hand,
     subscription_update: CircleDollarSign,
-    system_alert: ShieldAlert
+    system_alert: ShieldAlert,
+    staff_message: Megaphone
   };
 
   return iconsByType[type.split(":")[0]] ?? Bell;

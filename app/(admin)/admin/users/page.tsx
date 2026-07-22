@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { AdminUserControls } from "@/components/admin/admin-user-controls";
+import { AdminUserMessage } from "@/components/admin/admin-user-message";
 import { OrphanAccountRow } from "@/components/admin/orphan-account-row";
 import { listOrphanAuthAccounts } from "@/lib/admin/orphan-accounts";
 import { getAdminAccess } from "@/lib/admin/access";
@@ -83,6 +84,9 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   // this list. Computed once on the first, unfiltered view since it's a global
   // alert rather than a per-page slice.
   const canRepairAccounts = access.permissions.has("admin.support.manage");
+  const canMessageUsers = access.permissions.has("admin.support.manage");
+  // The user's Pulse tag depends on the sender's tier.
+  const staffTag = access.role === "support" ? "Support" : "Mad Buddy core team";
   const orphanAccounts = page === 1 && !search ? await listOrphanAuthAccounts(admin) : [];
 
   return (
@@ -175,6 +179,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                   <div className="text-xs font-medium"><span className="mr-2 text-muted-foreground md:hidden">Plan</span>{humanizeAdminValue(subscription?.plan ?? "free")}</div>
                   <div>{restrictions > 0 ? <AdminStatus label={String(restrictions)} tone="danger" /> : <AdminStatus label="None" tone="success" />}</div>
                   <AdminUserControls userId={profile.user_id} disabled={suspendedUsers.has(profile.user_id)} canQuickFix={access.permissions.has("admin.support.manage")} />
+                  {canMessageUsers ? <AdminUserMessage userId={profile.user_id} tag={staffTag} /> : null}
                 </div>
               );
             })}

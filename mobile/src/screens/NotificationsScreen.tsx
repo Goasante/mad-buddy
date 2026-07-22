@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ListChecks,
   MapPinOff,
+  Megaphone,
   MessageSquare,
   Settings2,
   Trash2
@@ -39,6 +40,7 @@ const filterOptions: { value: Filter; label: string }[] = [
 
 function iconFor(type: string) {
   const base = type.split(":")[0];
+  if (base === "staff_message") return Megaphone;
   if (base.includes("nearby") || base.includes("proximity")) return MapPinOff;
   if (base.startsWith("message")) return MessageSquare;
   if (base.startsWith("plan") || base.includes("rsvp")) return CalendarCheck2;
