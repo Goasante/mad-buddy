@@ -86,6 +86,19 @@ export function PlansPageContent({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [plans, setPlans] = useState<PlanSummary[]>(initialPlans);
+  // router.refresh() re-runs the server component and hands us fresh props, but
+  // React never re-initializes useState from changed props. Without this sync,
+  // authoritative server data after a mutation (poll vote counts, RSVP totals)
+  // never reaches the UI until a full reload. This is React's recommended
+  // "adjust state when a prop changes" pattern (set state during render, not in
+  // an effect): initialPlans only gets a new reference when the server
+  // re-renders (refresh/navigation), so ordinary client re-renders are untouched
+  // and optimistic updates survive until the authoritative refresh lands.
+  const [syncedFrom, setSyncedFrom] = useState(initialPlans);
+  if (syncedFrom !== initialPlans) {
+    setSyncedFrom(initialPlans);
+    setPlans(initialPlans);
+  }
   const [activeBucket, setActiveBucket] = useState<PlanBucket>("upcoming");
   const [createOpen, setCreateOpen] = useState(() => searchParams.get("create") === "1");
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
