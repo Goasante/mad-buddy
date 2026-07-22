@@ -16,9 +16,15 @@ export type ServiceResult = { ok: boolean; message: string };
 
 export const visibilitySchema = z.enum(["visible", "ghost", "app_open_only"]);
 
-export const notificationPreferenceSchema = z.object({
-  nearbyAlerts: z.boolean()
-});
+// Additive: the Pulse quick-settings popover persists three toggles. Any subset
+// may be sent; only the provided keys are written into the preferences JSON.
+export const notificationPreferenceSchema = z
+  .object({
+    nearbyAlerts: z.boolean().optional(),
+    quietNearby: z.boolean().optional(),
+    planAlerts: z.boolean().optional()
+  })
+  .refine((data) => Object.keys(data).length > 0, { message: "Choose a setting to update." });
 
 export async function updateVisibilityStatus(
   rlsClient: SupabaseClient<Database>,
@@ -63,12 +69,17 @@ export async function updateNotificationPreference(
     !Array.isArray(existing.notification_preferences)
       ? existing.notification_preferences
       : {};
+  const updates: Record<string, boolean> = {};
+  if (parsed.data.nearbyAlerts !== undefined) updates.nearbyAlerts = parsed.data.nearbyAlerts;
+  if (parsed.data.quietNearby !== undefined) updates.quietNearby = parsed.data.quietNearby;
+  if (parsed.data.planAlerts !== undefined) updates.planAlerts = parsed.data.planAlerts;
+
   const { error } = await admin.from("user_preferences").upsert(
     {
       user_id: userId,
       notification_preferences: {
         ...prior,
-        nearbyAlerts: parsed.data.nearbyAlerts,
+        ...updates,
         updatedAt: new Date().toISOString()
       }
     },

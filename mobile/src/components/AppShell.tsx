@@ -11,6 +11,7 @@ import {
   UserRound,
   Settings,
   CircleDollarSign,
+  LifeBuoy,
   LogOut,
   type LucideIcon
 } from "lucide-react";
@@ -138,6 +139,7 @@ export function AppShell() {
                   <AccountItem icon={UserRound} label="Profile" onClick={() => { close(); navigate("/profile"); }} />
                   <AccountItem icon={Settings} label="Settings" onClick={() => { close(); navigate("/settings"); }} />
                   <AccountItem icon={CircleDollarSign} label="Plan and billing" onClick={() => { close(); navigate("/subscription"); }} />
+                  <AccountItem icon={LifeBuoy} label="Help and support" onClick={() => { close(); navigate("/help"); }} />
                   <div className="my-2 h-px bg-white/10" />
                   <button
                     type="button"

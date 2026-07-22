@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Bell,
   CalendarCheck2,
@@ -16,7 +15,11 @@ import { formatRelativeTime, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "../components/Spinner";
 import { useOverlayDismiss } from "../lib/overlay";
+import { useAuth } from "../auth/AuthProvider";
+import { supabase } from "../lib/supabase";
 import { api } from "../lib/api";
+
+type NotifPrefs = { nearbyAlerts: boolean; quietNearby: boolean; planAlerts: boolean };
 
 type Notification = {
   id: string;
@@ -53,7 +56,7 @@ function dayBucket(iso: string): string {
 }
 
 export function NotificationsScreen() {
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState("");
@@ -62,8 +65,34 @@ export function NotificationsScreen() {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [prefs, setPrefs] = useState<NotifPrefs>({ nearbyAlerts: true, quietNearby: false, planAlerts: true });
   useOverlayDismiss(filterOpen, () => setFilterOpen(false));
   useOverlayDismiss(actionsOpen, () => setActionsOpen(false));
+  useOverlayDismiss(settingsOpen, () => setSettingsOpen(false));
+
+  // Load the saved notification preferences for the quick-settings popover.
+  useEffect(() => {
+    if (!user) return;
+    void supabase
+      .from("user_preferences")
+      .select("notification_preferences")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        const raw = (data?.notification_preferences ?? {}) as Record<string, unknown>;
+        setPrefs({
+          nearbyAlerts: raw.nearbyAlerts !== false,
+          quietNearby: raw.quietNearby === true,
+          planAlerts: raw.planAlerts !== false
+        });
+      });
+  }, [user]);
+
+  async function savePref(patch: Partial<NotifPrefs>) {
+    setPrefs((current) => ({ ...current, ...patch }));
+    await api.post("/api/settings/notifications", patch);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -129,6 +158,11 @@ export function NotificationsScreen() {
     setActionsOpen(false);
   }
 
+  function selectAllVisible() {
+    setSelected(new Set(visible.map((i) => i.id)));
+    setActionsOpen(false);
+  }
+
   async function applyBulkRead(isRead: boolean) {
     const ids = [...selected];
     if (ids.length === 0) return;
@@ -153,6 +187,7 @@ export function NotificationsScreen() {
   }
 
   const selectedCount = selected.size;
+  const allVisibleSelected = visible.length > 0 && visible.every((i) => selected.has(i.id));
   const filterLabel = filterOptions.find((o) => o.value === filter)!.label;
 
   return (
@@ -171,14 +206,47 @@ export function NotificationsScreen() {
                 Mark all as read
               </button>
             ) : null}
-            <button
-              type="button"
-              aria-label="Notification settings"
-              onClick={() => navigate("/settings")}
-              className="focus-ring grid h-10 w-10 place-items-center rounded-full border border-border/70 text-muted-foreground hover:bg-secondary hover:text-foreground"
-            >
-              <Settings2 className="h-4 w-4" aria-hidden="true" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="Notification settings"
+                aria-expanded={settingsOpen}
+                onClick={() => setSettingsOpen((v) => !v)}
+                className="focus-ring grid h-10 w-10 place-items-center rounded-full border border-border/70 text-muted-foreground hover:bg-secondary hover:text-foreground"
+              >
+                <Settings2 className="h-4 w-4" aria-hidden="true" />
+              </button>
+              {settingsOpen ? (
+                <>
+                  <div className="fixed inset-0 z-[90]" onClick={() => setSettingsOpen(false)} aria-hidden="true" />
+                  <div className="absolute right-0 top-full z-[100] mt-2 w-72 rounded-xl border border-border bg-card p-2 shadow-[0_18px_45px_rgba(0,0,0,0.5)]">
+                    <p className="px-2 pb-1 pt-1.5 text-sm font-semibold">Notification settings</p>
+                    <PrefToggle
+                      icon={MapPinOff}
+                      title="Nearby alerts"
+                      description="Get occasional alerts when approved Muddies are nearby."
+                      checked={prefs.nearbyAlerts}
+                      onChange={(checked) => void savePref(checked ? { nearbyAlerts: true } : { nearbyAlerts: false, quietNearby: false })}
+                    />
+                    <PrefToggle
+                      icon={Bell}
+                      title="Quiet nearby alerts"
+                      description="Temporarily silence nearby alerts."
+                      checked={prefs.quietNearby}
+                      disabled={!prefs.nearbyAlerts}
+                      onChange={(checked) => void savePref({ quietNearby: checked })}
+                    />
+                    <PrefToggle
+                      icon={CalendarCheck2}
+                      title="Plan alerts"
+                      description="Get updates about invitations, changes, and reminders."
+                      checked={prefs.planAlerts}
+                      onChange={(checked) => void savePref({ planAlerts: checked })}
+                    />
+                  </div>
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">Updates from your Muddies and account.</p>
@@ -230,19 +298,20 @@ export function NotificationsScreen() {
         {selectMode ? (
           <div className="flex items-center gap-1.5">
             <div className="relative">
-              <Button type="button" size="sm" variant="outline" onClick={() => (selectedCount > 0 ? setActionsOpen((v) => !v) : undefined)}>
+              <Button type="button" size="sm" variant="outline" onClick={() => setActionsOpen((v) => !v)}>
                 <ListChecks className="h-4 w-4" aria-hidden="true" />
                 {selectedCount > 0 ? `${selectedCount} selected` : "Select"}
               </Button>
-              {actionsOpen && selectedCount > 0 ? (
+              {actionsOpen ? (
                 <>
                   <div className="fixed inset-0 z-[90]" onClick={() => setActionsOpen(false)} aria-hidden="true" />
                   <div role="menu" className="absolute right-0 top-full z-[100] mt-1 w-48 rounded-xl border border-border bg-card p-1 shadow-[0_18px_45px_rgba(0,0,0,0.5)]">
-                    <MenuItem label="Mark as read" onClick={() => void applyBulkRead(true)} />
-                    <MenuItem label="Mark as unread" onClick={() => void applyBulkRead(false)} />
+                    <MenuItem label="Select all" onClick={selectAllVisible} disabled={visible.length === 0 || allVisibleSelected} />
+                    <MenuItem label="Mark as read" onClick={() => void applyBulkRead(true)} disabled={selectedCount === 0} />
+                    <MenuItem label="Mark as unread" onClick={() => void applyBulkRead(false)} disabled={selectedCount === 0} />
                     <div className="my-1 h-px bg-border" />
-                    <MenuItem label={selectedCount === 1 ? "Delete update" : "Delete selected"} destructive onClick={() => void deleteSelected()} />
-                    <MenuItem label="Clear selection" onClick={() => setSelected(new Set())} />
+                    <MenuItem label={selectedCount === 1 ? "Delete update" : "Delete selected"} destructive disabled={selectedCount === 0} onClick={() => void deleteSelected()} />
+                    <MenuItem label="Clear selection" onClick={() => setSelected(new Set())} disabled={selectedCount === 0} />
                   </div>
                 </>
               ) : null}
@@ -331,14 +400,52 @@ export function NotificationsScreen() {
   );
 }
 
-function MenuItem({ label, onClick, destructive }: { label: string; onClick: () => void; destructive?: boolean }) {
+function PrefToggle({
+  icon: Icon,
+  title,
+  description,
+  checked,
+  disabled,
+  onChange
+}: {
+  icon: typeof Bell;
+  title: string;
+  description: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className={cn("flex items-start gap-3 rounded-lg px-2 py-2.5", disabled && "opacity-50")}>
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{title}</p>
+        <p className="text-xs leading-4 text-muted-foreground">{description}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={title}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors", checked ? "bg-primary" : "bg-secondary")}
+      >
+        <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform", checked ? "translate-x-5" : "translate-x-0.5")} />
+      </button>
+    </div>
+  );
+}
+
+function MenuItem({ label, onClick, destructive, disabled }: { label: string; onClick: () => void; destructive?: boolean; disabled?: boolean }) {
   return (
     <button
       type="button"
       role="menuitem"
       onClick={onClick}
+      disabled={disabled}
       className={cn(
-        "focus-ring w-full rounded-lg px-2.5 py-2 text-left text-sm active:bg-secondary",
+        "focus-ring w-full rounded-lg px-2.5 py-2 text-left text-sm active:bg-secondary disabled:opacity-40",
         destructive ? "text-destructive" : "text-foreground"
       )}
     >

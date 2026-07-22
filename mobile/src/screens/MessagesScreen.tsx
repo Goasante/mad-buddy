@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { PenSquare, ChevronLeft, Search } from "lucide-react";
+import { PenSquare, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { formatRelativeTime } from "@/lib/utils";
 import { Screen } from "../components/AppShell";
 import { Spinner } from "../components/Spinner";
+import { Modal } from "../components/Modal";
 import { api } from "../lib/api";
 
 type Conversation = {
@@ -18,7 +20,7 @@ type Conversation = {
   contextBadge: string | null;
 };
 
-type Friend = { friendId: string; displayName: string; username: string };
+type Friend = { friendId: string; displayName: string; username: string; avatarUrl: string | null };
 
 export function MessagesScreen() {
   const navigate = useNavigate();
@@ -38,10 +40,6 @@ export function MessagesScreen() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  if (composing) {
-    return <NewMessage onBack={() => setComposing(false)} onOpened={(id) => navigate(`/messages/${id}`)} />;
-  }
 
   return (
     <Screen
@@ -132,73 +130,93 @@ export function MessagesScreen() {
           ))}
         </ul>
       )}
+
+      <NewMessageModal open={composing} onOpenChange={setComposing} onOpened={(id, title) => navigate(`/messages/${id}`, { state: { title } })} />
     </Screen>
   );
 }
 
-function NewMessage({ onBack, onOpened }: { onBack: () => void; onOpened: (id: string) => void }) {
+function NewMessageModal({
+  open,
+  onOpenChange,
+  onOpened
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onOpened: (id: string, title: string) => void;
+}) {
   const [friends, setFriends] = useState<Friend[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [query, setQuery] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
-    void (async () => {
-      const result = await api.get<{ friends: Friend[] }>("/api/messages/friends");
-      setLoading(false);
+    if (!open || loaded) return;
+    void api.get<{ friends: Friend[] }>("/api/messages/friends").then((result) => {
       if (result.ok) setFriends(result.data.friends);
-    })();
-  }, []);
+      setLoaded(true);
+    });
+  }, [open, loaded]);
 
-  async function open(friend: Friend) {
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return friends;
+    return friends.filter((f) => f.displayName.toLowerCase().includes(q) || f.username.toLowerCase().includes(q));
+  }, [friends, query]);
+
+  async function openConversation(friend: Friend) {
     const result = await api.post<{ ok: boolean; conversationId?: string; message: string }>("/api/messages/open", {
       recipientId: friend.friendId
     });
-    if (result.ok && result.data.conversationId) onOpened(result.data.conversationId);
+    if (result.ok && result.data.conversationId) onOpened(result.data.conversationId, friend.displayName);
     else setError(result.ok ? result.data.message : result.error);
   }
 
   return (
-    <Screen
+    <Modal
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next);
+        if (!next) {
+          setQuery("");
+          setError("");
+        }
+      }}
       title="New message"
-      action={
-        <Button size="sm" variant="outline" onClick={onBack}>
-          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-          Back
-        </Button>
-      }
     >
-      {error ? <p className="mb-3 text-sm text-destructive">{error}</p> : null}
-      {loading ? (
-        <div className="flex justify-center py-10">
-          <Spinner />
+      <div className="space-y-4">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search Muddies" className="pl-9" />
         </div>
-      ) : friends.length === 0 ? (
-        <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">
-          Add some Muddies first — you can only message your Muddies.
-        </p>
-      ) : (
-        <ul className="overflow-hidden rounded-2xl border border-border">
-          {friends.map((friend, index) => (
-            <li key={friend.friendId}>
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        <div className="max-h-72 space-y-1 overflow-y-auto">
+          {!loaded ? (
+            <div className="flex justify-center py-8">
+              <Spinner />
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              {friends.length === 0 ? "Add some Muddies first — you can only message your Muddies." : "No Muddies match that search."}
+            </p>
+          ) : (
+            filtered.map((friend) => (
               <button
+                key={friend.friendId}
                 type="button"
-                onClick={() => void open(friend)}
-                className={`focus-ring flex w-full items-center gap-3 bg-card/40 px-4 py-3 text-left active:bg-secondary ${
-                  index > 0 ? "border-t border-border" : ""
-                }`}
+                onClick={() => void openConversation(friend)}
+                className="focus-ring flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left active:bg-secondary"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-sm font-semibold">
-                  {friend.displayName.slice(0, 1).toUpperCase()}
-                </div>
+                <GlowAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{friend.displayName}</p>
                   <p className="truncate text-xs text-muted-foreground">@{friend.username}</p>
                 </div>
               </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Screen>
+            ))
+          )}
+        </div>
+      </div>
+    </Modal>
   );
 }

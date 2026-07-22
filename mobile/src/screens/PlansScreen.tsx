@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -226,6 +227,7 @@ function CreatePlanModal({
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [place, setPlace] = useState("");
+  const [notes, setNotes] = useState("");
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -235,6 +237,7 @@ function CreatePlanModal({
     setDate("");
     setTime("");
     setPlace("");
+    setNotes("");
     setSelected(new Set());
     setError("");
   }
@@ -249,6 +252,7 @@ function CreatePlanModal({
     const startAt = scheduled ? new Date(`${date}T${time || "00:00"}`).toISOString() : undefined;
     const result = await api.post<{ ok: boolean; message: string }>("/api/plans", {
       title: title.trim(),
+      description: notes.trim() || undefined,
       planType: scheduled ? "scheduled" : "quick",
       startAt,
       placeType: "custom",
@@ -302,6 +306,10 @@ function CreatePlanModal({
 
         <Field label="Invite Muddies">
           <InviteSelect invitees={invitees} selected={selected} onChange={setSelected} />
+        </Field>
+
+        <Field label="Notes (optional)">
+          <Textarea value={notes} maxLength={500} onChange={(e) => setNotes(e.target.value)} placeholder="Add a note for your Muddies" />
         </Field>
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
