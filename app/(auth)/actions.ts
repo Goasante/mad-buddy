@@ -1,7 +1,9 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { getSiteUrl } from "@/lib/seo";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import {
   consumeRateLimit,
@@ -53,6 +55,39 @@ const resetPasswordSchema = z
     confirmPassword: z.string().min(8)
   })
   .refine((data) => data.password === data.confirmPassword);
+
+/**
+ * The public origin to build email/callback links from. Derived from the actual
+ * request (host / x-forwarded-* on Vercel) so links are always correct even when
+ * NEXT_PUBLIC_APP_URL is unset or empty — which is exactly what sent password-
+ * reset emails pointing at http://localhost:3000. Falls back to the configured
+ * site URL only if request headers are unavailable.
+ */
+async function resolveRequestOrigin(): Promise<string> {
+  try {
+    const headerList = await headers();
+    const origin = headerList.get("origin");
+    if (origin) return origin.replace(/\/+$/, "");
+    const host = headerList.get("x-forwarded-host") ?? headerList.get("host");
+    if (host) {
+      const proto = headerList.get("x-forwarded-proto") ?? "https";
+      return `${proto}://${host}`;
+    }
+  } catch {
+    // headers() not available in this context — fall through.
+  }
+  return getSiteUrl().origin;
+}
+
+/**
+ * The provider's shared email service caps sends to a few per hour. That's a
+ * global condition (not tied to a specific account), so surfacing it can't leak
+ * whether an address is registered.
+ */
+function isEmailRateLimited(error: { message?: string; code?: string; status?: number }): boolean {
+  const message = (error.message ?? "").toLowerCase();
+  return error.status === 429 || error.code === "over_email_send_rate_limit" || message.includes("rate limit");
+}
 
 function missingSupabaseState(): AuthActionState | null {
   const env = getSupabaseBrowserEnv();
@@ -384,15 +419,24 @@ export async function forgotPasswordAction(input: unknown): Promise<AuthActionSt
     return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
   }
 
+  const origin = await resolveRequestOrigin();
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/auth/callback?next=/reset-password`
+    redirectTo: `${origin}/auth/callback?next=/reset-password`
   });
 
-  // Keep the response identical whether or not the address exists. The
-  // provider error is intentionally not returned to avoid account discovery.
+  // Keep the response identical whether or not the address exists (the provider
+  // error is not returned, to avoid account discovery) — EXCEPT for the mailer
+  // rate limit, which is global, not account-specific, so telling the user their
+  // email genuinely isn't coming leaks nothing and beats a false "sent".
   if (error) {
     logBackendEvent("warn", { action: "auth.password_recovery", statusCode: 400, errorType: errorType(error) });
+    if (isEmailRateLimited(error)) {
+      return {
+        ok: false,
+        message: "We can't send reset emails right now — the mailer is temporarily busy. Please try again in a few minutes."
+      };
+    }
   }
 
   return { ok: true, message: "If an account exists for that email, a reset link has been sent." };

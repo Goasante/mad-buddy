@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { PlanId } from "@/components/premium/plans";
+import { getSiteUrl } from "@/lib/seo";
 
 export type PaidPlanId = Exclude<PlanId, "free">;
 
@@ -67,5 +68,8 @@ export function getMissingPaystackWebhookConfig() {
 }
 
 export function getAppUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  // Route through getSiteUrl so Paystack return URLs never fall back to
+  // localhost when NEXT_PUBLIC_APP_URL is unset/empty (uses the Vercel
+  // production domain instead).
+  return getSiteUrl().origin;
 }
