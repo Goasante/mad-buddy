@@ -26,6 +26,7 @@ type NearbyFriend = {
 };
 type Plan = { id: string; title: string; startAt: string | null; placeText: string | null; status: string; goingCount: number; myRsvp: string };
 type Activity = { id: string; type: string; title: string; message: string; created_at: string };
+type OpenToPlan = { id: string; ownerName: string; activityType: string; message: string | null; broadAreaText: string | null };
 
 const quickActions: { label: string; feature: FeatureIconKey; to: string }[] = [
   { label: "Hangout", feature: "hangout", to: "/socialize" },
@@ -64,6 +65,7 @@ export function HomeScreen() {
   const [sharingLocation, setSharingLocation] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
+  const [openToPlans, setOpenToPlans] = useState<OpenToPlan[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -96,6 +98,9 @@ export function HomeScreen() {
     });
     void api.get<{ notifications: Activity[] }>("/api/notifications?limit=5").then((r) => {
       if (r.ok) setActivity(r.data.notifications);
+    });
+    void api.get<{ openToPlans: OpenToPlan[] }>("/api/hangouts/open").then((r) => {
+      if (r.ok) setOpenToPlans(r.data.openToPlans);
     });
   }, [loadNearby]);
 
@@ -321,13 +326,33 @@ export function HomeScreen() {
       {/* Muddies open to plans */}
       <section className="mt-6">
         <h2 className="mb-3 text-lg font-semibold tracking-tight">Muddies open to plans</h2>
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card/40 p-4">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold">No Muddies are available right now</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">Check again later or start a new plan.</p>
+        {openToPlans.length === 0 ? (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card/40 p-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">No Muddies are available right now</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Check again later or start a new plan.</p>
+            </div>
+            <Button variant="outline" size="sm" className="shrink-0" onClick={() => navigate("/plans")}>New plan</Button>
           </div>
-          <Button variant="outline" size="sm" className="shrink-0" onClick={() => navigate("/plans")}>New plan</Button>
-        </div>
+        ) : (
+          <ul className="space-y-2">
+            {openToPlans.map((item) => (
+              <li key={item.id} className="flex items-center gap-3 rounded-xl border border-border bg-card/40 p-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-semibold">
+                  {item.ownerName.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{item.ownerName}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {item.activityType.replace(/_/g, " ")}
+                    {item.broadAreaText ? ` · ${item.broadAreaText}` : ""}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => navigate("/plans")}>Invite</Button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );
