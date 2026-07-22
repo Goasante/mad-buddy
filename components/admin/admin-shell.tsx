@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   ClipboardList,
   CreditCard,
+  SlidersHorizontal,
   FileKey2,
   Gauge,
   Headphones,
@@ -31,6 +32,7 @@ type AdminHref =
   | "/admin/support"
   | "/admin/repairs"
   | "/admin/billing"
+  | "/admin/entitlements"
   | "/admin/privacy"
   | "/admin/system"
   | "/admin/audit"
@@ -58,6 +60,7 @@ const adminNavigationGroups: Array<{ label: string; items: AdminNavigationItem[]
     label: "Platform",
     items: [
       { href: "/admin/billing", label: "Billing", icon: CreditCard, permission: "admin.billing.view" },
+      { href: "/admin/entitlements", label: "Entitlements", icon: SlidersHorizontal, permission: "admin.entitlements.view" },
       { href: "/admin/privacy", label: "Privacy", icon: FileKey2, permission: "admin.privacy.requests.manage" },
       { href: "/admin/system", label: "App health", icon: Activity, permission: "admin.security.events.view" }
     ]

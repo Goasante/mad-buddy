@@ -2656,6 +2656,32 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["support_tickets"]["Insert"]>;
         Relationships: [];
       };
+      tier_entitlement_overrides: {
+        Row: {
+          id: string;
+          plan: SubscriptionPlan;
+          entitlement_key: string;
+          value_type: "number" | "boolean";
+          numeric_value: number | null;
+          is_unlimited: boolean;
+          boolean_value: boolean | null;
+          updated_by: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          plan: SubscriptionPlan;
+          entitlement_key: string;
+          value_type: "number" | "boolean";
+          numeric_value?: number | null;
+          is_unlimited?: boolean;
+          boolean_value?: boolean | null;
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["tier_entitlement_overrides"]["Insert"]>;
+        Relationships: [];
+      };
       support_ticket_messages: {
         Row: {
           id: string;

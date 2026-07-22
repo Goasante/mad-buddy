@@ -21,14 +21,19 @@ const legacyPermissions: Record<AdminAccessRole, readonly AdminPermission[]> = {
     // Owner/admin/support may adjust a user's plan (view is needed to reach the
     // billing screen); refunds/entitlement overrides stay billing.refund-only.
     "admin.billing.view",
-    "admin.billing.manage_plan"
+    "admin.billing.manage_plan",
+    // Owner/admin/support may view and edit the per-tier entitlement matrix.
+    "admin.entitlements.view",
+    "admin.entitlements.manage"
   ],
   support: [
     ...ROLE_PERMISSIONS.customer_support_agent,
     "admin.users.suspend",
     "admin.sessions.revoke",
     "admin.billing.view",
-    "admin.billing.manage_plan"
+    "admin.billing.manage_plan",
+    "admin.entitlements.view",
+    "admin.entitlements.manage"
   ]
 };
 

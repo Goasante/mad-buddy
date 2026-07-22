@@ -34,6 +34,8 @@ export const ADMIN_PERMISSIONS = [
   "admin.billing.view",
   "admin.billing.refund",
   "admin.billing.manage_plan",
+  "admin.entitlements.view",
+  "admin.entitlements.manage",
   "admin.verification.review",
   "admin.organisations.restrict",
   "admin.security.events.view",

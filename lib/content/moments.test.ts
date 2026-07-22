@@ -19,7 +19,7 @@ describe("tier limits (spec §16, §32)", () => {
   it("gives free users the documented caps", () => {
     const free = contentTierLimitsFor("free");
     expect(free.maxActiveMomentsPerDay).toBe(5);
-    expect(free.maxActiveNearbyMoments).toBe(1);
+    expect(free.maxActiveNearbyMoments).toBe(5);
     expect(free.maxActiveDrops).toBe(3);
     expect(free.allowEventDrops).toBe(false);
   });

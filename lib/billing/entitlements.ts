@@ -1,4 +1,5 @@
 import type { SubscriptionPlan, SubscriptionStatus } from "@/lib/supabase/database.types";
+import { getTierOverrideCache } from "@/lib/billing/tier-overrides";
 
 /**
  * THE central entitlement registry (feature architecture batch 10, spec §7-§15).
@@ -81,7 +82,7 @@ const FREE: Entitlements = {
   max_private_groups: 3,
   max_group_members: 15,
   max_daily_moments: 5,
-  max_active_nearby_moments: 1,
+  max_active_nearby_moments: 5,
   max_active_drops: 3,
   max_safe_arrival_contacts: 2,
   max_active_safe_arrivals: 3,
@@ -123,7 +124,7 @@ const BUDDY_PLUS: Entitlements = {
   max_private_groups: 20,
   max_group_members: 50,
   max_daily_moments: 20,
-  max_active_nearby_moments: 5,
+  max_active_nearby_moments: 20,
   max_active_drops: 20,
   max_safe_arrival_contacts: 5,
   max_hangout_capacity: 50,
@@ -152,7 +153,7 @@ const BUDDY_PRO: Entitlements = {
   max_private_groups: 100,
   max_group_members: 1000,
   max_daily_moments: 100,
-  max_active_nearby_moments: 20,
+  max_active_nearby_moments: 50,
   max_active_drops: 100,
   max_event_circle_members: 5000,
   event_circle_archive_days: 90,
@@ -247,7 +248,7 @@ export function resolveEntitlements(input: {
   nowMs: number;
 }): Entitlements {
   const plan = effectivePlan(input.state, input.nowMs);
-  const base = { ...PLAN_ENTITLEMENTS[plan] };
+  const base = { ...entitlementsFor(plan) };
 
   for (const override of input.overrides ?? []) {
     const started = override.startsAtMs === null || override.startsAtMs <= input.nowMs;
@@ -261,7 +262,11 @@ export function resolveEntitlements(input: {
 }
 
 export function entitlementsFor(plan: SubscriptionPlan): Entitlements {
-  return PLAN_ENTITLEMENTS[plan] ?? PLAN_ENTITLEMENTS.free;
+  const base = PLAN_ENTITLEMENTS[plan] ?? PLAN_ENTITLEMENTS.free;
+  // Merge any admin-set tier overrides (empty on the client / cold cache, so
+  // this is a no-op there and callers get the code defaults).
+  const overrides = getTierOverrideCache()[plan];
+  return overrides ? ({ ...base, ...overrides } as Entitlements) : base;
 }
 
 // ---------------------------------------------------------------------------
