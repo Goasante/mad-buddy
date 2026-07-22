@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { PenSquare, ChevronLeft } from "lucide-react";
+import { PenSquare, ChevronLeft, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { formatRelativeTime } from "@/lib/utils";
 import { Screen } from "../components/AppShell";
 import { Spinner } from "../components/Spinner";
@@ -24,6 +25,7 @@ export function MessagesScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState(false);
+  const [query, setQuery] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,21 +48,28 @@ export function MessagesScreen() {
       action={
         <Button size="sm" onClick={() => setComposing(true)}>
           <PenSquare className="h-4 w-4" aria-hidden="true" />
-          New
+          New message
         </Button>
       }
     >
+      <div className="relative mb-4">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <Input className="pl-9" placeholder="Search messages" value={query} onChange={(e) => setQuery(e.target.value)} />
+      </div>
+
       {loading ? (
         <div className="flex justify-center py-10">
           <Spinner />
         </div>
       ) : conversations.length === 0 ? (
         <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">
-          No conversations yet. Tap “New” to message a Muddy.
+          No conversations yet. Tap “New message” to message a Muddy.
         </p>
       ) : (
         <ul className="overflow-hidden rounded-2xl border border-border">
-          {conversations.map((conversation, index) => (
+          {conversations
+            .filter((c) => query.trim().length === 0 || c.title.toLowerCase().includes(query.toLowerCase()))
+            .map((conversation, index) => (
             <li key={conversation.id}>
               <button
                 type="button"

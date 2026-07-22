@@ -90,10 +90,8 @@ export function ChatScreen() {
             <div key={message.id} className={cn("flex", message.isMine ? "justify-end" : "justify-start")}>
               <div
                 className={cn(
-                  "max-w-[78%] rounded-2xl px-3.5 py-2 text-sm",
-                  message.isMine
-                    ? "rounded-br-md bg-primary text-primary-foreground"
-                    : "rounded-bl-md border border-border bg-card/60"
+                  "max-w-[75%] rounded-2xl px-3.5 py-2 text-sm",
+                  message.isMine ? "rounded-br-md bg-primary text-white" : "rounded-bl-md bg-secondary"
                 )}
               >
                 {message.deleted ? (
@@ -110,7 +108,7 @@ export function ChatScreen() {
 
       <footer className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-card/80 px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur">
         <Input
-          placeholder="Message…"
+          placeholder={`Message ${title}`}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
