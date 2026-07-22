@@ -21,6 +21,7 @@ import { GroupsScreen } from "./screens/GroupsScreen";
 import { UserProfileScreen } from "./screens/UserProfileScreen";
 import { SafetyScreen } from "./screens/SafetyScreen";
 import { SubscriptionScreen } from "./screens/SubscriptionScreen";
+import { useAndroidBack } from "./hooks/useAndroidBack";
 import type { ReactNode } from "react";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -38,6 +39,7 @@ function RedirectIfAuthed({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
+  useAndroidBack();
   return (
     <Routes>
       <Route path="/login" element={<RedirectIfAuthed><LoginScreen /></RedirectIfAuthed>} />

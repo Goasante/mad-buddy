@@ -19,6 +19,7 @@ import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import { useAuth } from "../auth/AuthProvider";
 import { supabase } from "../lib/supabase";
 import { api } from "../lib/api";
+import { dismissAllOverlays, useOverlayDismiss } from "../lib/overlay";
 import { BrandMark } from "./BrandMark";
 
 const tabs = [
@@ -202,20 +203,39 @@ function Dropdown({
 }) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+  // Register with the shared overlay stack so outside-press, Escape, and the
+  // Android back button all dismiss it via one handler.
+  useOverlayDismiss(open, close);
+
+  function toggle() {
+    setOpen((current) => {
+      if (current) return false;
+      dismissAllOverlays(); // only one dropdown open at a time
+      return true;
+    });
+  }
+
   return (
     <div className="relative">
       <button
         type="button"
         aria-label={label}
-        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={toggle}
         className="focus-ring block rounded-full transition-colors hover:opacity-90"
       >
         {trigger}
       </button>
       {open ? (
         <>
+          {/* Dismissible backdrop — transparent (not an opaque modal), so a tap on
+              any empty area closes the dropdown. */}
           <div className="fixed inset-0 z-40" onClick={close} aria-hidden="true" />
-          <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-border bg-card p-1.5 shadow-[0_18px_45px_rgba(0,0,0,0.45)]">
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-border bg-card p-1.5 shadow-[0_18px_45px_rgba(0,0,0,0.45)]"
+          >
             {children(close)}
           </div>
         </>
