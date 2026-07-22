@@ -202,7 +202,7 @@ function BooleanEditor({ entitlementKey, plan, cell, canManage, onFeedback }: { 
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="flex flex-col items-start gap-1.5">
       <button
         type="button"
         role="switch"
@@ -210,7 +210,7 @@ function BooleanEditor({ entitlementKey, plan, cell, canManage, onFeedback }: { 
         aria-label={`${entitlementKey} for ${plan}`}
         disabled={!canManage || pending}
         onClick={() => toggle(!value)}
-        className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60", value ? "bg-primary" : "bg-secondary")}
+        className={cn("relative block h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60", value ? "bg-primary" : "bg-secondary")}
       >
         <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform", value ? "translate-x-5" : "translate-x-0.5")} />
       </button>
