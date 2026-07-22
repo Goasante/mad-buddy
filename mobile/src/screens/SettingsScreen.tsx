@@ -112,6 +112,12 @@ export function SettingsScreen() {
           disabled={busy}
           onChange={() => void toggleNearby()}
         />
+        <Row
+          icon={Bell}
+          title="Notification preferences"
+          description="Categories, quiet hours, and how you're reached."
+          onClick={() => navigate("/settings/notifications")}
+        />
       </Card>
 
       <SectionTitle>Billing</SectionTitle>
