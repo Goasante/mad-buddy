@@ -3,21 +3,18 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, SubscriptionPlan } from "@/lib/supabase/database.types";
 import { UNLIMITED } from "@/lib/billing/entitlements";
-import { setTierOverrideCache, tierOverridesLoadedAtMs, type TierOverrideMap } from "@/lib/billing/tier-overrides";
+import { setTierOverrideCache, type TierOverrideMap } from "@/lib/billing/tier-overrides";
 
 type Admin = SupabaseClient<Database>;
 
-const TTL_MS = 60_000;
-
 /**
- * Loads the per-tier entitlement overrides into the shared cache. Cheap and
- * cached (TTL), so limit-gated flows can call it before resolving entitlements
- * without a per-request round trip. `force` bypasses the TTL right after an
- * admin edit so the new value applies immediately.
+ * Reloads the per-tier entitlement overrides into the shared cache. Always hits
+ * the table (one small read, no rows unless an admin has customised a tier), so
+ * an admin edit applies globally on the very next request rather than after a
+ * cache window. The cache still exists so the sync entitlementsFor() calls that
+ * follow within the same request read the freshly-loaded values.
  */
-export async function refreshTierOverrides(admin: Admin, force = false): Promise<void> {
-  if (!force && Date.now() - tierOverridesLoadedAtMs() < TTL_MS) return;
-
+export async function refreshTierOverrides(admin: Admin): Promise<void> {
   const { data, error } = await admin
     .from("tier_entitlement_overrides")
     .select("plan, entitlement_key, value_type, numeric_value, is_unlimited, boolean_value");

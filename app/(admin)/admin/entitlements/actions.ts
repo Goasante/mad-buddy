@@ -80,7 +80,7 @@ export async function setTierEntitlementAction(input: unknown): Promise<Entitlem
   );
   if (error) return { ok: false, message: "The entitlement could not be saved." };
 
-  await refreshTierOverrides(admin, true); // apply immediately
+  await refreshTierOverrides(admin); // apply immediately
   revalidatePath("/admin/entitlements");
   return { ok: true, message: "Entitlement updated." };
 }
@@ -122,7 +122,7 @@ export async function resetTierEntitlementAction(input: unknown): Promise<Entitl
     .eq("entitlement_key", parsed.data.key);
   if (error) return { ok: false, message: "The entitlement could not be reset." };
 
-  await refreshTierOverrides(admin, true);
+  await refreshTierOverrides(admin);
   revalidatePath("/admin/entitlements");
   return { ok: true, message: "Reverted to default." };
 }
