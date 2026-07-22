@@ -13,10 +13,12 @@ type Muddy = { id: string; displayName: string; username: string; avatarUrl: str
 type NearbyItem = { friend_id: string; proximity_level: ProximityLevel; glow_strength: number };
 type SearchUser = { id: string; displayName: string; username: string; avatarUrl: string | null };
 type Request = { id: string; senderId: string; displayName: string; username: string; avatarUrl: string | null };
+type Circle = { id: string; name: string; icon: string | null; memberIds: string[] };
 
-type Tab = "all" | "close" | "requests" | "blocked";
+type Tab = "all" | "circles" | "close" | "requests" | "blocked";
 const tabs: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },
+  { id: "circles", label: "Circles" },
   { id: "close", label: "Close Friends" },
   { id: "requests", label: "Requests" },
   { id: "blocked", label: "Blocked" }
@@ -28,6 +30,9 @@ export function MuddiesScreen() {
   const [muddies, setMuddies] = useState<Muddy[]>([]);
   const [proximity, setProximity] = useState<Record<string, NearbyItem>>({});
   const [requests, setRequests] = useState<Request[]>([]);
+  const [closeFriendIds, setCloseFriendIds] = useState<string[]>([]);
+  const [circles, setCircles] = useState<Circle[]>([]);
+  const [blocked, setBlocked] = useState<Muddy[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -40,12 +45,17 @@ export function MuddiesScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     const [friendsRes, nearbyRes, requestsRes] = await Promise.all([
-      api.get<{ muddies: Muddy[] }>("/api/friends"),
+      api.get<{ muddies: Muddy[]; closeFriendIds: string[]; circles: Circle[]; blocked: Muddy[] }>("/api/friends"),
       api.get<{ friends: NearbyItem[] }>("/api/friends/nearby"),
       api.get<{ requests: Request[] }>("/api/friends/requests")
     ]);
     setLoading(false);
-    if (friendsRes.ok) setMuddies(friendsRes.data.muddies);
+    if (friendsRes.ok) {
+      setMuddies(friendsRes.data.muddies);
+      setCloseFriendIds(friendsRes.data.closeFriendIds ?? []);
+      setCircles(friendsRes.data.circles ?? []);
+      setBlocked(friendsRes.data.blocked ?? []);
+    }
     if (nearbyRes.ok) {
       setProximity(Object.fromEntries(nearbyRes.data.friends.map((f) => [f.friend_id, f])));
     }
@@ -97,16 +107,21 @@ export function MuddiesScreen() {
     else setFeedback(result.ok ? result.data.message : result.error);
   }
 
-  const filteredMuddies = muddies.filter(
-    (m) =>
-      query.trim().length === 0 ||
-      m.displayName.toLowerCase().includes(query.toLowerCase()) ||
-      m.username.toLowerCase().includes(query.toLowerCase())
-  );
-  const activeNow = filteredMuddies.filter((m) => {
-    const level = proximity[m.id]?.proximity_level;
+  const matchesQuery = (m: Muddy) =>
+    query.trim().length === 0 ||
+    m.displayName.toLowerCase().includes(query.toLowerCase()) ||
+    m.username.toLowerCase().includes(query.toLowerCase());
+
+  const filteredMuddies = muddies.filter(matchesQuery);
+  const isActive = (id: string) => {
+    const level = proximity[id]?.proximity_level;
     return level === "very_close" || level === "nearby" || level === "around";
-  });
+  };
+  const activeNow = filteredMuddies.filter((m) => isActive(m.id));
+  // "All Muddies" excludes those already surfaced under "Active now".
+  const restMuddies = filteredMuddies.filter((m) => !isActive(m.id));
+  const closeFriends = muddies.filter((m) => closeFriendIds.includes(m.id) && matchesQuery(m));
+  const muddyById = new Map(muddies.map((m) => [m.id, m]));
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-lg space-y-6 px-4 pt-6">
@@ -218,45 +233,106 @@ export function MuddiesScreen() {
                   );
                 })}
               </ul>
-              <h2 className="mb-2 mt-6 text-lg font-semibold tracking-tight">All Muddies</h2>
             </section>
           ) : null}
 
-          {filteredMuddies.length === 0 ? (
-            <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">
-              {muddies.length === 0 ? "No Muddies yet. Tap “Add Muddy” to find people." : "No matches."}
-            </p>
-          ) : (
-            <ul className="space-y-1">
-              {filteredMuddies.map((muddy) => {
-                const near = proximity[muddy.id];
-                return (
-                  <li key={muddy.id}>
-                    <button type="button" onClick={() => navigate(`/u/${muddy.id}`)} className="focus-ring flex w-full items-center gap-3 rounded-xl p-2 text-left active:bg-secondary">
-                      <GlowAvatar
-                        name={muddy.displayName}
-                        src={muddy.avatarUrl}
-                        proximityLevel={near?.proximity_level ?? "far"}
-                        glowStrength={near?.glow_strength ?? 0}
-                        confidence="medium"
-                        size="md"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold">{muddy.displayName}</p>
-                        <p className="truncate text-xs text-muted-foreground">@{muddy.username}</p>
-                      </div>
-                      {near && near.proximity_level !== "far" && near.proximity_level !== "hidden" ? (
-                        <span className="shrink-0 text-xs font-medium text-primary">
-                          {near.proximity_level === "very_close" ? "Very close" : near.proximity_level === "nearby" ? "Nearby" : "Around"}
-                        </span>
-                      ) : null}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          <section>
+            <h2 className="mb-2 text-lg font-semibold tracking-tight">All Muddies</h2>
+            {restMuddies.length === 0 ? (
+              <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">
+                {muddies.length === 0
+                  ? "No Muddies yet. Tap “Add Muddy” to find people."
+                  : activeNow.length > 0
+                    ? "Everyone else is active right now — see above."
+                    : "No matches."}
+              </p>
+            ) : (
+              <ul className="space-y-1">
+                {restMuddies.map((muddy) => (
+                  <MuddyRow
+                    key={muddy.id}
+                    muddy={muddy}
+                    near={proximity[muddy.id]}
+                    isClose={closeFriendIds.includes(muddy.id)}
+                    onOpen={() => navigate(`/u/${muddy.id}`)}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
+      ) : activeTab === "circles" ? (
+        circles.length === 0 ? (
+          <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">
+            No circles yet. Create circles on the web to group your Muddies.
+          </p>
+        ) : (
+          <div className="space-y-5">
+            {circles.map((circle) => {
+              const members = circle.memberIds.map((id) => muddyById.get(id)).filter((m): m is Muddy => Boolean(m));
+              return (
+                <section key={circle.id}>
+                  <div className="mb-2 flex items-center gap-2">
+                    <h2 className="text-base font-semibold tracking-tight">{circle.name}</h2>
+                    <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      {members.length} {members.length === 1 ? "Muddy" : "Muddies"}
+                    </span>
+                  </div>
+                  {members.length === 0 ? (
+                    <p className="rounded-xl border border-border bg-card/40 p-3 text-sm text-muted-foreground">No Muddies in this circle yet.</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {members.map((muddy) => (
+                        <MuddyRow
+                          key={muddy.id}
+                          muddy={muddy}
+                          near={proximity[muddy.id]}
+                          isClose={closeFriendIds.includes(muddy.id)}
+                          onOpen={() => navigate(`/u/${muddy.id}`)}
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              );
+            })}
+          </div>
+        )
+      ) : activeTab === "close" ? (
+        closeFriends.length === 0 ? (
+          <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">
+            No close friends yet. Add close friends on the web to prioritise their glow.
+          </p>
+        ) : (
+          <ul className="space-y-1">
+            {closeFriends.map((muddy) => (
+              <MuddyRow
+                key={muddy.id}
+                muddy={muddy}
+                near={proximity[muddy.id]}
+                isClose
+                onOpen={() => navigate(`/u/${muddy.id}`)}
+              />
+            ))}
+          </ul>
+        )
+      ) : activeTab === "blocked" ? (
+        blocked.length === 0 ? (
+          <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">You haven’t blocked anyone.</p>
+        ) : (
+          <ul className="space-y-2">
+            {blocked.map((user) => (
+              <li key={user.id} className="flex items-center gap-3 rounded-xl border border-border bg-card/40 p-3">
+                <Avatar name={user.displayName} src={user.avatarUrl} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{user.displayName}</p>
+                  <p className="truncate text-xs text-muted-foreground">@{user.username}</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">Blocked</span>
+              </li>
+            ))}
+          </ul>
+        )
       ) : activeTab === "requests" ? (
         requests.length === 0 ? (
           <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">No pending requests.</p>
@@ -281,12 +357,51 @@ export function MuddiesScreen() {
             ))}
           </ul>
         )
-      ) : (
-        <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">
-          {activeTab === "close" ? "Close friends appear here." : "Blocked accounts appear here."}
-        </p>
-      )}
+      ) : null}
     </div>
+  );
+}
+
+function MuddyRow({
+  muddy,
+  near,
+  isClose,
+  onOpen
+}: {
+  muddy: Muddy;
+  near: NearbyItem | undefined;
+  isClose: boolean;
+  onOpen: () => void;
+}) {
+  const label =
+    near && near.proximity_level !== "far" && near.proximity_level !== "hidden"
+      ? near.proximity_level === "very_close"
+        ? "Very close"
+        : near.proximity_level === "nearby"
+          ? "Nearby"
+          : "Around"
+      : null;
+  return (
+    <li>
+      <button type="button" onClick={onOpen} className="focus-ring flex w-full items-center gap-3 rounded-xl p-2 text-left active:bg-secondary">
+        <GlowAvatar
+          name={muddy.displayName}
+          src={muddy.avatarUrl}
+          proximityLevel={near?.proximity_level ?? "far"}
+          glowStrength={near?.glow_strength ?? 0}
+          confidence="medium"
+          size="md"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
+            {muddy.displayName}
+            {isClose ? <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">Close</span> : null}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">@{muddy.username}</p>
+        </div>
+        {label ? <span className="shrink-0 text-xs font-medium text-primary">{label}</span> : null}
+      </button>
+    </li>
   );
 }
 

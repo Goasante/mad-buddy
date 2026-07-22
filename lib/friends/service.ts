@@ -113,6 +113,89 @@ export async function listMuddies(userId: string): Promise<ServiceResult & { mud
   };
 }
 
+export type MuddyCircle = { id: string; name: string; icon: string | null; memberIds: string[] };
+export type BlockedMuddy = { id: string; displayName: string; username: string; avatarUrl: string | null };
+
+export type MuddyNetwork = ServiceResult & {
+  muddies: MuddyListItem[];
+  closeFriendIds: string[];
+  circles: MuddyCircle[];
+  blocked: BlockedMuddy[];
+};
+
+/**
+ * Everything the Muddies screen needs in one round trip: approved Muddies,
+ * close-friend ids, the user's circles (+ members), and blocked accounts.
+ * Mirrors the web `friends/page.tsx` loader so the mobile tabs (All / Circles /
+ * Close Friends / Blocked) show the same data. Read-only.
+ */
+export async function listMuddyNetwork(userId: string): Promise<MuddyNetwork> {
+  const envMessage = browserEnvMessage() ?? serviceRoleEnvMessage();
+  if (envMessage) {
+    return { ok: false, message: envMessage, muddies: [], closeFriendIds: [], circles: [], blocked: [] };
+  }
+
+  const admin = createSupabaseAdminClient();
+  const [friendsResult, closeRows, circleRows, blockedRows] = await Promise.all([
+    listMuddies(userId),
+    admin.from("close_friend_relationships").select("friend_id").eq("owner_id", userId),
+    admin
+      .from("friend_circles")
+      .select("id, name, icon")
+      .eq("user_id", userId)
+      .is("archived_at", null)
+      .order("created_at", { ascending: true }),
+    admin.from("blocked_users").select("blocked_id").eq("blocker_id", userId)
+  ]);
+
+  const closeFriendIds = (closeRows.data ?? []).map((row) => row.friend_id);
+
+  // Resolve circle members.
+  const circles = circleRows.data ?? [];
+  let membersByCircle = new Map<string, string[]>();
+  if (circles.length > 0) {
+    const { data: members } = await admin
+      .from("circle_members")
+      .select("circle_id, friend_id")
+      .in("circle_id", circles.map((circle) => circle.id));
+    membersByCircle = new Map<string, string[]>();
+    for (const member of members ?? []) {
+      if (!membersByCircle.has(member.circle_id)) membersByCircle.set(member.circle_id, []);
+      membersByCircle.get(member.circle_id)!.push(member.friend_id);
+    }
+  }
+
+  // Resolve blocked profiles.
+  const blockedIds = (blockedRows.data ?? []).map((row) => row.blocked_id);
+  let blocked: BlockedMuddy[] = [];
+  if (blockedIds.length > 0) {
+    const { data: blockedProfiles } = await admin
+      .from("profiles")
+      .select("user_id, full_name, username, avatar_url")
+      .in("user_id", blockedIds);
+    blocked = (blockedProfiles ?? []).map((profile) => ({
+      id: profile.user_id,
+      displayName: profile.full_name,
+      username: profile.username,
+      avatarUrl: profile.avatar_url
+    }));
+  }
+
+  return {
+    ok: friendsResult.ok,
+    message: friendsResult.message,
+    muddies: friendsResult.muddies,
+    closeFriendIds,
+    circles: circles.map((circle) => ({
+      id: circle.id,
+      name: circle.name,
+      icon: circle.icon,
+      memberIds: membersByCircle.get(circle.id) ?? []
+    })),
+    blocked
+  };
+}
+
 /** Search public profile fields by username or name (server-side, rate limited). */
 export async function searchUsers(userId: string, query: string): Promise<SearchUsersResult> {
   const requestId = createRequestId();

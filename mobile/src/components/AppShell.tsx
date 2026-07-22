@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Home,
@@ -202,6 +203,8 @@ function Dropdown({
   children: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState({ top: 0, right: 0 });
   const close = () => setOpen(false);
   // Register with the shared overlay stack so outside-press, Escape, and the
   // Android back button all dismiss it via one handler.
@@ -211,13 +214,16 @@ function Dropdown({
     setOpen((current) => {
       if (current) return false;
       dismissAllOverlays(); // only one dropdown open at a time
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) setPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
       return true;
     });
   }
 
   return (
-    <div className="relative">
+    <>
       <button
+        ref={triggerRef}
         type="button"
         aria-label={label}
         aria-expanded={open}
@@ -227,20 +233,25 @@ function Dropdown({
       >
         {trigger}
       </button>
-      {open ? (
-        <>
-          {/* Dismissible backdrop — transparent (not an opaque modal), so a tap on
-              any empty area closes the dropdown. */}
-          <div className="fixed inset-0 z-40" onClick={close} aria-hidden="true" />
-          <div
-            role="menu"
-            className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-border bg-card p-1.5 shadow-[0_18px_45px_rgba(0,0,0,0.45)]"
-          >
-            {children(close)}
-          </div>
-        </>
-      ) : null}
-    </div>
+      {open
+        ? // Portal to <body> so the backdrop escapes the header's stacking
+          // context (sticky + backdrop-blur) and actually covers the page —
+          // that's what makes tap-outside-to-close work.
+          createPortal(
+            <>
+              <div className="fixed inset-0 z-[90]" onClick={close} aria-hidden="true" />
+              <div
+                role="menu"
+                style={{ top: pos.top, right: pos.right }}
+                className="fixed z-[100] w-64 rounded-xl border border-border bg-card p-1.5 shadow-[0_18px_45px_rgba(0,0,0,0.45)]"
+              >
+                {children(close)}
+              </div>
+            </>,
+            document.body
+          )
+        : null}
+    </>
   );
 }
 
