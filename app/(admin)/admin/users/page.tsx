@@ -14,6 +14,8 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { AdminUserControls } from "@/components/admin/admin-user-controls";
+import { OrphanAccountRow } from "@/components/admin/orphan-account-row";
+import { listOrphanAuthAccounts } from "@/lib/admin/orphan-accounts";
 import { getAdminAccess } from "@/lib/admin/access";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
 import { redirect } from "next/navigation";
@@ -76,6 +78,13 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   const total = profilesResult.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  // Safeguard: surface auth accounts that have no profile row (e.g. an OAuth
+  // sign-up whose profile bootstrap failed). Without this they never appear in
+  // this list. Computed once on the first, unfiltered view since it's a global
+  // alert rather than a per-page slice.
+  const canRepairAccounts = access.permissions.has("admin.support.manage");
+  const orphanAccounts = page === 1 && !search ? await listOrphanAuthAccounts(admin) : [];
+
   return (
     <div className="space-y-6">
       <AdminPageHeader
@@ -120,6 +129,27 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
       </div>
 
       {profilesResult.error || subscriptionsResult.error || restrictionsResult.error ? <AdminQueryError /> : null}
+
+      {orphanAccounts.length > 0 ? (
+        <Card className="overflow-hidden border-amber-400/30 p-0">
+          <div className="flex items-center justify-between gap-3 border-b border-amber-400/20 bg-amber-400/10 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-amber-100">
+                {orphanAccounts.length} account{orphanAccounts.length === 1 ? "" : "s"} without a profile
+              </p>
+              <p className="mt-0.5 text-xs text-amber-100/80">
+                These exist in auth but never got a profile row, so they don&rsquo;t show in the list below. Create the
+                profile to restore them.
+              </p>
+            </div>
+          </div>
+          <div className="divide-y divide-border/70">
+            {orphanAccounts.map((account) => (
+              <OrphanAccountRow key={account.id} account={account} canRepair={canRepairAccounts} />
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       {!profilesResult.error && profiles.length === 0 ? (
         <AdminEmptyState icon={UsersRound} title="No users found" description={search ? "Try another name or username." : "No accounts match this filter."} />
