@@ -26,6 +26,7 @@ export function MessagesScreen() {
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"all" | "unread" | "plans">("all");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,10 +53,29 @@ export function MessagesScreen() {
         </Button>
       }
     >
+      <p className="-mt-3 mb-4 text-sm text-muted-foreground">Chat privately with your approved Muddies.</p>
+
       <div className="relative mb-4">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <Input className="pl-9" placeholder="Search messages" value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
+
+      <nav className="mb-4 border-b border-border/70" aria-label="Messages tabs">
+        <div className="flex gap-1">
+          {(["all", "unread", "plans"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setActiveTab(t)}
+              className={`focus-ring safe-motion border-b-2 px-4 py-2.5 text-sm font-medium capitalize ${
+                activeTab === t ? "border-primary text-foreground" : "border-transparent text-muted-foreground"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </nav>
 
       {loading ? (
         <div className="flex justify-center py-10">
@@ -69,6 +89,7 @@ export function MessagesScreen() {
         <ul className="overflow-hidden rounded-2xl border border-border">
           {conversations
             .filter((c) => query.trim().length === 0 || c.title.toLowerCase().includes(query.toLowerCase()))
+            .filter((c) => (activeTab === "unread" ? c.unreadCount > 0 : activeTab === "plans" ? c.contextBadge === "Plan" : true))
             .map((conversation, index) => (
             <li key={conversation.id}>
               <button

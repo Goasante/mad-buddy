@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Plus, Check, X, UserPlus } from "lucide-react";
+import { Search, Plus, Check, X, UserPlus, Hand, MessageCircle, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
@@ -86,12 +86,27 @@ export function MuddiesScreen() {
     } else setFeedback(result.error);
   }
 
+  async function wave(muddy: Muddy) {
+    const result = await api.post<{ ok: boolean; message: string }>("/api/waves", { targetUserId: muddy.id });
+    setFeedback(result.ok ? result.data.message : result.error);
+  }
+
+  async function message(muddy: Muddy) {
+    const result = await api.post<{ ok: boolean; conversationId?: string; message: string }>("/api/messages/open", { recipientId: muddy.id });
+    if (result.ok && result.data.conversationId) navigate(`/messages/${result.data.conversationId}`, { state: { title: muddy.displayName } });
+    else setFeedback(result.ok ? result.data.message : result.error);
+  }
+
   const filteredMuddies = muddies.filter(
     (m) =>
       query.trim().length === 0 ||
       m.displayName.toLowerCase().includes(query.toLowerCase()) ||
       m.username.toLowerCase().includes(query.toLowerCase())
   );
+  const activeNow = filteredMuddies.filter((m) => {
+    const level = proximity[m.id]?.proximity_level;
+    return level === "very_close" || level === "nearby" || level === "around";
+  });
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-lg space-y-6 px-4 pt-6">
@@ -173,6 +188,40 @@ export function MuddiesScreen() {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input className="pl-9" placeholder="Search your Muddies" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
+
+          {activeNow.length > 0 ? (
+            <section>
+              <div className="mb-2 flex items-center gap-2">
+                <h2 className="text-lg font-semibold tracking-tight">Active now</h2>
+                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">{activeNow.length} active</span>
+              </div>
+              <ul className="space-y-3">
+                {activeNow.map((muddy) => {
+                  const near = proximity[muddy.id];
+                  const label = near?.proximity_level === "very_close" ? "Very close" : near?.proximity_level === "nearby" ? "Nearby" : "Around";
+                  return (
+                    <li key={muddy.id} className="rounded-2xl border border-primary/40 bg-primary/[0.04] p-4">
+                      <button type="button" onClick={() => navigate(`/u/${muddy.id}`)} className="focus-ring flex w-full items-center gap-3 text-left">
+                        <GlowAvatar name={muddy.displayName} src={muddy.avatarUrl} proximityLevel={near?.proximity_level ?? "far"} glowStrength={near?.glow_strength ?? 0} confidence="medium" size="md" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold">{muddy.displayName}</p>
+                          <p className="truncate text-xs text-primary">{label}</p>
+                          <p className="truncate text-xs text-muted-foreground">Approved Muddy</p>
+                        </div>
+                      </button>
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        <ActionBtn icon={Hand} label="Wave" onClick={() => void wave(muddy)} />
+                        <ActionBtn icon={MessageCircle} label="Message" onClick={() => void message(muddy)} />
+                        <ActionBtn icon={MoreHorizontal} label="More" onClick={() => navigate(`/u/${muddy.id}`)} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <h2 className="mb-2 mt-6 text-lg font-semibold tracking-tight">All Muddies</h2>
+            </section>
+          ) : null}
+
           {filteredMuddies.length === 0 ? (
             <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">
               {muddies.length === 0 ? "No Muddies yet. Tap “Add Muddy” to find people." : "No matches."}
@@ -238,6 +287,19 @@ export function MuddiesScreen() {
         </p>
       )}
     </div>
+  );
+}
+
+function ActionBtn({ icon: Icon, label, onClick }: { icon: typeof Hand; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="focus-ring flex items-center justify-center gap-1.5 rounded-xl border border-border bg-card/60 py-2 text-sm font-medium active:bg-secondary"
+    >
+      <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      {label}
+    </button>
   );
 }
 

@@ -99,6 +99,33 @@ export async function GET(request: Request) {
   );
 }
 
+// Mark notifications read. Body: { markAllRead: true } marks all of the user's,
+// or { ids: [...] } marks specific ones. Mobile "Mark all as read".
+export async function POST(request: Request) {
+  const env = getSupabaseServerEnv();
+  if (!env.url || !env.anonKey || !env.serviceRoleKey) {
+    return withCors(NextResponse.json({ error: "Supabase is not configured yet." }, { status: 503 }), request);
+  }
+
+  const auth = await resolveApiUser(request);
+  if (!auth) {
+    return withCors(NextResponse.json({ error: "Authentication required." }, { status: 401 }), request);
+  }
+  const { user } = auth;
+
+  const body = (await request.json().catch(() => null)) as { markAllRead?: boolean; ids?: string[] } | null;
+  const admin = createSupabaseAdminClient();
+  let query = admin.from("notifications").update({ is_read: true }).eq("user_id", user.id).eq("is_read", false);
+  if (!body?.markAllRead && Array.isArray(body?.ids) && body.ids.length > 0) {
+    query = query.in("id", body.ids.slice(0, 200));
+  }
+  const { error } = await query;
+  if (error) {
+    return withCors(NextResponse.json({ error: "Could not update notifications." }, { status: 500 }), request);
+  }
+  return withCors(NextResponse.json({ ok: true }), request);
+}
+
 export async function DELETE(request: Request) {
   const env = getSupabaseServerEnv();
 

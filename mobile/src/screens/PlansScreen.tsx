@@ -57,6 +57,7 @@ export function PlansScreen() {
   const [loading, setLoading] = useState(true);
   const [activeBucket, setActiveBucket] = useState<Bucket>("upcoming");
   const [createOpen, setCreateOpen] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
 
   const load = useCallback(async () => {
@@ -81,13 +82,15 @@ export function PlansScreen() {
 
   return (
     <div className="mx-auto w-full max-w-lg px-4 pt-6">
-      <header className="flex items-center justify-between gap-3">
+      <header>
         <h1 className="text-2xl font-semibold tracking-tight">Plans</h1>
-        <Button type="button" className="shrink-0" onClick={() => setCreateOpen((v) => !v)}>
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          New plan
-        </Button>
+        <p className="mt-1 text-sm text-muted-foreground">Make plans and organise meet-ups with your Muddies.</p>
       </header>
+
+      <Button type="button" className="mt-4 w-full" onClick={() => setCreateOpen((v) => !v)}>
+        <Plus className="h-4 w-4" aria-hidden="true" />
+        New plan
+      </Button>
 
       {createOpen ? (
         <CreatePlan
@@ -158,23 +161,40 @@ export function PlansScreen() {
                   </div>
                 </div>
 
-                {plan.isHost || TERMINAL.has(plan.status) ? null : (
-                  <div className="mt-3 flex gap-2">
-                    {rsvpChoices.map((choice) => (
-                      <button
-                        key={choice.value}
-                        type="button"
-                        onClick={() => void rsvp(plan.id, choice.value)}
-                        className={cn(
-                          "focus-ring flex-1 rounded-lg border py-1.5 text-sm",
-                          plan.myRsvp === choice.value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
-                        )}
-                      >
-                        {choice.label}
-                      </button>
-                    ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-3 w-full"
+                  onClick={() => setExpandedId((id) => (id === plan.id ? null : plan.id))}
+                >
+                  View
+                </Button>
+
+                {expandedId === plan.id ? (
+                  <div className="mt-3 space-y-3 border-t border-border pt-3">
+                    {plan.placeText ? <p className="text-sm text-muted-foreground">📍 {plan.placeText}</p> : null}
+                    {plan.description ? <p className="text-sm">{plan.description}</p> : null}
+                    {plan.isHost ? (
+                      <p className="text-xs font-medium text-primary">You're hosting this plan.</p>
+                    ) : TERMINAL.has(plan.status) ? null : (
+                      <div className="flex gap-2">
+                        {rsvpChoices.map((choice) => (
+                          <button
+                            key={choice.value}
+                            type="button"
+                            onClick={() => void rsvp(plan.id, choice.value)}
+                            className={cn(
+                              "focus-ring flex-1 rounded-lg border py-1.5 text-sm",
+                              plan.myRsvp === choice.value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
+                            )}
+                          >
+                            {choice.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
+                ) : null}
               </Card>
             </li>
           ))}
