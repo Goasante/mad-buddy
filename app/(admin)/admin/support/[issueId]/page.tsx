@@ -158,7 +158,8 @@ export default async function SupportIssueDetailPage({ params }: DetailPageProps
     staff: staffIds
       .map((id) => ({ id, name: profileById.get(id)?.full_name ?? "Staff member" }))
       .sort((a, b) => a.name.localeCompare(b.name)),
-    actorId: context.userId
+    actorId: context.userId,
+    canSendPasswordReset: access.permissions.has("admin.users.recovery_link")
   };
 
   return (

@@ -10,6 +10,7 @@ import { createRequestId, logBackendEvent } from "@/lib/observability/logger";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
+import { normalizeUsername, validateUsername } from "@/lib/profile/rules";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -26,12 +27,14 @@ export async function bootstrapNewUser(
   admin: Admin,
   { userId, fullName, username }: { userId: string; fullName: string; username: string }
 ): Promise<{ label: "profile" | "subscription" | "preferences"; error: unknown }[]> {
+  const normalizedUsername = normalizeUsername(username);
   const [profileResult, subscriptionResult, preferencesResult] = await Promise.all([
     admin.from("profiles").upsert(
       {
         user_id: userId,
         full_name: fullName,
-        username,
+        username: normalizedUsername,
+        username_normalized: normalizedUsername,
         is_onboarded: false
       },
       { onConflict: "user_id" }
@@ -71,6 +74,10 @@ const mobileSignupSchema = z
     password: z.string().min(8),
     acceptedPolicy: z.literal(true),
     policyVersion: z.literal(PRIVACY_POLICY_VERSION)
+  })
+  .superRefine((data, context) => {
+    const usernameError = validateUsername(data.username);
+    if (usernameError) context.addIssue({ code: "custom", path: ["username"], message: usernameError });
   });
 
 export type MobileSignUpResult = { ok: boolean; message: string };
@@ -136,6 +143,7 @@ export async function registerConfirmedUser(input: unknown): Promise<MobileSignU
     fullName,
     username
   });
+  const failedBootstrap = bootstrapResults.find((result) => result.error);
   for (const { label, error: rowError } of bootstrapResults) {
     if (rowError) {
       logBackendEvent("error", {
@@ -147,6 +155,18 @@ export async function registerConfirmedUser(input: unknown): Promise<MobileSignU
         errorType: `bootstrap_${label}_failed`
       });
     }
+  }
+
+  if (failedBootstrap) {
+    await admin.auth.admin.deleteUser(data.user.id);
+    const code = (failedBootstrap.error as { code?: string } | null)?.code;
+    return {
+      ok: false,
+      message:
+        failedBootstrap.label === "profile" && code === "23505"
+          ? "That username is already taken. Try another one."
+          : "Your account could not be set up. Please try again."
+    };
   }
 
   logBackendEvent("info", {

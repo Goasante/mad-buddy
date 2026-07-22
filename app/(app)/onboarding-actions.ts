@@ -169,7 +169,8 @@ export async function completeOnboardingStepAction(step: string): Promise<Onboar
   if (next === "location_prompted" && !progress.location_prompted_at) update.location_prompted_at = nowIso;
   if (next === "first_muddy_added" && !progress.first_muddy_added_at) update.first_muddy_added_at = nowIso;
 
-  await admin.from("onboarding_progress").update(update).eq("user_id", userId);
+  const { error: updateError } = await admin.from("onboarding_progress").update(update).eq("user_id", userId);
+  if (updateError) return { ok: false, message: "Couldn't save your onboarding progress. Try again." };
 
   if (next === "profile_completed") await recordMilestone(admin, userId, "profile_completed");
   if (next === "first_muddy_added") await recordMilestone(admin, userId, "first_muddy_added");
@@ -242,7 +243,7 @@ export async function completeOnboardingV2Action(): Promise<OnboardingActionStat
   }
 
   const nowIso = new Date().toISOString();
-  await Promise.all([
+  const [progressResult, profileResult] = await Promise.all([
     admin
       .from("onboarding_progress")
       .update({ current_step: "completed" as OnboardingStepName, completed_at: nowIso, updated_at: nowIso })
@@ -250,6 +251,10 @@ export async function completeOnboardingV2Action(): Promise<OnboardingActionStat
     // Keep the legacy convenience flag in sync.
     admin.from("profiles").update({ is_onboarded: true }).eq("user_id", userId)
   ]);
+
+  if (progressResult.error || profileResult.error) {
+    return { ok: false, message: "Couldn't finish setting up your account. Try again." };
+  }
 
   return { ok: true, message: "You're all set." };
 }

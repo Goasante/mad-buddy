@@ -51,6 +51,7 @@ export type RateLimitAction =
   | "account.export"
   | "account.delete"
   | "admin.mutate"
+  | "admin.password_reset"
   | "admin.search";
 
 export type RateLimitResult = {
@@ -113,6 +114,7 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "account.export": { limit: 3, windowSeconds: 60 * 60 },
   "account.delete": { limit: 3, windowSeconds: 24 * 60 * 60 },
   "admin.mutate": { limit: 120, windowSeconds: 60 * 60 },
+  "admin.password_reset": { limit: 10, windowSeconds: 60 * 60 },
   "admin.search": { limit: 120, windowSeconds: 60 }
 };
 

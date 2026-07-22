@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, Lock, MessageSquare, RotateCcw, Send, ShieldAlert } from "lucide-react";
+import { Check, Copy, KeyRound, LoaderCircle, Lock, MessageSquare, RotateCcw, Send, ShieldAlert } from "lucide-react";
 import { useState, useTransition } from "react";
 import {
   addInternalNoteAction,
@@ -9,6 +9,7 @@ import {
   updateSupportIssuePriorityAction,
   updateSupportIssueStatusAction
 } from "@/app/(admin)/admin/support/actions";
+import { sendUserPasswordResetAction } from "@/app/(admin)/admin/users/actions";
 import { AdminSection, formatAdminDate } from "@/components/admin/admin-ui";
 import { IssuePriorityBadge, IssueStatusBadge } from "@/components/admin/support/issue-badges";
 import { AppSelect, type AppSelectOption } from "@/components/ui/app-dropdown";
@@ -49,6 +50,7 @@ export type IssueDetailData = {
   timeline: { id: string; label: string; note: string | null; actorName: string; createdAt: string }[];
   staff: { id: string; name: string }[];
   actorId: string;
+  canSendPasswordReset: boolean;
 };
 
 type Feedback = { ok: boolean; text: string } | null;
@@ -113,7 +115,12 @@ export function IssueDetailPanel({ data }: { data: IssueDetailData }) {
 
         {/* Metadata + controls (narrow) */}
         <div className="order-1 space-y-4 lg:order-2">
-          <UserSummary user={data.user} />
+          <UserSummary
+            user={data.user}
+            ticketId={data.id}
+            canSendPasswordReset={data.canSendPasswordReset}
+            onFeedback={setFeedback}
+          />
 
           <Card className="space-y-3 p-4">
             <AssignmentControl
@@ -173,7 +180,20 @@ function MetaRow({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-function UserSummary({ user }: { user: IssueDetailData["user"] }) {
+function UserSummary({
+  user,
+  ticketId,
+  canSendPasswordReset,
+  onFeedback
+}: {
+  user: IssueDetailData["user"];
+  ticketId: string;
+  canSendPasswordReset: boolean;
+  onFeedback: (feedback: Feedback) => void;
+}) {
+  const [pending, start] = useTransition();
+  const [confirmingReset, setConfirmingReset] = useState(false);
+
   if (!user) {
     return (
       <Card className="p-4">
@@ -191,6 +211,49 @@ function UserSummary({ user }: { user: IssueDetailData["user"] }) {
         </div>
       </div>
       {user.plan ? <p className="mt-3 text-xs text-muted-foreground">Plan: <span className="text-foreground">{user.plan}</span></p> : null}
+      {canSendPasswordReset ? (
+        confirmingReset ? (
+          <div className="mt-3 space-y-2 rounded-xl border border-border bg-secondary/30 p-3">
+            <p className="text-xs leading-5 text-muted-foreground">
+              Send a secure recovery link to the registered email? Staff cannot see or set the password.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => setConfirmingReset(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={pending}
+                onClick={() => {
+                  start(async () => {
+                    const result = await sendUserPasswordResetAction({
+                      userId: user.id,
+                      ticketId,
+                      reason: `Account recovery requested through support ticket ${ticketId}`
+                    });
+                    onFeedback({ ok: result.ok, text: result.message });
+                    if (result.ok) setConfirmingReset(false);
+                  });
+                }}
+              >
+                {pending ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                ) : (
+                  <KeyRound className="h-4 w-4" aria-hidden="true" />
+                )}
+                Send link
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button type="button" size="sm" variant="outline" className="mt-3 w-full" onClick={() => setConfirmingReset(true)}>
+            <KeyRound className="h-4 w-4" aria-hidden="true" />
+            Send password reset link
+          </Button>
+        )
+      ) : null}
     </Card>
   );
 }

@@ -26,6 +26,7 @@ export const ADMIN_PERMISSIONS = [
   "admin.users.restrict",
   "admin.users.suspend",
   "admin.users.restore",
+  "admin.users.recovery_link",
   "admin.sessions.revoke",
   "admin.reports.review",
   "admin.appeals.review",
@@ -139,6 +140,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, readonly AdminPermission[]> = {
     "admin.users.restrict",
     "admin.users.suspend",
     "admin.users.restore",
+    "admin.users.recovery_link",
     "admin.reports.review",
     "admin.appeals.review",
     "admin.organisations.restrict",
@@ -147,7 +149,13 @@ export const ROLE_PERMISSIONS: Record<AdminRole, readonly AdminPermission[]> = {
     "admin.support.manage",
     "admin.sessions.revoke"
   ],
-  customer_support_agent: ["admin.users.view_summary", "admin.users.suspend", "admin.sessions.revoke", "admin.support.manage"],
+  customer_support_agent: [
+    "admin.users.view_summary",
+    "admin.users.suspend",
+    "admin.users.recovery_link",
+    "admin.sessions.revoke",
+    "admin.support.manage"
+  ],
   billing_support_agent: ["admin.users.view_summary", "admin.users.suspend", "admin.billing.view", "admin.billing.refund"],
   verification_reviewer: ["admin.users.view_summary", "admin.users.suspend", "admin.verification.review"],
   security_engineer: [

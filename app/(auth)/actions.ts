@@ -16,6 +16,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
+import { validateUsername } from "@/lib/profile/rules";
 
 export type AuthActionState = {
   ok: boolean;
@@ -37,7 +38,13 @@ const signupSchema = z
     acceptedPolicy: z.literal(true),
     policyVersion: z.literal(PRIVACY_POLICY_VERSION)
   })
-  .refine((data) => data.password === data.confirmPassword);
+  .superRefine((data, context) => {
+    if (data.password !== data.confirmPassword) {
+      context.addIssue({ code: "custom", path: ["confirmPassword"], message: "Passwords do not match." });
+    }
+    const usernameError = validateUsername(data.username);
+    if (usernameError) context.addIssue({ code: "custom", path: ["username"], message: usernameError });
+  });
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -194,6 +201,7 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
   // Per-user rows (profile / subscription / preferences). Idempotent; shared
   // with the mobile path (lib/auth/bootstrap) so the two can't drift.
   const bootstrapResults = await bootstrapNewUser(admin, { userId: created.user.id, fullName, username });
+  const failedBootstrap = bootstrapResults.find((result) => result.error);
   for (const { label, error: rowError } of bootstrapResults) {
     if (rowError) {
       logBackendEvent("error", {
@@ -205,6 +213,20 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
         errorType: `bootstrap_${label}_failed`
       });
     }
+  }
+
+  if (failedBootstrap) {
+    // Do not leave an auth-only account behind. It appears in Admin but cannot
+    // complete onboarding because its required profile row was never created.
+    await admin.auth.admin.deleteUser(created.user.id);
+    const code = (failedBootstrap.error as { code?: string } | null)?.code;
+    return {
+      ok: false,
+      message:
+        failedBootstrap.label === "profile" && code === "23505"
+          ? "That username is already taken. Try another one."
+          : "Your account could not be set up. Please try again."
+    };
   }
 
   // Establish the cookie session so they continue straight into onboarding. The

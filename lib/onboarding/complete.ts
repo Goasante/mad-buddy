@@ -12,6 +12,7 @@ import {
 import { recordMilestone } from "@/lib/onboarding/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
+import { normalizeUsername, validateUsername } from "@/lib/profile/rules";
 
 /**
  * Transport-agnostic onboarding services. Each takes an already-authenticated
@@ -19,7 +20,7 @@ import { getSupabaseServerEnv } from "@/lib/supabase/env";
  * `savePrivacySetupAction`) and the mobile `/api/onboarding/*` routes.
  */
 
-export type ServiceResult = { ok: boolean; message: string };
+export type ServiceResult = { ok: boolean; message: string; field?: "username" };
 
 function serviceRoleEnvMessage(): string | null {
   const env = getSupabaseServerEnv();
@@ -68,7 +69,22 @@ export async function completeOnboarding(userId: string, input: unknown): Promis
     return { ok: false, message: "Check your onboarding details and try again." };
   }
 
+  const username = normalizeUsername(parsed.data.username);
+  const usernameError = validateUsername(username);
+  if (usernameError) return { ok: false, message: usernameError, field: "username" };
+
   const admin = createSupabaseAdminClient();
+
+  const { data: usernameOwner, error: usernameLookupError } = await admin
+    .from("profiles")
+    .select("user_id")
+    .or(`username.eq.${username},username_normalized.eq.${username}`)
+    .limit(1)
+    .maybeSingle();
+  if (usernameLookupError) return { ok: false, message: "That username could not be checked.", field: "username" };
+  if (usernameOwner && usernameOwner.user_id !== userId) {
+    return { ok: false, message: "That username is already taken. Try another one.", field: "username" };
+  }
 
   // Upsert on user_id: the profile row already exists (created at sign-up / by
   // ensureProfileForUser for OAuth), so without this the default id-PK conflict
@@ -78,11 +94,14 @@ export async function completeOnboarding(userId: string, input: unknown): Promis
     {
       user_id: userId,
       full_name: parsed.data.fullName,
-      username: parsed.data.username,
+      username,
+      username_normalized: username,
       bio: parsed.data.bio || null,
       mood_status: parsed.data.moodStatus || null,
       ...(parsed.data.visibility ? { visibility_status: visibilityMap[parsed.data.visibility] } : {}),
-      is_onboarded: true
+      // The final onboarding action flips this only after required progress is
+      // confirmed, preventing a half-finished account from entering the app.
+      is_onboarded: false
     },
     { onConflict: "user_id" }
   );
@@ -90,7 +109,7 @@ export async function completeOnboarding(userId: string, input: unknown): Promis
   if (profileError) {
     // 23505 here means the chosen username belongs to someone else.
     if (profileError.code === "23505") {
-      return { ok: false, message: "That username is already taken. Try another one." };
+      return { ok: false, message: "That username is already taken. Try another one.", field: "username" };
     }
     return { ok: false, message: "Your profile could not be saved." };
   }

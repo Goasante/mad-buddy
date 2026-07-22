@@ -2,9 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
-import { completeOnboardingAction } from "@/app/(onboarding)/onboarding/actions";
+import { ArrowLeft, ArrowRight, Check, Loader2, X } from "lucide-react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import {
+  checkUsernameAvailabilityAction,
+  completeOnboardingAction,
+  type UsernameCheckState
+} from "@/app/(onboarding)/onboarding/actions";
 import {
   completeOnboardingStepAction,
   completeOnboardingV2Action
@@ -51,7 +55,45 @@ export function OnboardingFlow({
   const [privacySaved, setPrivacySaved] = useState(false);
   const [firstFriend, setFirstFriend] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [usernameCheck, setUsernameCheck] = useState<UsernameCheckState | null>(null);
+  const [usernameCheckAttempt, setUsernameCheckAttempt] = useState(0);
   const [isPending, startTransition] = useTransition();
+
+  const usernameFormatError = username.length > 0 ? validateUsername(username) : null;
+  const currentUsernameCheck = usernameCheck?.username === username ? usernameCheck : null;
+  const usernameStatus: UsernameStatus =
+    username.length === 0
+      ? "idle"
+      : usernameFormatError
+        ? "invalid"
+        : currentUsernameCheck?.status ?? "checking";
+  const usernameMessage = usernameFormatError ?? currentUsernameCheck?.message ?? "Checking availability...";
+
+  // Debounced live availability check so a taken username is caught AT the field
+  // (green checklist) rather than at the final submit.
+  useEffect(() => {
+    if (username.length === 0 || validateUsername(username)) return;
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const result = await checkUsernameAvailabilityAction(username);
+        if (!cancelled && result.username === username) setUsernameCheck(result);
+      } catch {
+        if (!cancelled) {
+          setUsernameCheck({
+            status: "error",
+            message: "Couldn't check this username. Try again.",
+            username
+          });
+        }
+      }
+    }, 450);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [username, usernameCheckAttempt]);
 
   const activeStep = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;
@@ -70,7 +112,20 @@ export function OnboardingFlow({
         setFeedback(usernameError);
         return;
       }
-      void completeOnboardingStepAction("profile_completed");
+      if (usernameStatus !== "available") {
+        setFeedback(usernameMessage);
+        return;
+      }
+      startTransition(async () => {
+        const result = await completeOnboardingStepAction("profile_completed");
+        if (!result.ok) {
+          setFeedback(result.message);
+          return;
+        }
+        setFeedback("");
+        setStepIndex((current) => Math.min(current + 1, steps.length - 1));
+      });
+      return;
     }
     setFeedback("");
     setStepIndex((current) => Math.min(current + 1, steps.length - 1));
@@ -99,11 +154,27 @@ export function OnboardingFlow({
 
       setFeedback(result.message);
 
-      if (result.ok) {
-        if (firstFriend.trim()) void completeOnboardingStepAction("first_muddy_added");
-        await completeOnboardingV2Action();
-        router.push("/dashboard");
+      if (!result.ok) {
+        if (result.field === "username") {
+          setUsernameCheck({
+            status: result.message.toLowerCase().includes("taken") ? "taken" : "error",
+            message: result.message,
+            username
+          });
+          setStepIndex(0);
+        }
+        return;
       }
+
+      if (firstFriend.trim()) await completeOnboardingStepAction("first_muddy_added");
+      const completion = await completeOnboardingV2Action();
+      if (!completion.ok) {
+        setFeedback(completion.message);
+        return;
+      }
+
+      router.replace("/dashboard");
+      router.refresh();
     });
   }
 
@@ -152,7 +223,13 @@ export function OnboardingFlow({
                 displayName={displayName}
                 setDisplayName={setDisplayName}
                 username={username}
-                setUsername={setUsername}
+                setUsername={(value) => {
+                  setUsername(value);
+                  setFeedback("");
+                }}
+                usernameStatus={usernameStatus}
+                usernameMessage={usernameMessage}
+                retryUsernameCheck={() => setUsernameCheckAttempt((attempt) => attempt + 1)}
                 bio={bio}
                 setBio={setBio}
                 moodStatus={moodStatus}
@@ -211,7 +288,7 @@ export function OnboardingFlow({
                 <Check className="h-4 w-4" aria-hidden="true" />
               </Button>
             ) : (
-              <Button type="button" onClick={goNext}>
+              <Button type="button" onClick={goNext} disabled={isPending}>
                 Continue
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Button>
@@ -223,11 +300,16 @@ export function OnboardingFlow({
   );
 }
 
+type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid" | "error";
+
 type ProfileStepProps = {
   displayName: string;
   setDisplayName: (value: string) => void;
   username: string;
   setUsername: (value: string) => void;
+  usernameStatus: UsernameStatus;
+  usernameMessage: string;
+  retryUsernameCheck: () => void;
   bio: string;
   setBio: (value: string) => void;
   moodStatus: MoodStatus;
@@ -239,6 +321,9 @@ function ProfileStep({
   setDisplayName,
   username,
   setUsername,
+  usernameStatus,
+  usernameMessage,
+  retryUsernameCheck,
   bio,
   setBio,
   moodStatus,
@@ -252,12 +337,7 @@ function ProfileStep({
       <FormField htmlFor="displayName" label="Display name">
         <Input id="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
       </FormField>
-      <FormField
-        htmlFor="username"
-        label="Username"
-        hint="3–24 chars · lowercase, numbers, underscores"
-        error={username.length > 0 ? validateUsername(username) ?? undefined : undefined}
-      >
+      <FormField htmlFor="username" label="Username" hint="Use 3 to 24 lowercase letters, numbers, or underscores.">
         <Input
           id="username"
           value={username}
@@ -266,9 +346,18 @@ function ProfileStep({
           autoCorrect="off"
           spellCheck={false}
           inputMode="text"
+          maxLength={24}
+          aria-describedby="username-guidance username-status"
+          aria-invalid={usernameStatus === "invalid" || usernameStatus === "taken" || usernameStatus === "error"}
           // Usernames are stored lowercase, so lowercase as you type (no
           // surprise uppercase→lowercase at save) and drop spaces.
           onChange={(event) => setUsername(event.target.value.toLowerCase().replace(/\s+/g, ""))}
+        />
+        <UsernameChecklist
+          username={username}
+          status={usernameStatus}
+          message={usernameMessage}
+          onRetry={retryUsernameCheck}
         />
       </FormField>
       <FormField htmlFor="bio" label="Bio">
@@ -277,6 +366,125 @@ function ProfileStep({
       <div className="space-y-2.5">
         <p className="text-sm font-medium">Mood status</p>
         <MoodStatusSelector value={moodStatus} onChange={setMoodStatus} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Live, three-rule checklist under the username field with a bar that fills
+ * green when the name is valid AND available — so the user knows exactly what's
+ * wrong (and that it's free) before they ever reach the final step.
+ */
+function UsernameChecklist({
+  username,
+  status,
+  message,
+  onRetry
+}: {
+  username: string;
+  status: UsernameStatus;
+  message: string;
+  onRetry: () => void;
+}) {
+  const lengthOk = username.length >= 3 && username.length <= 24;
+  const formatOk = username.length > 0 && /^[a-z0-9_]+$/.test(username);
+  const rules: { ok: boolean; pending?: boolean; failed?: boolean; label: string }[] = [
+    { ok: lengthOk, label: "3 to 24 characters" },
+    { ok: formatOk, label: "Lowercase letters, numbers, and underscores only" },
+    {
+      ok: status === "available",
+      pending: status === "checking",
+      failed: status === "taken" || status === "error",
+      label:
+        status === "taken"
+          ? "This username is taken"
+          : status === "error"
+            ? "Availability check failed"
+            : status === "checking"
+              ? "Checking availability..."
+              : status === "available"
+                ? "Unique and available"
+                : "Must be unique and available"
+    }
+  ];
+  const passed = rules.filter((rule) => rule.ok).length;
+  const allGood = passed === rules.length;
+
+  return (
+    <div id="username-guidance" className="mt-3 space-y-2.5 rounded-xl border border-border/70 bg-muted/35 p-3">
+      <div
+        className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label="Username requirements completed"
+        aria-valuemin={0}
+        aria-valuemax={rules.length}
+        aria-valuenow={passed}
+      >
+        <div
+          className={cn(
+            "h-full rounded-full transition-[width,background-color] duration-300 ease-in-out motion-reduce:transition-none",
+            allGood ? "bg-emerald-500" : "bg-accent"
+          )}
+          style={{ width: `${(passed / rules.length) * 100}%` }}
+        />
+      </div>
+      <ul className="space-y-1">
+        {rules.map((rule) => (
+          <li key={rule.label} className="flex items-center gap-2 text-xs">
+            <span
+              className={cn(
+                "grid h-4 w-4 shrink-0 place-items-center rounded-full",
+                rule.ok
+                  ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                  : rule.failed
+                    ? "bg-destructive/15 text-destructive"
+                    : "text-muted-foreground"
+              )}
+              aria-hidden="true"
+            >
+              {rule.ok ? (
+                <Check className="h-3 w-3" />
+              ) : rule.pending ? (
+                <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" />
+              ) : rule.failed ? (
+                <X className="h-3 w-3" />
+              ) : (
+                <span className="h-1 w-1 rounded-full bg-current" />
+              )}
+            </span>
+            <span
+              className={cn(
+                rule.ok
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : rule.failed
+                    ? "text-destructive"
+                    : "text-muted-foreground"
+              )}
+            >
+              {rule.label}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div id="username-status" className="flex items-center justify-between gap-3" aria-live="polite">
+        <p
+          className={cn(
+            "text-xs",
+            status === "available"
+              ? "text-emerald-700 dark:text-emerald-400"
+              : status === "taken" || status === "invalid" || status === "error"
+                ? "text-destructive"
+                : "text-muted-foreground"
+          )}
+        >
+          {username.length === 0 ? "Choose a username friends can use to find you." : message}
+        </p>
+        {status === "error" ? (
+          <button type="button" className="focus-ring shrink-0 rounded-md text-xs font-semibold text-accent" onClick={onRetry}>
+            Try again
+          </button>
+        ) : null}
       </div>
     </div>
   );

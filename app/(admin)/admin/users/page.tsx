@@ -85,6 +85,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   // alert rather than a per-page slice.
   const canRepairAccounts = access.permissions.has("admin.support.manage");
   const canMessageUsers = access.permissions.has("admin.support.manage");
+  const canSendPasswordReset = access.permissions.has("admin.users.recovery_link");
   // The user's Pulse tag depends on the sender's tier.
   const staffTag = access.role === "support" ? "Support" : "Mad Buddy core team";
   const orphanAccounts = page === 1 && !search ? await listOrphanAuthAccounts(admin) : [];
@@ -178,7 +179,12 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                   </div>
                   <div className="text-xs font-medium"><span className="mr-2 text-muted-foreground md:hidden">Plan</span>{humanizeAdminValue(subscription?.plan ?? "free")}</div>
                   <div>{restrictions > 0 ? <AdminStatus label={String(restrictions)} tone="danger" /> : <AdminStatus label="None" tone="success" />}</div>
-                  <AdminUserControls userId={profile.user_id} disabled={suspendedUsers.has(profile.user_id)} canQuickFix={access.permissions.has("admin.support.manage")} />
+                  <AdminUserControls
+                    userId={profile.user_id}
+                    disabled={suspendedUsers.has(profile.user_id)}
+                    canQuickFix={access.permissions.has("admin.support.manage")}
+                    canSendPasswordReset={canSendPasswordReset}
+                  />
                   {canMessageUsers ? <AdminUserMessage userId={profile.user_id} tag={staffTag} /> : null}
                 </div>
               );

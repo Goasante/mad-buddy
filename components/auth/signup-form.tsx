@@ -14,6 +14,7 @@ import { FormField } from "@/components/auth/form-field";
 import { PasswordStrength } from "@/components/auth/password-strength";
 import { startOAuth } from "@/lib/auth/oauth";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
+import { normalizeUsername, validateUsername } from "@/lib/profile/rules";
 
 const signupSchema = z
   .object({
@@ -29,14 +30,17 @@ const signupSchema = z
     acceptedPolicy: z.boolean().refine(Boolean, "You must agree before creating an account."),
     policyVersion: z.literal(PRIVACY_POLICY_VERSION)
   })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match.",
-    path: ["confirmPassword"]
+  .superRefine((data, context) => {
+    if (data.password !== data.confirmPassword) {
+      context.addIssue({ code: "custom", path: ["confirmPassword"], message: "Passwords do not match." });
+    }
+    const usernameError = validateUsername(data.username);
+    if (usernameError) {
+      context.addIssue({ code: "custom", path: ["username"], message: usernameError });
+    }
   });
 
 type SignupFormValues = z.infer<typeof signupSchema>;
-
-const reservedUsernames = new Set(["admin", "support", "madbuddy", "billing"]);
 
 type SignupFormProps = {
   initialError?: string | null;
@@ -74,20 +78,10 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
   const password = useWatch({ control, name: "password" });
   const acceptedPolicy = useWatch({ control, name: "acceptedPolicy" });
   const usernameState = useMemo(() => {
-    if (!username || username.length < 3) {
-      return "At least 3 characters";
-    }
-
-    if (reservedUsernames.has(username.toLowerCase())) {
-      return "Username is reserved";
-    }
-
-    if (!/^[a-z0-9_]+$/.test(username)) {
-      return "Checking paused";
-    }
-
-    return "Looks available";
+    if (!username) return "Use 3 to 24 lowercase letters, numbers, or underscores.";
+    return validateUsername(username) ?? "Format looks good. Availability is confirmed when you create the account.";
   }, [username]);
+  const usernameField = register("username");
 
   function onSubmit(values: SignupFormValues) {
     startTransition(async () => {
@@ -149,7 +143,20 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
           <Input id="fullName" autoComplete="name" placeholder="Godfred Ofosu Asante" {...register("fullName")} />
         </FormField>
         <FormField htmlFor="username" label="Username" hint={usernameState} error={errors.username?.message}>
-          <Input id="username" autoComplete="username" placeholder="godfred" {...register("username")} />
+          <Input
+            id="username"
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            maxLength={24}
+            placeholder="godfred"
+            {...usernameField}
+            onChange={(event) => {
+              event.target.value = normalizeUsername(event.target.value).replace(/\s+/g, "");
+              usernameField.onChange(event);
+            }}
+          />
         </FormField>
       </div>
 

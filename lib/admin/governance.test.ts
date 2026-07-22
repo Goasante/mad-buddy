@@ -119,9 +119,25 @@ describe("no ambient staff access to private data (spec §1, §4)", () => {
     expect(permissionsForRole("customer_support_agent")).toEqual([
       "admin.users.view_summary",
       "admin.users.suspend",
+      "admin.users.recovery_link",
       "admin.sessions.revoke",
       "admin.support.manage"
     ]);
+  });
+
+  it("limits user recovery links to owner, admin, and customer support roles", () => {
+    expect(permissionsForRole("super_administrator")).toContain("admin.users.recovery_link");
+    expect(permissionsForRole("trust_safety_administrator")).toContain("admin.users.recovery_link");
+    expect(permissionsForRole("customer_support_agent")).toContain("admin.users.recovery_link");
+    for (const role of [
+      "billing_support_agent",
+      "verification_reviewer",
+      "security_engineer",
+      "privacy_administrator",
+      "read_only_auditor"
+    ] as const) {
+      expect(permissionsForRole(role)).not.toContain("admin.users.recovery_link");
+    }
   });
 
   it("gives every admin role the universal account safety hold", () => {
