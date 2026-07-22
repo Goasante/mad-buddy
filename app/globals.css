@@ -78,6 +78,30 @@
   }
 }
 
+@keyframes install-prompt-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes install-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.install-prompt-panel[data-state="open"] {
+  animation: install-prompt-in 220ms ease-out;
+}
+
+.install-prompt-overlay[data-state="open"] {
+  animation: install-overlay-in 180ms ease-out;
+}
+
 .toast-in {
   animation: toast-in 200ms ease-out;
 }
@@ -85,6 +109,11 @@
 @media (prefers-reduced-motion: reduce) {
   .toast-in {
     animation: none;
+  }
+
+  .install-prompt-panel,
+  .install-prompt-overlay {
+    animation: none !important;
   }
 }
 

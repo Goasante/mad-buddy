@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { InstallAppPrompt } from "@/components/pwa/install-app-prompt";
+import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { getSiteUrl } from "@/lib/seo";
 import "./globals.css";
@@ -17,6 +19,10 @@ export const metadata: Metadata = {
     template: "%s | Mad Buddy"
   },
   description: "When your Muddies are close, they glow, private proximity for mutually approved friends.",
+  applicationName: "Mad Buddy",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Mad Buddy" },
+  formatDetection: { telephone: false },
   openGraph: {
     title: "Mad Buddy",
     description: "When your Muddies are close, they glow.",
@@ -64,7 +70,11 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <script id="theme-script" dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body suppressHydrationWarning>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          <ServiceWorkerRegistration />
+          <InstallAppPrompt />
+        </ThemeProvider>
       </body>
     </html>
   );
