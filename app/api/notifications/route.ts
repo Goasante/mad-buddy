@@ -113,11 +113,19 @@ export async function POST(request: Request) {
   }
   const { user } = auth;
 
-  const body = (await request.json().catch(() => null)) as { markAllRead?: boolean; ids?: string[] } | null;
+  const body = (await request.json().catch(() => null)) as
+    | { markAllRead?: boolean; ids?: string[]; isRead?: boolean }
+    | null;
+  // Additive: an explicit isRead lets the Pulse bulk controls mark a selection
+  // read OR unread through the same endpoint. Defaults to marking read.
+  const isRead = body?.isRead ?? true;
   const admin = createSupabaseAdminClient();
-  let query = admin.from("notifications").update({ is_read: true }).eq("user_id", user.id).eq("is_read", false);
+  let query = admin.from("notifications").update({ is_read: isRead }).eq("user_id", user.id);
   if (!body?.markAllRead && Array.isArray(body?.ids) && body.ids.length > 0) {
     query = query.in("id", body.ids.slice(0, 200));
+  } else if (isRead) {
+    // "Mark all as read" only needs to touch the unread rows.
+    query = query.eq("is_read", false);
   }
   const { error } = await query;
   if (error) {

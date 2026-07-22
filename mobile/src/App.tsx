@@ -16,6 +16,7 @@ import { MessagesScreen } from "./screens/MessagesScreen";
 import { ChatScreen } from "./screens/ChatScreen";
 import { MomentsScreen } from "./screens/MomentsScreen";
 import { SocializeScreen } from "./screens/SocializeScreen";
+import { MeetingPingsScreen } from "./screens/MeetingPingsScreen";
 import { EventsScreen } from "./screens/EventsScreen";
 import { GroupsScreen } from "./screens/GroupsScreen";
 import { UserProfileScreen } from "./screens/UserProfileScreen";
@@ -62,6 +63,7 @@ export default function App() {
         <Route path="/messages" element={<MessagesScreen />} />
         <Route path="/moments" element={<MomentsScreen />} />
         <Route path="/socialize" element={<SocializeScreen />} />
+        <Route path="/pings" element={<MeetingPingsScreen />} />
         <Route path="/events" element={<EventsScreen />} />
         <Route path="/groups" element={<GroupsScreen />} />
         <Route path="/safety" element={<SafetyScreen />} />

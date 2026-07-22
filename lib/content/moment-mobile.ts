@@ -18,11 +18,11 @@ import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import type { MomentAudienceType, ReactionType } from "@/lib/supabase/database.types";
 
 /**
- * Mobile Moments v1: text-only posting + reactions. The full web
- * createMomentAction (media upload, circle/muddy targeting) stays as-is; this
- * covers the native subset (text to all_muddies / nearby_muddies) reusing the
- * same tier limits, guards, and visibility rules. The feed itself is the shared
- * buildMomentFeed (called directly by the route).
+ * Mobile Moments: text posting (with audience + expiry) and reactions, matching
+ * the web Share-a-Moment modal. Reuses the same tier limits, guards, visibility
+ * rules, and circle-targeting (`moment_audience_targets`) as createMomentAction.
+ * Photo upload is the one web-only path still pending a native media endpoint.
+ * The feed itself is the shared buildMomentFeed (called directly by the route).
  */
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -34,9 +34,13 @@ export type MomentResult = {
   locationWarning?: string;
 };
 
+// Matches the web modal's audiences: Close Friends / A circle / Muddies nearby.
 export const createTextMomentSchema = z.object({
   textContent: z.string().min(1).max(500),
-  audienceType: z.enum(["all_muddies", "nearby_muddies"])
+  audienceType: z.enum(["close_friends", "selected_circles", "nearby_muddies"]),
+  targetIds: z.array(z.string().uuid()).max(50).optional(),
+  // ISO expiry from the chosen preset (1h/3h/6h/24h). Defaults to 24h.
+  expiresAt: z.string().datetime({ offset: true }).optional()
 });
 
 const uuidSchema = z.string().uuid();
@@ -65,7 +69,8 @@ export async function createTextMoment(userId: string, input: unknown): Promise<
   if (contentError) return { ok: false, message: contentError };
 
   const nowMs = Date.now();
-  const expiresAt = new Date(nowMs + 24 * 60 * 60 * 1000).toISOString();
+  // Honour the chosen preset (1h/3h/6h/24h) when supplied; default to 24h.
+  const expiresAt = parsed.data.expiresAt ?? new Date(nowMs + 24 * 60 * 60 * 1000).toISOString();
   const expiryError = validateExpiry(Date.parse(expiresAt), nowMs);
   if (expiryError) return { ok: false, message: expiryError };
 
@@ -127,6 +132,26 @@ export async function createTextMoment(userId: string, input: unknown): Promise<
     .select("id")
     .single();
   if (error || !moment) return { ok: false, message: "Couldn't share that Moment. Try again." };
+
+  // Circle audience: record the targeted circle(s), but only ones this user
+  // actually owns (never trust a client-supplied id) — mirrors createMomentAction.
+  if (parsed.data.audienceType === "selected_circles") {
+    const targetIds = [...new Set(parsed.data.targetIds ?? [])];
+    if (targetIds.length > 0) {
+      const { data: ownedCircles } = await admin
+        .from("friend_circles")
+        .select("id")
+        .eq("user_id", userId)
+        .is("archived_at", null)
+        .in("id", targetIds);
+      const rows = (ownedCircles ?? []).map((circle) => ({
+        moment_id: moment.id,
+        target_type: "circle" as const,
+        target_id: circle.id
+      }));
+      if (rows.length > 0) await admin.from("moment_audience_targets").insert(rows);
+    }
+  }
 
   const risk = detectLocationRisk(parsed.data.textContent);
   return {
@@ -199,6 +224,40 @@ export async function reactToMoment(userId: string, momentId: string, reaction: 
     );
   if (error) return { ok: false, message: "Couldn't add your reaction." };
   return { ok: true, message: "Reaction added." };
+}
+
+/** Soft-delete the author's own Moment. Mirrors deleteMomentAction; text
+ * Moments carry no media, so there's nothing to queue for deletion. */
+export async function deleteMoment(userId: string, momentId: string): Promise<MomentResult> {
+  const envMessage = serviceRoleEnvMessage();
+  if (envMessage) return { ok: false, message: envMessage };
+  if (!uuidSchema.safeParse(momentId).success) return { ok: false, message: "Moment not found." };
+
+  const admin = createSupabaseAdminClient();
+  const { data: moment } = await admin
+    .from("moments")
+    .select("id, media_id")
+    .eq("id", momentId)
+    .eq("author_id", userId)
+    .maybeSingle();
+  if (!moment) return { ok: false, message: "Moment not found." };
+
+  const { error } = await admin
+    .from("moments")
+    .update({
+      status: "deleted_by_user",
+      deleted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", momentId)
+    .eq("author_id", userId);
+  if (error) return { ok: false, message: "Couldn't delete that Moment." };
+
+  if (moment.media_id) {
+    const { queueMediaDeletion } = await import("@/lib/content/service");
+    await queueMediaDeletion(admin, moment.media_id, "parent_deleted");
+  }
+  return { ok: true, message: "Moment deleted." };
 }
 
 export async function removeMomentReaction(userId: string, momentId: string): Promise<MomentResult> {

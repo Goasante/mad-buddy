@@ -33,7 +33,7 @@ const tabs = [
 
 const createActions: { to: string; title: string; description: string; feature: FeatureIconKey }[] = [
   { to: "/plans", title: "New plan", description: "Create a hangout and invite Muddies", feature: "plans" },
-  { to: "/socialize", title: "Meeting ping", description: "Ask a Muddy to meet up nearby", feature: "ping" },
+  { to: "/pings", title: "Meeting ping", description: "Ask a Muddy to meet up nearby", feature: "ping" },
   { to: "/moments", title: "Share a Moment", description: "Post a moment for your Muddies", feature: "moments" }
 ];
 

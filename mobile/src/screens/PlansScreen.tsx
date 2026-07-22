@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Users } from "lucide-react";
+import { ChevronDown, Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Spinner } from "../components/Spinner";
+import { Modal } from "../components/Modal";
+import { useOverlayDismiss } from "../lib/overlay";
 import { api } from "../lib/api";
 
 type Plan = {
@@ -23,6 +24,8 @@ type Plan = {
   goingCount: number;
   attendeeCount: number;
 };
+
+type Invitee = { id: string; name: string; username: string };
 
 type Bucket = "upcoming" | "invites" | "hosting" | "past";
 const bucketTabs: { id: Bucket; label: string }[] = [
@@ -54,6 +57,7 @@ const rsvpChoices = [
 
 export function PlansScreen() {
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [invitees, setInvitees] = useState<Invitee[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeBucket, setActiveBucket] = useState<Bucket>("upcoming");
   const [createOpen, setCreateOpen] = useState(false);
@@ -62,10 +66,12 @@ export function PlansScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const result = await api.get<{ plans: Plan[] }>("/api/plans");
+    const result = await api.get<{ plans: Plan[]; invitees: Invitee[] }>("/api/plans");
     setLoading(false);
-    if (result.ok) setPlans(result.data.plans);
-    else setFeedback(result.error);
+    if (result.ok) {
+      setPlans(result.data.plans);
+      setInvitees(result.data.invitees ?? []);
+    } else setFeedback(result.error);
   }, []);
 
   useEffect(() => {
@@ -87,19 +93,20 @@ export function PlansScreen() {
         <p className="mt-1 text-sm text-muted-foreground">Make plans and organise meet-ups with your Muddies.</p>
       </header>
 
-      <Button type="button" className="mt-4 w-full" onClick={() => setCreateOpen((v) => !v)}>
+      <Button type="button" className="mt-4 w-full" onClick={() => setCreateOpen(true)}>
         <Plus className="h-4 w-4" aria-hidden="true" />
         New plan
       </Button>
 
-      {createOpen ? (
-        <CreatePlan
-          onCreated={() => {
-            setCreateOpen(false);
-            void load();
-          }}
-        />
-      ) : null}
+      <CreatePlanModal
+        open={createOpen}
+        invitees={invitees}
+        onOpenChange={setCreateOpen}
+        onCreated={() => {
+          setCreateOpen(false);
+          void load();
+        }}
+      />
 
       {feedback ? (
         <div className="mt-4 rounded-[1rem] border border-orange-400/20 bg-orange-400/10 p-3 text-sm text-orange-50" role="status">
@@ -204,46 +211,191 @@ export function PlansScreen() {
   );
 }
 
-function CreatePlan({ onCreated }: { onCreated: () => void }) {
+function CreatePlanModal({
+  open,
+  invitees,
+  onOpenChange,
+  onCreated
+}: {
+  open: boolean;
+  invitees: Invitee[];
+  onOpenChange: (open: boolean) => void;
+  onCreated: () => void;
+}) {
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [when, setWhen] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
   const [place, setPlace] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  function reset() {
+    setTitle("");
+    setDate("");
+    setTime("");
+    setPlace("");
+    setSelected(new Set());
+    setError("");
+  }
+
   async function create() {
-    if (title.trim().length < 2) return setError("Give your plan a title.");
+    if (title.trim().length < 2) return setError("Give your plan a name.");
     setBusy(true);
     setError("");
-    const scheduled = when.trim().length > 0;
+    // Combine the optional date + time into a single start timestamp. Time
+    // alone is ignored (no day to anchor it to), matching the web form.
+    const scheduled = date.trim().length > 0;
+    const startAt = scheduled ? new Date(`${date}T${time || "00:00"}`).toISOString() : undefined;
     const result = await api.post<{ ok: boolean; message: string }>("/api/plans", {
       title: title.trim(),
-      description: description.trim() || undefined,
       planType: scheduled ? "scheduled" : "quick",
-      startAt: scheduled ? new Date(when).toISOString() : undefined,
+      startAt,
       placeType: "custom",
-      customPlaceText: place.trim() || undefined
+      customPlaceText: place.trim() || undefined,
+      participantIds: selected.size > 0 ? [...selected] : undefined
     });
     setBusy(false);
-    if (result.ok) onCreated();
-    else setError(result.error);
+    if (result.ok) {
+      reset();
+      onCreated();
+    } else setError(result.error);
   }
 
   return (
-    <Card className="mt-4 space-y-3 p-4">
-      <p className="text-sm font-semibold">Create plan</p>
-      <Input placeholder="Lunch later" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <Textarea placeholder="Details (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
-      <div className="space-y-1.5">
-        <label htmlFor="when" className="text-xs font-medium text-muted-foreground">When (optional)</label>
-        <Input id="when" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+    <Modal
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next);
+        if (!next) reset();
+      }}
+      title="Create a plan"
+      description="Add the details and invite your Muddies."
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={create} disabled={busy || title.trim().length < 2}>
+            {busy ? "Creating…" : "Create plan"}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label="Plan name">
+          <Input placeholder="Lunch later" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Date (optional)">
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          <Field label="Time (optional)">
+            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          </Field>
+        </div>
+
+        <Field label="Meeting area (optional)" hint="Use a general area, not an exact address.">
+          <Input placeholder="A café or nearby area" value={place} onChange={(e) => setPlace(e.target.value)} />
+        </Field>
+
+        <Field label="Invite Muddies">
+          <InviteSelect invitees={invitees} selected={selected} onChange={setSelected} />
+        </Field>
+
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
       </div>
-      <Input placeholder="A café or nearby area" value={place} onChange={(e) => setPlace(e.target.value)} />
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button className="w-full" onClick={create} disabled={busy}>
-        {busy ? "Creating…" : "Create plan"}
-      </Button>
-    </Card>
+    </Modal>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-sm font-semibold">{label}</p>
+      {children}
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
+function InviteSelect({
+  invitees,
+  selected,
+  onChange
+}: {
+  invitees: Invitee[];
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  useOverlayDismiss(open, () => setOpen(false));
+
+  function toggle(id: string) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange(next);
+  }
+
+  const summary =
+    selected.size === 0
+      ? "Select Muddies"
+      : `${selected.size} ${selected.size === 1 ? "Muddy" : "Muddies"} invited`;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className="focus-ring flex w-full items-center justify-between rounded-md border border-border bg-card/70 px-3 py-2.5 text-left text-sm"
+      >
+        <span className={cn(selected.size === 0 && "text-muted-foreground")}>{summary}</span>
+        <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} aria-hidden="true" />
+      </button>
+      {open ? (
+        <>
+          <div className="fixed inset-0 z-[110]" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div
+            role="listbox"
+            className="absolute left-0 right-0 top-full z-[120] mt-1 max-h-56 overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-[0_18px_45px_rgba(0,0,0,0.5)]"
+          >
+            {invitees.length === 0 ? (
+              <p className="px-3 py-3 text-sm text-muted-foreground">Add Muddies first to invite them.</p>
+            ) : (
+              invitees.map((invitee) => {
+                const checked = selected.has(invitee.id);
+                return (
+                  <button
+                    key={invitee.id}
+                    type="button"
+                    role="option"
+                    aria-selected={checked}
+                    onClick={() => toggle(invitee.id)}
+                    className="focus-ring flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left active:bg-secondary"
+                  >
+                    <span
+                      className={cn(
+                        "grid h-5 w-5 shrink-0 place-items-center rounded border",
+                        checked ? "border-primary bg-primary text-primary-foreground" : "border-border"
+                      )}
+                    >
+                      {checked ? "✓" : ""}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{invitee.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">@{invitee.username}</span>
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }
