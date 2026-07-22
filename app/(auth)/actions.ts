@@ -104,135 +104,86 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     return { ok: false, message: "Please check the signup form and try again." };
   }
 
-  const supabase = await createSupabaseServerClient();
   const { fullName, username, email, password } = parsed.data;
+
+  const env = getSupabaseServerEnv();
+  if (!env.url || !env.serviceRoleKey) {
+    logBackendEvent("error", {
+      requestId,
+      action: "auth.signup",
+      statusCode: 500,
+      latencyMs: Date.now() - startedAt,
+      errorType: "missing_service_role"
+    });
+    return { ok: false, message: "Sign-up is temporarily unavailable. Please try again shortly." };
+  }
+  const admin = createSupabaseAdminClient();
+
+  // Create a pre-confirmed account with the admin API. This never sends a
+  // confirmation email, so sign-up can't be blocked by the provider's email
+  // rate limit — the built-in SMTP allows only a few messages per hour, and once
+  // it was exhausted `auth.signUp` failed outright, so real sign-ups silently
+  // created no account and those users then hit "wrong password" on login. The
+  // app already auto-confirms and never uses the email link, so email delivery
+  // must never gate sign-up. Mirrors the mobile /api/auth/signup path.
   // TODO(consent): Persist a PolicyConsentEvent through ConsentLogger after
   // consent_logs RLS, retention, and audit access are approved.
-  const { data, error } = await supabase.auth.signUp({
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
     email,
     password,
-    options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/auth/callback`,
-      data: {
-        full_name: fullName,
-        username
-      }
-    }
+    email_confirm: true,
+    user_metadata: { full_name: fullName, username }
   });
 
-  if (error) {
+  if (createError || !created?.user) {
+    // Duplicate email: keep the response indistinguishable from a fresh sign-up
+    // so the form can't be used to discover which addresses are registered;
+    // returning users are nudged to log in.
+    const duplicate =
+      (createError && "code" in createError && (createError as { code?: string }).code === "email_exists") ||
+      /already|registered|exists/i.test(createError?.message ?? "");
+    if (duplicate) {
+      logBackendEvent("info", { requestId, action: "auth.signup", statusCode: 200, latencyMs: Date.now() - startedAt });
+      return { ok: true, message: "Check your email to continue.", redirectTo: "/login" };
+    }
     logBackendEvent("warn", {
       requestId,
       action: "auth.signup",
       statusCode: 400,
       latencyMs: Date.now() - startedAt,
-      errorType: error.name
+      errorType: createError?.name ?? "create_user_failed"
     });
     return { ok: false, message: "Your account could not be created. Check the form and try again." };
   }
 
-  // Supabase intentionally returns an obfuscated user for an existing email.
-  // Keep this indistinguishable from a confirmation-required signup so the
-  // action cannot be used to discover registered addresses.
-  if (data.user && data.user.identities?.length === 0 && !data.session) {
-    logBackendEvent("info", {
-      requestId,
-      action: "auth.signup",
-      statusCode: 200,
-      latencyMs: Date.now() - startedAt
-    });
-    return {
-      ok: true,
-      message: "Check your email to continue.",
-      redirectTo: "/login"
-    };
-  }
-
-  if (data.user) {
-    // When email confirmation is required, signUp returns no session, so
-    // auth.uid() is null for the rest of this request, the owner-only RLS
-    // policies on these tables would silently reject an anon-client insert
-    // (42501), leaving a confirmed user with no profile/subscription/prefs
-    // rows at all. The service role bypasses RLS so bootstrap always
-    // succeeds regardless of session state.
-    const env = getSupabaseServerEnv();
-    if (env.url && env.serviceRoleKey) {
-      const admin = createSupabaseAdminClient();
-      // Shared with the mobile /api/auth/signup path (lib/auth/bootstrap) so the
-      // two never drift. Keyed on user_id (onConflict) → idempotent on re-run.
-      const bootstrapResults = await bootstrapNewUser(admin, {
-        userId: data.user.id,
-        fullName,
-        username
-      });
-
-      for (const { label, error: rowError } of bootstrapResults) {
-        if (rowError) {
-          logBackendEvent("error", {
-            requestId,
-            action: "auth.signup",
-            statusCode: 500,
-            latencyMs: Date.now() - startedAt,
-            userId: data.user.id,
-            errorType: `bootstrap_${label}_failed`
-          });
-        }
-      }
-
-      // Sign-up must never depend on email delivery. When confirmation is
-      // required (no session returned), confirm the address with the service
-      // role so the new user is not stranded waiting for an email that may be
-      // slow, rate-limited, or misdelivered. Getting people into the app is the
-      // whole point of sign-up.
-      if (!data.session) {
-        const { error: confirmError } = await admin.auth.admin.updateUserById(data.user.id, {
-          email_confirm: true
-        });
-        if (confirmError) {
-          logBackendEvent("error", {
-            requestId,
-            action: "auth.signup",
-            statusCode: 500,
-            latencyMs: Date.now() - startedAt,
-            userId: data.user.id,
-            errorType: "email_confirm_failed"
-          });
-        }
-      }
-    } else {
+  // Per-user rows (profile / subscription / preferences). Idempotent; shared
+  // with the mobile path (lib/auth/bootstrap) so the two can't drift.
+  const bootstrapResults = await bootstrapNewUser(admin, { userId: created.user.id, fullName, username });
+  for (const { label, error: rowError } of bootstrapResults) {
+    if (rowError) {
       logBackendEvent("error", {
         requestId,
         action: "auth.signup",
         statusCode: 500,
         latencyMs: Date.now() - startedAt,
-        userId: data.user.id,
-        errorType: "missing_service_role_for_bootstrap"
+        userId: created.user.id,
+        errorType: `bootstrap_${label}_failed`
       });
     }
   }
 
-  // If confirmation was required (no session), sign the freshly-confirmed user
-  // in now so they go straight into onboarding rather than a login wall.
-  if (data.user && !data.session) {
-    const { error: sessionError } = await supabase.auth.signInWithPassword({ email, password });
-    if (!sessionError) {
-      logBackendEvent("info", {
-        requestId,
-        action: "auth.signup",
-        statusCode: 200,
-        latencyMs: Date.now() - startedAt,
-        userId: data.user.id
-      });
-      return { ok: true, message: "Account created. Continue onboarding.", redirectTo: "/onboarding" };
-    }
-    // Very rare: confirmed but couldn't establish a session. They can still log
-    // in normally (the email is confirmed), so no one is locked out.
+  // Establish the cookie session so they continue straight into onboarding. The
+  // account is already confirmed, so a failure here is transient — and even then
+  // the user can just log in, so no one is stranded.
+  const supabase = await createSupabaseServerClient();
+  const { error: sessionError } = await supabase.auth.signInWithPassword({ email, password });
+  if (sessionError) {
     logBackendEvent("warn", {
       requestId,
       action: "auth.signup",
       statusCode: 200,
       latencyMs: Date.now() - startedAt,
-      userId: data.user.id,
+      userId: created.user.id,
       errorType: "auto_signin_failed"
     });
     return { ok: true, message: "Account created. Log in to continue.", redirectTo: "/login" };
@@ -243,14 +194,9 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     action: "auth.signup",
     statusCode: 200,
     latencyMs: Date.now() - startedAt,
-    userId: data.user?.id
+    userId: created.user.id
   });
-
-  return {
-    ok: true,
-    message: "Account created. Continue onboarding.",
-    redirectTo: "/onboarding"
-  };
+  return { ok: true, message: "Account created. Continue onboarding.", redirectTo: "/onboarding" };
 }
 
 export async function loginAction(input: unknown): Promise<AuthActionState> {
