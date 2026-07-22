@@ -24,8 +24,6 @@ export type IntegrationActionState = {
   avatarUrl?: string;
 };
 
-export type { SearchUserResult };
-
 const uuidSchema = z.string().uuid();
 
 function missingSupabaseState(): IntegrationActionState | null {
