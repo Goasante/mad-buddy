@@ -247,8 +247,8 @@ function Hero() {
             <span className="text-primary">they glow.</span>
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
-            A <strong className="font-semibold text-foreground">Muddy</strong> is a friend you both
-            approve. See who&rsquo;s nearby, connect, and make plans, without sharing exact
+            A <strong className="font-semibold text-foreground">Muddy</strong>{" "}is a friend you
+            both approve. See who&rsquo;s nearby, connect, and make plans, without sharing exact
             locations.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
