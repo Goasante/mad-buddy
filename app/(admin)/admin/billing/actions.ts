@@ -6,7 +6,7 @@ import { requireAdminPermission } from "@/lib/admin/access";
 import { recordAdminAuditEvent } from "@/lib/admin/service";
 import { requireSafetyAdmin } from "@/lib/safety/admin";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
-import { isOverrideableEntitlement } from "@/lib/admin/billing-admin";
+import { isOverrideableEntitlement, planLabel } from "@/lib/admin/billing-admin";
 import { paystackRequest } from "@/lib/paystack/client";
 import { getPaystackSecretKey } from "@/lib/paystack/config";
 import { mapPaystackSubscriptionStatus } from "@/lib/paystack/subscriptions";
@@ -190,6 +190,90 @@ export async function revokeEntitlementOverrideAction(input: unknown): Promise<B
 
   revalidatePath(`/admin/billing/${parsed.data.userId}`);
   return { ok: true, message: "Entitlement override revoked." };
+}
+
+// ---------------------------------------------------------------------------
+// Change plan (upgrade / downgrade) — a manual admin override of the user's
+// plan. Gated on admin.billing.manage_plan (owner / admin / support).
+// ---------------------------------------------------------------------------
+const PLAN_RANK: Record<string, number> = { free: 0, buddy_plus: 1, buddy_pro: 2 };
+const changePlanSchema = z.object({
+  userId: z.string().uuid(),
+  plan: z.enum(["free", "buddy_plus", "buddy_pro"]),
+  reason: z.string().trim().min(3).max(200)
+});
+
+export async function changeSubscriptionPlanAction(input: unknown): Promise<BillingActionState> {
+  const parsed = changePlanSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: "Choose a plan and add a short reason (3+ characters)." };
+  }
+
+  let admin: Admin;
+  let actorId: string;
+  try {
+    const auth = await authorizeBilling("admin.billing.manage_plan");
+    if (!auth.ok) return auth;
+    admin = auth.admin;
+    actorId = auth.actorId;
+  } catch {
+    return { ok: false, message: "You don't have permission to change plans." };
+  }
+
+  const { data: sub } = await admin
+    .from("subscriptions")
+    .select("id, plan, status")
+    .eq("user_id", parsed.data.userId)
+    .maybeSingle();
+  if (!sub) return { ok: false, message: "No subscription record for that account." };
+  if (sub.plan === parsed.data.plan) {
+    return { ok: true, message: `Already on ${planLabel(parsed.data.plan)}.` };
+  }
+
+  const toPaid = parsed.data.plan !== "free";
+  const nextStatus = toPaid ? "active" : "free";
+  const changeType = PLAN_RANK[parsed.data.plan] > PLAN_RANK[sub.plan] ? "upgrade" : "downgrade";
+
+  // Audit-first: an unlogged billing change is worse than a failed one.
+  const logged = await recordAdminAuditEvent(admin, {
+    actorId,
+    action: "subscription_plan_changed",
+    targetType: "subscription",
+    targetId: sub.id,
+    previousState: { plan: sub.plan, status: sub.status },
+    newState: { plan: parsed.data.plan, status: nextStatus, source: "manual" },
+    reason: parsed.data.reason
+  });
+  if (!logged) return { ok: false, message: "The audit entry could not be recorded, so nothing was changed." };
+
+  const nowIso = new Date().toISOString();
+  const { error } = await admin
+    .from("subscriptions")
+    .update({
+      plan: parsed.data.plan,
+      status: nextStatus,
+      // A fresh paid grant shouldn't inherit a pending cancellation.
+      ...(toPaid ? { cancel_at_period_end: false } : {}),
+      updated_at: nowIso
+    })
+    .eq("id", sub.id);
+  if (error) return { ok: false, message: "The plan could not be changed." };
+
+  await admin.from("subscription_changes").insert({
+    subscription_id: sub.id,
+    user_id: parsed.data.userId,
+    change_type: changeType,
+    from_plan: sub.plan,
+    to_plan: parsed.data.plan,
+    effective_at: nowIso,
+    applied_at: nowIso,
+    status: "applied",
+    reason: parsed.data.reason
+  });
+
+  revalidatePath("/admin/billing");
+  revalidatePath(`/admin/billing/${parsed.data.userId}`);
+  return { ok: true, message: `Plan changed to ${planLabel(parsed.data.plan)} (${changeType}).` };
 }
 
 // ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 import { Gift, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { useState, useTransition } from "react";
 import {
+  changeSubscriptionPlanAction,
   grantEntitlementOverrideAction,
   reconcileSubscriptionAction,
   revokeEntitlementOverrideAction,
@@ -15,12 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { changeTypeLabel, maskPaystackReference, OVERRIDEABLE_ENTITLEMENTS, planLabel } from "@/lib/admin/billing-admin";
+import { changeTypeLabel, maskPaystackReference, OVERRIDEABLE_ENTITLEMENTS, planLabel, SUBSCRIPTION_PLANS } from "@/lib/admin/billing-admin";
 import { cn } from "@/lib/utils";
 
 export type BillingDetailData = {
   userId: string;
   canManage: boolean;
+  canManagePlan: boolean;
   user: { name: string; username: string | null; avatarUrl: string | null };
   subscription: {
     plan: string;
@@ -70,6 +72,7 @@ export function BillingDetailPanel({ data }: { data: BillingDetailData }) {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
         <div className="order-2 space-y-5 lg:order-1">
+          {data.canManagePlan ? <ChangePlanControls data={data} onFeedback={setFeedback} /> : null}
           {data.canManage ? <ManageControls data={data} onFeedback={setFeedback} /> : null}
 
           <AdminSection title="Change history" description="Plan and lifecycle changes for this account.">
@@ -124,6 +127,38 @@ function MetaRow({ label, value }: { label: string; value: string | null }) {
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className="min-w-0 truncate text-right text-sm">{value ?? "—"}</span>
     </div>
+  );
+}
+
+function ChangePlanControls({ data, onFeedback }: { data: BillingDetailData; onFeedback: (f: Feedback) => void }) {
+  const [pending, start] = useTransition();
+  const [plan, setPlan] = useState<string | null>(data.subscription.plan);
+  const [reason, setReason] = useState("");
+  const planOptions: AppSelectOption[] = SUBSCRIPTION_PLANS.map((value) => ({ value, label: planLabel(value) }));
+  const changed = plan !== null && plan !== data.subscription.plan;
+
+  function apply() {
+    if (!plan || !changed) return;
+    start(async () => {
+      const result = await changeSubscriptionPlanAction({ userId: data.userId, plan, reason: reason.trim() });
+      onFeedback({ ok: result.ok, text: result.message });
+      if (result.ok) setReason("");
+    });
+  }
+
+  return (
+    <AdminSection title="Plan" description="Upgrade or downgrade this account's plan. Applies immediately and is recorded in the audit log.">
+      <Card className="space-y-3 p-4">
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-start">
+          <AppSelect value={plan} options={planOptions} placeholder="Choose a plan" onChange={setPlan} />
+          <Input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Reason (recorded)" maxLength={200} aria-label="Reason for the plan change" />
+          <Button type="button" size="sm" onClick={apply} disabled={pending || !changed || reason.trim().length < 3}>Apply</Button>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Current plan: {planLabel(data.subscription.plan)}. A manual change doesn&rsquo;t touch Paystack — use it for comps, corrections, or support grants.
+        </p>
+      </Card>
+    </AdminSection>
   );
 }
 

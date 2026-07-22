@@ -19,6 +19,7 @@ export default async function BillingDetailPage({ params }: DetailProps) {
   const access = await getAdminAccess(admin, context);
   if (!access.permissions.has("admin.billing.view")) redirect("/admin");
   const canManage = access.permissions.has("admin.billing.refund");
+  const canManagePlan = access.permissions.has("admin.billing.manage_plan");
 
   const { data: sub } = await admin
     .from("subscriptions")
@@ -47,6 +48,7 @@ export default async function BillingDetailPage({ params }: DetailProps) {
   const data: BillingDetailData = {
     userId,
     canManage,
+    canManagePlan,
     user: {
       name: profileRes.data?.full_name ?? "Account unavailable",
       username: profileRes.data?.username ?? null,

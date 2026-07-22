@@ -17,12 +17,18 @@ const legacyPermissions: Record<AdminAccessRole, readonly AdminPermission[]> = {
     ...ROLE_PERMISSIONS.trust_safety_administrator,
     "admin.roles.manage",
     "admin.support.manage",
-    "admin.sessions.revoke"
+    "admin.sessions.revoke",
+    // Owner/admin/support may adjust a user's plan (view is needed to reach the
+    // billing screen); refunds/entitlement overrides stay billing.refund-only.
+    "admin.billing.view",
+    "admin.billing.manage_plan"
   ],
   support: [
     ...ROLE_PERMISSIONS.customer_support_agent,
     "admin.users.suspend",
-    "admin.sessions.revoke"
+    "admin.sessions.revoke",
+    "admin.billing.view",
+    "admin.billing.manage_plan"
   ]
 };
 

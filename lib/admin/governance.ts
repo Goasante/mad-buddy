@@ -32,6 +32,7 @@ export const ADMIN_PERMISSIONS = [
   "admin.support.manage",
   "admin.billing.view",
   "admin.billing.refund",
+  "admin.billing.manage_plan",
   "admin.verification.review",
   "admin.organisations.restrict",
   "admin.security.events.view",
