@@ -36,10 +36,51 @@ export default async function SafeArrivalRoute() {
     // Journeys I'm travelling.
     const { data: ownRows } = await admin
       .from("safe_arrival_sessions")
-      .select("id, destination_label, expected_arrival_at, grace_period_minutes, note, status, traveller_id")
+      .select("id, destination_label, expected_arrival_at, grace_period_minutes, note, status, traveller_id, started_at")
       .eq("traveller_id", user.id)
       .in("status", LIVE_STATUSES)
       .order("expected_arrival_at", { ascending: true });
+
+    // Watchers who have ACCEPTED (acknowledgement_status = 'watching') for each
+    // of my sessions. This is the canonical approved-watcher set — never the
+    // raw invite count — so the traveller is never shown a misleading number.
+    const ownSessionIds = (ownRows ?? []).map((row) => row.id);
+    const watchersBySession = new Map<string, { id: string; name: string; avatarUrl: string | null }[]>();
+    const sharedCountBySession = new Map<string, number>();
+    if (ownSessionIds.length > 0) {
+      const { data: contactRows2 } = await admin
+        .from("safe_arrival_contacts")
+        .select("session_id, contact_user_id, acknowledgement_status")
+        .in("session_id", ownSessionIds);
+      const watcherIds = [
+        ...new Set((contactRows2 ?? []).filter((r) => r.acknowledgement_status === "watching").map((r) => r.contact_user_id))
+      ];
+      const watcherProfiles = new Map<string, { name: string; avatarUrl: string | null }>();
+      if (watcherIds.length > 0) {
+        const { data: wp } = await admin
+          .from("profiles")
+          .select("user_id, full_name, avatar_url")
+          .in("user_id", watcherIds);
+        for (const p of wp ?? []) {
+          watcherProfiles.set(p.user_id, { name: p.full_name?.trim() || "A Muddy", avatarUrl: p.avatar_url });
+        }
+      }
+      for (const sessionId of ownSessionIds) {
+        const rows = (contactRows2 ?? []).filter((r) => r.session_id === sessionId);
+        // "Shared with N" counts everyone still invited or watching (not declined).
+        sharedCountBySession.set(sessionId, rows.filter((r) => r.acknowledgement_status !== "declined").length);
+        watchersBySession.set(
+          sessionId,
+          rows
+            .filter((r) => r.acknowledgement_status === "watching")
+            .map((r) => ({
+              id: r.contact_user_id,
+              name: watcherProfiles.get(r.contact_user_id)?.name ?? "A Muddy",
+              avatarUrl: watcherProfiles.get(r.contact_user_id)?.avatarUrl ?? null
+            }))
+        );
+      }
+    }
 
     mySessions = (ownRows ?? []).map((row) => ({
       id: row.id,
@@ -50,7 +91,10 @@ export default async function SafeArrivalRoute() {
       status: row.status,
       travellerName: "You",
       isTraveller: true,
-      myAcknowledgement: null
+      myAcknowledgement: null,
+      startedAt: row.started_at,
+      watchers: watchersBySession.get(row.id) ?? [],
+      sharedCount: sharedCountBySession.get(row.id) ?? 0
     }));
 
     // Journeys I've been asked to watch.
@@ -65,7 +109,7 @@ export default async function SafeArrivalRoute() {
     if (watchedIds.length > 0) {
       const { data: watchedRows } = await admin
         .from("safe_arrival_sessions")
-        .select("id, destination_label, expected_arrival_at, grace_period_minutes, note, status, traveller_id")
+        .select("id, destination_label, expected_arrival_at, grace_period_minutes, note, status, traveller_id, started_at")
         .in("id", watchedIds)
         .in("status", LIVE_STATUSES)
         .order("expected_arrival_at", { ascending: true });
@@ -91,7 +135,10 @@ export default async function SafeArrivalRoute() {
         status: row.status,
         travellerName: nameById.get(row.traveller_id) ?? "A Muddy",
         isTraveller: false,
-        myAcknowledgement: ackBySession.get(row.id) ?? null
+        myAcknowledgement: ackBySession.get(row.id) ?? null,
+        startedAt: row.started_at,
+        watchers: [],
+        sharedCount: 0
       }));
     }
 

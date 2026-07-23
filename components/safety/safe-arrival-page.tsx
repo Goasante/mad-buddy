@@ -18,10 +18,27 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { JourneyStatusCard } from "@/components/safety/journey-status-card";
 import { EXTENSION_OPTIONS_MINUTES } from "@/lib/safety/safe-arrival";
+import type { SafeArrivalStatus } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 
+function startedAtLabel(iso?: string): string | undefined {
+  if (!iso) return undefined;
+  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function journeyTiming(session: SafeArrivalSessionSummary) {
+  return {
+    expectedArrivalMs: Date.parse(session.expectedArrivalAt),
+    gracePeriodMinutes: session.gracePeriodMinutes,
+    nowMs: Date.now()
+  };
+}
+
 export type SafeArrivalContactOption = { id: string; name: string; isCloseFriend: boolean };
+
+export type SafeArrivalWatcher = { id: string; name: string; avatarUrl: string | null };
 
 export type SafeArrivalSessionSummary = {
   id: string;
@@ -33,6 +50,9 @@ export type SafeArrivalSessionSummary = {
   travellerName: string;
   isTraveller: boolean;
   myAcknowledgement: string | null;
+  startedAt?: string;
+  watchers?: SafeArrivalWatcher[];
+  sharedCount?: number;
 };
 
 const gracePeriodOptions = [10, 20, 30, 60];
@@ -107,7 +127,19 @@ export function SafeArrivalPage({
           <div className="space-y-3">
             {mySessions.map((session) => (
               <Card key={session.id} className="p-4">
-                <SessionHeader session={session} />
+                <JourneyStatusCard
+                  role="traveller"
+                  sessionId={session.id}
+                  status={session.status as SafeArrivalStatus}
+                  timing={journeyTiming(session)}
+                  travellerName="You"
+                  watchers={session.watchers ?? []}
+                  sharedCount={session.sharedCount ?? 0}
+                  startedAtLabel={startedAtLabel(session.startedAt)}
+                />
+                <div className="mt-4">
+                  <SessionHeader session={session} />
+                </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button type="button" size="sm" onClick={() => run(() => confirmSafeArrivalAction(session.id))} disabled={isPending}>
                     I&apos;ve arrived safely
@@ -140,24 +172,29 @@ export function SafeArrivalPage({
           <div className="space-y-3">
             {watching.map((session) => (
               <Card key={session.id} className="p-4">
-                <div className="flex items-start gap-3">
-                  <GlowAvatar name={session.travellerName} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <SessionHeader session={session} />
-                  </div>
+                <JourneyStatusCard
+                  role="watcher"
+                  sessionId={session.id}
+                  status={session.status as SafeArrivalStatus}
+                  timing={journeyTiming(session)}
+                  travellerName={session.travellerName}
+                  startedAtLabel={startedAtLabel(session.startedAt)}
+                />
+                <div className="mt-4">
+                  <SessionHeader session={session} />
                 </div>
                 {session.myAcknowledgement === "pending" ? (
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Button type="button" size="sm" onClick={() => run(() => acknowledgeSafeArrivalAction(session.id, "watching"))} disabled={isPending}>
-                      I&apos;ll check on you
+                      I&apos;ll watch your journey
                     </Button>
                     <Button type="button" size="sm" variant="outline" onClick={() => run(() => acknowledgeSafeArrivalAction(session.id, "declined"))} disabled={isPending}>
-                      Can&apos;t monitor this time
+                      Can&apos;t this time
                     </Button>
                   </div>
                 ) : (
                   <p className="mt-3 text-xs text-muted-foreground">
-                    {session.myAcknowledgement === "watching" ? "You're checking on this journey." : "You're not monitoring this one."}
+                    {session.myAcknowledgement === "watching" ? "You're watching this journey." : "You're not watching this one."}
                   </p>
                 )}
               </Card>

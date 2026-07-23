@@ -94,6 +94,109 @@
   to { opacity: 1; }
 }
 
+/* -------------------------------------------------------------------------
+ * Safe Arrival — live journey status animation.
+ *
+ * Communicates journey STATUS only: a calm breathing mark while in transit, a
+ * slower neutral pulse while awaiting an update, a one-shot success glow on
+ * arrival, and nothing at all once ended. No motion represents movement,
+ * progress, distance, or a route — there is no geography here. Every looping
+ * animation is disabled under prefers-reduced-motion (and the component also
+ * gates them in JS), leaving the status text and colour as the indicators.
+ * ------------------------------------------------------------------------- */
+.journey-mark {
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.12);
+  border: 1px solid hsl(var(--primary) / 0.35);
+  transition: background-color 300ms ease, border-color 300ms ease, color 300ms ease;
+}
+.journey-mark-waiting {
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted-foreground) / 0.1);
+  border-color: hsl(var(--muted-foreground) / 0.3);
+}
+.journey-mark-arrived,
+.journey-mark-completed {
+  color: hsl(142 71% 40%);
+  background: hsl(142 71% 45% / 0.14);
+  border-color: hsl(142 71% 45% / 0.45);
+}
+.journey-mark-cancelled,
+.journey-mark-expired {
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted-foreground) / 0.08);
+  border-color: hsl(var(--border));
+}
+
+/* The breathing ring sits behind the mark via ::before; a calm "alive" bloom
+ * with no directional motion. */
+.journey-mark-active::before,
+.journey-mark-waiting::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  border: 2px solid currentColor;
+  opacity: 0.4;
+  animation: journey-breathe 2.8s ease-in-out infinite;
+}
+.journey-mark-waiting::before {
+  animation-duration: 4.2s;
+  opacity: 0.3;
+}
+@keyframes journey-breathe {
+  0%, 100% { transform: scale(0.94); opacity: 0.18; }
+  50% { transform: scale(1.08); opacity: 0.5; }
+}
+
+/* Arrival: a single expanding success ring, then settle. */
+.journey-mark-arrived::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  border: 2px solid currentColor;
+  animation: journey-arrived 900ms ease-out 1;
+}
+@keyframes journey-arrived {
+  0% { transform: scale(0.8); opacity: 0.7; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* The status dot beside the label, colour-coded per state so status is never
+ * carried by animation alone. */
+.journey-status-dot {
+  display: inline-block;
+  height: 0.5rem;
+  width: 0.5rem;
+  border-radius: 9999px;
+  background: hsl(var(--primary));
+}
+.journey-status-dot-waiting { background: hsl(var(--muted-foreground)); }
+.journey-status-dot-arrived { background: hsl(142 71% 45%); }
+.journey-status-dot-cancelled,
+.journey-status-dot-expired { background: hsl(var(--border)); }
+
+/* Approved watcher avatars: a soft breathing ring so their presence reads as
+ * "here with you", never a surveillance eye. */
+.journey-watcher { display: inline-flex; border-radius: 9999px; }
+.journey-watcher-pulse { animation: journey-watcher-pulse 3.2s ease-in-out infinite; }
+@keyframes journey-watcher-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.35); }
+  50% { box-shadow: 0 0 0 4px hsl(var(--primary) / 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey-mark-active::before,
+  .journey-mark-waiting::before,
+  .journey-mark-arrived::before,
+  .journey-watcher-pulse {
+    animation: none;
+  }
+  /* Keep a static ring so the "active" state still reads without motion. */
+  .journey-mark-active::before { opacity: 0.35; transform: scale(1); }
+}
+
 /* Live signals (an incoming Wave, an achievement unlocking): a TikTok-style
  * full-screen celebration burst. The whole stage fades in and out; inside it
  * the icon bursts in with overshoot, rays and rings expand behind it, sparks
