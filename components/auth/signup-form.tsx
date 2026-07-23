@@ -5,14 +5,13 @@ import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState, useTransition } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { signUpAction, type AuthActionState } from "@/app/(auth)/actions";
 import { FormField } from "@/components/auth/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
-import { startOAuth } from "@/lib/auth/oauth";
 
 const signupSchema = z.object({
   email: z.string().email("Enter a valid email address."),
@@ -30,7 +29,6 @@ type SignupFormProps = {
 export function SignupForm({ initialError = null }: SignupFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [isGooglePending, setIsGooglePending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [actionState, setActionState] = useState<AuthActionState | null>(
     initialError ? { ok: false, message: initialError } : null
@@ -38,8 +36,6 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
   const {
     register,
     handleSubmit,
-    control,
-    setError,
     formState: { errors }
   } = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -51,9 +47,6 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
     }
   });
 
-  const acceptedPolicy = useWatch({ control, name: "acceptedPolicy" });
-  const busy = isPending || isGooglePending;
-
   function onSubmit(values: SignupFormValues) {
     setActionState(null);
     startTransition(async () => {
@@ -63,44 +56,8 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
     });
   }
 
-  async function signUpWithGoogle() {
-    setActionState(null);
-    if (!acceptedPolicy) {
-      setError("acceptedPolicy", { message: "Agree to the Terms and Privacy Policy to continue." });
-      return;
-    }
-
-    setIsGooglePending(true);
-    try {
-      await startOAuth("google", "/onboarding");
-    } catch {
-      setActionState({ ok: false, message: "Google sign-up could not start. Try again." });
-      setIsGooglePending(false);
-    }
-  }
-
   return (
     <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
-      <Button type="button" variant="outline" className="w-full" onClick={signUpWithGoogle} disabled={busy}>
-        {isGooglePending ? (
-          <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-        ) : (
-          <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
-            <path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.4 3-7.4Z" />
-            <path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1a5.8 5.8 0 0 1-5.4-4H3.3v2.6A10 10 0 0 0 12 22Z" />
-            <path fill="#FBBC05" d="M6.6 14a6 6 0 0 1 0-4V7.4H3.3a10 10 0 0 0 0 9.2L6.6 14Z" />
-            <path fill="#EA4335" d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.9-2.8A9.7 9.7 0 0 0 3.3 7.4L6.6 10A5.8 5.8 0 0 1 12 5.9Z" />
-          </svg>
-        )}
-        Continue with Google
-      </Button>
-
-      <div className="flex items-center gap-3" aria-hidden="true">
-        <span className="h-px flex-1 bg-border" />
-        <span className="text-xs font-medium text-muted-foreground">or</span>
-        <span className="h-px flex-1 bg-border" />
-      </div>
-
       <FormField htmlFor="email" label="Email address" error={errors.email?.message}>
         <Input
           id="email"
@@ -179,7 +136,7 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
         </div>
       ) : null}
 
-      <Button type="submit" className="w-full" disabled={busy}>
+      <Button type="submit" className="w-full" disabled={isPending}>
         {isPending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
         {isPending ? "Creating account..." : "Create account"}
       </Button>
