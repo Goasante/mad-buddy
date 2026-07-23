@@ -39,6 +39,7 @@ import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { PendingInvitePrompt } from "@/components/discovery/pending-invite-prompt";
 import { ProfileCompletionReminder } from "@/components/profile/profile-completion-reminder";
+import { JourneyStatusCard } from "@/components/safety/journey-status-card";
 import { StatusComposer } from "@/components/social/status-composer";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -52,6 +53,7 @@ import type { HomeUpcomingPlan, PlanAttendee } from "@/lib/social/upcoming-plans
 import { type FreshnessState } from "@/lib/proximity/freshness";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import type { ActivityType, AvailabilityType, SubscriptionPlan } from "@/lib/supabase/database.types";
+import type { SafeArrivalStatus } from "@/lib/supabase/database.types";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
 type DashboardFriend = {
@@ -121,6 +123,17 @@ type DashboardPageContentProps = {
     userId: string;
     missingItems: string[];
   } | null;
+  safeArrivalSession?: {
+    id: string;
+    expectedArrivalAt: string;
+    gracePeriodMinutes: number;
+    status: string;
+    travellerName: string;
+    isTraveller: boolean;
+    startedAt: string;
+    watchers: Array<{ id: string; name: string; avatarUrl: string | null }>;
+    sharedCount: number;
+  } | null;
 };
 
 const attentionIconByType: Record<string, LucideIcon> = {
@@ -146,7 +159,8 @@ export function DashboardPageContent({
   initialStatusNote = "",
   upcomingPlans = [],
   hasMorePlans = false,
-  profileReminder = null
+  profileReminder = null,
+  safeArrivalSession = null
 }: DashboardPageContentProps) {
   const reducedMotion = useReducedMotion();
   const [ghostMode, setGhostMode] = useState(initialVisibilityStatus === "ghost");
@@ -578,6 +592,28 @@ export function DashboardPageContent({
           </div>
         );
       })()}
+
+      {safeArrivalSession ? (
+        <section className="min-w-0" aria-labelledby="home-safe-arrival-heading">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 id="home-safe-arrival-heading" className="text-lg font-semibold tracking-tight">
+              Safe Arrival
+            </h2>
+            <Link href="/safe-arrival" className="text-sm font-medium text-primary hover:underline">
+              View journey
+            </Link>
+          </div>
+          <JourneyStatusCard
+            role={safeArrivalSession.isTraveller ? "traveller" : "watcher"}
+            sessionId={safeArrivalSession.id}
+            status={safeArrivalSession.status as SafeArrivalStatus}
+            travellerName={safeArrivalSession.travellerName}
+            watchers={safeArrivalSession.watchers}
+            sharedCount={safeArrivalSession.sharedCount}
+            startedAtLabel={formatRelativeTime(safeArrivalSession.startedAt)}
+          />
+        </section>
+      ) : null}
 
       {/* One dashboard grid. Explicit desktop positions retain the existing
           mobile feed order while forming independent 2:1 desktop columns. */}

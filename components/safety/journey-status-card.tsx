@@ -1,7 +1,7 @@
 "use client";
 
-import { ShieldCheck } from "lucide-react";
-import { useEffect } from "react";
+import { RefreshCcw, ShieldCheck, WifiOff } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -47,17 +47,38 @@ export function JourneyStatusCard({
   const router = useRouter();
   const reducedMotion = useReducedMotion();
   const journey = resolveJourneyState(status, timing);
+  const [realtimeState, setRealtimeState] = useState<"idle" | "connecting" | "connected" | "offline">(
+    journey.isLive ? "connecting" : "idle"
+  );
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+
+  const retryRealtime = useCallback(() => {
+    setRealtimeState("connecting");
+    setReconnectAttempt((attempt) => attempt + 1);
+    router.refresh();
+  }, [router]);
 
   useEffect(() => {
     if (!journey.isLive) return; // Terminal session: nothing left to stream.
 
-    let supabase: ReturnType<typeof createSupabaseBrowserClient>;
+    if (!window.navigator.onLine) {
+      const timer = window.setTimeout(() => setRealtimeState("offline"), 0);
+      return () => window.clearTimeout(timer);
+    }
+
+    let supabase: ReturnType<typeof createSupabaseBrowserClient> | null = null;
     try {
       supabase = createSupabaseBrowserClient();
     } catch {
-      return; // No realtime available: the page still shows canonical state.
+      const timer = window.setTimeout(() => setRealtimeState("offline"), 0);
+      return () => window.clearTimeout(timer);
     }
 
+    if (!supabase) {
+      return;
+    }
+
+    let disposed = false;
     let refreshQueued = false;
     const refresh = () => {
       // Coalesce a burst of events into one canonical refetch.
@@ -83,12 +104,35 @@ export function JourneyStatusCard({
         refresh
       );
     }
-    channel.subscribe();
+    channel.subscribe((subscriptionStatus) => {
+      if (disposed) return;
+      if (subscriptionStatus === "SUBSCRIBED") {
+        setRealtimeState("connected");
+      } else if (
+        subscriptionStatus === "CHANNEL_ERROR" ||
+        subscriptionStatus === "TIMED_OUT" ||
+        subscriptionStatus === "CLOSED"
+      ) {
+        setRealtimeState("offline");
+      }
+    });
+
+    const handleOffline = () => setRealtimeState("offline");
+    const handleOnline = () => {
+      setRealtimeState("connecting");
+      setReconnectAttempt((attempt) => attempt + 1);
+      router.refresh();
+    };
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
 
     return () => {
+      disposed = true;
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
       void supabase.removeChannel(channel);
     };
-  }, [journey.isLive, role, sessionId, router]);
+  }, [journey.isLive, reconnectAttempt, role, sessionId, router]);
 
   const motionClass =
     reducedMotion || journey.motion === "none"
@@ -162,6 +206,24 @@ export function JourneyStatusCard({
         <p className="mt-3 text-xs leading-5 text-muted-foreground">
           Safe Arrival is active. You&apos;ll be notified when {travellerName} arrives.
         </p>
+      ) : null}
+
+      {journey.isLive && realtimeState === "offline" ? (
+        <div
+          className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
+          role="status"
+        >
+          <WifiOff className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">Live updates are unavailable.</span>
+          <button
+            type="button"
+            onClick={retryRealtime}
+            className="focus-ring safe-motion inline-flex items-center gap-1 rounded-lg px-2 py-1 font-semibold hover:bg-amber-500/10"
+          >
+            <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            Try again
+          </button>
+        </div>
       ) : null}
 
       {children ? <div className="mt-4">{children}</div> : null}

@@ -1,6 +1,7 @@
 import { DashboardPageContent } from "@/components/dashboard/dashboard-page";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
+import { loadSafeArrival } from "@/lib/safety/safe-arrival-mobile";
 import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -13,7 +14,7 @@ export default async function DashboardPage() {
   // Shares the per-request cached getUser() with the layout; the client is for
   // this page's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
-  const [access, profile, statusResult, upcoming, profileDetailsResult] = user
+  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -27,9 +28,10 @@ export default async function DashboardPage() {
           .from("profiles")
           .select("avatar_url, bio, mood_status")
           .eq("user_id", user.id)
-          .maybeSingle()
+          .maybeSingle(),
+        loadSafeArrival(user.id)
       ])
-    : [null, null, null, { plans: [], hasMore: false }, null];
+    : [null, null, null, { plans: [], hasMore: false }, null, null];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -54,6 +56,11 @@ export default async function DashboardPage() {
       initialStatusNote={hasActiveStatus ? status?.custom_text ?? "" : ""}
       upcomingPlans={upcoming?.plans ?? []}
       hasMorePlans={upcoming?.hasMore ?? false}
+      safeArrivalSession={
+        safeArrival?.mySessions[0] ??
+        safeArrival?.watching.find((item) => item.myAcknowledgement === "watching") ??
+        null
+      }
       profileReminder={
         user && missingProfileItems.length > 0
           ? { userId: user.id, missingItems: missingProfileItems }

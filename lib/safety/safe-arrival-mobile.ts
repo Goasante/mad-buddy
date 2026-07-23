@@ -43,6 +43,10 @@ export type SafeArrivalSessionSummary = {
   status: string;
   travellerName: string;
   isTraveller: boolean;
+  myAcknowledgement: "pending" | "watching" | "declined" | null;
+  startedAt: string;
+  watchers: Array<{ id: string; name: string; avatarUrl: string | null }>;
+  sharedCount: number;
 };
 
 export type SafeArrivalData = {
@@ -143,10 +147,57 @@ export async function loadSafeArrival(userId: string): Promise<SafeArrivalData> 
 
   const { data: ownRows } = await admin
     .from("safe_arrival_sessions")
-    .select("id, destination_label, expected_arrival_at, grace_period_minutes, note, status, traveller_id")
+    .select("id, destination_label, expected_arrival_at, grace_period_minutes, note, status, traveller_id, started_at")
     .eq("traveller_id", userId)
     .in("status", LIVE_STATUSES)
     .order("expected_arrival_at", { ascending: true });
+
+  const ownSessionIds = (ownRows ?? []).map((row) => row.id);
+  const watchersBySession = new Map<string, SafeArrivalSessionSummary["watchers"]>();
+  const sharedCountBySession = new Map<string, number>();
+  if (ownSessionIds.length > 0) {
+    const { data: ownContactRows } = await admin
+      .from("safe_arrival_contacts")
+      .select("session_id, contact_user_id, acknowledgement_status")
+      .in("session_id", ownSessionIds);
+    const acceptedWatcherIds = [
+      ...new Set(
+        (ownContactRows ?? [])
+          .filter((row) => row.acknowledgement_status === "watching")
+          .map((row) => row.contact_user_id)
+      )
+    ];
+    const watcherProfiles = new Map<string, { name: string; avatarUrl: string | null }>();
+    if (acceptedWatcherIds.length > 0) {
+      const { data: profiles } = await admin
+        .from("profiles")
+        .select("user_id, full_name, avatar_url")
+        .in("user_id", acceptedWatcherIds);
+      for (const profile of profiles ?? []) {
+        watcherProfiles.set(profile.user_id, {
+          name: profile.full_name?.trim() || "A Muddy",
+          avatarUrl: profile.avatar_url
+        });
+      }
+    }
+    for (const sessionId of ownSessionIds) {
+      const sessionContacts = (ownContactRows ?? []).filter((row) => row.session_id === sessionId);
+      sharedCountBySession.set(
+        sessionId,
+        sessionContacts.filter((row) => row.acknowledgement_status !== "declined").length
+      );
+      watchersBySession.set(
+        sessionId,
+        sessionContacts
+          .filter((row) => row.acknowledgement_status === "watching")
+          .map((row) => ({
+            id: row.contact_user_id,
+            name: watcherProfiles.get(row.contact_user_id)?.name ?? "A Muddy",
+            avatarUrl: watcherProfiles.get(row.contact_user_id)?.avatarUrl ?? null
+          }))
+      );
+    }
+  }
 
   const mySessions: SafeArrivalSessionSummary[] = (ownRows ?? []).map((row) => ({
     id: row.id,
@@ -156,20 +207,27 @@ export async function loadSafeArrival(userId: string): Promise<SafeArrivalData> 
     note: row.note,
     status: row.status,
     travellerName: "You",
-    isTraveller: true
+    isTraveller: true,
+    myAcknowledgement: null,
+    startedAt: row.started_at,
+    watchers: watchersBySession.get(row.id) ?? [],
+    sharedCount: sharedCountBySession.get(row.id) ?? 0
   }));
 
   const { data: contactRows } = await admin
     .from("safe_arrival_contacts")
-    .select("session_id")
+    .select("session_id, acknowledgement_status")
     .eq("contact_user_id", userId);
   const watchedIds = (contactRows ?? []).map((row) => row.session_id);
+  const acknowledgementBySession = new Map(
+    (contactRows ?? []).map((row) => [row.session_id, row.acknowledgement_status])
+  );
 
   let watching: SafeArrivalSessionSummary[] = [];
   if (watchedIds.length > 0) {
     const { data: watchedRows } = await admin
       .from("safe_arrival_sessions")
-      .select("id, destination_label, expected_arrival_at, grace_period_minutes, note, status, traveller_id")
+      .select("id, destination_label, expected_arrival_at, grace_period_minutes, note, status, traveller_id, started_at")
       .in("id", watchedIds)
       .in("status", LIVE_STATUSES)
       .order("expected_arrival_at", { ascending: true });
@@ -191,7 +249,11 @@ export async function loadSafeArrival(userId: string): Promise<SafeArrivalData> 
       note: row.note,
       status: row.status,
       travellerName: nameById.get(row.traveller_id) ?? "A Muddy",
-      isTraveller: false
+      isTraveller: false,
+      myAcknowledgement: acknowledgementBySession.get(row.id) ?? null,
+      startedAt: row.started_at,
+      watchers: [],
+      sharedCount: 0
     }));
   }
 
