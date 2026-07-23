@@ -18,18 +18,33 @@ import { getSupabaseServerEnv } from "@/lib/supabase/env";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-function isAuthorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  // Fail closed: with no secret configured, the endpoint is unusable rather
-  // than open.
-  if (!secret) return false;
-
-  const header = request.headers.get("authorization") ?? "";
+function matchesSecret(header: string, secret: string): boolean {
   const expected = `Bearer ${secret}`;
   const provided = Buffer.from(header);
   const expectedBuffer = Buffer.from(expected);
   if (provided.length !== expectedBuffer.length) return false;
   return timingSafeEqual(provided, expectedBuffer);
+}
+
+function isAuthorized(request: Request): boolean {
+  // Two independent callers, two independent credentials:
+  //  - CRON_SECRET: the GitHub Actions workflow.
+  //  - CRON_DB_SECRET: the pg_cron job inside Supabase, which is the reliable
+  //    5-minute scheduler (GitHub throttles scheduled workflows to roughly
+  //    hourly, which is too slow for safe_arrival.unconfirmed_alert).
+  // Separate secrets mean either scheduler can be rotated or revoked on its
+  // own without taking the other down.
+  const secrets = [process.env.CRON_SECRET, process.env.CRON_DB_SECRET].filter(
+    (value): value is string => Boolean(value)
+  );
+  // Fail closed: with no secret configured, the endpoint is unusable rather
+  // than open.
+  if (secrets.length === 0) return false;
+
+  const header = request.headers.get("authorization") ?? "";
+  // Not short-circuited: every configured secret is compared so the work done
+  // does not reveal which one matched.
+  return secrets.reduce((matched, secret) => matchesSecret(header, secret) || matched, false);
 }
 
 export async function GET(request: Request) {
