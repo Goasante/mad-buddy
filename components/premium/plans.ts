@@ -6,8 +6,8 @@ export type PlanId = "free" | "plus" | "pro";
 // codes; keep these display values in sync with that configuration.
 export const planDisplayPrices: Record<PlanId, string> = {
   free: "GHS 0",
-  plus: "GHS 50",
-  pro: "GHS 100"
+  plus: "GHS 4.99",
+  pro: "GHS 9.99"
 };
 
 export type PricingPlan = {

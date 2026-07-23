@@ -12,16 +12,20 @@ export type PaystackPlanConfig = {
   planCode?: string;
 };
 
+// Amounts are in the currency's minor unit (pesewas for GHS), and MUST equal
+// the amount Paystack actually charges for each plan code: lib/paystack/sync.ts
+// rejects any transaction/webhook whose amount differs, so a mismatch here
+// silently fails every real payment. GHS 4.99 = 499, GHS 9.99 = 999.
 export const paystackPlans: Record<PaidPlanId, PaystackPlanConfig> = {
   plus: {
     appPlan: "buddy_plus",
-    amount: 5000,
+    amount: 499,
     currency: "GHS",
     planCode: process.env.PAYSTACK_BUDDY_PLUS_PLAN_CODE
   },
   pro: {
     appPlan: "buddy_pro",
-    amount: 10000,
+    amount: 999,
     currency: "GHS",
     planCode: process.env.PAYSTACK_BUDDY_PRO_PLAN_CODE
   }

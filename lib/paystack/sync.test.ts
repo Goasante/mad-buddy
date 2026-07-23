@@ -4,7 +4,8 @@ import { validatePaystackSyncInput } from "@/lib/paystack/sync";
 const base = {
   userId: "00000000-0000-4000-8000-000000000001",
   plan: "plus" as const,
-  amount: 5000,
+  // GHS 4.99 in pesewas — must match paystackPlans.plus.amount.
+  amount: 499,
   currency: "GHS"
 };
 
@@ -14,7 +15,7 @@ describe("Paystack subscription verification", () => {
   });
 
   it("rejects client or webhook metadata with a spoofed amount", () => {
-    expect(() => validatePaystackSyncInput({ ...base, amount: 10000 })).toThrow(/amount/i);
+    expect(() => validatePaystackSyncInput({ ...base, amount: 999 })).toThrow(/amount/i);
   });
 
   it("rejects unsupported currencies", () => {
