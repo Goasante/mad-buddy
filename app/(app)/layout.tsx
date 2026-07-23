@@ -1,8 +1,13 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { InstallAppPrompt } from "@/components/pwa/install-app-prompt";
+import { ensureMaintenanceWarm } from "@/lib/maintenance/loader";
+import { shouldBlockForMaintenance } from "@/lib/maintenance/state";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type ProtectedAppLayoutProps = {
@@ -40,6 +45,16 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
           .maybeSingle()
       : Promise.resolve({ data: null })
   ]);
+
+  // Global pause. Staff are exempt so someone can still reach /admin to turn
+  // it back off and verify the fix before reopening the app.
+  const env = getSupabaseServerEnv();
+  if (env.url && env.serviceRoleKey) {
+    const maintenance = await ensureMaintenanceWarm(createSupabaseAdminClient());
+    if (shouldBlockForMaintenance({ isActive: maintenance.isActive, isStaff: adminContext.ok })) {
+      redirect("/maintenance");
+    }
+  }
 
   return (
     <AppShell

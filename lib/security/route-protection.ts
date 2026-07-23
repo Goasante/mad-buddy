@@ -32,7 +32,9 @@ const PUBLIC_PREFIXES = [
   "/auth",
   "/admin/login",
   "/subscription-success",
-  "/subscription-cancelled"
+  "/subscription-cancelled",
+  // Shown while the app is paused; must be reachable signed out too.
+  "/maintenance"
 ];
 
 /**

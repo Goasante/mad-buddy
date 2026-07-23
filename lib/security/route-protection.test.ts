@@ -58,6 +58,8 @@ describe("route protection (deny-by-default, audit I-08)", () => {
       "/admin/login",
       "/subscription-success",
       "/subscription-cancelled",
+      // Must render while the app is paused, signed out included.
+      "/maintenance",
       "/robots.txt",
       "/sitemap.xml"
     ]) {

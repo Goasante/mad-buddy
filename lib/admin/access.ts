@@ -24,7 +24,10 @@ const legacyPermissions: Record<AdminAccessRole, readonly AdminPermission[]> = {
     "admin.billing.manage_plan",
     // Owner/admin/support may view and edit the per-tier entitlement matrix.
     "admin.entitlements.view",
-    "admin.entitlements.manage"
+    "admin.entitlements.manage",
+    // Pausing the whole app is owner/admin only: it takes the product offline
+    // for every user, which is a wider blast radius than a support role needs.
+    "admin.maintenance.manage"
   ],
   support: [
     ...ROLE_PERMISSIONS.customer_support_agent,

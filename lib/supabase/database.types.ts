@@ -2682,6 +2682,26 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["tier_entitlement_overrides"]["Insert"]>;
         Relationships: [];
       };
+      maintenance_mode: {
+        Row: {
+          id: boolean;
+          is_active: boolean;
+          message: string | null;
+          activated_by: string | null;
+          activated_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: boolean;
+          is_active?: boolean;
+          message?: string | null;
+          activated_by?: string | null;
+          activated_at?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["maintenance_mode"]["Insert"]>;
+        Relationships: [];
+      };
       support_ticket_messages: {
         Row: {
           id: string;
