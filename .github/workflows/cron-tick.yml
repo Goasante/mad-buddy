@@ -2,25 +2,67 @@ name: Cron tick
 
 # Vercel Hobby only allows once-daily cron, but several jobs behind
 # /api/cron/tick need much tighter cadence (safe_arrival.unconfirmed_alert
-# runs every 5 minutes; several expiry jobs every 15-30). This workflow is
-# the real scheduler; Vercel's own cron.json entry only covers the
-# once-daily jobs. The endpoint itself buckets by job type and is
-# idempotent, so calling it more often than a given job needs is harmless.
+# runs every 5 minutes; several expiry jobs every 15-30). This workflow is the
+# ONLY scheduler for them — vercel.json declares no crons at all. The endpoint
+# buckets by job type and is idempotent, so calling it more often than a given
+# job needs is harmless.
+#
+# The URL must be the canonical custom domain. mad-buddy.vercel.app 307s to
+# mad-buddy.com, and curl drops the Authorization header when a redirect
+# crosses hosts, so pointing at the vercel.app alias fails twice over: the
+# unfollowed redirect is a non-2xx, and following it would arrive unauthorised.
+# Overridable via a repository variable so the next domain change is a settings
+# edit rather than a silent outage.
 on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch: {}
+
+# A slow tick should never overlap itself into a pile-up.
+concurrency:
+  group: cron-tick
+  cancel-in-progress: false
 
 jobs:
   tick:
     runs-on: ubuntu-latest
     steps:
       - name: Call cron tick endpoint
+        env:
+          TICK_URL: ${{ vars.CRON_TICK_URL || 'https://mad-buddy.com/api/cron/tick' }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          status=$(curl -s -o /dev/stderr -w "%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "https://mad-buddy.vercel.app/api/cron/tick")
-          echo "status=$status"
-          if [ "$status" -ge 300 ]; then
+          set -uo pipefail
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "CRON_SECRET is not set for this repository."
             exit 1
           fi
+
+          # Retry transient network/cold-start blips before failing, so a
+          # one-off hiccup doesn't page anyone. A real fault still fails.
+          for attempt in 1 2 3; do
+            status=$(curl -sS -o /tmp/tick-body.txt -w "%{http_code}" \
+              --max-time 90 \
+              -H "Authorization: Bearer ${CRON_SECRET}" \
+              "${TICK_URL}" || echo "000")
+            echo "attempt ${attempt}: status=${status}"
+
+            if [ "${status}" -ge 200 ] && [ "${status}" -lt 300 ]; then
+              echo "tick ok"
+              exit 0
+            fi
+
+            # 401/404 here means the secret is wrong or the URL is not the
+            # cron route — retrying cannot help, so fail fast and loudly.
+            if [ "${status}" = "401" ] || [ "${status}" = "404" ]; then
+              echo "Authorisation or routing problem, not retrying."
+              head -c 500 /tmp/tick-body.txt || true
+              exit 1
+            fi
+
+            sleep $((attempt * 5))
+          done
+
+          echo "Cron tick failed after 3 attempts (last status=${status})."
+          head -c 500 /tmp/tick-body.txt || true
+          exit 1
