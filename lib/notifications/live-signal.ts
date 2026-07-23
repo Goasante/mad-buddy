@@ -10,8 +10,8 @@
  * client-supplied field.
  */
 
-/** How long a signal stays on screen before it fades out. */
-export const LIVE_SIGNAL_DURATION_MS = 6000;
+/** How long the celebration stays on screen before it fades out. */
+export const LIVE_SIGNAL_DURATION_MS = 4200;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Achievement codes are catalog slugs, e.g. "first_muddy". */

@@ -3,7 +3,6 @@
 import Image from "next/image";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { ACHIEVEMENT_BY_CODE } from "@/lib/achievements/achievement-catalog";
@@ -197,64 +196,105 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
 
   if (!signal) return null;
 
+  const open = () => {
+    dismiss();
+    router.push(signal.href);
+  };
+
   return (
     <div
-      // Sits above the mobile nav; centred on mobile, bottom-right on desktop.
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(104px+env(safe-area-inset-bottom))] z-[95] flex justify-center px-4 sm:bottom-6 sm:justify-end sm:px-6"
+      key={signal.id}
+      className="live-signal-stage fixed inset-0 z-[95] flex items-center justify-center px-6"
       role="status"
       aria-live="polite"
     >
-      <div
-        key={signal.id}
-        className="live-signal-toast pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-2xl border border-border/70 bg-card/95 p-3 shadow-[0_18px_50px_hsl(var(--shadow)/0.28)] supports-[backdrop-filter]:bg-card/90 supports-[backdrop-filter]:backdrop-blur-xl"
-      >
+      {/* Tap anywhere outside the medallion to dismiss without navigating. */}
+      <button
+        type="button"
+        aria-label="Dismiss"
+        onClick={dismiss}
+        className="live-signal-scrim absolute inset-0 cursor-default"
+      />
+
+      <div className="pointer-events-none relative flex flex-col items-center">
+        {/* Radiating rays + expanding rings behind the icon. */}
+        <div className="pointer-events-none absolute left-1/2 top-[4.5rem] -translate-x-1/2 -translate-y-1/2" aria-hidden="true">
+          <span className="live-signal-rays block h-64 w-64" />
+          <span className="live-signal-ring absolute inset-0 m-auto block h-32 w-32 rounded-full" />
+          <span className="live-signal-ring live-signal-ring-2 absolute inset-0 m-auto block h-32 w-32 rounded-full" />
+        </div>
+
+        {/* Sparks flying outward. Each carries its own angle + distance. */}
+        <div className="pointer-events-none absolute left-1/2 top-[4.5rem] -translate-x-1/2 -translate-y-1/2" aria-hidden="true">
+          {SPARKS.map((spark, index) => (
+            <span
+              key={index}
+              className="live-signal-spark"
+              style={
+                {
+                  "--angle": `${spark.angle}deg`,
+                  "--distance": `${spark.distance}px`,
+                  "--delay": `${spark.delay}ms`,
+                  "--size": `${spark.size}px`
+                } as React.CSSProperties
+              }
+            />
+          ))}
+        </div>
+
+        {/* The medallion. Tapping it opens the sender / badges. */}
         <button
           type="button"
-          onClick={() => {
-            dismiss();
-            router.push(signal.href);
-          }}
-          className="focus-ring flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left"
+          onClick={open}
+          className="focus-ring live-signal-medallion pointer-events-auto relative grid h-36 w-36 place-items-center rounded-full"
         >
-          <span className="relative shrink-0">
-            {signal.badgeIconPath ? (
-              <span className="live-signal-badge grid h-10 w-10 place-items-center rounded-full bg-secondary/70">
-                <Image
-                  src={signal.badgeIconPath}
-                  alt=""
-                  width={32}
-                  height={32}
-                  className="h-8 w-8 object-contain"
-                  aria-hidden="true"
-                />
-              </span>
-            ) : (
-              <UserAvatar src={signal.avatarUrl} name={signal.avatarName} size="sm" decorative />
-            )}
-            {signal.kind === "wave" ? (
-              <span
-                className="live-signal-hand absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-background text-sm shadow-sm"
-                aria-hidden="true"
-              >
+          {signal.badgeIconPath ? (
+            <Image
+              src={signal.badgeIconPath}
+              alt=""
+              width={92}
+              height={92}
+              className="live-signal-emblem h-[5.75rem] w-[5.75rem] object-contain drop-shadow-[0_6px_16px_hsl(var(--shadow)/0.45)]"
+              aria-hidden="true"
+            />
+          ) : (
+            <span className="live-signal-emblem relative">
+              <UserAvatar src={signal.avatarUrl} name={signal.avatarName} size="xl" decorative />
+              <span className="live-signal-hand absolute -bottom-1 -right-1 grid h-11 w-11 place-items-center rounded-full bg-background text-2xl shadow-md">
                 👋
               </span>
-            ) : null}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold">{signal.title}</span>
-            <span className="block truncate text-xs text-muted-foreground">{signal.subtitle}</span>
-          </span>
+            </span>
+          )}
         </button>
-        <button
-          type="button"
-          onClick={dismiss}
-          aria-label="Dismiss"
-          title="Dismiss"
-          className="focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-        >
-          <X className="h-4 w-4" aria-hidden="true" />
-        </button>
+
+        {/* Title + subtitle. */}
+        <div className="pointer-events-auto mt-7 flex flex-col items-center text-center">
+          <p className="live-signal-title text-2xl font-bold tracking-tight sm:text-3xl">{signal.title}</p>
+          <button
+            type="button"
+            onClick={open}
+            className="focus-ring live-signal-subtitle mt-2 rounded-full bg-foreground/10 px-4 py-1.5 text-sm font-semibold text-foreground/90 backdrop-blur-sm"
+          >
+            {signal.subtitle}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
+
+/** Deterministic spark layout so the burst reads as intentional, not random. */
+const SPARKS: Array<{ angle: number; distance: number; delay: number; size: number }> = [
+  { angle: 8, distance: 132, delay: 0, size: 12 },
+  { angle: 40, distance: 108, delay: 40, size: 8 },
+  { angle: 74, distance: 140, delay: 20, size: 10 },
+  { angle: 112, distance: 104, delay: 60, size: 7 },
+  { angle: 146, distance: 136, delay: 10, size: 11 },
+  { angle: 178, distance: 116, delay: 50, size: 9 },
+  { angle: 210, distance: 138, delay: 30, size: 12 },
+  { angle: 244, distance: 106, delay: 70, size: 7 },
+  { angle: 278, distance: 142, delay: 15, size: 10 },
+  { angle: 310, distance: 110, delay: 55, size: 8 },
+  { angle: 338, distance: 130, delay: 25, size: 11 },
+  { angle: 358, distance: 100, delay: 65, size: 7 }
+];

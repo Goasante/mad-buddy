@@ -94,57 +94,179 @@
   to { opacity: 1; }
 }
 
-/* Live signals (an incoming Wave, an achievement unlocking): the card slides
- * up and fades in, then the subject animates — the hand waves, the badge pops.
- * All settle on their resting state (no fill-forwards needed, since the
- * element unmounts when the signal expires). */
-@keyframes live-signal-in {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+/* Live signals (an incoming Wave, an achievement unlocking): a TikTok-style
+ * full-screen celebration burst. The whole stage fades in and out; inside it
+ * the icon bursts in with overshoot, rays and rings expand behind it, sparks
+ * fly outward, and the title pops up. The element unmounts when the signal
+ * expires, so the closing fade is driven by the stage's own out-phase. */
+.live-signal-stage {
+  animation: live-signal-stage 4200ms ease-out both;
+}
+
+@keyframes live-signal-stage {
+  0% { opacity: 0; }
+  4% { opacity: 1; }
+  86% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* A soft radial vignette so the burst reads against any page behind it. */
+.live-signal-scrim {
+  background: radial-gradient(circle at center, hsl(var(--shadow) / 0.42) 0%, hsl(var(--shadow) / 0.28) 38%, transparent 72%);
+  animation: live-signal-scrim 4200ms ease-out both;
+}
+
+@keyframes live-signal-scrim {
+  0% { opacity: 0; }
+  6% { opacity: 1; }
+  82% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* The icon medallion: bursts in past full size, settles, then a gentle idle
+ * breathe, then drops away at the end. */
+.live-signal-medallion {
+  background:
+    radial-gradient(circle at 50% 38%, hsl(var(--card)) 0%, hsl(var(--card)) 58%, hsl(var(--secondary)) 100%);
+  border: 2px solid hsl(var(--primary) / 0.55);
+  box-shadow:
+    0 0 0 6px hsl(var(--primary) / 0.12),
+    0 18px 60px hsl(var(--shadow) / 0.5),
+    0 0 44px hsl(var(--primary) / 0.4);
+  animation: live-signal-medallion 4200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes live-signal-medallion {
+  0% { opacity: 0; transform: scale(0.2) rotate(-14deg); }
+  16% { opacity: 1; transform: scale(1.18) rotate(6deg); }
+  26% { transform: scale(0.94) rotate(-2deg); }
+  34% { transform: scale(1) rotate(0deg); }
+  84% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.82); }
+}
+
+.live-signal-emblem {
+  animation: live-signal-emblem 4200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes live-signal-emblem {
+  0% { transform: scale(0.4); }
+  20% { transform: scale(1.05); }
+  34% { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+
+/* The waving hand keeps waving through the celebration. */
+.live-signal-hand {
+  transform-origin: 70% 70%;
+  animation: live-signal-hand 1.5s ease-in-out 0.2s 2 both;
 }
 
 @keyframes live-signal-hand {
   0%, 60%, 100% { transform: rotate(0deg); }
-  10% { transform: rotate(16deg); }
-  20% { transform: rotate(-10deg); }
-  30% { transform: rotate(16deg); }
-  40% { transform: rotate(-8deg); }
-  50% { transform: rotate(12deg); }
+  12% { transform: rotate(18deg); }
+  24% { transform: rotate(-10deg); }
+  36% { transform: rotate(18deg); }
+  48% { transform: rotate(-8deg); }
 }
 
-@keyframes live-signal-badge {
-  0% { transform: scale(0.6) rotate(-12deg); }
-  45% { transform: scale(1.12) rotate(6deg); }
-  70% { transform: scale(0.96) rotate(-3deg); }
-  100% { transform: scale(1) rotate(0deg); }
+/* Radiating rays behind the medallion: a striped conic wheel that scales up
+ * from nothing and slowly rotates. */
+.live-signal-rays {
+  background: repeating-conic-gradient(
+    from 0deg,
+    hsl(var(--primary) / 0.34) 0deg 8deg,
+    transparent 8deg 24deg
+  );
+  border-radius: 9999px;
+  mask-image: radial-gradient(circle, transparent 26%, #000 30%, #000 62%, transparent 72%);
+  -webkit-mask-image: radial-gradient(circle, transparent 26%, #000 30%, #000 62%, transparent 72%);
+  animation: live-signal-rays 4200ms ease-out both;
 }
 
-.live-signal-toast {
-  animation: live-signal-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+@keyframes live-signal-rays {
+  0% { opacity: 0; transform: scale(0.2) rotate(0deg); }
+  18% { opacity: 0.9; transform: scale(1) rotate(18deg); }
+  84% { opacity: 0.5; transform: scale(1.04) rotate(40deg); }
+  100% { opacity: 0; transform: scale(1.1) rotate(52deg); }
 }
 
-.live-signal-hand {
-  transform-origin: 70% 70%;
-  animation: live-signal-hand 1.6s ease-in-out 2;
+/* Two expanding shockwave rings. */
+.live-signal-ring {
+  border: 3px solid hsl(var(--primary) / 0.6);
+  animation: live-signal-ring 900ms ease-out both;
 }
 
-.live-signal-badge {
-  animation: live-signal-badge 620ms cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 0 0 0 hsl(var(--primary) / 0.35), 0 0 18px hsl(var(--primary) / 0.28);
+.live-signal-ring-2 {
+  animation-delay: 180ms;
+  border-color: hsl(var(--accent) / 0.5);
 }
 
+@keyframes live-signal-ring {
+  0% { opacity: 0.8; transform: scale(0.3); }
+  100% { opacity: 0; transform: scale(2.4); }
+}
+
+/* Sparks: each flies out along its own --angle to its own --distance, then
+ * fades. Positioned at the burst centre and translated outward. */
+.live-signal-spark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--size, 10px);
+  height: var(--size, 10px);
+  margin-left: calc(var(--size, 10px) / -2);
+  margin-top: calc(var(--size, 10px) / -2);
+  border-radius: 9999px;
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+  box-shadow: 0 0 10px hsl(var(--primary) / 0.7);
+  animation: live-signal-spark 1000ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+@keyframes live-signal-spark {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--angle)) translateX(0) scale(0.3);
+  }
+  30% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--angle)) translateX(var(--distance)) scale(0.9);
+  }
+}
+
+.live-signal-title {
+  animation: live-signal-title 4200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.live-signal-subtitle {
+  animation: live-signal-title 4200ms cubic-bezier(0.16, 1, 0.3, 1) 80ms both;
+}
+
+@keyframes live-signal-title {
+  0% { opacity: 0; transform: translateY(14px) scale(0.9); }
+  22% { opacity: 0; transform: translateY(14px) scale(0.9); }
+  34% { opacity: 1; transform: translateY(0) scale(1); }
+  84% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(6px) scale(0.98); }
+}
+
+/* Reduced motion: keep the celebration, drop the motion. Everything appears
+ * in place and holds, then the stage fades it out. */
 @media (prefers-reduced-motion: reduce) {
-  .live-signal-toast,
+  .live-signal-medallion,
+  .live-signal-emblem,
   .live-signal-hand,
-  .live-signal-badge {
+  .live-signal-rays,
+  .live-signal-ring,
+  .live-signal-spark,
+  .live-signal-title,
+  .live-signal-subtitle {
     animation: none;
   }
+  .live-signal-spark { display: none; }
+  .live-signal-rays { opacity: 0.6; transform: scale(1); }
 }
 
 .install-prompt-panel[data-state="open"] {
