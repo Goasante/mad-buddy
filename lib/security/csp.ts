@@ -1,20 +1,27 @@
 /**
- * Content-Security-Policy builder (security-header hardening, audit §6/§13).
+ * Content-Security-Policy builder.
  *
- * STAGE: Report-Only. This policy is intentionally shipped as
- * Content-Security-Policy-Report-Only first, it cannot block anything, it
- * only reports would-be violations to /api/csp-report. Enforcement (and the
- * nonce upgrade replacing script-src 'unsafe-inline') is a documented
- * follow-up gated on a clean report window across the core user journeys.
+ * STAGE: Enforced, nonce-based. proxy.ts generates a per-request nonce and
+ * emits this as `Content-Security-Policy` (not Report-Only). script-src carries
+ * `'nonce-<n>'`; the two app inline scripts (theme bootstrap, JSON-LD) and
+ * every Next.js runtime script carry that nonce, so an injected inline script
+ * without it is blocked.
  *
- * Every source below is evidence-backed from the read-only audit:
- * - Supabase project origin: browser auth client (connect-src) and avatar
- *   images from Storage public URLs (img-src).
- * - data: images: the sign-in card uses an inline data: SVG noise texture.
- * - 'unsafe-inline' script/style: the theme bootstrap script in
- *   app/layout.tsx and Next.js runtime inline scripts/styles. To be replaced
- *   by nonces before enforcement.
- * - The same-origin service worker is used only to display web-push events.
+ * `'unsafe-inline'` remains in script-src ONLY as a CSP Level 2 fallback: the
+ * spec says a browser that understands nonces MUST ignore 'unsafe-inline' when
+ * a nonce is present, so modern browsers get full inline protection while very
+ * old ones still run the page. This is the standard backward-compatible strict
+ * CSP pattern, not a loophole.
+ *
+ * Sources, each evidence-backed:
+ * - Supabase origin: auth/REST (connect-src https), Realtime (connect-src
+ *   wss), avatar images from Storage (img-src).
+ * - data: images: the sign-in card's inline SVG noise texture.
+ * - style-src 'unsafe-inline': Tailwind/Next inject inline styles; style
+ *   injection is far lower risk than script injection and nonce-ing every
+ *   style is impractical, so this stays.
+ * - Google Analytics tag + beacon endpoints.
+ * - The same-origin service worker (web-push display only).
  */
 
 export function supabaseOriginFromEnv(supabaseUrl: string | undefined): string | null {
@@ -32,6 +39,8 @@ export function supabaseOriginFromEnv(supabaseUrl: string | undefined): string |
 export function buildContentSecurityPolicy(options: {
   supabaseOrigin: string | null;
   mode: "report-only" | "enforce";
+  /** Per-request nonce (from proxy.ts). Present in enforce mode. */
+  nonce?: string;
   /**
    * Next.js dev tooling (HMR, eval source maps) requires eval. This must
    * only ever be true under `next dev`, production policies never include
@@ -44,9 +53,13 @@ export function buildContentSecurityPolicy(options: {
   // beacons to google-analytics.com (both endpoints + regional subdomains).
   const gtm = "https://www.googletagmanager.com";
   const ga = "https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com";
+  // A nonce is added alongside 'unsafe-inline': nonce-aware browsers ignore
+  // 'unsafe-inline' (CSP2+), so they only run scripts carrying this nonce,
+  // while older browsers fall back to 'unsafe-inline' and still work.
+  const noncePart = options.nonce ? ` 'nonce-${options.nonce}'` : "";
   const scriptSrc = options.allowDevEval
-    ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${gtm}`
-    : `script-src 'self' 'unsafe-inline' ${gtm}`;
+    ? `script-src 'self'${noncePart} 'unsafe-inline' 'unsafe-eval' ${gtm}`
+    : `script-src 'self'${noncePart} 'unsafe-inline' ${gtm}`;
 
   const directives = [
     `default-src 'self'`,

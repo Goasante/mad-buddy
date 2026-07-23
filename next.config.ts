@@ -1,11 +1,9 @@
 import type { NextConfig } from "next";
-import { buildContentSecurityPolicy, supabaseOriginFromEnv } from "./lib/security/csp";
 
-const contentSecurityPolicy = buildContentSecurityPolicy({
-  supabaseOrigin: supabaseOriginFromEnv(process.env.NEXT_PUBLIC_SUPABASE_URL),
-  mode: "report-only",
-  allowDevEval: process.env.NODE_ENV === "development"
-});
+// The Content-Security-Policy is intentionally NOT set here. It needs a
+// per-request nonce, which a static next.config header cannot provide, so it
+// is generated and enforced in proxy.ts (the middleware). The remaining
+// headers below are request-independent and stay here.
 
 const nextConfig: NextConfig = {
   experimental: {
@@ -38,13 +36,8 @@ const nextConfig: NextConfig = {
             key: "Permissions-Policy",
             value: "geolocation=(self), camera=(), microphone=(), payment=(), usb=()"
           },
-          // STAGE 2 of the CSP rollout (audit §13): Report-Only observes,
-          // never blocks. Flip to "Content-Security-Policy" only after a
-          // clean report window and the script-src nonce upgrade.
-          {
-            key: "Content-Security-Policy-Report-Only",
-            value: contentSecurityPolicy
-          },
+          // Content-Security-Policy is set per-request in proxy.ts (it needs a
+          // nonce). It is now enforced, not Report-Only.
           ...productionOnlyHeaders
         ]
       },

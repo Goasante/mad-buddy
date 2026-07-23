@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import type { Metadata, Viewport } from "next";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import CapacitorBackButton from "@/components/CapacitorBackButton";
@@ -66,14 +67,17 @@ const themeScript = `
 })();
 `;
 
-export default function RootLayout({ children }: RootLayoutProps) {
+export default async function RootLayout({ children }: RootLayoutProps) {
   const gaMeasurementId =
     process.env.NODE_ENV === "production" ? process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID : undefined;
+  // The CSP nonce proxy.ts minted for this request. The theme bootstrap is an
+  // inline script, so under the enforced nonce-based CSP it must carry it.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script id="theme-script" dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script id="theme-script" nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body suppressHydrationWarning>
         <ThemeProvider>

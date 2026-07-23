@@ -45,6 +45,24 @@ describe("buildContentSecurityPolicy", () => {
     expect(withSupabase).toContain("https://www.google-analytics.com");
   });
 
+  it("adds the per-request nonce to script-src, keeping unsafe-inline as the legacy fallback", () => {
+    const nonced = buildContentSecurityPolicy({
+      supabaseOrigin: "https://abc123.supabase.co",
+      mode: "enforce",
+      nonce: "abc123NONCE"
+    });
+    const scriptSrc = nonced.split("; ").find((directive) => directive.startsWith("script-src"));
+    // Nonce present so CSP2+ browsers ignore 'unsafe-inline'; both appear.
+    expect(scriptSrc).toContain("'nonce-abc123NONCE'");
+    expect(scriptSrc).toContain("'unsafe-inline'");
+    // The nonce comes before the fallback so the intent reads clearly.
+    expect(scriptSrc!.indexOf("'nonce-")).toBeLessThan(scriptSrc!.indexOf("'unsafe-inline'"));
+  });
+
+  it("omits the nonce token entirely when none is supplied", () => {
+    expect(withSupabase).not.toContain("'nonce-");
+  });
+
   it("degrades safely when Supabase env is absent", () => {
     expect(withoutSupabase).toContain("img-src 'self' data: https://www.google-analytics.com");
     expect(withoutSupabase).toContain("connect-src 'self' https://www.googletagmanager.com");
