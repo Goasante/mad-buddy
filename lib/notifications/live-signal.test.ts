@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isFreshSignal, parseLiveSignal } from "@/lib/notifications/live-signal";
+import { parseLiveSignal, selectNewSignals } from "@/lib/notifications/live-signal";
 
 const SENDER = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
 
@@ -35,26 +35,46 @@ describe("parseLiveSignal", () => {
   });
 });
 
-describe("isFreshSignal", () => {
-  const now = Date.parse("2026-07-23T12:00:00.000Z");
+describe("selectNewSignals", () => {
+  const wave = { id: "n1", type: `wave:${SENDER}` };
+  const achievement = { id: "n2", type: "achievement:first_muddy" };
+  const chatter = { id: "n3", type: "message:new" };
 
-  it("accepts a signal that just arrived", () => {
-    expect(isFreshSignal("2026-07-23T11:59:58.000Z", now)).toBe(true);
+  it("returns nothing for rows already accounted for", () => {
+    const seen = new Set(["n1", "n2"]);
+    expect(selectNewSignals([wave, achievement], seen)).toEqual([]);
   });
 
-  it("rejects a replayed older signal, so a reconnect never fakes a live one", () => {
-    expect(isFreshSignal("2026-07-23T11:00:00.000Z", now)).toBe(false);
+  it("returns only unseen rows that are live signals", () => {
+    const seen = new Set<string>();
+    const picked = selectNewSignals([chatter, achievement, wave], seen);
+    expect(picked.map((entry) => entry.id)).toEqual(["n1", "n2"]);
   });
 
-  it("tolerates small clock skew where the database is slightly ahead", () => {
-    expect(isFreshSignal("2026-07-23T12:00:02.000Z", now)).toBe(true);
+  it("marks every row seen, including non-signals, so nothing repeats", () => {
+    const seen = new Set<string>();
+    selectNewSignals([chatter, achievement, wave], seen);
+    expect(seen).toEqual(new Set(["n1", "n2", "n3"]));
+    // A second pass over the same list must produce nothing.
+    expect(selectNewSignals([chatter, achievement, wave], seen)).toEqual([]);
   });
 
-  it("rejects a timestamp far in the future", () => {
-    expect(isFreshSignal("2026-07-23T13:00:00.000Z", now)).toBe(false);
+  it("orders oldest first, so the newest signal ends up on screen last", () => {
+    // The API returns newest first; the newest must be presented last.
+    const seen = new Set<string>();
+    const picked = selectNewSignals([achievement, wave], seen);
+    expect(picked.map((entry) => entry.id)).toEqual(["n1", "n2"]);
   });
 
-  it("rejects an unparseable timestamp", () => {
-    expect(isFreshSignal("not a date", now)).toBe(false);
+  it("never depends on a timestamp, a wrong device clock must not hide signals", () => {
+    const seen = new Set<string>();
+    const ancient = { id: "old", type: "achievement:first_wave" };
+    expect(selectNewSignals([ancient], seen)).toHaveLength(1);
+  });
+
+  it("tolerates malformed rows", () => {
+    const seen = new Set<string>();
+    const rows = [{ id: "", type: "wave:x" }, achievement] as Array<{ id: string; type: string }>;
+    expect(selectNewSignals(rows, seen).map((entry) => entry.id)).toEqual(["n2"]);
   });
 });

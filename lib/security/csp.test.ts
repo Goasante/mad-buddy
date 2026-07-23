@@ -30,6 +30,16 @@ describe("buildContentSecurityPolicy", () => {
     expect(withSupabase).not.toContain("script-src 'self' 'unsafe-inline' https://abc123.supabase.co");
   });
 
+  it("authorises the Realtime WebSocket, not just the https origin", () => {
+    // CSP scheme matching does not let an https: source cover a wss:
+    // connection. Without this entry, enforcing the policy would silently
+    // break every Realtime subscription (waves, achievements, chat).
+    expect(withSupabase).toContain("wss://abc123.supabase.co");
+    const connectSrc = withSupabase.split("; ").find((directive) => directive.startsWith("connect-src"));
+    expect(connectSrc).toContain("https://abc123.supabase.co");
+    expect(connectSrc).toContain("wss://abc123.supabase.co");
+  });
+
   it("allows the Google Analytics endpoints (tag + beacon)", () => {
     expect(withSupabase).toContain("script-src 'self' 'unsafe-inline' https://www.googletagmanager.com");
     expect(withSupabase).toContain("https://www.google-analytics.com");

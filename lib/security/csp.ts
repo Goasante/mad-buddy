@@ -54,7 +54,12 @@ export function buildContentSecurityPolicy(options: {
     scriptSrc,
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' data:${supabase ? ` ${supabase}` : ""} ${ga}`,
-    `connect-src 'self'${supabase ? ` ${supabase}` : ""} ${gtm} ${ga}`,
+    // The Supabase origin is listed twice on purpose: once as https:// for
+    // REST/auth, and once as wss:// for the Realtime socket. CSP scheme
+    // matching does NOT let an https: source authorise a wss: connection, so
+    // without the second entry every Realtime subscription breaks the moment
+    // this policy moves from Report-Only to enforcing.
+    `connect-src 'self'${supabase ? ` ${supabase} ${supabase.replace(/^https:/, "wss:")}` : ""} ${gtm} ${ga}`,
     `font-src 'self'`,
     `frame-src 'none'`,
     `frame-ancestors 'none'`,

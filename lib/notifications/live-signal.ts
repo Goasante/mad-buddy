@@ -47,16 +47,29 @@ export function parseLiveSignal(type: string | null | undefined): LiveSignal | n
 }
 
 /**
- * Whether a just-received signal is recent enough to animate.
+ * Picks the notifications worth animating out of a polled list.
  *
- * A reconnecting realtime channel can replay an older row, and animating
- * "someone is waving right now" for a wave from an hour ago would be a lie.
- * Anything outside the freshness window updates the badge only.
+ * Identity, not time, decides what is "new": `seenIds` starts as every row
+ * that already existed when the page loaded, so the first poll shows nothing
+ * and later polls only surface rows that appeared since. This is deliberately
+ * clock-independent — comparing a database timestamp against the browser
+ * clock means any device whose clock is off silently animates nothing at all,
+ * which is exactly the failure this replaced.
+ *
+ * Mutates `seenIds` so a signal is only ever shown once, no matter whether the
+ * realtime channel or the poll fallback observed it first.
  */
-export function isFreshSignal(createdAtIso: string, nowMs: number, freshnessMs = 30_000): boolean {
-  const createdAtMs = Date.parse(createdAtIso);
-  if (Number.isNaN(createdAtMs)) return false;
-  // Allow a small negative skew: the row is stamped by the database clock,
-  // which can sit slightly ahead of the browser's.
-  return createdAtMs - nowMs <= freshnessMs && nowMs - createdAtMs <= freshnessMs;
+export function selectNewSignals(
+  rows: Array<{ id: string; type: string }>,
+  seenIds: Set<string>
+): Array<{ id: string; signal: LiveSignal }> {
+  const fresh: Array<{ id: string; signal: LiveSignal }> = [];
+  // Oldest first, so if several arrive at once the newest ends up on screen.
+  for (const row of [...rows].reverse()) {
+    if (!row?.id || seenIds.has(row.id)) continue;
+    seenIds.add(row.id);
+    const signal = parseLiveSignal(row.type);
+    if (signal) fresh.push({ id: row.id, signal });
+  }
+  return fresh;
 }
