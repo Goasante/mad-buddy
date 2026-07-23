@@ -1,7 +1,7 @@
 import "server-only";
 
+import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type SafetyAdminContext =
   | {
@@ -63,13 +63,10 @@ export async function getAdminEmailAccess(email: string) {
 }
 
 export async function getSafetyAdminContext(): Promise<SafetyAdminContext> {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser();
+  // Shares the per-request cached getUser() round trip with the layout and page.
+  const user = await getCurrentUser();
 
-  if (error || !user?.email) {
+  if (!user?.email) {
     return { ok: false, reason: "signed_out" };
   }
 

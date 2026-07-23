@@ -2,6 +2,7 @@ import { DashboardPageContent } from "@/components/dashboard/dashboard-page";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
 import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function isStatusActiveAtRequestTime(expiresAt: string) {
@@ -9,10 +10,9 @@ function isStatusActiveAtRequestTime(expiresAt: string) {
 }
 
 export default async function DashboardPage() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  // Shares the per-request cached getUser() with the layout; the client is for
+  // this page's own queries.
+  const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
   const [access, profile, statusResult, upcoming, profileDetailsResult] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),

@@ -6,6 +6,7 @@ import { InstallAppPrompt } from "@/components/pwa/install-app-prompt";
 import { ensureMaintenanceWarm } from "@/lib/maintenance/loader";
 import { shouldBlockForMaintenance } from "@/lib/maintenance/state";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -24,10 +25,9 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function ProtectedAppLayout({ children }: ProtectedAppLayoutProps) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  // getCurrentUser() is the shared per-request auth round trip; the RLS client
+  // below is only for this layout's own queries.
+  const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
   const [adminContext, unreadResult, profileResult] = await Promise.all([
     getSafetyAdminContext(),
     user
