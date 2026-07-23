@@ -3,6 +3,7 @@ import {
   type InitialCircle,
   type UserSummary
 } from "@/components/friends/friends-page";
+import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { actionableFriendRequests } from "@/lib/friends/relationship-state";
@@ -10,13 +11,14 @@ import { actionableFriendRequests } from "@/lib/friends/relationship-state";
 export const dynamic = "force-dynamic";
 
 export default async function FriendsPage() {
-  const { users, circles, closeFriendIds } = await loadFriendNetwork();
+  const { users, circles, closeFriendIds, glowColorByFriendId } = await loadFriendNetwork();
 
   return (
     <FriendsPageContent
       initialUsers={users}
       initialCircles={circles}
       initialCloseFriendIds={closeFriendIds}
+      glowColorByFriendId={glowColorByFriendId}
     />
   );
 }
@@ -25,6 +27,7 @@ async function loadFriendNetwork(): Promise<{
   users: UserSummary[];
   circles: InitialCircle[];
   closeFriendIds: string[];
+  glowColorByFriendId: Record<string, string>;
 }> {
   const supabase = await createSupabaseServerClient();
   const {
@@ -32,7 +35,7 @@ async function loadFriendNetwork(): Promise<{
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { users: [], circles: [], closeFriendIds: [] };
+    return { users: [], circles: [], closeFriendIds: [], glowColorByFriendId: {} };
   }
 
   const admin = createSupabaseAdminClient();
@@ -65,13 +68,14 @@ async function loadFriendNetwork(): Promise<{
   });
   blocked.forEach((entry) => profileIds.add(entry.blocked_id));
 
-  const [circles, closeFriendIds] = await Promise.all([
+  const [circles, closeFriendIds, glowColorByFriendId] = await Promise.all([
     loadCircles(admin, user.id),
-    loadCloseFriendIds(admin, user.id)
+    loadCloseFriendIds(admin, user.id),
+    loadFriendGlowColors(admin, user.id)
   ]);
 
   if (profileIds.size === 0) {
-    return { users: [], circles, closeFriendIds };
+    return { users: [], circles, closeFriendIds, glowColorByFriendId };
   }
 
   const { data: profiles } = await admin
@@ -159,7 +163,7 @@ async function loadFriendNetwork(): Promise<{
     }
   });
 
-  return { users: results, circles, closeFriendIds };
+  return { users: results, circles, closeFriendIds, glowColorByFriendId };
 }
 
 async function loadCircles(

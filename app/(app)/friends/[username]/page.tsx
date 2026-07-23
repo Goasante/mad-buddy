@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import { MuddyProfilePage } from "@/components/friends/muddy-profile-page";
+import { checkFeature } from "@/lib/billing/entitlements";
+import { resolveUserEntitlements } from "@/lib/billing/service";
 import { getPublicTrustSummary } from "@/lib/discovery/service";
+import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { getVisibleProfileFields, resolveViewerRelationship } from "@/lib/profile/service";
+import { areApprovedMuddies } from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -33,6 +37,18 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
   const relationship = user ? await resolveViewerRelationship(admin, user.id, profile.user_id) : "stranger";
   const fields = user ? await getVisibleProfileFields(admin, profile.user_id, relationship) : null;
 
+  // Custom glow (custom_glow_styles entitlement): only offer the picker when
+  // the viewer can actually use it and this is a real Muddy of theirs.
+  const isOwnProfile = Boolean(user && user.id === profile.user_id);
+  const [entitlements, areFriends, glowColors] = user && !isOwnProfile
+    ? await Promise.all([
+        resolveUserEntitlements(admin, user.id),
+        areApprovedMuddies(admin, user.id, profile.user_id),
+        loadFriendGlowColors(admin, user.id)
+      ])
+    : [null, false, {} as Record<string, string>];
+  const canCustomizeGlow = Boolean(entitlements && checkFeature(entitlements, "custom_glow_styles") && areFriends);
+
   return (
     <MuddyProfilePage
       muddy={{
@@ -45,6 +61,9 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
       }}
       trust={trust}
       fields={fields}
+      canCustomizeGlow={canCustomizeGlow}
+      isMuddy={areFriends}
+      initialGlowColorId={glowColors[profile.user_id] ?? null}
     />
   );
 }

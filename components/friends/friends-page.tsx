@@ -102,11 +102,14 @@ const tabs: Array<{ id: FriendTab; label: string }> = [
 export function FriendsPageContent({
   initialUsers = [],
   initialCircles = [],
-  initialCloseFriendIds = []
+  initialCloseFriendIds = [],
+  glowColorByFriendId = {}
 }: {
   initialUsers?: UserSummary[];
   initialCircles?: InitialCircle[];
   initialCloseFriendIds?: string[];
+  /** friendId → custom glow palette id (custom_glow_styles entitlement). */
+  glowColorByFriendId?: Record<string, string>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -367,6 +370,7 @@ export function FriendsPageContent({
       key={user.id}
       user={user}
       proximity={proximityByFriendId[user.id]}
+      glowColorId={glowColorByFriendId[user.id] ?? null}
       isCloseFriend={closeFriendIds.includes(user.id)}
       circles={circles}
       onViewProfile={() => setProfileUser(user)}
@@ -784,6 +788,7 @@ function FriendsEmptyState({
 type UserRowProps = {
   user: UserSummary;
   proximity?: ProximityInfo;
+  glowColorId?: string | null;
   isCloseFriend: boolean;
   circles: Circle[];
   onViewProfile: () => void;
@@ -800,6 +805,7 @@ type UserRowProps = {
 function UserRow({
   user,
   proximity,
+  glowColorId = null,
   isCloseFriend,
   circles,
   onViewProfile,
@@ -826,6 +832,7 @@ function UserRow({
             proximityLevel={level}
             glowStrength={proximity?.glowStrength ?? 0}
             confidence={proximity?.confidence ?? "low"}
+            glowColorId={glowColorId}
             size="md"
           />
         </button>

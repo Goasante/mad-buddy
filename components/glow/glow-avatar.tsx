@@ -13,6 +13,8 @@ export type GlowAvatarProps = {
   size?: "sm" | "md" | "lg" | "xl";
   reducedMotion?: boolean;
   className?: string;
+  /** Optional custom-glow palette id (custom_glow_styles entitlement). */
+  glowColorId?: string | null;
 };
 
 export function GlowAvatar({
@@ -23,7 +25,8 @@ export function GlowAvatar({
   confidence = "low",
   size = "md",
   reducedMotion = false,
-  className
+  className,
+  glowColorId = null
 }: GlowAvatarProps) {
   return (
     <GlowRing
@@ -31,6 +34,7 @@ export function GlowAvatar({
       confidence={confidence}
       glowStrength={glowStrength}
       reducedMotion={reducedMotion}
+      glowColorId={glowColorId}
       className={cn(proximityLevel === "hidden" && "opacity-50 grayscale", className)}
       aria-label={`${name}, ${proximityLabels[proximityLevel].toLowerCase()}`}
     >

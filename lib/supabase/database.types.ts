@@ -2682,6 +2682,24 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["tier_entitlement_overrides"]["Insert"]>;
         Relationships: [];
       };
+      friend_glow_colors: {
+        Row: {
+          owner_id: string;
+          friend_id: string;
+          color_id: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          owner_id: string;
+          friend_id: string;
+          color_id: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["friend_glow_colors"]["Insert"]>;
+        Relationships: [];
+      };
       maintenance_mode: {
         Row: {
           id: boolean;

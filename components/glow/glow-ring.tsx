@@ -2,12 +2,15 @@ import type { CSSProperties, HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 import { getGlowClass } from "@/lib/proximity";
+import { glowColorById } from "@/lib/glow/custom-colors";
 
 export type GlowRingProps = HTMLAttributes<HTMLDivElement> & {
   proximityLevel: ProximityLevel;
   confidence: ConfidenceLevel;
   glowStrength?: number;
   reducedMotion?: boolean;
+  /** Optional custom-glow palette id (custom_glow_styles entitlement). */
+  glowColorId?: string | null;
 };
 
 export function GlowRing({
@@ -15,6 +18,7 @@ export function GlowRing({
   confidence,
   glowStrength = 0,
   reducedMotion = false,
+  glowColorId = null,
   className,
   children,
   ...props
@@ -40,12 +44,24 @@ export function GlowRing({
   // left visible was the solid gradient ring itself with a hard edge and no
   // perceptible bloom around it. Raising the floor keeps the glow visibly
   // present through the whole cycle instead of only at its peak.
+  // A custom colour only recolours the halo; it keeps the proximity class's
+  // blur/spread/scale so the intensity still encodes how close the Muddy is.
+  // Inline custom properties beat the ones the proximity class sets on the same
+  // element, so --halo-color / --halo-ring here override the default palette
+  // without touching the rest.
+  const customColor = glowColorById(glowColorId);
+  const colorStyle: Record<string, string> =
+    customColor && !isMuted
+      ? { "--halo-color": customColor.rgb, "--halo-ring": customColor.ring }
+      : {};
+
   const glowStyle = {
     ...props.style,
     "--halo-active-opacity": activeHaloOpacity,
     "--halo-rest-opacity": activeHaloOpacity * 0.78,
     "--halo-aura-active-opacity": activeHaloOpacity * 0.72,
-    "--halo-aura-rest-opacity": activeHaloOpacity * 0.55
+    "--halo-aura-rest-opacity": activeHaloOpacity * 0.55,
+    ...colorStyle
   } as CSSProperties;
 
   return (

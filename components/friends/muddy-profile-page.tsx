@@ -1,18 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { BadgeCheck, ChevronLeft, Hand, MessagesSquare } from "lucide-react";
+import { BadgeCheck, Check, ChevronLeft, Hand, MessagesSquare, Sparkles } from "lucide-react";
 import { useState, useTransition } from "react";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
+import { clearFriendGlowColorAction, setFriendGlowColorAction } from "@/app/(app)/glow-color-actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
+import { GLOW_COLORS } from "@/lib/glow/custom-colors";
 import { CONNECTION_PROMPTS } from "@/lib/meetups/connection-prompts";
 import type { PublicTrustSummary } from "@/lib/discovery/trust";
 import type { VisibleProfileFields } from "@/lib/profile/service";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
+import { cn } from "@/lib/utils";
 
 export type MuddyProfileData = {
   friendId: string;
@@ -29,17 +32,44 @@ export type MuddyProfileData = {
 export function MuddyProfilePage({
   muddy,
   trust = null,
-  fields = null
+  fields = null,
+  canCustomizeGlow = false,
+  isMuddy = false,
+  initialGlowColorId = null
 }: {
   muddy: MuddyProfileData;
   trust?: PublicTrustSummary | null;
   fields?: VisibleProfileFields | null;
+  /** Viewer has the custom_glow_styles entitlement AND is a Muddy of this person. */
+  canCustomizeGlow?: boolean;
+  /** Viewer is an approved Muddy (drives the free-tier upsell visibility). */
+  isMuddy?: boolean;
+  initialGlowColorId?: string | null;
 }) {
   const [pingOpen, setPingOpen] = useState(false);
   const [waveSent, setWaveSent] = useState(false);
   const [waveFeedback, setWaveFeedback] = useState("");
   const [isWavePending, startWaveTransition] = useTransition();
   const [isPingPending, startPingTransition] = useTransition();
+  const [glowColorId, setGlowColorId] = useState<string | null>(initialGlowColorId);
+  const [glowFeedback, setGlowFeedback] = useState("");
+  const [isGlowPending, startGlowTransition] = useTransition();
+
+  function chooseGlowColor(nextId: string | null) {
+    const previous = glowColorId;
+    // Optimistic: recolour the ring immediately, revert if the server rejects.
+    setGlowColorId(nextId);
+    setGlowFeedback("");
+    startGlowTransition(async () => {
+      const result = nextId
+        ? await setFriendGlowColorAction({ friendId: muddy.friendId, colorId: nextId })
+        : await clearFriendGlowColorAction({ friendId: muddy.friendId });
+      if (!result.ok) {
+        setGlowColorId(previous);
+        setGlowFeedback(result.message);
+      }
+    });
+  }
 
   function sendWave() {
     startWaveTransition(async () => {
@@ -74,6 +104,7 @@ export function MuddyProfilePage({
                 proximityLevel={muddy.proximityLevel}
                 glowStrength={muddy.glowStrength}
                 confidence={muddy.confidence}
+                glowColorId={glowColorId}
                 size="xl"
                 className="border-4 border-card"
               />
@@ -141,6 +172,78 @@ export function MuddyProfilePage({
           ) : null}
         </div>
       </Card>
+
+      {canCustomizeGlow ? (
+        <Card className="p-5 sm:p-6">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
+            <h2 className="text-sm font-semibold">Glow colour</h2>
+          </div>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Give {muddy.displayName.split(" ")[0]} a colour so you can spot them the moment they glow nearby.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2.5">
+            <button
+              type="button"
+              onClick={() => chooseGlowColor(null)}
+              disabled={isGlowPending}
+              aria-pressed={glowColorId === null}
+              className={cn(
+                "focus-ring grid h-10 w-10 place-items-center rounded-full border text-xs font-medium transition",
+                glowColorId === null ? "border-primary text-foreground" : "border-border text-muted-foreground hover:border-foreground/40"
+              )}
+              title="Default glow"
+            >
+              {glowColorId === null ? <Check className="h-4 w-4" aria-hidden="true" /> : "Off"}
+            </button>
+            {GLOW_COLORS.map((color) => (
+              <button
+                key={color.id}
+                type="button"
+                onClick={() => chooseGlowColor(color.id)}
+                disabled={isGlowPending}
+                aria-label={color.label}
+                aria-pressed={glowColorId === color.id}
+                title={color.label}
+                className={cn(
+                  "focus-ring relative grid h-10 w-10 place-items-center rounded-full transition",
+                  glowColorId === color.id
+                    ? "ring-2 ring-offset-2 ring-offset-card"
+                    : "hover:scale-105"
+                )}
+                style={{
+                  backgroundColor: color.swatch,
+                  boxShadow: glowColorId === color.id ? `0 0 14px ${color.swatch}` : undefined,
+                  // Tailwind ring colour via CSS var so it matches the swatch.
+                  ["--tw-ring-color" as string]: color.swatch
+                }}
+              >
+                {glowColorId === color.id ? <Check className="h-4 w-4 text-white drop-shadow" aria-hidden="true" /> : null}
+              </button>
+            ))}
+          </div>
+          {glowFeedback ? (
+            <p className="mt-3 text-xs text-amber-300" role="status">
+              {glowFeedback}
+            </p>
+          ) : null}
+        </Card>
+      ) : isMuddy ? (
+        <Card className="flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
+          <div className="flex items-start gap-2.5">
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-semibold">Custom glow colours</p>
+              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                Give each Muddy their own glow colour with Buddy Plus, so you know who&apos;s near at a glance.
+              </p>
+            </div>
+          </div>
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link href="/plans">See Buddy Plus</Link>
+          </Button>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-xl border border-border/70 bg-card/50 p-4">
