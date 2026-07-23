@@ -27,12 +27,17 @@ describe("buildContentSecurityPolicy", () => {
     expect(withSupabase).toContain("img-src 'self' data: https://abc123.supabase.co");
     expect(withSupabase).toContain("connect-src 'self' https://abc123.supabase.co");
     // Never in script-src, Supabase is data/auth, not a script host.
-    expect(withSupabase).toContain("script-src 'self' 'unsafe-inline';");
+    expect(withSupabase).not.toContain("script-src 'self' 'unsafe-inline' https://abc123.supabase.co");
+  });
+
+  it("allows the Google Analytics endpoints (tag + beacon)", () => {
+    expect(withSupabase).toContain("script-src 'self' 'unsafe-inline' https://www.googletagmanager.com");
+    expect(withSupabase).toContain("https://www.google-analytics.com");
   });
 
   it("degrades safely when Supabase env is absent", () => {
-    expect(withoutSupabase).toContain("img-src 'self' data:;");
-    expect(withoutSupabase).toContain("connect-src 'self';");
+    expect(withoutSupabase).toContain("img-src 'self' data: https://www.google-analytics.com");
+    expect(withoutSupabase).toContain("connect-src 'self' https://www.googletagmanager.com");
   });
 
   it("locks down framing, objects, base, and forms", () => {
@@ -52,9 +57,12 @@ describe("buildContentSecurityPolicy", () => {
     expect(withSupabase).toContain("worker-src 'self'");
   });
 
-  it("never contains unsafe-eval or wildcard sources", () => {
+  it("never contains unsafe-eval or a bare wildcard source", () => {
     expect(withSupabase).not.toContain("unsafe-eval");
-    expect(withSupabase).not.toMatch(/-src[^;]*\*/);
+    // A bare `*` source is forbidden; scoped subdomain wildcards like
+    // https://*.google-analytics.com are fine.
+    expect(withSupabase.split(/[;\s]+/)).not.toContain("*");
+    expect(withSupabase).not.toContain("https://*;");
   });
 
   it("routes violation reports to the intake endpoint", () => {

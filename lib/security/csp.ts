@@ -40,17 +40,21 @@ export function buildContentSecurityPolicy(options: {
   allowDevEval?: boolean;
 }): string {
   const supabase = options.supabaseOrigin;
+  // Google Analytics (gtag.js): the tag loads from googletagmanager.com and
+  // beacons to google-analytics.com (both endpoints + regional subdomains).
+  const gtm = "https://www.googletagmanager.com";
+  const ga = "https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com";
   const scriptSrc = options.allowDevEval
-    ? `script-src 'self' 'unsafe-inline' 'unsafe-eval'`
-    : `script-src 'self' 'unsafe-inline'`;
+    ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${gtm}`
+    : `script-src 'self' 'unsafe-inline' ${gtm}`;
 
   const directives = [
     `default-src 'self'`,
     // Nonce upgrade planned before enforcement; see module comment.
     scriptSrc,
     `style-src 'self' 'unsafe-inline'`,
-    `img-src 'self' data:${supabase ? ` ${supabase}` : ""}`,
-    `connect-src 'self'${supabase ? ` ${supabase}` : ""}`,
+    `img-src 'self' data:${supabase ? ` ${supabase}` : ""} ${ga}`,
+    `connect-src 'self'${supabase ? ` ${supabase}` : ""} ${gtm} ${ga}`,
     `font-src 'self'`,
     `frame-src 'none'`,
     `frame-ancestors 'none'`,

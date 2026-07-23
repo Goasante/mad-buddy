@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell/app-shell";
+import { InstallAppPrompt } from "@/components/pwa/install-app-prompt";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -49,6 +50,8 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
       currentAvatarUrl={profileResult.data?.avatar_url ?? null}
     >
       {children}
+      {/* Only offered once the user is signed in (mounted in the authed layout). */}
+      <InstallAppPrompt />
     </AppShell>
   );
 }

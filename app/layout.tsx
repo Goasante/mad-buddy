@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { InstallAppPrompt } from "@/components/pwa/install-app-prompt";
+import Script from "next/script";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { getSiteUrl } from "@/lib/seo";
 import "./globals.css";
+
+const GA_MEASUREMENT_ID = "G-R74E70LPTT";
 
 export const viewport: Viewport = {
   themeColor: [
@@ -68,12 +70,19 @@ export default function RootLayout({ children }: RootLayoutProps) {
     <html lang="en" suppressHydrationWarning>
       <head>
         <script id="theme-script" dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* Google Analytics (gtag.js) — loaded on every page. */}
+        <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`} strategy="afterInteractive" />
+        <Script id="gtag-init" strategy="afterInteractive">
+          {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${GA_MEASUREMENT_ID}');`}
+        </Script>
       </head>
       <body suppressHydrationWarning>
         <ThemeProvider>
           {children}
           <ServiceWorkerRegistration />
-          <InstallAppPrompt />
         </ThemeProvider>
       </body>
     </html>
