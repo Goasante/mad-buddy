@@ -1,11 +1,14 @@
 import type { Metadata, Viewport } from "next";
 import { GoogleAnalytics } from "@next/third-parties/google";
+import CapacitorBackButton from "@/components/CapacitorBackButton";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { getSiteUrl } from "@/lib/seo";
 import "./globals.css";
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#fbfaff" },
     { media: "(prefers-color-scheme: dark)", color: "#0b0f19" }
@@ -74,6 +77,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
       </head>
       <body suppressHydrationWarning>
         <ThemeProvider>
+          <CapacitorBackButton />
           {children}
           <ServiceWorkerRegistration />
         </ThemeProvider>
