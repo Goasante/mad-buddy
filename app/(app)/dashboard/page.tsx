@@ -14,7 +14,7 @@ export default async function DashboardPage() {
   // Shares the per-request cached getUser() with the layout; the client is for
   // this page's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
-  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival] = user
+  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival, glowColorsResult] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -29,13 +29,20 @@ export default async function DashboardPage() {
           .select("avatar_url, bio, mood_status")
           .eq("user_id", user.id)
           .maybeSingle(),
-        loadSafeArrival(user.id)
+        loadSafeArrival(user.id),
+        supabase
+          .from("friend_glow_colors")
+          .select("friend_id, color_id")
+          .eq("owner_id", user.id)
       ])
-    : [null, null, null, { plans: [], hasMore: false }, null, null];
+    : [null, null, null, { plans: [], hasMore: false }, null, null, null];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
   const profileDetails = profileDetailsResult?.data;
+  const glowColorByFriendId = Object.fromEntries(
+    (glowColorsResult?.data ?? []).map((row) => [row.friend_id, row.color_id])
+  );
   const missingProfileItems = profileDetails
     ? [
         !profileDetails.avatar_url ? "photo" : null,
@@ -56,6 +63,7 @@ export default async function DashboardPage() {
       initialStatusNote={hasActiveStatus ? status?.custom_text ?? "" : ""}
       upcomingPlans={upcoming?.plans ?? []}
       hasMorePlans={upcoming?.hasMore ?? false}
+      glowColorByFriendId={glowColorByFriendId}
       safeArrivalSession={
         safeArrival?.mySessions[0] ??
         safeArrival?.watching.find((item) => item.myAcknowledgement === "watching") ??

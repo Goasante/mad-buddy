@@ -119,6 +119,7 @@ type DashboardPageContentProps = {
   initialStatusNote?: string;
   upcomingPlans?: HomeUpcomingPlan[];
   hasMorePlans?: boolean;
+  glowColorByFriendId?: Record<string, string>;
   profileReminder?: {
     userId: string;
     missingItems: string[];
@@ -159,6 +160,7 @@ export function DashboardPageContent({
   initialStatusNote = "",
   upcomingPlans = [],
   hasMorePlans = false,
+  glowColorByFriendId = {},
   profileReminder = null,
   safeArrivalSession = null
 }: DashboardPageContentProps) {
@@ -659,6 +661,7 @@ export function DashboardPageContent({
                         proximityLevel={friend.proximityLevel}
                         glowStrength={friend.glowStrength}
                         confidence={friend.confidence}
+                        glowColorId={glowColorByFriendId[friend.friendId] ?? null}
                         size="md"
                         reducedMotion={reducedMotion}
                       />
@@ -691,6 +694,7 @@ export function DashboardPageContent({
                         proximityLevel={friend.proximityLevel}
                         glowStrength={friend.glowStrength}
                         confidence={friend.confidence}
+                        glowColorId={glowColorByFriendId[friend.friendId] ?? null}
                         size="lg"
                         reducedMotion={reducedMotion}
                       />
@@ -783,6 +787,7 @@ export function DashboardPageContent({
           <MuddiesOpenToPlans
             muddies={openToPlansMuddies}
             hangouts={openHangouts}
+            glowColorByFriendId={glowColorByFriendId}
             onSelect={setSelectedFriendId}
             onRequestHangout={requestHangout}
             isPending={isPending}
@@ -842,7 +847,8 @@ export function DashboardPageContent({
                 statusText: selectedFriend.statusText,
                 proximityLevel: selectedFriend.proximityLevel,
                 glowStrength: selectedFriend.glowStrength,
-                confidence: selectedFriend.confidence
+                confidence: selectedFriend.confidence,
+                glowColorId: glowColorByFriendId[selectedFriend.friendId] ?? null
               }
             : null
         }
@@ -1093,12 +1099,14 @@ const NEARBY_LEVELS = new Set<ProximityLevel>(["very_close", "nearby", "around"]
 function MuddiesOpenToPlans({
   muddies,
   hangouts,
+  glowColorByFriendId,
   onSelect,
   onRequestHangout,
   isPending
 }: {
   muddies: DashboardFriend[];
   hangouts: VisibleHangout[];
+  glowColorByFriendId: Record<string, string>;
   onSelect: (friendId: string) => void;
   onRequestHangout: (hangoutId: string) => void;
   isPending: boolean;
@@ -1153,6 +1161,7 @@ function MuddiesOpenToPlans({
                     proximityLevel={muddy.proximityLevel}
                     glowStrength={muddy.glowStrength}
                     confidence={muddy.confidence}
+                    glowColorId={glowColorByFriendId[muddy.friendId] ?? null}
                     size="sm"
                   />
                   <span className="min-w-0 flex-1">

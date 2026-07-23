@@ -21,6 +21,7 @@ export type MuddyProfileSummary = {
   proximityLevel?: ProximityLevel;
   glowStrength?: number;
   confidence?: ConfidenceLevel;
+  glowColorId?: string | null;
 };
 
 export type MuddyProfileModalProps = {
@@ -70,6 +71,7 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
                 proximityLevel={muddy.proximityLevel}
                 glowStrength={muddy.glowStrength}
                 confidence={muddy.confidence}
+                glowColorId={muddy.glowColorId}
                 size="lg"
               />
             </div>

@@ -71,6 +71,7 @@ export async function setFriendGlowColorAction(input: unknown): Promise<GlowColo
   if (error) return { ok: false, message: "Your glow colour couldn't be saved." };
 
   revalidatePath("/friends");
+  revalidatePath("/dashboard");
   return { ok: true, message: "Glow colour updated." };
 }
 
@@ -98,5 +99,6 @@ export async function clearFriendGlowColorAction(input: unknown): Promise<GlowCo
   if (error) return { ok: false, message: "Your glow colour couldn't be reset." };
 
   revalidatePath("/friends");
+  revalidatePath("/dashboard");
   return { ok: true, message: "Reverted to the default glow." };
 }

@@ -721,7 +721,8 @@ export function FriendsPageContent({
                 mutualMuddies: profileUser.mutualFriends,
                 proximityLevel: proximityByFriendId[profileUser.id]?.proximityLevel,
                 glowStrength: proximityByFriendId[profileUser.id]?.glowStrength,
-                confidence: proximityByFriendId[profileUser.id]?.confidence
+                confidence: proximityByFriendId[profileUser.id]?.confidence,
+                glowColorId: glowColorByFriendId[profileUser.id] ?? null
               }
             : null
         }
