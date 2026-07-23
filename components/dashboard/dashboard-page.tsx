@@ -19,6 +19,7 @@ import {
   MessageSquareText,
   Moon,
   PartyPopper,
+  Plus,
   RefreshCcw,
   ShieldCheck,
   Sparkles,
@@ -1144,8 +1145,10 @@ function MuddiesOpenToPlans({
             <p className="text-sm font-medium">No Muddies are available right now</p>
             <p className="mt-0.5 text-xs text-muted-foreground">Check again later or start a new plan.</p>
           </div>
-          <Button type="button" variant="outline" size="sm" className="shrink-0" asChild>
-            <Link href="/plans">New plan</Link>
+          <Button type="button" variant="outline" size="icon" className="shrink-0" asChild>
+            <Link href="/plans" aria-label="New plan" title="New plan">
+              <Plus className="h-4 w-4" aria-hidden="true" />
+            </Link>
           </Button>
         </div>
       ) : null}

@@ -615,14 +615,6 @@ function AppHeader({
               open /notifications from the same unread source, so badging both
               would show the same count twice. The badge stays on the Pulse
               tab (the labelled destination). */}
-          <Link
-            href="/notifications"
-            aria-label="Notifications"
-            title="Notifications"
-            className="focus-ring grid h-10 w-10 place-items-center rounded-full border border-border/70 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground md:hidden"
-          >
-            <Bell className="h-4 w-4" aria-hidden="true" />
-          </Link>
           <div className="md:hidden">
             <MobileAccountMenu
               currentUsername={currentUsername}
@@ -722,18 +714,26 @@ function MobileAccountMenu({
 }
 
 function AccountAvatar({ src, initial }: { src: string | null; initial: string }) {
-  const [updatedAvatarSrc, setUpdatedAvatarSrc] = useState<string | null>(null);
+  const [avatarRevision, setAvatarRevision] = useState(0);
 
   useEffect(() => {
-    const handleAvatarUpdate = (event: Event) => {
-      const nextSrc = (event as CustomEvent<string>).detail;
-      if (nextSrc) setUpdatedAvatarSrc(nextSrc);
+    const handleAvatarUpdate = () => {
+      setAvatarRevision(Date.now());
     };
     window.addEventListener("madbuddy:avatar-updated", handleAvatarUpdate);
     return () => window.removeEventListener("madbuddy:avatar-updated", handleAvatarUpdate);
   }, []);
 
-  return <UserAvatar src={updatedAvatarSrc ?? src} name={initial} size="sm" decorative className="h-full w-full" />;
+  const isExternalAvatar = Boolean(src && !src.includes("/storage/v1/object/"));
+  // The current-user endpoint is the canonical source for Mad Buddy uploads.
+  // Trying it even when the layout's profile snapshot is missing keeps a
+  // recently saved photo from falling back to "?" until another navigation.
+  const resolvedSrc =
+    isExternalAvatar && avatarRevision === 0
+      ? src
+      : `/api/profile/avatar${avatarRevision ? `?v=${avatarRevision}` : ""}`;
+
+  return <UserAvatar src={resolvedSrc} name={initial} size="sm" decorative className="h-full w-full" />;
 }
 
 const createActions: Array<{

@@ -1,27 +1,18 @@
 "use client";
 
-import { BriefcaseBusiness, Eye, Heart, MapPin, UserRound, type LucideIcon } from "lucide-react";
 import { useState, useTransition } from "react";
 import { updateProfileDetailsAction, type ProfileDetails } from "@/app/(app)/profile-actions";
-import { Button } from "@/components/ui/button";
 import { AppSelect } from "@/components/ui/app-dropdown";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { resolveFieldVisibility, type FieldVisibility, type ProfileField, type ViewerRelationship } from "@/lib/profile/rules";
-import { cn } from "@/lib/utils";
+import type { FieldVisibility, ProfileField } from "@/lib/profile/rules";
 
-const audienceOptions: Array<{ id: FieldVisibility; label: string }> = [
-  { id: "only_me", label: "Only me" },
-  { id: "close_friends", label: "Close Friends" },
-  { id: "approved_muddies", label: "Muddies" },
-  { id: "shared_communities", label: "Shared groups" }
-];
-
-const previewOptions: Array<{ id: ViewerRelationship; label: string }> = [
-  { id: "close_friend", label: "Close Friend" },
-  { id: "approved_muddy", label: "Muddy" },
-  { id: "shared_community", label: "Group member" },
-  { id: "stranger", label: "Someone else" }
+const audienceOptions: Array<{ value: FieldVisibility; label: string }> = [
+  { value: "only_me", label: "Only me" },
+  { value: "close_friends", label: "Close Muddies" },
+  { value: "approved_muddies", label: "All Muddies" },
+  { value: "shared_communities", label: "People in my groups" }
 ];
 
 type EditableField = {
@@ -30,9 +21,8 @@ type EditableField = {
   placeholder: string;
   helper?: string;
   value: string;
-  icon: LucideIcon;
-  wide?: boolean;
   onChange: (value: string) => void;
+  wide?: boolean;
 };
 
 export function ProfileDetailsEditor({ initialDetails }: { initialDetails: ProfileDetails }) {
@@ -42,34 +32,33 @@ export function ProfileDetailsEditor({ initialDetails }: { initialDetails: Profi
   const [pronouns, setPronouns] = useState(initialDetails.pronouns);
   const [interestsText, setInterestsText] = useState(initialDetails.interests.join(", "));
   const [privacy, setPrivacy] = useState(initialDetails.privacy);
-  const [previewAs, setPreviewAs] = useState<ViewerRelationship | null>(null);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  const fields: EditableField[] = [
+  const contextFields: EditableField[] = [
     {
       field: "institution",
-      label: "Work or study",
-      placeholder: "Company, school, or community",
+      label: "Organisation or community",
+      placeholder: "Workplace, school, organisation, or community",
       value: institution,
-      icon: BriefcaseBusiness,
       onChange: setInstitution
     },
     {
       field: "programme",
-      label: "Role or field",
-      placeholder: "Your role, profession, field, or course",
+      label: "What you do",
+      placeholder: "Role, profession, field, or course",
       value: programme,
-      icon: BriefcaseBusiness,
       onChange: setProgramme
-    },
+    }
+  ];
+
+  const personalFields: EditableField[] = [
     {
       field: "general_area",
       label: "General area",
       placeholder: "For example, East Legon or central Accra",
-      helper: "Keep it broad. Never enter an exact address.",
+      helper: "Keep this broad. Never enter an exact address.",
       value: generalArea,
-      icon: MapPin,
       onChange: setGeneralArea
     },
     {
@@ -77,7 +66,6 @@ export function ProfileDetailsEditor({ initialDetails }: { initialDetails: Profi
       label: "Pronouns",
       placeholder: "Optional",
       value: pronouns,
-      icon: UserRound,
       onChange: setPronouns
     },
     {
@@ -86,19 +74,17 @@ export function ProfileDetailsEditor({ initialDetails }: { initialDetails: Profi
       placeholder: "Music, football, food, travel",
       helper: "Separate interests with commas. Add up to 10.",
       value: interestsText,
-      icon: Heart,
-      wide: true,
-      onChange: setInterestsText
+      onChange: setInterestsText,
+      wide: true
     }
   ];
 
   function save() {
+    setFeedback("");
     startTransition(async () => {
       const result = await updateProfileDetailsAction({
         institution,
         programme,
-        // Graduation year is no longer a general-profile field, but any
-        // previously saved value remains untouched instead of being erased.
         graduationYear: initialDetails.graduationYear,
         generalArea,
         pronouns,
@@ -114,94 +100,131 @@ export function ProfileDetailsEditor({ initialDetails }: { initialDetails: Profi
   }
 
   return (
-    <Card className="p-5 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-xl">
-          <h2 className="text-lg font-semibold">Personal details</h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            Add optional context that helps approved friends recognise you.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Eye className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <span className="text-xs font-medium text-muted-foreground">Preview as</span>
-          <AppSelect
-            id="profile-preview-audience"
-            value={previewAs ?? ""}
-            options={[
-              { value: "", label: "Myself" },
-              ...previewOptions.map((option) => ({ value: option.id, label: option.label }))
-            ]}
-            size="compact"
-            triggerClassName="min-h-9 w-[138px] py-0 text-xs"
-            onChange={(next) => setPreviewAs((next || null) as ViewerRelationship | null)}
-          />
-        </div>
-      </div>
+    <Card className="overflow-hidden">
+      <header className="border-b border-border/70 px-5 py-5 sm:px-6">
+        <h2 className="text-lg font-semibold">Personal details</h2>
+        <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+          Share only what helps approved friends recognise you. Every field is optional, and you choose who can see it.
+        </p>
+      </header>
 
       {feedback ? (
-        <p className="mt-4 rounded-xl bg-secondary/55 px-4 py-3 text-sm text-muted-foreground" role="status">
+        <p className="mx-5 mt-5 rounded-xl bg-secondary/60 px-4 py-3 text-sm text-muted-foreground sm:mx-6" role="status">
           {feedback}
         </p>
       ) : null}
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        {fields.map(({ field, label, placeholder, helper, value, icon: Icon, wide, onChange }) => {
-          const hiddenInPreview =
-            previewAs !== null && !resolveFieldVisibility({ visibility: privacy[field], relationship: previewAs });
+      <div className="px-5 py-5 sm:px-6">
+        <ProfileDetailsSection
+          title="Everyday context"
+          description="A little context about where you spend your time and what you do."
+          fields={contextFields}
+          privacy={privacy}
+          setPrivacy={setPrivacy}
+        />
 
-          return (
-            <div
-              key={field}
-              className={cn(
-                "rounded-xl bg-secondary/35 p-4",
-                wide && "sm:col-span-2",
-                hiddenInPreview && "opacity-65"
-              )}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-background/70 text-muted-foreground">
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                  <div>
-                    <label htmlFor={`detail-${field}`} className="block text-sm font-semibold">
-                      {label}
-                    </label>
-                    {helper ? <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">{helper}</p> : null}
-                  </div>
-                </div>
-                <AppSelect
-                  id={`detail-${field}-audience`}
-                  label={`Who can see ${label}`}
-                  className="[&>label]:sr-only"
-                  value={privacy[field]}
-                  options={audienceOptions.map((option) => ({ value: option.id, label: option.label }))}
-                  size="compact"
-                  disabled={previewAs !== null}
-                  triggerClassName="min-h-9 w-[138px] bg-background/55 py-0 text-xs"
-                  onChange={(next) => setPrivacy((current) => ({ ...current, [field]: next }))}
-                />
-              </div>
-              <Input
-                id={`detail-${field}`}
-                value={hiddenInPreview ? "" : value}
-                disabled={previewAs !== null}
-                onChange={(event) => onChange(event.target.value)}
-                placeholder={hiddenInPreview ? "Hidden from this person" : placeholder}
-                className="mt-3 bg-background/55"
-              />
-            </div>
-          );
-        })}
+        <div className="my-6 border-t border-border/70" />
+
+        <ProfileDetailsSection
+          title="About you"
+          description="Simple details that can make your profile easier to recognise."
+          fields={personalFields}
+          privacy={privacy}
+          setPrivacy={setPrivacy}
+        />
       </div>
 
-      <div className="mt-5 flex items-center justify-between gap-4 border-t border-border/70 pt-4">
-        <p className="hidden text-xs text-muted-foreground sm:block">Every detail is optional.</p>
-        <Button type="button" onClick={save} disabled={isPending || previewAs !== null}>
-          {isPending ? "Saving..." : "Save changes"}
+      <footer className="flex flex-col gap-3 border-t border-border/70 bg-secondary/20 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <p className="text-xs leading-5 text-muted-foreground">Nothing here is visible beyond the audience you choose.</p>
+        <Button type="button" onClick={save} disabled={isPending} className="w-full sm:w-auto">
+          {isPending ? "Saving..." : "Save personal details"}
         </Button>
-      </div>
+      </footer>
     </Card>
+  );
+}
+
+function ProfileDetailsSection({
+  title,
+  description,
+  fields,
+  privacy,
+  setPrivacy
+}: {
+  title: string;
+  description: string;
+  fields: EditableField[];
+  privacy: Record<ProfileField, FieldVisibility>;
+  setPrivacy: React.Dispatch<React.SetStateAction<Record<ProfileField, FieldVisibility>>>;
+}) {
+  return (
+    <section aria-labelledby={`profile-section-${title.toLowerCase().replace(/\s+/g, "-")}`}>
+      <div>
+        <h3 id={`profile-section-${title.toLowerCase().replace(/\s+/g, "-")}`} className="text-sm font-semibold">
+          {title}
+        </h3>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+      </div>
+
+      <div className="mt-4 grid gap-x-5 gap-y-6 sm:grid-cols-2">
+        {fields.map((field) => (
+          <DetailField
+            key={field.field}
+            {...field}
+            audience={privacy[field.field]}
+            onAudienceChange={(audience) =>
+              setPrivacy((current) => ({
+                ...current,
+                [field.field]: audience
+              }))
+            }
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DetailField({
+  field,
+  label,
+  placeholder,
+  helper,
+  value,
+  onChange,
+  wide,
+  audience,
+  onAudienceChange
+}: EditableField & {
+  audience: FieldVisibility;
+  onAudienceChange: (audience: FieldVisibility) => void;
+}) {
+  return (
+    <div className={wide ? "sm:col-span-2" : undefined}>
+      <label htmlFor={`detail-${field}`} className="text-sm font-semibold">
+        {label}
+      </label>
+      {helper ? <p className="mt-1 text-xs leading-5 text-muted-foreground">{helper}</p> : null}
+      <Input
+        id={`detail-${field}`}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="mt-2"
+      />
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <span className="text-xs text-muted-foreground">Who can see this?</span>
+        <AppSelect
+          id={`detail-${field}-audience`}
+          label={`Who can see ${label}`}
+          className="w-auto [&>label]:sr-only"
+          value={audience}
+          options={audienceOptions}
+          size="compact"
+          triggerClassName="min-h-8 w-[158px] bg-secondary/45 py-0 text-xs sm:w-[172px]"
+          onChange={(next) => onAudienceChange(next as FieldVisibility)}
+        />
+      </div>
+    </div>
   );
 }

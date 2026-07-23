@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Sparkles, X } from "lucide-react";
+import { UserRound, X } from "lucide-react";
 import { useCallback, useSyncExternalStore } from "react";
 
 export function ProfileCompletionReminder({
@@ -27,14 +27,17 @@ export function ProfileCompletionReminder({
       : `Add a ${missingItems.slice(0, -1).join(", ")} and ${missingItems.at(-1)} so friends can recognise you.`;
 
   return (
-    <aside className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/[0.06] p-3.5" aria-label="Finish your profile">
-      <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
-        <Sparkles className="h-4 w-4" aria-hidden="true" />
+    <aside
+      className="flex w-fit max-w-full items-start gap-3 rounded-xl bg-secondary/55 p-3"
+      aria-label="Finish your profile"
+    >
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-background text-muted-foreground">
+        <UserRound className="h-4 w-4" aria-hidden="true" />
       </span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 max-w-sm">
         <p className="text-sm font-semibold">Finish your profile</p>
         <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{summary}</p>
-        <Link href="/profile" className="mt-2 inline-flex text-xs font-semibold text-primary hover:underline">
+        <Link href="/profile" className="mt-1.5 inline-flex text-xs font-semibold text-primary hover:underline">
           Continue setup
         </Link>
       </div>
