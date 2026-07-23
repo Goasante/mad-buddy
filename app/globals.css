@@ -415,6 +415,21 @@ select {
   outline-color: hsl(var(--ring));
 }
 
+/* iOS Safari (and some Android browsers) zoom the whole page in when a
+ * focused form control's computed font-size is under 16px, and don't always
+ * zoom back out on blur, leaving the page stuck zoomed in with scrollbars
+ * until the user manually pinches back out. Our inputs/selects/textareas use
+ * 14px (text-sm) for visual density, which is below that threshold. Force
+ * 16px on the actual focusable elements on mobile only, desktop keeps the
+ * compact size. */
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 ::selection {
   background: rgba(249, 115, 22, 0.28);
   color: var(--text-primary);
