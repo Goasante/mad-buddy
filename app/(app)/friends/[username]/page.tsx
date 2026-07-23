@@ -15,7 +15,7 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("user_id, full_name, username, bio, mood_status")
+    .select("user_id, full_name, username, avatar_url, bio, mood_status")
     .eq("username", username)
     .maybeSingle();
 
@@ -55,6 +55,7 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
         friendId: profile.user_id,
         displayName: profile.full_name,
         username: profile.username,
+        avatarUrl: profile.avatar_url,
         bio: fields?.bio ?? "",
         moodStatus: profile.mood_status ?? "",
         mutualMuddies: trust?.mutualCount ?? 0

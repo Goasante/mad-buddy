@@ -21,6 +21,7 @@ export type MuddyProfileData = {
   friendId: string;
   displayName: string;
   username: string;
+  avatarUrl: string | null;
   bio: string;
   moodStatus: string;
   mutualMuddies: number;
@@ -101,6 +102,7 @@ export function MuddyProfilePage({
             <div className="flex items-end gap-3">
               <GlowAvatar
                 name={muddy.displayName}
+                src={muddy.avatarUrl}
                 proximityLevel={muddy.proximityLevel}
                 glowStrength={muddy.glowStrength}
                 confidence={muddy.confidence}
@@ -240,7 +242,7 @@ export function MuddyProfilePage({
             </div>
           </div>
           <Button type="button" variant="outline" size="sm" asChild>
-            <Link href="/plans">See Buddy Plus</Link>
+            <Link href="/billing#plans">See Buddy Plus</Link>
           </Button>
         </Card>
       ) : null}
