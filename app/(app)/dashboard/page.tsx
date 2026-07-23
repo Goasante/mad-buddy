@@ -13,7 +13,7 @@ export default async function DashboardPage() {
   const {
     data: { user }
   } = await supabase.auth.getUser();
-  const [access, profile, statusResult, upcoming] = user
+  const [access, profile, statusResult, upcoming, profileDetailsResult] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -22,12 +22,25 @@ export default async function DashboardPage() {
           .select("availability_type, activity_type, custom_text, expires_at")
           .eq("user_id", user.id)
           .maybeSingle(),
-        loadUpcomingPlans(user.id)
+        loadUpcomingPlans(user.id),
+        supabase
+          .from("profiles")
+          .select("avatar_url, bio, mood_status")
+          .eq("user_id", user.id)
+          .maybeSingle()
       ])
-    : [null, null, null, { plans: [], hasMore: false }];
+    : [null, null, null, { plans: [], hasMore: false }, null];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
+  const profileDetails = profileDetailsResult?.data;
+  const missingProfileItems = profileDetails
+    ? [
+        !profileDetails.avatar_url ? "photo" : null,
+        !profileDetails.bio?.trim() ? "short bio" : null,
+        !profileDetails.mood_status?.trim() ? "mood" : null
+      ].filter((item): item is string => Boolean(item))
+    : [];
 
   return (
     <DashboardPageContent
@@ -41,6 +54,11 @@ export default async function DashboardPage() {
       initialStatusNote={hasActiveStatus ? status?.custom_text ?? "" : ""}
       upcomingPlans={upcoming?.plans ?? []}
       hasMorePlans={upcoming?.hasMore ?? false}
+      profileReminder={
+        user && missingProfileItems.length > 0
+          ? { userId: user.id, missingItems: missingProfileItems }
+          : null
+      }
     />
   );
 }

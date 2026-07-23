@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 export type MoodStatus = "open" | "busy" | "exploring" | "quiet";
 
 export type MoodStatusSelectorProps = {
-  value: MoodStatus;
+  value: MoodStatus | null;
   onChange: (value: MoodStatus) => void;
 };
 

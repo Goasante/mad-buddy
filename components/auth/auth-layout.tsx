@@ -9,6 +9,7 @@ export type AuthLayoutProps = {
   description: string;
   children: ReactNode;
   footer: ReactNode;
+  compact?: boolean;
 };
 
 const trustBullets = [
@@ -18,7 +19,30 @@ const trustBullets = [
   { icon: ToggleRight, text: "Turn your visibility on or off anytime" }
 ];
 
-export function AuthLayout({ title, description, children, footer }: AuthLayoutProps) {
+export function AuthLayout({ title, description, children, footer, compact = false }: AuthLayoutProps) {
+  if (compact) {
+    return (
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-8 sm:px-6">
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_15%,hsl(var(--primary)/0.12),transparent_38%)]"
+          aria-hidden="true"
+        />
+        <div className="relative w-full max-w-md">
+          <Link href="/" className="focus-ring mx-auto mb-6 flex w-fit items-center gap-2.5 rounded-lg font-semibold">
+            <BrandMark className="h-9 w-9" priority />
+            <span>Mad Buddy</span>
+          </Link>
+          <section className="rounded-2xl border border-border/70 bg-card p-5 shadow-xl shadow-black/10 sm:p-7">
+            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+            <div className="mt-6">{children}</div>
+          </section>
+          {footer ? <div className="mt-5 text-center text-sm text-muted-foreground">{footer}</div> : null}
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="grid min-h-screen lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       {/* Left panel (≈40%): privacy-first brand story with a soft glow. */}

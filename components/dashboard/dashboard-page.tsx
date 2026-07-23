@@ -37,6 +37,7 @@ import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { PendingInvitePrompt } from "@/components/discovery/pending-invite-prompt";
+import { ProfileCompletionReminder } from "@/components/profile/profile-completion-reminder";
 import { StatusComposer } from "@/components/social/status-composer";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -115,6 +116,10 @@ type DashboardPageContentProps = {
   initialStatusNote?: string;
   upcomingPlans?: HomeUpcomingPlan[];
   hasMorePlans?: boolean;
+  profileReminder?: {
+    userId: string;
+    missingItems: string[];
+  } | null;
 };
 
 const attentionIconByType: Record<string, LucideIcon> = {
@@ -139,7 +144,8 @@ export function DashboardPageContent({
   initialStatusActivity = null,
   initialStatusNote = "",
   upcomingPlans = [],
-  hasMorePlans = false
+  hasMorePlans = false,
+  profileReminder = null
 }: DashboardPageContentProps) {
   const reducedMotion = useReducedMotion();
   const [ghostMode, setGhostMode] = useState(initialVisibilityStatus === "ghost");
@@ -480,6 +486,10 @@ export function DashboardPageContent({
           />
         </div>
       </div>
+
+      {profileReminder ? (
+        <ProfileCompletionReminder userId={profileReminder.userId} missingItems={profileReminder.missingItems} />
+      ) : null}
 
       {(() => {
         const nearbyTotal = proximityCounts.very_close + proximityCounts.nearby + proximityCounts.around;

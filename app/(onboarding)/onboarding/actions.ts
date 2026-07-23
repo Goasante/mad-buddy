@@ -1,6 +1,8 @@
 "use server";
 
-import { completeOnboarding } from "@/lib/onboarding/complete";
+import { completeOnboarding, savePrivacySetup } from "@/lib/onboarding/complete";
+import { SAFE_DEFAULT_PRIVACY_SETUP } from "@/lib/onboarding/rules";
+import { recordMilestone } from "@/lib/onboarding/service";
 import { normalizeUsername, validateUsername } from "@/lib/profile/rules";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -67,4 +69,57 @@ export async function completeOnboardingAction(input: unknown): Promise<Onboardi
   }
 
   return completeOnboarding(user.id, input);
+}
+
+/**
+ * Finishes the simplified setup in one server-controlled sequence. Applying
+ * the safest privacy defaults here removes a whole decision-heavy screen while
+ * preserving the product rule that every new account starts hidden.
+ */
+export async function finishOnboardingAction(
+  input: unknown,
+  skippedOptional: boolean
+): Promise<OnboardingActionState> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    return { ok: false, message: "Log in before finishing setup." };
+  }
+
+  const profileResult = await completeOnboarding(user.id, input);
+  if (!profileResult.ok) return profileResult;
+
+  const privacyResult = await savePrivacySetup(user.id, SAFE_DEFAULT_PRIVACY_SETUP);
+  if (!privacyResult.ok) return privacyResult;
+
+  const admin = createSupabaseAdminClient();
+  const nowIso = new Date().toISOString();
+  const [progressResult, onboardedResult] = await Promise.all([
+    admin.from("onboarding_progress").upsert(
+      {
+        user_id: user.id,
+        current_step: "completed",
+        profile_completed_at: nowIso,
+        completed_at: nowIso,
+        skipped_optional: skippedOptional,
+        updated_at: nowIso
+      },
+      { onConflict: "user_id" }
+    ),
+    admin.from("profiles").update({ is_onboarded: true }).eq("user_id", user.id),
+    recordMilestone(admin, user.id, "profile_completed")
+  ]);
+
+  if (progressResult.error || onboardedResult.error) {
+    return { ok: false, message: "Your profile was saved, but setup could not finish. Try again." };
+  }
+
+  return {
+    ok: true,
+    message: skippedOptional ? "You're ready. You can finish your profile anytime." : "You're all set."
+  };
 }

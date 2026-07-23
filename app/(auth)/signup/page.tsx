@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { SignupForm } from "@/components/auth/signup-form";
 import { oauthErrorMessage } from "@/lib/auth/oauth-redirect";
@@ -13,15 +12,9 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
   return (
     <AuthLayout
       title="Create your account"
-      description="Set up the basics — you’ll choose your privacy settings next."
-      footer={
-        <>
-          Need the overview?{" "}
-          <Link href="/" className="font-semibold text-foreground hover:text-accent">
-            Back to home
-          </Link>
-        </>
-      }
+      description="Start with email, then choose how friends find you."
+      footer={null}
+      compact
     >
       <SignupForm initialError={oauthErrorMessage(oauthError)} />
     </AuthLayout>

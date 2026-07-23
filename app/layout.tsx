@@ -1,11 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { getSiteUrl } from "@/lib/seo";
 import "./globals.css";
-
-const GA_MEASUREMENT_ID = "G-R74E70LPTT";
 
 export const viewport: Viewport = {
   themeColor: [
@@ -66,24 +64,20 @@ const themeScript = `
 `;
 
 export default function RootLayout({ children }: RootLayoutProps) {
+  const gaMeasurementId =
+    process.env.NODE_ENV === "production" ? process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID : undefined;
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         <script id="theme-script" dangerouslySetInnerHTML={{ __html: themeScript }} />
-        {/* Google Analytics (gtag.js) — loaded on every page. */}
-        <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`} strategy="afterInteractive" />
-        <Script id="gtag-init" strategy="afterInteractive">
-          {`window.dataLayer = window.dataLayer || [];
-function gtag(){dataLayer.push(arguments);}
-gtag('js', new Date());
-gtag('config', '${GA_MEASUREMENT_ID}');`}
-        </Script>
       </head>
       <body suppressHydrationWarning>
         <ThemeProvider>
           {children}
           <ServiceWorkerRegistration />
         </ThemeProvider>
+        {gaMeasurementId ? <GoogleAnalytics gaId={gaMeasurementId} /> : null}
       </body>
     </html>
   );

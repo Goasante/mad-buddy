@@ -16,7 +16,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
-import { validateUsername } from "@/lib/profile/rules";
+import { createPlaceholderUsername, PLACEHOLDER_DISPLAY_NAME } from "@/lib/profile/placeholder-identity";
 
 export type AuthActionState = {
   ok: boolean;
@@ -24,27 +24,12 @@ export type AuthActionState = {
   redirectTo?: "/login" | "/dashboard" | "/onboarding" | "/admin";
 };
 
-const signupSchema = z
-  .object({
-    fullName: z.string().min(2),
-    username: z
-      .string()
-      .min(3)
-      .max(24)
-      .regex(/^[a-z0-9_]+$/),
-    email: z.string().email(),
-    password: z.string().min(8),
-    confirmPassword: z.string().min(8),
-    acceptedPolicy: z.literal(true),
-    policyVersion: z.literal(PRIVACY_POLICY_VERSION)
-  })
-  .superRefine((data, context) => {
-    if (data.password !== data.confirmPassword) {
-      context.addIssue({ code: "custom", path: ["confirmPassword"], message: "Passwords do not match." });
-    }
-    const usernameError = validateUsername(data.username);
-    if (usernameError) context.addIssue({ code: "custom", path: ["username"], message: usernameError });
-  });
+const signupSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  acceptedPolicy: z.literal(true),
+  policyVersion: z.literal(PRIVACY_POLICY_VERSION)
+});
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -146,7 +131,7 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     return { ok: false, message: "Please check the signup form and try again." };
   }
 
-  const { fullName, username, email, password } = parsed.data;
+  const { email, password } = parsed.data;
 
   const env = getSupabaseServerEnv();
   if (!env.url || !env.serviceRoleKey) {
@@ -174,7 +159,7 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     email,
     password,
     email_confirm: true,
-    user_metadata: { full_name: fullName, username }
+    user_metadata: { full_name: PLACEHOLDER_DISPLAY_NAME }
   });
 
   if (createError || !created?.user) {
@@ -200,7 +185,11 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
 
   // Per-user rows (profile / subscription / preferences). Idempotent; shared
   // with the mobile path (lib/auth/bootstrap) so the two can't drift.
-  const bootstrapResults = await bootstrapNewUser(admin, { userId: created.user.id, fullName, username });
+  const bootstrapResults = await bootstrapNewUser(admin, {
+    userId: created.user.id,
+    fullName: PLACEHOLDER_DISPLAY_NAME,
+    username: createPlaceholderUsername(created.user.id)
+  });
   const failedBootstrap = bootstrapResults.find((result) => result.error);
   for (const { label, error: rowError } of bootstrapResults) {
     if (rowError) {
@@ -224,7 +213,7 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
       ok: false,
       message:
         failedBootstrap.label === "profile" && code === "23505"
-          ? "That username is already taken. Try another one."
+          ? "Your account could not be prepared. Please try again."
           : "Your account could not be set up. Please try again."
     };
   }
