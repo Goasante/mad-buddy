@@ -176,13 +176,23 @@ export async function consumeRateLimit(input: {
   const admin = createSupabaseAdminClient();
 
   try {
-    const { data, error } = await admin.rpc("consume_rate_limit", {
-      p_user_id: input.userId ?? null,
-      p_ip_hash: input.ipHash ?? null,
-      p_action: input.action,
-      p_limit: rule.limit,
-      p_window_seconds: rule.windowSeconds
-    });
+    const callRpc = () =>
+      admin.rpc("consume_rate_limit", {
+        p_user_id: input.userId ?? null,
+        p_ip_hash: input.ipHash ?? null,
+        p_action: input.action,
+        p_limit: rule.limit,
+        p_window_seconds: rule.windowSeconds
+      });
+
+    // One retry: a cold serverless function's first DB round trip is the
+    // likeliest place for a transient blip, and this fails closed (blocks the
+    // request) on any error, so a single retry avoids turning a brief hiccup
+    // into a false "too many attempts" on someone's very first signup.
+    let { data, error } = await callRpc();
+    if (error) {
+      ({ data, error } = await callRpc());
+    }
 
     if (error) {
       throw error;

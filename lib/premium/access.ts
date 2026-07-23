@@ -1,7 +1,7 @@
 import "server-only";
 
 import { effectivePlan } from "@/lib/billing/entitlements";
-import { refreshTierOverrides } from "@/lib/billing/tier-overrides-loader";
+import { ensureTierOverridesWarm } from "@/lib/billing/tier-overrides-loader";
 import { loadBillingState } from "@/lib/billing/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
@@ -21,9 +21,10 @@ const planRank: Record<SubscriptionPlan, number> = {
  */
 export async function getCurrentSubscriptionAccess(userId: string) {
   const admin = createSupabaseAdminClient();
-  // Keep the tier-override cache warm so the sync entitlementsFor() calls that
-  // follow in this request reflect any admin edits.
-  await refreshTierOverrides(admin);
+  // Keep the tier-override cache warm (reload only if stale) so the sync
+  // entitlementsFor() calls that follow in this request reflect admin edits
+  // without paying a DB round trip on every page load.
+  await ensureTierOverridesWarm(admin);
   const state = await loadBillingState(admin, userId);
   const plan = effectivePlan(state, Date.now());
 

@@ -26,3 +26,8 @@ export function setTierOverrideCache(next: TierOverrideMap): void {
 export function tierOverridesLoadedAtMs(): number {
   return loadedAtMs;
 }
+
+/** Never loaded, or loaded further back than the given TTL. */
+export function isTierOverrideCacheStale(ttlMs: number): boolean {
+  return loadedAtMs === 0 || Date.now() - loadedAtMs > ttlMs;
+}

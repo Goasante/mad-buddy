@@ -114,32 +114,39 @@ export function OnboardingFlow({
 
     setFeedback("");
     startTransition(async () => {
-      const result = await finishOnboardingAction(
-        {
-          fullName: displayName.trim(),
-          username,
-          bio: skippedOptional ? "" : bio.trim(),
-          moodStatus: skippedOptional ? "" : moodStatus ?? "",
-          notifications: "smart"
-        },
-        skippedOptional
-      );
+      try {
+        const result = await finishOnboardingAction(
+          {
+            fullName: displayName.trim(),
+            username,
+            bio: skippedOptional ? "" : bio.trim(),
+            moodStatus: skippedOptional ? "" : moodStatus ?? "",
+            notifications: "smart"
+          },
+          skippedOptional
+        );
 
-      if (!result.ok) {
-        setFeedback(result.message);
-        if (result.field === "username") {
-          setUsernameCheck({
-            status: result.message.toLowerCase().includes("taken") ? "taken" : "error",
-            message: result.message,
-            username
-          });
-          setStepIndex(0);
+        if (!result.ok) {
+          setFeedback(result.message);
+          if (result.field === "username") {
+            setUsernameCheck({
+              status: result.message.toLowerCase().includes("taken") ? "taken" : "error",
+              message: result.message,
+              username
+            });
+            setStepIndex(0);
+          }
+          return;
         }
-        return;
-      }
 
-      router.replace("/dashboard");
-      router.refresh();
+        router.replace("/dashboard");
+        router.refresh();
+      } catch {
+        // A thrown server error (rather than a returned { ok: false }) must
+        // still resolve the pending state and tell the user, otherwise the
+        // button is left spinning with no way to retry.
+        setFeedback("Something went wrong finishing setup. Please try again.");
+      }
     });
   }
 
