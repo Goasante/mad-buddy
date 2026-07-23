@@ -1,5 +1,45 @@
 import { describe, expect, it } from "vitest";
-import { isApiPath, isPublicPath, requiredLoginRedirect } from "@/lib/security/route-protection";
+import {
+  authenticatedRedirect,
+  isApiPath,
+  isPublicPath,
+  requiredLoginRedirect
+} from "@/lib/security/route-protection";
+
+describe("authenticated visitors on guest-only routes", () => {
+  it("sends a signed-in user from the landing and auth forms to the dashboard", () => {
+    for (const path of ["/", "/login", "/signup", "/forgot-password"]) {
+      expect(authenticatedRedirect(path)).toBe("/dashboard");
+    }
+  });
+
+  it("never redirects /reset-password — the recovery link signs the user in first", () => {
+    // Redirecting here would make it impossible to ever set a new password.
+    expect(authenticatedRedirect("/reset-password")).toBeNull();
+  });
+
+  it("leaves the OAuth callback and admin login alone", () => {
+    expect(authenticatedRedirect("/auth/callback")).toBeNull();
+    expect(authenticatedRedirect("/admin/login")).toBeNull();
+  });
+
+  it("keeps marketing and legal pages readable while signed in", () => {
+    for (const path of ["/pricing", "/about", "/faq", "/privacy", "/terms"]) {
+      expect(authenticatedRedirect(path)).toBeNull();
+    }
+  });
+
+  it("does not touch in-app routes or API paths", () => {
+    for (const path of ["/dashboard", "/plans", "/messages", "/api/notifications"]) {
+      expect(authenticatedRedirect(path)).toBeNull();
+    }
+  });
+
+  it("does not prefix-match beyond a path boundary", () => {
+    expect(authenticatedRedirect("/loginsomething")).toBeNull();
+    expect(authenticatedRedirect("/signup-flow")).toBeNull();
+  });
+});
 
 describe("route protection (deny-by-default, audit I-08)", () => {
   it("treats the documented public pages as public", () => {

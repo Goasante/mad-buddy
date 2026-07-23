@@ -81,3 +81,33 @@ export function requiredLoginRedirect(pathname: string): "/login" | "/admin/logi
 
   return matchesPrefix(pathname, "/admin") ? "/admin/login" : "/login";
 }
+
+/**
+ * Routes that only make sense for a signed-OUT visitor. A user who already has
+ * a session is sent to their dashboard instead of being shown the marketing
+ * page or an empty login form.
+ *
+ * Deliberately EXCLUDED, each for a concrete reason:
+ * - /reset-password: the recovery link signs the user in before they land here,
+ *   so redirecting an authenticated visitor would make it impossible to ever
+ *   set a new password.
+ * - /auth/*: the OAuth callback completes sign-in itself and decides where to
+ *   send the user (onboarding vs. their original destination).
+ * - /admin/login: staff sign-in is a separate surface; a signed-in consumer
+ *   account must still be able to reach it.
+ * - /pricing, /about, /faq, /privacy, /terms: readable signed in or out.
+ */
+const GUEST_ONLY_EXACT_PATHS = new Set(["/"]);
+const GUEST_ONLY_PREFIXES = ["/login", "/signup", "/forgot-password"];
+
+export function authenticatedRedirect(pathname: string): "/dashboard" | null {
+  if (isApiPath(pathname)) {
+    return null;
+  }
+
+  if (GUEST_ONLY_EXACT_PATHS.has(pathname)) {
+    return "/dashboard";
+  }
+
+  return GUEST_ONLY_PREFIXES.some((prefix) => matchesPrefix(pathname, prefix)) ? "/dashboard" : null;
+}
