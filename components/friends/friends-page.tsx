@@ -614,7 +614,16 @@ export function FriendsPageContent({
 
       <AddMuddyModal
         open={addOpen}
-        onOpenChange={setAddOpen}
+        onOpenChange={(next) => {
+          setAddOpen(next);
+          if (!next) {
+            // Closing (X, backdrop, Escape, or after a successful send) always
+            // clears the search, so reopening later never shows a stale query
+            // or result list from a previous visit.
+            setAddQuery("");
+            setHasSearched(false);
+          }
+        }}
         query={addQuery}
         onQueryChange={(value) => {
           setAddQuery(value);
@@ -629,7 +638,12 @@ export function FriendsPageContent({
         onRequest={(user) =>
           runFriendAction(
             () => sendFriendRequestAction(user.id),
-            () => updateUserStatus(user.id, "sent", `Muddy request sent to ${user.displayName}.`)
+            () => {
+              updateUserStatus(user.id, "sent", `Muddy request sent to ${user.displayName}.`);
+              setAddOpen(false);
+              setAddQuery("");
+              setHasSearched(false);
+            }
           )
         }
       />
