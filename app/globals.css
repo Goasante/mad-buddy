@@ -94,6 +94,45 @@
   to { opacity: 1; }
 }
 
+/* Incoming Wave: the card slides up and fades, and the hand actually waves.
+ * Both settle on their resting state (no fill-forwards needed since the
+ * element unmounts when the wave expires). */
+@keyframes wave-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes wave-toast-hand {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  10% { transform: rotate(16deg); }
+  20% { transform: rotate(-10deg); }
+  30% { transform: rotate(16deg); }
+  40% { transform: rotate(-8deg); }
+  50% { transform: rotate(12deg); }
+}
+
+.wave-toast {
+  animation: wave-toast-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wave-toast-hand {
+  transform-origin: 70% 70%;
+  animation: wave-toast-hand 1.6s ease-in-out 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wave-toast,
+  .wave-toast-hand {
+    animation: none;
+  }
+}
+
 .install-prompt-panel[data-state="open"] {
   animation: install-prompt-in 220ms ease-out;
 }

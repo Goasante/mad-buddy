@@ -28,6 +28,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { logoutAction } from "@/app/(auth)/actions";
 import { LocationSignalSync } from "@/components/app-shell/location-signal-sync";
+import { WaveToast } from "@/components/social/wave-toast";
 import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -82,6 +83,7 @@ export type AppShellProps = {
   locationSyncEnabled?: boolean;
   currentUsername?: string | null;
   currentAvatarUrl?: string | null;
+  currentUserId?: string | null;
 };
 
 export function AppShell({
@@ -90,7 +92,8 @@ export function AppShell({
   initialUnreadCount = 0,
   locationSyncEnabled = true,
   currentUsername = null,
-  currentAvatarUrl = null
+  currentAvatarUrl = null,
+  currentUserId = null
 }: AppShellProps) {
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
@@ -161,6 +164,9 @@ export function AppShell({
         Skip to content
       </a>
       <LocationSignalSync initiallyEnabled={locationSyncEnabled} />
+      {/* Waves animate over whatever page the user is on, so this lives in the
+          shell rather than on any one screen. */}
+      <WaveToast currentUserId={currentUserId} />
       <div className="flex min-h-0 flex-1 flex-col bg-background dark:bg-[#111112] md:grid md:h-[calc(100vh-2rem)] md:grid-cols-[4.75rem_minmax(0,1fr)] md:overflow-hidden md:rounded-[1.35rem] md:border md:border-border/80 md:bg-background md:shadow-[0_28px_90px_hsl(var(--shadow)/0.24)] dark:md:border-white/10 dark:md:bg-[#101011]">
       <DesktopSidebar
         navigationItems={visibleNavigationItems}

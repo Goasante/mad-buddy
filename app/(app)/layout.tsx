@@ -63,6 +63,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
       locationSyncEnabled={profileResult.data?.visibility_status !== "ghost"}
       currentUsername={profileResult.data?.username ?? null}
       currentAvatarUrl={profileResult.data?.avatar_url ?? null}
+      currentUserId={user?.id ?? null}
     >
       {children}
       {/* Only offered once the user is signed in (mounted in the authed layout). */}
