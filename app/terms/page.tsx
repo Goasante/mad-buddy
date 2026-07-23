@@ -1,77 +1,303 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { BrandMark } from "@/components/brand/brand-mark";
-import { legalContactPlaceholders } from "@/content/privacy-policy";
+import { legalContact } from "@/content/privacy-policy";
 import { FEATURE_ICON_CREDITS } from "@/lib/icons/feature-icons";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
-  description: "Mad Buddy terms of service.",
-  robots: { index: false, follow: false }
+  description: "Mad Buddy terms and conditions.",
+  alternates: { canonical: "/terms" },
+  openGraph: {
+    title: "Terms of Service | Mad Buddy",
+    description: "Mad Buddy terms and conditions.",
+    url: "/terms"
+  }
 };
 
-// DRAFT STATUS: like the privacy policy, this describes the product's real
-// behavior but has NOT been approved by legal counsel. TODO(legal): replace
-// entity placeholders and obtain sign-off before production launch.
-const sections: Array<{ title: string; body: string[] }> = [
+const TERMS_EFFECTIVE_DATE = "23 July 2026";
+
+type TermsBlock = { type: "paragraph"; text: string } | { type: "list"; items: string[] };
+type TermsSection = { title: string; blocks: TermsBlock[] };
+
+const sections: TermsSection[] = [
   {
     title: "1. Who we are",
-    body: [
-      `Mad Buddy is operated by ${legalContactPlaceholders.companyName}, ${legalContactPlaceholders.businessAddress}. By creating an account you agree to these terms and to our Privacy Policy.`
+    blocks: [
+      {
+        type: "paragraph",
+        text: `Mad Buddy is operated by ${legalContact.companyName}, located at ${legalContact.businessAddress} ("Mad Buddy", "we", "our", or "us").`
+      },
+      { type: "paragraph", text: `If you have questions about these Terms, please contact us at ${legalContact.supportEmail}.` }
     ]
   },
   {
-    title: "2. The service",
-    body: [
-      "Mad Buddy lets mutually approved friends (\"Muddies\") see privacy-safe proximity signals, never exact locations, maps, or distances.",
-      "Proximity signals are estimates. Do not rely on Mad Buddy for safety-critical decisions, navigation, or emergencies."
+    title: "2. Eligibility",
+    blocks: [
+      { type: "paragraph", text: "To use Mad Buddy, you must:" },
+      {
+        type: "list",
+        items: [
+          "Be at least 18 years old, or the minimum legal age required to create an online account in your country.",
+          "Provide accurate and complete information.",
+          "Keep your account credentials secure.",
+          "Not create an account on behalf of another person without permission."
+        ]
+      },
+      { type: "paragraph", text: "You are responsible for everything that happens under your account." }
     ]
   },
   {
-    title: "3. Your account",
-    body: [
-      "You must provide accurate information and keep your credentials secure. You are responsible for activity on your account. You must be old enough to hold an account under the laws that apply to you."
+    title: "3. About the service",
+    blocks: [
+      {
+        type: "paragraph",
+        text: 'Mad Buddy helps mutually approved friends ("Muddies") stay socially connected by sharing privacy-focused proximity information.'
+      },
+      { type: "paragraph", text: "Mad Buddy intentionally does not display:" },
+      { type: "list", items: ["Exact GPS coordinates", "Street addresses", "Live maps", "Exact distances"] },
+      {
+        type: "paragraph",
+        text: "Instead, users receive approximate proximity signals designed to protect everyone's privacy."
+      },
+      {
+        type: "paragraph",
+        text: "Because proximity information depends on several factors, including device permissions, internet connectivity, and operating system restrictions, it may occasionally be delayed or inaccurate."
+      },
+      { type: "paragraph", text: "You must never rely on Mad Buddy for:" },
+      {
+        type: "list",
+        items: [
+          "Personal safety",
+          "Emergency situations",
+          "Navigation",
+          "Finding missing persons",
+          "Medical emergencies",
+          "Any situation requiring precise location information"
+        ]
+      }
     ]
   },
   {
-    title: "4. Acceptable use",
-    body: [
-      "Do not harass, stalk, impersonate, or harm others; do not attempt to derive another person's exact location; do not probe, scrape, or interfere with the service; do not upload unlawful content. We may suspend or remove accounts that break these rules, and users can block and report others at any time."
+    title: "4. User safety",
+    blocks: [
+      { type: "paragraph", text: "Your safety is important." },
+      {
+        type: "paragraph",
+        text: "Mad Buddy does not perform background checks, verify user identities, or guarantee that any user is who they claim to be."
+      },
+      { type: "paragraph", text: "You are solely responsible for your interactions with other users, whether online or offline." },
+      { type: "paragraph", text: "Always use good judgement when communicating with or meeting another person." },
+      { type: "paragraph", text: "If you believe another user is abusing the platform, you should report and block them immediately." }
     ]
   },
   {
-    title: "5. Subscriptions",
-    body: [
-      "Paid plans are billed through Paystack at the prices shown on the pricing page. Subscriptions renew until cancelled. Failed payments may limit paid features until payment succeeds. Statutory refund rights are unaffected."
+    title: "5. Acceptable use",
+    blocks: [
+      { type: "paragraph", text: "You agree that you will not:" },
+      {
+        type: "list",
+        items: [
+          "Harass, threaten, intimidate, or stalk another user.",
+          "Attempt to determine another person's precise location.",
+          "Create fake or misleading accounts.",
+          "Impersonate another individual or organisation.",
+          "Upload unlawful, offensive, or harmful content.",
+          "Interfere with the operation or security of the Service.",
+          "Reverse engineer, scrape, copy, or exploit any part of the Service without permission.",
+          "Introduce malware, viruses, or harmful software.",
+          "Use Mad Buddy for illegal purposes."
+        ]
+      },
+      {
+        type: "paragraph",
+        text: "We reserve the right to investigate suspected misuse and may suspend or permanently terminate accounts that violate these Terms."
+      },
+      { type: "paragraph", text: "Where legally required, we may cooperate with law enforcement authorities." }
     ]
   },
   {
-    title: "6. Your content",
-    body: [
-      "You keep ownership of what you upload (like your profile photo and bio) and grant us the license needed to operate the service, to store and display that content to you and the Muddies you have approved."
+    title: "6. User content",
+    blocks: [
+      { type: "paragraph", text: "You retain ownership of the content you upload, including:" },
+      {
+        type: "list",
+        items: ["Profile photographs", "Bios", "Usernames", "Status updates", "Other personal content"]
+      },
+      {
+        type: "paragraph",
+        text: "By uploading content, you grant Mad Buddy a worldwide, non-exclusive, royalty-free licence to host, store, process, reproduce, and display your content solely for the purpose of operating and improving the Service."
+      },
+      { type: "paragraph", text: "You confirm that you have the necessary rights to upload your content." }
     ]
   },
   {
-    title: "7. Ending the relationship",
-    body: [
-      "You can delete your account at any time from Settings, which removes your data as described in the Privacy Policy. We may suspend or terminate accounts that violate these terms."
+    title: "7. Privacy",
+    blocks: [
+      { type: "paragraph", text: "Your personal information is processed in accordance with our Privacy Policy." },
+      { type: "paragraph", text: "You remain responsible for deciding what information you choose to share with other users." }
     ]
   },
   {
-    title: "8. Disclaimers and liability",
-    body: [
-      "The service is provided \"as is\" during this pre-release period. To the extent permitted by law, we are not liable for indirect or consequential losses arising from use of the service. Nothing in these terms excludes liability that cannot lawfully be excluded."
+    title: "8. Subscriptions and payments",
+    blocks: [
+      { type: "paragraph", text: "Some features of Mad Buddy require a paid subscription." },
+      { type: "paragraph", text: "Payments are securely processed through Paystack." },
+      { type: "paragraph", text: "By purchasing a subscription, you agree that:" },
+      {
+        type: "list",
+        items: [
+          "Subscription fees are charged at the prices displayed within the Service.",
+          "Subscriptions automatically renew unless cancelled before the next billing date.",
+          "Failed payments may result in the loss of premium features until payment is successful.",
+          "Prices may change with reasonable notice.",
+          "Applicable taxes may be included where required by law."
+        ]
+      },
+      { type: "paragraph", text: "Nothing in these Terms limits any statutory consumer rights available under applicable law." }
     ]
   },
   {
-    title: "9. Changes",
-    body: [
-      "We may update these terms; material changes will be announced in the app before they take effect. Continued use after changes take effect means you accept them."
+    title: "9. Intellectual property",
+    blocks: [
+      {
+        type: "paragraph",
+        text: "Mad Buddy, including its software, design, logos, graphics, branding, text, and technology, is owned by us or our licensors and is protected by intellectual property laws."
+      },
+      { type: "paragraph", text: "These Terms do not grant you ownership of any part of the Service." },
+      {
+        type: "paragraph",
+        text: "You may not copy, reproduce, distribute, modify, or create derivative works without our written permission."
+      }
     ]
   },
   {
-    title: "10. Contact",
-    body: [`Questions about these terms: ${legalContactPlaceholders.supportEmail}.`]
+    title: "10. Service availability",
+    blocks: [
+      { type: "paragraph", text: "We strive to provide a reliable Service but cannot guarantee that it will always be:" },
+      { type: "list", items: ["Available", "Uninterrupted", "Error-free", "Secure"] },
+      { type: "paragraph", text: "We may modify, suspend, remove, or discontinue features at any time without liability." }
+    ]
+  },
+  {
+    title: "11. Suspension and termination",
+    blocks: [
+      {
+        type: "paragraph",
+        text: "You may stop using Mad Buddy and delete your account at any time through the application settings."
+      },
+      { type: "paragraph", text: "We may suspend or terminate your account immediately if:" },
+      {
+        type: "list",
+        items: [
+          "You violate these Terms.",
+          "We believe your account presents a security risk.",
+          "We are required to do so by law.",
+          "It is necessary to protect other users or the integrity of the Service."
+        ]
+      },
+      { type: "paragraph", text: "Deletion of your account will be handled in accordance with our Privacy Policy." }
+    ]
+  },
+  {
+    title: "12. Beta services",
+    blocks: [
+      { type: "paragraph", text: "Some parts of Mad Buddy may be released as beta or pre-release features." },
+      { type: "paragraph", text: "These features may contain bugs, change without notice, or be discontinued." },
+      { type: "paragraph", text: "Your use of beta features is entirely at your own risk." }
+    ]
+  },
+  {
+    title: "13. Disclaimers",
+    blocks: [
+      { type: "paragraph", text: 'The Service is provided on an "as is" and "as available" basis.' },
+      { type: "paragraph", text: "To the fullest extent permitted by law, we make no warranties regarding:" },
+      {
+        type: "list",
+        items: ["Accuracy", "Reliability", "Availability", "Fitness for a particular purpose", "Continuous operation"]
+      },
+      { type: "paragraph", text: "We do not guarantee that proximity information will always be correct or available." }
+    ]
+  },
+  {
+    title: "14. Limitation of liability",
+    blocks: [
+      {
+        type: "paragraph",
+        text: "To the fullest extent permitted by law, Mad Buddy and its owners, directors, employees, and partners shall not be liable for:"
+      },
+      {
+        type: "list",
+        items: [
+          "Indirect damages",
+          "Incidental damages",
+          "Consequential damages",
+          "Loss of profits",
+          "Loss of goodwill",
+          "Loss of business opportunities",
+          "Data loss"
+        ]
+      },
+      {
+        type: "paragraph",
+        text: "Our total liability for any claim relating to the Service shall not exceed the amount you paid to us during the twelve (12) months preceding the claim."
+      },
+      { type: "paragraph", text: "Nothing in these Terms excludes liability that cannot legally be excluded." }
+    ]
+  },
+  {
+    title: "15. Force majeure",
+    blocks: [
+      {
+        type: "paragraph",
+        text: "We are not responsible for delays or failures caused by circumstances beyond our reasonable control, including:"
+      },
+      {
+        type: "list",
+        items: [
+          "Natural disasters",
+          "Internet outages",
+          "Government actions",
+          "Cyberattacks",
+          "Utility failures",
+          "Failures of third-party service providers"
+        ]
+      }
+    ]
+  },
+  {
+    title: "16. Changes to these Terms",
+    blocks: [
+      { type: "paragraph", text: "We may update these Terms from time to time." },
+      {
+        type: "paragraph",
+        text: "Where changes are significant, we will notify users through the application or by other appropriate means before the changes take effect."
+      },
+      {
+        type: "paragraph",
+        text: "Your continued use of the Service after the effective date of updated Terms constitutes acceptance of those changes."
+      }
+    ]
+  },
+  {
+    title: "17. Governing law",
+    blocks: [
+      {
+        type: "paragraph",
+        text: "These Terms shall be governed by and interpreted in accordance with the laws of the Republic of Ghana, without regard to conflict of law principles."
+      },
+      {
+        type: "paragraph",
+        text: "Any disputes arising from these Terms shall be subject to the jurisdiction of the competent courts of Ghana, unless applicable consumer protection laws require otherwise."
+      }
+    ]
+  },
+  {
+    title: "18. Contact",
+    blocks: [
+      { type: "paragraph", text: "For questions regarding these Terms, please contact:" },
+      { type: "paragraph", text: `Email: ${legalContact.supportEmail}` }
+    ]
   }
 ];
 
@@ -81,27 +307,40 @@ export default function TermsPage() {
       <div className="mx-auto max-w-2xl">
         <div className="text-center">
           <BrandMark className="mx-auto h-16 w-16" priority />
-          <h1 className="mt-4 text-3xl font-semibold">Terms of Service</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Last updated: 16 July 2026</p>
+          <h1 className="mt-4 text-3xl font-semibold">Terms and Conditions</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Effective date: {TERMS_EFFECTIVE_DATE}</p>
         </div>
 
-        <div
-          role="note"
-          className="mt-8 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-800 dark:text-amber-100"
-        >
-          <strong>Draft.</strong> These terms describe how Mad Buddy really works today, but they
-          have not yet been reviewed by legal counsel and the company details are placeholders.
-        </div>
+        <p className="mt-8 text-sm leading-7 text-muted-foreground">
+          Welcome to Mad Buddy. These Terms and Conditions (&ldquo;Terms&rdquo;) govern your access to and use of the
+          Mad Buddy application, website, and related services (collectively, the &ldquo;Service&rdquo;).
+        </p>
+        <p className="mt-3 text-sm leading-7 text-muted-foreground">
+          By creating an account or using Mad Buddy, you confirm that you have read, understood, and agree to be
+          bound by these Terms and our Privacy Policy. If you do not agree, please do not use the Service.
+        </p>
 
         <div className="mt-8 space-y-8">
           {sections.map((section) => (
             <section key={section.title}>
               <h2 className="text-lg font-semibold">{section.title}</h2>
-              {section.body.map((paragraph) => (
-                <p key={paragraph.slice(0, 40)} className="mt-2 text-sm leading-7 text-muted-foreground">
-                  {paragraph}
-                </p>
-              ))}
+              <div className="mt-2 space-y-3">
+                {section.blocks.map((block, index) =>
+                  block.type === "list" ? (
+                    <ul key={index} className="space-y-1.5 pl-5 text-sm leading-7 text-muted-foreground">
+                      {block.items.map((item) => (
+                        <li key={item} className="list-disc pl-1">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p key={index} className="text-sm leading-7 text-muted-foreground">
+                      {block.text}
+                    </p>
+                  )
+                )}
+              </div>
             </section>
           ))}
         </div>
@@ -109,7 +348,7 @@ export default function TermsPage() {
         <section className="mt-12 border-t border-border/70 pt-8">
           <h2 className="text-lg font-semibold">Icon credits</h2>
           <p className="mt-2 text-sm leading-7 text-muted-foreground">
-            Some feature icons in Mad Buddy are from Flaticon, used under their licence with attribution:
+            Some icons used within Mad Buddy are provided by Flaticon under their applicable licence:
           </p>
           <ul className="mt-3 space-y-1.5 text-sm text-muted-foreground">
             {FEATURE_ICON_CREDITS.map((credit) => (
@@ -126,6 +365,9 @@ export default function TermsPage() {
               </li>
             ))}
           </ul>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">
+            All icon rights remain with their respective creators and Flaticon in accordance with their licensing terms.
+          </p>
         </section>
 
         <div className="mt-12 flex justify-center gap-4 border-t border-border/70 pt-6 text-sm">

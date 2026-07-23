@@ -1,30 +1,20 @@
 export { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
-export const PRIVACY_POLICY_EFFECTIVE_DATE = "16 July 2026";
-export const PRIVACY_POLICY_LAST_UPDATED = "16 July 2026";
+export const PRIVACY_POLICY_EFFECTIVE_DATE = "23 July 2026";
+export const PRIVACY_POLICY_LAST_UPDATED = "23 July 2026";
 
-export const legalContactPlaceholders = {
-  // TODO(legal): Replace every placeholder before production launch.
-  companyName: "[LEGAL COMPANY NAME]",
-  businessAddress: "[REGISTERED BUSINESS ADDRESS]",
-  privacyEmail: "[PRIVACY EMAIL ADDRESS]",
-  supportEmail: "[SUPPORT EMAIL ADDRESS]"
+export const legalContact = {
+  companyName: "Godfred Ofosu Asante",
+  businessAddress: "Ashongman Estate",
+  privacyEmail: "godfredasante004@gmail.com",
+  supportEmail: "godfredasante004@gmail.com"
 } as const;
 
-// DRAFT STATUS: This policy describes the application's actual, verified
-// behavior (location handling, sharing rules, deletion) as confirmed in the
-// July 2026 application audit. It has NOT yet been reviewed by legal counsel.
-// The bracketed entity placeholders above must be filled in, and the whole
-// document must be approved by a lawyer, before public launch.
 export const privacyPolicyMarkdown = `
 # Mad Buddy Privacy Policy
 
-## Draft status
-
-**This is a draft.** It accurately describes how Mad Buddy handles your data today, but it has not yet been reviewed by legal counsel and the operating company details below are placeholders. It is published now because we believe an honest draft is better than an empty page.
-
 ## Introduction
 
-Mad Buddy ("we", "us") is a private social proximity app operated by ${legalContactPlaceholders.companyName}, ${legalContactPlaceholders.businessAddress}. It lets friends you have mutually approved ("Muddies") know roughly when you are nearby without ever sharing your exact location. This policy explains what we collect, why, what your friends can and cannot see, and what control you have.
+Mad Buddy ("we", "us") is a private social proximity app operated by ${legalContact.companyName}, ${legalContact.businessAddress}. It lets friends you have mutually approved ("Muddies") know roughly when you are nearby without ever sharing your exact location. This policy explains what we collect, why, what your friends can and cannot see, and what control you have.
 
 ## What we collect
 
@@ -85,7 +75,7 @@ Our server logs record request metadata (route, status, timing, error category) 
 * Pause your visibility or turn on Ghost Mode at any time.
 * Export a copy of your account data from Settings.
 * Delete your account from Settings at any time.
-* Contact us about your data at ${legalContactPlaceholders.privacyEmail}.
+* Contact us about your data at ${legalContact.privacyEmail}.
 
 ## Changes to this policy
 
@@ -93,5 +83,5 @@ We will update the "Last updated" date above when this policy changes, and mater
 
 ## Contact
 
-Questions about privacy: ${legalContactPlaceholders.privacyEmail}. General support: ${legalContactPlaceholders.supportEmail}.
+Questions about privacy: ${legalContact.privacyEmail}. General support: ${legalContact.supportEmail}.
 `;
