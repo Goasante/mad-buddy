@@ -90,21 +90,37 @@ export async function completeOnboarding(userId: string, input: unknown): Promis
   // ensureProfileForUser for OAuth), so without this the default id-PK conflict
   // target would try to INSERT a second row and violate the user_id unique
   // constraint — which is what surfaced as "Your profile could not be saved."
-  const { error: profileError } = await admin.from("profiles").upsert(
-    {
-      user_id: userId,
-      full_name: parsed.data.fullName,
-      username,
-      username_normalized: username,
-      bio: parsed.data.bio || null,
-      mood_status: parsed.data.moodStatus || null,
-      ...(parsed.data.visibility ? { visibility_status: visibilityMap[parsed.data.visibility] } : {}),
-      // The final onboarding action flips this only after required progress is
-      // confirmed, preventing a half-finished account from entering the app.
-      is_onboarded: false
-    },
-    { onConflict: "user_id" }
-  );
+  const [profileResult, preferencesResult] = await Promise.all([
+    admin.from("profiles").upsert(
+      {
+        user_id: userId,
+        full_name: parsed.data.fullName,
+        username,
+        username_normalized: username,
+        bio: parsed.data.bio || null,
+        mood_status: parsed.data.moodStatus || null,
+        ...(parsed.data.visibility ? { visibility_status: visibilityMap[parsed.data.visibility] } : {}),
+        // The final onboarding action flips this only after required progress is
+        // confirmed, preventing a half-finished account from entering the app.
+        is_onboarded: false
+      },
+      { onConflict: "user_id" }
+    ),
+    admin.from("user_preferences").upsert(
+      {
+        user_id: userId,
+        mood_status: parsed.data.moodStatus || null,
+        notification_preferences: {
+          nearbyAlerts: parsed.data.notifications === "smart",
+          requestAlertsOnly: parsed.data.notifications === "requests",
+          quietMode: parsed.data.notifications === "quiet",
+          updatedAt: new Date().toISOString()
+        }
+      },
+      { onConflict: "user_id" }
+    )
+  ]);
+  const profileError = profileResult.error;
 
   if (profileError) {
     // 23505 here means the chosen username belongs to someone else.
@@ -114,19 +130,7 @@ export async function completeOnboarding(userId: string, input: unknown): Promis
     return { ok: false, message: "Your profile could not be saved." };
   }
 
-  const { error: preferencesError } = await admin.from("user_preferences").upsert(
-    {
-      user_id: userId,
-      mood_status: parsed.data.moodStatus || null,
-      notification_preferences: {
-        nearbyAlerts: parsed.data.notifications === "smart",
-        requestAlertsOnly: parsed.data.notifications === "requests",
-        quietMode: parsed.data.notifications === "quiet",
-        updatedAt: new Date().toISOString()
-      }
-    },
-    { onConflict: "user_id" }
-  );
+  const preferencesError = preferencesResult.error;
 
   if (preferencesError) {
     return { ok: false, message: "Your preferences could not be saved." };

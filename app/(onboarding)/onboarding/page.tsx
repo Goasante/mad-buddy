@@ -1,5 +1,6 @@
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import type { MoodStatus } from "@/components/onboarding/mood-status-selector";
+import { redirect } from "next/navigation";
 import {
   isPlaceholderUsername,
   PLACEHOLDER_DISPLAY_NAME
@@ -26,9 +27,12 @@ export default async function OnboardingPage() {
     if (user) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("full_name, username, bio, mood_status")
+        .select("full_name, username, bio, mood_status, is_onboarded")
         .eq("user_id", user.id)
         .maybeSingle();
+      if (profile?.is_onboarded) {
+        redirect("/dashboard");
+      }
       const profileName =
         profile?.full_name ??
         (typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : "");

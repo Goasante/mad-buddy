@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, Loader2, RotateCcw, XCircle } from "lucide-react";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   checkUsernameAvailabilityAction,
   finishOnboardingAction,
@@ -19,6 +18,8 @@ import { normalizeUsername, validateUsername } from "@/lib/profile/rules";
 import { cn } from "@/lib/utils";
 
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid" | "error";
+
+const ONBOARDING_FINISH_TIMEOUT_MS = 20_000;
 
 const steps = [
   {
@@ -42,7 +43,6 @@ export function OnboardingFlow({
   initialBio?: string;
   initialMood?: MoodStatus | null;
 }) {
-  const router = useRouter();
   const [stepIndex, setStepIndex] = useState(0);
   const [displayName, setDisplayName] = useState(initialName);
   const [username, setUsername] = useState(normalizeUsername(initialUsername));
@@ -51,7 +51,7 @@ export function OnboardingFlow({
   const [feedback, setFeedback] = useState("");
   const [usernameCheck, setUsernameCheck] = useState<UsernameCheckState | null>(null);
   const [usernameCheckAttempt, setUsernameCheckAttempt] = useState(0);
-  const [isPending, startTransition] = useTransition();
+  const [isFinishing, setIsFinishing] = useState(false);
 
   const usernameFormatError = username ? validateUsername(username) : null;
   const currentUsernameCheck = usernameCheck?.username === username ? usernameCheck : null;
@@ -105,7 +105,7 @@ export function OnboardingFlow({
     setStepIndex(1);
   }
 
-  function finish(skippedOptional: boolean) {
+  async function finish(skippedOptional: boolean) {
     if (displayName.trim().length < 2 || usernameStatus !== "available") {
       setStepIndex(0);
       setFeedback("Complete your display name and available username first.");
@@ -113,41 +113,54 @@ export function OnboardingFlow({
     }
 
     setFeedback("");
-    startTransition(async () => {
-      try {
-        const result = await finishOnboardingAction(
-          {
-            fullName: displayName.trim(),
-            username,
-            bio: skippedOptional ? "" : bio.trim(),
-            moodStatus: skippedOptional ? "" : moodStatus ?? "",
-            notifications: "smart"
-          },
-          skippedOptional
+    setIsFinishing(true);
+
+    let timeoutId: number | undefined;
+    try {
+      const actionPromise = finishOnboardingAction(
+        {
+          fullName: displayName.trim(),
+          username,
+          bio: skippedOptional ? "" : bio.trim(),
+          moodStatus: skippedOptional ? "" : moodStatus ?? "",
+          notifications: "smart"
+        },
+        skippedOptional
+      );
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(
+          () => reject(new Error("onboarding_finish_timeout")),
+          ONBOARDING_FINISH_TIMEOUT_MS
         );
+      });
+      const result = await Promise.race([actionPromise, timeoutPromise]);
 
-        if (!result.ok) {
-          setFeedback(result.message);
-          if (result.field === "username") {
-            setUsernameCheck({
-              status: result.message.toLowerCase().includes("taken") ? "taken" : "error",
-              message: result.message,
-              username
-            });
-            setStepIndex(0);
-          }
-          return;
+      if (!result.ok) {
+        setFeedback(result.message);
+        if (result.field === "username") {
+          setUsernameCheck({
+            status: result.message.toLowerCase().includes("taken") ? "taken" : "error",
+            message: result.message,
+            username
+          });
+          setStepIndex(0);
         }
-
-        router.replace("/dashboard");
-        router.refresh();
-      } catch {
-        // A thrown server error (rather than a returned { ok: false }) must
-        // still resolve the pending state and tell the user, otherwise the
-        // button is left spinning with no way to retry.
-        setFeedback("Something went wrong finishing setup. Please try again.");
+        return;
       }
-    });
+
+      // A full navigation reads the newly saved server state and is more
+      // reliable than a transition-bound client route on mobile Safari/PWAs.
+      window.location.replace("/dashboard");
+    } catch (error) {
+      setFeedback(
+        error instanceof Error && error.message === "onboarding_finish_timeout"
+          ? "Setup is taking longer than expected. Your details are safe. Tap Finish setup to try again."
+          : "Something went wrong finishing setup. Please try again."
+      );
+    } finally {
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      setIsFinishing(false);
+    }
   }
 
   return (
@@ -259,21 +272,21 @@ export function OnboardingFlow({
               </div>
 
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <Button type="button" variant="ghost" onClick={() => setStepIndex(0)} disabled={isPending}>
+                <Button type="button" variant="ghost" onClick={() => setStepIndex(0)} disabled={isFinishing}>
                   <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                   Back
                 </Button>
                 <div className="flex flex-col-reverse gap-2 sm:flex-row">
-                  <Button type="button" variant="outline" onClick={() => finish(true)} disabled={isPending}>
+                  <Button type="button" variant="outline" onClick={() => finish(true)} disabled={isFinishing}>
                     Skip for now
                   </Button>
-                  <Button type="button" onClick={() => finish(false)} disabled={isPending}>
-                    {isPending ? (
+                  <Button type="button" onClick={() => finish(false)} disabled={isFinishing}>
+                    {isFinishing ? (
                       <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
                     ) : (
                       <Check className="h-4 w-4" aria-hidden="true" />
                     )}
-                    {isPending ? "Finishing..." : "Finish setup"}
+                    {isFinishing ? "Finishing..." : "Finish setup"}
                   </Button>
                 </div>
               </div>
