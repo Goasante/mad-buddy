@@ -274,6 +274,10 @@ export async function createMeetupRequestAction(input: unknown): Promise<Premium
           ? `${senderName} sent you a quick hello.`
           : parsed.data.message || `${senderName} wants to meet nearby.`
     });
+    {
+      const { grantAchievement } = await import("@/lib/engagement/achievements");
+      await grantAchievement(admin, userId, "first_ping");
+    }
 
     revalidatePath("/notifications");
     return { ok: true, message: "Hello sent." };
@@ -333,6 +337,10 @@ export async function respondToMeetupRequestAction(input: unknown): Promise<Prem
       title: `${senderName} replied`,
       message: parsed.data.message
     });
+    {
+      const { grantAchievement } = await import("@/lib/engagement/achievements");
+      await grantAchievement(admin, userId, "thoughtful_reply");
+    }
 
     revalidatePath("/notifications");
     return { ok: true, message: "Response sent." };

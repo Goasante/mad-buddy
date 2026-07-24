@@ -139,6 +139,10 @@ export async function activateSocialize(userId: string, input: unknown): Promise
       .select("id, activity, note, area_tier, starts_at, expires_at, status")
       .single();
     if (error || !data) return { ok: false, message: "Couldn’t turn on Socialize. Try again." };
+    {
+      const { grantAchievement } = await import("@/lib/engagement/achievements");
+      await grantAchievement(admin, userId, "open_to_plans");
+    }
     return { ok: true, message: "Socialize is on", session: toSession(data) };
   } catch {
     return { ok: false, message: "Couldn’t turn on Socialize. Try again." };

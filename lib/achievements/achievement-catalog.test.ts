@@ -8,10 +8,12 @@ import {
 } from "@/lib/achievements/achievement-catalog";
 
 // The seeded rows are the granting authority; the catalog must stay in lockstep.
-const MIGRATION = readFileSync(
-  join(process.cwd(), "supabase/migrations/20260717240000_recaps_streaks_achievements.sql"),
-  "utf8"
-);
+const MIGRATION = [
+  "20260717240000_recaps_streaks_achievements.sql",
+  "20260724152000_expand_achievement_definitions.sql"
+]
+  .map((name) => readFileSync(join(process.cwd(), "supabase/migrations", name), "utf8"))
+  .join("\n");
 
 function seededCodes(): { code: string; type: string; value: number }[] {
   const rows: { code: string; type: string; value: number }[] = [];

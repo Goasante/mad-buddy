@@ -505,7 +505,7 @@ export async function acceptFriendRequest(
 
   // Both sides now have a Muddy; the sender's request was also accepted.
   {
-    const [{ recordMilestone }, { grantAchievement }] = await Promise.all([
+    const [{ recordMilestone }, { grantFriendshipAchievements }] = await Promise.all([
       import("@/lib/onboarding/service"),
       import("@/lib/engagement/achievements")
     ]);
@@ -513,8 +513,8 @@ export async function acceptFriendRequest(
       recordMilestone(admin, userId, "first_muddy_added"),
       recordMilestone(admin, request.sender_id, "first_muddy_added"),
       recordMilestone(admin, request.sender_id, "first_request_accepted"),
-      grantAchievement(admin, userId, "first_muddy"),
-      grantAchievement(admin, request.sender_id, "first_muddy")
+      grantFriendshipAchievements(admin, userId),
+      grantFriendshipAchievements(admin, request.sender_id)
     ]);
   }
 

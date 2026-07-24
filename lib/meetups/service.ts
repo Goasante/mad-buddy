@@ -132,6 +132,8 @@ export async function createMeetupRequest(userId: string, input: unknown): Promi
     title: `${name} sent you a connection prompt`,
     message: parsed.data.message || `${name} wants to meet nearby.`
   });
+  const { grantAchievement } = await import("@/lib/engagement/achievements");
+  await grantAchievement(admin, userId, "first_ping");
   return { ok: true, message: "Meeting ping sent." };
 }
 
@@ -178,6 +180,8 @@ export async function respondToMeetupRequest(userId: string, input: unknown): Pr
     title: `${name} replied`,
     message: parsed.data.message
   });
+  const { grantAchievement } = await import("@/lib/engagement/achievements");
+  await grantAchievement(admin, userId, "thoughtful_reply");
   return { ok: true, message: "Reply sent." };
 }
 

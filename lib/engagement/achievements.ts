@@ -81,3 +81,67 @@ export async function grantCountAchievement(
     // Best-effort by design.
   }
 }
+
+/**
+ * Count-backed grants always recount canonical rows after a successful write.
+ * They never trust a client counter, and failures stay best-effort so a badge
+ * can never break the social action that earned it.
+ */
+export async function grantFriendshipAchievements(admin: Admin, userId: string): Promise<void> {
+  try {
+    const { count } = await admin
+      .from("friendships")
+      .select("id", { count: "exact", head: true })
+      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`);
+    await Promise.all([
+      grantAchievement(admin, userId, "first_muddy"),
+      grantCountAchievement(admin, userId, "friendly_five", count ?? 0)
+    ]);
+  } catch {
+    // Best-effort by design.
+  }
+}
+
+export async function grantMomentAchievements(admin: Admin, userId: string): Promise<void> {
+  try {
+    const { count } = await admin
+      .from("moments")
+      .select("id", { count: "exact", head: true })
+      .eq("author_id", userId);
+    await Promise.all([
+      grantAchievement(admin, userId, "first_moment"),
+      grantCountAchievement(admin, userId, "moment_maker", count ?? 0)
+    ]);
+  } catch {
+    // Best-effort by design.
+  }
+}
+
+export async function grantSafeTravellerAchievements(admin: Admin, userId: string): Promise<void> {
+  try {
+    const { count } = await admin
+      .from("safe_arrival_sessions")
+      .select("id", { count: "exact", head: true })
+      .eq("traveller_id", userId)
+      .eq("status", "completed");
+    await Promise.all([
+      grantAchievement(admin, userId, "good_check_in"),
+      grantCountAchievement(admin, userId, "safe_traveller", count ?? 0)
+    ]);
+  } catch {
+    // Best-effort by design.
+  }
+}
+
+export async function grantReliableWatcherAchievement(admin: Admin, userId: string): Promise<void> {
+  try {
+    const { count } = await admin
+      .from("safe_arrival_contacts")
+      .select("id", { count: "exact", head: true })
+      .eq("contact_user_id", userId)
+      .eq("acknowledgement_status", "watching");
+    await grantCountAchievement(admin, userId, "reliable_watcher", count ?? 0);
+  } catch {
+    // Best-effort by design.
+  }
+}

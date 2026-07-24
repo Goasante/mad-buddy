@@ -132,6 +132,10 @@ export async function createEvent(userId: string, input: unknown): Promise<Event
     .single();
   if (error || !event) return { ok: false, message: "Couldn't create the event." };
 
+  {
+    const { grantAchievement } = await import("@/lib/engagement/achievements");
+    await grantAchievement(admin, userId, "event_host");
+  }
   return { ok: true, message: `${parsed.data.name.trim()} created.`, eventId: event.id };
 }
 
@@ -192,6 +196,10 @@ export async function checkInToEvent(userId: string, eventId: string): Promise<E
     return { ok: false, message: "Couldn't check you in. Try again." };
   }
 
+  {
+    const { grantAchievement } = await import("@/lib/engagement/achievements");
+    await grantAchievement(admin, userId, "event_explorer");
+  }
   return { ok: true, message: `Checked in to ${event.name}.`, checkInId: checkIn.id };
 }
 

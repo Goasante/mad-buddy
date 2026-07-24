@@ -216,6 +216,10 @@ export async function acknowledgeSafeArrivalAction(
     eventType: parsed.data === "watching" ? "acknowledged" : "declined",
     createdBy: userId
   });
+  if (parsed.data === "watching") {
+    const { grantReliableWatcherAchievement } = await import("@/lib/engagement/achievements");
+    await grantReliableWatcherAchievement(admin, userId);
+  }
 
   return {
     ok: true,
@@ -264,8 +268,8 @@ export async function confirmSafeArrivalAction(sessionId: string): Promise<SafeA
 
   await recordSafeArrivalEvent(admin, { sessionId, eventType: "confirmed", createdBy: userId });
   {
-    const { grantAchievement } = await import("@/lib/engagement/achievements");
-    await grantAchievement(admin, userId, "good_check_in");
+    const { grantSafeTravellerAchievements } = await import("@/lib/engagement/achievements");
+    await grantSafeTravellerAchievements(admin, userId);
   }
   const name = await travellerName(admin, userId);
   await notifyContacts(admin, sessionId, {

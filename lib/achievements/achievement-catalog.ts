@@ -59,6 +59,42 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     notification: unlocked("First Wave")
   },
   {
+    id: "first_ping",
+    name: "First Ping",
+    description: "You sent your first Ping.",
+    iconPath: `${BADGE_DIR}/First Ping.png`,
+    category: "connection",
+    criteria: { type: "first_time", threshold: 1 },
+    notification: unlocked("First Ping")
+  },
+  {
+    id: "thoughtful_reply",
+    name: "Thoughtful Reply",
+    description: "You replied to your first connection prompt.",
+    iconPath: `${BADGE_DIR}/Thoughtful Reply.png`,
+    category: "connection",
+    criteria: { type: "first_time", threshold: 1 },
+    notification: unlocked("Thoughtful Reply")
+  },
+  {
+    id: "close_friend",
+    name: "Close Friend",
+    description: "You added your first Close Friend.",
+    iconPath: `${BADGE_DIR}/Close Friend.png`,
+    category: "connection",
+    criteria: { type: "first_time", threshold: 1 },
+    notification: unlocked("Close Friend")
+  },
+  {
+    id: "friendly_five",
+    name: "Friendly Five",
+    description: "You connected with 5 approved friends.",
+    iconPath: `${BADGE_DIR}/Friendly Five.png`,
+    category: "connection",
+    criteria: { type: "count", threshold: 5 },
+    notification: unlocked("Friendly Five")
+  },
+  {
     id: "first_plan",
     name: "First Plan",
     description: "You completed your first Plan.",
@@ -77,6 +113,78 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     notification: unlocked("Plan Maker")
   },
   {
+    id: "plan_regular",
+    name: "Plan Regular",
+    description: "You completed 10 Plans.",
+    iconPath: `${BADGE_DIR}/Plan Regular.png`,
+    category: "connection",
+    criteria: { type: "count", threshold: 10 },
+    notification: unlocked("Plan Regular")
+  },
+  {
+    id: "open_to_plans",
+    name: "Open to Plans",
+    description: "You turned on Socialize for the first time.",
+    iconPath: `${BADGE_DIR}/Open to Plans.png`,
+    category: "connection",
+    criteria: { type: "first_time", threshold: 1 },
+    notification: unlocked("Open to Plans")
+  },
+  {
+    id: "first_moment",
+    name: "First Moment",
+    description: "You shared your first Moment.",
+    iconPath: `${BADGE_DIR}/First Moment.png`,
+    category: "community",
+    criteria: { type: "first_time", threshold: 1 },
+    notification: unlocked("First Moment")
+  },
+  {
+    id: "moment_maker",
+    name: "Moment Maker",
+    description: "You shared 10 Moments.",
+    iconPath: `${BADGE_DIR}/Moment Maker.png`,
+    category: "community",
+    criteria: { type: "count", threshold: 10 },
+    notification: unlocked("Moment Maker")
+  },
+  {
+    id: "event_explorer",
+    name: "Event Explorer",
+    description: "You checked in to your first event.",
+    iconPath: `${BADGE_DIR}/Event Explorer.png`,
+    category: "community",
+    criteria: { type: "first_time", threshold: 1 },
+    notification: unlocked("Event Explorer")
+  },
+  {
+    id: "event_host",
+    name: "Event Host",
+    description: "You created your first event.",
+    iconPath: `${BADGE_DIR}/Event Host.png`,
+    category: "community",
+    criteria: { type: "first_time", threshold: 1 },
+    notification: unlocked("Event Host")
+  },
+  {
+    id: "group_member",
+    name: "Group Member",
+    description: "You joined your first group.",
+    iconPath: `${BADGE_DIR}/Group Member.png`,
+    category: "community",
+    criteria: { type: "first_time", threshold: 1 },
+    notification: unlocked("Group Member")
+  },
+  {
+    id: "group_founder",
+    name: "Group Founder",
+    description: "You created your first group.",
+    iconPath: `${BADGE_DIR}/Group Founder.png`,
+    category: "community",
+    criteria: { type: "first_time", threshold: 1 },
+    notification: unlocked("Group Founder")
+  },
+  {
     id: "first_glow",
     name: "First Glow",
     description: "You turned on your glow for the first time.",
@@ -93,6 +201,15 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     category: "privacy",
     criteria: { type: "first_time", threshold: 1 },
     notification: unlocked("Privacy Pro")
+  },
+  {
+    id: "privacy_pause",
+    name: "Privacy Pause",
+    description: "You used Ghost Mode for the first time.",
+    iconPath: `${BADGE_DIR}/Privacy Pause.png`,
+    category: "privacy",
+    criteria: { type: "first_time", threshold: 1 },
+    notification: unlocked("Privacy Pause")
   },
   {
     id: "circle_builder",
@@ -129,6 +246,24 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     category: "safety",
     criteria: { type: "first_time", threshold: 1 },
     notification: unlocked("Trusted Contact")
+  },
+  {
+    id: "safe_traveller",
+    name: "Safe Traveller",
+    description: "You completed 5 Safe Arrivals.",
+    iconPath: `${BADGE_DIR}/Safe Traveller.png`,
+    category: "safety",
+    criteria: { type: "count", threshold: 5 },
+    notification: unlocked("Safe Traveller")
+  },
+  {
+    id: "reliable_watcher",
+    name: "Reliable Watcher",
+    description: "You watched over 5 Safe Arrival journeys.",
+    iconPath: `${BADGE_DIR}/Reliable Watcher.png`,
+    category: "safety",
+    criteria: { type: "count", threshold: 5 },
+    notification: unlocked("Reliable Watcher")
   }
 ];
 

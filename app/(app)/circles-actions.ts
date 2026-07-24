@@ -304,6 +304,8 @@ export async function addCloseFriendAction(friendId: string): Promise<CircleActi
     .from("close_friend_relationships")
     .upsert({ owner_id: userId, friend_id: friendId }, { onConflict: "owner_id,friend_id" });
   if (error) return { ok: false, message: "Couldn't update Close Friends." };
+  const { grantAchievement } = await import("@/lib/engagement/achievements");
+  await grantAchievement(admin, userId, "close_friend");
   return { ok: true, message: "Added to Close Friends. This stays private." };
 }
 

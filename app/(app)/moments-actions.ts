@@ -364,6 +364,11 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
   }
 
   // Warn (never block) if the text may reveal an exact location (§55).
+  {
+    const { grantMomentAchievements } = await import("@/lib/engagement/achievements");
+    await grantMomentAchievements(admin, userId);
+  }
+
   const risk = detectLocationRisk(`${parsed.data.textContent ?? ""} ${parsed.data.caption ?? ""}`);
   return {
     ok: true,

@@ -45,6 +45,12 @@ export async function updateVisibilityStatus(
     return { ok: false, message: "The visibility setting could not be saved." };
   }
 
+  if (parsed.data === "ghost") {
+    const admin = createSupabaseAdminClient();
+    const { grantAchievement } = await import("@/lib/engagement/achievements");
+    await grantAchievement(admin, userId, "privacy_pause");
+  }
+
   return { ok: true, message: "Visibility setting saved." };
 }
 

@@ -167,6 +167,10 @@ export async function checkInToEventAction(input: unknown): Promise<EventActionS
     return { ok: false, message: "Couldn't check you in. Try again." };
   }
 
+  {
+    const { grantAchievement } = await import("@/lib/engagement/achievements");
+    await grantAchievement(admin, userId, "event_explorer");
+  }
   return { ok: true, message: `Checked in to ${event.name}.`, checkInId: checkIn.id };
 }
 

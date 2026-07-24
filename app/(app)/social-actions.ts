@@ -332,6 +332,10 @@ export async function createMeetingPingAction(input: unknown): Promise<SocialAct
     title: `${name} wants to meet`,
     message: `${name} sent a Meet Ping: ${label} Open Meeting Pings to reply.`
   });
+  {
+    const { grantAchievement } = await import("@/lib/engagement/achievements");
+    await grantAchievement(admin, userId, "first_ping");
+  }
 
   logBackendEvent("info", { requestId, action: "ping.create", userId, statusCode: 200 });
   return { ok: true, message: "Meet Ping sent. It expires automatically if there's no reply." };
@@ -430,6 +434,10 @@ export async function respondToPingAction(input: unknown): Promise<SocialActionS
     suggested_time: parsed.data.suggestedTime ?? null,
     message: parsed.data.message || null
   });
+  {
+    const { grantAchievement } = await import("@/lib/engagement/achievements");
+    await grantAchievement(admin, userId, "thoughtful_reply");
+  }
 
   const otherUserId = actorIsSender ? ping.recipient_id : ping.sender_id;
   const name = await senderDisplayName(admin, userId);

@@ -387,6 +387,7 @@ export const handleCompletePastPlans: JobHandler = async (admin) => {
       .eq("rsvp_status", "going")
       .eq("plans.status", "completed");
     await grantCountAchievement(admin, userId, "plan_maker", count ?? 0);
+    await grantCountAchievement(admin, userId, "plan_regular", count ?? 0);
   }
 
   return completed.length;

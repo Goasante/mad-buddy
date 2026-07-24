@@ -268,6 +268,10 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
     return { ok: false, message: "Couldn't finish creating that group." };
   }
 
+  {
+    const { grantAchievement } = await import("@/lib/engagement/achievements");
+    await grantAchievement(admin, userId, "group_founder");
+  }
   revalidatePath("/groups");
   return { ok: true, message: "Group created.", groupId: conversation.id };
 }
@@ -302,6 +306,10 @@ export async function joinDiscoverableGroupAction(groupId: string): Promise<Grou
     history_visible_from: settings.history_visibility === "full" ? new Date(0).toISOString() : now
   }, { onConflict: "conversation_id,user_id" });
   if (error) return { ok: false, message: "Couldn't join that group." };
+  {
+    const { grantAchievement } = await import("@/lib/engagement/achievements");
+    await grantAchievement(admin, userId, "group_member");
+  }
   revalidatePath("/groups");
   return { ok: true, message: "Joined group.", groupId };
 }
@@ -345,6 +353,10 @@ export async function respondToGroupInvitationAction(input: unknown): Promise<Gr
     history_visible_from: settings?.history_visibility === "full" ? new Date(0).toISOString() : now
   }).eq("conversation_id", parsed.data.groupId).eq("user_id", userId);
   if (error) return { ok: false, message: "Couldn't accept that invitation." };
+  {
+    const { grantAchievement } = await import("@/lib/engagement/achievements");
+    await grantAchievement(admin, userId, "group_member");
+  }
   revalidatePath("/groups");
   return { ok: true, message: "Group joined.", groupId: parsed.data.groupId };
 }

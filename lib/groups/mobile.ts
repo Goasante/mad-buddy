@@ -251,6 +251,10 @@ export async function createGroup(userId: string, input: unknown): Promise<Group
     return { ok: false, message: "Couldn't finish creating that group." };
   }
 
+  {
+    const { grantAchievement } = await import("@/lib/engagement/achievements");
+    await grantAchievement(admin, userId, "group_founder");
+  }
   return { ok: true, message: "Group created.", groupId: conversation.id };
 }
 
@@ -290,5 +294,9 @@ export async function joinDiscoverableGroup(userId: string, groupId: string): Pr
     { onConflict: "conversation_id,user_id" }
   );
   if (error) return { ok: false, message: "Couldn't join that group." };
+  {
+    const { grantAchievement } = await import("@/lib/engagement/achievements");
+    await grantAchievement(admin, userId, "group_member");
+  }
   return { ok: true, message: "Joined group.", groupId };
 }

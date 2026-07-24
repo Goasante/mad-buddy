@@ -373,6 +373,10 @@ export async function confirmSafeArrival(userId: string, sessionId: string): Pro
   if (!updated?.length) return { ok: true, message: "You're marked as arrived." };
 
   await recordSafeArrivalEvent(admin, { sessionId, eventType: "confirmed", createdBy: userId });
+  {
+    const { grantSafeTravellerAchievements } = await import("@/lib/engagement/achievements");
+    await grantSafeTravellerAchievements(admin, userId);
+  }
   const name = await travellerName(admin, userId);
   await notifyContacts(admin, sessionId, {
     type: "safe_arrival:arrived",

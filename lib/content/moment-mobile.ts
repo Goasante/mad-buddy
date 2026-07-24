@@ -153,6 +153,11 @@ export async function createTextMoment(userId: string, input: unknown): Promise<
     }
   }
 
+  {
+    const { grantMomentAchievements } = await import("@/lib/engagement/achievements");
+    await grantMomentAchievements(admin, userId);
+  }
+
   const risk = detectLocationRisk(parsed.data.textContent);
   return {
     ok: true,
