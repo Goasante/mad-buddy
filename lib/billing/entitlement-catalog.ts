@@ -38,6 +38,7 @@ export const BOOLEAN_ENTITLEMENTS: { key: BooleanEntitlementKey; label: string }
   { key: "event_circle_creation", label: "Event circle creation" },
   { key: "event_drops", label: "Event Drops" },
   { key: "photo_moments", label: "Photo Moments" },
+  { key: "public_moments", label: "Publish Open Moments" },
   { key: "qr_check_in", label: "QR check-in" },
   { key: "attendance_export", label: "Attendance export" },
   { key: "community_roles", label: "Community roles" },

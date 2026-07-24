@@ -1,6 +1,7 @@
 import "server-only";
 
 import { resolveMomentVisibility } from "@/lib/content/moments";
+import { isOpenMomentsEnabled } from "@/lib/features/feature-flags";
 import { loadNearbyForUser } from "@/lib/proximity/nearby-service";
 import { isCloseFriend, viewerCircleIds } from "@/lib/social/permissions";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -108,7 +109,11 @@ export async function buildMomentFeed(
   const friendIds = (friendships ?? []).map((friendship) =>
     friendship.user_one_id === viewerId ? friendship.user_two_id : friendship.user_one_id
   );
-  const blockedIds = new Set((blocks ?? []).flatMap((block) => [block.blocker_id, block.blocked_id]));
+  const blockedIds = new Set(
+    (blocks ?? []).map((block) =>
+      block.blocker_id === viewerId ? block.blocked_id : block.blocker_id
+    )
+  );
   const hiddenIds = new Set((hidden ?? []).map((row) => row.content_id));
 
   // Authors worth querying: my Muddies (minus blocks) plus myself.
@@ -121,6 +126,7 @@ export async function buildMomentFeed(
       "id, author_id, content_type, text_content, media_id, caption, audience_type, status, expires_at, created_at"
     )
     .in("author_id", authorIds)
+    .neq("audience_type", "public")
     .eq("status", "active")
     .gt("expires_at", nowIso)
     .order("created_at", { ascending: false })
@@ -251,6 +257,105 @@ export async function buildMomentFeed(
       reactionCount: reactionCountByMoment.get(moment.id) ?? 0,
       isAuthor,
       audienceLabel: isAuthor ? moment.audience_type : null
+    });
+  }
+
+  return visible;
+}
+
+/**
+ * Builds the authenticated-community Open Moments feed. Ranking is deliberately
+ * recency-only for the first release: no location, proximity, sensitive
+ * attributes, or fabricated engagement signals influence discovery.
+ */
+export async function buildOpenMomentFeed(
+  admin: Admin,
+  viewerId: string,
+  nowMs = Date.now()
+): Promise<VisibleMoment[]> {
+  if (!(await isOpenMomentsEnabled(admin))) return [];
+
+  const nowIso = new Date(nowMs).toISOString();
+  const [{ data: blocks }, { data: hidden }, { data: moments }] = await Promise.all([
+    admin
+      .from("blocked_users")
+      .select("blocker_id, blocked_id")
+      .or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`),
+    admin.from("hidden_content").select("content_id").eq("user_id", viewerId).eq("content_type", "moment"),
+    admin
+      .from("moments")
+      .select(
+        "id, author_id, content_type, text_content, media_id, caption, audience_type, status, expires_at, created_at"
+      )
+      .eq("audience_type", "public")
+      .eq("status", "active")
+      .gt("expires_at", nowIso)
+      .order("created_at", { ascending: false })
+      .limit(50)
+  ]);
+
+  const blockedIds = new Set(
+    (blocks ?? []).map((block) =>
+      block.blocker_id === viewerId ? block.blocked_id : block.blocker_id
+    )
+  );
+  const hiddenIds = new Set((hidden ?? []).map((row) => row.content_id));
+  const candidates = (moments ?? []).filter(
+    (moment) => !blockedIds.has(moment.author_id) && !hiddenIds.has(moment.id)
+  );
+  if (candidates.length === 0) return [];
+
+  const momentIds = candidates.map((moment) => moment.id);
+  const authorIds = [...new Set(candidates.map((moment) => moment.author_id))];
+  const [{ data: profiles }, { data: myReactions }, { data: allReactions }] = await Promise.all([
+    admin.from("profiles").select("user_id, full_name, avatar_url, visibility_status").in("user_id", authorIds),
+    admin.from("moment_reactions").select("moment_id, reaction_type").eq("user_id", viewerId).in("moment_id", momentIds),
+    admin.from("moment_reactions").select("moment_id").in("moment_id", momentIds)
+  ]);
+
+  const profileById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
+  const reactionByMoment = new Map((myReactions ?? []).map((row) => [row.moment_id, row.reaction_type]));
+  const reactionCountByMoment = new Map<string, number>();
+  for (const row of allReactions ?? []) {
+    reactionCountByMoment.set(row.moment_id, (reactionCountByMoment.get(row.moment_id) ?? 0) + 1);
+  }
+
+  const visible: VisibleMoment[] = [];
+  for (const moment of candidates) {
+    const isAuthor = moment.author_id === viewerId;
+    const profile = profileById.get(moment.author_id);
+    if (!profile && !isAuthor) continue;
+
+    const decision = resolveMomentVisibility({
+      isAuthor,
+      status: moment.status,
+      expiresAtMs: Date.parse(moment.expires_at),
+      nowMs,
+      areApprovedMuddies: false,
+      isBlockedEitherDirection: blockedIds.has(moment.author_id),
+      authorGhostMode: profile?.visibility_status === "ghost",
+      viewerHidThis: hiddenIds.has(moment.id),
+      audienceType: "public",
+      viewerInAudience: true,
+      viewerNearbyAndFresh: false
+    });
+    if (!decision.visible) continue;
+
+    visible.push({
+      id: moment.id,
+      authorId: moment.author_id,
+      authorName: isAuthor ? "You" : profile?.full_name?.trim() || "A Muddy",
+      authorAvatarUrl: profile?.avatar_url ?? null,
+      contentType: moment.content_type,
+      textContent: moment.text_content,
+      caption: moment.caption,
+      mediaUrl: moment.media_id ? await signMediaForAsset(admin, moment.media_id, "feed") : null,
+      expiresAt: moment.expires_at,
+      createdAt: moment.created_at,
+      myReaction: reactionByMoment.get(moment.id) ?? null,
+      reactionCount: reactionCountByMoment.get(moment.id) ?? 0,
+      isAuthor,
+      audienceLabel: isAuthor ? "public" : null
     });
   }
 

@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Camera, Clock, Flag, ImageOff, Plus, ShieldAlert, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { Camera, Clock, Flag, Globe2, ImageOff, LockKeyhole, Plus, ShieldAlert, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { useRef, useState, useTransition } from "react";
 import {
   createMomentAction,
   deleteMomentAction,
   getMomentFeedAction,
+  getOpenMomentFeedAction,
   reactToMomentAction,
   removeMomentReactionAction,
   reportContentAction,
@@ -35,7 +36,7 @@ const reactions: Array<{ id: ReactionType; emoji: string; label: string }> = [
   { id: "clap", emoji: "👏", label: "Clap" }
 ];
 
-const audienceOptions: Array<{ id: MomentAudienceType; label: string }> = [
+const privateAudienceOptions: Array<{ id: MomentAudienceType; label: string }> = [
   { id: "close_friends", label: "Close Friends" },
   { id: "selected_circles", label: "A circle" },
   { id: "nearby_muddies", label: "Muddies nearby" }
@@ -51,19 +52,40 @@ function expiryLabel(iso: string): string {
 
 export function MomentsPage({
   initialMoments = [],
-  circles = []
+  initialOpenMoments = [],
+  circles = [],
+  openMomentsEnabled = false,
+  canPublishOpenMoments = false
 }: {
   initialMoments?: VisibleMoment[];
+  initialOpenMoments?: VisibleMoment[];
   circles?: MomentAudienceOption[];
+  openMomentsEnabled?: boolean;
+  canPublishOpenMoments?: boolean;
 }) {
   const router = useRouter();
   const [moments, setMoments] = useState(initialMoments);
+  const [openMoments, setOpenMoments] = useState(initialOpenMoments);
+  const [activeFeed, setActiveFeed] = useState<"muddies" | "open">("muddies");
   const [createOpen, setCreateOpen] = useState(false);
   const [reportFor, setReportFor] = useState<VisibleMoment | null>(null);
   const [feedback, setFeedback] = useState("");
   const [failedMediaIds, setFailedMediaIds] = useState<Set<string>>(() => new Set());
   const mediaRetryIds = useRef(new Set<string>());
   const [isPending, startTransition] = useTransition();
+  const visibleMoments = activeFeed === "open" ? openMoments : moments;
+
+  function updateMomentInFeeds(
+    updater: (entry: VisibleMoment) => VisibleMoment
+  ) {
+    setMoments((current) => current.map(updater));
+    setOpenMoments((current) => current.map(updater));
+  }
+
+  function removeMomentFromFeeds(momentId: string) {
+    setMoments((current) => current.filter((entry) => entry.id !== momentId));
+    setOpenMoments((current) => current.filter((entry) => entry.id !== momentId));
+  }
 
   function retryMomentMedia(moment: VisibleMoment) {
     if (mediaRetryIds.current.has(moment.id)) {
@@ -73,12 +95,13 @@ export function MomentsPage({
 
     mediaRetryIds.current.add(moment.id);
     startTransition(async () => {
-      const refreshed = await getMomentFeedAction();
+      const refreshed =
+        moment.audienceLabel === "public" || activeFeed === "open"
+          ? await getOpenMomentFeedAction()
+          : await getMomentFeedAction();
       const replacement = refreshed.find((entry) => entry.id === moment.id);
       if (replacement?.mediaUrl && replacement.mediaUrl !== moment.mediaUrl) {
-        setMoments((current) =>
-          current.map((entry) => (entry.id === replacement.id ? replacement : entry))
-        );
+        updateMomentInFeeds((entry) => (entry.id === replacement.id ? replacement : entry));
         return;
       }
       setFailedMediaIds((current) => new Set(current).add(moment.id));
@@ -90,12 +113,10 @@ export function MomentsPage({
     // Count delta: +1 when going from no reaction to one, -1 when toggling the
     // same one off, 0 when switching type (still one reaction from this user).
     const delta = (isSame ? 0 : 1) - (moment.myReaction ? 1 : 0);
-    setMoments((current) =>
-      current.map((entry) =>
+    updateMomentInFeeds((entry) =>
         entry.id === moment.id
           ? { ...entry, myReaction: isSame ? null : reaction, reactionCount: Math.max(0, entry.reactionCount + delta) }
           : entry
-      )
     );
     startTransition(async () => {
       const result = isSame
@@ -104,12 +125,10 @@ export function MomentsPage({
       if (!result.ok) {
         setFeedback(result.message);
         // Restore the canonical pre-click state on failure.
-        setMoments((current) =>
-          current.map((entry) =>
+        updateMomentInFeeds((entry) =>
             entry.id === moment.id
               ? { ...entry, myReaction: moment.myReaction, reactionCount: moment.reactionCount }
               : entry
-          )
         );
       }
     });
@@ -120,7 +139,7 @@ export function MomentsPage({
       const result = await deleteMomentAction(moment.id);
       setFeedback(result.message);
       if (result.ok) {
-        setMoments((current) => current.filter((entry) => entry.id !== moment.id));
+        removeMomentFromFeeds(moment.id);
       }
     });
   }
@@ -141,31 +160,78 @@ export function MomentsPage({
         </Button>
       </header>
 
+      {openMomentsEnabled ? (
+        <div className="flex w-fit rounded-full border border-border/75 bg-secondary/45 p-1" role="tablist" aria-label="Moment feeds">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeFeed === "muddies"}
+            onClick={() => setActiveFeed("muddies")}
+            className={cn(
+              "focus-ring safe-motion rounded-full px-4 py-2 text-sm font-medium",
+              activeFeed === "muddies" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+            )}
+          >
+            Muddies
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeFeed === "open"}
+            onClick={() => setActiveFeed("open")}
+            className={cn(
+              "focus-ring safe-motion inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium",
+              activeFeed === "open" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+            )}
+          >
+            <Globe2 className="h-4 w-4" aria-hidden="true" />
+            Open
+          </button>
+        </div>
+      ) : null}
+
       {feedback ? (
         <div className="rounded-[1rem] border border-orange-400/20 bg-orange-400/10 p-3 text-sm text-orange-800 dark:text-orange-50" role="status">
           {feedback}
         </div>
       ) : null}
 
-      {moments.length === 0 ? (
+      {visibleMoments.length === 0 ? (
         <EmptyState
           icon={Sparkles}
           className="!min-h-0 !shadow-none p-5"
-          title="No Moments right now"
-          description="Moments from your Muddies show up here, and disappear when they expire."
+          title={activeFeed === "open" ? "No Open Moments yet" : "No Moments right now"}
+          description={
+            activeFeed === "open"
+              ? "Public Moments from the Mad Buddy community will appear here."
+              : "Moments from your Muddies show up here, and disappear when they expire."
+          }
           action={
-            <Button type="button" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Share a Moment
-            </Button>
+            activeFeed === "muddies" || canPublishOpenMoments ? (
+              <Button type="button" onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Share a Moment
+              </Button>
+            ) : undefined
           }
         />
       ) : (
-        <section className="space-y-4" aria-label="Shared Moments">
-          {moments.map((moment) => (
+        <section
+          className={cn(
+            "space-y-4",
+            activeFeed === "open" &&
+              "max-h-[calc(100dvh-13rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain pr-1"
+          )}
+          aria-label={activeFeed === "open" ? "Open Moments" : "Shared Moments"}
+        >
+          {visibleMoments.map((moment) => (
             <article
               key={moment.id}
-              className="overflow-hidden rounded-[1.35rem] border border-border/75 bg-card/65 shadow-[0_18px_50px_hsl(var(--shadow)/0.10)] dark:border-white/10 dark:bg-white/[0.035]"
+              className={cn(
+                "overflow-hidden rounded-[1.35rem] border border-border/75 bg-card/65 shadow-[0_18px_50px_hsl(var(--shadow)/0.10)] dark:border-white/10 dark:bg-white/[0.035]",
+                activeFeed === "open" &&
+                  "flex min-h-[calc(100dvh-14rem)] snap-start snap-always flex-col"
+              )}
             >
               <header className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
                 <UserAvatar name={moment.authorName} src={moment.authorAvatarUrl} size="sm" />
@@ -212,7 +278,13 @@ export function MomentsPage({
               </header>
 
               {moment.textContent ? (
-                <p className="whitespace-pre-wrap px-4 pb-4 text-[0.95rem] leading-6 text-foreground sm:px-5">
+                <p
+                  className={cn(
+                    "whitespace-pre-wrap px-4 pb-4 text-[0.95rem] leading-6 text-foreground sm:px-5",
+                    activeFeed === "open" &&
+                      "flex flex-1 items-center px-6 py-10 text-xl font-medium leading-8 sm:px-10 sm:text-2xl"
+                  )}
+                >
                   {moment.textContent}
                 </p>
               ) : null}
@@ -223,7 +295,10 @@ export function MomentsPage({
                   key={moment.mediaUrl}
                   src={moment.mediaUrl}
                   alt={moment.caption ?? `Moment from ${moment.authorName}`}
-                  className="block max-h-[560px] min-h-[220px] w-full bg-secondary/40 object-cover object-center sm:min-h-[300px]"
+                  className={cn(
+                    "block max-h-[560px] min-h-[220px] w-full bg-secondary/40 object-cover object-center sm:min-h-[300px]",
+                    activeFeed === "open" && "max-h-none min-h-[50dvh] flex-1"
+                  )}
                   draggable={false}
                   loading="lazy"
                   decoding="async"
@@ -243,7 +318,12 @@ export function MomentsPage({
                 <p className="px-4 pt-3 text-sm leading-6 text-muted-foreground sm:px-5">{moment.caption}</p>
               ) : null}
 
-              <footer className="mt-3 flex items-center gap-2 border-t border-border/60 px-3 py-2.5 dark:border-white/10 sm:px-4">
+              <footer
+                className={cn(
+                  "mt-3 flex items-center gap-2 border-t border-border/60 px-3 py-2.5 dark:border-white/10 sm:px-4",
+                  activeFeed === "open" && "mt-auto"
+                )}
+              >
                 <div className="flex min-w-0 flex-1 items-center gap-0.5" aria-label="React to this Moment">
                     {reactions.map((reaction) => (
                       <button
@@ -275,7 +355,9 @@ export function MomentsPage({
                 <span className="hidden text-xs text-muted-foreground sm:inline">
                   {moment.isAuthor && moment.audienceLabel
                     ? audienceSummaryLabel(moment.audienceLabel as MomentAudienceType, [])
-                    : "Shared privately"}
+                    : activeFeed === "open"
+                      ? "Open Moment"
+                      : "Shared privately"}
                 </span>
               </footer>
             </article>
@@ -292,12 +374,19 @@ export function MomentsPage({
         open={createOpen}
         circles={circles}
         pending={isPending}
+        openMomentsEnabled={openMomentsEnabled}
+        canPublishOpenMoments={canPublishOpenMoments}
         onOpenChange={setCreateOpen}
         onCreated={(message) => {
           setFeedback(message);
           setCreateOpen(false);
           startTransition(async () => {
-            setMoments(await getMomentFeedAction());
+            const [privateFeed, openFeed] = await Promise.all([
+              getMomentFeedAction(),
+              openMomentsEnabled ? getOpenMomentFeedAction() : Promise.resolve([])
+            ]);
+            setMoments(privateFeed);
+            setOpenMoments(openFeed);
             router.refresh();
           });
         }}
@@ -313,7 +402,7 @@ export function MomentsPage({
           setFeedback(message);
           if (ok) setReportFor(null);
           if (ok && reportedId) {
-            setMoments((current) => current.filter((entry) => entry.id !== reportedId));
+            removeMomentFromFeeds(reportedId);
           }
           if (ok) router.refresh();
         }}
@@ -326,12 +415,16 @@ function CreateMomentModal({
   open,
   circles,
   pending,
+  openMomentsEnabled,
+  canPublishOpenMoments,
   onOpenChange,
   onCreated
 }: {
   open: boolean;
   circles: MomentAudienceOption[];
   pending: boolean;
+  openMomentsEnabled: boolean;
+  canPublishOpenMoments: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (message: string) => void;
 }) {
@@ -342,6 +435,7 @@ function CreateMomentModal({
   const [expiry, setExpiry] = useState<ExpiryPresetId>("6h");
   const [mediaId, setMediaId] = useState<string | null>(null);
   const [mediaName, setMediaName] = useState<string | null>(null);
+  const [publicAudienceConfirmed, setPublicAudienceConfirmed] = useState(false);
   const [error, setError] = useState("");
   const [isUploading, startUpload] = useTransition();
   const [isSubmitting, startSubmit] = useTransition();
@@ -356,9 +450,13 @@ function CreateMomentModal({
   const expiresLabel = preset ? `in ${preset.label}` : "";
 
   const audienceNames = audience === "selected_circles" ? circles.filter((c) => c.id === circleId).map((c) => c.name) : [];
+  const audienceOptions = openMomentsEnabled
+    ? [...privateAudienceOptions, { id: "public" as const, label: "Public" }]
+    : privateAudienceOptions;
   const canShare =
     (mediaId !== null || text.trim().length > 0) &&
-    (audience !== "selected_circles" || circleId !== null);
+    (audience !== "selected_circles" || circleId !== null) &&
+    (audience !== "public" || (canPublishOpenMoments && publicAudienceConfirmed && !risk.warn));
 
   function reset() {
     setText("");
@@ -368,6 +466,7 @@ function CreateMomentModal({
     setExpiry("6h");
     setMediaId(null);
     setMediaName(null);
+    setPublicAudienceConfirmed(false);
     setError("");
   }
 
@@ -408,6 +507,7 @@ function CreateMomentModal({
         caption: caption.trim() || undefined,
         audienceType: audience,
         targetIds: audience === "selected_circles" && circleId ? [circleId] : undefined,
+        publicAudienceConfirmed: audience === "public" ? publicAudienceConfirmed : undefined,
         expiresAt: new Date(Date.now() + expiryMs).toISOString()
       });
       if (result.ok) {
@@ -465,16 +565,38 @@ function CreateMomentModal({
               <button
                 key={option.id}
                 type="button"
-                onClick={() => setAudience(option.id)}
+                onClick={() => {
+                  if (option.id === "public" && !canPublishOpenMoments) {
+                    setError("Publishing Open Moments is included with Buddy Pro.");
+                    return;
+                  }
+                  setAudience(option.id);
+                  setError("");
+                  if (option.id !== "public") setPublicAudienceConfirmed(false);
+                }}
                 aria-pressed={audience === option.id}
+                aria-label={
+                  option.id === "public" && !canPublishOpenMoments
+                    ? "Public, Buddy Pro required"
+                    : option.label
+                }
                 className={cn(
-                  "focus-ring safe-motion rounded-full border px-3 py-1.5 text-xs font-medium",
+                  "focus-ring safe-motion inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium",
                   audience === option.id
                     ? "border-primary bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground hover:bg-secondary"
+                    : "border-border text-muted-foreground hover:bg-secondary",
+                  option.id === "public" && !canPublishOpenMoments && "border-dashed"
                 )}
               >
+                {option.id === "public" ? (
+                  canPublishOpenMoments ? (
+                    <Globe2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
+                  )
+                ) : null}
                 {option.label}
+                {option.id === "public" && !canPublishOpenMoments ? " · Pro" : null}
               </button>
             ))}
           </div>
@@ -501,6 +623,28 @@ function CreateMomentModal({
                 ))}
               </div>
             )
+          ) : null}
+          {audience === "public" ? (
+            <div className="mt-3 rounded-xl border border-orange-400/30 bg-orange-400/10 p-3">
+              <div className="flex items-start gap-2">
+                <Globe2 className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">This is an Open Moment</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Anyone signed in to Mad Buddy may see it. Never include an exact location or private information.
+                  </p>
+                </div>
+              </div>
+              <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs leading-5 text-foreground">
+                <input
+                  type="checkbox"
+                  checked={publicAudienceConfirmed}
+                  onChange={(event) => setPublicAudienceConfirmed(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border"
+                />
+                I understand anyone on Mad Buddy may see this Moment.
+              </label>
+            </div>
           ) : null}
         </div>
 
@@ -543,7 +687,11 @@ function CreateMomentModal({
         {risk.warn ? (
           <div className="flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-            <p className="text-xs leading-5 text-amber-800 dark:text-amber-200">{LOCATION_WARNING_MESSAGE}</p>
+            <p className="text-xs leading-5 text-amber-800 dark:text-amber-200">
+              {audience === "public"
+                ? "Remove exact location details before sharing this Open Moment."
+                : LOCATION_WARNING_MESSAGE}
+            </p>
           </div>
         ) : null}
 

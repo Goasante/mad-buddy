@@ -3308,7 +3308,8 @@ export type MomentAudienceType =
   | "selected_circles"
   | "nearby_muddies"
   | "event_circle"
-  | "plan";
+  | "plan"
+  | "public";
 export type MomentStatus =
   | "active"
   | "under_review"

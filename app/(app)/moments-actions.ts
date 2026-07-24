@@ -3,6 +3,7 @@
 import { z } from "zod";
 import {
   buildMomentFeed,
+  buildOpenMomentFeed,
   hideContentForUser,
   queueMediaDeletion,
   type VisibleMoment
@@ -27,7 +28,9 @@ import {
   uploadValidationMessage,
   validateImageUpload
 } from "@/lib/media/validation";
-import { upgradePromptFor } from "@/lib/billing/entitlements";
+import { checkFeature, upgradePromptFor } from "@/lib/billing/entitlements";
+import { resolveUserEntitlements } from "@/lib/billing/service";
+import { isOpenMomentsEnabled } from "@/lib/features/feature-flags";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
@@ -225,9 +228,11 @@ const createMomentSchema = z.object({
     "selected_circles",
     "nearby_muddies",
     "event_circle",
-    "plan"
+    "plan",
+    "public"
   ]),
   targetIds: z.array(uuidSchema).max(50).optional(),
+  publicAudienceConfirmed: z.boolean().optional(),
   expiresAt: z.string().datetime({ offset: true })
 });
 
@@ -263,6 +268,29 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
 
   const access = await getCurrentSubscriptionAccess(userId);
   const limits = contentTierLimitsFor(access.plan);
+  const risk = detectLocationRisk(`${parsed.data.textContent ?? ""} ${parsed.data.caption ?? ""}`);
+
+  if (parsed.data.audienceType === "public") {
+    const [enabled, entitlements] = await Promise.all([
+      isOpenMomentsEnabled(admin),
+      resolveUserEntitlements(admin, userId, nowMs)
+    ]);
+    if (!enabled) {
+      return { ok: false, message: "Open Moments aren't available right now." };
+    }
+    if (!checkFeature(entitlements, "public_moments")) {
+      return { ok: false, message: "Publishing Open Moments is included with Buddy Pro." };
+    }
+    if (!parsed.data.publicAudienceConfirmed) {
+      return { ok: false, message: "Confirm that anyone on Mad Buddy may see this Moment." };
+    }
+    if (risk.warn) {
+      return {
+        ok: false,
+        message: "Remove exact location details before sharing an Open Moment."
+      };
+    }
+  }
 
   // Tier caps: active Moments today, and concurrent nearby Moments.
   const dayAgo = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
@@ -369,10 +397,9 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
     await grantMomentAchievements(admin, userId);
   }
 
-  const risk = detectLocationRisk(`${parsed.data.textContent ?? ""} ${parsed.data.caption ?? ""}`);
   return {
     ok: true,
-    message: "Moment shared.",
+    message: parsed.data.audienceType === "public" ? "Open Moment shared." : "Moment shared.",
     momentId: moment.id,
     locationWarning: risk.warn ? LOCATION_WARNING_MESSAGE : undefined
   };
@@ -420,6 +447,15 @@ export async function getMomentFeedAction(): Promise<VisibleMoment[]> {
   if (!userId) return [];
   const admin = createSupabaseAdminClient();
   return buildMomentFeed(admin, userId);
+}
+
+/** Authenticated-community discovery feed. Returns nothing while disabled. */
+export async function getOpenMomentFeedAction(): Promise<VisibleMoment[]> {
+  const env = getSupabaseServerEnv();
+  if (!env.url || !env.serviceRoleKey) return [];
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+  return buildOpenMomentFeed(createSupabaseAdminClient(), userId);
 }
 
 // ---------------------------------------------------------------------------
@@ -483,6 +519,7 @@ async function canViewMoment(
     .eq("id", momentId)
     .maybeSingle();
   if (!moment) return false;
+  if (moment.audience_type === "public" && !(await isOpenMomentsEnabled(admin))) return false;
   if (moment.author_id === viewerId) return true;
 
   const [mutual, blocked, { data: profile }, { data: hidden }] = await Promise.all([

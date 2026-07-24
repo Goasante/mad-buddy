@@ -149,11 +149,19 @@ export type MomentVisibilityResult = {
 export function resolveMomentVisibility(input: MomentVisibilityInput): MomentVisibilityResult {
   if (input.isAuthor) return { visible: true, reason: "author" };
   if (input.isBlockedEitherDirection) return { visible: false, reason: "blocked" };
-  if (!input.areApprovedMuddies) return { visible: false, reason: "not_muddies" };
   if (input.status !== "active") return { visible: false, reason: "not_active" };
   if (input.expiresAtMs <= input.nowMs) return { visible: false, reason: "expired" };
   if (input.viewerHidThis) return { visible: false, reason: "hidden_by_viewer" };
   if (input.authorGhostMode) return { visible: false, reason: "ghost_mode" };
+
+  // Open Moments are an explicit authenticated-community audience. They never
+  // depend on proximity or friendship, but every stronger safety deny above
+  // still applies.
+  if (input.audienceType === "public") {
+    return { visible: true, reason: "visible" };
+  }
+
+  if (!input.areApprovedMuddies) return { visible: false, reason: "not_muddies" };
 
   if (input.audienceType === "nearby_muddies") {
     // Nearby needs BOTH audience eligibility and a fresh, in-band presence.
@@ -240,5 +248,7 @@ export function audienceSummaryLabel(audienceType: MomentAudienceType, targetNam
       return "Event circle";
     case "plan":
       return "Plan participants";
+    case "public":
+      return "Everyone on Mad Buddy";
   }
 }

@@ -1,5 +1,8 @@
 import { MomentsPage, type MomentAudienceOption } from "@/components/content/moments-page";
-import { buildMomentFeed } from "@/lib/content/service";
+import { checkFeature } from "@/lib/billing/entitlements";
+import { resolveUserEntitlements } from "@/lib/billing/service";
+import { buildMomentFeed, buildOpenMomentFeed } from "@/lib/content/service";
+import { isOpenMomentsEnabled } from "@/lib/features/feature-flags";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -14,16 +17,27 @@ export default async function MomentsRoute() {
 
   const env = getSupabaseServerEnv();
   if (!user || !env.url || !env.serviceRoleKey) {
-    return <MomentsPage initialMoments={[]} circles={[]} />;
+    return <MomentsPage initialMoments={[]} initialOpenMoments={[]} circles={[]} />;
   }
 
   const admin = createSupabaseAdminClient();
-  const [moments, circles] = await Promise.all([
+  const [moments, circles, openMomentsEnabled, entitlements] = await Promise.all([
     buildMomentFeed(admin, user.id),
-    loadCircles(admin, user.id)
+    loadCircles(admin, user.id),
+    isOpenMomentsEnabled(admin),
+    resolveUserEntitlements(admin, user.id)
   ]);
+  const openMoments = openMomentsEnabled ? await buildOpenMomentFeed(admin, user.id) : [];
 
-  return <MomentsPage initialMoments={moments} circles={circles} />;
+  return (
+    <MomentsPage
+      initialMoments={moments}
+      initialOpenMoments={openMoments}
+      circles={circles}
+      openMomentsEnabled={openMomentsEnabled}
+      canPublishOpenMoments={checkFeature(entitlements, "public_moments")}
+    />
+  );
 }
 
 async function loadCircles(

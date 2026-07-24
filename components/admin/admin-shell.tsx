@@ -14,6 +14,7 @@ import {
   Gauge,
   Headphones,
   PowerOff,
+  ToggleRight,
   ShieldAlert,
   ShieldCheck,
   UsersRound,
@@ -34,6 +35,7 @@ type AdminHref =
   | "/admin/repairs"
   | "/admin/billing"
   | "/admin/entitlements"
+  | "/admin/features"
   | "/admin/privacy"
   | "/admin/system"
   | "/admin/maintenance"
@@ -63,6 +65,7 @@ const adminNavigationGroups: Array<{ label: string; items: AdminNavigationItem[]
     items: [
       { href: "/admin/billing", label: "Billing", icon: CreditCard, permission: "admin.billing.view" },
       { href: "/admin/entitlements", label: "Entitlements", icon: SlidersHorizontal, permission: "admin.entitlements.view" },
+      { href: "/admin/features", label: "Feature controls", icon: ToggleRight, permission: "admin.feature_flags.manage" },
       { href: "/admin/privacy", label: "Privacy", icon: FileKey2, permission: "admin.privacy.requests.manage" },
       { href: "/admin/system", label: "App health", icon: Activity, permission: "admin.security.events.view" },
       { href: "/admin/maintenance", label: "Maintenance", icon: PowerOff, permission: "admin.maintenance.manage" }

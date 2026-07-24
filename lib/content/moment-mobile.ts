@@ -9,7 +9,9 @@ import {
 } from "@/lib/content/moments";
 import { detectLocationRisk, LOCATION_WARNING_MESSAGE } from "@/lib/content/safety";
 import { guardAction } from "@/lib/admin/enforcement";
-import { upgradePromptFor } from "@/lib/billing/entitlements";
+import { checkFeature, upgradePromptFor } from "@/lib/billing/entitlements";
+import { resolveUserEntitlements } from "@/lib/billing/service";
+import { isOpenMomentsEnabled } from "@/lib/features/feature-flags";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
@@ -34,11 +36,12 @@ export type MomentResult = {
   locationWarning?: string;
 };
 
-// Matches the web modal's audiences: Close Friends / A circle / Muddies nearby.
+// Matches the web modal's audiences, including the gated Open audience.
 export const createTextMomentSchema = z.object({
   textContent: z.string().min(1).max(500),
-  audienceType: z.enum(["close_friends", "selected_circles", "nearby_muddies"]),
+  audienceType: z.enum(["close_friends", "selected_circles", "nearby_muddies", "public"]),
   targetIds: z.array(z.string().uuid()).max(50).optional(),
+  publicAudienceConfirmed: z.boolean().optional(),
   // ISO expiry from the chosen preset (1h/3h/6h/24h). Defaults to 24h.
   expiresAt: z.string().datetime({ offset: true }).optional()
 });
@@ -84,6 +87,24 @@ export async function createTextMoment(userId: string, input: unknown): Promise<
 
   const access = await getCurrentSubscriptionAccess(userId);
   const limits = contentTierLimitsFor(access.plan);
+  const risk = detectLocationRisk(parsed.data.textContent);
+
+  if (parsed.data.audienceType === "public") {
+    const [enabled, entitlements] = await Promise.all([
+      isOpenMomentsEnabled(admin),
+      resolveUserEntitlements(admin, userId, nowMs)
+    ]);
+    if (!enabled) return { ok: false, message: "Open Moments aren't available right now." };
+    if (!checkFeature(entitlements, "public_moments")) {
+      return { ok: false, message: "Publishing Open Moments is included with Buddy Pro." };
+    }
+    if (!parsed.data.publicAudienceConfirmed) {
+      return { ok: false, message: "Confirm that anyone on Mad Buddy may see this Moment." };
+    }
+    if (risk.warn) {
+      return { ok: false, message: "Remove exact location details before sharing an Open Moment." };
+    }
+  }
 
   const dayAgo = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
   const { count: todayCount } = await admin
@@ -158,10 +179,9 @@ export async function createTextMoment(userId: string, input: unknown): Promise<
     await grantMomentAchievements(admin, userId);
   }
 
-  const risk = detectLocationRisk(parsed.data.textContent);
   return {
     ok: true,
-    message: "Moment shared.",
+    message: parsed.data.audienceType === "public" ? "Open Moment shared." : "Moment shared.",
     momentId: moment.id,
     locationWarning: risk.warn ? LOCATION_WARNING_MESSAGE : undefined
   };
@@ -175,6 +195,7 @@ async function canViewMoment(admin: Admin, viewerId: string, momentId: string): 
     .eq("id", momentId)
     .maybeSingle();
   if (!moment) return false;
+  if (moment.audience_type === "public" && !(await isOpenMomentsEnabled(admin))) return false;
   if (moment.author_id === viewerId) return true;
 
   const [mutual, blocked, { data: profile }, { data: hidden }] = await Promise.all([

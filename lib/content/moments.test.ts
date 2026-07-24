@@ -121,6 +121,18 @@ describe("moment visibility (spec §5, §15)", () => {
     expect(resolveMomentVisibility({ ...nearby, viewerNearbyAndFresh: false }).reason).toBe("not_nearby");
     expect(resolveMomentVisibility({ ...nearby, viewerNearbyAndFresh: true }).visible).toBe(true);
   });
+
+  it("shows a public Moment to a non-Muddy while preserving stronger safety denies", () => {
+    const open = view({
+      audienceType: "public",
+      areApprovedMuddies: false,
+      viewerInAudience: false
+    });
+    expect(resolveMomentVisibility(open)).toEqual({ visible: true, reason: "visible" });
+    expect(resolveMomentVisibility({ ...open, isBlockedEitherDirection: true }).reason).toBe("blocked");
+    expect(resolveMomentVisibility({ ...open, viewerHidThis: true }).reason).toBe("hidden_by_viewer");
+    expect(resolveMomentVisibility({ ...open, authorGhostMode: true }).reason).toBe("ghost_mode");
+  });
 });
 
 describe("drop unlock (spec §25, §33)", () => {
@@ -174,5 +186,6 @@ describe("privacy summary copy (spec §7)", () => {
     expect(audienceSummaryLabel("nearby_muddies", [])).toBe("Approved Muddies who are nearby");
     expect(audienceSummaryLabel("selected_circles", ["Campus Friends"])).toBe("Campus Friends");
     expect(audienceSummaryLabel("close_friends", [])).toBe("Close Friends");
+    expect(audienceSummaryLabel("public", [])).toBe("Everyone on Mad Buddy");
   });
 });

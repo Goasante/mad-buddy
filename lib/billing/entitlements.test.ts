@@ -83,6 +83,9 @@ describe("plan registry (spec §3, §4, §5)", () => {
     expect(PLAN_ENTITLEMENTS.buddy_plus.moderation_dashboard).toBe(false);
     expect(PLAN_ENTITLEMENTS.buddy_pro.moderation_dashboard).toBe(true);
     expect(PLAN_ENTITLEMENTS.buddy_pro.qr_check_in).toBe(true);
+    expect(PLAN_ENTITLEMENTS.free.public_moments).toBe(false);
+    expect(PLAN_ENTITLEMENTS.buddy_plus.public_moments).toBe(false);
+    expect(PLAN_ENTITLEMENTS.buddy_pro.public_moments).toBe(true);
   });
 });
 

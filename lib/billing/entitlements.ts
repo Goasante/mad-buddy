@@ -55,6 +55,7 @@ export type BooleanEntitlementKey =
   | "event_circle_creation"
   | "event_drops"
   | "photo_moments"
+  | "public_moments"
   | "qr_check_in"
   | "attendance_export"
   | "community_roles"
@@ -106,6 +107,7 @@ const FREE: Entitlements = {
   event_circle_creation: false,
   event_drops: false,
   photo_moments: true,
+  public_moments: false,
   qr_check_in: false,
   attendance_export: false,
   community_roles: false,
@@ -160,6 +162,7 @@ const BUDDY_PRO: Entitlements = {
   plan_chat_archive_days: 90,
   storage_limit_bytes: 50 * 1024 * 1024 * 1024,
 
+  public_moments: true,
   qr_check_in: true,
   attendance_export: true,
   community_roles: true,

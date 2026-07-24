@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveApiUser } from "@/lib/api/auth";
 import { preflightResponse, withCors } from "@/lib/api/cors";
-import { buildMomentFeed } from "@/lib/content/service";
+import { buildMomentFeed, buildOpenMomentFeed } from "@/lib/content/service";
 import { createTextMoment, deleteMoment } from "@/lib/content/moment-mobile";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -17,11 +17,16 @@ export async function GET(request: Request) {
     return withCors(NextResponse.json({ error: "Authentication required." }, { status: 401 }), request);
   }
 
-  const moments = await buildMomentFeed(createSupabaseAdminClient(), auth.user.id);
+  const open = new URL(request.url).searchParams.get("feed") === "open";
+  const admin = createSupabaseAdminClient();
+  const moments = open
+    ? await buildOpenMomentFeed(admin, auth.user.id)
+    : await buildMomentFeed(admin, auth.user.id);
   return withCors(NextResponse.json({ moments }), request);
 }
 
-// Share a text Moment (mobile v1: text-only, all_muddies / nearby_muddies).
+// Share a text Moment. Public audience requests use the same flag, Pro,
+// confirmation, expiry, and safety checks as the web action.
 export async function POST(request: Request) {
   const auth = await resolveApiUser(request);
   if (!auth) {
