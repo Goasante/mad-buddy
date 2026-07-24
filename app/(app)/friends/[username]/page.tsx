@@ -40,14 +40,17 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
   // Custom glow (custom_glow_styles entitlement): only offer the picker when
   // the viewer can actually use it and this is a real Muddy of theirs.
   const isOwnProfile = Boolean(user && user.id === profile.user_id);
-  const [entitlements, areFriends, glowColors] = user && !isOwnProfile
+  const [entitlements, areFriends] = user && !isOwnProfile
     ? await Promise.all([
         resolveUserEntitlements(admin, user.id),
-        areApprovedMuddies(admin, user.id, profile.user_id),
-        loadFriendGlowColors(admin, user.id)
+        areApprovedMuddies(admin, user.id, profile.user_id)
       ])
-    : [null, false, {} as Record<string, string>];
+    : [null, false];
   const canCustomizeGlow = Boolean(entitlements && checkFeature(entitlements, "custom_glow_styles") && areFriends);
+  const glowColors =
+    user && entitlements && areFriends
+      ? await loadFriendGlowColors(admin, user.id, entitlements)
+      : {};
 
   return (
     <MuddyProfilePage

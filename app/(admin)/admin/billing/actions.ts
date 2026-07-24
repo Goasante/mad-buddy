@@ -273,6 +273,11 @@ export async function changeSubscriptionPlanAction(input: unknown): Promise<Bill
 
   revalidatePath("/admin/billing");
   revalidatePath(`/admin/billing/${parsed.data.userId}`);
+  // User-facing premium surfaces must re-read entitlements after an admin
+  // change. Preferences remain stored, but their server loaders fail closed.
+  revalidatePath("/dashboard");
+  revalidatePath("/friends");
+  revalidatePath("/friends/[username]", "page");
   return { ok: true, message: `Plan changed to ${planLabel(parsed.data.plan)} (${changeType}).` };
 }
 

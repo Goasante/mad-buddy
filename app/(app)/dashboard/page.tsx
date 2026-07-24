@@ -1,8 +1,10 @@
 import { DashboardPageContent } from "@/components/dashboard/dashboard-page";
+import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
 import { loadSafeArrival } from "@/lib/safety/safe-arrival-mobile";
 import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -14,7 +16,7 @@ export default async function DashboardPage() {
   // Shares the per-request cached getUser() with the layout; the client is for
   // this page's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
-  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival, glowColorsResult] = user
+  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival, glowColorByFriendId] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -30,19 +32,13 @@ export default async function DashboardPage() {
           .eq("user_id", user.id)
           .maybeSingle(),
         loadSafeArrival(user.id),
-        supabase
-          .from("friend_glow_colors")
-          .select("friend_id, color_id")
-          .eq("owner_id", user.id)
+        loadFriendGlowColors(createSupabaseAdminClient(), user.id)
       ])
-    : [null, null, null, { plans: [], hasMore: false }, null, null, null];
+    : [null, null, null, { plans: [], hasMore: false }, null, null, {}];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
   const profileDetails = profileDetailsResult?.data;
-  const glowColorByFriendId = Object.fromEntries(
-    (glowColorsResult?.data ?? []).map((row) => [row.friend_id, row.color_id])
-  );
   const missingProfileItems = profileDetails
     ? [
         !profileDetails.avatar_url ? "photo" : null,
