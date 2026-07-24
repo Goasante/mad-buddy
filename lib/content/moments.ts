@@ -76,7 +76,7 @@ export function validateExpiry(expiresAtMs: number, nowMs: number): string | nul
 }
 
 export type MomentContentInput = {
-  contentType: "text" | "photo";
+  contentType: "text" | "photo" | "video";
   textContent: string | null;
   mediaId: string | null;
   caption: string | null;
@@ -90,7 +90,7 @@ export function validateMomentContent(input: MomentContentInput): string | null 
       return `Moments are at most ${MOMENT_TEXT_MAX_LENGTH} characters.`;
     }
   } else {
-    if (!input.mediaId) return "Choose a photo.";
+    if (!input.mediaId) return input.contentType === "video" ? "Choose a video." : "Choose a photo.";
   }
   if (input.caption && input.caption.trim().length > MOMENT_CAPTION_MAX_LENGTH) {
     return `Captions are at most ${MOMENT_CAPTION_MAX_LENGTH} characters.`;

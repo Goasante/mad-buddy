@@ -1503,7 +1503,7 @@ export type Database = {
           drop_type: DropType;
           context_type: DropContextType;
           context_id: string;
-          content_type: MomentContentType;
+          content_type: DropContentType;
           text_content: string | null;
           media_id: string | null;
           action_type: DropActionType | null;
@@ -1521,7 +1521,7 @@ export type Database = {
           drop_type: DropType;
           context_type: DropContextType;
           context_id: string;
-          content_type: MomentContentType;
+          content_type: DropContentType;
           text_content?: string | null;
           media_id?: string | null;
           action_type?: DropActionType | null;
@@ -3286,7 +3286,17 @@ export type EventCircleMemberStatus = "joined" | "left" | "removed" | "banned";
 
 // --- Batch 6: Moments, Drops, Private Media, Content Safety ---
 
-export type MediaContentType = "image/jpeg" | "image/png" | "image/webp";
+export type MediaContentType =
+  | "image/jpeg"
+  | "image/png"
+  | "image/webp"
+  | "audio/webm"
+  | "audio/mpeg"
+  | "audio/mp4"
+  | "audio/ogg"
+  | "video/mp4"
+  | "video/webm"
+  | "video/quicktime";
 export type MediaProcessingStatus = "pending" | "processing" | "ready" | "failed" | "quarantined";
 export type MediaContextType = "profile" | "moment" | "drop" | "event" | "plan" | "chat";
 export type MediaRetentionPolicy = "follows_parent" | "keep_30d" | "legal_hold";
@@ -3301,7 +3311,8 @@ export type ModerationStatus =
   | "restored"
   | "deleted_by_user";
 
-export type MomentContentType = "text" | "photo";
+export type MomentContentType = "text" | "photo" | "video";
+export type DropContentType = "text" | "photo";
 export type MomentAudienceType =
   | "close_friends"
   | "selected_muddies"

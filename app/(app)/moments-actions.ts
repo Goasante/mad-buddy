@@ -24,9 +24,13 @@ import {
 import { guardAction } from "@/lib/admin/enforcement";
 import {
   sniffImageKind,
+  sniffVideoKind,
   storageKeyFor,
   uploadValidationMessage,
-  validateImageUpload
+  validateImageUpload,
+  validateVideoUpload,
+  videoUploadValidationMessage,
+  type ImageKind
 } from "@/lib/media/validation";
 import { checkFeature, upgradePromptFor } from "@/lib/billing/entitlements";
 import { resolveUserEntitlements } from "@/lib/billing/service";
@@ -38,7 +42,9 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
+  MediaContentType,
   MomentAudienceType,
+  MomentContentType,
   ReactionType,
   ReportableContentType
 } from "@/lib/supabase/database.types";
@@ -48,6 +54,7 @@ export type MomentActionState = {
   message: string;
   momentId?: string;
   mediaId?: string;
+  mediaType?: Extract<MomentContentType, "photo" | "video">;
   /** Non-blocking nudge shown before/after posting (spec §55). */
   locationWarning?: string;
 };
@@ -76,9 +83,10 @@ async function getAuthedUserId() {
 // ---------------------------------------------------------------------------
 
 /**
- * Uploads an image to the PRIVATE media bucket and records the asset. Media is
+ * Uploads a photo or short video to the PRIVATE media bucket and records the asset. Media is
  * never publicly addressable, viewers only ever receive short-lived signed
- * URLs minted after their permission on the parent object is checked (§41).
+ * URLs minted after their permission on the parent object is checked. Photos
+ * are re-encoded before storage; videos are stored in their verified container.
  */
 export async function uploadMomentMediaAction(formData: FormData): Promise<MomentActionState> {
   const missing = missingEnvState();
@@ -97,16 +105,30 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
   if (!guard.allowed) return { ok: false, message: guard.message };
 
   const file = formData.get("media");
-  if (!(file instanceof File)) return { ok: false, message: "Choose an image first." };
+  if (!(file instanceof File)) return { ok: false, message: "Choose a photo or video first." };
 
-  const headerBytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-  const validation = validateImageUpload({
-    claimedMimeType: file.type,
-    headerBytes,
-    sizeBytes: file.size,
-    context: "moment"
-  });
-  if (!validation.valid) return { ok: false, message: uploadValidationMessage(validation.reason) };
+  const headerBytes = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+  const isVideo = file.type.startsWith("video/") || sniffVideoKind(headerBytes) !== null;
+  const validation = isVideo
+    ? validateVideoUpload({
+        claimedMimeType: file.type,
+        headerBytes,
+        sizeBytes: file.size
+      })
+    : validateImageUpload({
+        claimedMimeType: file.type,
+        headerBytes,
+        sizeBytes: file.size,
+        context: "moment"
+      });
+  if (!validation.valid) {
+    return {
+      ok: false,
+      message: isVideo
+        ? videoUploadValidationMessage(validation.reason)
+        : uploadValidationMessage(validation.reason)
+    };
+  }
 
   const { data: asset, error: assetError } = await admin
     .from("media_assets")
@@ -114,7 +136,7 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
       owner_id: userId,
       // Placeholder; replaced with the real key below once we know the id.
       storage_key: `pending/${userId}/${Date.now()}`,
-      content_type: validation.mimeType as "image/jpeg" | "image/png" | "image/webp",
+      content_type: validation.mimeType as MediaContentType,
       size_bytes: file.size,
       context_type: "moment",
       processing_status: "pending"
@@ -124,15 +146,65 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
   if (assetError || !asset) return { ok: false, message: "Couldn't prepare the upload." };
 
   const key = storageKeyFor({ ownerId: userId, context: "moment", mediaId: asset.id, kind: validation.kind });
+  const removeFailedUpload = async (paths: string[] = []) => {
+    if (paths.length > 0) await admin.storage.from("media").remove(paths);
+    await admin.from("media_assets").delete().eq("id", asset.id).eq("owner_id", userId);
+  };
+
+  if (isVideo) {
+    const bytes = Uint8Array.from(new Uint8Array(await file.arrayBuffer())).buffer;
+    const { error: uploadError } = await admin.storage.from("media").upload(key, bytes, {
+      contentType: validation.mimeType,
+      upsert: false
+    });
+    if (uploadError) {
+      await removeFailedUpload();
+      return { ok: false, message: "Couldn't upload that video. Try again." };
+    }
+
+    const { data: storedVideo, error: verifyError } = await admin.storage.from("media").download(key);
+    const storedKind = storedVideo
+      ? sniffVideoKind(new Uint8Array(await storedVideo.slice(0, 32).arrayBuffer()))
+      : null;
+    if (verifyError || storedKind !== validation.kind) {
+      await removeFailedUpload([key]);
+      return { ok: false, message: "That video was not stored correctly. Please try again." };
+    }
+
+    const { error: readyError } = await admin
+      .from("media_assets")
+      .update({
+        storage_key: key,
+        processing_status: "ready",
+        size_bytes: file.size,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", asset.id)
+      .eq("owner_id", userId);
+    if (readyError) {
+      await removeFailedUpload([key]);
+      return { ok: false, message: "Couldn't finish preparing that video. Try again." };
+    }
+
+    return {
+      ok: true,
+      message: "Video ready.",
+      mediaId: asset.id,
+      mediaType: "video"
+    };
+  }
 
   // Strip EXIF (GPS!) and build thumb/feed variants BEFORE anything reaches
   // storage, the stored original is already the metadata-free re-encode.
   let processed;
   try {
     const { processImageUpload } = await import("@/lib/media/processing");
-    processed = await processImageUpload(Buffer.from(await file.arrayBuffer()), validation.kind);
+    processed = await processImageUpload(
+      Buffer.from(await file.arrayBuffer()),
+      validation.kind as ImageKind
+    );
   } catch {
-    await admin.from("media_assets").delete().eq("id", asset.id).eq("owner_id", userId);
+    await removeFailedUpload();
     return { ok: false, message: "That image couldn't be processed. Try a different photo." };
   }
 
@@ -149,7 +221,7 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
   // Compensating cleanup: an orphaned asset row must not survive a failed
   // upload (spec §18, §46).
   if (uploadError) {
-    await admin.from("media_assets").delete().eq("id", asset.id).eq("owner_id", userId);
+    await removeFailedUpload();
     return { ok: false, message: "Couldn't upload that image. Try again." };
   }
 
@@ -185,8 +257,7 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
     : null;
   if (verifyError || storedKind !== validation.kind) {
     const storedPaths = [key, ...variantRows.map((row) => row.key)];
-    await admin.storage.from("media").remove(storedPaths);
-    await admin.from("media_assets").delete().eq("id", asset.id).eq("owner_id", userId);
+    await removeFailedUpload(storedPaths);
     return { ok: false, message: "That photo was not stored correctly. Please try again." };
   }
 
@@ -205,12 +276,11 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
 
   if (readyError) {
     const storedPaths = [key, ...variantRows.map((row) => row.key)];
-    await admin.storage.from("media").remove(storedPaths);
-    await admin.from("media_assets").delete().eq("id", asset.id).eq("owner_id", userId);
+    await removeFailedUpload(storedPaths);
     return { ok: false, message: "Couldn't finish processing that image. Try again." };
   }
 
-  return { ok: true, message: "Image ready.", mediaId: asset.id };
+  return { ok: true, message: "Image ready.", mediaId: asset.id, mediaType: "photo" };
 }
 
 // ---------------------------------------------------------------------------
@@ -218,7 +288,7 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
 // ---------------------------------------------------------------------------
 
 const createMomentSchema = z.object({
-  contentType: z.enum(["text", "photo"]),
+  contentType: z.enum(["text", "photo", "video"]),
   textContent: z.string().max(500).optional(),
   mediaId: uuidSchema.optional(),
   caption: z.string().max(200).optional(),
@@ -330,12 +400,23 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
   if (parsed.data.mediaId) {
     const { data: asset } = await admin
       .from("media_assets")
-      .select("id")
+      .select("id, content_type, processing_status")
       .eq("id", parsed.data.mediaId)
       .eq("owner_id", userId)
       .is("deleted_at", null)
       .maybeSingle();
-    if (!asset) return { ok: false, message: "That image isn't available." };
+    if (!asset || asset.processing_status !== "ready") {
+      return { ok: false, message: "That media isn't available." };
+    }
+    const assetMatchesMoment =
+      parsed.data.contentType === "photo"
+        ? asset.content_type.startsWith("image/")
+        : parsed.data.contentType === "video"
+          ? asset.content_type.startsWith("video/")
+          : false;
+    if (!assetMatchesMoment) {
+      return { ok: false, message: "That media type doesn't match this Moment." };
+    }
   }
 
   const { data: moment, error } = await admin

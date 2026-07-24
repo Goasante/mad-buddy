@@ -15,7 +15,8 @@
  *
  * Sources, each evidence-backed:
  * - Supabase origin: auth/REST (connect-src https), Realtime (connect-src
- *   wss), avatar images from Storage (img-src).
+ *   wss), avatar images from Storage (img-src), private Moment playback from
+ *   signed Storage URLs (media-src).
  * - data: images: the sign-in card's inline SVG noise texture.
  * - style-src 'unsafe-inline': Tailwind/Next inject inline styles; style
  *   injection is far lower risk than script injection and nonce-ing every
@@ -80,7 +81,7 @@ export function buildContentSecurityPolicy(options: {
     `base-uri 'self'`,
     `form-action 'self'`,
     `worker-src 'self'`,
-    `media-src 'none'`,
+    `media-src 'self' data:${supabase ? ` ${supabase}` : ""}`,
     `manifest-src 'self'`
   ];
 

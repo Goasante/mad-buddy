@@ -64,7 +64,7 @@ export type VisibleMoment = {
   authorId: string;
   authorName: string;
   authorAvatarUrl: string | null;
-  contentType: "text" | "photo";
+  contentType: "text" | "photo" | "video";
   textContent: string | null;
   caption: string | null;
   mediaUrl: string | null;

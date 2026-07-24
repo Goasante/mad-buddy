@@ -13,6 +13,8 @@ import type { MediaContextType } from "@/lib/supabase/database.types";
  */
 
 export type ImageKind = "jpg" | "png" | "webp" | "heic";
+export type VideoKind = "mp4" | "webm" | "mov";
+export type MediaFileKind = ImageKind | VideoKind;
 
 export const MIME_BY_KIND: Record<ImageKind, string> = {
   jpg: "image/jpeg",
@@ -29,8 +31,24 @@ const KIND_BY_MIME = new Map<string, ImageKind>([
   ["image/heif", "heic"]
 ]);
 
+export const VIDEO_MIME_BY_KIND: Record<VideoKind, string> = {
+  mp4: "video/mp4",
+  webm: "video/webm",
+  mov: "video/quicktime"
+};
+
+const VIDEO_KIND_BY_MIME = new Map<string, VideoKind>([
+  ["video/mp4", "mp4"],
+  ["video/webm", "webm"],
+  ["video/quicktime", "mov"]
+]);
+
 export function kindForMimeType(mimeType: string): ImageKind | null {
   return KIND_BY_MIME.get(mimeType) ?? null;
+}
+
+export function kindForVideoMimeType(mimeType: string): VideoKind | null {
+  return VIDEO_KIND_BY_MIME.get(mimeType) ?? null;
 }
 
 /**
@@ -85,6 +103,44 @@ export function sniffImageKind(bytes: Uint8Array): ImageKind | null {
   return null;
 }
 
+/** Identifies the short-video containers accepted by Moments. */
+export function sniffVideoKind(bytes: Uint8Array): VideoKind | null {
+  // WebM/Matroska EBML header.
+  if (
+    bytes.length >= 4 &&
+    bytes[0] === 0x1a &&
+    bytes[1] === 0x45 &&
+    bytes[2] === 0xdf &&
+    bytes[3] === 0xa3
+  ) {
+    return "webm";
+  }
+
+  // MP4 and QuickTime both use ISO BMFF. The major brand distinguishes MOV.
+  if (
+    bytes.length >= 12 &&
+    bytes[4] === 0x66 &&
+    bytes[5] === 0x74 &&
+    bytes[6] === 0x79 &&
+    bytes[7] === 0x70
+  ) {
+    const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+    if (brand === "qt  ") return "mov";
+    const normalized = brand.toLowerCase();
+    if (
+      normalized.startsWith("iso") ||
+      normalized.startsWith("mp4") ||
+      normalized === "avc1" ||
+      normalized === "m4v " ||
+      normalized === "dash"
+    ) {
+      return "mp4";
+    }
+  }
+
+  return null;
+}
+
 // Size caps by context (spec §40).
 export const MAX_UPLOAD_BYTES: Record<MediaContextType, number> = {
   // These contexts currently upload through Server Actions. The profile limit
@@ -96,6 +152,9 @@ export const MAX_UPLOAD_BYTES: Record<MediaContextType, number> = {
   plan: 15 * 1024 * 1024,
   chat: 15 * 1024 * 1024
 };
+
+/** Short Moment clips stay beneath the configured 6 MB Server Action limit. */
+export const MAX_MOMENT_VIDEO_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 export function maxUploadBytesFor(context: MediaContextType): number {
   return MAX_UPLOAD_BYTES[context] ?? MAX_UPLOAD_BYTES.moment;
@@ -124,6 +183,27 @@ export function validateImageSelection(
   return null;
 }
 
+/** Fast browser-side feedback for a Moment video before upload. */
+export function validateVideoSelection(file: { size: number; type: string; name?: string }): string | null {
+  if (file.size <= 0) return "Choose a video first.";
+  const extension = file.name?.split(".").pop()?.toLowerCase();
+  const extensionKind: VideoKind | null =
+    extension === "mp4" || extension === "m4v"
+      ? "mp4"
+      : extension === "webm"
+        ? "webm"
+        : extension === "mov"
+          ? "mov"
+          : null;
+  if (!kindForVideoMimeType(file.type) && !extensionKind) {
+    return "Upload an MP4, WebM, or MOV video.";
+  }
+  if (file.size > MAX_MOMENT_VIDEO_UPLOAD_BYTES) {
+    return "Use a video smaller than 5 MB.";
+  }
+  return null;
+}
+
 export type UploadValidationInput = {
   claimedMimeType: string;
   headerBytes: Uint8Array;
@@ -133,6 +213,10 @@ export type UploadValidationInput = {
 
 export type UploadValidationResult =
   | { valid: true; kind: ImageKind; mimeType: string }
+  | { valid: false; reason: "unsupported_type" | "too_large" | "empty" | "content_mismatch" };
+
+export type VideoUploadValidationResult =
+  | { valid: true; kind: VideoKind; mimeType: string }
   | { valid: false; reason: "unsupported_type" | "too_large" | "empty" | "content_mismatch" };
 
 /**
@@ -165,6 +249,26 @@ export function validateImageUpload(input: UploadValidationInput): UploadValidat
   return { valid: true, kind: actualKind, mimeType: MIME_BY_KIND[actualKind] };
 }
 
+export function validateVideoUpload(
+  input: Omit<UploadValidationInput, "context">
+): VideoUploadValidationResult {
+  if (input.sizeBytes <= 0) return { valid: false, reason: "empty" };
+  if (input.sizeBytes > MAX_MOMENT_VIDEO_UPLOAD_BYTES) {
+    return { valid: false, reason: "too_large" };
+  }
+
+  const actualKind = sniffVideoKind(input.headerBytes);
+  const claimedKind = kindForVideoMimeType(input.claimedMimeType);
+  const hasGenericMime =
+    input.claimedMimeType === "" || input.claimedMimeType === "application/octet-stream";
+  const effectiveKind = claimedKind ?? (hasGenericMime ? actualKind : null);
+  if (!effectiveKind) return { valid: false, reason: "unsupported_type" };
+  if (!actualKind || actualKind !== effectiveKind) {
+    return { valid: false, reason: "content_mismatch" };
+  }
+  return { valid: true, kind: actualKind, mimeType: VIDEO_MIME_BY_KIND[actualKind] };
+}
+
 export function uploadValidationMessage(reason: Exclude<UploadValidationResult, { valid: true }>["reason"]): string {
   switch (reason) {
     case "unsupported_type":
@@ -175,6 +279,21 @@ export function uploadValidationMessage(reason: Exclude<UploadValidationResult, 
       return "Choose an image first.";
     case "content_mismatch":
       return "That file doesn't look like a supported JPG, PNG, WebP, or HEIC image.";
+  }
+}
+
+export function videoUploadValidationMessage(
+  reason: Exclude<VideoUploadValidationResult, { valid: true }>["reason"]
+): string {
+  switch (reason) {
+    case "unsupported_type":
+      return "Upload an MP4, WebM, or MOV video.";
+    case "too_large":
+      return "Use a video smaller than 5 MB.";
+    case "empty":
+      return "Choose a video first.";
+    case "content_mismatch":
+      return "That file doesn't look like a supported MP4, WebM, or MOV video.";
   }
 }
 
@@ -229,7 +348,7 @@ export function storageKeyFor(input: {
   ownerId: string;
   context: MediaContextType;
   mediaId: string;
-  kind: ImageKind;
+  kind: MediaFileKind;
 }): string {
   // Owner id first: the storage RLS policy authorizes on the first path segment.
   return `${input.ownerId}/${input.context}/${input.mediaId}.${input.kind}`;

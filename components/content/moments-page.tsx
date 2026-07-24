@@ -1,7 +1,27 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Camera, Clock, Flag, Globe2, ImageOff, LockKeyhole, Plus, ShieldAlert, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import {
+  Camera,
+  Clock,
+  Crown,
+  Eye,
+  Flag,
+  Globe2,
+  ImageOff,
+  ImagePlus,
+  LockKeyhole,
+  Plus,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+  Timer,
+  Trash2,
+  Users,
+  Video,
+  X
+} from "lucide-react";
 import { useRef, useState, useTransition } from "react";
 import {
   createMomentAction,
@@ -21,9 +41,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { audienceSummaryLabel, EXPIRY_PRESETS, type ExpiryPresetId } from "@/lib/content/moments";
 import { detectLocationRisk, LOCATION_WARNING_MESSAGE, REPORT_CATEGORIES } from "@/lib/content/safety";
-import { validateImageSelection } from "@/lib/media/validation";
+import { validateImageSelection, validateVideoSelection } from "@/lib/media/validation";
 import type { VisibleMoment } from "@/lib/content/service";
-import type { MomentAudienceType, ReactionType } from "@/lib/supabase/database.types";
+import type { MomentAudienceType, MomentContentType, ReactionType } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 
 export type MomentAudienceOption = { id: string; name: string };
@@ -50,6 +70,24 @@ function expiryLabel(iso: string): string {
   return `${Math.max(1, Math.floor(ms / 60000))}m left`;
 }
 
+const openMomentFacts = [
+  {
+    icon: Eye,
+    title: "Community visibility",
+    description: "Anyone signed in to Mad Buddy can view Open Moments."
+  },
+  {
+    icon: Crown,
+    title: "Buddy Pro publishing",
+    description: "Only Buddy Pro members can share to the Open feed."
+  },
+  {
+    icon: Timer,
+    title: "Temporary by design",
+    description: "Choose 1, 3, 6, or 24 hours. Every Moment expires."
+  }
+] as const;
+
 export function MomentsPage({
   initialMoments = [],
   initialOpenMoments = [],
@@ -68,12 +106,18 @@ export function MomentsPage({
   const [openMoments, setOpenMoments] = useState(initialOpenMoments);
   const [activeFeed, setActiveFeed] = useState<"muddies" | "open">("muddies");
   const [createOpen, setCreateOpen] = useState(false);
+  const [composerAudience, setComposerAudience] = useState<MomentAudienceType>("close_friends");
   const [reportFor, setReportFor] = useState<VisibleMoment | null>(null);
   const [feedback, setFeedback] = useState("");
   const [failedMediaIds, setFailedMediaIds] = useState<Set<string>>(() => new Set());
   const mediaRetryIds = useRef(new Set<string>());
   const [isPending, startTransition] = useTransition();
   const visibleMoments = activeFeed === "open" ? openMoments : moments;
+
+  function openComposer() {
+    setComposerAudience(activeFeed === "open" ? "public" : "close_friends");
+    setCreateOpen(true);
+  }
 
   function updateMomentInFeeds(
     updater: (entry: VisibleMoment) => VisibleMoment
@@ -145,48 +189,56 @@ export function MomentsPage({
   }
 
   return (
-    <div className="mx-auto w-full max-w-[760px] space-y-7 py-5 sm:py-7">
-      <header className="flex items-start justify-between gap-4 border-b border-border/70 pb-5 dark:border-white/10">
+    <div className="mx-auto w-full max-w-[1120px] space-y-6 py-5 sm:py-7">
+      <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-[2rem]">Moments</h1>
-          <p className="mt-1.5 max-w-xl text-sm leading-6 text-muted-foreground">
-            Temporary updates shared with the people you choose.
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Share what matters now</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-[2rem]">Moments</h1>
+          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Share temporary photos, short videos, and updates privately, or discover the wider Mad Buddy community.
           </p>
         </div>
-        <Button type="button" size="sm" className="shrink-0" onClick={() => setCreateOpen(true)}>
+        <Button type="button" size="sm" className="shrink-0" onClick={openComposer}>
           <Plus className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden sm:inline">Share Moment</span>
-          <span className="sm:hidden">Share</span>
+          <span>Share</span>
         </Button>
       </header>
 
       {openMomentsEnabled ? (
-        <div className="flex w-fit rounded-full border border-border/75 bg-secondary/45 p-1" role="tablist" aria-label="Moment feeds">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeFeed === "muddies"}
-            onClick={() => setActiveFeed("muddies")}
-            className={cn(
-              "focus-ring safe-motion rounded-full px-4 py-2 text-sm font-medium",
-              activeFeed === "muddies" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-            )}
-          >
-            Muddies
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeFeed === "open"}
-            onClick={() => setActiveFeed("open")}
-            className={cn(
-              "focus-ring safe-motion inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium",
-              activeFeed === "open" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-            )}
-          >
-            <Globe2 className="h-4 w-4" aria-hidden="true" />
-            Open
-          </button>
+        <div className="flex flex-col gap-3 border-y border-border/65 py-4 dark:border-white/10 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex w-fit rounded-full border border-border/75 bg-secondary/45 p-1" role="tablist" aria-label="Moment feeds">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeFeed === "muddies"}
+              onClick={() => setActiveFeed("muddies")}
+              className={cn(
+                "focus-ring safe-motion inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium",
+                activeFeed === "muddies" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+              )}
+            >
+              <Users className="h-4 w-4" aria-hidden="true" />
+              My Muddies
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeFeed === "open"}
+              onClick={() => setActiveFeed("open")}
+              className={cn(
+                "focus-ring safe-motion inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium",
+                activeFeed === "open" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+              )}
+            >
+              <Globe2 className="h-4 w-4" aria-hidden="true" />
+              Open
+            </button>
+          </div>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {activeFeed === "open"
+              ? "Visible across Mad Buddy. Buddy Pro is required to publish."
+              : "Visible only to the audience you choose."}
+          </p>
         </div>
       ) : null}
 
@@ -197,30 +249,87 @@ export function MomentsPage({
       ) : null}
 
       {visibleMoments.length === 0 ? (
-        <EmptyState
-          icon={Sparkles}
-          className="!min-h-0 !shadow-none p-5"
-          title={activeFeed === "open" ? "No Open Moments yet" : "No Moments right now"}
-          description={
-            activeFeed === "open"
-              ? "Public Moments from the Mad Buddy community will appear here."
-              : "Moments from your Muddies show up here, and disappear when they expire."
-          }
-          action={
-            activeFeed === "muddies" || canPublishOpenMoments ? (
-              <Button type="button" onClick={() => setCreateOpen(true)}>
+        activeFeed === "open" ? (
+          <section className="grid overflow-hidden rounded-[1.5rem] border border-border/70 bg-card/50 dark:border-white/10 dark:bg-white/[0.025] lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
+            <div className="relative flex min-h-[300px] flex-col justify-center overflow-hidden p-6 sm:p-9">
+              <div
+                className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl"
+                aria-hidden="true"
+              />
+              <div className="relative">
+                <div className="grid h-12 w-12 place-items-center rounded-2xl border border-primary/25 bg-primary/10 text-primary">
+                  <Globe2 className="h-6 w-6" aria-hidden="true" />
+                </div>
+                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-primary">Open Moments</p>
+                <h2 className="mt-2 max-w-lg text-2xl font-semibold tracking-tight sm:text-3xl">
+                  The community feed is ready for its first Moment.
+                </h2>
+                <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
+                  Share a thought, photo, or short video beyond your Muddy circle. Open Moments are temporary, reportable,
+                  and never include your device location.
+                </p>
+                <div className="mt-6 flex flex-wrap items-center gap-3">
+                  {canPublishOpenMoments ? (
+                    <Button type="button" onClick={openComposer}>
+                      <Plus className="h-4 w-4" aria-hidden="true" />
+                      Share publicly
+                    </Button>
+                  ) : (
+                    <Button asChild>
+                      <Link href="/plans">
+                        <Crown className="h-4 w-4" aria-hidden="true" />
+                        Unlock with Buddy Pro
+                      </Link>
+                    </Button>
+                  )}
+                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Timer className="h-3.5 w-3.5" aria-hidden="true" />
+                    Up to 24 hours
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <aside className="border-t border-border/65 bg-secondary/25 p-5 dark:border-white/10 lg:border-l lg:border-t-0 lg:p-6">
+              <h3 className="text-sm font-semibold">How Open works</h3>
+              <div className="mt-4 space-y-4">
+                {openMomentFacts.map((fact) => {
+                  const Icon = fact.icon;
+                  return (
+                    <div key={fact.title} className="flex gap-3">
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-background/80 text-primary">
+                        <Icon className="h-4 w-4" aria-hidden="true" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{fact.title}</p>
+                        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{fact.description}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </aside>
+          </section>
+        ) : (
+          <EmptyState
+            icon={Sparkles}
+            className="!min-h-[190px] !shadow-none p-5"
+            title="No Moments right now"
+            description="Moments from your Muddies appear here until they expire."
+            action={
+              <Button type="button" onClick={openComposer}>
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Share a Moment
               </Button>
-            ) : undefined
-          }
-        />
+            }
+          />
+        )
       ) : (
         <section
           className={cn(
-            "space-y-4",
+            "mx-auto w-full max-w-[760px] space-y-4",
             activeFeed === "open" &&
-              "max-h-[calc(100dvh-13rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain pr-1"
+              "max-h-[calc(100dvh-11rem)] max-w-[680px] snap-y snap-mandatory overflow-y-auto overscroll-contain pr-1"
           )}
           aria-label={activeFeed === "open" ? "Open Moments" : "Shared Moments"}
         >
@@ -230,7 +339,7 @@ export function MomentsPage({
               className={cn(
                 "overflow-hidden rounded-[1.35rem] border border-border/75 bg-card/65 shadow-[0_18px_50px_hsl(var(--shadow)/0.10)] dark:border-white/10 dark:bg-white/[0.035]",
                 activeFeed === "open" &&
-                  "flex min-h-[calc(100dvh-14rem)] snap-start snap-always flex-col"
+                  "flex min-h-[min(720px,calc(100dvh-12rem))] snap-start snap-always flex-col"
               )}
             >
               <header className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
@@ -290,26 +399,51 @@ export function MomentsPage({
               ) : null}
 
               {moment.mediaUrl && !failedMediaIds.has(moment.id) ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={moment.mediaUrl}
-                  src={moment.mediaUrl}
-                  alt={moment.caption ?? `Moment from ${moment.authorName}`}
-                  className={cn(
-                    "block max-h-[560px] min-h-[220px] w-full bg-secondary/40 object-cover object-center sm:min-h-[300px]",
-                    activeFeed === "open" && "max-h-none min-h-[50dvh] flex-1"
-                  )}
-                  draggable={false}
-                  loading="lazy"
-                  decoding="async"
-                  onError={() => retryMomentMedia(moment)}
-                />
-              ) : moment.contentType === "photo" ? (
+                moment.contentType === "video" ? (
+                  <video
+                    key={moment.mediaUrl}
+                    src={moment.mediaUrl}
+                    aria-label={moment.caption ?? `Video Moment from ${moment.authorName}`}
+                    className={cn(
+                      "block max-h-[560px] min-h-[240px] w-full bg-black object-contain sm:min-h-[320px]",
+                      activeFeed === "open" && "max-h-none min-h-[50dvh] flex-1"
+                    )}
+                    controls
+                    controlsList="nodownload"
+                    playsInline
+                    preload="metadata"
+                    onError={() => retryMomentMedia(moment)}
+                  />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={moment.mediaUrl}
+                    src={moment.mediaUrl}
+                    alt={moment.caption ?? `Moment from ${moment.authorName}`}
+                    className={cn(
+                      "block max-h-[560px] min-h-[220px] w-full bg-secondary/40 object-cover object-center sm:min-h-[300px]",
+                      activeFeed === "open" && "max-h-none min-h-[50dvh] flex-1"
+                    )}
+                    draggable={false}
+                    loading="lazy"
+                    decoding="async"
+                    onError={() => retryMomentMedia(moment)}
+                  />
+                )
+              ) : moment.contentType === "photo" || moment.contentType === "video" ? (
                 <div className="grid min-h-56 place-items-center bg-secondary/35 px-6 text-center">
                   <div>
-                    <ImageOff className="mx-auto h-7 w-7 text-muted-foreground" aria-hidden="true" />
-                    <p className="mt-2 text-sm font-medium">Photo unavailable</p>
-                    <p className="mt-1 text-xs text-muted-foreground">This photo could not be loaded.</p>
+                    {moment.contentType === "video" ? (
+                      <Video className="mx-auto h-7 w-7 text-muted-foreground" aria-hidden="true" />
+                    ) : (
+                      <ImageOff className="mx-auto h-7 w-7 text-muted-foreground" aria-hidden="true" />
+                    )}
+                    <p className="mt-2 text-sm font-medium">
+                      {moment.contentType === "video" ? "Video unavailable" : "Photo unavailable"}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      This {moment.contentType === "video" ? "video" : "photo"} could not be loaded.
+                    </p>
                   </div>
                 </div>
               ) : null}
@@ -365,13 +499,17 @@ export function MomentsPage({
         </section>
       )}
 
-      <div className="flex items-start gap-2.5 rounded-xl bg-secondary/45 px-4 py-3 text-xs leading-5 text-muted-foreground">
+      <div className="mx-auto flex w-full max-w-[760px] items-start gap-2.5 rounded-xl bg-secondary/45 px-4 py-3 text-xs leading-5 text-muted-foreground">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-        <p>Moments expire, but viewers can still take screenshots. Share thoughtfully.</p>
+        <p>
+          Moments disappear after the time you choose. Screenshots are still possible, so share thoughtfully.
+        </p>
       </div>
 
       <CreateMomentModal
+        key={`${composerAudience}-${createOpen ? "open" : "closed"}`}
         open={createOpen}
+        defaultAudience={composerAudience}
         circles={circles}
         pending={isPending}
         openMomentsEnabled={openMomentsEnabled}
@@ -413,6 +551,7 @@ export function MomentsPage({
 
 function CreateMomentModal({
   open,
+  defaultAudience,
   circles,
   pending,
   openMomentsEnabled,
@@ -421,6 +560,7 @@ function CreateMomentModal({
   onCreated
 }: {
   open: boolean;
+  defaultAudience: MomentAudienceType;
   circles: MomentAudienceOption[];
   pending: boolean;
   openMomentsEnabled: boolean;
@@ -430,13 +570,18 @@ function CreateMomentModal({
 }) {
   const [text, setText] = useState("");
   const [caption, setCaption] = useState("");
-  const [audience, setAudience] = useState<MomentAudienceType>("close_friends");
+  const [audience, setAudience] = useState<MomentAudienceType>(defaultAudience);
   const [circleId, setCircleId] = useState<string | null>(null);
   const [expiry, setExpiry] = useState<ExpiryPresetId>("6h");
   const [mediaId, setMediaId] = useState<string | null>(null);
-  const [mediaName, setMediaName] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<Extract<MomentContentType, "photo" | "video"> | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [publicAudienceConfirmed, setPublicAudienceConfirmed] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(
+    defaultAudience === "public" && !canPublishOpenMoments
+      ? "Publishing Open Moments is included with Buddy Pro."
+      : ""
+  );
   const [isUploading, startUpload] = useTransition();
   const [isSubmitting, startSubmit] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -465,7 +610,8 @@ function CreateMomentModal({
     setCircleId(null);
     setExpiry("6h");
     setMediaId(null);
-    setMediaName(null);
+    setMediaType(null);
+    setMediaPreview(null);
     setPublicAudienceConfirmed(false);
     setError("");
   }
@@ -476,22 +622,40 @@ function CreateMomentModal({
   }
 
   function upload(file: File) {
-    const selectionError = validateImageSelection(file, "moment");
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    const selectedAsVideo =
+      file.type.startsWith("video/") ||
+      extension === "mp4" ||
+      extension === "m4v" ||
+      extension === "webm" ||
+      extension === "mov";
+    const selectionError = selectedAsVideo
+      ? validateVideoSelection(file)
+      : validateImageSelection(file, "moment");
     if (selectionError) {
       setError(selectionError);
       if (fileRef.current) fileRef.current.value = "";
       return;
     }
 
+    setMediaType(selectedAsVideo ? "video" : "photo");
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") setMediaPreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+
     const formData = new FormData();
     formData.set("media", file);
     startUpload(async () => {
       const result = await uploadMomentMediaAction(formData);
-      if (result.ok && result.mediaId) {
+      if (result.ok && result.mediaId && result.mediaType) {
         setMediaId(result.mediaId);
-        setMediaName(file.name);
+        setMediaType(result.mediaType);
         setError("");
       } else {
+        setMediaType(null);
+        setMediaPreview(null);
         setError(result.message);
       }
       if (fileRef.current) fileRef.current.value = "";
@@ -501,7 +665,7 @@ function CreateMomentModal({
   function share() {
     startSubmit(async () => {
       const result = await createMomentAction({
-        contentType: mediaId ? "photo" : "text",
+        contentType: mediaId && mediaType ? mediaType : "text",
         textContent: text.trim() || undefined,
         mediaId: mediaId ?? undefined,
         caption: caption.trim() || undefined,
@@ -520,58 +684,153 @@ function CreateMomentModal({
   }
 
   return (
-    <Modal open={open} onOpenChange={handleOpenChange} title="Share a Moment" description="It disappears when it expires.">
-      <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
-        <Textarea
-          value={text}
-          maxLength={500}
-          onChange={(event) => setText(event.target.value)}
-          placeholder="What's happening?"
-          aria-label="Moment text"
-        />
+    <Modal
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={audience === "public" ? "Share to Open Moments" : "Share a Moment"}
+      description={
+        audience === "public"
+          ? "Post a temporary update to the Mad Buddy community."
+          : "Choose who sees it and when it disappears."
+      }
+    >
+      <div className="max-h-[68dvh] space-y-4 overflow-y-auto pr-1">
+        <div className="rounded-2xl border border-border/75 bg-secondary/20 p-3">
+          <Textarea
+            value={text}
+            maxLength={500}
+            onChange={(event) => setText(event.target.value)}
+            placeholder="Share what is happening..."
+            aria-label="Moment text"
+            className="min-h-24 resize-none border-0 bg-transparent p-1 shadow-none focus-visible:ring-0"
+          />
+          <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
+            <span>Text, one photo, or one short video</span>
+            <span className="tabular-nums">{text.length}/500</span>
+          </div>
+        </div>
 
-        <div>
+        <div className="overflow-hidden rounded-2xl border border-border/75">
           <input
             ref={fileRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov,.m4v"
             className="sr-only"
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) upload(file);
             }}
           />
-          <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={isUploading}>
-            <Camera className="h-4 w-4" aria-hidden="true" />
-            {isUploading ? "Uploading…" : mediaName ? "Change photo" : "Add photo"}
-          </Button>
-          {mediaName ? <span className="ml-2 text-xs text-muted-foreground">{mediaName}</span> : null}
+          {mediaPreview ? (
+            <div className="relative">
+              {mediaType === "video" ? (
+                <video
+                  src={mediaPreview}
+                  aria-label="Selected video preview"
+                  className="max-h-72 w-full bg-black object-contain"
+                  controls
+                  playsInline
+                  preload="metadata"
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={mediaPreview}
+                  alt="Selected Moment preview"
+                  className="max-h-64 w-full bg-black/5 object-contain"
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setMediaId(null);
+                  setMediaType(null);
+                  setMediaPreview(null);
+                  if (fileRef.current) fileRef.current.value = "";
+                }}
+                className="focus-ring absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-black/65 text-white shadow-lg"
+                aria-label="Remove selected photo"
+                title="Remove selected photo"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={isUploading}
+                className="focus-ring absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full bg-black/65 px-3 py-2 text-xs font-medium text-white shadow-lg"
+              >
+                <Camera className="h-4 w-4" aria-hidden="true" />
+                Replace
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={isUploading}
+              className="focus-ring flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-secondary/45"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                {isUploading ? (
+                  <Sparkles className="h-5 w-5 animate-pulse" aria-hidden="true" />
+                ) : (
+                  <ImagePlus className="h-5 w-5" aria-hidden="true" />
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">
+                  {isUploading ? "Preparing media..." : "Add a photo or video"}
+                </span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Photos up to 3 MB. MP4, WebM, or MOV videos up to 5 MB.
+                </span>
+              </span>
+              <Plus className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            </button>
+          )}
         </div>
 
         {mediaId ? (
-          <Textarea
-            value={caption}
-            maxLength={200}
-            onChange={(event) => setCaption(event.target.value)}
-            placeholder="Add a caption (optional)"
-            aria-label="Caption"
-          />
+          <div>
+            <Textarea
+              value={caption}
+              maxLength={200}
+              onChange={(event) => setCaption(event.target.value)}
+              placeholder="Add a caption (optional)"
+              aria-label="Caption"
+              className="min-h-20 resize-none"
+            />
+            <p className="mt-1 text-right text-[11px] tabular-nums text-muted-foreground">{caption.length}/200</p>
+          </div>
         ) : null}
 
-        <div>
-          <p className="mb-2 text-sm font-medium text-foreground">Who can see this?</p>
+        <div className="rounded-2xl border border-border/75 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-secondary text-muted-foreground">
+              {audience === "public" ? (
+                <Globe2 className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Users className="h-4 w-4" aria-hidden="true" />
+              )}
+            </span>
+            <div>
+              <p className="text-sm font-medium text-foreground">Audience</p>
+              <p className="text-[11px] text-muted-foreground">Choose private sharing or the Open community.</p>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2">
             {audienceOptions.map((option) => (
               <button
                 key={option.id}
                 type="button"
                 onClick={() => {
-                  if (option.id === "public" && !canPublishOpenMoments) {
-                    setError("Publishing Open Moments is included with Buddy Pro.");
-                    return;
-                  }
                   setAudience(option.id);
-                  setError("");
+                  setError(
+                    option.id === "public" && !canPublishOpenMoments
+                      ? "Publishing Open Moments is included with Buddy Pro."
+                      : ""
+                  );
                   if (option.id !== "public") setPublicAudienceConfirmed(false);
                 }}
                 aria-pressed={audience === option.id}
@@ -624,7 +883,22 @@ function CreateMomentModal({
               </div>
             )
           ) : null}
-          {audience === "public" ? (
+          {audience === "public" && !canPublishOpenMoments ? (
+            <div className="mt-3 flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2">
+                <Crown className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-medium">Open publishing is a Buddy Pro feature</p>
+                  <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                    Everyone can explore Open Moments. Buddy Pro members can publish to the community.
+                  </p>
+                </div>
+              </div>
+              <Button asChild size="sm" className="shrink-0">
+                <Link href="/plans">See Buddy Pro</Link>
+              </Button>
+            </div>
+          ) : audience === "public" ? (
             <div className="mt-3 rounded-xl border border-orange-400/30 bg-orange-400/10 p-3">
               <div className="flex items-start gap-2">
                 <Globe2 className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />
@@ -648,8 +922,16 @@ function CreateMomentModal({
           ) : null}
         </div>
 
-        <div>
-          <p className="mb-2 text-sm font-medium text-foreground">Disappears after</p>
+        <div className="rounded-2xl border border-border/75 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-secondary text-muted-foreground">
+              <Timer className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-sm font-medium text-foreground">Lifetime</p>
+              <p className="text-[11px] text-muted-foreground">The Moment is hidden automatically when this time ends.</p>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2">
             {EXPIRY_PRESETS.map((preset) => (
               <button
@@ -671,17 +953,22 @@ function CreateMomentModal({
         </div>
 
         {/* Privacy summary, updates live as settings change (spec §7). */}
-        <div className="rounded-lg border border-border/70 bg-background/60 p-3 text-xs leading-6 text-muted-foreground">
-          <p>
-            <span className="font-medium text-foreground">Visible to:</span>{" "}
-            {audienceSummaryLabel(audience, audienceNames)}
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Expires:</span> {expiresLabel}
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Exact location:</span> Not shared
-          </p>
+        <div className="grid gap-2 rounded-2xl bg-secondary/35 p-3 text-xs text-muted-foreground sm:grid-cols-3">
+          <div className="rounded-xl bg-background/60 p-3">
+            <Eye className="h-4 w-4 text-primary" aria-hidden="true" />
+            <p className="mt-2 font-medium text-foreground">Audience</p>
+            <p className="mt-0.5 leading-5">{audienceSummaryLabel(audience, audienceNames)}</p>
+          </div>
+          <div className="rounded-xl bg-background/60 p-3">
+            <Timer className="h-4 w-4 text-primary" aria-hidden="true" />
+            <p className="mt-2 font-medium text-foreground">Expires</p>
+            <p className="mt-0.5 leading-5">{expiresLabel}</p>
+          </div>
+          <div className="rounded-xl bg-background/60 p-3">
+            <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
+            <p className="mt-2 font-medium text-foreground">App location</p>
+            <p className="mt-0.5 leading-5">Not attached</p>
+          </div>
         </div>
 
         {risk.warn ? (

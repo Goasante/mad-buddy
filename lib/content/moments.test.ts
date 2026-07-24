@@ -43,6 +43,15 @@ describe("content + expiry validation (spec §3, §8)", () => {
     ).toBeNull();
   });
 
+  it("requires media for a video moment", () => {
+    expect(
+      validateMomentContent({ contentType: "video", textContent: null, mediaId: null, caption: null })
+    ).toBe("Choose a video.");
+    expect(
+      validateMomentContent({ contentType: "video", textContent: null, mediaId: "m1", caption: "A short clip" })
+    ).toBeNull();
+  });
+
   it("bounds text and caption length", () => {
     expect(
       validateMomentContent({ contentType: "text", textContent: "x".repeat(501), mediaId: null, caption: null })
