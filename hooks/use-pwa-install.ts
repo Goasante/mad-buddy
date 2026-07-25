@@ -6,6 +6,7 @@ import {
   INSTALL_CONFIRMED_KEY,
   INSTALL_DISMISSED_AT_KEY,
   INSTALL_SHOWN_SESSION_KEY,
+  installationHintIsFresh,
   isStandaloneDisplay,
   requestNativeInstall,
   shouldOfferInstall,
@@ -28,7 +29,7 @@ export function usePWAInstall(delayMs = 4000) {
   const [installed, setInstalled] = useState(false);
 
   const markInstalled = useCallback(() => {
-    window.localStorage.setItem(INSTALL_CONFIRMED_KEY, "true");
+    window.localStorage.setItem(INSTALL_CONFIRMED_KEY, String(Date.now()));
     deferredPrompt.current = null;
     setNativePromptAvailable(false);
     setInstalled(true);
@@ -48,24 +49,37 @@ export function usePWAInstall(delayMs = 4000) {
       displayModeStandalone: window.matchMedia("(display-mode: standalone)").matches,
       navigatorStandalone: installNavigator.standalone
     });
-    const installedFromStorage = window.localStorage.getItem(INSTALL_CONFIRMED_KEY) === "true";
+    const installedHint = window.localStorage.getItem(INSTALL_CONFIRMED_KEY);
+    const installedHintFresh = installationHintIsFresh(installedHint);
+    if (installedHint && !installedHintFresh) {
+      window.localStorage.removeItem(INSTALL_CONFIRMED_KEY);
+    }
     const stateTimer = window.setTimeout(() => {
       setDevice(detectedDevice);
-      setInstalled(standalone || installedFromStorage);
+      setInstalled(standalone);
     }, 0);
+
+    let cancelled = false;
+    let knownInstalled = standalone;
 
     function handleBeforeInstallPrompt(event: Event) {
       const installEvent = event as BeforeInstallPromptEvent;
       installEvent.preventDefault();
       deferredPrompt.current = installEvent;
+      // The browser proving the app is installable is stronger than a stale
+      // local hint left behind by an earlier installation.
+      window.localStorage.removeItem(INSTALL_CONFIRMED_KEY);
       setNativePromptAvailable(true);
     }
 
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.addEventListener("appinstalled", markInstalled);
+    function handleAppInstalled() {
+      knownInstalled = true;
+      markInstalled();
+    }
 
-    let cancelled = false;
-    let knownInstalled = standalone || installedFromStorage;
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
     const installedAppsPromise = installNavigator.getInstalledRelatedApps?.();
     if (installedAppsPromise) {
       void installedAppsPromise
@@ -82,7 +96,10 @@ export function usePWAInstall(delayMs = 4000) {
       const eligible = shouldOfferInstall({
         device: detectedDevice,
         standalone,
-        installed: installedFromStorage,
+        // A persisted timestamp is only a short-lived supporting hint. A
+        // fresh native install event is stronger evidence that the app is
+        // currently installable, including after an uninstall.
+        installed: standalone || (installedHintFresh && !deferredPrompt.current),
         dismissedAt: window.localStorage.getItem(INSTALL_DISMISSED_AT_KEY),
         shownThisSession: window.sessionStorage.getItem(INSTALL_SHOWN_SESSION_KEY) === "true"
       });
@@ -96,7 +113,7 @@ export function usePWAInstall(delayMs = 4000) {
       window.clearTimeout(stateTimer);
       window.clearTimeout(timer);
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-      window.removeEventListener("appinstalled", markInstalled);
+      window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, [delayMs, markInstalled]);
 

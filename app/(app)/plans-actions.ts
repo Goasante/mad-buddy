@@ -198,7 +198,7 @@ export async function addPlanParticipantsAction(
         userId: inviteeId,
         senderId: userId,
         category: "plans",
-        type: `plan:invite`,
+        type: `plan:${planId}`,
         title: "New plan invite",
         message: `${name} invited you to "${plan?.title ?? "a plan"}".`
       })

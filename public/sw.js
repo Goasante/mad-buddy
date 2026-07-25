@@ -1,6 +1,14 @@
 /* Mad Buddy service worker. It stores no page or user data. Requests remain
  * network-only while the worker supports PWA installation and web push. */
 
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
+
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET" || event.request.mode === "navigate") return;
   event.respondWith(fetch(event.request));
@@ -43,5 +51,30 @@ self.addEventListener("notificationclick", (event) => {
       }
       return clients.openWindow(url);
     })
+  );
+});
+
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      const oldSubscription = event.oldSubscription;
+      if (!oldSubscription?.options) return;
+      const replacement = await self.registration.pushManager.subscribe({
+        userVisibleOnly: oldSubscription.options.userVisibleOnly,
+        applicationServerKey: oldSubscription.options.applicationServerKey
+      });
+      const json = replacement.toJSON();
+      const response = await fetch("/api/push-subscriptions", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endpoint: replacement.endpoint,
+          keys: json.keys,
+          previousEndpoint: oldSubscription.endpoint
+        })
+      });
+      if (!response.ok) await replacement.unsubscribe();
+    })()
   );
 });

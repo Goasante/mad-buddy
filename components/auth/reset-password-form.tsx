@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
@@ -46,7 +47,7 @@ export function ResetPasswordForm() {
       setActionState(result);
 
       if (result.ok && result.redirectTo) {
-        router.push(result.redirectTo);
+        router.push(result.redirectTo as Route);
       }
     });
   }

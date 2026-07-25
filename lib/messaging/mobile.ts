@@ -230,7 +230,7 @@ async function notifyOtherMembers(admin: Admin, conversationId: string, senderId
         userId: member.user_id,
         senderId,
         priority: "high",
-        type: "message:new",
+        type: `message:${conversationId}`,
         title: preview.title,
         message: preview.body
       });

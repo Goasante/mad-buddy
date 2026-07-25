@@ -1,8 +1,6 @@
 "use server";
 
 import { z } from "zod";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type PushActionState = { ok: boolean; message: string };
@@ -25,19 +23,14 @@ async function getAuthedUserId() {
 }
 
 export async function savePushSubscriptionAction(input: unknown): Promise<PushActionState> {
-  const env = getSupabaseServerEnv();
-  if (!env.url || !env.serviceRoleKey) {
-    return { ok: false, message: "This action needs the server database configuration." };
-  }
-
   const parsed = subscriptionSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "That subscription isn't valid." };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin.from("push_subscriptions").upsert(
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("push_subscriptions").upsert(
     {
       user_id: userId,
       endpoint: parsed.data.endpoint,
@@ -52,14 +45,17 @@ export async function savePushSubscriptionAction(input: unknown): Promise<PushAc
 }
 
 export async function deletePushSubscriptionAction(endpoint: string): Promise<PushActionState> {
-  const env = getSupabaseServerEnv();
-  if (!env.url || !env.serviceRoleKey) {
-    return { ok: false, message: "This action needs the server database configuration." };
-  }
+  const parsedEndpoint = z.string().url().max(1000).safeParse(endpoint);
+  if (!parsedEndpoint.success) return { ok: false, message: "That subscription isn't valid." };
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
-  const admin = createSupabaseAdminClient();
-  await admin.from("push_subscriptions").delete().eq("user_id", userId).eq("endpoint", endpoint);
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("push_subscriptions")
+    .delete()
+    .eq("user_id", userId)
+    .eq("endpoint", parsedEndpoint.data);
+  if (error) return { ok: false, message: "Couldn't remove this browser's subscription. Try again." };
   return { ok: true, message: "Push notifications are off for this browser." };
 }

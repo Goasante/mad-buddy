@@ -85,6 +85,7 @@ export function PlansPageContent({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const requestedPlan = initialPlans.find((plan) => plan.id === searchParams.get("plan")) ?? null;
   const [plans, setPlans] = useState<PlanSummary[]>(initialPlans);
   // router.refresh() re-runs the server component and hands us fresh props, but
   // React never re-initializes useState from changed props. Without this sync,
@@ -99,9 +100,11 @@ export function PlansPageContent({
     setSyncedFrom(initialPlans);
     setPlans(initialPlans);
   }
-  const [activeBucket, setActiveBucket] = useState<PlanBucket>("upcoming");
+  const [activeBucket, setActiveBucket] = useState<PlanBucket>(() =>
+    requestedPlan ? bucketFor(requestedPlan) : "upcoming"
+  );
   const [createOpen, setCreateOpen] = useState(() => searchParams.get("create") === "1");
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(() => requestedPlan?.id ?? null);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
 

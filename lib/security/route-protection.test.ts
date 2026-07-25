@@ -60,6 +60,8 @@ describe("route protection (deny-by-default, audit I-08)", () => {
       "/subscription-cancelled",
       // Must render while the app is paused, signed out included.
       "/maintenance",
+      "/manifest.webmanifest",
+      "/sw.js",
       "/robots.txt",
       "/sitemap.xml"
     ]) {
@@ -82,6 +84,14 @@ describe("route protection (deny-by-default, audit I-08)", () => {
     ]) {
       expect(requiredLoginRedirect(path), path).toBe("/login");
     }
+  });
+
+  it("keeps only the required PWA boot resources public", () => {
+    expect(isPublicPath("/manifest.webmanifest")).toBe(true);
+    expect(isPublicPath("/sw.js")).toBe(true);
+    expect(requiredLoginRedirect("/manifest.webmanifest")).toBeNull();
+    expect(requiredLoginRedirect("/sw.js")).toBeNull();
+    expect(requiredLoginRedirect("/private-worker.js")).toBe("/login");
   });
 
   it("makes an invite landing public but keeps the authed invite screen private", () => {

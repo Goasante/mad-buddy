@@ -2,7 +2,8 @@
 
 import { Award, Flame, HandHeart, PauseCircle, ShieldCheck, Sparkles, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
 import { pauseStreakAction, type EngagementOverview } from "@/app/(app)/engagement-actions";
 import { Button } from "@/components/ui/button";
 import { achievementIconPath } from "@/lib/achievements/achievement-catalog";
@@ -40,12 +41,25 @@ const recapRows: Array<{ key: string; label: string }> = [
  * states what happened and stops (spec §6, §26, §44).
  */
 export function BadgesPageContent({ overview }: { overview: EngagementOverview }) {
+  const requestedAchievement = useSearchParams().get("achievement");
   const [tab, setTab] = useState<BadgesTab>("achievements");
   const [streaks, setStreaks] = useState(overview.streaks);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const earnedCount = overview.achievements.filter((achievement) => achievement.earned).length;
+
+  useEffect(() => {
+    if (!requestedAchievement) return;
+    setTab("achievements");
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`achievement-${requestedAchievement}`)?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "center"
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [requestedAchievement]);
 
   function pause(streakId: string) {
     startTransition(async () => {
@@ -102,9 +116,11 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
               return (
                 <div
                   key={achievement.code}
+                  id={`achievement-${achievement.code}`}
                   className={cn(
                     "rounded-xl border p-4",
-                    achievement.earned ? "border-primary/40 bg-primary/5" : "border-border/70 bg-card/50 opacity-70"
+                    achievement.earned ? "border-primary/40 bg-primary/5" : "border-border/70 bg-card/50 opacity-70",
+                    requestedAchievement === achievement.code && "ring-2 ring-primary/40"
                   )}
                 >
                   {iconPath ? (

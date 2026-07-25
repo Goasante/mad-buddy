@@ -298,7 +298,7 @@ export function AppCombobox<T extends string = string>({
                 aria-activedescendant={filtered[activeIndex] ? `${listboxId}-${activeIndex}` : undefined}
               />
               {query ? (
-                <button type="button" onClick={() => { setQuery(""); inputRef.current?.focus(); }} className="focus-ring absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-[calc(50%+4px)] place-items-center rounded-full text-muted-foreground hover:bg-secondary" aria-label="Clear search">
+                <button type="button" onClick={() => { setQuery(""); inputRef.current?.focus(); }} className="focus-ring absolute right-0.5 top-1/2 grid h-10 w-10 -translate-y-[calc(50%+4px)] place-items-center rounded-full text-muted-foreground hover:bg-secondary" aria-label="Clear search">
                   <X className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               ) : null}
@@ -412,7 +412,7 @@ export function AppMultiSelect<T extends string = string>({
                   aria-label={searchPlaceholder}
                 />
                 {query ? (
-                  <button type="button" onClick={() => { setQuery(""); searchRef.current?.focus(); }} className="focus-ring absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-[calc(50%+4px)] place-items-center rounded-full text-muted-foreground hover:bg-secondary" aria-label="Clear search">
+                  <button type="button" onClick={() => { setQuery(""); searchRef.current?.focus(); }} className="focus-ring absolute right-0.5 top-1/2 grid h-10 w-10 -translate-y-[calc(50%+4px)] place-items-center rounded-full text-muted-foreground hover:bg-secondary" aria-label="Clear search">
                     <X className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                 ) : null}

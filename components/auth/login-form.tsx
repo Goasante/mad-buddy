@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
@@ -15,17 +16,17 @@ import { startOAuth } from "@/lib/auth/oauth";
 
 const loginSchema = z.object({
   email: z.string().email("Enter your email address."),
-  password: z.string().min(1, "Enter your password."),
-  rememberMe: z.boolean()
+  password: z.string().min(1, "Enter your password.")
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 type LoginFormProps = {
   initialError?: string | null;
+  nextDestination?: string;
 };
 
-export function LoginForm({ initialError = null }: LoginFormProps) {
+export function LoginForm({ initialError = null, nextDestination = "/dashboard" }: LoginFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [actionState, setActionState] = useState<AuthActionState | null>(
@@ -41,14 +42,13 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: "",
-      password: "",
-      rememberMe: true
+      password: ""
     }
   });
 
   function onSubmit(values: LoginFormValues) {
     startTransition(async () => {
-      const result = await loginAction(values);
+      const result = await loginAction({ ...values, next: nextDestination });
       setActionState(
         result.ok ||
         result.message.includes("Supabase is not configured") ||
@@ -61,7 +61,7 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
       );
 
       if (result.ok && result.redirectTo) {
-        router.push(result.redirectTo);
+        router.push(result.redirectTo as Route);
       }
     });
   }
@@ -71,7 +71,7 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
     setIsGooglePending(true);
 
     try {
-      await startOAuth("google", "/dashboard");
+      await startOAuth("google", nextDestination);
     } catch {
       setActionState({ ok: false, message: "Google sign-in could not start. Please try again." });
       setIsGooglePending(false);
@@ -141,7 +141,7 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
           />
           <button
             type="button"
-            className="focus-ring absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md text-white/40 transition-colors hover:bg-white/[0.08] hover:text-white"
+            className="focus-ring absolute right-0.5 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-md text-white/40 transition-colors hover:bg-white/[0.08] hover:text-white"
             onClick={() => setShowPassword((current) => !current)}
             aria-label={showPassword ? "Hide password" : "Show password"}
             title={showPassword ? "Hide password" : "Show password"}
@@ -150,14 +150,6 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
           </button>
         </div>
       </FormField>
-      <label className="flex items-center gap-2 text-sm text-white/55">
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-white/20 bg-white/[0.06] accent-primary"
-          {...register("rememberMe")}
-        />
-        Remember me on this device
-      </label>
       {actionState && !actionState.ok ? (
         <div className="flex gap-2 rounded-lg border border-amber-300/20 bg-amber-300/10 p-3 text-sm leading-6 text-amber-50">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />

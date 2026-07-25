@@ -17,11 +17,12 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
 import { createPlaceholderUsername, PLACEHOLDER_DISPLAY_NAME } from "@/lib/profile/placeholder-identity";
+import { safeAuthNext } from "@/lib/auth/oauth-redirect";
 
 export type AuthActionState = {
   ok: boolean;
   message: string;
-  redirectTo?: "/login" | "/dashboard" | "/onboarding" | "/admin";
+  redirectTo?: string;
 };
 
 const signupSchema = z.object({
@@ -34,7 +35,7 @@ const signupSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
-  rememberMe: z.boolean()
+  next: z.string().max(2048).optional()
 });
 
 const forgotPasswordSchema = z.object({
@@ -47,6 +48,10 @@ const resetPasswordSchema = z
     confirmPassword: z.string().min(8)
   })
   .refine((data) => data.password === data.confirmPassword);
+
+const logoutSchema = z.object({
+  pushEndpoint: z.string().url().max(1000).nullable().optional()
+});
 
 /**
  * The public origin to build email/callback links from. Derived from the actual
@@ -326,7 +331,11 @@ export async function loginAction(input: unknown): Promise<AuthActionState> {
     latencyMs: Date.now() - startedAt
   });
 
-  return { ok: true, message: "Logged in.", redirectTo: "/dashboard" };
+  return {
+    ok: true,
+    message: "Logged in.",
+    redirectTo: safeAuthNext(parsed.data.next ?? null)
+  };
 }
 
 export async function adminLoginAction(input: unknown): Promise<AuthActionState> {
@@ -406,7 +415,11 @@ export async function adminLoginAction(input: unknown): Promise<AuthActionState>
     userId: data.user.id
   });
 
-  return { ok: true, message: "Admin login successful.", redirectTo: "/admin" };
+  return {
+    ok: true,
+    message: "Admin login successful.",
+    redirectTo: safeAuthNext(parsed.data.next ?? null, "/admin")
+  };
 }
 
 export async function forgotPasswordAction(input: unknown): Promise<AuthActionState> {
@@ -496,11 +509,31 @@ export async function resetPasswordAction(input: unknown): Promise<AuthActionSta
   return { ok: true, message: "Password updated. You can now log in with the new password.", redirectTo: "/login" };
 }
 
-export async function logoutAction() {
+export async function logoutAction(input?: unknown) {
   const missingEnv = missingSupabaseState();
 
   if (!missingEnv) {
     const supabase = await createSupabaseServerClient();
+    const parsed = logoutSchema.safeParse(input);
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+    const endpoint = parsed.success ? parsed.data.pushEndpoint : null;
+    if (user && endpoint) {
+      const { error } = await supabase
+        .from("push_subscriptions")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("endpoint", endpoint);
+      if (error) {
+        logBackendEvent("error", {
+          action: "auth.logout_push_cleanup",
+          statusCode: 500,
+          userId: user.id,
+          errorType: errorType(error)
+        });
+      }
+    }
     await supabase.auth.signOut();
   }
 

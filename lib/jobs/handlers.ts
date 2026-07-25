@@ -104,7 +104,7 @@ export const handleSafeArrivalUnconfirmedAlert: JobHandler = async (admin) => {
         deliverNotification(admin, {
           userId: contact.contact_user_id,
           priority: "critical",
-          type: "safe_arrival:unconfirmed",
+          type: `safe_arrival:${session.id}`,
           title: "Safe Arrival check",
           // Neutral by construction, never "missing" (batch 5 §9).
           message: unconfirmedAlertMessage(name)

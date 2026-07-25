@@ -283,7 +283,7 @@ export async function createPlan(userId: string, input: unknown): Promise<Servic
           userId: inviteeId,
           senderId: userId,
           category: "plans",
-          type: `plan:invite`,
+          type: `plan:${plan.id}`,
           title: "New plan invite",
           message: `${name} invited you to "${parsed.data.title.trim()}".`
         })

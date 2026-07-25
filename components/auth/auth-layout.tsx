@@ -22,7 +22,7 @@ const trustBullets = [
 export function AuthLayout({ title, description, children, footer, compact = false }: AuthLayoutProps) {
   if (compact) {
     return (
-      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-8 sm:px-6">
+      <main className="relative flex min-h-[100svh] min-h-[100dvh] items-center justify-center overflow-x-hidden bg-background px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))] sm:px-6">
         <div
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_15%,hsl(var(--primary)/0.12),transparent_38%)]"
           aria-hidden="true"
@@ -44,7 +44,7 @@ export function AuthLayout({ title, description, children, footer, compact = fal
   }
 
   return (
-    <main className="grid min-h-screen lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+    <main className="grid min-h-[100svh] min-h-[100dvh] lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       {/* Left panel (≈40%): privacy-first brand story with a soft glow. */}
       <section className="relative hidden overflow-hidden border-r border-border/60 bg-[#0b0b0d] px-8 py-10 lg:flex lg:flex-col lg:justify-between xl:px-12">
         <div
@@ -81,7 +81,7 @@ export function AuthLayout({ title, description, children, footer, compact = fal
       </section>
 
       {/* Right panel (≈60%): the form. */}
-      <section className="flex items-center justify-center px-5 py-10 sm:px-8">
+      <section className="flex items-center justify-center px-5 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-[max(2.5rem,env(safe-area-inset-top))] sm:px-8">
         <div className="w-full max-w-lg">
           <Link href="/" className="mb-8 inline-flex items-center gap-2.5 text-lg font-semibold lg:hidden">
             <BrandMark className="h-8 w-8" priority />

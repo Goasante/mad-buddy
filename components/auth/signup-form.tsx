@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
@@ -52,7 +53,7 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
     startTransition(async () => {
       const result = await signUpAction(values);
       setActionState(result);
-      if (result.ok && result.redirectTo) router.push(result.redirectTo);
+      if (result.ok && result.redirectTo) router.push(result.redirectTo as Route);
     });
   }
 
@@ -83,7 +84,7 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
             onClick={() => setShowPassword((current) => !current)}
             aria-label={showPassword ? "Hide password" : "Show password"}
             title={showPassword ? "Hide password" : "Show password"}
-            className="focus-ring absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+            className="focus-ring absolute right-0.5 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
           >
             {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
           </button>

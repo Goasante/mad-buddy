@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { authenticatedRedirect, requiredLoginRedirect } from "@/lib/security/route-protection";
+import { safeAuthNext } from "@/lib/auth/oauth-redirect";
 import { buildContentSecurityPolicy, supabaseOriginFromEnv } from "@/lib/security/csp";
 import { supabaseCookieOptions } from "@/lib/supabase/cookie-options";
 import type { Database } from "@/lib/supabase/database.types";
@@ -111,7 +112,7 @@ export async function proxy(request: NextRequest) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = loginRedirect;
     redirectUrl.search = "";
-    redirectUrl.searchParams.set("next", request.nextUrl.pathname);
+    redirectUrl.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
     const redirect = NextResponse.redirect(redirectUrl);
     redirect.headers.set("Content-Security-Policy", cspHeader);
     return redirect;
@@ -121,9 +122,12 @@ export async function proxy(request: NextRequest) {
   // password): drop them straight into the app instead of the marketing page
   // or an empty form.
   if (user && signedInRedirect) {
+    const destination = safeAuthNext(request.nextUrl.searchParams.get("next"), signedInRedirect);
+    const parsedDestination = new URL(destination, request.url);
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = signedInRedirect;
-    redirectUrl.search = "";
+    redirectUrl.pathname = parsedDestination.pathname;
+    redirectUrl.search = parsedDestination.search;
+    redirectUrl.hash = parsedDestination.hash;
     const redirect = NextResponse.redirect(redirectUrl);
     redirect.headers.set("Content-Security-Policy", cspHeader);
     return redirect;

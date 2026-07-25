@@ -1,8 +1,8 @@
 "use client";
 
 import { ShieldCheck, MapPin, Clock, Plus } from "lucide-react";
-import { useId, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useId, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   acknowledgeSafeArrivalAction,
   cancelSafeArrivalAction,
@@ -75,9 +75,21 @@ export function SafeArrivalPage({
   contacts?: SafeArrivalContactOption[];
 }) {
   const router = useRouter();
+  const requestedSessionId = useSearchParams().get("session");
   const [createOpen, setCreateOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!requestedSessionId) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`safe-arrival-${requestedSessionId}`)?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "center"
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [requestedSessionId]);
 
   function run(action: () => Promise<{ ok: boolean; message: string }>) {
     startTransition(async () => {
@@ -126,7 +138,11 @@ export function SafeArrivalPage({
         ) : (
           <div className="space-y-3">
             {mySessions.map((session) => (
-              <Card key={session.id} className="p-4">
+              <Card
+                key={session.id}
+                id={`safe-arrival-${session.id}`}
+                className={cn("p-4", requestedSessionId === session.id && "ring-2 ring-primary/35")}
+              >
                 <JourneyStatusCard
                   role="traveller"
                   sessionId={session.id}
@@ -171,7 +187,11 @@ export function SafeArrivalPage({
           <h2 className="mb-3 text-sm font-semibold">You&apos;re checking on</h2>
           <div className="space-y-3">
             {watching.map((session) => (
-              <Card key={session.id} className="p-4">
+              <Card
+                key={session.id}
+                id={`safe-arrival-${session.id}`}
+                className={cn("p-4", requestedSessionId === session.id && "ring-2 ring-primary/35")}
+              >
                 <JourneyStatusCard
                   role="watcher"
                   sessionId={session.id}

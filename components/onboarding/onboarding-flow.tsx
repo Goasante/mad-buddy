@@ -164,7 +164,7 @@ export function OnboardingFlow({
   }
 
   return (
-    <main className="min-h-screen bg-background px-4 py-6 sm:px-6 sm:py-10">
+    <main className="min-h-[100svh] min-h-[100dvh] bg-background px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] sm:px-6 sm:py-10">
       <div className="mx-auto w-full max-w-xl">
         <header className="flex items-center justify-between">
           <Link href="/" className="focus-ring flex items-center gap-2 rounded-lg font-semibold" aria-label="Mad Buddy home">

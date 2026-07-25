@@ -3,6 +3,8 @@ import {
   detectDevicePlatform,
   dismissalIsCoolingDown,
   INSTALL_DISMISS_COOLDOWN_MS,
+  INSTALL_HINT_TTL_MS,
+  installationHintIsFresh,
   isStandaloneDisplay,
   requestNativeInstall,
   shouldOfferInstall
@@ -78,6 +80,29 @@ describe("PWA prompt eligibility", () => {
     const common = { standalone: false, installed: false, dismissedAt: null, shownThisSession: false };
     expect(shouldOfferInstall({ ...common, device: android })).toBe(true);
     expect(shouldOfferInstall({ ...common, device: iosSafari })).toBe(true);
+  });
+
+  it("treats the persisted installed value as a temporary supporting hint", () => {
+    const now = Date.UTC(2026, 6, 24);
+    expect(installationHintIsFresh(String(now - 1000), now)).toBe(true);
+    expect(installationHintIsFresh(String(now - INSTALL_HINT_TTL_MS), now)).toBe(false);
+    expect(installationHintIsFresh("true", now)).toBe(false);
+  });
+
+  it("allows an uninstall revisit after the installed hint expires", () => {
+    const now = Date.UTC(2026, 8, 1);
+    const staleHint = String(now - INSTALL_HINT_TTL_MS - 1);
+    expect(installationHintIsFresh(staleHint, now)).toBe(false);
+    expect(
+      shouldOfferInstall({
+        device: android,
+        standalone: false,
+        installed: installationHintIsFresh(staleHint, now),
+        dismissedAt: null,
+        shownThisSession: false,
+        now
+      })
+    ).toBe(true);
   });
 });
 

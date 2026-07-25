@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition, type CSSProperties } from "react";
 import {
   AlertTriangle,
@@ -104,6 +104,7 @@ export function HangoutModePage({
   initialFeed?: VisibleHangout[];
 }) {
   const router = useRouter();
+  const requestedHangoutId = useSearchParams().get("hangout");
   const reducedMotion = useReducedMotion();
 
   const [activeHangout, setActiveHangout] = useState(initialActiveHangout);
@@ -133,6 +134,17 @@ export function HangoutModePage({
     const timer = setInterval(() => setNowMs(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!requestedHangoutId) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`hangout-${requestedHangoutId}`)?.scrollIntoView({
+        behavior: reducedMotion ? "auto" : "smooth",
+        block: "center"
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [requestedHangoutId, reducedMotion]);
 
   // Canonical refetch of the owner's join requests — the database is the source
   // of truth, never client-side arithmetic. Adopts the server list only for the
@@ -402,7 +414,11 @@ export function HangoutModePage({
                   {requests.map((request) => (
                     <li
                       key={request.id}
-                      className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card/60 p-3"
+                      id={`hangout-${request.id}`}
+                      className={cn(
+                        "flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card/60 p-3",
+                        requestedHangoutId === request.id && "ring-2 ring-primary/35"
+                      )}
                     >
                       <span className="min-w-0 flex-1 truncate text-sm font-medium">
                         {request.requesterName}
@@ -456,7 +472,11 @@ export function HangoutModePage({
               {feed.map((hangout) => (
                 <li
                   key={hangout.id}
-                  className="flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-card/50 p-4"
+                  id={`hangout-${hangout.id}`}
+                  className={cn(
+                    "flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-card/50 p-4",
+                    requestedHangoutId === hangout.id && "ring-2 ring-primary/35"
+                  )}
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">

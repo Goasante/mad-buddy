@@ -2,10 +2,16 @@ import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { AdminLoginForm } from "@/components/admin/admin-login-form";
 import { Badge } from "@/components/ui/badge";
+import { safeAuthNext } from "@/lib/auth/oauth-redirect";
 
-export default async function AdminLoginPage() {
+type AdminLoginPageProps = {
+  searchParams: Promise<{ next?: string }>;
+};
+
+export default async function AdminLoginPage({ searchParams }: AdminLoginPageProps) {
+  const { next } = await searchParams;
   return (
-    <main className="grid min-h-screen lg:grid-cols-[0.82fr_1.18fr]">
+    <main className="grid min-h-[100svh] min-h-[100dvh] lg:grid-cols-[0.82fr_1.18fr]">
       <section className="hidden border-r border-border bg-card/20 px-8 py-10 lg:flex lg:flex-col lg:justify-between">
         <Link href="/" className="text-lg font-semibold">
           Mad Buddy
@@ -26,7 +32,7 @@ export default async function AdminLoginPage() {
           state, readiness checks, and deletion audits.
         </p>
       </section>
-      <section className="flex items-center justify-center px-6 py-10">
+      <section className="flex items-center justify-center px-6 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-[max(2.5rem,env(safe-area-inset-top))]">
         <div className="w-full max-w-md">
           <Link href="/" className="mb-8 inline-block text-lg font-semibold lg:hidden">
             Mad Buddy
@@ -40,7 +46,7 @@ export default async function AdminLoginPage() {
               </p>
             </div>
             <div className="mt-6">
-              <AdminLoginForm />
+              <AdminLoginForm nextDestination={safeAuthNext(next ?? null, "/admin")} />
             </div>
           </div>
           <div className="mt-5 text-center text-sm text-muted-foreground">

@@ -46,8 +46,41 @@ const DESTINATION_BY_BASE: Record<string, Route> = {
   subscription_update: "/billing" as Route
 };
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ACHIEVEMENT_CODE_PATTERN = /^[a-z0-9][a-z0-9_-]{0,79}$/i;
+
+function withQuery(path: string, key: string, value: string): Route {
+  const params = new URLSearchParams({ [key]: value });
+  return `${path}?${params.toString()}` as Route;
+}
+
 export function resolveNotificationDestination(type: string): NotificationDestination {
-  const base = type.split(":")[0];
+  const separator = type.indexOf(":");
+  const base = separator === -1 ? type : type.slice(0, separator);
+  const entityId = separator === -1 ? null : type.slice(separator + 1);
+
+  if (entityId && UUID_PATTERN.test(entityId)) {
+    switch (base) {
+      case "message":
+        return { type: "internal", href: withQuery("/messages", "conversation", entityId) };
+      case "hangout":
+        return { type: "internal", href: withQuery("/hangout-mode", "hangout", entityId) };
+      case "plan":
+        return { type: "internal", href: withQuery("/plans", "plan", entityId) };
+      case "event":
+        return { type: "internal", href: withQuery("/events", "event", entityId) };
+      case "group":
+        return { type: "internal", href: `/groups/${entityId}` as Route };
+      case "safe_arrival":
+        return { type: "internal", href: withQuery("/safe-arrival", "session", entityId) };
+    }
+  }
+
+  if (base === "achievement" && entityId && ACHIEVEMENT_CODE_PATTERN.test(entityId)) {
+    return { type: "internal", href: withQuery("/badges", "achievement", entityId) };
+  }
+
   const href = DESTINATION_BY_BASE[base];
   return href ? { type: "internal", href } : null;
 }

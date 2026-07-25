@@ -2,14 +2,15 @@
 
 import { Laptop, Loader2 } from "lucide-react";
 import { useState, useTransition } from "react";
-import { logoutAction } from "@/app/(auth)/actions";
 import { revokeOtherSessionsAction } from "@/app/(app)/settings-actions";
+import { useSecureLogout } from "@/components/auth/use-secure-logout";
 import { Button } from "@/components/ui/button";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
 
 export function SessionsPage({ deviceLabel, signedInAt }: { deviceLabel: string; signedInAt: string | null }) {
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
+  const { logout, isPending: logoutPending } = useSecureLogout();
   return (
     <div className="mr-auto max-w-[640px] space-y-6 pt-6">
       <SettingsSubHeader title="Sessions" description="Review this session or log out other active sessions." />
@@ -36,9 +37,10 @@ export function SessionsPage({ deviceLabel, signedInAt }: { deviceLabel: string;
           {isPending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
           Log out all other sessions
         </Button>
-        <form action={logoutAction}>
-          <Button type="submit" variant="danger" className="w-full">Log out of this account</Button>
-        </form>
+        <Button type="button" variant="danger" className="w-full" disabled={logoutPending} onClick={logout}>
+          {logoutPending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
+          Log out of this account
+        </Button>
       </div>
     </div>
   );

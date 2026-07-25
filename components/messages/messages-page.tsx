@@ -1,9 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, Info, MessagesSquare, PenSquare, Search, Send, VolumeX } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   deleteMessageAction,
   editMessageAction,
@@ -68,9 +68,16 @@ export function MessagesPageContent({
   initialConversations?: ConversationView[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedConversationId = searchParams.get("conversation");
   const [conversations, setConversations] = useState(initialConversations);
   const [activeTab, setActiveTab] = useState<TabId>("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    initialConversations.some((conversation) => conversation.id === requestedConversationId)
+      ? requestedConversationId
+      : null
+  );
+  const openedRequestedConversation = useRef(false);
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -135,6 +142,31 @@ export function MessagesPageContent({
   }, [uniqueConversations]);
 
   const selected = uniqueConversations.find((conversation) => conversation.id === selectedId) ?? null;
+
+  useEffect(() => {
+    if (
+      openedRequestedConversation.current ||
+      !requestedConversationId ||
+      !uniqueConversations.some((conversation) => conversation.id === requestedConversationId)
+    ) {
+      return;
+    }
+    openedRequestedConversation.current = true;
+    setSelectedId(requestedConversationId);
+    setMessages([]);
+    setLoadingMessages(true);
+    startTransition(async () => {
+      const loaded = await getMessagesAction(requestedConversationId);
+      setMessages(loaded);
+      setLoadingMessages(false);
+      await markConversationReadAction(requestedConversationId);
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === requestedConversationId ? { ...conversation, unreadCount: 0 } : conversation
+        )
+      );
+    });
+  }, [requestedConversationId, uniqueConversations]);
 
   // Realtime (spec §64): subscribe to the open thread's messages instead of
   // only reloading after our own sends. Authorization is server-side, RLS on

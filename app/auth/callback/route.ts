@@ -13,18 +13,18 @@ export async function GET(request: NextRequest) {
   const env = getSupabaseBrowserEnv();
 
   if (error) {
-    return NextResponse.redirect(authErrorRedirect(requestUrl.origin, errorPage, "cancelled"));
+    return NextResponse.redirect(authErrorRedirect(requestUrl.origin, errorPage, "cancelled", next));
   }
 
   if (!env.url || !env.anonKey || !code) {
-    return NextResponse.redirect(authErrorRedirect(requestUrl.origin, errorPage, "callback_failed"));
+    return NextResponse.redirect(authErrorRedirect(requestUrl.origin, errorPage, "callback_failed", next));
   }
 
   const supabase = await createSupabaseServerClient();
   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
   if (exchangeError) {
-    return NextResponse.redirect(authErrorRedirect(requestUrl.origin, errorPage, "callback_failed"));
+    return NextResponse.redirect(authErrorRedirect(requestUrl.origin, errorPage, "callback_failed", next));
   }
 
   const {
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    return NextResponse.redirect(authErrorRedirect(requestUrl.origin, errorPage, "callback_failed"));
+    return NextResponse.redirect(authErrorRedirect(requestUrl.origin, errorPage, "callback_failed", next));
   }
 
   try {
@@ -42,6 +42,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL(destination, requestUrl.origin));
   } catch {
     await supabase.auth.signOut();
-    return NextResponse.redirect(authErrorRedirect(requestUrl.origin, errorPage, "account_setup_failed"));
+    return NextResponse.redirect(authErrorRedirect(requestUrl.origin, errorPage, "account_setup_failed", next));
   }
 }

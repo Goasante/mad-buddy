@@ -69,7 +69,7 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
   }, [mobileOpen, closeMobile]);
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-border/60 bg-background/85 backdrop-blur-md">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-border/60 bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur-md">
       <nav
         className="mx-auto flex h-[4.25rem] max-w-6xl items-center justify-between gap-3 px-4 sm:h-[4.5rem] sm:px-6"
         aria-label="Main navigation"
@@ -116,7 +116,7 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
         <button
           ref={menuButtonRef}
           type="button"
-          className="focus-ring safe-motion inline-flex h-10 w-10 items-center justify-center rounded-full border border-transparent text-foreground hover:bg-secondary md:hidden"
+          className="focus-ring safe-motion inline-flex h-11 w-11 items-center justify-center rounded-full border border-transparent text-foreground hover:bg-secondary md:hidden"
           aria-expanded={mobileOpen}
           aria-controls={menuId}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}

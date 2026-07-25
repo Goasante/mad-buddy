@@ -12,6 +12,7 @@ import {
   type NotificationPriority
 } from "@/lib/notifications/preferences";
 import type { Database } from "@/lib/supabase/database.types";
+import { privacySafePushPayload } from "@/lib/notifications/push-content";
 
 type SupabaseAdmin = ReturnType<typeof import("@/lib/supabase/admin").createSupabaseAdminClient>;
 
@@ -159,13 +160,10 @@ export async function deliverNotification(
   });
 
   if (decision.push) {
+    const safePush = privacySafePushPayload(input);
     // Real web push transport; silent no-op until VAPID keys are configured.
     const { sendPushToUser } = await import("@/lib/notifications/push");
-    await sendPushToUser(supabase, input.userId, {
-      title: input.title,
-      body: input.message,
-      url: "/notifications"
-    });
+    await sendPushToUser(supabase, input.userId, safePush);
 
     // Native push (FCM/APNs) to the user's mobile devices. Best-effort and a
     // silent no-op until FIREBASE_SERVICE_ACCOUNT_BASE64 is configured; never
@@ -173,9 +171,9 @@ export async function deliverNotification(
     try {
       const { sendNativePushToUser } = await import("@/lib/notifications/fcm");
       await sendNativePushToUser(input.userId, {
-        title: input.title,
-        body: input.message,
-        data: { url: "/notifications", type: input.type }
+        title: safePush.title,
+        body: safePush.body,
+        data: { url: safePush.url, type: input.type }
       });
     } catch {
       // swallow — the in-app notification already landed

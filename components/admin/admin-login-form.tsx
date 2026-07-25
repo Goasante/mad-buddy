@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, Loader2, ShieldCheck } from "lucide-react";
@@ -14,13 +15,12 @@ import { Input } from "@/components/ui/input";
 
 const adminLoginSchema = z.object({
   email: z.string().email("Enter a valid admin email address."),
-  password: z.string().min(1, "Enter your password."),
-  rememberMe: z.boolean()
+  password: z.string().min(1, "Enter your password.")
 });
 
 type AdminLoginFormValues = z.infer<typeof adminLoginSchema>;
 
-export function AdminLoginForm() {
+export function AdminLoginForm({ nextDestination = "/admin" }: { nextDestination?: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [actionState, setActionState] = useState<AuthActionState | null>(null);
@@ -32,18 +32,17 @@ export function AdminLoginForm() {
     resolver: zodResolver(adminLoginSchema),
     defaultValues: {
       email: "",
-      password: "",
-      rememberMe: true
+      password: ""
     }
   });
 
   function onSubmit(values: AdminLoginFormValues) {
     startTransition(async () => {
-      const result = await adminLoginAction(values);
+      const result = await adminLoginAction({ ...values, next: nextDestination });
       setActionState(result);
 
       if (result.ok && result.redirectTo) {
-        router.push(result.redirectTo);
+        router.push(result.redirectTo as Route);
       }
     });
   }
@@ -76,14 +75,6 @@ export function AdminLoginForm() {
           {...register("password")}
         />
       </FormField>
-      <label className="flex items-center gap-2 text-sm text-muted-foreground">
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-white/15 bg-white/[0.06] accent-primary"
-          {...register("rememberMe")}
-        />
-        Keep this admin session active
-      </label>
       {actionState && !actionState.ok ? (
         <div className="flex gap-2 rounded-md border border-amber-300/20 bg-amber-300/10 p-3 text-sm leading-6 text-amber-50">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />

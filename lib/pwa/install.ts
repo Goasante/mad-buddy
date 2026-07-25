@@ -2,6 +2,7 @@ export const INSTALL_DISMISSED_AT_KEY = "madbuddy-install-prompt-dismissed-at";
 export const INSTALL_SHOWN_SESSION_KEY = "madbuddy-install-prompt-shown";
 export const INSTALL_CONFIRMED_KEY = "madbuddy-app-installed";
 export const INSTALL_DISMISS_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+export const INSTALL_HINT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type MobilePlatform = "android" | "ios" | "desktop" | "unsupported";
 export type IOSBrowser = "safari" | "other" | null;
@@ -53,6 +54,16 @@ export function dismissalIsCoolingDown(
   if (!dismissedAt) return false;
   const timestamp = Number(dismissedAt);
   return Number.isFinite(timestamp) && timestamp > 0 && now - timestamp < cooldownMs;
+}
+
+export function installationHintIsFresh(
+  installedAt: string | null,
+  now = Date.now(),
+  ttlMs = INSTALL_HINT_TTL_MS
+) {
+  if (!installedAt) return false;
+  const timestamp = Number(installedAt);
+  return Number.isFinite(timestamp) && timestamp > 0 && now >= timestamp && now - timestamp < ttlMs;
 }
 
 export function shouldOfferInstall({ device, standalone, installed, dismissedAt, shownThisSession, now = Date.now() }: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarPlus, MapPin, Sparkles, Users } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
@@ -48,10 +48,12 @@ function isLive(event: EventView, nowMs: number): boolean {
 
 export function EventsPageContent({ initialEvents = [] }: { initialEvents?: EventView[] }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedEvent = initialEvents.find((event) => event.id === searchParams.get("event")) ?? null;
   const [events, setEvents] = useState<EventView[]>(initialEvents);
-  const [activeTab, setActiveTab] = useState<EventTab>("upcoming");
+  const [activeTab, setActiveTab] = useState<EventTab>(() => requestedEvent?.isHost ? "mine" : "upcoming");
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => requestedEvent?.id ?? null);
   const [glowList, setGlowList] = useState<EventGlowMuddyList | null>(null);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -68,6 +70,18 @@ export function EventsPageContent({ initialEvents = [] }: { initialEvents?: Even
       window.clearInterval(interval);
     };
   }, []);
+
+  useEffect(() => {
+    if (!requestedEvent) return;
+    let cancelled = false;
+    startTransition(async () => {
+      const list = await getEventGlowAction(requestedEvent.id);
+      if (!cancelled) setGlowList(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedEvent]);
 
   const visibleEvents = useMemo(() => {
     if (activeTab === "mine") return events.filter((event) => event.isHost);

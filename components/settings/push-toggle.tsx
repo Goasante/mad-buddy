@@ -43,14 +43,23 @@ export function PushToggle() {
   function enable() {
     startTransition(async () => {
       try {
-        const registration = await navigator.serviceWorker.register("/sw.js");
-        const subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: base64UrlToUint8Array(publicKey as string).buffer as ArrayBuffer
-        });
+        await navigator.serviceWorker.register("/sw.js");
+        const registration = await navigator.serviceWorker.ready;
+        const existing = await registration.pushManager.getSubscription();
+        const subscription =
+          existing ??
+          (await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: base64UrlToUint8Array(publicKey as string).buffer as ArrayBuffer
+          }));
         const result = await savePushSubscriptionAction(subscription.toJSON());
         setFeedback(result.message);
-        if (result.ok) setSubscribed(true);
+        if (result.ok) {
+          setSubscribed(true);
+        } else if (!existing) {
+          await subscription.unsubscribe();
+          setSubscribed(false);
+        }
       } catch {
         setFeedback("Push permission was refused or unavailable. In-app notifications still work.");
       }
@@ -62,11 +71,15 @@ export function PushToggle() {
       const registration = await navigator.serviceWorker.getRegistration();
       const subscription = await registration?.pushManager.getSubscription();
       if (subscription) {
-        await deletePushSubscriptionAction(subscription.endpoint);
+        const result = await deletePushSubscriptionAction(subscription.endpoint);
         await subscription.unsubscribe();
+        setFeedback(
+          result.ok
+            ? "Push notifications are off for this browser."
+            : "Push is off in this browser, but server cleanup needs another try."
+        );
       }
       setSubscribed(false);
-      setFeedback("Push notifications are off for this browser.");
     });
   }
 

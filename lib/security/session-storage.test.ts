@@ -53,6 +53,7 @@ describe("client-side storage never holds credentials", () => {
     "THEME_PREFERENCE_KEY",
     "ACCENT_COLOR_KEY",
     "mad-buddy:profile-reminder-dismissed",
+    "SESSION_REVISION_KEY",
     "INSTALL_CONFIRMED_KEY",
     "INSTALL_DISMISSED_AT_KEY",
     "INSTALL_SHOWN_SESSION_KEY",

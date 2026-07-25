@@ -1,6 +1,8 @@
 import "server-only";
 
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { logBackendEvent } from "@/lib/observability/logger";
+import { readVapidConfiguration } from "@/lib/notifications/vapid";
 
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -14,7 +16,7 @@ type SupabaseAdmin = ReturnType<typeof createSupabaseAdminClient>;
  * The client uses NEXT_PUBLIC_VAPID_PUBLIC_KEY (same value as VAPID_PUBLIC_KEY).
  */
 export function vapidConfigured(): boolean {
-  return Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+  return readVapidConfiguration(process.env).ok;
 }
 
 export async function sendPushToUser(
@@ -22,7 +24,20 @@ export async function sendPushToUser(
   userId: string,
   payload: { title: string; body: string; url?: string }
 ): Promise<void> {
-  if (!vapidConfigured()) return;
+  const vapid = readVapidConfiguration(process.env);
+  if (!vapid.ok) {
+    if (process.env.NODE_ENV === "production") {
+      logBackendEvent("error", {
+        action: "notifications.web_push",
+        statusCode: 503,
+        userId,
+        errorType: vapid.mismatch
+          ? "vapid_public_key_mismatch"
+          : `missing_vapid_configuration:${vapid.missing.join(",")}`
+      });
+    }
+    return;
+  }
 
   try {
     const { data: subscriptions } = await admin
@@ -33,9 +48,9 @@ export async function sendPushToUser(
 
     const webPush = (await import("web-push")).default;
     webPush.setVapidDetails(
-      process.env.VAPID_SUBJECT || "mailto:godfredasante0010@gmail.com",
-      process.env.VAPID_PUBLIC_KEY as string,
-      process.env.VAPID_PRIVATE_KEY as string
+      vapid.subject,
+      vapid.publicKey,
+      vapid.privateKey
     );
 
     await Promise.all(

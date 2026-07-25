@@ -14,6 +14,10 @@
 
 const PUBLIC_EXACT_PATHS = new Set([
   "/",
+  // PWA boot resources must stay public. Protecting either route makes the
+  // browser receive the login page instead of a manifest/worker script.
+  "/manifest.webmanifest",
+  "/sw.js",
   "/robots.txt",
   "/sitemap.xml",
   "/llms.txt"

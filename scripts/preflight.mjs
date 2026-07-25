@@ -32,6 +32,15 @@ if (mode === "production") {
     name: "Production safety",
     required: ["ADMIN_EMAILS"]
   });
+  groups.push({
+    name: "Web Push",
+    required: [
+      "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
+      "VAPID_PUBLIC_KEY",
+      "VAPID_PRIVATE_KEY",
+      "VAPID_SUBJECT"
+    ]
+  });
 }
 
 if (mode === "production" || mode === "paystack") {
@@ -73,6 +82,25 @@ const appUrl = env.NEXT_PUBLIC_APP_URL;
 if (hasValue(appUrl) && mode === "production" && /^http:\/\/localhost(?::\d+)?$/.test(appUrl)) {
   failures.push("NEXT_PUBLIC_APP_URL must not be localhost in production");
   console.log("\nMISSING NEXT_PUBLIC_APP_URL must not be localhost in production");
+}
+
+if (
+  mode === "production" &&
+  hasValue(env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) &&
+  hasValue(env.VAPID_PUBLIC_KEY) &&
+  env.NEXT_PUBLIC_VAPID_PUBLIC_KEY !== env.VAPID_PUBLIC_KEY
+) {
+  failures.push("NEXT_PUBLIC_VAPID_PUBLIC_KEY must match VAPID_PUBLIC_KEY");
+  console.log("\nMISSING NEXT_PUBLIC_VAPID_PUBLIC_KEY must match VAPID_PUBLIC_KEY");
+}
+
+if (
+  mode === "production" &&
+  hasValue(env.VAPID_SUBJECT) &&
+  !/^(?:mailto:|https:\/\/)/i.test(env.VAPID_SUBJECT)
+) {
+  failures.push("VAPID_SUBJECT must start with mailto: or https://");
+  console.log("\nMISSING VAPID_SUBJECT must start with mailto: or https://");
 }
 
 if (failures.length > 0) {

@@ -26,8 +26,9 @@ import {
 } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { logoutAction } from "@/app/(auth)/actions";
 import { LocationSignalSync } from "@/components/app-shell/location-signal-sync";
+import { SessionBoundary } from "@/components/auth/session-boundary";
+import { useSecureLogout } from "@/components/auth/use-secure-logout";
 import { LiveSignalToast } from "@/components/notifications/live-signal-toast";
 import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
@@ -156,7 +157,7 @@ export function AppShell({
     : navigationItems;
 
   return (
-    <div className="flex min-h-screen min-h-[100dvh] flex-col bg-background pb-[calc(88px+env(safe-area-inset-bottom))] dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]">
+    <div className="flex min-h-[100svh] min-h-[100dvh] flex-col bg-background pb-[calc(88px+env(safe-area-inset-bottom))] pt-[env(safe-area-inset-top)] dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]">
       <a
         href="#app-main-content"
         className="focus-ring sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:shadow-lg"
@@ -164,6 +165,7 @@ export function AppShell({
         Skip to content
       </a>
       <LocationSignalSync initiallyEnabled={locationSyncEnabled} />
+      <SessionBoundary currentUserId={currentUserId} />
       {/* Waves and achievement unlocks animate over whatever page the user is
           on, so this lives in the shell rather than on any one screen. */}
       <LiveSignalToast currentUserId={currentUserId} />
@@ -429,7 +431,7 @@ function AccountMenu({
   onOpenChange: (open: boolean) => void;
 }) {
   const initial = currentUsername?.[0]?.toUpperCase() ?? "?";
-  const logoutFormRef = useRef<HTMLFormElement>(null);
+  const { logout, isPending: logoutPending } = useSecureLogout();
   const isCurrentRoute =
     pathname === "/profile" ||
     pathname === "/settings" ||
@@ -499,12 +501,12 @@ function AccountMenu({
           <DropdownMenu.Separator className="my-2 h-px bg-border/70 dark:bg-white/10" />
           <DropdownMenu.Item
             className={cn(flyoutItemClassName(false), "text-destructive")}
-            onSelect={() => logoutFormRef.current?.requestSubmit()}
+            disabled={logoutPending}
+            onSelect={logout}
           >
             <LogOut className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
             Log out
           </DropdownMenu.Item>
-          <form ref={logoutFormRef} action={logoutAction} className="hidden" />
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
@@ -648,7 +650,7 @@ function MobileAccountMenu({
 }) {
   const [open, setOpen] = useState(false);
   const initial = currentUsername?.[0]?.toUpperCase() ?? "?";
-  const logoutFormRef = useRef<HTMLFormElement>(null);
+  const { logout, isPending: logoutPending } = useSecureLogout();
 
   return (
     <DropdownMenu.Root open={open} onOpenChange={setOpen}>
@@ -707,12 +709,12 @@ function MobileAccountMenu({
           <DropdownMenu.Separator className="my-2 h-px bg-border/70 dark:bg-white/10" />
           <DropdownMenu.Item
             className={cn(flyoutItemClassName(false), "text-destructive")}
-            onSelect={() => logoutFormRef.current?.requestSubmit()}
+            disabled={logoutPending}
+            onSelect={logout}
           >
             <LogOut className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
             Log out
           </DropdownMenu.Item>
-          <form ref={logoutFormRef} action={logoutAction} className="hidden" />
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

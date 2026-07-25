@@ -560,7 +560,7 @@ export async function respondHangoutRequestAction(
     userId: request.requester_id,
     senderId: userId,
     category: "plans",
-    type: `hangout:response`,
+    type: `hangout:${request.hangout_session_id}`,
     title: "Hangout update",
     message:
       parsedResponse.data === "accepted"
@@ -655,7 +655,7 @@ export async function convertHangoutToPlanAction(
         userId: participantId,
         senderId: userId,
         category: "plans",
-        type: `plan:created`,
+        type: `plan:${plan.id}`,
         title: "Your hangout became a plan",
         message: `${name} created "${planTitle}".`
       })

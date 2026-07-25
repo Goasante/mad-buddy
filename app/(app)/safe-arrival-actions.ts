@@ -75,7 +75,7 @@ async function notifyContacts(
       deliverNotification(admin, {
         userId: contact.contact_user_id,
         priority: "critical",
-        type: notification.type,
+        type: `safe_arrival:${sessionId}`,
         title: notification.title,
         message: notification.message
       })

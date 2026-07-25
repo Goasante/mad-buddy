@@ -52,7 +52,7 @@ export function Modal({
               ) : null}
             </div>
             <Dialog.Close asChild>
-              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Close" title="Close">
+              <Button type="button" variant="ghost" size="icon" className="shrink-0" aria-label="Close" title="Close">
                 <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </Dialog.Close>

@@ -46,7 +46,7 @@ export function PricingPageContent() {
 
 function PricingHeader() {
   return (
-    <header className="fixed inset-x-0 top-3 z-50 px-3 sm:top-4">
+    <header className="fixed inset-x-0 top-[calc(0.75rem+env(safe-area-inset-top))] z-50 px-3 sm:top-[calc(1rem+env(safe-area-inset-top))]">
       <nav className="glass-panel mx-auto flex h-14 max-w-6xl items-center justify-between rounded-full px-3 sm:px-5" aria-label="Pricing navigation">
         <Link href="/" className="flex items-center gap-3 font-semibold">
           <BrandMark className="h-9 w-9" priority />
