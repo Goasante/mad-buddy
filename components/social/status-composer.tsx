@@ -217,7 +217,6 @@ export function StatusComposer({
       align="start"
       widthClassName="w-[360px]"
       compact
-      alwaysPopover
     >
       {body}
     </ResponsiveFormPopover>

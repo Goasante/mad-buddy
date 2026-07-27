@@ -4,6 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { cn } from "@/lib/utils";
 
 export type ModalProps = {
@@ -17,6 +18,12 @@ export type ModalProps = {
   /** Requests a narrower content width. Drop panels are globally capped so
    * they never turn into oversized desktop overlays. */
   widthClassName?: string;
+  /**
+   * "center" (default) is the top-anchored drop panel. "sheet" makes it a
+   * bottom-anchored, safe-area-aware sheet on phones (a Back press dismisses
+   * it) while staying a centred dialog from `sm` up.
+   */
+  variant?: "center" | "sheet";
 };
 
 export function Modal({
@@ -27,19 +34,35 @@ export function Modal({
   children,
   footer,
   compact = false,
-  widthClassName = "max-w-md"
+  widthClassName = "max-w-md",
+  variant = "center"
 }: ModalProps) {
+  // Sheets are dismissible with the hardware/browser Back button, like a native
+  // mobile sheet. No-op for the centred variant.
+  useDismissOnBack(variant === "sheet" && open, () => onOpenChange(false));
+
+  const isSheet = variant === "sheet";
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="modal-drop-overlay fixed inset-0 bg-black/25 backdrop-blur-[2px]" />
+        <Dialog.Overlay
+          className={cn(
+            "modal-drop-overlay fixed inset-0 backdrop-blur-[2px]",
+            isSheet ? "bg-black/45" : "bg-black/25"
+          )}
+        />
         <Dialog.Content
           className={cn(
-            "modal-drop-panel fixed left-1/2 top-3 flex max-h-[calc(100svh-1.5rem)] w-[calc(100%-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl sm:top-16 sm:max-h-[calc(100svh-5rem)]",
+            "flex flex-col overflow-hidden border border-border/80 bg-card/95 outline-none supports-[backdrop-filter]:bg-card/90",
+            compact ? "p-3" : "p-4",
+            isSheet
+              ? // Phone: pinned to the bottom, full width, safe-area padded,
+                // slide-up entrance. From sm up it becomes the centred panel.
+                "modal-sheet-panel fixed inset-x-0 bottom-0 max-h-[88svh] w-full rounded-t-2xl border-x-0 border-b-0 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-18px_60px_hsl(var(--shadow)/0.28)] sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-16 sm:max-h-[calc(100svh-5rem)] sm:-translate-x-1/2 sm:rounded-2xl sm:border sm:pb-4 sm:shadow-[0_18px_60px_hsl(var(--shadow)/0.24)]"
+              : "modal-drop-panel fixed left-1/2 top-3 max-h-[calc(100svh-1.5rem)] w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-2xl shadow-[0_18px_60px_hsl(var(--shadow)/0.24)] sm:top-16 sm:max-h-[calc(100svh-5rem)]",
             widthClassName,
             "max-w-[32rem]",
-            compact ? "p-3" : "p-4",
-            "border border-border/80 bg-card/95 shadow-[0_18px_60px_hsl(var(--shadow)/0.24)] outline-none supports-[backdrop-filter]:bg-card/90"
+            isSheet && "sm:w-[calc(100%-1.5rem)]"
           )}
         >
           <div className="flex shrink-0 items-start justify-between gap-3">

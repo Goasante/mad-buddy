@@ -29,13 +29,14 @@ export function ProfileCompletionReminder({
 
   const remaining = Math.min(missingItems.length, TOTAL_PROFILE_STEPS);
   const done = TOTAL_PROFILE_STEPS - remaining;
+  // Terse, so the quiet single-line banner never truncates awkwardly.
   const summary =
     missingItems.length === 1
-      ? `Add your ${missingItems[0]} to help friends recognise you.`
-      : `Add a ${missingItems.slice(0, -1).join(", ")} and ${missingItems.at(-1)} to help friends recognise you.`;
+      ? `Add your ${missingItems[0]}`
+      : `Add your ${missingItems.slice(0, -1).join(", ")} and ${missingItems.at(-1)}`;
 
-  // Circular progress ring.
-  const radius = 22;
+  // Small circular progress ring — quiet, secondary guidance.
+  const radius = 15;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference * (1 - done / TOTAL_PROFILE_STEPS);
 
@@ -43,35 +44,34 @@ export function ProfileCompletionReminder({
     <Link
       href="/profile"
       aria-label={`Complete your profile, ${remaining} ${remaining === 1 ? "step" : "steps"} left`}
-      className="focus-ring safe-motion flex items-center gap-4 rounded-2xl border border-primary/30 bg-primary/[0.06] p-4 transition hover:border-primary/50 hover:bg-primary/[0.09]"
+      className="focus-ring safe-motion flex items-center gap-3 rounded-xl border border-border/70 bg-card/50 px-3 py-2.5 transition hover:bg-secondary/40 dark:bg-white/[0.035]"
     >
-      <span className="relative grid h-14 w-14 shrink-0 place-items-center" aria-hidden="true">
-        <svg viewBox="0 0 56 56" className="h-14 w-14 -rotate-90">
-          <circle cx="28" cy="28" r={radius} fill="none" stroke="hsl(var(--primary) / 0.18)" strokeWidth="4" />
+      <span className="relative grid h-10 w-10 shrink-0 place-items-center" aria-hidden="true">
+        <svg viewBox="0 0 40 40" className="h-10 w-10 -rotate-90">
+          <circle cx="20" cy="20" r={radius} fill="none" stroke="hsl(var(--primary) / 0.16)" strokeWidth="3" />
           <circle
-            cx="28"
-            cy="28"
+            cx="20"
+            cy="20"
             r={radius}
             fill="none"
             stroke="hsl(var(--primary))"
-            strokeWidth="4"
+            strokeWidth="3"
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={dashOffset}
           />
         </svg>
-        <span className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-          <span className="text-base font-bold">{remaining}</span>
-          <span className="text-[9px] font-medium text-muted-foreground">{remaining === 1 ? "step" : "steps"}</span>
+        <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold leading-none">
+          {remaining}
         </span>
       </span>
 
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">Complete your profile</span>
-        <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{summary}</span>
+        <span className="block text-sm font-medium">Complete your profile</span>
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{summary}</span>
       </span>
 
-      <ChevronRight className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </Link>
   );
 }

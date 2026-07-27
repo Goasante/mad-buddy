@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320" fill="none">
+  <!--
+    Mad Buddy default wallpaper tile. Used as a CSS mask (only the alpha
+    channel matters), so the app paints these shapes in a theme token at a very
+    low opacity. Abstract, brand-native marks: glow rings, sparks, a message
+    bubble, a wave, and a friendship pair — arranged asymmetrically so the
+    320px repeat reads as texture, not tiles.
+  -->
+  <g stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Glow rings (proximity halo) -->
+    <circle cx="62" cy="70" r="20" />
+    <circle cx="62" cy="70" r="30" opacity="0.5" />
+
+    <!-- Spark / four-point star -->
+    <path d="M244 44 C246 54 250 58 260 60 C250 62 246 66 244 76 C242 66 238 62 228 60 C238 58 242 54 244 44 Z" />
+
+    <!-- Message bubble -->
+    <path d="M212 150 h44 a10 10 0 0 1 10 10 v22 a10 10 0 0 1 -10 10 h-30 l-14 12 v-12 a10 10 0 0 1 -10 -10 v-22 a10 10 0 0 1 10 -10 Z" opacity="0.85" />
+
+    <!-- Wave (Safe Arrival / signal ripple) -->
+    <path d="M20 250 q16 -18 32 0 t32 0 t32 0" opacity="0.7" />
+
+    <!-- Friendship pair (two people, overlapping) -->
+    <circle cx="150" cy="268" r="10" opacity="0.8" />
+    <path d="M132 292 a18 18 0 0 1 36 0" opacity="0.8" />
+    <circle cx="178" cy="268" r="10" opacity="0.55" />
+    <path d="M160 292 a18 18 0 0 1 36 0" opacity="0.55" />
+
+    <!-- Small scattered sparks / dots -->
+    <path d="M300 210 v10 M295 215 h10" opacity="0.6" />
+    <path d="M120 120 v8 M116 124 h8" opacity="0.55" />
+    <circle cx="30" cy="150" r="2.5" fill="#000" stroke="none" opacity="0.5" />
+    <circle cx="285" cy="300" r="2.5" fill="#000" stroke="none" opacity="0.5" />
+    <circle cx="200" cy="40" r="2.5" fill="#000" stroke="none" opacity="0.5" />
+  </g>
+</svg>

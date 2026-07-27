@@ -4,6 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as Popover from "@radix-ui/react-popover";
 import { X } from "lucide-react";
 import { useId, useSyncExternalStore, type ReactNode } from "react";
+import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { cn } from "@/lib/utils";
 
 const desktopQuery = "(min-width: 768px)";
@@ -56,6 +57,11 @@ export function ResponsiveFormPopover({
   const generatedId = useId();
   const titleId = `${generatedId}-title`;
   const descriptionId = description ? `${generatedId}-description` : undefined;
+
+  // The phone bottom-sheet branch (below) dismisses on a hardware/browser Back
+  // press, like a native sheet. No-op in the popover branch.
+  const usesSheet = !isDesktop && !alwaysPopover;
+  useDismissOnBack(usesSheet && open, () => onOpenChange(false));
 
   if (isDesktop || alwaysPopover) {
     return (

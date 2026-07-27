@@ -385,7 +385,7 @@ export function DashboardPageContent({
   return (
     // A focused, centred column — Home answers "who's nearby?" at a glance, so
     // it stays narrow on every width rather than spreading into a dashboard.
-    <div className="mx-auto w-full max-w-[560px] space-y-5 pt-5">
+    <div className="mx-auto w-full max-w-[560px] space-y-4 pt-4">
       <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
       <PendingInvitePrompt />
 
@@ -410,7 +410,10 @@ export function DashboardPageContent({
             />
             <div className="min-w-0">
               <p className="text-sm font-semibold">{ghostMode ? "Paused" : "Visible"}</p>
-              <p className="truncate text-xs text-muted-foreground">
+              {/* Explanatory copy is secondary — hidden on the narrowest phones
+                  (where the state word + dot already read clearly) so it never
+                  looks accidentally clipped beside the status section. */}
+              <p className="hidden truncate text-xs text-muted-foreground min-[400px]:block">
                 {ghostMode ? "You’re hidden" : "Muddies can see you"}
               </p>
             </div>
@@ -443,7 +446,7 @@ export function DashboardPageContent({
                   <span className="block truncate text-sm font-semibold">
                     {hasActiveStatus ? statusDisplay(initialStatusNote, initialStatusAvailability) : "Set a status"}
                   </span>
-                  <span className="block truncate text-xs text-muted-foreground">
+                  <span className="hidden truncate text-xs text-muted-foreground min-[400px]:block">
                     {hasActiveStatus ? "Tap to edit" : "Tap to add"}
                   </span>
                 </span>
@@ -623,8 +626,8 @@ function NearbyHero({
 
   return (
     <section aria-labelledby="home-nearby-heading">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 id="home-nearby-heading" className="text-lg font-semibold tracking-tight">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 id="home-nearby-heading" className="text-base font-semibold tracking-tight">
           Nearby Muddies
         </h2>
         {total > 0 ? (
@@ -641,11 +644,11 @@ function NearbyHero({
 
       {total > 0 ? (
         // One fixed row of up to four positions — never wraps, never grows with
-        // the nearby count. Breaks out to the padding edges so four large
-        // glowing avatars fit across a phone; the top/side padding keeps the
-        // animated halo from being clipped at the row's edge.
+        // the nearby count. A moderate avatar size keeps two nearby Muddies
+        // from eating the viewport while still reading as the hero; the top/side
+        // padding keeps the animated halo from being clipped at the row's edge.
         <div
-          className="-mx-1 flex items-start justify-between gap-1 px-1 pt-5 sm:gap-3"
+          className="-mx-1 flex items-start justify-between gap-1 px-1 pt-3 sm:gap-3"
           aria-label="Nearby Muddies"
         >
           {shown.map((friend) => {
@@ -666,21 +669,21 @@ function NearbyHero({
                     glowStrength={friend.glowStrength}
                     confidence={friend.confidence}
                     glowColorId={glowColorByFriendId[friend.friendId] ?? null}
-                    size="lg"
+                    size="md"
                     reducedMotion={reducedMotion}
                   />
                   {/* Presence: a nearby Muddy with a live, just-updated signal. */}
                   {friend.freshnessState === "live" ? (
                     <span
-                      className="absolute bottom-0.5 right-0.5 z-[2] h-3.5 w-3.5 rounded-full border-2 border-background bg-emerald-500"
+                      className="absolute bottom-0 right-0 z-[2] h-3 w-3 rounded-full border-2 border-background bg-emerald-500"
                       aria-hidden="true"
                     />
                   ) : null}
                 </span>
-                <span className="mt-1 w-full truncate text-sm font-medium">{capitalize(name)}</span>
+                <span className="mt-0.5 w-full truncate text-xs font-medium">{capitalize(name)}</span>
                 <span
                   className={cn(
-                    "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                    "inline-flex max-w-full items-center truncate rounded-full px-2 py-0.5 text-[10px] font-semibold",
                     PROXIMITY_LABEL_CLASS[friend.proximityLevel] ?? "bg-primary/12 text-primary"
                   )}
                 >
@@ -696,12 +699,12 @@ function NearbyHero({
               className="focus-ring safe-motion flex min-w-0 basis-0 grow flex-col items-center gap-1.5 text-center"
               aria-label={`View all ${total} nearby Muddies`}
             >
-              <span className="grid h-[4.75rem] w-[4.75rem] place-items-center rounded-full border-2 border-dashed border-border bg-secondary/40 leading-none">
-                <span className="text-base font-bold">+{remaining}</span>
-                <span className="mt-0.5 text-[9px] font-medium text-muted-foreground">Muddies</span>
+              <span className="grid h-14 w-14 place-items-center rounded-full border-2 border-dashed border-border bg-secondary/40 leading-none">
+                <span className="text-sm font-bold">+{remaining}</span>
+                <span className="mt-0.5 text-[8px] font-medium text-muted-foreground">Muddies</span>
               </span>
-              <span className="mt-1 w-full truncate text-sm font-medium text-transparent">.</span>
-              <span className="text-[11px] font-semibold text-primary">View all</span>
+              <span className="mt-0.5 w-full truncate text-xs font-medium text-transparent">.</span>
+              <span className="text-[10px] font-semibold text-primary">View all</span>
             </Link>
           ) : null}
         </div>
@@ -783,18 +786,24 @@ function QuickActionsHome({ hiddenHrefs = [] }: { hiddenHrefs?: string[] }) {
           <button
             type="button"
             onClick={() => setMoreOpen(true)}
-            className="focus-ring safe-motion flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-border/70 bg-card/50 p-2 text-center hover:bg-secondary/40 active:scale-[0.98] motion-reduce:active:scale-100"
+            className="focus-ring safe-motion flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl border border-border/70 bg-card/50 p-2 text-center hover:bg-secondary/40 active:scale-[0.98] motion-reduce:active:scale-100"
             aria-label="More quick actions"
           >
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-secondary text-foreground/70">
-              <LayoutGrid className="h-5 w-5" aria-hidden="true" />
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-secondary text-foreground/70">
+              <LayoutGrid className="h-[18px] w-[18px]" aria-hidden="true" />
             </span>
             <span className="text-xs font-medium">More</span>
           </button>
         ) : null}
       </div>
 
-      <Modal open={moreOpen} onOpenChange={setMoreOpen} title="More actions" description="Jump to another Mad Buddy feature.">
+      <Modal
+        open={moreOpen}
+        onOpenChange={setMoreOpen}
+        title="More actions"
+        description="Jump to another Mad Buddy feature."
+        variant="sheet"
+      >
         <div className="grid grid-cols-3 gap-2.5 pt-1 sm:grid-cols-4">
           {secondary.map((action) => (
             <Link
@@ -822,12 +831,12 @@ function QuickActionTile({ action }: { action: QuickAction }) {
       href={action.href}
       aria-label={action.description}
       title={action.description}
-      className="focus-ring safe-motion flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-border/70 bg-card/50 p-2 text-center hover:bg-secondary/40 active:scale-[0.98] motion-reduce:active:scale-100"
+      className="focus-ring safe-motion flex min-h-[64px] w-full flex-col items-center justify-center gap-1 rounded-2xl border border-border/70 bg-card/50 p-2 text-center hover:bg-secondary/40 active:scale-[0.98] motion-reduce:active:scale-100"
     >
-      <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/10 text-primary">
-        <FeatureIcon feature={action.featureIcon} size={20} decorative />
+      <span className="grid h-8 w-8 place-items-center rounded-xl bg-primary/10 text-primary">
+        <FeatureIcon feature={action.featureIcon} size={18} decorative />
       </span>
-      <span className="truncate text-xs font-medium">{action.label}</span>
+      <span className="w-full truncate text-xs font-medium">{action.label}</span>
     </Link>
   );
 }
@@ -869,55 +878,50 @@ function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
           All plans
         </Link>
       </div>
+      {/* A compact preview, not a full plan card — the whole row is tappable and
+          the complete detail lives on /plans. */}
       <Link
         href="/plans"
         aria-label={`${capitalize(plan.title)}, ${when}, ${rsvpLabel(plan.myRsvp)}`}
-        className="focus-ring safe-motion block rounded-2xl border border-border/70 bg-card/50 p-4 hover:border-border hover:bg-secondary/40"
+        className="focus-ring safe-motion flex items-center gap-3 rounded-2xl border border-border/70 bg-card/50 p-3 hover:border-border hover:bg-secondary/40"
       >
-        <div className="flex items-start gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-            <CalendarDays className="h-5 w-5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold">{capitalize(plan.title)}</p>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground" suppressHydrationWarning>
-              {when}
-            </p>
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+          <CalendarDays className="h-[18px] w-[18px]" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold">{capitalize(plan.title)}</p>
+          <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground" suppressHydrationWarning>
+            <span className="truncate">{when}</span>
             {plan.placeText ? (
-              <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <>
+                <span aria-hidden="true">·</span>
+                <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
                 <span className="truncate">{capitalize(plan.placeText)}</span>
-              </p>
+              </>
             ) : null}
-          </div>
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/12 px-2.5 py-1 text-xs font-semibold text-primary">
-            {rsvpLabel(plan.myRsvp)}
-            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-          </span>
+          </p>
         </div>
-
-        {plan.goingCount > 0 ? (
-          <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3">
-            {plan.attendees.length > 0 ? (
-              <span className="flex -space-x-2">
-                {plan.attendees.map((attendee, index) => (
-                  <span
-                    key={`${attendee.name}-${index}`}
-                    className="grid h-7 w-7 place-items-center overflow-hidden rounded-full border-2 border-background bg-secondary text-[10px] font-semibold uppercase text-muted-foreground"
-                  >
-                    {attendee.avatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={attendee.avatarUrl} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      initialOf(attendee.name)
-                    )}
-                  </span>
-                ))}
+        {plan.attendees.length > 0 ? (
+          <span className="hidden shrink-0 -space-x-1.5 min-[400px]:flex" aria-hidden="true">
+            {plan.attendees.slice(0, 3).map((attendee, index) => (
+              <span
+                key={`${attendee.name}-${index}`}
+                className="grid h-6 w-6 place-items-center overflow-hidden rounded-full border-2 border-background bg-secondary text-[9px] font-semibold uppercase text-muted-foreground"
+              >
+                {attendee.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={attendee.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initialOf(attendee.name)
+                )}
               </span>
-            ) : null}
-            <span className="text-xs font-medium text-muted-foreground">{plan.goingCount} going</span>
-          </div>
+            ))}
+          </span>
         ) : null}
+        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/12 px-2 py-0.5 text-xs font-semibold text-primary">
+          {rsvpLabel(plan.myRsvp)}
+          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </span>
       </Link>
     </section>
   );

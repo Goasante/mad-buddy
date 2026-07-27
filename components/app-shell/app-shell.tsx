@@ -198,8 +198,11 @@ export function AppShell({
           currentAvatarUrl={currentAvatarUrl}
           showAdminLink={showAdminLink}
         />
-          <main id="app-main-content" className="mx-auto w-full max-w-[1200px] flex-1 px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:overflow-y-auto">
-          {children}
+          <main id="app-main-content" className="relative isolate flex-1 px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:overflow-y-auto">
+          {/* Subtle branded wallpaper, painted behind the content only (chrome,
+              nav and modals keep their own opaque surfaces). Decorative. */}
+          <div className="app-wallpaper absolute inset-0 -z-10" aria-hidden="true" />
+          <div className="mx-auto w-full max-w-[1200px]">{children}</div>
         </main>
         </div>
       </div>
