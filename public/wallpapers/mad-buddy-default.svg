@@ -1,36 +1,49 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000" fill="none">
   <!--
-    Mad Buddy default wallpaper tile. Used as a CSS mask (only the alpha
-    channel matters), so the app paints these shapes in a theme token at a very
-    low opacity. Abstract, brand-native marks: glow rings, sparks, a message
-    bubble, a wave, and a friendship pair — arranged asymmetrically so the
-    320px repeat reads as texture, not tiles.
+    Mad Buddy "proximity ambience" wallpaper. Used as a single non-repeating
+    CSS mask (only the alpha channel matters) — the app paints these shapes in
+    a theme token at a very low opacity, so it reads as atmosphere, not an
+    illustration. No feature/people/chat icons, no tiles. Elements are sparse
+    and asymmetric: faint irregular proximity rings, tiny scattered particles,
+    soft signal waves, and abstract fragments of the M/B letterforms.
   -->
-  <g stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <!-- Glow rings (proximity halo) -->
-    <circle cx="62" cy="70" r="20" />
-    <circle cx="62" cy="70" r="30" opacity="0.5" />
+  <g fill="none" stroke="#000" stroke-width="1.4" stroke-linecap="round">
+    <!-- Proximity ring clusters (irregular, concentric) -->
+    <g opacity="0.9"><circle cx="250" cy="300" r="52"/></g>
+    <g opacity="0.5"><circle cx="250" cy="300" r="92"/></g>
+    <g opacity="0.28"><circle cx="250" cy="300" r="140"/></g>
 
-    <!-- Spark / four-point star -->
-    <path d="M244 44 C246 54 250 58 260 60 C250 62 246 66 244 76 C242 66 238 62 228 60 C238 58 242 54 244 44 Z" />
+    <g opacity="0.7"><circle cx="770" cy="700" r="44"/></g>
+    <g opacity="0.36"><circle cx="770" cy="700" r="84"/></g>
 
-    <!-- Message bubble -->
-    <path d="M212 150 h44 a10 10 0 0 1 10 10 v22 a10 10 0 0 1 -10 10 h-30 l-14 12 v-12 a10 10 0 0 1 -10 -10 v-22 a10 10 0 0 1 10 -10 Z" opacity="0.85" />
+    <!-- A partial / broken ring (arc) for irregularity -->
+    <path d="M600 140 a70 70 0 0 1 66 96" opacity="0.32"/>
+    <circle cx="628" cy="176" r="30" opacity="0.55"/>
 
-    <!-- Wave (Safe Arrival / signal ripple) -->
-    <path d="M20 250 q16 -18 32 0 t32 0 t32 0" opacity="0.7" />
+    <!-- Soft, wide signal waves drifting across -->
+    <path d="M-40 560 C 200 500 360 640 560 590 S 900 500 1060 570" opacity="0.22"/>
+    <path d="M-40 840 C 220 790 380 900 600 850 S 940 780 1060 830" opacity="0.16"/>
 
-    <!-- Friendship pair (two people, overlapping) -->
-    <circle cx="150" cy="268" r="10" opacity="0.8" />
-    <path d="M132 292 a18 18 0 0 1 36 0" opacity="0.8" />
-    <circle cx="178" cy="268" r="10" opacity="0.55" />
-    <path d="M160 292 a18 18 0 0 1 36 0" opacity="0.55" />
+    <!-- Abstract M/B letterform fragments (geometry, not a logo) -->
+    <path d="M120 760 L152 690 L184 760 L216 690 L248 760" opacity="0.24"/>
+    <path d="M840 250 L840 360 M840 258 a26 22 0 0 1 0 52 M840 306 a30 26 0 0 1 0 54" opacity="0.2"/>
+  </g>
 
-    <!-- Small scattered sparks / dots -->
-    <path d="M300 210 v10 M295 215 h10" opacity="0.6" />
-    <path d="M120 120 v8 M116 124 h8" opacity="0.55" />
-    <circle cx="30" cy="150" r="2.5" fill="#000" stroke="none" opacity="0.5" />
-    <circle cx="285" cy="300" r="2.5" fill="#000" stroke="none" opacity="0.5" />
-    <circle cx="200" cy="40" r="2.5" fill="#000" stroke="none" opacity="0.5" />
+  <!-- Tiny scattered particles -->
+  <g fill="#000" stroke="none">
+    <circle cx="150" cy="150" r="2.4" opacity="0.5"/>
+    <circle cx="430" cy="220" r="1.8" opacity="0.4"/>
+    <circle cx="360" cy="470" r="2.6" opacity="0.45"/>
+    <circle cx="520" cy="360" r="1.6" opacity="0.35"/>
+    <circle cx="700" cy="180" r="2.2" opacity="0.4"/>
+    <circle cx="900" cy="430" r="2.8" opacity="0.5"/>
+    <circle cx="640" cy="560" r="1.7" opacity="0.32"/>
+    <circle cx="180" cy="520" r="1.9" opacity="0.4"/>
+    <circle cx="470" cy="720" r="2.5" opacity="0.42"/>
+    <circle cx="880" cy="820" r="2" opacity="0.4"/>
+    <circle cx="300" cy="880" r="1.7" opacity="0.34"/>
+    <circle cx="720" cy="930" r="2.3" opacity="0.4"/>
+    <circle cx="60" cy="700" r="1.6" opacity="0.3"/>
+    <circle cx="960" cy="640" r="1.8" opacity="0.36"/>
   </g>
 </svg>

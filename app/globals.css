@@ -728,24 +728,26 @@ body {
 }
 
 /* -------------------------------------------------------------------------
- * App wallpaper — a subtle, brand-native background pattern for the
- * authenticated app surface. Kept separate from any business logic and
- * driven by a single --wallpaper-image token so wallpapers can later become
- * user-selectable (Settings → Appearance → Wallpaper) by setting a
- * [data-wallpaper="…"] attribute on <html>; no component change needed.
+ * App wallpaper — a subtle "proximity ambience" behind the authenticated app
+ * surface. Kept separate from any business logic and driven by a single
+ * --wallpaper-image token so wallpapers can later become user-selectable
+ * (Settings → Appearance → Wallpaper) by setting a [data-wallpaper="…"]
+ * attribute on <html>; no component change needed.
  *
- * The pattern paints a theme token (foreground) through a mask, so ONE asset
- * serves both themes: dark shows faint light shapes, light shows faint dark
- * shapes. It is static (no JS, no animation, GPU-tiled) — negligible cost.
+ * The art paints a theme token (foreground) through a mask, so ONE asset
+ * serves both themes: dark shows faint slightly-lighter shapes on near-black,
+ * light shows faint slightly-darker shapes. It is a single, non-repeating,
+ * cover-fitted image (no tiles) and fully static — no JS, no animation, no
+ * blur/filter — so it costs virtually nothing and never competes with the
+ * nearby-Muddy glow, which stays the primary visual effect.
  * ---------------------------------------------------------------------- */
 :root {
   --wallpaper-image: url("/wallpapers/mad-buddy-default.svg");
-  --wallpaper-tile: 300px;
   --wallpaper-opacity: 0.05;
 }
 
 html.dark {
-  --wallpaper-opacity: 0.06;
+  --wallpaper-opacity: 0.055;
 }
 
 /* Future themes flip only the token — the layer below is untouched. */
@@ -759,13 +761,15 @@ html.dark {
   opacity: var(--wallpaper-opacity);
   -webkit-mask-image: var(--wallpaper-image);
   mask-image: var(--wallpaper-image);
-  -webkit-mask-repeat: repeat;
-  mask-repeat: repeat;
-  -webkit-mask-size: var(--wallpaper-tile) var(--wallpaper-tile);
-  mask-size: var(--wallpaper-tile) var(--wallpaper-tile);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: cover;
+  mask-size: cover;
 }
 
-/* No pattern asset → nothing to paint (avoids a flat foreground wash). */
+/* No art asset → nothing to paint (avoids a flat foreground wash). */
 [data-wallpaper="plain"] .app-wallpaper {
   display: none;
 }

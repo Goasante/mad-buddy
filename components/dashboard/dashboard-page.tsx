@@ -786,13 +786,13 @@ function QuickActionsHome({ hiddenHrefs = [] }: { hiddenHrefs?: string[] }) {
           <button
             type="button"
             onClick={() => setMoreOpen(true)}
-            className="focus-ring safe-motion flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl border border-border/70 bg-card/50 p-2 text-center hover:bg-secondary/40 active:scale-[0.98] motion-reduce:active:scale-100"
+            className="focus-ring safe-motion flex min-h-[68px] flex-col items-center justify-center gap-1 rounded-2xl border border-border/70 bg-card/50 px-1 py-2 text-center hover:bg-secondary/40 active:scale-[0.98] motion-reduce:active:scale-100"
             aria-label="More quick actions"
           >
-            <span className="grid h-8 w-8 place-items-center rounded-xl bg-secondary text-foreground/70">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-secondary text-foreground/70">
               <LayoutGrid className="h-[18px] w-[18px]" aria-hidden="true" />
             </span>
-            <span className="text-xs font-medium">More</span>
+            <span className="line-clamp-2 w-full text-[11px] font-medium leading-tight">More</span>
           </button>
         ) : null}
       </div>
@@ -831,12 +831,14 @@ function QuickActionTile({ action }: { action: QuickAction }) {
       href={action.href}
       aria-label={action.description}
       title={action.description}
-      className="focus-ring safe-motion flex min-h-[64px] w-full flex-col items-center justify-center gap-1 rounded-2xl border border-border/70 bg-card/50 p-2 text-center hover:bg-secondary/40 active:scale-[0.98] motion-reduce:active:scale-100"
+      className="focus-ring safe-motion flex min-h-[68px] w-full flex-col items-center justify-center gap-1 rounded-2xl border border-border/70 bg-card/50 px-1 py-2 text-center hover:bg-secondary/40 active:scale-[0.98] motion-reduce:active:scale-100"
     >
-      <span className="grid h-8 w-8 place-items-center rounded-xl bg-primary/10 text-primary">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
         <FeatureIcon feature={action.featureIcon} size={18} decorative />
       </span>
-      <span className="w-full truncate text-xs font-medium">{action.label}</span>
+      {/* Two-line label wraps ("Safe Arrival") rather than truncating; never
+          forces horizontal scroll because it only ever wraps within the tile. */}
+      <span className="line-clamp-2 w-full text-[11px] font-medium leading-tight">{action.label}</span>
     </Link>
   );
 }
@@ -890,13 +892,15 @@ function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{capitalize(plan.title)}</p>
-          <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground" suppressHydrationWarning>
-            <span className="truncate">{when}</span>
+          {/* Date + place on one truncating line — the whole line ellipsises as
+              a unit, so it can't overflow or wrap on the narrowest phones. */}
+          <p className="mt-0.5 truncate text-xs text-muted-foreground" suppressHydrationWarning>
+            {when}
             {plan.placeText ? (
               <>
-                <span aria-hidden="true">·</span>
-                <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
-                <span className="truncate">{capitalize(plan.placeText)}</span>
+                {" · "}
+                <MapPin className="mr-0.5 inline-block h-3 w-3 -translate-y-px" aria-hidden="true" />
+                {capitalize(plan.placeText)}
               </>
             ) : null}
           </p>
