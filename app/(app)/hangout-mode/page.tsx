@@ -6,19 +6,19 @@ import {
 } from "@/components/hangout/hangout-mode-page";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function HangoutModeRoute() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const env = getSupabaseServerEnv();
   let activeHangout: ActiveHangout | null = null;
   let requests: HangoutRequestSummary[] = [];
+  const feedPromise: Promise<VisibleHangout[]> = user
+    ? getVisibleHangoutsAction()
+    : Promise.resolve([]);
 
   if (user && env.url && env.serviceRoleKey) {
     const admin = createSupabaseAdminClient();
@@ -67,7 +67,7 @@ export default async function HangoutModeRoute() {
     }
   }
 
-  const feed: VisibleHangout[] = user ? await getVisibleHangoutsAction() : [];
+  const feed = await feedPromise;
 
   return <HangoutModePage initialActiveHangout={activeHangout} initialRequests={requests} initialFeed={feed} />;
 }

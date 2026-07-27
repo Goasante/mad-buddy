@@ -115,6 +115,35 @@ describe("effectivePlan / grace period (spec §59, §61, §62)", () => {
   it("grants trial access", () => {
     expect(effectivePlan(state({ status: "trialing" }), NOW)).toBe("buddy_plus");
   });
+
+  it("uses a separate active trial when no paid subscription grants access", () => {
+    expect(
+      effectivePlan(
+        state({
+          plan: "free",
+          status: "free",
+          trialId: "trial-1",
+          trialPlan: "buddy_pro",
+          trialStartedAtMs: NOW - DAY,
+          trialEndsAtMs: NOW + DAY
+        }),
+        NOW
+      )
+    ).toBe("buddy_pro");
+  });
+
+  it("lets paid access override a trial and rejects ended trial windows", () => {
+    const trial = {
+      trialId: "trial-1",
+      trialPlan: "buddy_pro" as const,
+      trialStartedAtMs: NOW - DAY,
+      trialEndsAtMs: NOW + DAY
+    };
+    expect(effectivePlan(state({ ...trial, plan: "buddy_plus", status: "active" }), NOW)).toBe("buddy_plus");
+    expect(effectivePlan(state({ ...trial, plan: "buddy_plus", status: "expired" }), NOW)).toBe("buddy_pro");
+    expect(effectivePlan(state({ ...trial, plan: "free", status: "free", trialEndsAtMs: NOW }), NOW)).toBe("free");
+    expect(effectivePlan(state({ ...trial, plan: "free", status: "free", trialId: null }), NOW)).toBe("free");
+  });
 });
 
 describe("overrides (spec §10, §11)", () => {

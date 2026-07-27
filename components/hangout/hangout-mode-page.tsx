@@ -32,6 +32,7 @@ import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 import { countActiveRequests } from "@/lib/social/hangout-requests";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
+import { withTimeout } from "@/lib/network/resilience";
 import type {
   HangoutActivityType,
   HangoutAudienceType,
@@ -125,6 +126,7 @@ export function HangoutModePage({
   const [isPending, startTransition] = useTransition();
 
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestRefreshRef = useRef<Promise<void> | null>(null);
 
   // Derive activation straight from the source of truth so an expired session
   // flips the orb back to inactive without a manual refresh.
@@ -151,16 +153,27 @@ export function HangoutModePage({
   // current active Hangout, so requests from an unrelated session never leak in.
   const activeHangoutId = activeHangout?.id ?? null;
   const refreshRequests = useCallback(async () => {
-    try {
-      const state = await getOwnerHangoutRequestsAction();
-      if (state.hangoutId && state.hangoutId === activeHangoutId) {
-        setRequests(state.requests);
-      } else if (!state.hangoutId) {
-        setRequests([]);
+    if (requestRefreshRef.current) return requestRefreshRef.current;
+
+    const refresh = (async () => {
+      try {
+        const state = await withTimeout(getOwnerHangoutRequestsAction(), {
+          operation: "refresh hangout requests"
+        });
+        if (state.hangoutId && state.hangoutId === activeHangoutId) {
+          setRequests(state.requests);
+        } else if (!state.hangoutId) {
+          setRequests([]);
+        }
+      } catch {
+        // A failed refetch simply leaves the last known canonical state in place.
+      } finally {
+        requestRefreshRef.current = null;
       }
-    } catch {
-      // A failed refetch simply leaves the last known canonical state in place.
-    }
+    })();
+
+    requestRefreshRef.current = refresh;
+    return refresh;
   }, [activeHangoutId]);
 
   // Live count updates for the owner: refetch on an interval while the Hangout

@@ -38,6 +38,7 @@ import {
   resolveNotificationDestination,
   type NotificationDestination
 } from "@/lib/notifications/destination";
+import { fetchWithTimeout } from "@/lib/network/resilience";
 import { cn } from "@/lib/utils";
 
 type NotificationItem = {
@@ -123,36 +124,44 @@ export function NotificationsPageContent({
 
   useEffect(() => {
     let isMounted = true;
+    let loadInFlight: Promise<void> | null = null;
 
-    async function loadNotifications() {
-      try {
-        const response = await fetch("/api/notifications", {
-          credentials: "include",
-          cache: "no-store"
-        });
+    function loadNotifications() {
+      if (loadInFlight) return loadInFlight;
 
-        if (!response.ok) {
-          setFeedback("Could not load notifications.");
-          return;
+      loadInFlight = (async () => {
+        try {
+          const response = await fetchWithTimeout("/api/notifications", {
+            credentials: "include",
+            cache: "no-store"
+          }, 12_000, "load notifications");
+
+          if (!response.ok) {
+            if (isMounted) setFeedback("Could not load notifications.");
+            return;
+          }
+
+          const data = (await response.json()) as { notifications: ApiNotification[] };
+
+          if (!isMounted) return;
+
+          setFeedback("");
+          setNotifications(data.notifications.map(toNotificationItem));
+          window.dispatchEvent(
+            new CustomEvent("mad-buddy:notifications-updated", {
+              detail: { unreadCount: data.notifications.filter((notification) => !notification.is_read).length }
+            })
+          );
+        } catch {
+          if (isMounted) {
+            setFeedback("Could not load notifications.");
+          }
+        } finally {
+          loadInFlight = null;
         }
+      })();
 
-        const data = (await response.json()) as { notifications: ApiNotification[] };
-
-        if (!isMounted) {
-          return;
-        }
-
-        setNotifications(data.notifications.map(toNotificationItem));
-        window.dispatchEvent(
-          new CustomEvent("mad-buddy:notifications-updated", {
-            detail: { unreadCount: data.notifications.filter((notification) => !notification.is_read).length }
-          })
-        );
-      } catch {
-        if (isMounted) {
-          setFeedback("Could not load notifications.");
-        }
-      }
+      return loadInFlight;
     }
 
     const onFocus = () => void loadNotifications();
@@ -193,11 +202,11 @@ export function NotificationsPageContent({
       );
 
       try {
-        const response = await fetch("/api/notifications/read", {
+        const response = await fetchWithTimeout("/api/notifications/read", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({})
-        });
+        }, 12_000, "mark all notifications read");
 
         setFeedback(
           response.ok
@@ -231,11 +240,11 @@ export function NotificationsPageContent({
       })
     );
 
-    void fetch("/api/notifications/read", {
+    void fetchWithTimeout("/api/notifications/read", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notificationId: notification.id })
-    }).then((response) => {
+    }, 12_000, "mark notification read").then((response) => {
       if (response.ok) return;
       setNotifications((current) =>
         current.map((item) => (item.id === notification.id ? { ...item, unread: true } : item))
@@ -301,11 +310,11 @@ export function NotificationsPageContent({
 
     startTransition(async () => {
       try {
-        const response = await fetch("/api/notifications/read", {
+        const response = await fetchWithTimeout("/api/notifications/read", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ids, isRead })
-        });
+        }, 12_000, "update selected notifications");
         if (!response.ok) throw new Error("bulk update failed");
         showToast(isRead ? "Updates marked as read" : "Updates marked as unread");
       } catch {
@@ -339,11 +348,11 @@ export function NotificationsPageContent({
 
     startTransition(async () => {
       try {
-        const response = await fetch("/api/notifications", {
+        const response = await fetchWithTimeout("/api/notifications", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ids })
-        });
+        }, 12_000, "delete selected notifications");
         const result = (await response.json().catch(() => null)) as { deletedIds?: string[] } | null;
         const deletedIds = new Set(result?.deletedIds ?? []);
         if (!response.ok || ids.some((id) => !deletedIds.has(id))) {
@@ -811,7 +820,7 @@ function NotificationCard({
       disabled={false}
       aria-label={`Delete: ${notification.title}`}
       title="Delete update"
-      className="focus-ring my-auto mr-1 grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+      className="focus-ring my-auto mr-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
     >
       <Trash2 className="h-4 w-4" aria-hidden="true" />
     </button>

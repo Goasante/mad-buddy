@@ -1,5 +1,18 @@
 apply plugin: 'com.android.application'
 
+// Release signing is loaded from keystore.properties (gitignored) so the
+// keystore path and passwords are NEVER committed. When the file is absent
+// (local debug builds, CI without release secrets) the release build simply
+// stays unsigned rather than failing — sign it explicitly for distribution.
+// A properly signed release enables the v2/v3 APK signature schemes that
+// current Android / Play Protect require; a debug-signed sideload does not.
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+def hasReleaseKeystore = keystorePropertiesFile.exists()
+if (hasReleaseKeystore) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.madbuddy.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,10 +29,28 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseKeystore) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                // Modern signature schemes. Play Protect distrusts apps signed
+                // only with the legacy v1 (JAR) scheme.
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseKeystore) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

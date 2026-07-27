@@ -260,14 +260,17 @@ export async function searchUsersAction(query: string): Promise<{
   return searchUsers(userId, query);
 }
 
-export async function sendFriendRequestAction(targetUserId: string): Promise<IntegrationActionState> {
+export async function sendFriendRequestAction(
+  targetUserId: string,
+  source: "friend" | "socialize" = "friend"
+): Promise<IntegrationActionState> {
   const userId = await getAuthedUserId();
 
   if (!userId) {
     return { ok: false, message: "Log in before sending Muddy requests." };
   }
 
-  const result = await sendFriendRequest(userId, targetUserId);
+  const result = await sendFriendRequest(userId, targetUserId, source);
 
   if (result.ok) {
     revalidatePath("/friends");

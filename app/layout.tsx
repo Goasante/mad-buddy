@@ -4,6 +4,7 @@ import { GoogleAnalytics } from "@next/third-parties/google";
 import CapacitorBackButton from "@/components/CapacitorBackButton";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import { ThemeProvider } from "@/components/theme/theme-provider";
+import { resolveBuildId } from "@/lib/pwa/update";
 import { getSiteUrl } from "@/lib/seo";
 import "./globals.css";
 
@@ -69,6 +70,7 @@ const themeScript = `
 `;
 
 export default async function RootLayout({ children }: RootLayoutProps) {
+  const buildId = resolveBuildId(process.env);
   const gaMeasurementId =
     process.env.NODE_ENV === "production" ? process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID : undefined;
   // The CSP nonce proxy.ts minted for this request. The theme bootstrap is an
@@ -84,7 +86,7 @@ export default async function RootLayout({ children }: RootLayoutProps) {
         <ThemeProvider>
           <CapacitorBackButton />
           {children}
-          <ServiceWorkerRegistration />
+          <ServiceWorkerRegistration currentBuildId={buildId} />
         </ThemeProvider>
         {gaMeasurementId ? <GoogleAnalytics gaId={gaMeasurementId} /> : null}
       </body>

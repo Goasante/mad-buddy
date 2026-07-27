@@ -22,6 +22,34 @@ export type SubscriptionStatus =
   | "attention"
   | "cancelled"
   | "expired";
+export type PremiumTrialStatus = "active" | "expired" | "converted" | "cancelled" | "revoked";
+export type PremiumTrialEventType =
+  | "eligible"
+  | "started"
+  | "active"
+  | "ending_soon"
+  | "expired"
+  | "converted"
+  | "cancelled"
+  | "revoked"
+  | "premium_feature_used";
+export type ExperimentStatus = "draft" | "scheduled" | "running" | "paused" | "completed" | "cancelled";
+export type ExperimentPlatform = "web" | "android" | "ios";
+export type ExperimentAudience = "all_eligible" | "selected_testers";
+export type BillingEventType =
+  | "pricing_viewed"
+  | "checkout_started"
+  | "payment_attempted"
+  | "payment_succeeded"
+  | "payment_failed"
+  | "payment_recovered"
+  | "subscription_activated"
+  | "subscription_renewed"
+  | "subscription_cancelled"
+  | "subscription_expired"
+  | "plan_upgraded"
+  | "plan_downgraded";
+export type BillingEventSource = "app_server" | "paystack_webhook" | "paystack_verify" | "admin";
 export type ReportStatus = "open" | "reviewing" | "resolved" | "dismissed";
 export type MeetupStatus = "pending" | "accepted" | "declined" | "expired";
 
@@ -295,6 +323,128 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["subscriptions"]["Insert"]>;
         Relationships: [];
       };
+      premium_trial_config: {
+        Row: RowWithTimestamps & {
+          key: "default";
+          enabled: boolean;
+          eligible_plan: Exclude<SubscriptionPlan, "free">;
+          duration_days: number;
+          eligibility_rules: Json;
+          campaign_source: string | null;
+          available_from: string | null;
+          available_until: string | null;
+          updated_by: string | null;
+        };
+        Insert: {
+          key?: "default";
+          enabled?: boolean;
+          eligible_plan?: Exclude<SubscriptionPlan, "free">;
+          duration_days?: number;
+          eligibility_rules?: Json;
+          campaign_source?: string | null;
+          available_from?: string | null;
+          available_until?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["premium_trial_config"]["Insert"]>;
+        Relationships: [];
+      };
+      premium_trials: {
+        Row: RowWithTimestamps & {
+          id: string;
+          user_id: string;
+          plan: Exclude<SubscriptionPlan, "free">;
+          status: PremiumTrialStatus;
+          trial_started_at: string;
+          trial_ends_at: string;
+          source: "self_service" | "owner_grant" | "campaign";
+          campaign_source: string | null;
+          owner_override: boolean;
+          override_reason: string | null;
+          granted_by: string | null;
+          converted_at: string | null;
+          cancelled_at: string | null;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          revocation_reason: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          plan: Exclude<SubscriptionPlan, "free">;
+          status?: PremiumTrialStatus;
+          trial_started_at: string;
+          trial_ends_at: string;
+          source?: "self_service" | "owner_grant" | "campaign";
+          campaign_source?: string | null;
+          owner_override?: boolean;
+          override_reason?: string | null;
+          granted_by?: string | null;
+          converted_at?: string | null;
+          cancelled_at?: string | null;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          revocation_reason?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["premium_trials"]["Insert"]>;
+        Relationships: [];
+      };
+      premium_trial_events: {
+        Row: {
+          id: string;
+          trial_id: string | null;
+          user_id: string;
+          event_type: PremiumTrialEventType;
+          event_key: string;
+          feature_key: string | null;
+          metadata: Json;
+          occurred_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          trial_id?: string | null;
+          user_id: string;
+          event_type: PremiumTrialEventType;
+          event_key: string;
+          feature_key?: string | null;
+          metadata?: Json;
+          occurred_at?: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      premium_trial_notifications: {
+        Row: RowWithTimestamps & {
+          id: string;
+          trial_id: string;
+          user_id: string;
+          notification_type: "started" | "ending_soon" | "expired" | "converted" | "revoked";
+          delivery_status: "pending" | "processing" | "delivered" | "failed";
+          attempts: number;
+          last_attempt_at: string | null;
+          delivered_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          trial_id: string;
+          user_id: string;
+          notification_type: "started" | "ending_soon" | "expired" | "converted" | "revoked";
+          delivery_status?: "pending" | "processing" | "delivered" | "failed";
+          attempts?: number;
+          last_attempt_at?: string | null;
+          delivered_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["premium_trial_notifications"]["Insert"]>;
+        Relationships: [];
+      };
       paystack_webhook_events: {
         Row: {
           id: string;
@@ -307,6 +457,152 @@ export type Database = {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["paystack_webhook_events"]["Insert"]>;
+        Relationships: [];
+      };
+      billing_events: {
+        Row: {
+          id: string;
+          event_type: BillingEventType;
+          source: BillingEventSource;
+          provider: string;
+          user_id: string | null;
+          subscription_id: string | null;
+          subscription_plan: SubscriptionPlan;
+          previous_plan: SubscriptionPlan | null;
+          amount_minor: number | null;
+          provider_fee_minor: number | null;
+          net_amount_minor: number | null;
+          fee_status: "verified" | "unavailable";
+          currency: string | null;
+          transaction_reference: string | null;
+          provider_event_id: string | null;
+          dedupe_key: string;
+          occurred_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_type: BillingEventType;
+          source: BillingEventSource;
+          provider?: string;
+          user_id?: string | null;
+          subscription_id?: string | null;
+          subscription_plan?: SubscriptionPlan;
+          previous_plan?: SubscriptionPlan | null;
+          amount_minor?: number | null;
+          provider_fee_minor?: number | null;
+          net_amount_minor?: number | null;
+          fee_status?: "verified" | "unavailable";
+          currency?: string | null;
+          transaction_reference?: string | null;
+          provider_event_id?: string | null;
+          dedupe_key: string;
+          occurred_at?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["billing_events"]["Insert"]>;
+        Relationships: [];
+      };
+      financial_snapshots: {
+        Row: {
+          id: string;
+          snapshot_date: string;
+          currency: string;
+          active_free_users: number;
+          buddy_plus_users: number;
+          buddy_pro_users: number;
+          active_paid_subscriptions: number;
+          opening_mrr_minor: number | null;
+          new_mrr_minor: number | null;
+          expansion_mrr_minor: number | null;
+          reactivation_mrr_minor: number | null;
+          contraction_mrr_minor: number | null;
+          churned_mrr_minor: number | null;
+          ending_mrr_minor: number;
+          reconciliation_status: "baseline" | "reconciled" | "reconciliation_required";
+          reconciliation_reason:
+            | "opening_snapshot_unavailable"
+            | "lifecycle_movements_do_not_match_trusted_mrr"
+            | null;
+          reconciliation_difference_minor: number | null;
+          captured_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          snapshot_date: string;
+          currency: string;
+          active_free_users: number;
+          buddy_plus_users: number;
+          buddy_pro_users: number;
+          active_paid_subscriptions: number;
+          opening_mrr_minor?: number | null;
+          new_mrr_minor?: number | null;
+          expansion_mrr_minor?: number | null;
+          reactivation_mrr_minor?: number | null;
+          contraction_mrr_minor?: number | null;
+          churned_mrr_minor?: number | null;
+          ending_mrr_minor: number;
+          reconciliation_status?: "baseline" | "reconciled" | "reconciliation_required";
+          reconciliation_reason?:
+            | "opening_snapshot_unavailable"
+            | "lifecycle_movements_do_not_match_trusted_mrr"
+            | null;
+          reconciliation_difference_minor?: number | null;
+          captured_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["financial_snapshots"]["Insert"]>;
+        Relationships: [];
+      };
+      provider_cost_records: {
+        Row: {
+          id: string;
+          provider: string;
+          billing_period: string;
+          currency: string;
+          amount_minor: number;
+          category: "database" | "hosting" | "email" | "sms" | "media_storage" | "push" | "api" | "other";
+          source: "manual" | "invoice" | "api";
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          provider: string;
+          billing_period: string;
+          currency: string;
+          amount_minor: number;
+          category: Database["public"]["Tables"]["provider_cost_records"]["Row"]["category"];
+          source: Database["public"]["Tables"]["provider_cost_records"]["Row"]["source"];
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["provider_cost_records"]["Insert"]>;
+        Relationships: [];
+      };
+      business_alert_rules: {
+        Row: {
+          rule_key: "mrr_drop" | "cancellation_spike" | "payment_failure_spike" | "recovery_rate_drop" | "infrastructure_cost_spike";
+          enabled: boolean;
+          threshold_percent: number;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          rule_key: Database["public"]["Tables"]["business_alert_rules"]["Row"]["rule_key"];
+          enabled?: boolean;
+          threshold_percent: number;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["business_alert_rules"]["Insert"]>;
         Relationships: [];
       };
       friend_circles: {
@@ -2948,6 +3244,7 @@ export type Database = {
           created_by: string | null;
           created_at: string;
           updated_at: string;
+          updated_by: string | null;
         };
         Insert: {
           id?: string;
@@ -2958,6 +3255,7 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          updated_by?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["feature_flags"]["Insert"]>;
         Relationships: [];
@@ -2984,6 +3282,148 @@ export type Database = {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["feature_flag_rules"]["Insert"]>;
+        Relationships: [];
+      };
+      experiments: {
+        Row: {
+          id: string;
+          key: string;
+          name: string;
+          description: string;
+          hypothesis: string;
+          status: ExperimentStatus;
+          parent_feature_flag_id: string | null;
+          allocation_percentage: number;
+          audience: ExperimentAudience;
+          target_platforms: ExperimentPlatform[];
+          target_plans: SubscriptionPlan[];
+          conflict_group: string | null;
+          starts_at: string | null;
+          ends_at: string | null;
+          primary_metric: string;
+          secondary_metrics: string[];
+          guardrail_metrics: string[];
+          created_by: string;
+          started_at: string | null;
+          paused_at: string | null;
+          completed_at: string | null;
+          cancelled_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          key: string;
+          name: string;
+          description: string;
+          hypothesis: string;
+          status?: ExperimentStatus;
+          parent_feature_flag_id?: string | null;
+          allocation_percentage?: number;
+          audience?: ExperimentAudience;
+          target_platforms?: ExperimentPlatform[];
+          target_plans?: SubscriptionPlan[];
+          conflict_group?: string | null;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          primary_metric: string;
+          secondary_metrics?: string[];
+          guardrail_metrics?: string[];
+          created_by: string;
+          started_at?: string | null;
+          paused_at?: string | null;
+          completed_at?: string | null;
+          cancelled_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["experiments"]["Insert"]>;
+        Relationships: [];
+      };
+      experiment_variants: {
+        Row: {
+          id: string;
+          experiment_id: string;
+          key: string;
+          name: string;
+          description: string;
+          weight_basis_points: number;
+          is_control: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          experiment_id: string;
+          key: string;
+          name: string;
+          description?: string;
+          weight_basis_points: number;
+          is_control?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["experiment_variants"]["Insert"]>;
+        Relationships: [];
+      };
+      experiment_testers: {
+        Row: {
+          id: string;
+          experiment_id: string;
+          user_id: string | null;
+          added_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          experiment_id: string;
+          user_id: string;
+          added_by: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["experiment_testers"]["Insert"]>;
+        Relationships: [];
+      };
+      experiment_assignments: {
+        Row: {
+          id: string;
+          experiment_id: string;
+          user_id: string | null;
+          variant_id: string;
+          assigned_plan: SubscriptionPlan;
+          assigned_platform: ExperimentPlatform;
+          assigned_at: string;
+        };
+        Insert: {
+          id?: string;
+          experiment_id: string;
+          user_id: string;
+          variant_id: string;
+          assigned_plan: SubscriptionPlan;
+          assigned_platform: ExperimentPlatform;
+          assigned_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["experiment_assignments"]["Insert"]>;
+        Relationships: [];
+      };
+      experiment_exposures: {
+        Row: {
+          id: string;
+          experiment_id: string;
+          assignment_id: string;
+          user_id: string | null;
+          variant_id: string;
+          platform: ExperimentPlatform;
+          first_exposed_at: string;
+        };
+        Insert: {
+          id?: string;
+          experiment_id: string;
+          assignment_id: string;
+          user_id: string;
+          variant_id: string;
+          platform: ExperimentPlatform;
+          first_exposed_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["experiment_exposures"]["Insert"]>;
         Relationships: [];
       };
       jobs: {
@@ -3061,6 +3501,9 @@ export type Database = {
           payload: Json;
           occurred_at: string;
           created_at: string;
+          dedupe_key: string | null;
+          feature_key: string | null;
+          subscription_plan: SubscriptionPlan;
         };
         Insert: {
           id?: string;
@@ -3072,9 +3515,42 @@ export type Database = {
           payload?: Json;
           occurred_at?: string;
           created_at?: string;
+          dedupe_key?: string | null;
+          feature_key?: string | null;
+          subscription_plan?: SubscriptionPlan;
         };
         // Append-only: a database trigger rejects UPDATE and DELETE.
         Update: never;
+        Relationships: [];
+      };
+      analytics_daily_user_facts: {
+        Row: {
+          id: string;
+          event_date: string;
+          user_id: string;
+          event_name: string;
+          feature_key: string;
+          subscription_plan: SubscriptionPlan;
+          action_count: number;
+          first_occurred_at: string;
+          last_occurred_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_date: string;
+          user_id: string;
+          event_name: string;
+          feature_key?: string;
+          subscription_plan?: SubscriptionPlan;
+          action_count?: number;
+          first_occurred_at: string;
+          last_occurred_at: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["analytics_daily_user_facts"]["Insert"]>;
         Relationships: [];
       };
       privacy_setup_versions: {
@@ -3100,6 +3576,111 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      get_revenue_subscription_snapshot: {
+        Args: { p_now?: string };
+        Returns: Array<{
+          stored_plan: SubscriptionPlan;
+          effective_plan: SubscriptionPlan;
+          in_grace: boolean;
+          grace_expired: boolean;
+          user_count: number;
+        }>;
+      };
+      get_admin_media_storage_summary: {
+        Args: Record<PropertyKey, never>;
+        Returns: Array<{
+          context_type: string;
+          content_type: string;
+          object_count: number;
+          original_bytes: number;
+          variant_bytes: number;
+        }>;
+      };
+      record_product_event: {
+        Args: {
+          p_event_name: string;
+          p_actor_id: string;
+          p_resource_type: string;
+          p_resource_id: string;
+          p_feature_key?: string;
+          p_occurred_at?: string;
+        };
+        Returns: string | null;
+      };
+      create_experiment_definition: {
+        Args: { p_definition: Json; p_created_by: string };
+        Returns: string;
+      };
+      process_experiment_schedules: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
+      };
+      feature_flag_enabled_for_subject: {
+        Args: {
+          p_flag_id: string;
+          p_user_id: string;
+          p_plan: SubscriptionPlan;
+          p_platform: ExperimentPlatform;
+          p_now: string;
+        };
+        Returns: boolean;
+      };
+      resolve_experiment_assignment: {
+        Args: {
+          p_experiment_key: string;
+          p_user_id: string;
+          p_platform: ExperimentPlatform;
+        };
+        Returns: Array<{
+          experiment_id: string;
+          assignment_id: string;
+          variant_key: string;
+          variant_name: string;
+          is_control: boolean;
+        }>;
+      };
+      record_experiment_exposure: {
+        Args: {
+          p_experiment_key: string;
+          p_user_id: string;
+          p_platform: ExperimentPlatform;
+        };
+        Returns: Array<{
+          experiment_id: string;
+          assignment_id: string;
+          variant_key: string;
+          variant_name: string;
+          is_control: boolean;
+          first_exposure: boolean;
+        }>;
+      };
+      start_premium_trial: {
+        Args: {
+          p_user_id: string;
+          p_owner_override?: boolean;
+          p_granted_by?: string | null;
+          p_override_reason?: string | null;
+          p_override_plan?: SubscriptionPlan | null;
+          p_source?: string;
+        };
+        Returns: Database["public"]["Tables"]["premium_trials"]["Row"];
+      };
+      convert_premium_trial: {
+        Args: { p_user_id: string; p_paid_plan: SubscriptionPlan };
+        Returns: string | null;
+      };
+      end_premium_trial: {
+        Args: { p_trial_id: string; p_action: string; p_actor_id?: string | null; p_reason?: string | null };
+        Returns: boolean;
+      };
+      process_premium_trial_lifecycle: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
+      };
+      claim_premium_trial_notifications: {
+        Args: { p_limit?: number };
+        Returns: Database["public"]["Tables"]["premium_trial_notifications"]["Row"][];
+      };
       accept_friend_request: {
         Args: { p_request_id: string };
         Returns: Array<{ sender_id: string; receiver_id: string }>;
@@ -3384,7 +3965,7 @@ export type QuickActionType =
 
 // --- Batch 8: Discovery, Invites, QR, Contact Matching, Account Trust ---
 
-export type RequestContextType = "school" | "work" | "church" | "event" | "friend" | "other";
+export type RequestContextType = "school" | "work" | "church" | "event" | "friend" | "socialize" | "other";
 
 export type InviteType = "personal" | "event" | "circle" | "community";
 export type InviteDeliveryType = "link" | "qr";

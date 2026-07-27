@@ -34,7 +34,9 @@ describe("public PWA boot resources", () => {
       "public/icons/pwa/icon-192.png",
       "public/icons/pwa/icon-512.png",
       "public/icons/pwa/icon-maskable-512.png",
-      "public/apple-touch-icon.png",
+      // App Router serves this as /apple-icon.png from the app metadata file;
+      // a duplicate public/apple-touch-icon.png is unnecessary.
+      "app/apple-icon.png",
       "app/favicon.ico"
     ]) {
       expect(() => readFileSync(join(process.cwd(), asset))).not.toThrow();

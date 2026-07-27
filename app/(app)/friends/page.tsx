@@ -5,7 +5,7 @@ import {
 } from "@/components/friends/friends-page";
 import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import { actionableFriendRequests } from "@/lib/friends/relationship-state";
 
 export const dynamic = "force-dynamic";
@@ -29,10 +29,7 @@ async function loadFriendNetwork(): Promise<{
   closeFriendIds: string[];
   glowColorByFriendId: Record<string, string>;
 }> {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) {
     return { users: [], circles: [], closeFriendIds: [], glowColorByFriendId: {} };

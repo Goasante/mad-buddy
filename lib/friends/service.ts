@@ -8,6 +8,7 @@ import { createRequestId, errorType, logBackendEvent } from "@/lib/observability
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import type { Database } from "@/lib/supabase/database.types";
+import { isSocializeEnabled } from "@/lib/features/feature-flags";
 
 /**
  * Transport-agnostic Muddies (friends) service.
@@ -23,7 +24,7 @@ import type { Database } from "@/lib/supabase/database.types";
  * (cookie or bearer token) and passed in — it can never be forged by the body.
  */
 
-export type ServiceResult = { ok: boolean; message: string };
+export type ServiceResult = { ok: boolean; message: string; resourceId?: string; created?: boolean };
 
 export type SearchUserResult = {
   id: string;
@@ -323,7 +324,11 @@ export async function listIncomingRequests(
 }
 
 /** Send a pending Muddy request from `userId` to `targetUserId`. */
-export async function sendFriendRequest(userId: string, targetUserId: string): Promise<ServiceResult> {
+export async function sendFriendRequest(
+  userId: string,
+  targetUserId: string,
+  source: "friend" | "socialize" = "friend"
+): Promise<ServiceResult> {
   const requestId = createRequestId();
   const startedAt = Date.now();
 
@@ -342,6 +347,18 @@ export async function sendFriendRequest(userId: string, targetUserId: string): P
   }
 
   const admin = createSupabaseAdminClient();
+  let requestContext: "friend" | "socialize" = "friend";
+  if (source === "socialize" && await isSocializeEnabled(admin)) {
+    const { data: activeSocializeSessions } = await admin
+      .from("socialize_sessions")
+      .select("user_id")
+      .in("user_id", [userId, parsedTarget.data])
+      .eq("status", "active")
+      .gt("expires_at", new Date().toISOString());
+    if (new Set((activeSocializeSessions ?? []).map((session) => session.user_id)).size === 2) {
+      requestContext = "socialize";
+    }
+  }
   const { data: existingProfile } = await admin
     .from("profiles")
     .select("user_id")
@@ -417,11 +434,16 @@ export async function sendFriendRequest(userId: string, targetUserId: string): P
   // notifications from the authenticated role, so the anon/cookie client is
   // denied. The sender is already resolved from the authenticated session, so
   // this is safe — sender_id can't be forged.
-  const { error } = await admin.from("friend_requests").insert({
-    sender_id: userId,
-    receiver_id: parsedTarget.data,
-    status: "pending"
-  });
+  const { data: createdRequest, error } = await admin
+    .from("friend_requests")
+    .insert({
+      sender_id: userId,
+      receiver_id: parsedTarget.data,
+      status: "pending",
+      context_type: requestContext
+    })
+    .select("id")
+    .single();
 
   if (error) {
     logBackendEvent("warn", {
@@ -462,7 +484,7 @@ export async function sendFriendRequest(userId: string, targetUserId: string): P
     userId
   });
 
-  return { ok: true, message: "Muddy request sent." };
+  return { ok: true, message: "Muddy request sent.", resourceId: createdRequest?.id, created: true };
 }
 
 /**

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { effectivePlan } from "@/lib/billing/entitlements";
+import { billingAccessSource, effectivePlan } from "@/lib/billing/entitlements";
 import { ensureTierOverridesWarm } from "@/lib/billing/tier-overrides-loader";
 import { loadBillingState } from "@/lib/billing/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -26,12 +26,16 @@ export async function getCurrentSubscriptionAccess(userId: string) {
   // without paying a DB round trip on every page load.
   await ensureTierOverridesWarm(admin);
   const state = await loadBillingState(admin, userId);
-  const plan = effectivePlan(state, Date.now());
+  const nowMs = Date.now();
+  const plan = effectivePlan(state, nowMs);
 
   return {
     plan,
     status: state.status,
-    hasPremium: plan !== "free"
+    hasPremium: plan !== "free",
+    accessSource: billingAccessSource(state, nowMs),
+    trialEndsAt: state.trialEndsAtMs ? new Date(state.trialEndsAtMs).toISOString() : null,
+    trialId: state.trialId ?? null
   };
 }
 
@@ -40,6 +44,15 @@ export async function requirePremiumPlan(userId: string, requiredPlan: Exclude<S
 
   if (!access.hasPremium || planRank[access.plan] < planRank[requiredPlan]) {
     throw new Error(`${requiredPlan} subscription required.`);
+  }
+  if (access.accessSource === "trial" && access.trialId) {
+    const admin = createSupabaseAdminClient();
+    const { recordTrialFeatureUse } = await import("@/lib/trials/service");
+    await recordTrialFeatureUse(admin, {
+      userId,
+      featureKey: `premium_access:${requiredPlan}`,
+      resourceId: access.trialId
+    });
   }
 
   return access;

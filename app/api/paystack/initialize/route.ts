@@ -7,6 +7,7 @@ import { guardFeature } from "@/lib/admin/enforcement";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { recordBillingEvent } from "@/lib/revenue/events";
 
 const initializeRequestSchema = z.object({
   plan: z.enum(["plus", "pro"])
@@ -81,6 +82,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: guard.message }, { status: 503 });
   }
 
+  try {
+    await recordBillingEvent(admin, {
+      event_type: "checkout_started",
+      source: "app_server",
+      user_id: user.id,
+      subscription_plan: plan.appPlan,
+      amount_minor: plan.amount,
+      currency: plan.currency,
+      dedupe_key: `checkout_started:${requestId}`
+    });
+  } catch (error) {
+    logBackendEvent("error", {
+      requestId,
+      route,
+      statusCode: 503,
+      latencyMs: Date.now() - startedAt,
+      userId: user.id,
+      errorType: errorType(error)
+    });
+    return NextResponse.json({ error: "Checkout is temporarily unavailable. Try again shortly." }, { status: 503 });
+  }
+
   const { data: subscription } = await admin
     .from("subscriptions")
     .select("paystack_customer_code")
@@ -147,6 +170,30 @@ export async function POST(request: Request) {
         }
       }
     });
+
+    try {
+      await recordBillingEvent(admin, {
+        event_type: "payment_attempted",
+        source: "app_server",
+        user_id: user.id,
+        subscription_plan: plan.appPlan,
+        amount_minor: plan.amount,
+        currency: plan.currency,
+        transaction_reference: transaction.reference,
+        dedupe_key: `paystack:payment_attempted:${transaction.reference}`
+      });
+    } catch (error) {
+      // Paystack already created the transaction. Do not invite a duplicate
+      // charge by returning an error; the verified webhook remains canonical.
+      logBackendEvent("error", {
+        requestId,
+        route,
+        statusCode: 200,
+        latencyMs: Date.now() - startedAt,
+        userId: user.id,
+        errorType: errorType(error)
+      });
+    }
 
     logBackendEvent("info", {
       requestId,

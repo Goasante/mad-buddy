@@ -11,6 +11,10 @@ const pushToggle = readFileSync(
   join(process.cwd(), "components", "settings", "push-toggle.tsx"),
   "utf8"
 );
+const browserPush = readFileSync(
+  join(process.cwd(), "hooks", "use-browser-push.ts"),
+  "utf8"
+);
 
 describe("Mad Buddy service worker safety and reliability", () => {
   it("supports push, safe clicks, activation and subscription replacement", () => {
@@ -35,7 +39,8 @@ describe("Mad Buddy service worker safety and reliability", () => {
   });
 
   it("waits for readiness and exposes a deliberate update lifecycle", () => {
-    expect(pushToggle).toContain("navigator.serviceWorker.ready");
+    expect(pushToggle).toContain("useBrowserPush");
+    expect(browserPush).toContain("navigator.serviceWorker.ready");
     expect(registration).toContain("updatefound");
     expect(registration).toContain("controllerchange");
     expect(registration).toContain("SKIP_WAITING");

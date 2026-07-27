@@ -12,6 +12,7 @@ import {
 } from "@/lib/social/socialize";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
+import { isSocializeEnabled } from "@/lib/features/feature-flags";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 
 /**
@@ -88,6 +89,7 @@ export async function getCurrentSocialize(userId: string): Promise<SocializeSess
   if (envMissing()) return null;
   try {
     const admin = createSupabaseAdminClient();
+    if (!(await isSocializeEnabled(admin))) return null;
     const { data } = await admin
       .from("socialize_sessions")
       .select("id, activity, note, area_tier, starts_at, expires_at, status")
@@ -118,6 +120,9 @@ export async function activateSocialize(userId: string, input: unknown): Promise
 
   try {
     const admin = createSupabaseAdminClient();
+    if (!(await isSocializeEnabled(admin))) {
+      return { ok: false, message: "Socialize is not available right now." };
+    }
     // One active session per user: end any existing active one first.
     await admin
       .from("socialize_sessions")
@@ -160,6 +165,9 @@ export async function updateSocialize(userId: string, input: unknown): Promise<S
 
   try {
     const admin = createSupabaseAdminClient();
+    if (!(await isSocializeEnabled(admin))) {
+      return { ok: false, message: "Socialize is not available right now." };
+    }
     const { data, error } = await admin
       .from("socialize_sessions")
       .update({
@@ -207,6 +215,7 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
   if (envMissing()) return [];
   try {
     const admin = createSupabaseAdminClient();
+    if (!(await isSocializeEnabled(admin))) return [];
 
     const { data: mySession } = await admin
       .from("socialize_sessions")

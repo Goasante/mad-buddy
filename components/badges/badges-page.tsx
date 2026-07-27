@@ -46,12 +46,12 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
   const [streaks, setStreaks] = useState(overview.streaks);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
+  const activeTab: BadgesTab = requestedAchievement ? "achievements" : tab;
 
   const earnedCount = overview.achievements.filter((achievement) => achievement.earned).length;
 
   useEffect(() => {
     if (!requestedAchievement) return;
-    setTab("achievements");
     const frame = window.requestAnimationFrame(() => {
       document.getElementById(`achievement-${requestedAchievement}`)?.scrollIntoView({
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
@@ -96,7 +96,7 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
             onClick={() => setTab(item.id)}
             className={cn(
               "focus-ring safe-motion border-b-2 px-4 py-3 text-sm font-medium",
-              tab === item.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+              activeTab === item.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
             {item.label}
@@ -104,7 +104,7 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
         ))}
       </div>
 
-      {tab === "achievements" ? (
+      {activeTab === "achievements" ? (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             {earnedCount} of {overview.achievements.length} earned. Criteria are always visible, nothing is random.
@@ -158,7 +158,7 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
         </div>
       ) : null}
 
-      {tab === "streaks" ? (
+      {activeTab === "streaks" ? (
         <div className="space-y-3">
           {streaks.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -196,7 +196,7 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
         </div>
       ) : null}
 
-      {tab === "recap" ? (
+      {activeTab === "recap" ? (
         overview.recap ? (
           <div className="space-y-4 rounded-2xl border border-border/70 bg-card/50 p-5">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

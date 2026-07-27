@@ -1,12 +1,9 @@
 import { NotificationsPageContent } from "@/components/notifications/notifications-page";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 
 export default async function NotificationsPage() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const access = user ? await getCurrentSubscriptionAccess(user.id) : null;
 
   return <NotificationsPageContent canSendCustomMessages={access?.hasPremium ?? false} />;

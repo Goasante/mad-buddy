@@ -12,17 +12,21 @@ import {
 } from "@/lib/safety/safe-arrival-service";
 import {
   arrivedMessage,
+  cancelledMessage,
   canTransitionSafeArrival,
   canTravellerAct,
   extendedArrivalMs,
   extendedMessage,
+  isTerminalSafeArrivalStatus,
   safeArrivalLimitsFor,
   validateContactCount,
   validateDestinationLabel,
   validateExpectedArrival,
   validateExtension,
-  validateGracePeriod
+  validateGracePeriod,
+  watcherAcceptedMessage
 } from "@/lib/safety/safe-arrival";
+import type { SafeArrivalStatus } from "@/lib/supabase/database.types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -172,7 +176,9 @@ export async function createSafeArrivalAction(input: unknown): Promise<SafeArriv
       deliverNotification(admin, {
         userId: contactId,
         priority: "critical",
-        type: "safe_arrival:request",
+        // The session id makes this deep-link to the exact Safe Arrival where
+        // the contact can accept, rather than the feature root.
+        type: `safe_arrival:${session.id}`,
         title: "Safe Arrival request",
         message: `${name} is heading to ${parsed.data.destinationLabel.trim()} and expects to arrive by ${arrivalLabel}.`
       })
@@ -204,11 +210,15 @@ export async function acknowledgeSafeArrivalAction(
   if (!access.exists) return { ok: false, message: "Session not found." };
   if (!access.isContact) return { ok: false, message: "You're not a contact on this session." };
 
-  const { error } = await admin
+  // Guard on a real change so re-accepting (e.g. a duplicate tap or a second
+  // device) never fires a second "watcher accepted" notification (dedup §14).
+  const { data: changed, error } = await admin
     .from("safe_arrival_contacts")
     .update({ acknowledgement_status: parsed.data, acknowledged_at: new Date().toISOString() })
     .eq("session_id", sessionId)
-    .eq("contact_user_id", userId);
+    .eq("contact_user_id", userId)
+    .neq("acknowledgement_status", parsed.data)
+    .select("id");
   if (error) return { ok: false, message: "Couldn't save your response." };
 
   await recordSafeArrivalEvent(admin, {
@@ -219,6 +229,28 @@ export async function acknowledgeSafeArrivalAction(
   if (parsed.data === "watching") {
     const { grantReliableWatcherAchievement } = await import("@/lib/engagement/achievements");
     await grantReliableWatcherAchievement(admin, userId);
+
+    // Tell the TRAVELLER (never the actor) a contact has accepted — server-side
+    // and only on a genuine transition, so it works even if the traveller's app
+    // is closed. Informational priority (respects the traveller's prefs), and
+    // safe_arrival:<sessionId> deep-links to the exact session.
+    if (changed?.length) {
+      const { data: session } = await admin
+        .from("safe_arrival_sessions")
+        .select("traveller_id, status")
+        .eq("id", sessionId)
+        .maybeSingle();
+      if (session && !isTerminalSafeArrivalStatus(session.status as SafeArrivalStatus)) {
+        const watcher = await travellerName(admin, userId);
+        await deliverNotification(admin, {
+          userId: session.traveller_id,
+          priority: "normal",
+          type: `safe_arrival:${sessionId}`,
+          title: "Watching your journey",
+          message: watcherAcceptedMessage(watcher)
+        });
+      }
+    }
   }
 
   return {
@@ -364,13 +396,30 @@ export async function cancelSafeArrivalAction(sessionId: string): Promise<SafeAr
     return { ok: false, message: "This session is already closed." };
   }
 
-  await admin
+  // Guarded update so a duplicate cancel (another device) updates no row and
+  // therefore sends no second round of notifications (dedup §14).
+  const { data: cancelled } = await admin
     .from("safe_arrival_sessions")
     .update({ status: "cancelled", cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq("id", sessionId)
-    .eq("traveller_id", userId);
+    .eq("traveller_id", userId)
+    .in("status", ["draft", "pending_acknowledgement", "active", "grace_period", "extended", "unconfirmed"])
+    .select("id");
 
   await recordSafeArrivalEvent(admin, { sessionId, eventType: "cancelled", createdBy: userId });
+
+  // Watchers must know they can stand down — server-side, works when their app
+  // is closed. notifyContacts stamps safe_arrival:<sessionId> (deep-links to the
+  // session) and skips anyone who declined.
+  if (cancelled?.length) {
+    const name = await travellerName(admin, userId);
+    await notifyContacts(admin, sessionId, {
+      type: "safe_arrival:cancelled",
+      title: "Safe Arrival ended",
+      message: cancelledMessage(name)
+    });
+  }
+
   return { ok: true, message: "Safe Arrival cancelled." };
 }
 

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
+import { fetchWithTimeout } from "@/lib/network/resilience";
 
 type LocationPermissionStatus = "checking" | "enabled" | "needed" | "blocked" | "unavailable";
 
@@ -84,7 +85,7 @@ export function LocationForGlowSetting({ onFeedback }: LocationForGlowSettingPro
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
-          const response = await fetch("/api/location/update", {
+          const response = await fetchWithTimeout("/api/location/update", {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
@@ -93,7 +94,7 @@ export function LocationForGlowSetting({ onFeedback }: LocationForGlowSettingPro
               longitude: position.coords.longitude,
               accuracy: position.coords.accuracy
             })
-          });
+          }, 15_000, "enable location for glow");
 
           if (!response.ok) {
             const data = (await response.json().catch(() => null)) as { error?: string } | null;

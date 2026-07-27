@@ -48,6 +48,7 @@ import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { Textarea } from "@/components/ui/textarea";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import { cn } from "@/lib/utils";
+import { fetchWithTimeout } from "@/lib/network/resilience";
 
 type FriendTab = "all" | "circles" | "close" | "requests" | "blocked";
 
@@ -156,7 +157,12 @@ export function FriendsPageContent({
 
     async function loadProximity() {
       try {
-        const response = await fetch("/api/friends/nearby", { credentials: "include", cache: "no-store" });
+        const response = await fetchWithTimeout(
+          "/api/friends/nearby",
+          { credentials: "include", cache: "no-store" },
+          12_000,
+          "load Muddy proximity"
+        );
         if (!response.ok || !isMounted) return;
         const data = (await response.json()) as { friends: NearbyFriendApiItem[] };
         const next: Record<string, ProximityInfo> = {};

@@ -230,6 +230,26 @@ export const handleApplyScheduledDowngrade: JobHandler = async (admin) => {
 };
 
 // ---------------------------------------------------------------------------
+// Financial intelligence
+// ---------------------------------------------------------------------------
+
+export const handleCaptureDailyFinancialSnapshot: JobHandler = async (admin) => {
+  const { captureDailyFinancialSnapshots } = await import("@/lib/revenue/snapshots");
+  const rows = await captureDailyFinancialSnapshots(admin);
+  return rows.length;
+};
+
+export const handleReconcilePaystackFees: JobHandler = async (admin) => {
+  const { reconcileMissingPaystackFees } = await import("@/lib/revenue/paystack-fees");
+  return reconcileMissingPaystackFees(admin, 50);
+};
+
+export const handlePremiumTrialLifecycle: JobHandler = async (admin) => {
+  const { processTrialLifecycle } = await import("@/lib/trials/service");
+  return processTrialLifecycle(admin);
+};
+
+// ---------------------------------------------------------------------------
 // Expiry sweeps (spec §31)
 // ---------------------------------------------------------------------------
 
@@ -622,6 +642,9 @@ export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
   "safe_arrival.unconfirmed_alert": handleSafeArrivalUnconfirmedAlert,
   "media.delete_queued": handleMediaDeleteQueued,
   "billing.apply_scheduled_downgrade": handleApplyScheduledDowngrade,
+  "financial.capture_daily_snapshot": handleCaptureDailyFinancialSnapshot,
+  "financial.reconcile_paystack_fees": handleReconcilePaystackFees,
+  "trials.lifecycle": handlePremiumTrialLifecycle,
   "streaks.close_expired_periods": handleCloseExpiredStreaks,
   "recap.generate_monthly": handleGenerateMonthlyRecaps,
   "expiry.plans": handleCompletePastPlans,

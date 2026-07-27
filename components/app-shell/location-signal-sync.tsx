@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchWithTimeout } from "@/lib/network/resilience";
 
 // Foreground-only web cadence. This keeps a moving device's broad proximity
 // signal current without claiming background tracking the browser cannot
@@ -45,7 +46,7 @@ export function LocationSignalSync({ initiallyEnabled }: LocationSignalSyncProps
 
     const savePosition = async (position: GeolocationPosition) => {
       try {
-        const response = await fetch("/api/location/update", {
+        const response = await fetchWithTimeout("/api/location/update", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -54,7 +55,7 @@ export function LocationSignalSync({ initiallyEnabled }: LocationSignalSyncProps
             longitude: position.coords.longitude,
             accuracy: position.coords.accuracy
           })
-        });
+        }, 15_000, "update proximity signal");
 
         if (response.ok) {
           window.dispatchEvent(new Event("mad-buddy:location-updated"));

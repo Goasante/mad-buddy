@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Loader2, LogOut, Send, UserPlus, Users2 } from "lucide-react";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { getMessagesAction, sendMessageAction } from "@/app/(app)/messaging-actions";
 import type { ChatMessageView } from "@/lib/messaging/mobile";
 import { inviteGroupMemberAction, leaveGroupAction } from "@/app/(app)/group-actions";
@@ -15,6 +15,7 @@ import { Modal } from "@/components/ui/modal";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import type { GroupDetailView, GroupInviteCandidate } from "@/lib/groups/types";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
 type GroupTab = "chat" | "members";
@@ -35,6 +36,14 @@ export function GroupDetailPage({
   const [inviteOpen, setInviteOpen] = useState(false);
   const [candidates, setCandidates] = useState(group.inviteCandidates);
   const [isPending, startTransition] = useTransition();
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let supabase: ReturnType<typeof createSupabaseBrowserClient>;
@@ -43,15 +52,48 @@ export function GroupDetailPage({
     } catch {
       return;
     }
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let refreshInFlight = false;
+    let refreshQueued = false;
+    let disposed = false;
+
+    const performRefresh = async () => {
+      if (refreshInFlight) {
+        refreshQueued = true;
+        return;
+      }
+      refreshInFlight = true;
+      try {
+        const loaded = await withTimeout(getMessagesAction(group.id), {
+          operation: "refresh group messages"
+        });
+        if (!disposed) setMessages(loaded);
+      } catch {
+        if (!disposed) setFeedback("Group messages could not be refreshed.");
+      } finally {
+        refreshInFlight = false;
+        if (refreshQueued && !disposed) {
+          refreshQueued = false;
+          refreshTimer = setTimeout(() => void performRefresh(), 150);
+        }
+      }
+    };
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => void performRefresh(), 150);
+    };
+
     const channel = supabase
       .channel(`group-messages:${group.id}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "messages", filter: `conversation_id=eq.${group.id}` },
-        () => void getMessagesAction(group.id).then(setMessages)
+        scheduleRefresh
       )
       .subscribe();
     return () => {
+      disposed = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
       void supabase.removeChannel(channel);
     };
   }, [group.id]);
@@ -61,15 +103,28 @@ export function GroupDetailPage({
     if (!text) return;
     setFeedback("");
     startTransition(async () => {
-      const result = await sendMessageAction({
-        conversationId: group.id,
-        text,
-        clientMessageId: crypto.randomUUID()
-      });
-      setFeedback(result.message);
-      if (result.ok) {
-        setDraft("");
-        setMessages(await getMessagesAction(group.id));
+      try {
+        const result = await withTimeout(sendMessageAction({
+          conversationId: group.id,
+          text,
+          clientMessageId: crypto.randomUUID()
+        }), {
+          operation: "send group message"
+        });
+        setFeedback(result.message);
+        if (result.ok) {
+          setDraft("");
+          const loaded = await withTimeout(getMessagesAction(group.id), {
+            operation: "refresh group messages"
+          });
+          if (mountedRef.current) setMessages(loaded);
+        }
+      } catch (error) {
+        setFeedback(
+          isRequestTimeoutError(error)
+            ? "Sending took too long. Your message was kept so you can try again."
+            : "The message could not be sent. Try again."
+        );
       }
     });
   }

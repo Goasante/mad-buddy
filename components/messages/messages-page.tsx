@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, Info, MessagesSquare, PenSquare, Search, Send, VolumeX } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   deleteMessageAction,
   editMessageAction,
@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { QUICK_ACTIONS, quickActionLabel, DELETED_MESSAGE_PLACEHOLDER } from "@/lib/messaging/rules";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
 const tabs = [
@@ -62,6 +63,12 @@ function stateLabel(state: string): string {
   }
 }
 
+function messageFailure(error: unknown) {
+  return isRequestTimeoutError(error)
+    ? "Messages took too long to respond. Try again."
+    : "Messages could not be updated. Try again.";
+}
+
 export function MessagesPageContent({
   initialConversations = []
 }: {
@@ -89,33 +96,96 @@ export function MessagesPageContent({
   const [newMessageOpen, setNewMessageOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const loadRequestIdRef = useRef(0);
+
+  const loadConversation = useCallback(async (conversationId: string) => {
+    const requestId = ++loadRequestIdRef.current;
+    setLoadingMessages(true);
+    setFeedback("");
+
+    try {
+      const loaded = await withTimeout(getMessagesAction(conversationId), {
+        operation: "load conversation"
+      });
+      if (requestId !== loadRequestIdRef.current) return;
+      setMessages(loaded);
+
+      const readResult = await withTimeout(markConversationReadAction(conversationId), {
+        operation: "mark conversation read"
+      });
+      if (requestId !== loadRequestIdRef.current) return;
+      if (!readResult.ok) setFeedback(readResult.message);
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation
+        )
+      );
+    } catch (error) {
+      if (requestId === loadRequestIdRef.current) {
+        setFeedback(messageFailure(error));
+      }
+    } finally {
+      if (requestId === loadRequestIdRef.current) {
+        setLoadingMessages(false);
+      }
+    }
+  }, []);
+
+  const refreshMessages = useCallback(async (conversationId: string) => {
+    try {
+      const loaded = await withTimeout(getMessagesAction(conversationId), {
+        operation: "refresh conversation"
+      });
+      setMessages(loaded);
+    } catch (error) {
+      setFeedback(messageFailure(error));
+    }
+  }, []);
 
   function react(messageId: string, reaction: string) {
     if (!selectedId) return;
     setReactingId(null);
     startTransition(async () => {
-      const result = await reactToMessageAction(messageId, reaction);
-      if (!result.ok) setFeedback(result.message);
-      setMessages(await getMessagesAction(selectedId));
+      try {
+        const result = await withTimeout(reactToMessageAction(messageId, reaction), {
+          operation: "react to message"
+        });
+        if (!result.ok) setFeedback(result.message);
+        await refreshMessages(selectedId);
+      } catch (error) {
+        setFeedback(messageFailure(error));
+      }
     });
   }
 
   function saveEdit(messageId: string) {
     if (!selectedId || !editDraft.trim()) return;
     startTransition(async () => {
-      const result = await editMessageAction(messageId, editDraft.trim());
-      if (!result.ok) setFeedback(result.message);
-      setEditingId(null);
-      setMessages(await getMessagesAction(selectedId));
+      try {
+        const result = await withTimeout(editMessageAction(messageId, editDraft.trim()), {
+          operation: "edit message"
+        });
+        if (!result.ok) setFeedback(result.message);
+        setEditingId(null);
+        await refreshMessages(selectedId);
+      } catch (error) {
+        setFeedback(messageFailure(error));
+      }
     });
   }
 
   function remove(messageId: string) {
     if (!selectedId) return;
     startTransition(async () => {
-      const result = await deleteMessageAction(messageId, true);
-      if (!result.ok) setFeedback(result.message);
-      setMessages(await getMessagesAction(selectedId));
+      try {
+        const result = await withTimeout(deleteMessageAction(messageId, true), {
+          operation: "delete message"
+        });
+        if (!result.ok) setFeedback(result.message);
+        await refreshMessages(selectedId);
+      } catch (error) {
+        setFeedback(messageFailure(error));
+      }
     });
   }
 
@@ -154,19 +224,8 @@ export function MessagesPageContent({
     openedRequestedConversation.current = true;
     setSelectedId(requestedConversationId);
     setMessages([]);
-    setLoadingMessages(true);
-    startTransition(async () => {
-      const loaded = await getMessagesAction(requestedConversationId);
-      setMessages(loaded);
-      setLoadingMessages(false);
-      await markConversationReadAction(requestedConversationId);
-      setConversations((current) =>
-        current.map((conversation) =>
-          conversation.id === requestedConversationId ? { ...conversation, unreadCount: 0 } : conversation
-        )
-      );
-    });
-  }, [requestedConversationId, uniqueConversations]);
+    void loadConversation(requestedConversationId);
+  }, [loadConversation, requestedConversationId, uniqueConversations]);
 
   // Realtime (spec §64): subscribe to the open thread's messages instead of
   // only reloading after our own sends. Authorization is server-side, RLS on
@@ -180,6 +239,38 @@ export function MessagesPageContent({
     } catch {
       return;
     }
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let refreshInFlight = false;
+    let refreshQueued = false;
+    let disposed = false;
+
+    const performRefresh = async () => {
+      if (refreshInFlight) {
+        refreshQueued = true;
+        return;
+      }
+      refreshInFlight = true;
+      try {
+        const loaded = await withTimeout(getMessagesAction(selectedId), {
+          operation: "realtime message refresh"
+        });
+        if (!disposed) setMessages(loaded);
+      } catch (error) {
+        if (!disposed) setFeedback(messageFailure(error));
+      } finally {
+        refreshInFlight = false;
+        if (refreshQueued && !disposed) {
+          refreshQueued = false;
+          refreshTimer = setTimeout(() => void performRefresh(), 150);
+        }
+      }
+    };
+
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => void performRefresh(), 150);
+    };
+
     const channel = supabase
       .channel(`messages:${selectedId}`)
       .on(
@@ -188,11 +279,13 @@ export function MessagesPageContent({
         () => {
           // Refetch through the server action so blocks, hides, and receipt
           // preferences are re-applied, never trust the raw event payload.
-          void getMessagesAction(selectedId).then(setMessages);
+          scheduleRefresh();
         }
       )
       .subscribe();
     return () => {
+      disposed = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
       void supabase.removeChannel(channel);
     };
   }, [selectedId]);
@@ -214,18 +307,7 @@ export function MessagesPageContent({
   function openConversation(conversationId: string) {
     setSelectedId(conversationId);
     setMessages([]);
-    setLoadingMessages(true);
-    startTransition(async () => {
-      const loaded = await getMessagesAction(conversationId);
-      setMessages(loaded);
-      setLoadingMessages(false);
-      await markConversationReadAction(conversationId);
-      setConversations((current) =>
-        current.map((conversation) =>
-          conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation
-        )
-      );
-    });
+    void loadConversation(conversationId);
   }
 
   function send(text: string, quickActionType?: string) {
@@ -237,33 +319,46 @@ export function MessagesPageContent({
     const clientMessageId = crypto.randomUUID();
     setDraft("");
     startTransition(async () => {
-      const result = await sendMessageAction({
-        conversationId: selectedId,
-        text: quickActionType ? undefined : body,
-        quickActionType,
-        clientMessageId
-      });
-      if (!result.ok) {
-        setFeedback(result.message);
-        return;
+      try {
+        const result = await withTimeout(sendMessageAction({
+          conversationId: selectedId,
+          text: quickActionType ? undefined : body,
+          quickActionType,
+          clientMessageId
+        }), {
+          operation: "send message"
+        });
+        if (!result.ok) {
+          setFeedback(result.message);
+          if (!quickActionType) setDraft(body);
+          return;
+        }
+        await refreshMessages(selectedId);
+        router.refresh();
+      } catch (error) {
+        setFeedback(messageFailure(error));
+        if (!quickActionType) setDraft(body);
       }
-      const refreshed = await getMessagesAction(selectedId);
-      setMessages(refreshed);
-      router.refresh();
     });
   }
 
   function toggleMute() {
     if (!selected) return;
     startTransition(async () => {
-      const result = await muteConversationAction(selected.id, selected.muted ? 0 : 8);
-      setFeedback(result.message);
-      if (result.ok) {
-        setConversations((current) =>
-          current.map((conversation) =>
-            conversation.id === selected.id ? { ...conversation, muted: !conversation.muted } : conversation
-          )
-        );
+      try {
+        const result = await withTimeout(muteConversationAction(selected.id, selected.muted ? 0 : 8), {
+          operation: "update conversation mute"
+        });
+        setFeedback(result.message);
+        if (result.ok) {
+          setConversations((current) =>
+            current.map((conversation) =>
+              conversation.id === selected.id ? { ...conversation, muted: !conversation.muted } : conversation
+            )
+          );
+        }
+      } catch (error) {
+        setFeedback(messageFailure(error));
       }
     });
   }
@@ -274,13 +369,19 @@ export function MessagesPageContent({
   function startConversationWith(friendId: string) {
     setNewMessageOpen(false);
     startTransition(async () => {
-      const result = await openDirectConversationAction(friendId);
-      if (!result.ok || !result.conversationId) {
-        setFeedback(result.message);
-        return;
+      try {
+        const result = await withTimeout(openDirectConversationAction(friendId), {
+          operation: "open direct conversation"
+        });
+        if (!result.ok || !result.conversationId) {
+          setFeedback(result.message);
+          return;
+        }
+        router.refresh();
+        openConversation(result.conversationId);
+      } catch (error) {
+        setFeedback(messageFailure(error));
       }
-      router.refresh();
-      openConversation(result.conversationId);
     });
   }
 

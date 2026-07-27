@@ -80,11 +80,13 @@ export function JourneyStatusCard({
 
     let disposed = false;
     let refreshQueued = false;
+    let refreshTimer: number | null = null;
     const refresh = () => {
       // Coalesce a burst of events into one canonical refetch.
       if (refreshQueued) return;
       refreshQueued = true;
-      window.setTimeout(() => {
+      refreshTimer = window.setTimeout(() => {
+        if (disposed) return;
         refreshQueued = false;
         router.refresh();
       }, 250);
@@ -128,6 +130,7 @@ export function JourneyStatusCard({
 
     return () => {
       disposed = true;
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("online", handleOnline);
       void supabase.removeChannel(channel);

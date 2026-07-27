@@ -57,6 +57,10 @@ describe("client-side storage never holds credentials", () => {
     "INSTALL_CONFIRMED_KEY",
     "INSTALL_DISMISSED_AT_KEY",
     "INSTALL_SHOWN_SESSION_KEY",
+    "PWA_UPDATE_ATTEMPT_KEY",
+    "completedKey",
+    "dismissedKey",
+    "shownKey",
     "storageKey" // the local const the install keys are read through
   ];
 

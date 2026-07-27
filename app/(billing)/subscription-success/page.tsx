@@ -2,7 +2,9 @@ import { SubscriptionResultPage } from "@/components/premium/subscription-result
 import { paystackRequest, type PaystackVerifiedTransaction } from "@/lib/paystack/client";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { syncPaystackSubscription } from "@/lib/paystack/sync";
+import { syncPaystackSubscription, validatePaystackSyncInput } from "@/lib/paystack/sync";
+import { loadSubscriptionSnapshot, recordSuccessfulPayment } from "@/lib/revenue/events";
+import { markTrialConverted } from "@/lib/trials/service";
 
 // Renders per-user billing/onboarding state; never statically prerender
 // (build environments have no Supabase secrets).
@@ -49,18 +51,35 @@ export default async function SubscriptionSuccessPage({ searchParams }: Subscrip
       const admin = createSupabaseAdminClient();
       const paystackPlan =
         typeof transaction.plan === "string" ? transaction.plan : transaction.plan?.plan_code ?? null;
+      const previous = await loadSubscriptionSnapshot(admin, user.id);
 
-      await syncPaystackSubscription(admin, {
+      const syncInput = {
         userId: user.id,
         plan: transaction.metadata?.plan ?? null,
         status: transaction.status,
         reference: transaction.reference,
         paidAt: transaction.paid_at ?? null,
         amount: transaction.amount,
+        currency: transaction.currency,
         customer: transaction.customer ?? null,
         authorization: transaction.authorization ?? null,
         planCode: paystackPlan
+      } as const;
+      const paidPlan = validatePaystackSyncInput(syncInput);
+      await recordSuccessfulPayment(admin, {
+        userId: user.id,
+        plan: paidPlan,
+        previous,
+        source: "paystack_verify",
+        reference: transaction.reference,
+        amountMinor: transaction.amount,
+        providerFeeMinor: transaction.fees,
+        currency: transaction.currency,
+        paidAt: transaction.paid_at ?? null,
+        subscriptionId: previous?.id
       });
+      await syncPaystackSubscription(admin, syncInput);
+      await markTrialConverted(admin, user.id, paidPlan);
       verified = true;
     }
   } catch {

@@ -17,7 +17,9 @@ export type RateLimitAction =
   | "friends.nearby"
   | "reports.create"
   | "paystack.initialize"
+  | "paystack.cancel"
   | "paystack.webhook"
+  | "trials.start"
   | "waves.send"
   | "waves.send.daily"
   | "pings.create"
@@ -71,7 +73,9 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "friends.nearby": { limit: 60, windowSeconds: 60 },
   "reports.create": { limit: 5, windowSeconds: 60 * 60 },
   "paystack.initialize": { limit: 5, windowSeconds: 15 * 60 },
+  "paystack.cancel": { limit: 5, windowSeconds: 24 * 60 * 60 },
   "paystack.webhook": { limit: 1200, windowSeconds: 60 },
+  "trials.start": { limit: 3, windowSeconds: 24 * 60 * 60 },
   // Wave/Ping anti-spam (feature spec §20, §41).
   "waves.send": { limit: 20, windowSeconds: 60 * 60 },
   "waves.send.daily": { limit: 50, windowSeconds: 24 * 60 * 60 },

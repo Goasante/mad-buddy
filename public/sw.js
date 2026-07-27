@@ -1,12 +1,25 @@
 /* Mad Buddy service worker. It stores no page or user data. Requests remain
  * network-only while the worker supports PWA installation and web push. */
 
+// Changing this protocol marker makes the hardening deployment itself visible
+// to existing registrations. Future ordinary application deployments are also
+// detected through /api/version, even when this file remains byte-identical.
+const WORKER_PROTOCOL_VERSION = "network-only-v2";
+
+self.addEventListener("install", () => {
+  // Do not call skipWaiting automatically. The app prompts first so an active
+  // form or conversation is not reloaded underneath the user.
+});
+
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+  if (event.data?.type === "GET_WORKER_VERSION") {
+    event.ports?.[0]?.postMessage({ version: WORKER_PROTOCOL_VERSION });
+  }
 });
 
 self.addEventListener("fetch", (event) => {

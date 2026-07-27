@@ -3,6 +3,7 @@
 import { Download } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { fetchWithTimeout } from "@/lib/network/resilience";
 
 export function DataExportButton() {
   const [status, setStatus] = useState("");
@@ -13,10 +14,10 @@ export function DataExportButton() {
     setStatus("Preparing export...");
 
     try {
-      const response = await fetch("/api/account/export", {
+      const response = await fetchWithTimeout("/api/account/export", {
         method: "GET",
         credentials: "include"
-      });
+      }, 30_000, "export account data");
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: "Export failed." }));

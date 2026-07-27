@@ -36,6 +36,8 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { cn } from "@/lib/utils";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import { BrandMark } from "@/components/brand/brand-mark";
+import { fetchWithTimeout } from "@/lib/network/resilience";
+import { NavigationWatchdog } from "@/components/navigation/navigation-watchdog";
 
 // Order matters for MobileNav, which just takes the first five (minus
 // admin/billing). Primary destinations are listed first so the bottom bar's
@@ -85,6 +87,7 @@ export type AppShellProps = {
   currentUsername?: string | null;
   currentAvatarUrl?: string | null;
   currentUserId?: string | null;
+  hiddenNavigationHrefs?: string[];
 };
 
 export function AppShell({
@@ -94,23 +97,34 @@ export function AppShell({
   locationSyncEnabled = true,
   currentUsername = null,
   currentAvatarUrl = null,
-  currentUserId = null
+  currentUserId = null,
+  hiddenNavigationHrefs = []
 }: AppShellProps) {
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   const hasCompletedInitialRender = useRef(false);
+  const unreadRefreshRef = useRef<Promise<void> | null>(null);
   const refreshUnreadCount = useCallback(async () => {
-    try {
-      const response = await fetch("/api/notifications", {
-        credentials: "include",
-        cache: "no-store"
-      });
-      if (!response.ok) return;
-      const data = (await response.json()) as { notifications: Array<{ is_read: boolean }> };
-      setUnreadCount(data.notifications.filter((notification) => !notification.is_read).length);
-    } catch {
-      // Keep the last known count when the notification service is unavailable.
-    }
+    if (unreadRefreshRef.current) return unreadRefreshRef.current;
+
+    const refresh = (async () => {
+      try {
+        const response = await fetchWithTimeout("/api/notifications", {
+          credentials: "include",
+          cache: "no-store"
+        }, 12_000, "refresh unread notifications");
+        if (!response.ok) return;
+        const data = (await response.json()) as { notifications: Array<{ is_read: boolean }> };
+        setUnreadCount(data.notifications.filter((notification) => !notification.is_read).length);
+      } catch {
+        // Keep the last known count when the notification service is unavailable.
+      } finally {
+        unreadRefreshRef.current = null;
+      }
+    })();
+
+    unreadRefreshRef.current = refresh;
+    return refresh;
   }, []);
 
   useEffect(() => {
@@ -152,9 +166,10 @@ export function AppShell({
     };
   }, [refreshUnreadCount]);
 
+  const enabledNavigationItems = navigationItems.filter((item) => !hiddenNavigationHrefs.includes(item.href));
   const visibleNavigationItems = showAdminLink
-    ? [...navigationItems, { href: "/admin" as const, label: "Admin", icon: Gauge }]
-    : navigationItems;
+    ? [...enabledNavigationItems, { href: "/admin" as const, label: "Admin", icon: Gauge }]
+    : enabledNavigationItems;
 
   return (
     <div className="flex min-h-[100svh] min-h-[100dvh] flex-col bg-background pb-[calc(88px+env(safe-area-inset-bottom))] pt-[env(safe-area-inset-top)] dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]">
@@ -166,6 +181,7 @@ export function AppShell({
       </a>
       <LocationSignalSync initiallyEnabled={locationSyncEnabled} />
       <SessionBoundary currentUserId={currentUserId} />
+      <NavigationWatchdog />
       {/* Waves and achievement unlocks animate over whatever page the user is
           on, so this lives in the shell rather than on any one screen. */}
       <LiveSignalToast currentUserId={currentUserId} />
@@ -659,7 +675,7 @@ function MobileAccountMenu({
           type="button"
           aria-label="Account"
           title="Account"
-          className="focus-ring grid h-10 w-10 place-items-center rounded-full border border-border/70"
+          className="focus-ring grid h-11 w-11 place-items-center rounded-full border border-border/70"
         >
           <span className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-secondary text-sm font-semibold text-foreground dark:bg-white/[0.06]">
             <AccountAvatar src={currentAvatarUrl} initial={initial} />

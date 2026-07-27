@@ -2,10 +2,13 @@ import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { GRACE_PERIOD_DAYS } from "@/lib/billing/entitlements";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
-import { markPaystackSubscriptionStatus, syncPaystackSubscription } from "@/lib/paystack/sync";
+import { markPaystackSubscriptionStatus, syncPaystackSubscription, validatePaystackSyncInput } from "@/lib/paystack/sync";
 import { getMissingPaystackWebhookConfig, getPaystackWebhookSecret } from "@/lib/paystack/config";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { consumeRateLimit, getClientIpHashFromRequest } from "@/lib/security/rate-limit";
+import { loadSubscriptionSnapshot, recordBillingEvent, recordSuccessfulPayment } from "@/lib/revenue/events";
+import { deliverNotification } from "@/lib/notifications/server";
+import { markTrialConverted } from "@/lib/trials/service";
 
 const MAX_WEBHOOK_BYTES = 256 * 1024;
 
@@ -17,6 +20,7 @@ type PaystackWebhookEvent = {
     status?: string;
     paid_at?: string | null;
     amount?: number;
+    fees?: number | null;
     currency?: string;
     metadata?: {
       user_id?: string;
@@ -125,7 +129,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await handlePaystackEvent(event);
+    await handlePaystackEvent(event, eventId);
   } catch (error) {
     // A failed attempt must not poison the idempotency ledger. Paystack can
     // safely retry and the next verified delivery will be processed again.
@@ -150,7 +154,7 @@ export async function POST(request: Request) {
   return NextResponse.json({ received: true });
 }
 
-async function handlePaystackEvent(event: PaystackWebhookEvent) {
+async function handlePaystackEvent(event: PaystackWebhookEvent, eventId: string) {
   const admin = createSupabaseAdminClient();
   const data = event.data;
   const userId = data.metadata?.user_id;
@@ -164,7 +168,7 @@ async function handlePaystackEvent(event: PaystackWebhookEvent) {
         return;
       }
 
-      await syncPaystackSubscription(admin, {
+      const syncInput = {
         userId,
         plan: data.metadata?.plan ?? data.metadata?.app_plan ?? null,
         status: data.status,
@@ -187,7 +191,34 @@ async function handlePaystackEvent(event: PaystackWebhookEvent) {
               }
             : null),
         planCode: typeof data.plan === "string" ? data.plan : data.plan?.plan_code ?? null
-      });
+      } as const;
+      const plan = validatePaystackSyncInput(syncInput);
+      const previous = await loadSubscriptionSnapshot(admin, userId);
+
+      if (
+        event.event === "charge.success" &&
+        data.reference &&
+        typeof data.amount === "number" &&
+        data.currency
+      ) {
+        await recordSuccessfulPayment(admin, {
+          userId,
+          plan,
+          previous,
+          source: "paystack_webhook",
+          reference: data.reference,
+          providerEventId: eventId,
+          amountMinor: data.amount,
+          providerFeeMinor: data.fees,
+          currency: data.currency,
+          paidAt: data.paid_at,
+          subscriptionId: previous?.id
+        });
+      }
+      await syncPaystackSubscription(admin, syncInput);
+      if (event.event === "charge.success") {
+        await markTrialConverted(admin, userId, plan);
+      }
       return;
     }
     case "subscription.not_renew": {
@@ -198,6 +229,7 @@ async function handlePaystackEvent(event: PaystackWebhookEvent) {
         "non_renewing",
         { cancelAtPeriodEnd: true }
       );
+      await recordLifecycleEvent(admin, eventId, data, "subscription_cancelled");
       return;
     }
     case "subscription.disable": {
@@ -207,22 +239,82 @@ async function handlePaystackEvent(event: PaystackWebhookEvent) {
         "cancelled",
         { graceEndsAt: null }
       );
+      await recordLifecycleEvent(admin, eventId, data, "subscription_cancelled");
       return;
     }
     case "invoice.payment_failed": {
       // Failed renewal starts the grace window (§61): paid features survive
       // until grace_ends_at, then effectivePlan falls back to free (§62).
+      const subscriptionCode = data.subscription_code ?? data.subscription?.subscription_code;
+      const subscription = await findSubscriptionByCode(admin, subscriptionCode);
       await markPaystackSubscriptionStatus(
         admin,
-        data.subscription_code ?? data.subscription?.subscription_code,
+        subscriptionCode,
         "past_due",
         { graceEndsAt: new Date(Date.now() + GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000).toISOString() }
       );
+      if (subscription) {
+        await recordBillingEvent(admin, {
+          event_type: "payment_failed",
+          source: "paystack_webhook",
+          user_id: subscription.user_id,
+          subscription_id: subscription.id,
+          subscription_plan: subscription.plan,
+          amount_minor: typeof data.amount === "number" ? data.amount : null,
+          currency: data.currency?.toUpperCase() ?? null,
+          transaction_reference: data.reference ?? null,
+          provider_event_id: eventId,
+          dedupe_key: `paystack:payment_failed:${data.reference ?? eventId}`
+        });
+        await deliverNotification(admin, {
+          userId: subscription.user_id,
+          priority: "high",
+          type: "subscription_update",
+          title: "Payment needs attention",
+          message: "Your Mad Buddy renewal didn't go through. Update your payment details to keep your benefits."
+        });
+      }
       return;
     }
     default:
       return;
   }
+}
+
+async function findSubscriptionByCode(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  subscriptionCode: string | null | undefined
+) {
+  if (!subscriptionCode) return null;
+  const { data, error } = await admin
+    .from("subscriptions")
+    .select("id, user_id, plan, status")
+    .eq("paystack_subscription_code", subscriptionCode)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function recordLifecycleEvent(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  eventId: string,
+  data: PaystackWebhookEvent["data"],
+  eventType: "subscription_cancelled"
+) {
+  const subscriptionCode = data.subscription_code ?? data.subscription?.subscription_code;
+  const subscription = await findSubscriptionByCode(admin, subscriptionCode);
+  if (!subscription) return;
+  await recordBillingEvent(admin, {
+    event_type: eventType,
+    source: "paystack_webhook",
+    user_id: subscription.user_id,
+    subscription_id: subscription.id,
+    subscription_plan: subscription.plan,
+    provider_event_id: eventId,
+    // A non-renewing notice and a later disablement are separate lifecycle
+    // facts. Retries of either provider event still share the same event ID.
+    dedupe_key: `paystack:${eventType}:${eventId}`
+  });
 }
 
 function isValidPaystackSignature(body: string, signature: string, secret: string) {

@@ -54,6 +54,8 @@ export type PaystackVerifiedTransaction = {
   status: string;
   reference: string;
   amount: number;
+  /** Authoritative Paystack fee in the currency's minor unit. */
+  fees?: number | null;
   currency: string;
   paid_at?: string | null;
   customer?: {

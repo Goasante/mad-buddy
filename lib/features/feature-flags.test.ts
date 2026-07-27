@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { resolveGlobalFeatureFlag } from "@/lib/features/feature-flags";
+import {
+  isManagedFeatureFlagKey,
+  MANAGED_FEATURES,
+  resolveGlobalFeatureFlag
+} from "@/lib/features/feature-flags";
 
 describe("global feature flags", () => {
   it("fails closed when a flag is missing", () => {
@@ -15,5 +19,13 @@ describe("global feature flags", () => {
   it("uses the safe configured default during a rollout", () => {
     expect(resolveGlobalFeatureFlag({ status: "rollout", default_value: false })).toBe(false);
     expect(resolveGlobalFeatureFlag({ status: "rollout", default_value: true })).toBe(true);
+  });
+
+  it("keeps the managed catalog unique and accepts only known keys", () => {
+    const keys = MANAGED_FEATURES.map((feature) => feature.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(isManagedFeatureFlagKey("open_moments")).toBe(true);
+    expect(isManagedFeatureFlagKey("socialize")).toBe(true);
+    expect(isManagedFeatureFlagKey("unknown_feature")).toBe(false);
   });
 });

@@ -12,6 +12,7 @@ import {
   selectNewSignals,
   type LiveSignal
 } from "@/lib/notifications/live-signal";
+import { fetchWithTimeout } from "@/lib/network/resilience";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type ActiveSignal = {
@@ -87,10 +88,10 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
       let senderUsername: string | null = null;
       let senderAvatarUrl: string | null = null;
       try {
-        const response = await fetch(`/api/users/${parsed.senderId}`, {
+        const response = await fetchWithTimeout(`/api/users/${parsed.senderId}`, {
           credentials: "include",
           cache: "no-store"
-        });
+        }, 10_000, "load live signal sender");
         if (response.ok) {
           const data = (await response.json()) as {
             profile?: { displayName?: string; username?: string; avatarUrl?: string | null };
@@ -121,12 +122,15 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
      * exists, so nothing historical is ever animated.
      */
     let primed = false;
+    let pollInFlight = false;
     const pollOnce = async () => {
+      if (pollInFlight) return;
+      pollInFlight = true;
       try {
-        const response = await fetch("/api/notifications?limit=10", {
+        const response = await fetchWithTimeout("/api/notifications?limit=10", {
           credentials: "include",
           cache: "no-store"
-        });
+        }, 10_000, "poll live notifications");
         if (!response.ok || cancelled) return;
         const data = (await response.json()) as { notifications?: Array<{ id: string; type: string }> };
         const rows = data.notifications ?? [];
@@ -140,6 +144,8 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
         }
       } catch {
         // Offline or unauthenticated: try again on the next tick.
+      } finally {
+        pollInFlight = false;
       }
     };
 
@@ -194,6 +200,27 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
     };
   }, [currentUserId]);
 
+  useEffect(() => {
+    if (!signal) return;
+
+    const onPageHide = () => dismiss();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") dismiss();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") dismiss();
+    };
+
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [dismiss, signal]);
+
   if (!signal) return null;
 
   const open = () => {
@@ -207,6 +234,9 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
       className="live-signal-stage fixed inset-0 z-[95] flex items-center justify-center px-6"
       role="status"
       aria-live="polite"
+      onAnimationEnd={(event) => {
+        if (event.currentTarget === event.target) dismiss();
+      }}
     >
       {/* Tap anywhere outside the medallion to dismiss without navigating. */}
       <button

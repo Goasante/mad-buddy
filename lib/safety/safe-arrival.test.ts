@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   arrivedMessage,
+  cancelledMessage,
   canTransitionSafeArrival,
   canTravellerAct,
   extendedArrivalMs,
@@ -13,7 +14,8 @@ import {
   validateExpectedArrival,
   validateExtension,
   validateGracePeriod,
-  validateDestinationLabel
+  validateDestinationLabel,
+  watcherAcceptedMessage
 } from "@/lib/safety/safe-arrival";
 
 const NOW = Date.parse("2026-07-16T12:00:00.000Z");
@@ -138,5 +140,18 @@ describe("neutral copy (spec §9)", () => {
     expect(message).toBe("Ama has not confirmed arrival yet.");
     expect(message).not.toMatch(/missing|emergency|danger|help/i);
     expect(arrivedMessage("Ama")).toBe("Ama has arrived safely.");
+  });
+
+  it("watcher-accepted and cancelled copy never leaks a destination or location", () => {
+    const accepted = watcherAcceptedMessage("Kojo");
+    const cancelled = cancelledMessage("Ama");
+    expect(accepted).toBe("Kojo is watching your journey.");
+    expect(cancelled).toBe("Ama's Safe Arrival was cancelled.");
+    for (const copy of [accepted, cancelled]) {
+      // No geography ever reaches a lock screen.
+      expect(copy.toLowerCase()).not.toMatch(
+        /\bkm\b|metre|meter|mile|coordinate|latitude|longitude|street|route|distance|heading to|address/
+      );
+    }
   });
 });

@@ -7,6 +7,7 @@ import { AdminStatus, formatAdminDate } from "@/components/admin/admin-ui";
 import { AppSwitch } from "@/components/ui/app-switch";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import type { ManagedFeatureFlagKey } from "@/lib/features/feature-flags";
 
 export function FeatureFlagControl({
   flagKey,
@@ -14,14 +15,20 @@ export function FeatureFlagControl({
   description,
   enabled,
   status,
-  updatedAt
+  updatedAt,
+  enabledImpact,
+  disabledImpact,
+  changedBy
 }: {
-  flagKey: "open_moments";
+  flagKey: ManagedFeatureFlagKey;
   title: string;
   description: string;
   enabled: boolean;
   status: string;
   updatedAt: string;
+  enabledImpact: string;
+  disabledImpact: string;
+  changedBy: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -59,7 +66,7 @@ export function FeatureFlagControl({
         </div>
         <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">{description}</p>
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Stored status: {status}. Last updated {formatAdminDate(updatedAt, true)}.
+          Stored status: {status}. Last updated {formatAdminDate(updatedAt, true)} by {changedBy}.
         </p>
         {feedback ? (
           <p className="mt-2 text-xs text-muted-foreground" role="status">
@@ -82,9 +89,7 @@ export function FeatureFlagControl({
         }}
         title={`${nextEnabled ? "Enable" : "Disable"} ${title}?`}
         description={
-          nextEnabled
-            ? "This makes the Open feed visible to signed-in members. Only Buddy Pro members can publish."
-            : "This immediately hides the Open feed and prevents new public posts. Existing posts stay stored until they expire."
+          nextEnabled ? enabledImpact : disabledImpact
         }
       >
         <div className="space-y-4">
@@ -109,7 +114,7 @@ export function FeatureFlagControl({
               disabled={pending || reason.trim().length < 3}
               onClick={confirm}
             >
-              {nextEnabled ? "Enable Open Moments" : "Disable Open Moments"}
+              {nextEnabled ? `Enable ${title}` : `Disable ${title}`}
             </Button>
           </div>
         </div>

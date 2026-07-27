@@ -75,6 +75,7 @@ export function usePWAInstall(delayMs = 4000) {
     function handleAppInstalled() {
       knownInstalled = true;
       markInstalled();
+      window.dispatchEvent(new Event("mad-buddy:pwa-installed"));
     }
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);

@@ -5,7 +5,7 @@ import {
 } from "@/components/safety/safe-arrival-page";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import type { SafeArrivalStatus } from "@/lib/supabase/database.types";
 
 export const dynamic = "force-dynamic";
@@ -20,10 +20,7 @@ const LIVE_STATUSES: SafeArrivalStatus[] = [
 ];
 
 export default async function SafeArrivalRoute() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const env = getSupabaseServerEnv();
   let mySessions: SafeArrivalSessionSummary[] = [];
@@ -33,13 +30,21 @@ export default async function SafeArrivalRoute() {
   if (user && env.url && env.serviceRoleKey) {
     const admin = createSupabaseAdminClient();
 
-    // Journeys I'm travelling.
-    const { data: ownRows } = await admin
-      .from("safe_arrival_sessions")
-      .select("id, destination_label, expected_arrival_at, grace_period_minutes, note, status, traveller_id, started_at")
-      .eq("traveller_id", user.id)
-      .in("status", LIVE_STATUSES)
-      .order("expected_arrival_at", { ascending: true });
+    // Independent first-stage reads run together. Their dependent profile and
+    // watcher lookups remain scoped to the ids returned below.
+    const [{ data: ownRows }, { data: contactRows }, muddyContacts] = await Promise.all([
+      admin
+        .from("safe_arrival_sessions")
+        .select("id, destination_label, expected_arrival_at, grace_period_minutes, note, status, traveller_id, started_at")
+        .eq("traveller_id", user.id)
+        .in("status", LIVE_STATUSES)
+        .order("expected_arrival_at", { ascending: true }),
+      admin
+        .from("safe_arrival_contacts")
+        .select("session_id, acknowledgement_status")
+        .eq("contact_user_id", user.id),
+      loadMuddies(admin, user.id)
+    ]);
 
     // Watchers who have ACCEPTED (acknowledgement_status = 'watching') for each
     // of my sessions. This is the canonical approved-watcher set — never the
@@ -98,11 +103,6 @@ export default async function SafeArrivalRoute() {
     }));
 
     // Journeys I've been asked to watch.
-    const { data: contactRows } = await admin
-      .from("safe_arrival_contacts")
-      .select("session_id, acknowledgement_status")
-      .eq("contact_user_id", user.id);
-
     const watchedIds = (contactRows ?? []).map((row) => row.session_id);
     const ackBySession = new Map((contactRows ?? []).map((row) => [row.session_id, row.acknowledgement_status]));
 
@@ -142,7 +142,7 @@ export default async function SafeArrivalRoute() {
       }));
     }
 
-    contacts = await loadMuddies(admin, user.id);
+    contacts = muddyContacts;
   }
 
   return <SafeArrivalPage mySessions={mySessions} watching={watching} contacts={contacts} />;

@@ -10,6 +10,7 @@ import {
 } from "@/lib/billing/entitlements";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SubscriptionPlan, SubscriptionStatus } from "@/lib/supabase/database.types";
+import { loadActiveTrialAccess } from "@/lib/trials/service";
 
 /**
  * Entitlement service (spec §10, §82). The single server-side path from a user
@@ -21,21 +22,37 @@ import type { SubscriptionPlan, SubscriptionStatus } from "@/lib/supabase/databa
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
 export async function loadBillingState(admin: Admin, userId: string): Promise<BillingState> {
-  const { data } = await admin
-    .from("subscriptions")
-    .select("plan, status, current_period_end, grace_ends_at")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const [{ data }, trial] = await Promise.all([
+    admin
+      .from("subscriptions")
+      .select("plan, status, current_period_end, grace_ends_at")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    loadActiveTrialAccess(admin, userId)
+  ]);
 
   if (!data) {
-    return { plan: "free", status: "free", periodEndMs: null, graceEndsMs: null };
+    return {
+      plan: "free",
+      status: "free",
+      periodEndMs: null,
+      graceEndsMs: null,
+      trialId: trial?.id ?? null,
+      trialPlan: trial?.plan ?? null,
+      trialStartedAtMs: trial?.startedAtMs ?? null,
+      trialEndsAtMs: trial?.endsAtMs ?? null
+    };
   }
 
   return {
     plan: data.plan as SubscriptionPlan,
     status: data.status as SubscriptionStatus,
     periodEndMs: data.current_period_end ? Date.parse(data.current_period_end) : null,
-    graceEndsMs: data.grace_ends_at ? Date.parse(data.grace_ends_at) : null
+    graceEndsMs: data.grace_ends_at ? Date.parse(data.grace_ends_at) : null,
+    trialId: trial?.id ?? null,
+    trialPlan: trial?.plan ?? null,
+    trialStartedAtMs: trial?.startedAtMs ?? null,
+    trialEndsAtMs: trial?.endsAtMs ?? null
   };
 }
 

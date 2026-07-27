@@ -48,6 +48,7 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { resolveNotificationDestination } from "@/lib/notifications/destination";
+import { fetchWithTimeout } from "@/lib/network/resilience";
 import { formatMuddyStatusLabel } from "@/lib/social/rules";
 import type { HomeUpcomingPlan, PlanAttendee } from "@/lib/social/upcoming-plans";
 import { type FreshnessState } from "@/lib/proximity/freshness";
@@ -135,6 +136,7 @@ type DashboardPageContentProps = {
     watchers: Array<{ id: string; name: string; avatarUrl: string | null }>;
     sharedCount: number;
   } | null;
+  hiddenQuickActionHrefs?: string[];
 };
 
 const attentionIconByType: Record<string, LucideIcon> = {
@@ -162,7 +164,8 @@ export function DashboardPageContent({
   hasMorePlans = false,
   glowColorByFriendId = {},
   profileReminder = null,
-  safeArrivalSession = null
+  safeArrivalSession = null,
+  hiddenQuickActionHrefs = []
 }: DashboardPageContentProps) {
   const reducedMotion = useReducedMotion();
   const [ghostMode, setGhostMode] = useState(initialVisibilityStatus === "ghost");
@@ -178,6 +181,7 @@ export function DashboardPageContent({
   const [openHangouts, setOpenHangouts] = useState<VisibleHangout[]>([]);
   const [isPending, startTransition] = useTransition();
   const locationUpdateInFlightRef = useRef(false);
+  const nearbyRefreshRef = useRef<Promise<void> | null>(null);
   const promptFeedbackTimerRef = useRef<number | null>(null);
   const visibleFriends = !ghostMode ? friends : [];
   // The nearby endpoint also returns friends whose signal is stale ("hidden")
@@ -238,18 +242,19 @@ export function DashboardPageContent({
   }, []);
 
   const loadNearbyFriends = useCallback(() => {
-    startTransition(async () => {
+    if (nearbyRefreshRef.current) return nearbyRefreshRef.current;
+
+    const refresh = (async () => {
       try {
-        const response = await fetch("/api/friends/nearby", {
+        const response = await fetchWithTimeout("/api/friends/nearby", {
           method: "GET",
           credentials: "include"
-        });
+        }, 12_000, "load nearby friends");
 
         if (!response.ok) {
           const error = (await response.json().catch(() => ({ error: "Could not refresh nearby friends." }))) as {
             error?: string;
           };
-          setFriends([]);
           setStatusMessage(error.error ?? "Could not refresh nearby friends.");
           return;
         }
@@ -258,10 +263,15 @@ export function DashboardPageContent({
         setFriends(data.friends.map(toDashboardFriend));
         setStatusMessage("");
       } catch {
-        setFriends([]);
         setStatusMessage("Could not reach the nearby friends service.");
+      } finally {
+        nearbyRefreshRef.current = null;
       }
-    });
+    })();
+
+    nearbyRefreshRef.current = refresh;
+    startTransition(async () => refresh);
+    return refresh;
   }, []);
 
   const updatePrivateLocation = useCallback(() => {
@@ -280,7 +290,7 @@ export function DashboardPageContent({
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
-          const response = await fetch("/api/location/update", {
+          const response = await fetchWithTimeout("/api/location/update", {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
@@ -289,23 +299,20 @@ export function DashboardPageContent({
               longitude: position.coords.longitude,
               accuracy: position.coords.accuracy
             })
-          });
+          }, 15_000, "update dashboard proximity");
 
           if (!response.ok) {
             const data = (await response.json().catch(() => null)) as { error?: string } | null;
             setStatusMessage(data?.error ?? "Could not update your private proximity signal.");
-            locationUpdateInFlightRef.current = false;
-            setIsCheckingNearby(false);
             return;
           }
 
-          locationUpdateInFlightRef.current = false;
-          setIsCheckingNearby(false);
           loadNearbyFriends();
         } catch {
+          setStatusMessage("Could not update your private proximity signal.");
+        } finally {
           locationUpdateInFlightRef.current = false;
           setIsCheckingNearby(false);
-          setStatusMessage("Could not update your private proximity signal.");
         }
       },
       (error) => {
@@ -342,7 +349,12 @@ export function DashboardPageContent({
 
     async function loadAttentionItems() {
       try {
-        const response = await fetch("/api/notifications", { credentials: "include", cache: "no-store" });
+        const response = await fetchWithTimeout(
+          "/api/notifications",
+          { credentials: "include", cache: "no-store" },
+          12_000,
+          "load dashboard attention"
+        );
         if (!response.ok || !isMounted) return;
         const data = (await response.json()) as { notifications: ApiNotification[] };
         const unread = data.notifications.filter((notification) => !notification.is_read);
@@ -737,7 +749,7 @@ export function DashboardPageContent({
         </section>
 
         <div className="min-w-0 self-start lg:col-start-2 lg:row-start-1">
-          <QuickActions />
+          <QuickActions hiddenHrefs={hiddenQuickActionHrefs} />
         </div>
 
         <div className="min-w-0 self-start lg:col-start-1 lg:row-start-2">
@@ -961,12 +973,13 @@ const quickActions: Array<{
   }
 ];
 
-function QuickActions() {
+function QuickActions({ hiddenHrefs = [] }: { hiddenHrefs?: string[] }) {
+  const visibleActions = quickActions.filter((action) => !hiddenHrefs.includes(action.href));
   return (
     <section className="min-w-0" aria-label="Quick actions">
       <h2 className="mb-3 text-lg font-semibold tracking-tight">Quick actions</h2>
       <div className="grid min-w-0 grid-cols-3 gap-2">
-        {quickActions.map((action) => (
+        {visibleActions.map((action) => (
           <Link
             key={action.href}
             href={action.href}

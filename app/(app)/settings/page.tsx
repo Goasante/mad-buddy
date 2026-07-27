@@ -1,5 +1,6 @@
 import { SettingsPageContent } from "@/components/settings/settings-page";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import type { Json, VisibilityStatus } from "@/lib/supabase/database.types";
 
 function nearbyAlertsFromPreferences(value: Json | undefined) {
@@ -13,9 +14,7 @@ function nearbyAlertsFromPreferences(value: Json | undefined) {
 
 export default async function SettingsPage() {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) {
     return <SettingsPageContent />;

@@ -206,6 +206,11 @@ export type BillingState = {
   /** End of the paid period / grace window, if any. */
   periodEndMs: number | null;
   graceEndsMs: number | null;
+  /** Separate, server-verified trial access. Never persisted as a subscription. */
+  trialId?: string | null;
+  trialPlan?: Exclude<SubscriptionPlan, "free"> | null;
+  trialStartedAtMs?: number | null;
+  trialEndsAtMs?: number | null;
 };
 
 /**
@@ -214,23 +219,53 @@ export type BillingState = {
  * evaluated against the server clock the caller passes in.
  */
 export function effectivePlan(state: BillingState, nowMs: number): SubscriptionPlan {
-  if (state.plan === "free") return "free";
-  if (!PAID_ACCESS_STATUSES.has(state.status)) return "free";
-
-  // A grace window, once elapsed, ends paid access even if the provider
-  // status hasn't caught up yet.
-  if (state.graceEndsMs !== null && nowMs > state.graceEndsMs) return "free";
-  // A lapsed period with no grace window also ends access.
-  if (
-    state.graceEndsMs === null &&
-    state.periodEndMs !== null &&
-    nowMs > state.periodEndMs &&
-    state.status !== "active" &&
-    state.status !== "trialing"
-  ) {
-    return "free";
+  if (state.plan !== "free" && PAID_ACCESS_STATUSES.has(state.status)) {
+    const graceExpired = state.graceEndsMs !== null && nowMs > state.graceEndsMs;
+    const periodExpired =
+      state.graceEndsMs === null &&
+      state.periodEndMs !== null &&
+      nowMs > state.periodEndMs &&
+      state.status !== "active" &&
+      state.status !== "trialing";
+    if (!graceExpired && !periodExpired) return state.plan;
   }
-  return state.plan;
+
+  const trialIsActive =
+    Boolean(state.trialId && state.trialPlan) &&
+    state.trialStartedAtMs !== null &&
+    state.trialStartedAtMs !== undefined &&
+    state.trialEndsAtMs !== null &&
+    state.trialEndsAtMs !== undefined &&
+    state.trialStartedAtMs <= nowMs &&
+    state.trialEndsAtMs > nowMs;
+  return trialIsActive ? (state.trialPlan ?? "free") : "free";
+}
+
+export function billingAccessSource(state: BillingState, nowMs: number): "subscription" | "trial" | "free" {
+  const plan = effectivePlan(state, nowMs);
+  if (plan === "free") return "free";
+  const trialActive =
+    state.trialId &&
+    state.trialPlan === plan &&
+    state.trialStartedAtMs !== null &&
+    state.trialStartedAtMs !== undefined &&
+    state.trialEndsAtMs !== null &&
+    state.trialEndsAtMs !== undefined &&
+    state.trialStartedAtMs <= nowMs &&
+    state.trialEndsAtMs > nowMs;
+  const paidActive =
+    effectivePlan(
+      {
+        ...state,
+        trialId: null,
+        trialPlan: null,
+        trialStartedAtMs: null,
+        trialEndsAtMs: null
+      },
+      nowMs
+    ) !== "free";
+  if (paidActive) return "subscription";
+  return trialActive ? "trial" : "free";
 }
 
 export type EntitlementOverride = {

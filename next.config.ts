@@ -24,6 +24,22 @@ const nextConfig: NextConfig = {
       : [];
     return [
       {
+        // A worker controls how an installed app launches. It must always be
+        // revalidated so an old Home Screen installation can discover a new
+        // deployment without being deleted and reinstalled.
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" }
+        ]
+      },
+      {
+        source: "/manifest.webmanifest",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, max-age=0, must-revalidate" }
+        ]
+      },
+      {
         source: "/(.*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },

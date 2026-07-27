@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell/app-shell";
+import { EnableNotificationsPrompt } from "@/components/pwa/enable-notifications-prompt";
 import { InstallAppPrompt } from "@/components/pwa/install-app-prompt";
 import { ensureMaintenanceWarm } from "@/lib/maintenance/loader";
 import { shouldBlockForMaintenance } from "@/lib/maintenance/state";
@@ -10,6 +11,7 @@ import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { resolveGlobalFeatureFlag, SOCIALIZE_FLAG } from "@/lib/features/feature-flags";
 
 type ProtectedAppLayoutProps = {
   children: ReactNode;
@@ -28,7 +30,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   // getCurrentUser() is the shared per-request auth round trip; the RLS client
   // below is only for this layout's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
-  const [adminContext, unreadResult, profileResult] = await Promise.all([
+  const [adminContext, unreadResult, profileResult, socializeFlagResult] = await Promise.all([
     getSafetyAdminContext(),
     user
       ? supabase
@@ -42,6 +44,13 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
           .from("profiles")
           .select("username, avatar_url, visibility_status")
           .eq("user_id", user.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    user
+      ? supabase
+          .from("feature_flags")
+          .select("status, default_value")
+          .eq("key", SOCIALIZE_FLAG)
           .maybeSingle()
       : Promise.resolve({ data: null })
   ]);
@@ -64,10 +73,12 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
       currentUsername={profileResult.data?.username ?? null}
       currentAvatarUrl={profileResult.data?.avatar_url ?? null}
       currentUserId={user?.id ?? null}
+      hiddenNavigationHrefs={resolveGlobalFeatureFlag(socializeFlagResult.data) ? [] : ["/discover"]}
     >
       {children}
       {/* Only offered once the user is signed in (mounted in the authed layout). */}
       <InstallAppPrompt />
+      {user ? <EnableNotificationsPrompt userId={user.id} /> : null}
     </AppShell>
   );
 }

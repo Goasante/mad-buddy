@@ -50,7 +50,10 @@ describe("canonical owner count", () => {
 describe("notification destination for a hangout request", () => {
   it("opens the Hangout view from a session-scoped type", () => {
     const destination = resolveNotificationDestination("hangout:3f8c1e2a-0000-4000-8000-000000000000");
-    expect(destination).toEqual({ type: "internal", href: "/hangout-mode" });
+    expect(destination).toEqual({
+      type: "internal",
+      href: "/hangout-mode?hangout=3f8c1e2a-0000-4000-8000-000000000000"
+    });
   });
 
   it("still resolves the legacy suffix", () => {

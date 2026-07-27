@@ -5,15 +5,12 @@ import { buildMomentFeed, buildOpenMomentFeed } from "@/lib/content/service";
 import { isOpenMomentsEnabled } from "@/lib/features/feature-flags";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function MomentsRoute() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const env = getSupabaseServerEnv();
   if (!user || !env.url || !env.serviceRoleKey) {

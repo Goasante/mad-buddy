@@ -1,15 +1,35 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
-export default function AppError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function AppError({
+  error,
+  reset
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  useEffect(() => {
+    console.error("[app] route render failed", {
+      digest: error.digest ?? "unavailable"
+    });
+  }, [error]);
+
   return (
-    <div className="mx-auto mt-8 max-w-xl rounded-2xl border border-red-400/30 bg-red-400/10 p-6 text-center" role="alert">
-      <AlertTriangle className="mx-auto h-6 w-6 text-red-500" aria-hidden="true" />
-      <h1 className="mt-3 text-lg font-semibold">This page could not be loaded</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Check your connection and try again.</p>
-      <Button type="button" variant="outline" size="sm" className="mt-4" onClick={reset}>Try again</Button>
-    </div>
+    <main className="mx-auto flex w-full max-w-xl flex-col items-center px-6 py-16 text-center">
+      <h1 className="text-2xl font-semibold">This page could not be opened</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Your data is safe. Check your connection, then try again.
+      </p>
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <Button type="button" onClick={reset}>
+          Try again
+        </Button>
+        <Button type="button" variant="outline" onClick={() => window.location.assign("/dashboard")}>
+          Go to Home
+        </Button>
+      </div>
+    </main>
   );
 }

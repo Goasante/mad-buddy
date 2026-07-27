@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import type { Route } from "next";
-import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState, useTransition } from "react";
@@ -13,6 +11,7 @@ import { FormField } from "@/components/auth/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
+import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 
 const signupSchema = z.object({
   email: z.string().email("Enter a valid email address."),
@@ -28,7 +27,6 @@ type SignupFormProps = {
 };
 
 export function SignupForm({ initialError = null }: SignupFormProps) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showPassword, setShowPassword] = useState(false);
   const [actionState, setActionState] = useState<AuthActionState | null>(
@@ -51,9 +49,21 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
   function onSubmit(values: SignupFormValues) {
     setActionState(null);
     startTransition(async () => {
-      const result = await signUpAction(values);
-      setActionState(result);
-      if (result.ok && result.redirectTo) router.push(result.redirectTo as Route);
+      try {
+        const result = await withTimeout(signUpAction(values), {
+          operation: "create account",
+          timeoutMs: 20_000
+        });
+        setActionState(result);
+        if (result.ok && result.redirectTo) window.location.assign(result.redirectTo);
+      } catch (error) {
+        setActionState({
+          ok: false,
+          message: isRequestTimeoutError(error)
+            ? "Account creation is taking too long. Check your connection and try again."
+            : "Mad Buddy could not create your account. Try again."
+        });
+      }
     });
   }
 

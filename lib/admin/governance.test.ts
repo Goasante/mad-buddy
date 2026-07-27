@@ -125,6 +125,25 @@ describe("no ambient staff access to private data (spec §1, §4)", () => {
     ]);
   });
 
+  it("keeps product analytics with business administrators, not support", () => {
+    expect(permissionsForRole("super_administrator")).toContain("admin.analytics.view");
+    expect(permissionsForRole("trust_safety_administrator")).toContain("admin.analytics.view");
+    expect(permissionsForRole("customer_support_agent")).not.toContain("admin.analytics.view");
+    expect(permissionsForRole("billing_support_agent")).not.toContain("admin.analytics.view");
+    expect(permissionsForRole("super_administrator")).toContain("admin.revenue.view");
+    expect(permissionsForRole("trust_safety_administrator")).toContain("admin.revenue.view");
+    expect(permissionsForRole("customer_support_agent")).not.toContain("admin.revenue.view");
+    expect(permissionsForRole("billing_support_agent")).not.toContain("admin.revenue.view");
+    expect(permissionsForRole("super_administrator")).toContain("admin.revenue.manage");
+    expect(permissionsForRole("trust_safety_administrator")).not.toContain("admin.revenue.manage");
+    expect(permissionsForRole("customer_support_agent")).not.toContain("admin.revenue.manage");
+    expect(permissionsForRole("billing_support_agent")).not.toContain("admin.revenue.manage");
+    expect(permissionsForRole("super_administrator")).toContain("admin.experiments.manage");
+    expect(permissionsForRole("trust_safety_administrator")).not.toContain("admin.experiments.manage");
+    expect(permissionsForRole("customer_support_agent")).not.toContain("admin.experiments.manage");
+    expect(permissionsForRole("billing_support_agent")).not.toContain("admin.experiments.manage");
+  });
+
   it("limits user recovery links to owner, admin, and customer support roles", () => {
     expect(permissionsForRole("super_administrator")).toContain("admin.users.recovery_link");
     expect(permissionsForRole("trust_safety_administrator")).toContain("admin.users.recovery_link");

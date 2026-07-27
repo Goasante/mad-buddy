@@ -6,11 +6,14 @@ import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
+  ChartNoAxesCombined,
   ArrowLeft,
   ClipboardList,
   CreditCard,
+  CircleDollarSign,
   SlidersHorizontal,
   FileKey2,
+  FlaskConical,
   Gauge,
   Headphones,
   PowerOff,
@@ -35,7 +38,10 @@ type AdminHref =
   | "/admin/repairs"
   | "/admin/billing"
   | "/admin/entitlements"
+  | "/admin/analytics"
+  | "/admin/revenue"
   | "/admin/features"
+  | "/admin/experiments"
   | "/admin/privacy"
   | "/admin/system"
   | "/admin/maintenance"
@@ -47,6 +53,7 @@ type AdminNavigationItem = {
   label: string;
   icon: LucideIcon;
   permission?: AdminPermission;
+  ownerOnly?: boolean;
 };
 
 const adminNavigationGroups: Array<{ label: string; items: AdminNavigationItem[] }> = [
@@ -65,7 +72,10 @@ const adminNavigationGroups: Array<{ label: string; items: AdminNavigationItem[]
     items: [
       { href: "/admin/billing", label: "Billing", icon: CreditCard, permission: "admin.billing.view" },
       { href: "/admin/entitlements", label: "Entitlements", icon: SlidersHorizontal, permission: "admin.entitlements.view" },
+      { href: "/admin/analytics", label: "Analytics", icon: ChartNoAxesCombined, permission: "admin.analytics.view" },
+      { href: "/admin/revenue", label: "Revenue", icon: CircleDollarSign, permission: "admin.revenue.view" },
       { href: "/admin/features", label: "Feature controls", icon: ToggleRight, permission: "admin.feature_flags.manage" },
+      { href: "/admin/experiments", label: "Experiments", icon: FlaskConical, permission: "admin.experiments.manage", ownerOnly: true },
       { href: "/admin/privacy", label: "Privacy", icon: FileKey2, permission: "admin.privacy.requests.manage" },
       { href: "/admin/system", label: "App health", icon: Activity, permission: "admin.security.events.view" },
       { href: "/admin/maintenance", label: "Maintenance", icon: PowerOff, permission: "admin.maintenance.manage" }
@@ -94,7 +104,9 @@ export function AdminShell({ children, email, isDevelopmentFallback, permissions
   const pathname = usePathname();
   const allowedGroups = adminNavigationGroups.map((group) => ({
     ...group,
-    items: group.items.filter((item) => !item.permission || permissions.includes(item.permission))
+    items: group.items.filter(
+      (item) => (!item.permission || permissions.includes(item.permission)) && (!item.ownerOnly || role === "owner")
+    )
   })).filter((group) => group.items.length > 0);
   const allowedItems = allowedGroups.flatMap((group) => group.items);
 

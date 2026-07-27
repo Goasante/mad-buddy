@@ -3,6 +3,7 @@
 import { CheckCircle2, LocateFixed, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { fetchWithTimeout } from "@/lib/network/resilience";
 
 export function LocationPermissionPanel() {
   const [status, setStatus] = useState<"idle" | "checking" | "ready" | "error">("idle");
@@ -20,7 +21,7 @@ export function LocationPermissionPanel() {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
-          const response = await fetch("/api/location/update", {
+          const response = await fetchWithTimeout("/api/location/update", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -28,7 +29,7 @@ export function LocationPermissionPanel() {
               longitude: position.coords.longitude,
               accuracy: position.coords.accuracy
             })
-          });
+          }, 15_000, "save onboarding proximity");
 
           if (!response.ok) {
             const data = (await response.json().catch(() => ({ error: "Could not save private location." }))) as {

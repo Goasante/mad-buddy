@@ -23,6 +23,7 @@ import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { recordProductEvent } from "@/lib/analytics/track";
 import type { InviteType } from "@/lib/supabase/database.types";
 
 export type InviteActionState = {
@@ -128,7 +129,7 @@ export async function resolveInviteAction(token: string): Promise<InvitePreview 
   const admin = createSupabaseAdminClient();
   const { data: invite } = await admin
     .from("invite_links")
-    .select("id, creator_id, invite_type, status, expires_at, revoked_at, uses_count, max_uses")
+    .select("id, creator_id, invite_type, status, expires_at, revoked_at, uses_count, max_uses, created_at")
     .eq("token_hash", hashInviteToken(token))
     .maybeSingle();
   if (!invite) return null;
@@ -171,7 +172,7 @@ export async function acceptInviteAction(token: string): Promise<InviteActionSta
   const admin = createSupabaseAdminClient();
   const { data: invite } = await admin
     .from("invite_links")
-    .select("id, creator_id, invite_type, status, expires_at, revoked_at, uses_count, max_uses")
+    .select("id, creator_id, invite_type, status, expires_at, revoked_at, uses_count, max_uses, created_at")
     .eq("token_hash", hashInviteToken(token))
     .maybeSingle();
   if (!invite) return { ok: false, message: "That invite link isn't valid." };
@@ -222,6 +223,21 @@ export async function acceptInviteAction(token: string): Promise<InviteActionSta
       updated_at: new Date().toISOString()
     })
     .eq("id", invite.id);
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("created_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (profile && Date.parse(profile.created_at) >= Date.parse(invite.created_at)) {
+    await recordProductEvent(admin, {
+      eventName: "invite_signup",
+      actorId: userId,
+      resourceType: "invite_links",
+      resourceId: invite.id,
+      featureKey: "invites"
+    });
+  }
 
   return { ok: true, message: "Request sent. They'll see it shortly." };
 }

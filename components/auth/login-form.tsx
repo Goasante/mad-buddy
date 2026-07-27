@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import type { Route } from "next";
-import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
 import { useState, useTransition } from "react";
@@ -13,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/auth/form-field";
 import { startOAuth } from "@/lib/auth/oauth";
+import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 
 const loginSchema = z.object({
   email: z.string().email("Enter your email address."),
@@ -27,7 +26,6 @@ type LoginFormProps = {
 };
 
 export function LoginForm({ initialError = null, nextDestination = "/dashboard" }: LoginFormProps) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [actionState, setActionState] = useState<AuthActionState | null>(
     initialError ? { ok: false, message: initialError } : null
@@ -48,20 +46,32 @@ export function LoginForm({ initialError = null, nextDestination = "/dashboard" 
 
   function onSubmit(values: LoginFormValues) {
     startTransition(async () => {
-      const result = await loginAction({ ...values, next: nextDestination });
-      setActionState(
-        result.ok ||
-        result.message.includes("Supabase is not configured") ||
-        result.message.includes("Too many") ||
-        result.message.includes("could not reach the login service") ||
-        result.message.includes("Confirm your email first") ||
-        result.message.includes("already exists")
-          ? result
-          : { ...result, message: "Email address or password is incorrect." }
-      );
+      try {
+        const result = await withTimeout(loginAction({ ...values, next: nextDestination }), {
+          operation: "log in",
+          timeoutMs: 20_000
+        });
+        setActionState(
+          result.ok ||
+          result.message.includes("Supabase is not configured") ||
+          result.message.includes("Too many") ||
+          result.message.includes("could not reach the login service") ||
+          result.message.includes("Confirm your email first") ||
+          result.message.includes("already exists")
+            ? result
+            : { ...result, message: "Email address or password is incorrect." }
+        );
 
-      if (result.ok && result.redirectTo) {
-        router.push(result.redirectTo as Route);
+        if (result.ok && result.redirectTo) {
+          window.location.assign(result.redirectTo);
+        }
+      } catch (error) {
+        setActionState({
+          ok: false,
+          message: isRequestTimeoutError(error)
+            ? "Login is taking too long. Check your connection and try again."
+            : "Mad Buddy could not reach the login service. Try again."
+        });
       }
     });
   }

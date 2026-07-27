@@ -4,6 +4,7 @@ import { CreditCard, Loader2 } from "lucide-react";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import type { PaidPlanId } from "@/lib/paystack/config";
+import { fetchWithTimeout } from "@/lib/network/resilience";
 
 export type CheckoutButtonProps = {
   plan: PaidPlanId;
@@ -24,19 +25,23 @@ export function CheckoutButton({
   function startCheckout() {
     startTransition(async () => {
       setMessage(null);
-      const response = await fetch("/api/paystack/initialize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan })
-      });
-      const data = (await response.json()) as { authorizationUrl?: string; error?: string };
+      try {
+        const response = await fetchWithTimeout("/api/paystack/initialize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plan })
+        }, 20_000, "start Paystack checkout");
+        const data = (await response.json()) as { authorizationUrl?: string; error?: string };
 
-      if (!response.ok || !data.authorizationUrl) {
-        setMessage(data.error ?? "Could not start checkout.");
-        return;
+        if (!response.ok || !data.authorizationUrl) {
+          setMessage(data.error ?? "Could not start checkout.");
+          return;
+        }
+
+        window.location.assign(data.authorizationUrl);
+      } catch {
+        setMessage("Checkout could not be reached. Check your connection and try again.");
       }
-
-      window.location.href = data.authorizationUrl;
     });
   }
 

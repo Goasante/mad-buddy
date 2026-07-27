@@ -7,6 +7,7 @@ import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isSocializeEnabled } from "@/lib/features/feature-flags";
 
 function isStatusActiveAtRequestTime(expiresAt: string) {
   return Date.parse(expiresAt) > Date.now();
@@ -16,7 +17,7 @@ export default async function DashboardPage() {
   // Shares the per-request cached getUser() with the layout; the client is for
   // this page's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
-  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival, glowColorByFriendId] = user
+  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -32,9 +33,10 @@ export default async function DashboardPage() {
           .eq("user_id", user.id)
           .maybeSingle(),
         loadSafeArrival(user.id),
-        loadFriendGlowColors(createSupabaseAdminClient(), user.id)
+        loadFriendGlowColors(createSupabaseAdminClient(), user.id),
+        isSocializeEnabled(createSupabaseAdminClient())
       ])
-    : [null, null, null, { plans: [], hasMore: false }, null, null, {}];
+    : [null, null, null, { plans: [], hasMore: false }, null, null, {}, false];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -70,6 +72,7 @@ export default async function DashboardPage() {
           ? { userId: user.id, missingItems: missingProfileItems }
           : null
       }
+      hiddenQuickActionHrefs={socializeEnabled ? [] : ["/discover"]}
     />
   );
 }

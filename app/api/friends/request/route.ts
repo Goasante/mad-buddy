@@ -4,7 +4,10 @@ import { resolveApiUser } from "@/lib/api/auth";
 import { preflightResponse, withCors } from "@/lib/api/cors";
 import { sendFriendRequest } from "@/lib/friends/service";
 
-const bodySchema = z.object({ targetUserId: z.string().uuid() });
+const bodySchema = z.object({
+  targetUserId: z.string().uuid(),
+  source: z.enum(["friend", "socialize"]).default("friend")
+});
 
 export function OPTIONS(request: Request) {
   return preflightResponse(request);
@@ -26,7 +29,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await sendFriendRequest(auth.user.id, body.data.targetUserId);
+  const result = await sendFriendRequest(auth.user.id, body.data.targetUserId, body.data.source);
 
   return withCors(NextResponse.json(result, { status: result.ok ? 200 : 400 }), request);
 }

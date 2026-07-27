@@ -36,6 +36,9 @@ export const ADMIN_PERMISSIONS = [
   "admin.billing.manage_plan",
   "admin.entitlements.view",
   "admin.entitlements.manage",
+  "admin.analytics.view",
+  "admin.revenue.view",
+  "admin.revenue.manage",
   "admin.verification.review",
   "admin.organisations.restrict",
   "admin.security.events.view",
@@ -43,6 +46,7 @@ export const ADMIN_PERMISSIONS = [
   "admin.privacy.requests.manage",
   "admin.audit.view",
   "admin.feature_flags.manage",
+  "admin.experiments.manage",
   "admin.emergency_controls.manage",
   "admin.maintenance.manage",
   "admin.roles.manage"
@@ -148,6 +152,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, readonly AdminPermission[]> = {
     "admin.appeals.review",
     "admin.organisations.restrict",
     "admin.audit.view",
+    "admin.analytics.view",
+    "admin.revenue.view",
     "admin.roles.manage",
     "admin.support.manage",
     "admin.sessions.revoke"

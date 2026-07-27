@@ -176,7 +176,7 @@ export function SocializePage({
       current.map((item) => (item.userId === person.userId ? { ...item, waveState: "sent" } : item))
     );
     startTransition(async () => {
-      const result = await sendFriendRequestAction(person.userId);
+      const result = await sendFriendRequestAction(person.userId, "socialize");
       if (!result.ok) {
         setPeople((current) =>
           current.map((item) => (item.userId === person.userId ? { ...item, waveState: "none" } : item))
@@ -474,7 +474,7 @@ export function SocializePage({
               type="button"
               onClick={() => setToast(null)}
               aria-label="Dismiss notification"
-              className="focus-ring -mr-1 shrink-0 rounded text-white/50 hover:text-white"
+              className="focus-ring -mr-2 -my-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-white/50 hover:bg-white/10 hover:text-white"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -534,7 +534,7 @@ function PersonCard({
             <button
               type="button"
               aria-label={`More options for ${capitalize(name)}`}
-              className="focus-ring safe-motion rounded-md p-1 text-muted-foreground hover:text-foreground"
+              className="focus-ring safe-motion grid h-11 w-11 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
               <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
             </button>

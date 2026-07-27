@@ -19,8 +19,8 @@ import {
 } from "@/lib/social/plans";
 import { activeHangoutCount } from "@/lib/social/planning";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { HangoutActivityType, HangoutAudienceType, HangoutRequestStatus } from "@/lib/supabase/database.types";
 
 export type HangoutActionState = {
@@ -42,12 +42,8 @@ function missingEnvState(): HangoutActionState | null {
 }
 
 async function getAuthedUserId() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser();
-  return error || !user ? null : user.id;
+  const user = await getCurrentUser();
+  return user?.id ?? null;
 }
 
 async function displayName(admin: Admin, userId: string) {

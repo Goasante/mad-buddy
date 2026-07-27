@@ -6,10 +6,13 @@ import { PlanComparisonTable } from "@/components/premium/plan-comparison-table"
 import { BrandMark } from "@/components/brand/brand-mark";
 import { PricingCard } from "@/components/premium/pricing-card";
 import { pricingPlans } from "@/components/premium/plans";
+import { PricingViewTracker } from "@/components/premium/pricing-view-tracker";
+import { TrialOffer } from "@/components/premium/trial-offer";
 
 export function PricingPageContent() {
   return (
     <main className="min-h-screen bg-background">
+      <PricingViewTracker />
       <PricingHeader />
 
       <div className="mx-auto max-w-6xl px-4 pb-7 pt-20 sm:px-6 sm:pt-24">
@@ -23,6 +26,7 @@ export function PricingPageContent() {
 
         <section className="relative isolate px-0 sm:px-4" aria-label="Pricing plans">
           <PricingDecoration />
+          <TrialOffer />
           <div className="grid overflow-hidden rounded-xl border border-border/80 bg-card/20 shadow-[0_18px_55px_hsl(var(--shadow)/0.1)] divide-y divide-border/70 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
             {pricingPlans.map((plan) => (
               <PricingCard key={plan.id} plan={plan} />

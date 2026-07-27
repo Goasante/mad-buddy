@@ -5,6 +5,7 @@ import type { Route } from "next";
 import { Hand, MapPin, CalendarClock, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { fetchWithTimeout } from "@/lib/network/resilience";
 
 type PulseSummaryData = {
   nearbyCount: number;
@@ -28,7 +29,12 @@ export function PulseSummary() {
     let cancelled = false;
     (async () => {
       try {
-        const response = await fetch("/api/pulse", { credentials: "include", cache: "no-store" });
+        const response = await fetchWithTimeout(
+          "/api/pulse",
+          { credentials: "include", cache: "no-store" },
+          12_000,
+          "load Pulse summary"
+        );
         if (!response.ok) throw new Error("pulse failed");
         const data = (await response.json()) as { summary: PulseSummaryData };
         if (!cancelled) {

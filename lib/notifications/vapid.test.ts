@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { readVapidConfiguration } from "@/lib/notifications/vapid";
 
 const configured = {
@@ -39,5 +41,12 @@ describe("VAPID configuration", () => {
     expect(readVapidConfiguration({ ...configured, VAPID_SUBJECT: "plain email" })).toMatchObject({
       ok: false
     });
+  });
+
+  it("validates production configuration during server startup without logging values", () => {
+    const source = readFileSync(join(process.cwd(), "instrumentation.ts"), "utf8");
+    expect(source).toContain("startup.web_push_configuration");
+    expect(source).toContain("readVapidConfiguration(process.env)");
+    expect(source).not.toContain("VAPID_PRIVATE_KEY=");
   });
 });

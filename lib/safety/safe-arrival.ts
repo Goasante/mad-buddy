@@ -191,3 +191,13 @@ export function arrivedMessage(travellerName: string): string {
 export function extendedMessage(travellerName: string, extraMinutes: number): string {
   return `${travellerName} needs ${extraMinutes} more minutes.`;
 }
+
+/** Sent to the traveller when a chosen contact accepts. No location, ever. */
+export function watcherAcceptedMessage(watcherName: string): string {
+  return `${watcherName} is watching your journey.`;
+}
+
+/** Sent to watchers when the traveller ends the session. No location, ever. */
+export function cancelledMessage(travellerName: string): string {
+  return `${travellerName}'s Safe Arrival was cancelled.`;
+}

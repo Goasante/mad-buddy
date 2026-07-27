@@ -40,6 +40,48 @@
   }
 }
 
+@keyframes notification-bell-success {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-9deg);
+  }
+  50% {
+    transform: rotate(8deg);
+  }
+  75% {
+    transform: rotate(-4deg);
+  }
+}
+
+@keyframes notification-success-ring {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.72);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+
+.notification-bell-success {
+  animation: notification-bell-success 700ms ease-in-out 1;
+}
+
+.notification-success-ring {
+  animation: notification-success-ring 1100ms ease-out 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-bell-success,
+  .notification-success-ring {
+    animation: none;
+  }
+}
+
 /* Mobile: no visible scrollbar anywhere, but touch/keyboard scrolling is fully
  * preserved (display:none on the bar only, not overflow). */
 @media (max-width: 767px) {

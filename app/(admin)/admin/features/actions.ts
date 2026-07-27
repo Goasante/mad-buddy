@@ -4,14 +4,14 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdminPermission } from "@/lib/admin/access";
 import { recordAdminAuditEvent } from "@/lib/admin/service";
-import { OPEN_MOMENTS_FLAG } from "@/lib/features/feature-flags";
+import { isManagedFeatureFlagKey, MANAGED_FEATURES } from "@/lib/features/feature-flags";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { requireSafetyAdmin } from "@/lib/safety/admin";
 
 export type FeatureFlagActionState = { ok: boolean; message: string };
 
 const schema = z.object({
-  key: z.literal(OPEN_MOMENTS_FLAG),
+  key: z.string().refine(isManagedFeatureFlagKey, "Unknown feature control."),
   enabled: z.boolean(),
   reason: z.string().trim().min(3).max(500)
 });
@@ -58,6 +58,7 @@ export async function setFeatureFlagAction(input: unknown): Promise<FeatureFlagA
     .update({
       status: nextStatus,
       default_value: parsed.data.enabled,
+      updated_by: auth.context.userId,
       updated_at: new Date().toISOString()
     })
     .eq("id", current.id);
@@ -65,8 +66,12 @@ export async function setFeatureFlagAction(input: unknown): Promise<FeatureFlagA
 
   revalidatePath("/admin/features");
   revalidatePath("/moments");
+  revalidatePath("/discover");
+  revalidatePath("/dashboard");
+  const feature = MANAGED_FEATURES.find((item) => item.key === parsed.data.key);
+  const title = feature?.title ?? "Feature";
   return {
     ok: true,
-    message: parsed.data.enabled ? "Open Moments enabled." : "Open Moments disabled."
+    message: parsed.data.enabled ? `${title} enabled.` : `${title} disabled.`
   };
 }

@@ -24,6 +24,9 @@ export type JobType =
   | "media.strip_exif"
   | "media.delete_queued"
   | "billing.apply_scheduled_downgrade"
+  | "financial.capture_daily_snapshot"
+  | "financial.reconcile_paystack_fees"
+  | "trials.lifecycle"
   | "recap.generate_monthly"
   | "streaks.close_expired_periods"
   // Expiry sweeps (spec §31).
@@ -157,6 +160,9 @@ export const SCHEDULE: readonly ScheduleSpec[] = [
   { jobType: "safe_arrival.unconfirmed_alert", everyMinutes: 5, priority: 1 },
   { jobType: "media.delete_queued", everyMinutes: 60, priority: 4 },
   { jobType: "billing.apply_scheduled_downgrade", everyMinutes: 60, priority: 3 },
+  { jobType: "financial.capture_daily_snapshot", everyMinutes: 60 * 24, priority: 6 },
+  { jobType: "financial.reconcile_paystack_fees", everyMinutes: 60 * 24, priority: 6 },
+  { jobType: "trials.lifecycle", everyMinutes: 60, priority: 3 },
   { jobType: "streaks.close_expired_periods", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "recap.generate_monthly", everyMinutes: 60 * 24, priority: 7 },
   { jobType: "expiry.plans", everyMinutes: 60, priority: 5 },

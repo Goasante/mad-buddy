@@ -6,7 +6,7 @@ import {
 } from "@/components/plans/plans-page";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +20,7 @@ async function loadPlans(): Promise<{
   invitees: PlanInvitee[];
   currentUserId: string | null;
 }> {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const env = getSupabaseServerEnv();
   if (!user || !env.url || !env.serviceRoleKey) {
     return { plans: [], invitees: [], currentUserId: user?.id ?? null };
@@ -32,13 +29,14 @@ async function loadPlans(): Promise<{
   const admin = createSupabaseAdminClient();
 
   // Plans where I'm a (non-removed) participant, plus plans I created.
-  const [{ data: myRows }, { data: createdPlans }] = await Promise.all([
+  const [{ data: myRows }, { data: createdPlans }, invitees] = await Promise.all([
     admin
       .from("plan_participants")
       .select("plan_id, role, rsvp_status")
       .eq("user_id", user.id)
       .neq("rsvp_status", "removed"),
-    admin.from("plans").select("id").eq("creator_id", user.id)
+    admin.from("plans").select("id").eq("creator_id", user.id),
+    loadMuddies(admin, user.id)
   ]);
 
   const planIds = [
@@ -48,9 +46,6 @@ async function loadPlans(): Promise<{
     ])
   ];
   const myRowByPlan = new Map((myRows ?? []).map((row) => [row.plan_id, row]));
-
-  // Invite picker: my approved Muddies (id + name).
-  const invitees = await loadMuddies(admin, user.id);
 
   if (planIds.length === 0) {
     return { plans: [], invitees, currentUserId: user.id };

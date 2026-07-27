@@ -5,7 +5,7 @@ import {
   resolveUserEntitlements,
   serializeEntitlements
 } from "@/lib/billing/service";
-import { effectivePlan } from "@/lib/billing/entitlements";
+import { billingAccessSource, effectivePlan } from "@/lib/billing/entitlements";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -41,6 +41,8 @@ export async function GET() {
   const response = NextResponse.json({
     plan: effectivePlan(state, nowMs),
     status: state.status,
+    accessSource: billingAccessSource(state, nowMs),
+    trialEndsAt: state.trialEndsAtMs ? new Date(state.trialEndsAtMs).toISOString() : null,
     // Renewal/period info the billing screen needs (spec §70).
     currentPeriodEnd: state.periodEndMs ? new Date(state.periodEndMs).toISOString() : null,
     inGracePeriod: state.graceEndsMs !== null && nowMs <= state.graceEndsMs,

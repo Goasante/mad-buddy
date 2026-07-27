@@ -11,6 +11,7 @@ import {
 } from "@/lib/safety/safe-arrival-service";
 import {
   arrivedMessage,
+  cancelledMessage,
   canTransitionSafeArrival,
   canTravellerAct,
   safeArrivalLimitsFor,
@@ -330,7 +331,8 @@ export async function createSafeArrival(userId: string, input: unknown): Promise
       deliverNotification(admin, {
         userId: contactId,
         priority: "critical",
-        type: "safe_arrival:request",
+        // Deep-links to the exact session where the contact can accept.
+        type: `safe_arrival:${session.id}`,
         title: "Safe Arrival request",
         message: `${name} is heading to ${parsed.data.destinationLabel.trim()} and expects to arrive by ${arrivalLabel}.`
       })
@@ -404,12 +406,26 @@ export async function cancelSafeArrival(userId: string, sessionId: string): Prom
     return { ok: false, message: "This session is already closed." };
   }
 
-  await admin
+  const { data: cancelled } = await admin
     .from("safe_arrival_sessions")
     .update({ status: "cancelled", cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq("id", sessionId)
-    .eq("traveller_id", userId);
+    .eq("traveller_id", userId)
+    .in("status", ["draft", "pending_acknowledgement", "active", "grace_period", "extended", "unconfirmed"])
+    .select("id");
 
   await recordSafeArrivalEvent(admin, { sessionId, eventType: "cancelled", createdBy: userId });
+
+  // Watchers must know they can stand down (idempotent — a duplicate cancel
+  // updates no row and sends nothing).
+  if (cancelled?.length) {
+    const name = await travellerName(admin, userId);
+    await notifyContacts(admin, sessionId, {
+      type: "safe_arrival:cancelled",
+      title: "Safe Arrival ended",
+      message: cancelledMessage(name)
+    });
+  }
+
   return { ok: true, message: "Safe Arrival cancelled." };
 }
