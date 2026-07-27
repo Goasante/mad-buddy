@@ -3,10 +3,11 @@
 import { CheckCircle2, LocateFixed, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { LocationEnableGuide } from "@/components/location/location-enable-guide";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 
 export function LocationPermissionPanel() {
-  const [status, setStatus] = useState<"idle" | "checking" | "ready" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "checking" | "ready" | "error" | "blocked">("idle");
   const [message, setMessage] = useState("Weak location signals will never create a strong glow.");
 
   function requestPermission() {
@@ -47,9 +48,15 @@ export function LocationPermissionPanel() {
           setMessage("Could not save private location.");
         }
       },
-      () => {
-        setStatus("error");
-        setMessage("Location permission was not granted.");
+      (error) => {
+        // A blocked permission needs the OS-specific how-to, not a dead end.
+        if (error.code === error.PERMISSION_DENIED) {
+          setStatus("blocked");
+          setMessage("Location is turned off for Mad Buddy. Here's how to turn it back on:");
+        } else {
+          setStatus("error");
+          setMessage("Your device couldn't get a location signal. Check that location is on, then try again.");
+        }
       },
       {
         enableHighAccuracy: false,
@@ -82,9 +89,14 @@ export function LocationPermissionPanel() {
           Private location update received.
         </div>
       ) : null}
+      {status === "blocked" ? (
+        <div className="mt-4">
+          <LocationEnableGuide />
+        </div>
+      ) : null}
       <div className="mt-5 flex flex-wrap gap-3">
         <Button type="button" onClick={requestPermission} disabled={status === "checking"}>
-          {status === "checking" ? "Checking..." : "Enable location"}
+          {status === "checking" ? "Checking..." : status === "blocked" ? "Check again" : "Enable location"}
         </Button>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <ShieldAlert className="h-4 w-4 text-accent" aria-hidden="true" />

@@ -4,6 +4,7 @@ import { ChevronRight, LocateFixed, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { LocationEnableGuide } from "@/components/location/location-enable-guide";
 import { cn } from "@/lib/utils";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 
@@ -206,6 +207,9 @@ export function LocationForGlowSetting({ onFeedback }: LocationForGlowSettingPro
               {message || statusMessage(status)}
             </p>
           </div>
+          {/* When the permission is blocked, a generic "allow it in settings"
+              line leaves people stuck — show the exact per-OS steps instead. */}
+          {status === "blocked" ? <LocationEnableGuide /> : null}
         </div>
       </Modal>
     </>
