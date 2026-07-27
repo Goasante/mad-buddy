@@ -18,13 +18,21 @@ export default async function ProfilePage() {
         .maybeSingle()
     : { data: null };
 
-  const muddyCount = user
-    ? await createSupabaseAdminClient()
-        .from("friendships")
-        .select("user_one_id", { count: "exact", head: true })
-        .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
-        .then((result) => result.count ?? 0)
-    : 0;
+  const admin = createSupabaseAdminClient();
+  const [muddyCount, badgeCount] = user
+    ? await Promise.all([
+        admin
+          .from("friendships")
+          .select("user_one_id", { count: "exact", head: true })
+          .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
+          .then((result) => result.count ?? 0),
+        admin
+          .from("user_achievements")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .then((result) => result.count ?? 0)
+      ])
+    : [0, 0];
 
   return (
     <ProfilePageContent
@@ -35,6 +43,7 @@ export default async function ProfilePage() {
       initialAvatarUrl={profile?.avatar_url ?? null}
       initialVisibilityStatus={profile?.visibility_status ?? "visible"}
       muddyCount={muddyCount}
+      badgeCount={badgeCount}
     />
   );
 }
