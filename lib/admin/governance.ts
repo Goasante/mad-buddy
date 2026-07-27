@@ -47,6 +47,7 @@ export const ADMIN_PERMISSIONS = [
   "admin.audit.view",
   "admin.feature_flags.manage",
   "admin.experiments.manage",
+  "admin.wallpapers.manage",
   "admin.emergency_controls.manage",
   "admin.maintenance.manage",
   "admin.roles.manage"

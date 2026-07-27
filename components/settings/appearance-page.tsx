@@ -1,6 +1,8 @@
 "use client";
 
-import { Check, Laptop, Moon, Sun } from "lucide-react";
+import Link from "next/link";
+import type { Route } from "next";
+import { Check, ChevronRight, Image as ImageIcon, Laptop, Moon, Sun } from "lucide-react";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
 import { useTheme, type AccentColor, type ThemePreference } from "@/components/theme/theme-provider";
 import { cn } from "@/lib/utils";
@@ -74,6 +76,25 @@ export function AppearanceSettingsPage() {
             </button>
           ))}
         </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-semibold">Wallpaper</h2>
+        <Link
+          href={"/settings/appearance/wallpaper" as Route}
+          className="focus-ring safe-motion mt-3 flex items-center gap-3 rounded-xl border border-border/70 bg-card/50 p-3.5 hover:bg-secondary/40"
+        >
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+            <ImageIcon className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium">Wallpaper</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Pick the background behind Mad Buddy, or use your own photo.
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </Link>
       </section>
 
       <section>

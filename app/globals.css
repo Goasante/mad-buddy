@@ -774,6 +774,34 @@ html.dark {
   display: none;
 }
 
+/* Image-mode wallpaper (bundled gallery, managed, or a premium custom upload).
+ * The photo is cover-fitted behind content; a base-background scrim over it
+ * keeps text, cards, and nearby-Muddy glow readable. Light/dark variants switch
+ * with the app theme via CSS custom properties set inline by the shell. The
+ * background-image loads lazily and never blocks render; a broken URL simply
+ * leaves the scrim over the base background. */
+.app-wallpaper-image {
+  background-image: var(--wp-light, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+html.dark .app-wallpaper-image {
+  background-image: var(--wp-dark, none);
+}
+
+.app-wallpaper-scrim {
+  background:
+    linear-gradient(180deg, hsl(var(--background) / 0.82), hsl(var(--background) / 0.72) 40%, hsl(var(--background) / 0.86)),
+    hsl(var(--background) / 0.04);
+}
+
+html.dark .app-wallpaper-scrim {
+  background:
+    linear-gradient(180deg, hsl(var(--background) / 0.86), hsl(var(--background) / 0.74) 40%, hsl(var(--background) / 0.9));
+}
+
 button,
 a,
 input,

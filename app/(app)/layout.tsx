@@ -12,6 +12,9 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { resolveGlobalFeatureFlag, SOCIALIZE_FLAG } from "@/lib/features/feature-flags";
+import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
+import { resolveWallpaperForRender } from "@/lib/wallpapers/service";
+import { defaultResolvedWallpaper } from "@/lib/wallpapers/catalog";
 
 type ProtectedAppLayoutProps = {
   children: ReactNode;
@@ -65,6 +68,18 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
     }
   }
 
+  // Server-authoritative wallpaper resolve. Never throws; failure → the safe
+  // Mad Buddy Default, so the background never blocks or breaks a page.
+  let wallpaper = defaultResolvedWallpaper();
+  if (user && env.url && env.serviceRoleKey) {
+    try {
+      const access = await getCurrentSubscriptionAccess(user.id);
+      wallpaper = await resolveWallpaperForRender(createSupabaseAdminClient(), user.id, access.plan);
+    } catch {
+      // keep the default
+    }
+  }
+
   return (
     <AppShell
       showAdminLink={adminContext.ok}
@@ -74,6 +89,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
       currentAvatarUrl={profileResult.data?.avatar_url ?? null}
       currentUserId={user?.id ?? null}
       hiddenNavigationHrefs={resolveGlobalFeatureFlag(socializeFlagResult.data) ? [] : ["/discover"]}
+      wallpaper={wallpaper}
     >
       {children}
       {/* Only offered once the user is signed in (mounted in the authed layout). */}

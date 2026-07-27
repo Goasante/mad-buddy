@@ -108,6 +108,80 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;
         Relationships: [];
       };
+      wallpapers: {
+        Row: RowWithTimestamps & {
+          id: string;
+          slug: string;
+          name: string;
+          render_mode: "ambient" | "plain" | "image";
+          tier: SubscriptionPlan;
+          thumb_url: string | null;
+          light_url: string | null;
+          dark_url: string | null;
+          is_enabled: boolean;
+          sort_order: number;
+          source: "bundled" | "managed" | "custom";
+          created_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          render_mode: "ambient" | "plain" | "image";
+          tier?: SubscriptionPlan;
+          thumb_url?: string | null;
+          light_url?: string | null;
+          dark_url?: string | null;
+          is_enabled?: boolean;
+          sort_order?: number;
+          source?: "bundled" | "managed" | "custom";
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["wallpapers"]["Insert"]>;
+        Relationships: [];
+      };
+      user_wallpaper_preferences: {
+        Row: {
+          user_id: string;
+          selected_slug: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          selected_slug?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["user_wallpaper_preferences"]["Insert"]>;
+        Relationships: [];
+      };
+      custom_wallpapers: {
+        Row: RowWithTimestamps & {
+          id: string;
+          owner_id: string;
+          storage_key: string;
+          mime_type: "image/webp" | "image/jpeg" | "image/png";
+          size_bytes: number;
+          width: number | null;
+          height: number | null;
+          state: "active" | "removed";
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          storage_key: string;
+          mime_type: "image/webp" | "image/jpeg" | "image/png";
+          size_bytes: number;
+          width?: number | null;
+          height?: number | null;
+          state?: "active" | "removed";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["custom_wallpapers"]["Insert"]>;
+        Relationships: [];
+      };
       admin_users: {
         Row: RowWithTimestamps & {
           id: string;

@@ -14,6 +14,7 @@ import {
   SlidersHorizontal,
   FileKey2,
   FlaskConical,
+  Image as ImageIcon,
   Gauge,
   Headphones,
   PowerOff,
@@ -42,6 +43,7 @@ type AdminHref =
   | "/admin/revenue"
   | "/admin/features"
   | "/admin/experiments"
+  | "/admin/wallpapers"
   | "/admin/privacy"
   | "/admin/system"
   | "/admin/maintenance"
@@ -76,6 +78,7 @@ const adminNavigationGroups: Array<{ label: string; items: AdminNavigationItem[]
       { href: "/admin/revenue", label: "Revenue", icon: CircleDollarSign, permission: "admin.revenue.view" },
       { href: "/admin/features", label: "Feature controls", icon: ToggleRight, permission: "admin.feature_flags.manage" },
       { href: "/admin/experiments", label: "Experiments", icon: FlaskConical, permission: "admin.experiments.manage", ownerOnly: true },
+      { href: "/admin/wallpapers", label: "Wallpapers", icon: ImageIcon, permission: "admin.wallpapers.manage", ownerOnly: true },
       { href: "/admin/privacy", label: "Privacy", icon: FileKey2, permission: "admin.privacy.requests.manage" },
       { href: "/admin/system", label: "App health", icon: Activity, permission: "admin.security.events.view" },
       { href: "/admin/maintenance", label: "Maintenance", icon: PowerOff, permission: "admin.maintenance.manage" }

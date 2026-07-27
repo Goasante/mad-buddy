@@ -24,7 +24,7 @@ import {
   Users2,
   UsersRound
 } from "lucide-react";
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LocationSignalSync } from "@/components/app-shell/location-signal-sync";
 import { SessionBoundary } from "@/components/auth/session-boundary";
@@ -35,6 +35,7 @@ import { FeatureIcon } from "@/components/ui/feature-icon";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { cn } from "@/lib/utils";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
+import type { ResolvedWallpaper } from "@/lib/wallpapers/catalog";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 import { NavigationWatchdog } from "@/components/navigation/navigation-watchdog";
@@ -88,6 +89,8 @@ export type AppShellProps = {
   currentAvatarUrl?: string | null;
   currentUserId?: string | null;
   hiddenNavigationHrefs?: string[];
+  /** Server-resolved wallpaper (entitlement-checked, always safe). */
+  wallpaper?: ResolvedWallpaper | null;
 };
 
 export function AppShell({
@@ -98,7 +101,8 @@ export function AppShell({
   currentUsername = null,
   currentAvatarUrl = null,
   currentUserId = null,
-  hiddenNavigationHrefs = []
+  hiddenNavigationHrefs = [],
+  wallpaper = null
 }: AppShellProps) {
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
@@ -199,9 +203,9 @@ export function AppShell({
           showAdminLink={showAdminLink}
         />
           <main id="app-main-content" className="relative isolate flex-1 px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:overflow-y-auto">
-          {/* Subtle branded wallpaper, painted behind the content only (chrome,
-              nav and modals keep their own opaque surfaces). Decorative. */}
-          <div className="app-wallpaper absolute inset-0 -z-10" aria-hidden="true" />
+          {/* Branded wallpaper, painted behind the content only (chrome, nav and
+              modals keep their own opaque surfaces). Purely decorative. */}
+          <WallpaperLayer wallpaper={wallpaper} />
           <div className="mx-auto w-full max-w-[1200px]">{children}</div>
         </main>
         </div>
@@ -847,6 +851,40 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
       </ul>
     </nav>
   );
+}
+
+/**
+ * Renders the resolved wallpaper behind the content. Three modes:
+ *  - ambient: the theme-adaptive masked SVG (default). Extremely subtle.
+ *  - plain:   nothing — the raw design-system background.
+ *  - image:   a bundled/managed/custom photo with a readability scrim so text,
+ *             cards and glow stay legible above it. Light/dark variants switch
+ *             via CSS. A failed image just shows the scrim over the base bg, so
+ *             a broken URL never breaks the page.
+ */
+function WallpaperLayer({ wallpaper }: { wallpaper: ResolvedWallpaper | null }) {
+  const mode = wallpaper?.renderMode ?? "ambient";
+  if (mode === "plain") return null;
+  if (mode === "image") {
+    const light = wallpaper?.lightUrl ?? wallpaper?.darkUrl ?? null;
+    const dark = wallpaper?.darkUrl ?? wallpaper?.lightUrl ?? null;
+    if (!light && !dark) return <div className="app-wallpaper absolute inset-0 -z-10" aria-hidden="true" />;
+    return (
+      <div className="absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+        <div
+          className="app-wallpaper-image absolute inset-0"
+          style={
+            {
+              "--wp-light": light ? `url("${light}")` : "none",
+              "--wp-dark": dark ? `url("${dark}")` : "none"
+            } as CSSProperties
+          }
+        />
+        <div className="app-wallpaper-scrim absolute inset-0" />
+      </div>
+    );
+  }
+  return <div className="app-wallpaper absolute inset-0 -z-10" aria-hidden="true" />;
 }
 
 function UnreadBadge({ count }: { count: number }) {

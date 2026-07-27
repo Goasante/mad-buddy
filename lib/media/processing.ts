@@ -118,6 +118,32 @@ export async function optimizeProfileAvatar(input: Buffer): Promise<Buffer> {
   return output;
 }
 
+export const WALLPAPER_MAX_DIMENSION = 1600;
+export const WALLPAPER_TARGET_MAX_BYTES = 500 * 1024;
+
+/**
+ * Optimizes a personal wallpaper upload: bakes EXIF orientation then strips all
+ * metadata (GPS included — a phone photo must never leak location), caps the
+ * long edge, and re-encodes to WebP. A quality ladder keeps a big camera photo
+ * comfortably small since a wallpaper only ever renders behind content. Returns
+ * the bytes plus final dimensions for the metadata row.
+ */
+export async function optimizeWallpaper(input: Buffer): Promise<ProcessedImage> {
+  const base = sharp(input, { failOn: "error" })
+    .rotate()
+    .resize(WALLPAPER_MAX_DIMENSION, WALLPAPER_MAX_DIMENSION, { fit: "inside", withoutEnlargement: true });
+
+  let best = await base.clone().webp({ quality: 72, effort: 5 }).toBuffer({ resolveWithObject: true });
+  if (best.data.length > WALLPAPER_TARGET_MAX_BYTES) {
+    for (const quality of [66, 60, 54, 48, 42]) {
+      const candidate = await base.clone().webp({ quality, effort: 5 }).toBuffer({ resolveWithObject: true });
+      best = candidate;
+      if (candidate.data.length <= WALLPAPER_TARGET_MAX_BYTES) break;
+    }
+  }
+  return { buffer: best.data, width: best.info.width, height: best.info.height };
+}
+
 /** Variant keys live beside the original: `<originalKey>` → `<stem>.thumb.<ext>`. */
 export function variantStorageKey(originalKey: string, variant: "thumb" | "feed"): string {
   const dot = originalKey.lastIndexOf(".");

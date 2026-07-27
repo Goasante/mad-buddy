@@ -39,6 +39,11 @@ export const PRODUCT_EVENT_NAMES = [
   ,"notification_opt_out"
   ,"activation"
   ,"notification_permission_accepted"
+  ,"wallpaper_picker_opened"
+  ,"wallpaper_selected"
+  ,"premium_wallpaper_attempted"
+  ,"custom_wallpaper_uploaded"
+  ,"custom_wallpaper_applied"
 ] as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT_NAMES)[number];
