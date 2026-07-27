@@ -4,6 +4,7 @@ import {
   Ban,
   Check,
   Clock,
+  EyeOff,
   Flag,
   MessagesSquare,
   MoreHorizontal,
@@ -34,11 +35,9 @@ import {
   removeCloseFriendAction
 } from "@/app/(app)/circles-actions";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
-import { Badge } from "@/components/ui/badge";
 import { AppMenu } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
-import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -372,7 +371,7 @@ export function FriendsPageContent({
   // Shared row renderer so the "Active now" and "All Muddies" sections render
   // identical cards without duplicating the (many) action closures.
   const renderUserRow = (user: UserSummary) => (
-    <UserRow
+    <MuddyRow
       key={user.id}
       user={user}
       proximity={proximityByFriendId[user.id]}
@@ -409,24 +408,32 @@ export function FriendsPageContent({
     />
   );
 
+  const receivedRequestCount = useMemo(
+    () => users.filter((user) => user.status === "received").length,
+    [users]
+  );
+
   return (
-    <div className="mx-auto w-full min-w-0 max-w-[1200px] space-y-6 overflow-x-clip pt-6">
+    <div className="mx-auto w-full min-w-0 max-w-[1200px] space-y-4 overflow-x-clip pt-5">
       <header className="flex min-w-0 items-center justify-between gap-3">
-        <p className="min-w-0 text-sm leading-6 text-muted-foreground">Your people, your circles, and quick ways to connect.</p>
-        <Button type="button" className="shrink-0 whitespace-nowrap" onClick={() => setAddOpen(true)}>
+        <p className="min-w-0 truncate text-sm text-muted-foreground">Your Muddies, all in one place.</p>
+        <Button type="button" size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAddOpen(true)}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           Add Muddy
         </Button>
       </header>
 
-      <nav className="max-w-full overflow-x-auto border-b border-border/70" aria-label="Muddies tabs">
-        <div className="flex min-w-max gap-1">
+      {/* Scrollable tab bar. The extra end padding + no-scrollbar utility stop
+          the last tab (Blocked) from clipping on narrow screens. */}
+      <nav className="no-scrollbar -mx-4 max-w-[calc(100%+2rem)] overflow-x-auto border-b border-border/70 px-4 sm:mx-0 sm:max-w-full sm:px-0" aria-label="Muddies tabs">
+        <div className="flex w-max gap-1 pr-4 sm:pr-0">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
+              aria-current={activeTab === tab.id ? "page" : undefined}
               className={cn(
-                "focus-ring safe-motion border-b-2 px-4 py-3 text-sm font-medium",
+                "focus-ring safe-motion inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium",
                 activeTab === tab.id
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -440,6 +447,11 @@ export function FriendsPageContent({
               }}
             >
               {tab.label}
+              {tab.id === "requests" && receivedRequestCount > 0 ? (
+                <span className="grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-primary px-1 text-[11px] font-bold leading-none text-primary-foreground">
+                  {receivedRequestCount}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -452,48 +464,52 @@ export function FriendsPageContent({
 
       {activeTab === "all" || activeTab === "close" || (activeTab === "circles" && activeCircleId) ? (
         <div className="space-y-4">
-          <div className="relative w-full sm:max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search Muddies"
-              className="pl-9"
-              aria-label="Search Muddies"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1 sm:max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search Muddies"
+                className="pl-9"
+                aria-label="Search Muddies"
+              />
+            </div>
+            {activeTab === "circles" && activeCircleId ? (
+              <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={() => setActiveCircleId(null)}>
+                ← All circles
+              </Button>
+            ) : null}
           </div>
 
-          {activeTab === "circles" && activeCircleId ? (
-            <Button type="button" variant="ghost" size="sm" onClick={() => setActiveCircleId(null)}>
-              ← All circles
-            </Button>
-          ) : null}
-
           {visibleFriendUsers.length > 0 ? (
-            activeFriends.length > 0 ? (
-              // Active-first layout: nearby/visible Muddies surface under
-              // "Active now"; everyone else stays reachable under "All Muddies".
-              <div className="space-y-6">
-                <section>
-                  <div className="mb-3 flex items-center gap-2">
-                    <h2 className="text-base font-semibold tracking-tight">Active now</h2>
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                      {activeFriends.length} active
-                    </span>
-                  </div>
-                  <div className="grid gap-3 lg:grid-cols-2">{activeFriends.map(renderUserRow)}</div>
-                </section>
+            (() => {
+              const showActive = activeFriends.length > 0 && activeTab !== "close";
+              const listUsers = showActive ? inactiveFriends : visibleFriendUsers;
+              return (
+                <div className="space-y-5">
+                  {/* Active-first: a compact, lively people strip for anyone
+                      glowing right now. */}
+                  {showActive ? (
+                    <ActiveNowStrip
+                      friends={activeFriends}
+                      proximityByFriendId={proximityByFriendId}
+                      glowColorByFriendId={glowColorByFriendId}
+                      onSelect={setProfileUser}
+                    />
+                  ) : null}
 
-                {inactiveFriends.length > 0 ? (
-                  <section>
-                    <h2 className="mb-3 text-base font-semibold tracking-tight">All Muddies</h2>
-                    <div className="grid gap-3 lg:grid-cols-2">{inactiveFriends.map(renderUserRow)}</div>
-                  </section>
-                ) : null}
-              </div>
-            ) : (
-              <div className="grid gap-3 lg:grid-cols-2">{visibleFriendUsers.map(renderUserRow)}</div>
-            )
+                  {listUsers.length > 0 ? (
+                    <section>
+                      {showActive ? (
+                        <h2 className="mb-1 text-sm font-semibold text-muted-foreground">All Muddies</h2>
+                      ) : null}
+                      <ul className="divide-y divide-border/60">{listUsers.map(renderUserRow)}</ul>
+                    </section>
+                  ) : null}
+                </div>
+              );
+            })()
           ) : (
             <FriendsEmptyState
               activeTab={activeTab}
@@ -545,9 +561,9 @@ export function FriendsPageContent({
           </div>
 
           {requestUsers.length > 0 ? (
-            <div className="grid gap-3 lg:grid-cols-2">
+            <ul className="divide-y divide-border/60">
               {requestUsers.map((user) => (
-                <RequestCard
+                <RequestRow
                   key={user.id}
                   user={user}
                   kind={requestSubTab}
@@ -571,7 +587,7 @@ export function FriendsPageContent({
                   }
                 />
               ))}
-            </div>
+            </ul>
           ) : (
             <EmptyState
               icon={Search}
@@ -585,33 +601,32 @@ export function FriendsPageContent({
 
       {activeTab === "blocked" ? (
         blockedUsers.length > 0 ? (
-          <div className="grid gap-3 lg:grid-cols-2">
+          <ul className="divide-y divide-border/60">
             {blockedUsers.map((user) => (
-              <Card key={user.id} className="p-5">
-                <div className="flex items-center gap-4">
-                  <InitialsAvatar name={user.displayName} src={user.avatarUrl} />
-                  <div className="min-w-0 flex-1">
-                    <h3 className="truncate font-semibold">{user.displayName}</h3>
-                    <p className="truncate text-sm text-muted-foreground">@{user.username}</p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      runFriendAction(
-                        () => unblockUserAction(user.id),
-                        () => updateUserStatus(user.id, "available", `${user.displayName} is unblocked.`)
-                      )
-                    }
-                  >
-                    <Check className="h-4 w-4" aria-hidden="true" />
-                    Unblock
-                  </Button>
+              <li key={user.id} className="flex items-center gap-3 py-3">
+                <InitialsAvatar name={user.displayName} src={user.avatarUrl} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{user.displayName}</p>
+                  <p className="truncate text-xs text-muted-foreground">@{user.username}</p>
                 </div>
-              </Card>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() =>
+                    runFriendAction(
+                      () => unblockUserAction(user.id),
+                      () => updateUserStatus(user.id, "available", `${user.displayName} is unblocked.`)
+                    )
+                  }
+                >
+                  <Check className="h-4 w-4" aria-hidden="true" />
+                  Unblock
+                </Button>
+              </li>
             ))}
-          </div>
+          </ul>
         ) : (
           <EmptyState
             icon={Ban}
@@ -809,7 +824,44 @@ type UserRowProps = {
   onCreateCircle: () => void;
 };
 
-function UserRow({
+/** Colour for the secondary proximity line — active states read as "alive",
+ *  inactive/hidden stay muted. Never conveys distance, only the bucket. */
+const PROXIMITY_TEXT_CLASS: Partial<Record<ProximityLevel, string>> = {
+  very_close: "text-primary",
+  nearby: "text-violet-600 dark:text-violet-300",
+  around: "text-blue-600 dark:text-blue-300"
+};
+
+function isActiveLevel(level: ProximityLevel): boolean {
+  return level === "very_close" || level === "nearby" || level === "around";
+}
+
+/** A small presence marker on the avatar: eye-off when hidden, a live dot when
+ *  glowing, nothing when simply not glowing. Not colour-only — the icon/shape
+ *  and the text label both carry the state. */
+function PresenceDot({ level }: { level: ProximityLevel }) {
+  if (level === "hidden") {
+    return (
+      <span
+        className="absolute -bottom-0.5 -right-0.5 z-[2] grid h-4 w-4 place-items-center rounded-full border-2 border-background bg-secondary text-muted-foreground"
+        aria-hidden="true"
+      >
+        <EyeOff className="h-2.5 w-2.5" />
+      </span>
+    );
+  }
+  if (isActiveLevel(level)) {
+    return (
+      <span
+        className="absolute bottom-0 right-0 z-[2] h-3 w-3 rounded-full border-2 border-background bg-emerald-500"
+        aria-hidden="true"
+      />
+    );
+  }
+  return null;
+}
+
+function MuddyRow({
   user,
   proximity,
   glowColorId = null,
@@ -828,89 +880,160 @@ function UserRow({
   const [menuOpen, setMenuOpen] = useState(false);
   const level = proximity?.proximityLevel ?? "far";
   const otherCircles = circles.filter((circle) => circle.id !== "close-friends");
+  const statusClass = PROXIMITY_TEXT_CLASS[level] ?? "text-muted-foreground";
 
   return (
-    <Card className="min-w-0 overflow-hidden p-4">
-      <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-3 sm:flex sm:gap-4">
-        <button type="button" onClick={onViewProfile} className="focus-ring safe-motion shrink-0 rounded-full">
-          <GlowAvatar
-            name={user.displayName}
-            src={user.avatarUrl}
-            proximityLevel={level}
-            glowStrength={proximity?.glowStrength ?? 0}
-            confidence={proximity?.confidence ?? "low"}
-            glowColorId={glowColorId}
-            size="md"
-          />
-        </button>
-        <div className="min-w-0 flex-1">
-          <button type="button" onClick={onViewProfile} className="focus-ring block max-w-full truncate rounded text-left font-semibold hover:underline">
-            {user.displayName}
-          </button>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">{proximityLabels[level]}</span>
-            {isCloseFriend ? <Badge variant="orange">Close Friend</Badge> : null}
-          </div>
-          <p className="mt-1 truncate text-xs text-muted-foreground">{user.note}</p>
-        </div>
-        <div className="col-span-2 -mx-4 -mb-4 mt-1 grid min-w-0 grid-cols-3 border-t border-border/70 sm:col-auto sm:m-0 sm:flex sm:shrink-0 sm:items-center sm:gap-1.5 sm:border-0">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Wave"
-            title="Wave"
-            onClick={onWave}
-            className="h-12 w-full gap-2 rounded-none border-0 shadow-none hover:translate-y-0 sm:h-10 sm:w-10 sm:rounded-full sm:border sm:border-border sm:bg-card/60"
-          >
-            <FeatureIcon feature="wave" size={18} decorative />
-            <span className="text-xs sm:sr-only">Wave</span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Message"
-            title="Message"
-            onClick={onMessage}
-            className="h-12 w-full gap-2 rounded-none border-x border-y-0 border-border/70 shadow-none hover:translate-y-0 sm:h-10 sm:w-10 sm:rounded-full sm:border sm:border-border sm:bg-card/60"
-          >
-            <MessagesSquare className="h-4 w-4" aria-hidden="true" />
-            <span className="text-xs sm:sr-only">Message</span>
-          </Button>
-          <AppMenu
-            open={menuOpen}
-            onOpenChange={setMenuOpen}
-            label={`Actions for ${user.displayName}`}
-            trigger={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="More"
-                title="More"
-                className="h-12 w-full gap-2 rounded-none border-0 shadow-none hover:translate-y-0 sm:h-10 sm:w-10 sm:rounded-full sm:border sm:border-border sm:bg-card/60"
-              >
-                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                <span className="text-xs sm:sr-only">More</span>
-              </Button>
-            }
-            items={[
-              { id: "close-friend", label: isCloseFriend ? "Remove from Close Friends" : "Add to Close Friends", onSelect: onToggleCloseFriend },
-              ...otherCircles.map((circle) => ({ id: `circle-${circle.id}`, label: `Add to ${circle.name}`, onSelect: () => onAddToCircle(circle.id) })),
-              { id: "new-circle", label: "Add to new circle", onSelect: onCreateCircle },
-              { id: "remove", label: "Remove Muddy", icon: <UserMinus className="h-4 w-4" />, destructive: true, separatorBefore: true, onSelect: onRemove },
-              { id: "block", label: "Block", icon: <Ban className="h-4 w-4" />, destructive: true, onSelect: onBlock },
-              { id: "report", label: "Report", icon: <Flag className="h-4 w-4" />, onSelect: onReport }
-            ]}
-          />
-        </div>
+    <li className="flex items-center gap-3 py-2.5">
+      <button
+        type="button"
+        onClick={onViewProfile}
+        className="focus-ring safe-motion relative shrink-0 rounded-full"
+        aria-label={`${user.displayName}, ${proximityLabels[level]}`}
+      >
+        <GlowAvatar
+          name={user.displayName}
+          src={user.avatarUrl}
+          proximityLevel={level}
+          glowStrength={proximity?.glowStrength ?? 0}
+          confidence={proximity?.confidence ?? "low"}
+          glowColorId={glowColorId}
+          size="sm"
+        />
+        <PresenceDot level={level} />
+      </button>
+
+      <button type="button" onClick={onViewProfile} className="focus-ring min-w-0 flex-1 rounded text-left">
+        <span className="block truncate font-medium leading-tight">{user.displayName}</span>
+        <span className="mt-0.5 flex items-center gap-1.5 text-xs leading-tight">
+          <span className={cn("truncate", statusClass)}>{proximityLabels[level]}</span>
+          {isCloseFriend ? (
+            <span className="inline-flex shrink-0 items-center rounded-full bg-orange-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 dark:text-orange-200">
+              Close Friend
+            </span>
+          ) : null}
+        </span>
+      </button>
+
+      <div className="flex shrink-0 items-center">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={`Wave at ${user.displayName}`}
+          title="Wave"
+          onClick={onWave}
+          className="h-11 w-11 rounded-full text-muted-foreground hover:text-foreground"
+        >
+          <FeatureIcon feature="wave" size={18} decorative />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={`Message ${user.displayName}`}
+          title="Message"
+          onClick={onMessage}
+          className="h-11 w-11 rounded-full text-muted-foreground hover:text-foreground"
+        >
+          <MessagesSquare className="h-[18px] w-[18px]" aria-hidden="true" />
+        </Button>
+        <AppMenu
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          label={`Actions for ${user.displayName}`}
+          trigger={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`More actions for ${user.displayName}`}
+              title="More"
+              className="h-11 w-11 rounded-full text-muted-foreground hover:text-foreground"
+            >
+              <MoreHorizontal className="h-[18px] w-[18px]" aria-hidden="true" />
+            </Button>
+          }
+          items={[
+            { id: "profile", label: "View profile", onSelect: onViewProfile },
+            { id: "close-friend", label: isCloseFriend ? "Remove from Close Friends" : "Add to Close Friends", onSelect: onToggleCloseFriend },
+            ...otherCircles.map((circle) => ({ id: `circle-${circle.id}`, label: `Add to ${circle.name}`, onSelect: () => onAddToCircle(circle.id) })),
+            { id: "new-circle", label: "Add to new circle", onSelect: onCreateCircle },
+            { id: "remove", label: "Remove Muddy", icon: <UserMinus className="h-4 w-4" />, destructive: true, separatorBefore: true, onSelect: onRemove },
+            { id: "block", label: "Block", icon: <Ban className="h-4 w-4" />, destructive: true, onSelect: onBlock },
+            { id: "report", label: "Report", icon: <Flag className="h-4 w-4" />, onSelect: onReport }
+          ]}
+        />
       </div>
-    </Card>
+    </li>
   );
 }
 
-function RequestCard({
+/**
+ * Compact, lively "Active now" strip: a horizontally scrollable row of glowing
+ * avatars for Muddies whose live proximity signal places them nearby. Purely a
+ * different presentation of the same friend + proximity data already loaded —
+ * no extra fetch. Tapping opens the existing Muddy profile. Never shows exact
+ * distance, only the proximity bucket.
+ */
+function ActiveNowStrip({
+  friends,
+  proximityByFriendId,
+  glowColorByFriendId,
+  onSelect
+}: {
+  friends: UserSummary[];
+  proximityByFriendId: Record<string, ProximityInfo>;
+  glowColorByFriendId: Record<string, string>;
+  onSelect: (user: UserSummary) => void;
+}) {
+  return (
+    <section aria-labelledby="active-now-heading">
+      <div className="mb-2 flex items-center gap-2">
+        <h2 id="active-now-heading" className="text-sm font-semibold">
+          Active now
+        </h2>
+        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+          {friends.length} active
+        </span>
+      </div>
+      <ul className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1 pt-1.5">
+        {friends.map((friend) => {
+          const proximity = proximityByFriendId[friend.id];
+          const level = proximity?.proximityLevel ?? "around";
+          return (
+            <li key={friend.id} className="shrink-0">
+              <button
+                type="button"
+                onClick={() => onSelect(friend)}
+                className="focus-ring safe-motion flex w-[76px] flex-col items-center gap-1.5 rounded-xl text-center"
+                aria-label={`${friend.displayName}, ${proximityLabels[level]}`}
+              >
+                <span className="relative">
+                  <GlowAvatar
+                    name={friend.displayName}
+                    src={friend.avatarUrl}
+                    proximityLevel={level}
+                    glowStrength={proximity?.glowStrength ?? 0}
+                    confidence={proximity?.confidence ?? "low"}
+                    glowColorId={glowColorByFriendId[friend.id] ?? null}
+                    size="md"
+                  />
+                  <span className="absolute bottom-0.5 right-0.5 z-[2] h-3 w-3 rounded-full border-2 border-background bg-emerald-500" aria-hidden="true" />
+                </span>
+                <span className="w-full truncate text-xs font-medium">{friend.displayName}</span>
+                <span className={cn("w-full truncate text-[11px] font-semibold", PROXIMITY_TEXT_CLASS[level] ?? "text-primary")}>
+                  {proximityLabels[level]}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function RequestRow({
   user,
   kind,
   onAccept,
@@ -924,36 +1047,32 @@ function RequestCard({
   onCancel: () => void;
 }) {
   return (
-    <Card className="p-5">
-      <div className="flex items-start gap-4">
-        <InitialsAvatar name={user.displayName} src={user.avatarUrl} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate font-semibold">{user.displayName}</h3>
-            <Badge variant={kind === "received" ? "violet" : "warning"}>{kind === "received" ? "Incoming" : "Pending"}</Badge>
-          </div>
-          <p className="mt-1 truncate text-sm text-muted-foreground">@{user.username}</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{user.note}</p>
-        </div>
+    <li className="flex items-center gap-3 py-3">
+      <InitialsAvatar name={user.displayName} src={user.avatarUrl} size="sm" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium leading-tight">{user.displayName}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          @{user.username}
+          {user.mutualFriends > 0 ? ` · ${user.mutualFriends} mutual` : ""}
+        </p>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         {kind === "received" ? (
           <>
-            <Button type="button" variant="outline" size="sm" onClick={onAccept}>
+            <Button type="button" size="sm" onClick={onAccept}>
               <Check className="h-4 w-4" aria-hidden="true" />
-              Accept
+              <span className="hidden min-[380px]:inline">Accept</span>
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={onDecline}>
+            <Button type="button" variant="outline" size="icon" aria-label={`Decline ${user.displayName}`} title="Decline" onClick={onDecline}>
               <X className="h-4 w-4" aria-hidden="true" />
-              Decline
             </Button>
           </>
         ) : (
           <>
-            <Button type="button" variant="outline" size="sm" disabled>
-              <Clock className="h-4 w-4" aria-hidden="true" />
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" aria-hidden="true" />
               Pending
-            </Button>
+            </span>
             <Button type="button" variant="outline" size="sm" onClick={onCancel}>
               <X className="h-4 w-4" aria-hidden="true" />
               Cancel
@@ -961,7 +1080,7 @@ function RequestCard({
           </>
         )}
       </div>
-    </Card>
+    </li>
   );
 }
 
