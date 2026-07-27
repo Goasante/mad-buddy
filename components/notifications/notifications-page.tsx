@@ -13,12 +13,14 @@ import {
   Hand,
   HeartHandshake,
   ListChecks,
+  MapPin,
   MapPinOff,
   Megaphone,
   MessageCircle,
+  MoreHorizontal,
   Send,
-  Settings2,
   ShieldAlert,
+  ShieldCheck,
   Trash2,
   UserPlus,
   UsersRound,
@@ -29,7 +31,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { respondToMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { Button } from "@/components/ui/button";
-import { AppMenu, AppSelect } from "@/components/ui/app-dropdown";
+import { AppMenu } from "@/components/ui/app-dropdown";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { PrivacyToggle } from "@/components/settings/privacy-toggle";
@@ -66,13 +68,70 @@ type NotificationsPageContentProps = {
   canSendCustomMessages?: boolean;
 };
 
-type FilterValue = "all" | "unread" | "read";
+type PulseCategory = "all" | "nearby" | "social" | "plans" | "safety";
 
-const FILTER_OPTIONS: Array<{ value: FilterValue; label: string }> = [
-  { value: "all", label: "All updates" },
-  { value: "unread", label: "Unread" },
-  { value: "read", label: "Read" }
+const PULSE_CATEGORIES: Array<{ value: PulseCategory; label: string; icon: LucideIcon | null }> = [
+  { value: "all", label: "All", icon: null },
+  { value: "nearby", label: "Nearby", icon: MapPin },
+  { value: "social", label: "Social", icon: UsersRound },
+  { value: "plans", label: "Plans", icon: CalendarCheck2 },
+  { value: "safety", label: "Safety", icon: ShieldCheck }
 ];
+
+/** Maps a raw notification type to a Pulse category. Types outside the four
+ *  named buckets (billing, support, staff) only surface under "All". */
+function categoryForType(type: string): Exclude<PulseCategory, "all"> | "system" {
+  const base = type.split(":")[0];
+  if (base === "friend_nearby" || base === "best_buddy_nearby" || base === "circle_nearby") return "nearby";
+  if (
+    base === "wave" ||
+    base === "friend_request_received" ||
+    base === "friend_request_accepted" ||
+    base === "meetup_request" ||
+    base === "meeting_ping" ||
+    base === "hangout" ||
+    base === "moment" ||
+    base === "group" ||
+    base === "message"
+  ) {
+    return "social";
+  }
+  if (base === "plan" || base === "event") return "plans";
+  if (base === "safe_arrival" || base === "system_alert") return "safety";
+  return "system";
+}
+
+function categoryLabel(category: Exclude<PulseCategory, "all">): string {
+  return category === "nearby" ? "nearby" : category === "social" ? "social" : category === "plans" ? "plans" : "safety";
+}
+
+function categoryEmptyHint(category: Exclude<PulseCategory, "all">): string {
+  switch (category) {
+    case "nearby":
+      return "Muddies glowing nearby will show up here.";
+    case "social":
+      return "Waves, requests and Moments will show up here.";
+    case "plans":
+      return "Plan invites and reminders will show up here.";
+    case "safety":
+      return "Safe Arrival and safety updates will show up here.";
+  }
+}
+
+/** Per-category accent for the row icon (real, derived from the type). */
+function categoryIconClass(category: ReturnType<typeof categoryForType>): string {
+  switch (category) {
+    case "nearby":
+    case "plans":
+      return "bg-primary/10 text-primary";
+    case "social":
+      return "bg-violet-500/12 text-violet-600 dark:text-violet-300";
+    case "safety":
+      return "bg-sky-500/12 text-sky-600 dark:text-sky-300";
+    default:
+      return "bg-secondary text-muted-foreground";
+  }
+}
 
 export function NotificationsPageContent({
   canSendCustomMessages = false
@@ -83,7 +142,7 @@ export function NotificationsPageContent({
   const [planAlerts, setPlanAlerts] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<NotificationItem | null>(null);
-  const [filter, setFilter] = useState<FilterValue>("all");
+  const [category, setCategory] = useState<PulseCategory>("all");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -94,12 +153,10 @@ export function NotificationsPageContent({
   const unreadCount = notifications.filter((notification) => notification.unread).length;
   const visibleNotifications = useMemo(
     () =>
-      filter === "unread"
-        ? notifications.filter((notification) => notification.unread)
-        : filter === "read"
-          ? notifications.filter((notification) => !notification.unread)
-          : notifications,
-    [filter, notifications]
+      category === "all"
+        ? notifications
+        : notifications.filter((notification) => categoryForType(notification.type) === category),
+    [category, notifications]
   );
 
   const selectedItems = useMemo(
@@ -377,22 +434,17 @@ export function NotificationsPageContent({
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Pulse</h1>
           <div className="flex items-center gap-2">
-            {unreadCount > 0 ? (
-              <Button type="button" size="sm" variant="outline" onClick={markAllRead} disabled={isPending}>
-                <CheckCheck className="h-4 w-4" aria-hidden="true" />
-                {isPending ? "Marking..." : "Mark all as read"}
-              </Button>
-            ) : null}
             <Popover.Root open={settingsOpen} onOpenChange={setSettingsOpen}>
               <Popover.Trigger asChild>
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
-                  aria-label="Notification settings"
-                  title="Notification settings"
+                  className="rounded-full"
+                  aria-label="Pulse options"
+                  title="Pulse options"
                 >
-                  <Settings2 className="h-4 w-4" aria-hidden="true" />
+                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </Popover.Trigger>
               <Popover.Portal>
@@ -402,7 +454,36 @@ export function NotificationsPageContent({
                   collisionPadding={12}
                   className="compact-drop-popover app-dropdown-content w-[min(320px,calc(100vw-1.5rem))] p-2"
                 >
-                  <p className="px-2 pb-1 pt-1.5 text-sm font-semibold">Notification settings</p>
+                  <div className="grid gap-0.5 pb-1">
+                    {unreadCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          markAllRead();
+                          setSettingsOpen(false);
+                        }}
+                        disabled={isPending}
+                        className="focus-ring flex items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm hover:bg-secondary disabled:opacity-60"
+                      >
+                        <CheckCheck className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        {isPending ? "Marking…" : "Mark all as read"}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectionMode(true);
+                        setSettingsOpen(false);
+                      }}
+                      className="focus-ring flex items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm hover:bg-secondary"
+                    >
+                      <ListChecks className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      Select updates
+                    </button>
+                  </div>
+                  <p className="border-t border-border/60 px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Notification settings
+                  </p>
                   <div className="grid gap-0.5">
                     <PrivacyToggle
                       icon={MapPinOff}
@@ -437,7 +518,7 @@ export function NotificationsPageContent({
             </Popover.Root>
           </div>
         </div>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">Updates from your Muddies and account.</p>
+        <p className="mt-1 text-sm text-muted-foreground">What&apos;s happening with your Muddies.</p>
       </section>
 
       {feedback ? (
@@ -447,73 +528,73 @@ export function NotificationsPageContent({
       ) : null}
 
       <section>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-2">
-          <AppSelect
-            value={filter}
-            options={FILTER_OPTIONS.map((option) => ({
-              value: option.value,
-              label: option.value === "unread" && unreadCount > 0 ? `${option.label} (${unreadCount})` : option.label
-            }))}
-            size="compact"
-            triggerClassName="min-w-40"
-            onChange={setFilter}
-          />
-
-          {/* Bulk selection control. */}
-          {selectionMode ? (
-            <div className="flex items-center gap-1.5">
-              {selectedCount > 0 ? (
-                <AppMenu
-                  open={actionsOpen}
-                  onOpenChange={setActionsOpen}
-                  label="Selected update actions"
-                  trigger={
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    aria-label={selectedCount > 0 ? `Bulk actions, ${selectedCount} selected` : "Select updates"}
-                  >
+        {selectionMode ? (
+          // Bulk-selection toolbar replaces the category chips while active.
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2">
+            {selectedCount > 0 ? (
+              <AppMenu
+                open={actionsOpen}
+                onOpenChange={setActionsOpen}
+                label="Selected update actions"
+                trigger={
+                  <Button type="button" size="sm" variant="outline" aria-label={`Bulk actions, ${selectedCount} selected`}>
                     <ListChecks className="h-4 w-4" aria-hidden="true" />
-                    <span aria-live="polite">{selectedCount > 0 ? `${selectedCount} selected` : "Select"}</span>
+                    <span aria-live="polite">{selectedCount} selected</span>
                   </Button>
-                  }
-                  items={[
-                    ...(!allVisibleSelected ? [{ id: "select-all", label: "Select all", onSelect: selectAllVisible }] : []),
-                    { id: "mark-read", label: "Mark as read", disabled: allSelectedRead, onSelect: () => applyBulkRead(true) },
-                    { id: "mark-unread", label: "Mark as unread", disabled: allSelectedUnread, onSelect: () => applyBulkRead(false) },
-                    {
-                      id: "delete",
-                      label: selectedCount === 1 ? "Delete update" : "Delete selected",
-                      icon: <Trash2 className="h-4 w-4" />,
-                      destructive: true,
-                      separatorBefore: true,
-                      onSelect: () => deleteNotifications([...selectedIds])
-                    },
-                    { id: "clear", label: "Clear selection", separatorBefore: true, onSelect: () => setSelectedIds(new Set()) }
-                  ]}
-                />
-              ) : (
-                <Button type="button" size="sm" variant="outline" onClick={exitSelection}>
-                  <ListChecks className="h-4 w-4" aria-hidden="true" />
-                  Select
-                </Button>
-              )}
-              <Button type="button" size="sm" variant="ghost" onClick={exitSelection}>
-                Done
-              </Button>
-            </div>
-          ) : (
-            <Button type="button" size="sm" variant="outline" onClick={() => setSelectionMode(true)}>
-              <ListChecks className="h-4 w-4" aria-hidden="true" />
-              Select
+                }
+                items={[
+                  ...(!allVisibleSelected ? [{ id: "select-all", label: "Select all", onSelect: selectAllVisible }] : []),
+                  { id: "mark-read", label: "Mark as read", disabled: allSelectedRead, onSelect: () => applyBulkRead(true) },
+                  { id: "mark-unread", label: "Mark as unread", disabled: allSelectedUnread, onSelect: () => applyBulkRead(false) },
+                  {
+                    id: "delete",
+                    label: selectedCount === 1 ? "Delete update" : "Delete selected",
+                    icon: <Trash2 className="h-4 w-4" />,
+                    destructive: true,
+                    separatorBefore: true,
+                    onSelect: () => deleteNotifications([...selectedIds])
+                  },
+                  { id: "clear", label: "Clear selection", separatorBefore: true, onSelect: () => setSelectedIds(new Set()) }
+                ]}
+              />
+            ) : (
+              <span className="text-sm text-muted-foreground">Select updates to manage.</span>
+            )}
+            <Button type="button" size="sm" variant="ghost" onClick={exitSelection}>
+              Done
             </Button>
-          )}
-        </div>
+          </div>
+        ) : (
+          // Category chips (All / Nearby / Social / Plans / Safety), scrollable.
+          <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0" role="tablist" aria-label="Pulse filters">
+            {PULSE_CATEGORIES.map((option) => {
+              const active = category === option.value;
+              const Icon = option.icon;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setCategory(option.value)}
+                  className={cn(
+                    "focus-ring safe-motion inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium",
+                    active
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border/70 text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                  )}
+                >
+                  {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div>
           {visibleNotifications.length > 0 ? (
-            <div className="space-y-5 pt-6">
+            <div className="space-y-5 pt-4">
               {notificationGroups.map((group) => (
                 <section key={group.label} aria-labelledby={`notification-group-${group.key}`}>
                   <h2
@@ -545,19 +626,11 @@ export function NotificationsPageContent({
             </div>
           ) : (
             <InlineEmptyState
-              title={
-                filter === "unread"
-                  ? "No unread updates"
-                  : filter === "read"
-                    ? "No read updates"
-                    : "You’re all caught up"
-              }
+              title={category === "all" ? "You’re all caught up" : `No ${categoryLabel(category)} activity yet`}
               description={
-                filter === "unread"
-                  ? "You’ve seen everything for now."
-                  : filter === "read"
-                    ? "Updates you’ve read will appear here."
-                    : "New updates will appear here."
+                category === "all"
+                  ? "New updates will appear here."
+                  : `${categoryEmptyHint(category)}`
               }
             />
           )}
@@ -761,7 +834,7 @@ function NotificationCard({
   onActivate
 }: NotificationCardProps) {
   const actionable = Boolean(notification.meetupRequestId);
-  const isMuddyActivity = isMuddyActivityType(notification.type);
+  const iconClass = categoryIconClass(categoryForType(notification.type));
   // Three mutually exclusive shapes: an in-place reply (button), a deep link
   // (anchor), or a static informational row. meetup_request never has a
   // resolver destination, so these never collide.
@@ -781,12 +854,7 @@ function NotificationCard({
           {selected ? <Check className="h-3.5 w-3.5" /> : null}
         </span>
       ) : null}
-      <div
-        className={cn(
-          "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-          isMuddyActivity ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground"
-        )}
-      >
+      <div className={cn("mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full", iconClass)}>
         <notification.icon className="h-4 w-4" aria-hidden="true" />
       </div>
       <div className="min-w-0 flex-1">
@@ -968,22 +1036,6 @@ function iconForType(type: string): LucideIcon {
   };
 
   return iconsByType[type.split(":")[0]] ?? Bell;
-}
-
-const MUDDY_ACTIVITY_TYPES = new Set([
-  "friend_request_received",
-  "friend_request_accepted",
-  "friend_nearby",
-  "best_buddy_nearby",
-  "circle_nearby",
-  "meetup_request",
-  "wave"
-]);
-
-/** Orange is reserved for Muddy activity and proximity, billing/system
- * notifications get a neutral icon treatment instead. */
-function isMuddyActivityType(type: string): boolean {
-  return MUDDY_ACTIVITY_TYPES.has(type.split(":")[0]);
 }
 
 function formatNotificationTime(createdAt: string) {
