@@ -1,18 +1,22 @@
 "use client";
 
 import {
+  ChevronRight,
   CreditCard,
   Eye,
-  LifeBuoy,
+  Flag,
   MessageSquare,
   Rocket,
   Search,
   Send,
   Settings,
-  Shield
+  Shield,
+  UsersRound
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTransition } from "react";
 import { replyToSupportThreadAction, submitSupportRequestAction, type SupportThread } from "@/app/(app)/help-actions";
 import { Button } from "@/components/ui/button";
@@ -21,13 +25,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/auth/form-field";
 import { cn } from "@/lib/utils";
 
-const popularTopics = [
-  { title: "Getting Started", description: "Learn the basics and set up your profile.", icon: Rocket },
-  { title: "Glow & Visibility", description: "Understand how Glow and visibility work.", icon: Eye },
-  { title: "Meet & Plans", description: "How to create, join, and manage plans.", icon: LifeBuoy },
-  { title: "Safety & Privacy", description: "Keep your account and data safe.", icon: Shield },
-  { title: "Billing & Premium", description: "Manage payments, plans, and refunds.", icon: CreditCard },
-  { title: "Account & Settings", description: "Update your profile and preferences.", icon: Settings }
+const helpTopics: Array<{ title: string; description: string; icon: LucideIcon; accent: string }> = [
+  { title: "Getting Started", description: "Set up your profile and learn the basics.", icon: Rocket, accent: "bg-violet-500/12 text-violet-600 dark:text-violet-300" },
+  { title: "Glow & Visibility", description: "Understand how Glow and visibility work.", icon: Eye, accent: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-300" },
+  { title: "Muddies & Social", description: "Friends, invites, circles, chats and more.", icon: UsersRound, accent: "bg-primary/10 text-primary" },
+  { title: "Safety & Privacy", description: "Privacy and safety controls.", icon: Shield, accent: "bg-violet-500/12 text-violet-600 dark:text-violet-300" },
+  { title: "Billing & Premium", description: "Plans, payments and subscriptions.", icon: CreditCard, accent: "bg-pink-500/12 text-pink-600 dark:text-pink-300" },
+  { title: "Account & Settings", description: "Manage your account and preferences.", icon: Settings, accent: "bg-teal-500/12 text-teal-600 dark:text-teal-300" }
 ];
 
 export function HelpCenterPage({ initialThreads = [] }: { initialThreads?: SupportThread[] }) {
@@ -37,77 +41,139 @@ export function HelpCenterPage({ initialThreads = [] }: { initialThreads?: Suppo
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
+  const contactRef = useRef<HTMLDivElement>(null);
+
+  // Reveal + scroll the message form into view when Contact Support is tapped.
+  useEffect(() => {
+    if (contactOpen) contactRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [contactOpen]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleTopics = helpTopics.filter(
+    (topic) => topic.title.toLowerCase().includes(normalizedQuery) || topic.description.toLowerCase().includes(normalizedQuery)
+  );
 
   return (
-    <div className="mx-auto max-w-[900px] space-y-8 pt-6">
+    <div className="mx-auto max-w-[900px] space-y-6 pt-5">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">How can we help you?</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Find answers and get the most out of Mad Buddy.</p>
         <div className="relative mt-4">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search help articles..." className="pl-9" />
+          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Mad Buddy help..." className="pl-9" aria-label="Search Mad Buddy help" />
         </div>
       </div>
 
       {initialThreads.length > 0 ? <SupportThreads threads={initialThreads} /> : null}
 
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Popular topics</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {popularTopics
-            .filter((topic) => topic.title.toLowerCase().includes(query.trim().toLowerCase()))
-            .map((topic) => (
-              <div key={topic.title} className="rounded-xl border border-border/70 bg-card/50 p-4">
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-primary">
-                  <topic.icon className="h-4 w-4" aria-hidden="true" />
-                </span>
-                <h3 className="mt-3 text-sm font-semibold">{topic.title}</h3>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">{topic.description}</p>
-              </div>
+      <section aria-labelledby="help-topics-heading">
+        <h2 id="help-topics-heading" className="mb-1 text-xs font-semibold uppercase tracking-wide text-violet-500 dark:text-violet-300">
+          Help topics
+        </h2>
+        {visibleTopics.length > 0 ? (
+          <ul className="divide-y divide-border/60">
+            {visibleTopics.map((topic) => (
+              <li key={topic.title}>
+                <button
+                  type="button"
+                  onClick={() => setContactOpen(true)}
+                  className="focus-ring safe-motion flex w-full items-center gap-3.5 py-3.5 text-left hover:bg-secondary/30"
+                  aria-label={topic.title}
+                >
+                  <span className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-full", topic.accent)}>
+                    <topic.icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">{topic.title}</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{topic.description}</span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                </button>
+              </li>
             ))}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-border/70 bg-card/50 p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <MessageSquare className="h-5 w-5 text-primary" aria-hidden="true" />
-          <h2 className="text-base font-semibold">Send us a message</h2>
-        </div>
-
-        {sent ? (
-          <p className="text-sm text-muted-foreground">Thanks, our team will get back to you soon.</p>
+          </ul>
         ) : (
-          <div className="grid gap-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField htmlFor="help-name" label="Full name">
-                <Input id="help-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Enter your name" />
-              </FormField>
-              <FormField htmlFor="help-email" label="Email">
-                <Input id="help-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Enter your email" />
-              </FormField>
-            </div>
-            <FormField htmlFor="help-message" label="Message">
-              <Textarea id="help-message" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="How can we help?" />
-            </FormField>
-            <Button
-              type="button"
-              disabled={isPending || !name.trim() || !email.trim() || message.trim().length < 3}
-              onClick={() => startTransition(async () => {
-                setFeedback("");
-                const result = await submitSupportRequestAction({ fullName: name, email, message });
-                if (result.ok) {
-                  setSent(true);
-                  router.refresh(); // surface the new request under "Your requests"
-                } else setFeedback(result.message);
-              })}
-            >
-              {isPending ? "Sending..." : "Send message"}
-            </Button>
-            {feedback ? <p className="text-sm text-red-600 dark:text-red-300" role="alert">{feedback}</p> : null}
-          </div>
+          <p className="py-4 text-sm text-muted-foreground">No topics match “{query.trim()}”. Try contacting support below.</p>
         )}
       </section>
+
+      <section aria-labelledby="help-more-heading" className="space-y-2">
+        <h2 id="help-more-heading" className="text-xs font-semibold uppercase tracking-wide text-violet-500 dark:text-violet-300">
+          Need more help?
+        </h2>
+        <button
+          type="button"
+          onClick={() => setContactOpen(true)}
+          className="focus-ring safe-motion flex w-full items-center gap-3.5 rounded-2xl border border-border/70 bg-card/50 p-3.5 text-left hover:bg-secondary/40"
+        >
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-violet-500/12 text-violet-600 dark:text-violet-300">
+            <MessageSquare className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">Contact Support</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">Chat with our team and get help.</span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </button>
+        <Link
+          href="/settings/feedback"
+          className="focus-ring safe-motion flex w-full items-center gap-3.5 rounded-2xl border border-border/70 bg-card/50 p-3.5 text-left hover:bg-secondary/40"
+        >
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+            <Flag className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">Report a problem</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">Tell us what’s not working.</span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </Link>
+      </section>
+
+      {contactOpen ? (
+        <section ref={contactRef} className="rounded-2xl border border-border/70 bg-card/50 p-5" aria-label="Contact support">
+          <div className="mb-4 flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-primary" aria-hidden="true" />
+            <h2 className="text-base font-semibold">Send us a message</h2>
+          </div>
+
+          {sent ? (
+            <p className="text-sm text-muted-foreground">Thanks, our team will get back to you soon.</p>
+          ) : (
+            <div className="grid gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField htmlFor="help-name" label="Full name">
+                  <Input id="help-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Enter your name" />
+                </FormField>
+                <FormField htmlFor="help-email" label="Email">
+                  <Input id="help-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Enter your email" />
+                </FormField>
+              </div>
+              <FormField htmlFor="help-message" label="Message">
+                <Textarea id="help-message" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="How can we help?" />
+              </FormField>
+              <Button
+                type="button"
+                disabled={isPending || !name.trim() || !email.trim() || message.trim().length < 3}
+                onClick={() => startTransition(async () => {
+                  setFeedback("");
+                  const result = await submitSupportRequestAction({ fullName: name, email, message });
+                  if (result.ok) {
+                    setSent(true);
+                    router.refresh(); // surface the new request under "Your requests"
+                  } else setFeedback(result.message);
+                })}
+              >
+                {isPending ? "Sending..." : "Send message"}
+              </Button>
+              {feedback ? <p className="text-sm text-red-600 dark:text-red-300" role="alert">{feedback}</p> : null}
+            </div>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }
