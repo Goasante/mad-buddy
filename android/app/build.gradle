@@ -20,8 +20,11 @@ android {
         applicationId "com.madbuddy.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Increase versionCode on EVERY release so a newer signed build installs
+        // over the previous one as an upgrade (Android rejects an equal/lower
+        // versionCode with INSTALL_FAILED_VERSION_DOWNGRADE).
+        versionCode 2
+        versionName "1.0.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
