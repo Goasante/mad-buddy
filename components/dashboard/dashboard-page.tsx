@@ -410,11 +410,11 @@ export function DashboardPageContent({
             />
             <div className="min-w-0">
               <p className="text-sm font-semibold">{ghostMode ? "Paused" : "Visible"}</p>
-              {/* Explanatory copy is secondary — hidden on the narrowest phones
-                  (where the state word + dot already read clearly) so it never
-                  looks accidentally clipped beside the status section. */}
+              {/* Explanatory copy is secondary — concise, and hidden on the
+                  narrowest phones (where the state word + dot already read
+                  clearly) so it never clips beside the status section. */}
               <p className="hidden truncate text-xs text-muted-foreground min-[400px]:block">
-                {ghostMode ? "You’re hidden" : "Muddies can see you"}
+                {ghostMode ? "You’re hidden" : "Muddies see you"}
               </p>
             </div>
           </div>
@@ -709,26 +709,33 @@ function NearbyHero({
           ) : null}
         </div>
       ) : (
-        // Compact empty state — no oversized container.
-        <div className="flex items-center gap-3 rounded-2xl bg-card/50 p-4 dark:bg-white/[0.035]">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-secondary/70 text-muted-foreground">
-            {ghostMode ? <Ghost className="h-5 w-5" aria-hidden="true" /> : <Users className="h-5 w-5" aria-hidden="true" />}
+        // Intentional, borderless empty state — a soft proximity visual, not a
+        // giant card. Kept compact so Home stays composed with nothing nearby.
+        <div className="flex flex-col items-center py-5 text-center">
+          <span className="relative grid h-[68px] w-[68px] place-items-center" aria-hidden="true">
+            {/* Concentric proximity rings — the same idea as the glow, resting. */}
+            <span className="absolute inset-0 rounded-full border border-border/60" />
+            <span className="absolute inset-[10px] rounded-full border border-border/45" />
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-secondary/70 text-muted-foreground">
+              {ghostMode ? <Ghost className="h-5 w-5" aria-hidden="true" /> : <Users className="h-5 w-5" aria-hidden="true" />}
+            </span>
           </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">{ghostMode ? "Visibility is paused" : "No Muddies nearby right now"}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {ghostMode
-                ? "Turn visibility back on to appear nearby."
-                : "Approved Muddies glow here when they’re nearby."}
-            </p>
-          </div>
+          <p className="mt-3 text-sm font-semibold">
+            {ghostMode ? "Visibility is paused" : "No Muddies nearby"}
+          </p>
+          <p className="mt-1 max-w-[16rem] text-xs leading-5 text-muted-foreground">
+            {ghostMode
+              ? "Turn visibility back on to appear nearby."
+              : "Approved Muddies glow here when they’re around."}
+          </p>
           {!ghostMode ? (
-            <Button type="button" size="sm" variant="outline" className="shrink-0" asChild>
-              <Link href="/friends?tab=add" aria-label="Add Muddies">
-                <UserPlus className="h-4 w-4" aria-hidden="true" />
-                Add
-              </Link>
-            </Button>
+            <Link
+              href="/friends?tab=add"
+              className="focus-ring safe-motion mt-3 inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10"
+            >
+              <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
+              Add Muddies
+            </Link>
           ) : null}
         </div>
       )}
@@ -746,18 +753,20 @@ type QuickAction = {
   description: string;
   icon: LucideIcon;
   featureIcon: FeatureIconKey;
+  /** Per-feature accent (the FeatureIcon glyph is a currentColor mask). */
+  accent: string;
 };
 
 const quickActions: QuickAction[] = [
-  { href: "/hangout-mode", label: "Hangout", description: "Let your Muddies know you’re open to meeting.", icon: Hand, featureIcon: "hangout" },
-  { href: "/discover", label: "Socialize", description: "Find people who are open to socializing.", icon: Compass, featureIcon: "socialize" },
-  { href: "/safe-arrival", label: "Safe Arrival", description: "Let trusted Muddies know when you arrive safely.", icon: ShieldCheck, featureIcon: "safeArrival" },
-  { href: "/moments", label: "Moments", description: "Share a moment before it disappears.", icon: Sparkles, featureIcon: "moments" },
-  { href: "/events", label: "Events", description: "See what’s coming up.", icon: PartyPopper, featureIcon: "events" },
-  { href: "/groups", label: "Groups", description: "Open your groups and invitations.", icon: Users2, featureIcon: "groups" },
-  { href: "/invites", label: "Invites", description: "Review and send invitations.", icon: UserPlus, featureIcon: "invites" },
-  { href: "/reminders", label: "Reminders", description: "Reminders for plans and connections.", icon: Bell, featureIcon: "reminders" },
-  { href: "/settings/engagement", label: "Focus", description: "Manage Focus Mode and notification limits.", icon: Moon, featureIcon: "focus" }
+  { href: "/hangout-mode", label: "Hangout", description: "Let your Muddies know you’re open to meeting.", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
+  { href: "/discover", label: "Socialize", description: "Find people who are open to socializing.", icon: Compass, featureIcon: "socialize", accent: "text-violet-500 dark:text-violet-400" },
+  { href: "/safe-arrival", label: "Safe Arrival", description: "Let trusted Muddies know when you arrive safely.", icon: ShieldCheck, featureIcon: "safeArrival", accent: "text-sky-500 dark:text-sky-400" },
+  { href: "/moments", label: "Moments", description: "Share a moment before it disappears.", icon: Sparkles, featureIcon: "moments", accent: "text-primary" },
+  { href: "/events", label: "Events", description: "See what’s coming up.", icon: PartyPopper, featureIcon: "events", accent: "text-violet-500 dark:text-violet-400" },
+  { href: "/groups", label: "Groups", description: "Open your groups and invitations.", icon: Users2, featureIcon: "groups", accent: "text-sky-500 dark:text-sky-400" },
+  { href: "/invites", label: "Invites", description: "Review and send invitations.", icon: UserPlus, featureIcon: "invites", accent: "text-emerald-500 dark:text-emerald-400" },
+  { href: "/reminders", label: "Reminders", description: "Reminders for plans and connections.", icon: Bell, featureIcon: "reminders", accent: "text-amber-500 dark:text-amber-400" },
+  { href: "/settings/engagement", label: "Focus", description: "Manage Focus Mode and notification limits.", icon: Moon, featureIcon: "focus", accent: "text-pink-500 dark:text-pink-400" }
 ];
 
 const PRIMARY_ACTION_HREFS = ["/hangout-mode", "/discover", "/safe-arrival"];
@@ -777,8 +786,13 @@ function QuickActionsHome({ hiddenHrefs = [] }: { hiddenHrefs?: string[] }) {
   const secondary = rest;
 
   return (
-    <section aria-label="Quick actions">
-      <div className={cn("grid gap-2.5", secondary.length > 0 ? "grid-cols-4" : "grid-cols-3")}>
+    <section aria-labelledby="home-actions-heading">
+      <h2 id="home-actions-heading" className="mb-2 text-sm font-semibold">
+        Quick actions
+      </h2>
+      {/* Icon-first launcher row — no card containers or borders; the glyphs
+          carry their own accent and the whole cell is the tap target. */}
+      <div className={cn("grid gap-1", secondary.length > 0 ? "grid-cols-4" : "grid-cols-3")}>
         {primary.map((action) => (
           <QuickActionTile key={action.href} action={action} />
         ))}
@@ -786,12 +800,10 @@ function QuickActionsHome({ hiddenHrefs = [] }: { hiddenHrefs?: string[] }) {
           <button
             type="button"
             onClick={() => setMoreOpen(true)}
-            className="focus-ring safe-motion flex min-h-[68px] flex-col items-center justify-center gap-1 rounded-2xl border border-border/70 bg-card/50 px-1 py-2 text-center hover:bg-secondary/40 active:scale-[0.98] motion-reduce:active:scale-100"
+            className="focus-ring safe-motion flex min-h-[68px] flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-center hover:bg-secondary/30 active:scale-[0.96] motion-reduce:active:scale-100"
             aria-label="More quick actions"
           >
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-secondary text-foreground/70">
-              <LayoutGrid className="h-[18px] w-[18px]" aria-hidden="true" />
-            </span>
+            <LayoutGrid className="h-7 w-7 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
             <span className="line-clamp-2 w-full text-[11px] font-medium leading-tight">More</span>
           </button>
         ) : null}
@@ -804,19 +816,18 @@ function QuickActionsHome({ hiddenHrefs = [] }: { hiddenHrefs?: string[] }) {
         description="Jump to another Mad Buddy feature."
         variant="sheet"
       >
-        <div className="grid grid-cols-3 gap-2.5 pt-1 sm:grid-cols-4">
+        {/* Same icon-first language as the launcher row above. */}
+        <div className="grid grid-cols-3 gap-1 pt-1 sm:grid-cols-4">
           {secondary.map((action) => (
             <Link
               key={action.href}
               href={action.href}
               onClick={() => setMoreOpen(false)}
               aria-label={action.description}
-              className="focus-ring safe-motion flex min-h-[84px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-border/70 bg-card/50 p-2 text-center hover:bg-secondary/40"
+              className="focus-ring safe-motion flex min-h-[76px] flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-center hover:bg-secondary/30 active:scale-[0.97] motion-reduce:active:scale-100"
             >
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
-                <FeatureIcon feature={action.featureIcon} size={22} decorative />
-              </span>
-              <span className="text-xs font-medium">{action.label}</span>
+              <FeatureIcon feature={action.featureIcon} size={28} decorative className={action.accent} />
+              <span className="line-clamp-2 w-full text-[11px] font-medium leading-tight">{action.label}</span>
             </Link>
           ))}
         </div>
@@ -831,13 +842,11 @@ function QuickActionTile({ action }: { action: QuickAction }) {
       href={action.href}
       aria-label={action.description}
       title={action.description}
-      className="focus-ring safe-motion flex min-h-[68px] w-full flex-col items-center justify-center gap-1 rounded-2xl border border-border/70 bg-card/50 px-1 py-2 text-center hover:bg-secondary/40 active:scale-[0.98] motion-reduce:active:scale-100"
+      className="focus-ring safe-motion flex min-h-[68px] w-full flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-center hover:bg-secondary/30 active:scale-[0.96] motion-reduce:active:scale-100"
     >
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-        <FeatureIcon feature={action.featureIcon} size={18} decorative />
-      </span>
+      <FeatureIcon feature={action.featureIcon} size={30} decorative className={action.accent} />
       {/* Two-line label wraps ("Safe Arrival") rather than truncating; never
-          forces horizontal scroll because it only ever wraps within the tile. */}
+          forces horizontal scroll because it only ever wraps within the cell. */}
       <span className="line-clamp-2 w-full text-[11px] font-medium leading-tight">{action.label}</span>
     </Link>
   );
