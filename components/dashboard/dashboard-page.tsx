@@ -5,21 +5,20 @@ import type { Route } from "next";
 import {
   AlertTriangle,
   Bell,
-  CalendarCheck2,
-  CheckCheck,
   CheckCircle2,
+  ChevronRight,
+  CalendarDays,
   CircleDollarSign,
   Compass,
   Eye,
   EyeOff,
   Ghost,
   Hand,
-  MapPinOff,
-  MessageCircle,
+  LayoutGrid,
+  MapPin,
   MessageSquareText,
   Moon,
   PartyPopper,
-  Plus,
   RefreshCcw,
   ShieldCheck,
   Sparkles,
@@ -32,9 +31,7 @@ import type { LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
-import { getVisibleHangoutsAction, requestHangoutAction, type VisibleHangout } from "@/app/(app)/hangout-actions";
 import { updateVisibilityStatusAction } from "@/app/(app)/settings-actions";
-import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { PendingInvitePrompt } from "@/components/discovery/pending-invite-prompt";
@@ -42,15 +39,13 @@ import { ProfileCompletionReminder } from "@/components/profile/profile-completi
 import { JourneyStatusCard } from "@/components/safety/journey-status-card";
 import { StatusComposer } from "@/components/social/status-composer";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
 import { FeatureIcon } from "@/components/ui/feature-icon";
-import { UserAvatar } from "@/components/ui/user-avatar";
+import { Modal } from "@/components/ui/modal";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
-import { resolveNotificationDestination } from "@/lib/notifications/destination";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 import { formatMuddyStatusLabel } from "@/lib/social/rules";
-import type { HomeUpcomingPlan, PlanAttendee } from "@/lib/social/upcoming-plans";
+import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import { type FreshnessState } from "@/lib/proximity/freshness";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import type { ActivityType, AvailabilityType, SubscriptionPlan } from "@/lib/supabase/database.types";
@@ -90,25 +85,6 @@ type NearbyFriendApiItem = {
   muddy_status_note: string | null;
 };
 
-type AttentionItem = {
-  id: string;
-  type: string;
-  href: string;
-  title: string;
-  preview: string;
-  time: string;
-  icon: LucideIcon;
-};
-
-type ApiNotification = {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  is_read: boolean;
-  created_at: string;
-};
-
 type DashboardPageContentProps = {
   subscriptionPlan?: SubscriptionPlan;
   hasPremium?: boolean;
@@ -139,17 +115,48 @@ type DashboardPageContentProps = {
   hiddenQuickActionHrefs?: string[];
 };
 
-const attentionIconByType: Record<string, LucideIcon> = {
-  friend_request_received: UserPlus,
-  friend_request_accepted: CheckCheck,
-  friend_nearby: MapPinOff,
-  meetup_request: MessageCircle,
-  wave: Hand
+/** Strongest proximity bucket first, then the brightest glow within a bucket. */
+const PROXIMITY_ORDER: Record<ProximityLevel, number> = {
+  very_close: 0,
+  nearby: 1,
+  around: 2,
+  far: 3,
+  hidden: 4
 };
+
+/** Home shows at most four positions; a fifth+ collapses into a "+N" tile. */
+const NEARBY_MAX_POSITIONS = 4;
 
 function capitalize(name: string) {
   return name ? name.charAt(0).toUpperCase() + name.slice(1) : name;
 }
+
+/** First letter of a name for the attendee-avatar fallback. */
+function initialOf(name: string) {
+  return name.trim().charAt(0).toUpperCase() || "?";
+}
+
+/** Short status text for the compact card (custom note wins, else availability). */
+const AVAILABILITY_LABEL: Record<AvailabilityType, string> = {
+  free: "Free",
+  open_to_hang_out: "Open to hang out",
+  maybe_available: "Maybe free",
+  busy: "Busy",
+  do_not_disturb: "Do not disturb"
+};
+
+function statusDisplay(note?: string, availability?: AvailabilityType): string {
+  const trimmed = note?.trim();
+  if (trimmed) return trimmed;
+  return availability ? AVAILABILITY_LABEL[availability] : "Status on";
+}
+
+/** Per-proximity accent for the label pill, matching the reference hues. */
+const PROXIMITY_LABEL_CLASS: Partial<Record<ProximityLevel, string>> = {
+  very_close: "bg-primary/12 text-primary",
+  nearby: "bg-violet-500/15 text-violet-600 dark:text-violet-300",
+  around: "bg-blue-500/15 text-blue-600 dark:text-blue-300"
+};
 
 export function DashboardPageContent({
   subscriptionPlan = "free",
@@ -161,7 +168,6 @@ export function DashboardPageContent({
   initialStatusActivity = null,
   initialStatusNote = "",
   upcomingPlans = [],
-  hasMorePlans = false,
   glowColorByFriendId = {},
   profileReminder = null,
   safeArrivalSession = null,
@@ -176,48 +182,34 @@ export function DashboardPageContent({
     null
   );
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
-  const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([]);
-  const [unreadActivityCount, setUnreadActivityCount] = useState(0);
-  const [openHangouts, setOpenHangouts] = useState<VisibleHangout[]>([]);
   const [isPending, startTransition] = useTransition();
   const locationUpdateInFlightRef = useRef(false);
   const nearbyRefreshRef = useRef<Promise<void> | null>(null);
   const promptFeedbackTimerRef = useRef<number | null>(null);
+
   const visibleFriends = !ghostMode ? friends : [];
   // The nearby endpoint also returns friends whose signal is stale ("hidden")
-  // or who are merely within the broader "far" bucket, real data the API
-  // legitimately reports, but not what belongs in a "Nearby friends" glance.
-  // Only these three levels count toward the proximity pills above, so the
-  // card grid must match that same set or the two disagree (the exact bug
-  // this filter fixes: "1 nearby" while two cards render).
-  const nearbyFriends = visibleFriends.filter(
-    (friend) =>
-      friend.proximityLevel === "very_close" || friend.proximityLevel === "nearby" || friend.proximityLevel === "around"
+  // or merely "far"; only these three levels are a real "nearby" glance. Sorted
+  // strongest-first so the four preview positions show the closest Muddies.
+  // Memoised on the stable inputs (friends, ghostMode) rather than the derived
+  // visibleFriends, so it doesn't recompute every render.
+  const nearbyFriends = useMemo(
+    () =>
+      (ghostMode ? [] : friends)
+        .filter(
+          (friend) =>
+            friend.proximityLevel === "very_close" ||
+            friend.proximityLevel === "nearby" ||
+            friend.proximityLevel === "around"
+        )
+        .sort(
+          (a, b) =>
+            PROXIMITY_ORDER[a.proximityLevel] - PROXIMITY_ORDER[b.proximityLevel] || b.glowStrength - a.glowStrength
+        ),
+    [friends, ghostMode]
   );
-  // "Muddies open to plans" reuses the existing availability signal only, a
-  // Muddy who set their availability to "open to hang out". No invented state.
-  const openToPlansMuddies = visibleFriends.filter((friend) => friend.availability === "open_to_hang_out");
   const selectedFriend = visibleFriends.find((friend) => friend.friendId === selectedFriendId) ?? null;
-
-  // Home shows only a compact preview of nearby Muddies; the cap adapts to the
-  // viewport (mobile 5, tablet 6, desktop 8) and "View all" links to the full
-  // Muddies list when more active Muddies exist than the preview shows. The
-  // list only renders after a client fetch, so a width-derived cap is free of
-  // hydration concerns.
-  const [previewLimit, setPreviewLimit] = useState(8);
-  const nearbyPreview = nearbyFriends.slice(0, previewLimit);
-  const hasMoreNearbyFriends = nearbyFriends.length > previewLimit;
-
-  const proximityCounts = useMemo(() => {
-    const counts = { very_close: 0, nearby: 0, around: 0 };
-    if (ghostMode) return counts;
-    friends.forEach((friend) => {
-      if (friend.proximityLevel === "very_close") counts.very_close += 1;
-      else if (friend.proximityLevel === "nearby") counts.nearby += 1;
-      else if (friend.proximityLevel === "around") counts.around += 1;
-    });
-    return counts;
-  }, [friends, ghostMode]);
+  const nearbyTotal = nearbyFriends.length;
 
   const scheduleToastDismiss = useCallback(() => {
     if (promptFeedbackTimerRef.current) window.clearTimeout(promptFeedbackTimerRef.current);
@@ -246,10 +238,12 @@ export function DashboardPageContent({
 
     const refresh = (async () => {
       try {
-        const response = await fetchWithTimeout("/api/friends/nearby", {
-          method: "GET",
-          credentials: "include"
-        }, 12_000, "load nearby friends");
+        const response = await fetchWithTimeout(
+          "/api/friends/nearby",
+          { method: "GET", credentials: "include" },
+          12_000,
+          "load nearby friends"
+        );
 
         if (!response.ok) {
           const error = (await response.json().catch(() => ({ error: "Could not refresh nearby friends." }))) as {
@@ -283,23 +277,26 @@ export function DashboardPageContent({
     }
 
     locationUpdateInFlightRef.current = true;
-    // Transient loading state, not a permanent description; cleared in every
-    // terminal branch below so it never sticks.
     setIsCheckingNearby(true);
     setStatusMessage("");
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
-          const response = await fetchWithTimeout("/api/location/update", {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              accuracy: position.coords.accuracy
-            })
-          }, 15_000, "update dashboard proximity");
+          const response = await fetchWithTimeout(
+            "/api/location/update",
+            {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: position.coords.accuracy
+              })
+            },
+            15_000,
+            "update dashboard proximity"
+          );
 
           if (!response.ok) {
             const data = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -335,93 +332,12 @@ export function DashboardPageContent({
   }, [loadNearbyFriends]);
 
   useEffect(() => {
-    const computeLimit = () => {
-      const width = window.innerWidth;
-      setPreviewLimit(width < 768 ? 5 : width < 1024 ? 6 : 8);
-    };
-    computeLimit();
-    window.addEventListener("resize", computeLimit);
-    return () => window.removeEventListener("resize", computeLimit);
-  }, []);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadAttentionItems() {
-      try {
-        const response = await fetchWithTimeout(
-          "/api/notifications",
-          { credentials: "include", cache: "no-store" },
-          12_000,
-          "load dashboard attention"
-        );
-        if (!response.ok || !isMounted) return;
-        const data = (await response.json()) as { notifications: ApiNotification[] };
-        const unread = data.notifications.filter((notification) => !notification.is_read);
-        setUnreadActivityCount(unread.length);
-        setAttentionItems(
-          unread.slice(0, 3).map((notification) => ({
-            id: notification.id,
-            type: notification.type,
-            // Deep link via the shared resolver; fall back to the Pulse hub for
-            // informational notifications with no specific destination.
-            href: resolveNotificationDestination(notification.type)?.href ?? "/notifications",
-            title: notification.title,
-            preview: notification.message,
-            time: formatRelativeTime(notification.created_at),
-            icon: attentionIconByType[notification.type.split(":")[0]] ?? Bell
-          }))
-        );
-      } catch {
-        // Leave attention items empty if the request fails.
-      }
-    }
-
-    void loadAttentionItems();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
     return () => {
       if (promptFeedbackTimerRef.current) {
         window.clearTimeout(promptFeedbackTimerRef.current);
       }
     };
   }, []);
-
-  // Hangouts the viewer is eligible to see (audience-gated server-side, incl.
-  // Close Friends / circles) so a Muddy's active hangout shows up in "open to
-  // plans" — not only inside Hangout Mode.
-  useEffect(() => {
-    let mounted = true;
-    getVisibleHangoutsAction()
-      .then((list) => {
-        if (mounted) setOpenHangouts(list);
-      })
-      .catch(() => {
-        // Leave hangouts empty if the request fails.
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  function requestHangout(hangoutId: string) {
-    setOpenHangouts((current) =>
-      current.map((item) => (item.id === hangoutId ? { ...item, myRequestStatus: "pending" } : item))
-    );
-    startTransition(async () => {
-      const result = await requestHangoutAction(hangoutId);
-      if (!result.ok) {
-        setOpenHangouts((current) =>
-          current.map((item) => (item.id === hangoutId ? { ...item, myRequestStatus: null } : item))
-        );
-        showPromptFeedback(result.message, true);
-      }
-    });
-  }
 
   useEffect(() => {
     const handleLocationUpdated = () => loadNearbyFriends();
@@ -439,17 +355,13 @@ export function DashboardPageContent({
 
   function toggleVisibility() {
     const nextGhostMode = !ghostMode;
-
     startTransition(async () => {
       const result = await updateVisibilityStatusAction(nextGhostMode ? "ghost" : "visible");
       setStatusMessage(result.ok ? "" : result.message);
-
       if (result.ok) {
         setGhostMode(nextGhostMode);
         window.dispatchEvent(
-          new CustomEvent("mad-buddy:location-sync-status", {
-            detail: { enabled: !nextGhostMode }
-          })
+          new CustomEvent("mad-buddy:location-sync-status", { detail: { enabled: !nextGhostMode } })
         );
         if (!nextGhostMode) updatePrivateLocation();
       }
@@ -460,10 +372,7 @@ export function DashboardPageContent({
     showPromptFeedback("Sending...");
     startTransition(async () => {
       try {
-        const result = await createMeetupRequestAction({
-          receiverId: friendId,
-          message
-        });
+        const result = await createMeetupRequestAction({ receiverId: friendId, message });
         showPromptFeedback(result.message, !result.ok);
       } catch {
         showPromptFeedback("Couldn’t send your message. Try again.", true);
@@ -471,24 +380,45 @@ export function DashboardPageContent({
     });
   }
 
-  return (
-    // The app shell supplies 16px mobile, 24px tablet, and 32px desktop
-    // horizontal padding. This single wrapper caps and centres Home without
-    // adding a second padded full-width layer.
-    <div className="mx-auto w-full max-w-[1200px] space-y-6 pt-6">
-      <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
+  const plan = upcomingPlans[0];
 
-      {/* If this account arrived from an invite while logged out, offer to
-          connect them with the inviter now that they're signed in. */}
+  return (
+    // A focused, centred column — Home answers "who's nearby?" at a glance, so
+    // it stays narrow on every width rather than spreading into a dashboard.
+    <div className="mx-auto w-full max-w-[560px] space-y-5 pt-5">
+      <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
       <PendingInvitePrompt />
 
+      {/* Greeting */}
       <div className="min-w-0">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl" suppressHydrationWarning>
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-[1.75rem]" suppressHydrationWarning>
           {getGreeting()}
           {displayName ? `, ${capitalize(displayName)}` : ""}
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">See which approved Muddies are nearby.</p>
-        <div className="mt-3">
+        <p className="mt-0.5 text-sm text-muted-foreground">See which approved Muddies are nearby.</p>
+      </div>
+
+      {/* Visibility + status: one compact card, two labelled sections split by
+          a divider, with the pause/refresh controls on the right. */}
+      <div className="rounded-2xl border border-border/70 bg-card/50 dark:bg-white/[0.035]">
+        <div className="flex items-center">
+          {/* Visibility */}
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 p-3.5">
+            <span
+              className={cn("h-2.5 w-2.5 shrink-0 rounded-full", ghostMode ? "bg-muted-foreground" : "bg-emerald-500")}
+              aria-hidden="true"
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">{ghostMode ? "Paused" : "Visible"}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {ghostMode ? "You’re hidden" : "Muddies can see you"}
+              </p>
+            </div>
+          </div>
+
+          <div className="h-9 w-px shrink-0 bg-border/70" aria-hidden="true" />
+
+          {/* Status — the whole section opens the composer. */}
           <StatusComposer
             hasActiveStatus={hasActiveStatus}
             initialAvailability={initialStatusAvailability}
@@ -506,32 +436,23 @@ export function DashboardPageContent({
               <button
                 type="button"
                 title={hasActiveStatus ? "Edit your status" : "Add a status"}
-                className="focus-ring safe-motion inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 bg-card/50 px-3 text-sm font-medium text-foreground hover:bg-secondary/60"
+                className="focus-ring safe-motion flex min-w-0 flex-1 items-center gap-2.5 p-3.5 text-left hover:bg-secondary/40"
               >
-                <MessageSquareText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                {hasActiveStatus ? "Edit status" : "Add status"}
+                <MessageSquareText className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold">
+                    {hasActiveStatus ? statusDisplay(initialStatusNote, initialStatusAvailability) : "Set a status"}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {hasActiveStatus ? "Tap to edit" : "Tap to add"}
+                  </span>
+                </span>
               </button>
             }
           />
-        </div>
-      </div>
 
-      {profileReminder ? (
-        <ProfileCompletionReminder userId={profileReminder.userId} missingItems={profileReminder.missingItems} />
-      ) : null}
-
-      {(() => {
-        const nearbyTotal = proximityCounts.very_close + proximityCounts.nearby + proximityCounts.around;
-        const statusDot = (
-          <span
-            className={cn("h-2 w-2 shrink-0 rounded-full", ghostMode ? "bg-muted-foreground" : "bg-emerald-500")}
-            aria-hidden="true"
-          />
-        );
-        // Pause is the primary action (subtle bordered emphasis); refresh is a
-        // neutral ghost icon so the two don't read as equal weight.
-        const statusActions = (
-          <div className="flex shrink-0 items-center gap-1">
+          {/* Controls */}
+          <div className="flex shrink-0 items-center gap-1 pr-2.5">
             <Button
               type="button"
               variant={ghostMode ? "primary" : "outline"}
@@ -558,62 +479,28 @@ export function DashboardPageContent({
               />
             </Button>
           </div>
-        );
+        </div>
 
-        return (
-          <div>
-            {/* Mobile: the full card with the helper line, so the meaning is
-                spelled out on the smallest screen. */}
-            <section className="rounded-2xl bg-card/55 p-5 shadow-sm dark:bg-white/[0.035] md:hidden">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  {statusDot}
-                  <span className="text-sm font-semibold">{ghostMode ? "Visibility paused" : "Visible"}</span>
-                </div>
-                {statusActions}
-              </div>
+        {statusMessage || isCheckingNearby ? (
+          <p className="border-t border-border/60 px-3.5 py-2 text-xs text-muted-foreground" role="status">
+            {isCheckingNearby ? "Checking nearby Muddies…" : statusMessage}
+          </p>
+        ) : null}
+      </div>
 
-              {!ghostMode ? (
-                <p className="mt-1.5 text-sm text-muted-foreground">{formatNearbyCount(nearbyTotal)}</p>
-              ) : null}
+      {/* Compact profile-completion banner (real state, dismissible). */}
+      {profileReminder ? (
+        <ProfileCompletionReminder userId={profileReminder.userId} missingItems={profileReminder.missingItems} />
+      ) : null}
 
-              <p className="mt-1 text-xs text-muted-foreground" role="status">
-                {isCheckingNearby
-                  ? "Checking nearby Muddies…"
-                  : statusMessage ||
-                    (ghostMode
-                      ? "You won’t appear nearby until you turn visibility back on."
-                      : "Approved Muddies can see when you’re nearby.")}
-              </p>
-            </section>
-
-            {/* Tablet + web: a compact single-row status bar — no card container,
-                so the feed below sits higher. The pause/refresh buttons sit
-                right next to the status text rather than pushed to the edge. */}
-            <div className="hidden items-center gap-3 md:flex">
-              <div className="flex min-w-0 items-center gap-2.5">
-                {statusDot}
-                <span className="shrink-0 text-sm font-semibold">{ghostMode ? "Visibility paused" : "Visible"}</span>
-                <span className="truncate text-sm text-muted-foreground" role="status">
-                  {isCheckingNearby
-                    ? "Checking nearby Muddies…"
-                    : statusMessage ||
-                      (ghostMode ? "Turn visibility on to appear nearby" : formatNearbyCount(nearbyTotal))}
-                </span>
-              </div>
-              {statusActions}
-            </div>
-          </div>
-        );
-      })()}
-
+      {/* Live Safe Arrival — only present during an active journey. */}
       {safeArrivalSession ? (
-        <section className="min-w-0" aria-labelledby="home-safe-arrival-heading">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 id="home-safe-arrival-heading" className="text-lg font-semibold tracking-tight">
+        <section aria-labelledby="home-safe-arrival-heading">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 id="home-safe-arrival-heading" className="text-sm font-semibold">
               Safe Arrival
             </h2>
-            <Link href="/safe-arrival" className="text-sm font-medium text-primary hover:underline">
+            <Link href="/safe-arrival" className="text-xs font-medium text-primary hover:underline">
               View journey
             </Link>
           </div>
@@ -629,183 +516,21 @@ export function DashboardPageContent({
         </section>
       ) : null}
 
-      {/* One dashboard grid. Explicit desktop positions retain the existing
-          mobile feed order while forming independent 2:1 desktop columns. */}
-      <div className="grid min-w-0 gap-y-8 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)] lg:gap-x-8">
-        <section className="min-w-0 self-start lg:col-start-1 lg:row-start-1">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold tracking-tight">Nearby Muddies</h2>
-            {hasMoreNearbyFriends ? (
-              <Link
-                href="/friends"
-                aria-label="View all Muddies"
-                className="text-sm font-medium text-primary hover:underline"
-              >
-                View all
-              </Link>
-            ) : null}
-          </div>
+      {/* HERO: Nearby Muddies */}
+      <NearbyHero
+        friends={nearbyFriends}
+        total={nearbyTotal}
+        ghostMode={ghostMode}
+        glowColorByFriendId={glowColorByFriendId}
+        reducedMotion={reducedMotion}
+        onSelect={setSelectedFriendId}
+      />
 
-          {nearbyFriends.length > 0 ? (
-            <>
-              {/* Mobile: a horizontal avatar strip so several Muddies are
-                  visible at a glance without pushing the feed below the fold.
-                  Hidden scrollbar keeps touch scrolling. The larger leading
-                  and top insets contain the animated halo at peak scale so
-                  the scroll boundary never cuts it into a sharp line. */}
-              <div
-                className="glow-strip no-scrollbar -mx-4 flex gap-4 overflow-x-auto pb-3 pl-12 pr-7 pt-7 md:hidden"
-                aria-label="Nearby Muddies"
-              >
-                {nearbyPreview.map((friend) => {
-                  const name = friend.displayName || friend.username;
-                  return (
-                    <button
-                      key={friend.friendId}
-                      type="button"
-                      onClick={() => setSelectedFriendId(friend.friendId)}
-                      className="focus-ring safe-motion flex w-20 shrink-0 flex-col items-center gap-1.5 text-center"
-                      aria-label={`${capitalize(name)}, ${proximityLabels[friend.proximityLevel]}`}
-                    >
-                      <GlowAvatar
-                        name={name}
-                        src={friend.avatarUrl}
-                        proximityLevel={friend.proximityLevel}
-                        glowStrength={friend.glowStrength}
-                        confidence={friend.confidence}
-                        glowColorId={glowColorByFriendId[friend.friendId] ?? null}
-                        size="md"
-                        reducedMotion={reducedMotion}
-                      />
-                      <span className="w-full truncate text-xs font-medium">{capitalize(name)}</span>
-                      <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                        {proximityLabels[friend.proximityLevel]}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+      {/* Quick actions: three primary + More */}
+      <QuickActionsHome hiddenHrefs={hiddenQuickActionHrefs} />
 
-              {/* Desktop/tablet: standalone glowing avatars (no card, no
-                  border), the same visual language as the mobile strip but
-                  wrapping. Padding keeps the contained glow from being clipped. */}
-              <div className="hidden flex-wrap gap-x-6 gap-y-5 pb-1 pl-6 pt-3 md:flex" aria-label="Nearby Muddies">
-                {nearbyPreview.map((friend) => {
-                  const name = friend.displayName || friend.username;
-                  return (
-                    <button
-                      key={friend.friendId}
-                      type="button"
-                      onClick={() => setSelectedFriendId(friend.friendId)}
-                      className="focus-ring safe-motion flex min-w-0 shrink-0 flex-col items-center text-center"
-                      aria-label={`${capitalize(name)}, ${proximityLabels[friend.proximityLevel]}`}
-                    >
-                      <GlowAvatar
-                        name={name}
-                        src={friend.avatarUrl}
-                        proximityLevel={friend.proximityLevel}
-                        glowStrength={friend.glowStrength}
-                        confidence={friend.confidence}
-                        glowColorId={glowColorByFriendId[friend.friendId] ?? null}
-                        size="lg"
-                        reducedMotion={reducedMotion}
-                      />
-                      <span className="mt-2 max-w-24 truncate text-sm font-medium">{capitalize(name)}</span>
-                      <span className="mt-1.5 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-                        {proximityLabels[friend.proximityLevel]}
-                      </span>
-                      {friend.muddyStatusLabel ? (
-                        <span className="mt-1 w-full truncate text-xs text-muted-foreground">
-                          {friend.muddyStatusLabel}
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          ) : (
-            <EmptyState
-              icon={ghostMode ? Ghost : Users}
-              className="w-full !border-border/50 !shadow-none p-4 sm:p-5"
-              title={ghostMode ? "Visibility is paused" : "No Muddies nearby"}
-              description={
-                ghostMode
-                  ? "You won’t appear nearby until you turn visibility back on."
-                  : "Approved Muddies will appear here when they’re nearby."
-              }
-              action={
-                !ghostMode ? (
-                  <Button type="button" asChild>
-                    <Link href="/friends?tab=add">
-                      <UserPlus className="h-4 w-4" aria-hidden="true" />
-                      Add Muddies
-                    </Link>
-                  </Button>
-                ) : undefined
-              }
-            />
-          )}
-        </section>
-
-        <div className="min-w-0 self-start lg:col-start-2 lg:row-start-1">
-          <QuickActions hiddenHrefs={hiddenQuickActionHrefs} />
-        </div>
-
-        <div className="min-w-0 self-start lg:col-start-1 lg:row-start-2">
-          <FeaturedPlan plan={upcomingPlans[0]} hasMore={hasMorePlans || upcomingPlans.length > 1} />
-        </div>
-
-        {attentionItems.length > 0 ? (
-          <section className="min-w-0 self-start lg:col-start-2 lg:row-start-2">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-semibold tracking-tight">Recent activity</h2>
-              {unreadActivityCount > attentionItems.length ? (
-                <Link
-                  href="/notifications"
-                  aria-label="View all activity"
-                  className="text-sm font-medium text-primary hover:underline"
-                >
-                  View all
-                </Link>
-              ) : null}
-            </div>
-
-            <ul className="divide-y divide-border/60 rounded-2xl border border-border/70 bg-card/40">
-              {attentionItems.map((item) => (
-                <li key={item.id}>
-                  <Link
-                    href={item.href as Route}
-                    aria-label={`Open: ${capitalize(item.title)}`}
-                    className="focus-ring safe-motion flex min-h-[60px] items-center gap-3 px-4 py-3 hover:bg-secondary/50"
-                  >
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                      <item.icon className="h-4 w-4" aria-hidden="true" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{capitalize(item.title)}</span>
-                      {item.preview ? (
-                        <span className="block truncate text-xs text-muted-foreground">{item.preview}</span>
-                      ) : null}
-                    </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{item.time}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-        <div className="min-w-0 self-start lg:col-start-1 lg:row-start-3">
-          <MuddiesOpenToPlans
-            muddies={openToPlansMuddies}
-            hangouts={openHangouts}
-            glowColorByFriendId={glowColorByFriendId}
-            onSelect={setSelectedFriendId}
-            onRequestHangout={requestHangout}
-            isPending={isPending}
-          />
-        </div>
-      </div>
+      {/* Compact upcoming plan — only when one genuinely exists. */}
+      {plan ? <UpcomingPlanRow plan={plan} /> : null}
 
       {promptFeedback ? (
         <div
@@ -815,10 +540,6 @@ export function DashboardPageContent({
           onMouseLeave={scheduleToastDismiss}
           onFocus={pauseToastDismiss}
           onBlur={scheduleToastDismiss}
-          // Sits above the mobile bottom nav (its 88px + safe-area) so it never
-          // covers it; on desktop there is no bottom nav, so a small offset.
-          // A fixed dark surface in every theme, per the toast spec, rather
-          // than bg-card which would be near-white in the light theme.
           className="toast-in fixed bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-2rem)] max-w-[320px] -translate-x-1/2 md:bottom-6"
         >
           <div className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-[#1b1b1d] px-4 py-3 text-white shadow-lg">
@@ -848,6 +569,7 @@ export function DashboardPageContent({
           </div>
         </div>
       ) : null}
+
       <MuddyProfileModal
         muddy={
           selectedFriend
@@ -871,132 +593,248 @@ export function DashboardPageContent({
           if (selectedFriendId) sendConnectionPrompt(selectedFriendId, message);
         }}
       />
-
     </div>
   );
 }
 
-function getGreeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
+// ---------------------------------------------------------------------------
+// Nearby hero — at most four positions, fixed height at any nearby count.
+// ---------------------------------------------------------------------------
+
+function NearbyHero({
+  friends,
+  total,
+  ghostMode,
+  glowColorByFriendId,
+  reducedMotion,
+  onSelect
+}: {
+  friends: DashboardFriend[];
+  total: number;
+  ghostMode: boolean;
+  glowColorByFriendId: Record<string, string>;
+  reducedMotion: boolean;
+  onSelect: (friendId: string) => void;
+}) {
+  // Over the cap, keep the three strongest and give the 4th slot to "+N".
+  const overflow = total > NEARBY_MAX_POSITIONS;
+  const shown = overflow ? friends.slice(0, NEARBY_MAX_POSITIONS - 1) : friends.slice(0, NEARBY_MAX_POSITIONS);
+  const remaining = total - shown.length;
+
+  return (
+    <section aria-labelledby="home-nearby-heading">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 id="home-nearby-heading" className="text-lg font-semibold tracking-tight">
+          Nearby Muddies
+        </h2>
+        {total > 0 ? (
+          <Link
+            href="/friends"
+            className="inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline"
+            aria-label={`${total} nearby, view all Muddies`}
+          >
+            {total} nearby
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        ) : null}
+      </div>
+
+      {total > 0 ? (
+        // One fixed row of up to four positions — never wraps, never grows with
+        // the nearby count. Breaks out to the padding edges so four large
+        // glowing avatars fit across a phone; the top/side padding keeps the
+        // animated halo from being clipped at the row's edge.
+        <div
+          className="-mx-1 flex items-start justify-between gap-1 px-1 pt-5 sm:gap-3"
+          aria-label="Nearby Muddies"
+        >
+          {shown.map((friend) => {
+            const name = friend.displayName || friend.username;
+            return (
+              <button
+                key={friend.friendId}
+                type="button"
+                onClick={() => onSelect(friend.friendId)}
+                className="focus-ring safe-motion flex min-w-0 basis-0 grow flex-col items-center gap-1.5 text-center"
+                aria-label={`${capitalize(name)}, ${proximityLabels[friend.proximityLevel]}`}
+              >
+                <span className="relative">
+                  <GlowAvatar
+                    name={name}
+                    src={friend.avatarUrl}
+                    proximityLevel={friend.proximityLevel}
+                    glowStrength={friend.glowStrength}
+                    confidence={friend.confidence}
+                    glowColorId={glowColorByFriendId[friend.friendId] ?? null}
+                    size="lg"
+                    reducedMotion={reducedMotion}
+                  />
+                  {/* Presence: a nearby Muddy with a live, just-updated signal. */}
+                  {friend.freshnessState === "live" ? (
+                    <span
+                      className="absolute bottom-0.5 right-0.5 z-[2] h-3.5 w-3.5 rounded-full border-2 border-background bg-emerald-500"
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </span>
+                <span className="mt-1 w-full truncate text-sm font-medium">{capitalize(name)}</span>
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                    PROXIMITY_LABEL_CLASS[friend.proximityLevel] ?? "bg-primary/12 text-primary"
+                  )}
+                >
+                  {proximityLabels[friend.proximityLevel]}
+                </span>
+              </button>
+            );
+          })}
+
+          {overflow ? (
+            <Link
+              href="/friends"
+              className="focus-ring safe-motion flex min-w-0 basis-0 grow flex-col items-center gap-1.5 text-center"
+              aria-label={`View all ${total} nearby Muddies`}
+            >
+              <span className="grid h-[4.75rem] w-[4.75rem] place-items-center rounded-full border-2 border-dashed border-border bg-secondary/40 leading-none">
+                <span className="text-base font-bold">+{remaining}</span>
+                <span className="mt-0.5 text-[9px] font-medium text-muted-foreground">Muddies</span>
+              </span>
+              <span className="mt-1 w-full truncate text-sm font-medium text-transparent">.</span>
+              <span className="text-[11px] font-semibold text-primary">View all</span>
+            </Link>
+          ) : null}
+        </div>
+      ) : (
+        // Compact empty state — no oversized container.
+        <div className="flex items-center gap-3 rounded-2xl bg-card/50 p-4 dark:bg-white/[0.035]">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-secondary/70 text-muted-foreground">
+            {ghostMode ? <Ghost className="h-5 w-5" aria-hidden="true" /> : <Users className="h-5 w-5" aria-hidden="true" />}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">{ghostMode ? "Visibility is paused" : "No Muddies nearby right now"}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {ghostMode
+                ? "Turn visibility back on to appear nearby."
+                : "Approved Muddies glow here when they’re nearby."}
+            </p>
+          </div>
+          {!ghostMode ? (
+            <Button type="button" size="sm" variant="outline" className="shrink-0" asChild>
+              <Link href="/friends?tab=add" aria-label="Add Muddies">
+                <UserPlus className="h-4 w-4" aria-hidden="true" />
+                Add
+              </Link>
+            </Button>
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
 }
 
-function formatNearbyCount(total: number): string {
-  if (total <= 0) return "No Muddies nearby";
-  if (total === 1) return "1 Muddy nearby";
-  return `${total} Muddies nearby`;
-}
+// ---------------------------------------------------------------------------
+// Quick actions — three primary + a More sheet for the rest.
+// ---------------------------------------------------------------------------
 
-// Compact tiles with short labels only (the full description lives in the
-// tooltip / aria-label and the opened flow, not permanently on Home). Each
-// links to its existing route; nothing here duplicates that feature's logic.
-const quickActions: Array<{
-  href:
-    | "/hangout-mode"
-    | "/safe-arrival"
-    | "/moments"
-    | "/events"
-    | "/groups"
-    | "/discover"
-    | "/invites"
-    | "/reminders"
-    | "/settings/engagement";
+type QuickAction = {
+  href: Route;
   label: string;
   description: string;
   icon: LucideIcon;
   featureIcon: FeatureIconKey;
-}> = [
-  {
-    href: "/hangout-mode",
-    label: "Hangout",
-    description: "Let your Muddies know you’re open to meeting.",
-    icon: Hand,
-    featureIcon: "hangout"
-  },
-  {
-    href: "/safe-arrival",
-    label: "Safe Arrival",
-    description: "Let trusted Muddies know when you arrive safely.",
-    icon: ShieldCheck,
-    featureIcon: "safeArrival"
-  },
-  {
-    href: "/moments",
-    label: "Moments",
-    description: "Share a moment with your Muddies before it disappears.",
-    icon: Sparkles,
-    featureIcon: "moments"
-  },
-  {
-    href: "/events",
-    label: "Events",
-    description: "View events and see what is coming up.",
-    icon: PartyPopper,
-    featureIcon: "events"
-  },
-  {
-    href: "/groups",
-    label: "Groups",
-    description: "Open your groups and group invitations.",
-    icon: Users2,
-    featureIcon: "groups"
-  },
-  {
-    href: "/discover",
-    label: "Socialize",
-    description: "Find people who are open to socializing.",
-    icon: Compass,
-    featureIcon: "socialize"
-  },
-  {
-    href: "/invites",
-    label: "Invites",
-    description: "Review invitations and invite your Muddies.",
-    icon: UserPlus,
-    featureIcon: "invites"
-  },
-  {
-    href: "/reminders",
-    label: "Reminders",
-    description: "Review reminders for plans and connections.",
-    icon: Bell,
-    featureIcon: "reminders"
-  },
-  {
-    href: "/settings/engagement",
-    label: "Focus",
-    description: "Manage Focus Mode and notification limits.",
-    icon: Moon,
-    featureIcon: "focus"
-  }
+};
+
+const quickActions: QuickAction[] = [
+  { href: "/hangout-mode", label: "Hangout", description: "Let your Muddies know you’re open to meeting.", icon: Hand, featureIcon: "hangout" },
+  { href: "/discover", label: "Socialize", description: "Find people who are open to socializing.", icon: Compass, featureIcon: "socialize" },
+  { href: "/safe-arrival", label: "Safe Arrival", description: "Let trusted Muddies know when you arrive safely.", icon: ShieldCheck, featureIcon: "safeArrival" },
+  { href: "/moments", label: "Moments", description: "Share a moment before it disappears.", icon: Sparkles, featureIcon: "moments" },
+  { href: "/events", label: "Events", description: "See what’s coming up.", icon: PartyPopper, featureIcon: "events" },
+  { href: "/groups", label: "Groups", description: "Open your groups and invitations.", icon: Users2, featureIcon: "groups" },
+  { href: "/invites", label: "Invites", description: "Review and send invitations.", icon: UserPlus, featureIcon: "invites" },
+  { href: "/reminders", label: "Reminders", description: "Reminders for plans and connections.", icon: Bell, featureIcon: "reminders" },
+  { href: "/settings/engagement", label: "Focus", description: "Manage Focus Mode and notification limits.", icon: Moon, featureIcon: "focus" }
 ];
 
-function QuickActions({ hiddenHrefs = [] }: { hiddenHrefs?: string[] }) {
-  const visibleActions = quickActions.filter((action) => !hiddenHrefs.includes(action.href));
+const PRIMARY_ACTION_HREFS = ["/hangout-mode", "/discover", "/safe-arrival"];
+
+function QuickActionsHome({ hiddenHrefs = [] }: { hiddenHrefs?: string[] }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const available = quickActions.filter((action) => !hiddenHrefs.includes(action.href));
+
+  // Keep three primary tiles. If one (e.g. Socialize) is disabled by Owner
+  // controls, backfill from the remaining actions so there is never an empty
+  // gap where a feature used to be.
+  const primary: QuickAction[] = available.filter((action) => PRIMARY_ACTION_HREFS.includes(action.href));
+  const rest = available.filter((action) => !PRIMARY_ACTION_HREFS.includes(action.href));
+  while (primary.length < 3 && rest.length > 0) {
+    primary.push(rest.shift()!);
+  }
+  const secondary = rest;
+
   return (
-    <section className="min-w-0" aria-label="Quick actions">
-      <h2 className="mb-3 text-lg font-semibold tracking-tight">Quick actions</h2>
-      <div className="grid min-w-0 grid-cols-3 gap-2">
-        {visibleActions.map((action) => (
-          <Link
-            key={action.href}
-            href={action.href}
-            aria-label={action.description}
-            title={action.description}
-            className="focus-ring safe-motion flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl border border-border/70 bg-card/50 p-1.5 text-center hover:bg-secondary/40"
-          >
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/10 text-primary">
-              <FeatureIcon feature={action.featureIcon} size={20} decorative />
-            </span>
-            <span className="truncate text-[11px] font-medium leading-tight">{action.label}</span>
-          </Link>
+    <section aria-label="Quick actions">
+      <div className={cn("grid gap-2.5", secondary.length > 0 ? "grid-cols-4" : "grid-cols-3")}>
+        {primary.map((action) => (
+          <QuickActionTile key={action.href} action={action} />
         ))}
+        {secondary.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setMoreOpen(true)}
+            className="focus-ring safe-motion flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-border/70 bg-card/50 p-2 text-center hover:bg-secondary/40 active:scale-[0.98] motion-reduce:active:scale-100"
+            aria-label="More quick actions"
+          >
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-secondary text-foreground/70">
+              <LayoutGrid className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="text-xs font-medium">More</span>
+          </button>
+        ) : null}
       </div>
+
+      <Modal open={moreOpen} onOpenChange={setMoreOpen} title="More actions" description="Jump to another Mad Buddy feature.">
+        <div className="grid grid-cols-3 gap-2.5 pt-1 sm:grid-cols-4">
+          {secondary.map((action) => (
+            <Link
+              key={action.href}
+              href={action.href}
+              onClick={() => setMoreOpen(false)}
+              aria-label={action.description}
+              className="focus-ring safe-motion flex min-h-[84px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-border/70 bg-card/50 p-2 text-center hover:bg-secondary/40"
+            >
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
+                <FeatureIcon feature={action.featureIcon} size={22} decorative />
+              </span>
+              <span className="text-xs font-medium">{action.label}</span>
+            </Link>
+          ))}
+        </div>
+      </Modal>
     </section>
   );
 }
+
+function QuickActionTile({ action }: { action: QuickAction }) {
+  return (
+    <Link
+      href={action.href}
+      aria-label={action.description}
+      title={action.description}
+      className="focus-ring safe-motion flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-border/70 bg-card/50 p-2 text-center hover:bg-secondary/40 active:scale-[0.98] motion-reduce:active:scale-100"
+    >
+      <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/10 text-primary">
+        <FeatureIcon feature={action.featureIcon} size={20} decorative />
+      </span>
+      <span className="truncate text-xs font-medium">{action.label}</span>
+    </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Upcoming plan — one compact tappable row.
+// ---------------------------------------------------------------------------
 
 function rsvpLabel(rsvp: string): string {
   switch (rsvp) {
@@ -1008,210 +846,92 @@ function rsvpLabel(rsvp: string): string {
     case "declined":
       return "Not going";
     default:
-      return "Invited";
+      return "Respond";
   }
 }
 
-function PlanFace({ attendee }: { attendee: PlanAttendee }) {
-  const name = attendee.name || "Muddy";
-  return (
-    <UserAvatar
-      src={attendee.avatarUrl}
-      name={capitalize(name)}
-      size="xs"
-      className="border-2 border-card bg-primary/15 text-primary"
-    />
-  );
-}
-
-function FeaturedPlan({ plan, hasMore }: { plan: HomeUpcomingPlan | undefined; hasMore: boolean }) {
-  const actionLabel = !plan
-    ? ""
-    : plan.myRsvp === "invited"
-      ? "Respond"
-      : plan.organiserName === "You"
-        ? "Manage plan"
-        : "View plan";
+function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
+  const when = new Date(plan.startAt).toLocaleString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
 
   return (
-    <section>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-lg font-semibold tracking-tight">Upcoming plans</h2>
-        {plan && hasMore ? (
-          <Link href="/plans" className="text-sm font-medium text-primary hover:underline">
-            View all
-          </Link>
-        ) : null}
+    <section aria-labelledby="home-plan-heading">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 id="home-plan-heading" className="text-sm font-semibold">
+          Upcoming
+        </h2>
+        <Link href="/plans" className="text-xs font-medium text-primary hover:underline">
+          All plans
+        </Link>
       </div>
-
-      {plan ? (
-        <div className="max-h-[190px] rounded-2xl border border-border/70 bg-card/50 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-base font-semibold">{capitalize(plan.title)}</p>
-              <p className="mt-1 text-sm text-muted-foreground" suppressHydrationWarning>
-                {new Date(plan.startAt).toLocaleString([], {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                  hour: "numeric",
-                  minute: "2-digit"
-                })}
+      <Link
+        href="/plans"
+        aria-label={`${capitalize(plan.title)}, ${when}, ${rsvpLabel(plan.myRsvp)}`}
+        className="focus-ring safe-motion block rounded-2xl border border-border/70 bg-card/50 p-4 hover:border-border hover:bg-secondary/40"
+      >
+        <div className="flex items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+            <CalendarDays className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold">{capitalize(plan.title)}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground" suppressHydrationWarning>
+              {when}
+            </p>
+            {plan.placeText ? (
+              <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{capitalize(plan.placeText)}</span>
               </p>
-              {plan.placeText ? (
-                <p className="mt-0.5 truncate text-xs font-medium text-foreground/80">
-                  {capitalize(plan.placeText)}
-                </p>
-              ) : null}
-            </div>
-            <span className="inline-flex shrink-0 items-center rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-foreground">
-              {rsvpLabel(plan.myRsvp)}
-            </span>
+            ) : null}
           </div>
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              {plan.attendees.length > 0 ? (
-                <div className="flex -space-x-2">
-                  {plan.attendees.map((attendee, index) => (
-                    <PlanFace key={index} attendee={attendee} />
-                  ))}
-                </div>
-              ) : null}
-              <p className="text-xs text-muted-foreground">
-                {plan.goingCount} going
-                {plan.maybeCount > 0 ? ` · ${plan.maybeCount} maybe` : ""}
-              </p>
-            </div>
-            <Button type="button" size="sm" asChild>
-              <Link href="/plans">{actionLabel}</Link>
-            </Button>
-          </div>
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/12 px-2.5 py-1 text-xs font-semibold text-primary">
+            {rsvpLabel(plan.myRsvp)}
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </span>
         </div>
-      ) : (
-        <EmptyState
-          icon={CalendarCheck2}
-          className="w-full !border-border/50 !shadow-none p-4 sm:p-5"
-          title="Nothing planned yet"
-          description="Create a plan when you’re ready to meet up."
-          action={
-            <Button type="button" asChild>
-              <Link href="/plans">
-                <CalendarCheck2 className="h-4 w-4" aria-hidden="true" />
-                New plan
-              </Link>
-            </Button>
-          }
-        />
-      )}
+
+        {plan.goingCount > 0 ? (
+          <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3">
+            {plan.attendees.length > 0 ? (
+              <span className="flex -space-x-2">
+                {plan.attendees.map((attendee, index) => (
+                  <span
+                    key={`${attendee.name}-${index}`}
+                    className="grid h-7 w-7 place-items-center overflow-hidden rounded-full border-2 border-background bg-secondary text-[10px] font-semibold uppercase text-muted-foreground"
+                  >
+                    {attendee.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={attendee.avatarUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      initialOf(attendee.name)
+                    )}
+                  </span>
+                ))}
+              </span>
+            ) : null}
+            <span className="text-xs font-medium text-muted-foreground">{plan.goingCount} going</span>
+          </div>
+        ) : null}
+      </Link>
     </section>
   );
 }
 
-const NEARBY_LEVELS = new Set<ProximityLevel>(["very_close", "nearby", "around"]);
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-function MuddiesOpenToPlans({
-  muddies,
-  hangouts,
-  glowColorByFriendId,
-  onSelect,
-  onRequestHangout,
-  isPending
-}: {
-  muddies: DashboardFriend[];
-  hangouts: VisibleHangout[];
-  glowColorByFriendId: Record<string, string>;
-  onSelect: (friendId: string) => void;
-  onRequestHangout: (hangoutId: string) => void;
-  isPending: boolean;
-}) {
-  const hasContent = muddies.length > 0 || hangouts.length > 0;
-  return (
-    <section>
-      <h2 className="mb-3 text-lg font-semibold tracking-tight">Muddies open to plans</h2>
-
-      {hangouts.length > 0 ? (
-        <ul className="mb-3 divide-y divide-border/60 rounded-2xl border border-primary/25 bg-primary/[0.04]">
-          {hangouts.map((hangout) => (
-            <li key={hangout.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">
-                  {capitalize(hangout.ownerName)} is open to{" "}
-                  {(HANGOUT_ACTIVITY_LABELS[hangout.activityType] ?? "hang out").toLowerCase()}
-                </span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {hangout.message ? `“${hangout.message}” · ` : ""}
-                  Until {new Date(hangout.endsAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                </span>
-              </span>
-              {hangout.myRequestStatus ? (
-                <span className="shrink-0 text-xs font-medium capitalize text-muted-foreground">
-                  {hangout.myRequestStatus === "pending" ? "Requested" : hangout.myRequestStatus}
-                </span>
-              ) : (
-                <Button type="button" size="sm" className="shrink-0" disabled={isPending} onClick={() => onRequestHangout(hangout.id)}>
-                  I&apos;m interested
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {muddies.length > 0 ? (
-        <ul className="divide-y divide-border/60 rounded-2xl border border-border/70 bg-card/40">
-          {muddies.map((muddy) => {
-            const name = muddy.displayName || muddy.username;
-            return (
-              <li key={muddy.friendId}>
-                <button
-                  type="button"
-                  onClick={() => onSelect(muddy.friendId)}
-                  className="focus-ring safe-motion flex min-h-[64px] w-full items-center gap-3 px-4 py-3 text-left hover:bg-secondary/50"
-                >
-                  <GlowAvatar
-                    name={name}
-                    src={muddy.avatarUrl}
-                    proximityLevel={muddy.proximityLevel}
-                    glowStrength={muddy.glowStrength}
-                    confidence={muddy.confidence}
-                    glowColorId={glowColorByFriendId[muddy.friendId] ?? null}
-                    size="sm"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{capitalize(name)}</span>
-                    {muddy.muddyStatusLabel ? (
-                      <span className="block truncate text-xs text-muted-foreground">{muddy.muddyStatusLabel}</span>
-                    ) : null}
-                  </span>
-                  {NEARBY_LEVELS.has(muddy.proximityLevel) ? (
-                    <span className="inline-flex shrink-0 items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-                      {proximityLabels[muddy.proximityLevel]}
-                    </span>
-                  ) : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
-
-      {!hasContent ? (
-        // Compact inline state, not a large bordered panel: keeps Home short
-        // when nobody is available and stays left-aligned on desktop.
-        <div className="flex max-w-[820px] items-start justify-between gap-4 rounded-xl bg-card/40 px-5 py-5 sm:px-6">
-          <div className="min-w-0">
-            <p className="text-sm font-medium">No Muddies are available right now</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">Check again later or start a new plan.</p>
-          </div>
-          <Button type="button" variant="outline" size="icon" className="shrink-0" asChild>
-            <Link href="/plans" aria-label="New plan" title="New plan">
-              <Plus className="h-4 w-4" aria-hidden="true" />
-            </Link>
-          </Button>
-        </div>
-      ) : null}
-    </section>
-  );
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
 }
 
 function toDashboardFriend(friend: NearbyFriendApiItem): DashboardFriend {

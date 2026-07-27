@@ -1,8 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { UserRound, X } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useCallback, useSyncExternalStore } from "react";
+
+/**
+ * The current profile-completion model has three optional items (photo, bio,
+ * mood). The banner shows how many remain as a small circular progress ring.
+ */
+const TOTAL_PROFILE_STEPS = 3;
 
 export function ProfileCompletionReminder({
   userId,
@@ -21,38 +27,51 @@ export function ProfileCompletionReminder({
 
   if (!visible || missingItems.length === 0) return null;
 
+  const remaining = Math.min(missingItems.length, TOTAL_PROFILE_STEPS);
+  const done = TOTAL_PROFILE_STEPS - remaining;
   const summary =
     missingItems.length === 1
-      ? `Add your ${missingItems[0]} so friends can recognise you.`
-      : `Add a ${missingItems.slice(0, -1).join(", ")} and ${missingItems.at(-1)} so friends can recognise you.`;
+      ? `Add your ${missingItems[0]} to help friends recognise you.`
+      : `Add a ${missingItems.slice(0, -1).join(", ")} and ${missingItems.at(-1)} to help friends recognise you.`;
+
+  // Circular progress ring.
+  const radius = 22;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - done / TOTAL_PROFILE_STEPS);
 
   return (
-    <aside
-      className="flex w-fit max-w-full items-start gap-3 rounded-xl bg-secondary/55 p-3"
-      aria-label="Finish your profile"
+    <Link
+      href="/profile"
+      aria-label={`Complete your profile, ${remaining} ${remaining === 1 ? "step" : "steps"} left`}
+      className="focus-ring safe-motion flex items-center gap-4 rounded-2xl border border-primary/30 bg-primary/[0.06] p-4 transition hover:border-primary/50 hover:bg-primary/[0.09]"
     >
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-background text-muted-foreground">
-        <UserRound className="h-4 w-4" aria-hidden="true" />
+      <span className="relative grid h-14 w-14 shrink-0 place-items-center" aria-hidden="true">
+        <svg viewBox="0 0 56 56" className="h-14 w-14 -rotate-90">
+          <circle cx="28" cy="28" r={radius} fill="none" stroke="hsl(var(--primary) / 0.18)" strokeWidth="4" />
+          <circle
+            cx="28"
+            cy="28"
+            r={radius}
+            fill="none"
+            stroke="hsl(var(--primary))"
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+          />
+        </svg>
+        <span className="absolute inset-0 flex flex-col items-center justify-center leading-none">
+          <span className="text-base font-bold">{remaining}</span>
+          <span className="text-[9px] font-medium text-muted-foreground">{remaining === 1 ? "step" : "steps"}</span>
+        </span>
       </span>
-      <div className="min-w-0 max-w-sm">
-        <p className="text-sm font-semibold">Finish your profile</p>
-        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{summary}</p>
-        <Link href="/profile" className="mt-1.5 inline-flex text-xs font-semibold text-primary hover:underline">
-          Continue setup
-        </Link>
-      </div>
-      <button
-        type="button"
-        className="focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-        aria-label="Dismiss profile reminder"
-        title="Dismiss"
-        onClick={() => {
-          sessionStorage.setItem(storageKey, "1");
-          window.dispatchEvent(new Event("mad-buddy:profile-reminder-updated"));
-        }}
-      >
-        <X className="h-4 w-4" aria-hidden="true" />
-      </button>
-    </aside>
+
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">Complete your profile</span>
+        <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{summary}</span>
+      </span>
+
+      <ChevronRight className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+    </Link>
   );
 }
