@@ -53,12 +53,17 @@ const DURATION_MS: Record<string, number> = {
   "3h": 3 * 60 * 60 * 1000
 };
 
+// Socialize is spontaneous: only duration + range are required. `activity` and
+// `note` stay optional so older callers (and the mobile API) keep working, but
+// the radar UI never asks for them — activity defaults to "anything".
 export const socializeInputSchema = z.object({
-  activity: z.string().refine(isSocializeActivity, "Choose an activity."),
+  activity: z.string().refine(isSocializeActivity, "Choose an activity.").optional(),
   areaTier: z.string().refine(isSocializeAreaTier, "Choose an area."),
   duration: z.enum(["30m", "1h", "3h"]),
   note: z.string().trim().max(140).optional()
 });
+
+const DEFAULT_SOCIALIZE_ACTIVITY: SocializeActivity = "anything";
 
 function envMissing(): boolean {
   const env = getSupabaseServerEnv();
@@ -134,7 +139,7 @@ export async function activateSocialize(userId: string, input: unknown): Promise
       .from("socialize_sessions")
       .insert({
         user_id: userId,
-        activity: parsed.data.activity,
+        activity: parsed.data.activity ?? DEFAULT_SOCIALIZE_ACTIVITY,
         note: parsed.data.note?.trim() || null,
         area_tier: parsed.data.areaTier,
         starts_at: new Date(now).toISOString(),

@@ -1,17 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition, type CSSProperties } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  MapPin,
-  MoreHorizontal,
-  Send,
-  ShieldCheck,
-  Sparkles,
-  X
-} from "lucide-react";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, Eye, Info, RefreshCcw, ShieldCheck, X } from "lucide-react";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
 import {
   deactivateSocializeAction,
@@ -20,63 +11,112 @@ import {
   updateSocializeAction
 } from "@/app/(app)/socialize-actions";
 import type { SocializePerson, SocializeSession } from "@/lib/social/socialize-mobile";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
-import { AppMenu, AppSelect } from "@/components/ui/app-dropdown";
+import { AppSelect } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import { Modal } from "@/components/ui/modal";
-import { ResponsiveFormPopover } from "@/components/ui/responsive-form-popover";
 import { Textarea } from "@/components/ui/textarea";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { proximityLabels } from "@/lib/proximity";
 import {
-  SOCIALIZE_ACTIVITIES,
-  SOCIALIZE_ACTIVITY_LABELS,
   SOCIALIZE_AREA_LABELS,
   SOCIALIZE_AREA_TIERS,
   SOCIALIZE_DURATIONS,
-  type SocializeActivity,
   type SocializeAreaTier,
   type SocializeDuration
 } from "@/lib/social/socialize";
 import { cn } from "@/lib/utils";
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
-
 function capitalize(text: string): string {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
+/** Whole minutes left in the session (server time is authoritative; this is the
+ *  display estimate that ticks locally). */
+function minutesRemaining(expiresAt: string, nowMs: number): number {
+  return Math.max(0, Math.ceil((Date.parse(expiresAt) - nowMs) / 60000));
+}
+
+function remainingLabel(expiresAt: string, nowMs: number): string {
+  const total = minutesRemaining(expiresAt, nowMs);
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  if (total === 0) return "ending now";
+  if (hours > 0) return `${hours}h ${mins}m left`;
+  return `${mins} min left`;
+}
+
+type Tier = SocializePerson["proximityTier"];
+
+// Radar geometry: each proximity tier sits on a ring at this radius (% of the
+// container's half-width). A per-tier starting angle keeps tiers from lining up.
+const TIER_RADIUS: Record<Tier, number> = { very_close: 21, nearby: 34, around: 47 };
+const TIER_START_ANGLE: Record<Tier, number> = { very_close: -90, nearby: -54, around: -74 };
+const TIER_MAX: Record<Tier, number> = { very_close: 4, nearby: 5, around: 6 };
+const TIER_RING: Record<Tier, string> = {
+  very_close: "ring-violet-500",
+  nearby: "ring-primary",
+  around: "ring-sky-500"
+};
+const TIER_PILL: Record<Tier, string> = {
+  very_close: "bg-violet-500",
+  nearby: "bg-primary",
+  around: "bg-sky-500"
+};
+
+type RadarSlot = { person: SocializePerson; left: number; top: number; tier: Tier };
+
+function radarSlots(people: SocializePerson[]): RadarSlot[] {
+  const byTier: Record<Tier, SocializePerson[]> = { very_close: [], nearby: [], around: [] };
+  for (const person of people) byTier[person.proximityTier].push(person);
+
+  const slots: RadarSlot[] = [];
+  (Object.keys(byTier) as Tier[]).forEach((tier) => {
+    const list = byTier[tier].slice(0, TIER_MAX[tier]);
+    const step = list.length > 0 ? 360 / list.length : 0;
+    list.forEach((person, index) => {
+      const angle = ((TIER_START_ANGLE[tier] + index * step) * Math.PI) / 180;
+      const r = TIER_RADIUS[tier];
+      slots.push({ person, left: 50 + r * Math.cos(angle), top: 50 + r * Math.sin(angle), tier });
+    });
+  });
+  return slots;
 }
 
 type Toast = { title?: string; message: string; error: boolean } | null;
 
 export function SocializePage({
   initialSession,
-  initialPeople
+  initialPeople,
+  myAvatarUrl = null,
+  myName = ""
 }: {
   initialSession: SocializeSession | null;
   initialPeople: SocializePerson[];
+  myAvatarUrl?: string | null;
+  myName?: string;
 }) {
+  const router = useRouter();
   const reducedMotion = useReducedMotion();
   const [session, setSession] = useState(initialSession);
   const [people, setPeople] = useState(initialPeople);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [setupOpen, setSetupOpen] = useState(false);
-  const [activity, setActivity] = useState<SocializeActivity | null>(null);
+  const [controlsOpen, setControlsOpen] = useState(false);
   const [areaTier, setAreaTier] = useState<SocializeAreaTier | null>(null);
   const [duration, setDuration] = useState<SocializeDuration | null>(null);
-  const [note, setNote] = useState("");
   const [attempted, setAttempted] = useState(false);
 
-  const [menuPerson, setMenuPerson] = useState<SocializePerson | null>(null);
+  const [previewPerson, setPreviewPerson] = useState<SocializePerson | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportText, setReportText] = useState("");
 
   const [toast, setToast] = useState<Toast>(null);
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const [isPending, startTransition] = useTransition();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activating, setActivating] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isActive = session !== null && Date.parse(session.expiresAt) > nowMs;
@@ -107,57 +147,70 @@ export function SocializePage({
     });
   }, []);
 
-  // Prefill the draft from the active session (edit) or clear it (new). Called
-  // both when the dropdown opens via its trigger and via the "Edit area" path.
-  function prepareForm() {
-    if (isActive && session) {
-      setActivity(session.activity);
-      setAreaTier(session.areaTier);
-      setNote(session.note ?? "");
-    } else {
-      setActivity(null);
-      setAreaTier(null);
-      setNote("");
+  // Live discovery while ON: refresh on focus + a modest 60s cadence, paused
+  // while the tab is hidden. Restrained (reuses the app's polling pattern), not
+  // aggressive — people appear/leave as their sessions come and go.
+  useEffect(() => {
+    if (!isActive) return;
+    const onFocus = () => refresh();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const interval = window.setInterval(() => {
+      if (!document.hidden) refresh();
+    }, 60_000);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [isActive, refresh]);
+
+  // The central profile is the interaction: tap it to configure (OFF) or to
+  // see compact session controls (ON).
+  function tapCenter() {
+    if (isActive) {
+      setControlsOpen(true);
+      return;
     }
-    // Duration is never preselected (no approved default): editing re-sets
-    // expiry, so the user always picks a fresh duration.
+    setAreaTier(session?.areaTier ?? "nearby");
     setDuration(null);
     setAttempted(false);
-  }
-
-  function openSetup() {
-    prepareForm();
     setSetupOpen(true);
   }
 
-  function closeSetup() {
-    setSetupOpen(false);
+  function openChange() {
+    setControlsOpen(false);
+    setAreaTier(session?.areaTier ?? "nearby");
+    setDuration(null);
+    setAttempted(false);
+    setSetupOpen(true);
   }
 
-  const canSubmit = Boolean(activity && areaTier && duration);
+  const canSubmit = Boolean(areaTier && duration);
 
   function submitSetup() {
     setAttempted(true);
-    if (!activity || !areaTier || !duration) return;
-    const editing = isActive && session !== null;
+    if (!areaTier || !duration) return;
+    const editing = isActive;
+    if (!editing) setActivating(true);
 
     startTransition(async () => {
-      const input = { activity, areaTier, duration, note: note.trim() || undefined };
+      // Spontaneous: only range + duration. Activity defaults server-side.
+      const input = { areaTier, duration };
       const result = editing ? await updateSocializeAction(input) : await activateSocializeAction(input);
       if (result.ok && result.session) {
         setSession(result.session);
         setSetupOpen(false);
-        if (editing) {
-          showToast("", false, "Socialize updated");
-        } else {
-          showToast(`Visible until ${formatTime(result.session.expiresAt)}.`, false, "Socialize is on");
-        }
-        // Pull fresh discovery results for the (possibly new) area tier.
+        showToast(editing ? "" : `On until ${new Date(result.session.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`, false, editing ? "Socialize updated" : "Socialize is on");
         const next = await discoverSocializePeopleAction();
         setPeople(next);
       } else {
-        showToast("Couldn’t turn on Socialize. Try again.", true);
+        showToast(result.message || "Couldn’t turn on Socialize. Try again.", true);
       }
+      setActivating(false);
     });
   }
 
@@ -167,6 +220,7 @@ export function SocializePage({
       if (result.ok) {
         setSession(null);
         setPeople([]);
+        setControlsOpen(false);
         showToast("Socialize is off");
       } else {
         showToast(result.message, true);
@@ -178,6 +232,7 @@ export function SocializePage({
     setPeople((current) =>
       current.map((item) => (item.userId === person.userId ? { ...item, waveState: "sent" } : item))
     );
+    setPreviewPerson((current) => (current?.userId === person.userId ? { ...current, waveState: "sent" } : current));
     startTransition(async () => {
       const result = await sendFriendRequestAction(person.userId, "socialize");
       if (!result.ok) {
@@ -186,7 +241,7 @@ export function SocializePage({
         );
         showToast(result.message, true);
       } else {
-        showToast("Wave sent");
+        showToast(`Muddy request sent to ${capitalize(person.displayName || person.username)}.`);
       }
     });
   }
@@ -196,8 +251,8 @@ export function SocializePage({
       const result = await blockUserAction(person.userId);
       if (result.ok) {
         setPeople((current) => current.filter((item) => item.userId !== person.userId));
-        setMenuPerson(null);
-        showToast(`${capitalize(person.displayName)} is blocked`);
+        setPreviewPerson(null);
+        showToast(`${capitalize(person.displayName || person.username)} is blocked`);
       } else {
         showToast(result.message, true);
       }
@@ -205,7 +260,7 @@ export function SocializePage({
   }
 
   function submitReport() {
-    const person = menuPerson;
+    const person = previewPerson;
     if (!person) return;
     startTransition(async () => {
       const result = await reportUserAction({
@@ -215,240 +270,256 @@ export function SocializePage({
       });
       setReportOpen(false);
       setReportText("");
-      setMenuPerson(null);
+      setPreviewPerson(null);
       showToast(result.ok ? "Report submitted" : result.message, !result.ok);
     });
   }
 
-  const activityLabel = session ? SOCIALIZE_ACTIVITY_LABELS[session.activity] : "";
-  const selectClass =
-    "focus-ring safe-motion h-11 w-full rounded-md border border-border bg-card/70 px-3 text-sm";
+  const statusLabel = activating ? "Turning on…" : isActive ? "Socialize is ON" : "Socialize is OFF";
+  const slots = useMemo(() => (isActive ? radarSlots(people) : []), [isActive, people]);
 
-  // The shared form overlay handles desktop collision detection, mobile sheet
-  // behavior, Escape, focus return, and a footer that remains reachable.
-  function renderSetup(trigger: ReactNode) {
-    return (
-      <ResponsiveFormPopover
+  return (
+    <div className="mx-auto flex w-full max-w-[560px] flex-col pt-4">
+      {/* Header — this route renders its own (AppShell hides the global one). */}
+      <header className="relative flex items-center justify-center">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          aria-label="Back"
+          className="focus-ring safe-motion absolute left-0 grid h-10 w-10 place-items-center rounded-full text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <h1 className="text-lg font-semibold">Socialize</h1>
+        <button
+          type="button"
+          onClick={() => router.push("/safety-center")}
+          aria-label="How Socialize keeps you private"
+          className="focus-ring safe-motion absolute right-0 grid h-10 w-10 place-items-center rounded-full text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+        >
+          <Info className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </header>
+      <p className="mt-1 text-center text-sm text-muted-foreground">
+        Meet people nearby who are also open to connecting.
+      </p>
+
+      {/* The radar IS the product. */}
+      <div className={cn("mt-4 flex flex-1 flex-col items-center", activating && "socialize-radar-activating")}>
+        <div className="relative aspect-square w-full max-w-[360px]">
+          {[44, 70, 96].map((size, index) => (
+            <span
+              key={size}
+              aria-hidden="true"
+              className={cn(
+                "socialize-ring absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border",
+                isActive ? "border-primary/25" : "border-violet-500/20",
+                !reducedMotion && "socialize-ring-animate",
+                index === 1 && "socialize-ring-2",
+                index === 2 && "socialize-ring-3"
+              )}
+              style={{ width: `${size}%`, height: `${size}%` }}
+            />
+          ))}
+
+          {slots.map(({ person, left, top, tier }) => {
+            const name = capitalize(person.displayName || person.username);
+            return (
+              <button
+                key={person.userId}
+                type="button"
+                onClick={() => setPreviewPerson(person)}
+                aria-label={`${name}, ${proximityLabels[person.proximityTier]}`}
+                className="focus-ring safe-motion absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-full"
+                style={{ left: `${left}%`, top: `${top}%` }}
+              >
+                <span className="relative">
+                  <UserAvatar
+                    src={person.avatarUrl}
+                    name={name}
+                    size="md"
+                    decorative
+                    className={cn("h-12 w-12 ring-2 ring-offset-2 ring-offset-background", TIER_RING[tier])}
+                  />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background bg-emerald-500" aria-hidden="true" />
+                </span>
+                <span className={cn("rounded-full px-1.5 py-0.5 text-[9px] font-semibold text-white", TIER_PILL[tier])}>
+                  {proximityLabels[person.proximityTier]}
+                </span>
+              </button>
+            );
+          })}
+
+          {/* Central profile — the main control. */}
+          <button
+            type="button"
+            onClick={tapCenter}
+            disabled={isPending && activating}
+            aria-label={isActive ? "Socialize controls" : "Turn on Socialize"}
+            className="focus-ring safe-motion absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+          >
+            <span
+              className={cn(
+                "block rounded-full p-1",
+                isActive
+                  ? "bg-gradient-to-br from-primary to-orange-500 shadow-[0_0_44px_hsl(var(--primary)/0.45)]"
+                  : "bg-gradient-to-br from-violet-500 to-primary shadow-[0_0_40px_hsl(270_80%_60%/0.4)]"
+              )}
+            >
+              <UserAvatar src={myAvatarUrl} name={myName || "You"} size="xl" decorative className="h-24 w-24 border-4 border-background" />
+            </span>
+          </button>
+
+          {/* Status pill hugging the avatar's lower edge. */}
+          <span className="absolute left-1/2 top-1/2 inline-flex -translate-x-1/2 translate-y-[3.25rem] items-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 bg-background/90 px-3 py-1 text-xs font-medium backdrop-blur">
+            <Eye className={cn("h-3.5 w-3.5", isActive ? "text-primary" : "text-muted-foreground")} aria-hidden="true" />
+            {statusLabel}
+          </span>
+        </div>
+
+        {isActive && !activating ? (
+          <p className="mt-2 h-5 text-center text-xs text-muted-foreground" aria-live="polite">
+            {people.length === 0 ? "Looking for people nearby…" : `${remainingLabel(session!.expiresAt, nowMs)} · tap yourself for controls`}
+          </p>
+        ) : (
+          <p className="mt-2 h-5 text-center text-xs text-muted-foreground">
+            {activating ? "Turning on Socialize…" : "Tap your profile to turn on Socialize."}
+          </p>
+        )}
+      </div>
+
+      {/* Setup sheet — only How long? + How far? */}
+      <Modal
         open={setupOpen}
-        onOpenChange={(open) => {
-          if (open) prepareForm();
-          setSetupOpen(open);
-        }}
-        trigger={trigger}
-        title={isActive ? "Edit Socialize" : "Turn on Socialize"}
-        description="Choose what you're open to, your area, and how long you'll be visible."
-        closeLabel="Close Socialize setup"
-        align="start"
-        widthClassName="w-[400px]"
+        onOpenChange={setSetupOpen}
+        title="Turn on Socialize"
+        description="Spontaneous and private — pick a time and range."
+        variant="sheet"
         compact
         footer={
           <>
-            <Button type="button" variant="outline" onClick={closeSetup} disabled={isPending}>
+            <Button type="button" variant="ghost" onClick={() => setSetupOpen(false)} disabled={isPending}>
               Cancel
             </Button>
-            <Button type="button" onClick={submitSetup} disabled={isPending || !canSubmit}>
-              {isPending ? "Saving..." : isActive ? "Save changes" : "Start Socializing"}
+            <Button
+              type="button"
+              onClick={submitSetup}
+              disabled={isPending || !canSubmit}
+              className="bg-gradient-to-r from-primary to-orange-500 text-white hover:opacity-95"
+            >
+              {isPending ? "Turning on…" : isActive ? "Save changes" : "Turn on Socialize"}
             </Button>
           </>
         }
       >
-        <div className="space-y-2.5">
-              <AppSelect
-                id="socialize-activity"
-                label="What are you open to?"
-                value={activity}
-                options={SOCIALIZE_ACTIVITIES.map((option) => ({ value: option.id, label: option.label }))}
-                placeholder="Choose an activity"
-                error={attempted && !activity ? "Choose an activity." : undefined}
-                size="compact"
-                triggerClassName="!w-full"
-                onChange={setActivity}
-              />
-
-              <AppSelect
-                id="socialize-area"
-                label="Search area"
-                value={areaTier}
-                options={SOCIALIZE_AREA_TIERS.map((option) => ({ value: option.id, label: option.label }))}
-                placeholder="Select an area"
-                error={attempted && !areaTier ? "Select a search area." : undefined}
-                size="compact"
-                triggerClassName="!w-full"
-                onChange={setAreaTier}
-              />
-
-              <AppSelect
-                id="socialize-duration"
-                label="Duration"
-                value={duration}
-                options={SOCIALIZE_DURATIONS.map((option) => ({ value: option.id, label: option.label }))}
-                placeholder="Choose a duration"
-                error={attempted && !duration ? "Choose a duration." : undefined}
-                size="compact"
-                triggerClassName="!w-full"
-                onChange={setDuration}
-              />
-
-              <div>
-                <label htmlFor="socialize-note" className="mb-1.5 block text-sm font-medium">
-                  Add a note <span className="font-normal text-muted-foreground">(optional)</span>
-                </label>
-                <input
-                  id="socialize-note"
-                  type="text"
-                  value={note}
-                  maxLength={140}
-                  onChange={(event) => setNote(event.target.value)}
-                  placeholder="Free later, anyone around?"
-                  className={selectClass}
-                />
-              </div>
-
-              <p className="flex items-start gap-2 text-xs text-muted-foreground">
-                <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-                Only your profile, activity, and broad proximity are shared. Your exact location stays private.
-              </p>
-
-              {attempted && !canSubmit ? (
-                <p className="text-xs font-medium text-red-500" role="alert">
-                  Choose an activity and search area to continue.
-                </p>
-              ) : null}
+        <div className="space-y-3">
+          <AppSelect
+            id="socialize-duration"
+            label="How long?"
+            value={duration}
+            options={SOCIALIZE_DURATIONS.map((option) => ({ value: option.id, label: option.label }))}
+            placeholder="Choose a duration"
+            error={attempted && !duration ? "Choose how long." : undefined}
+            size="compact"
+            triggerClassName="!w-full"
+            onChange={setDuration}
+          />
+          <AppSelect
+            id="socialize-area"
+            label="How far?"
+            value={areaTier}
+            options={SOCIALIZE_AREA_TIERS.map((option) => ({ value: option.id, label: option.label }))}
+            placeholder="Choose a range"
+            error={attempted && !areaTier ? "Choose a range." : undefined}
+            size="compact"
+            triggerClassName="!w-full"
+            onChange={setAreaTier}
+          />
+          <p className="flex items-start gap-2 rounded-lg border border-border/60 bg-card/40 p-2.5 text-xs text-muted-foreground">
+            <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+            Approximate proximity — we never share your exact location.
+          </p>
         </div>
-      </ResponsiveFormPopover>
-    );
-  }
+      </Modal>
 
-  return (
-    <div className="mx-auto max-w-[560px] space-y-6 pt-5">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-          <FeatureIcon feature="socialize" size={26} decorative className="text-violet-500 dark:text-violet-400" />
-          Socialize
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Meet people nearby who are also open to connecting.
-        </p>
-      </div>
-
-      {!isActive ? (
-        // Inactive: compact — radar, a short status line, the CTA (kept above
-        // the fold), and one lightweight reassurance line. No people are shown
-        // or fabricated before opt-in; the radar is purely abstract.
-        <>
-          <SocializeRadar reducedMotion={reducedMotion} />
-
-          <div className="text-center">
-            <p className="text-base font-semibold">Socialize is off</p>
-            <p className="mt-1 text-sm text-muted-foreground">Discover people around you.</p>
+      {/* Session controls sheet (ACTIVE). */}
+      <Modal open={controlsOpen} onOpenChange={setControlsOpen} title="Socialize is on" variant="sheet" compact>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/40 p-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+              <Clock className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">{session ? remainingLabel(session.expiresAt, nowMs) : ""}</p>
+              <p className="text-xs text-muted-foreground">
+                Range: {session ? SOCIALIZE_AREA_LABELS[session.areaTier] : ""}
+              </p>
+            </div>
           </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={openChange} disabled={isPending}>
+              <RefreshCcw className="h-4 w-4" aria-hidden="true" />
+              Change
+            </Button>
+            <Button type="button" variant="outline" className="flex-1 border-red-400/40 text-red-500" onClick={turnOff} disabled={isPending}>
+              <X className="h-4 w-4" aria-hidden="true" />
+              Turn off
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
-          {renderSetup(
+      {/* Person preview → connect via the existing Muddy-request flow. */}
+      <Modal
+        open={Boolean(previewPerson)}
+        onOpenChange={(open) => {
+          if (!open) setPreviewPerson(null);
+        }}
+        title="Open to connect"
+        variant="sheet"
+        compact
+      >
+        {previewPerson ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <UserAvatar
+                src={previewPerson.avatarUrl}
+                name={previewPerson.displayName || previewPerson.username}
+                size="lg"
+                decorative
+                className={cn("ring-2 ring-offset-2 ring-offset-background", TIER_RING[previewPerson.proximityTier])}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-base font-semibold">{capitalize(previewPerson.displayName || previewPerson.username)}</p>
+                <p className="truncate text-xs text-muted-foreground">@{previewPerson.username}</p>
+                <span className={cn("mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-white", TIER_PILL[previewPerson.proximityTier])}>
+                  {proximityLabels[previewPerson.proximityTier]}
+                </span>
+              </div>
+            </div>
+            {previewPerson.note ? (
+              <p className="rounded-lg bg-secondary/40 px-3 py-2 text-sm text-muted-foreground">“{previewPerson.note}”</p>
+            ) : null}
             <Button
               type="button"
-              disabled={isPending}
-              className="h-12 w-full rounded-full bg-gradient-to-r from-primary to-orange-500 text-base font-semibold text-white shadow-[0_10px_30px_hsl(var(--primary)/0.35)] hover:opacity-95"
+              className="w-full"
+              disabled={isPending || previewPerson.waveState === "sent"}
+              onClick={() => wave(previewPerson)}
             >
-              <Send className="h-4 w-4" aria-hidden="true" />
-              Turn on Socialize
+              <FeatureIcon feature="wave" size={18} decorative />
+              {previewPerson.waveState === "sent" ? "Request sent" : previewPerson.waveState === "received" ? "Accept & connect" : "Connect"}
             </Button>
-          )}
-
-          <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" aria-hidden="true" /> Approximate proximity
-            </span>
-            <span aria-hidden="true">·</span>
-            <span className="inline-flex items-center gap-1">
-              <ShieldCheck className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" aria-hidden="true" /> You&apos;re in control
-            </span>
-          </p>
-        </>
-      ) : session ? (
-        <div className="space-y-6">
-          {/* Left: active status + controls. Dark neutral surface, orange only
-              as a contained accent (dot + subtle border/glow). */}
-          <section
-            className={cn(
-              "relative isolate overflow-hidden rounded-2xl border border-primary/30 bg-card/60 p-5 dark:bg-white/[0.04] lg:max-w-[380px]",
-              !reducedMotion && "proximity-halo proximity-halo-around"
-            )}
-            style={{ "--halo-active-opacity": 0.22, "--halo-rest-opacity": 0.12 } as CSSProperties}
-          >
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-              <p className="text-base font-semibold">Socialize is on</p>
-            </div>
-            <p className="mt-3 text-sm font-medium">{activityLabel}</p>
-            <p className="text-xs text-muted-foreground">Until {formatTime(session.expiresAt)}</p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Area: {SOCIALIZE_AREA_LABELS[session.areaTier]}
-            </p>
-            <div className="mt-4 flex gap-2">
-              {renderSetup(
-                <Button type="button" variant="secondary" size="sm" disabled={isPending}>
-                  Edit
-                </Button>
-              )}
-              <Button type="button" variant="outline" size="sm" onClick={turnOff} disabled={isPending}>
-                Turn off
+            <div className="flex justify-between gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setReportOpen(true)} disabled={isPending}>
+                Report
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="text-red-500" onClick={() => blockPerson(previewPerson)} disabled={isPending}>
+                Block
               </Button>
             </div>
-          </section>
-
-          {/* Right: people open to connect */}
-          <section>
-            <h2 className="mb-3 text-lg font-semibold tracking-tight">People open to connect</h2>
-
-            {people.length > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {people.map((person) => (
-                  <PersonCard
-                    key={person.userId}
-                    person={person}
-                    reducedMotion={reducedMotion}
-                    disabled={isPending}
-                    onWave={() => wave(person)}
-                    onBlock={() => blockPerson(person)}
-                    onReport={() => {
-                      setMenuPerson(person);
-                      setReportOpen(true);
-                    }}
-                  />
-                ))}
-              </div>
-            ) : (
-              // Compact inline empty state: copy left, actions beside on wide
-              // screens and stacked on mobile. The only refresh action lives here.
-              <div className="flex flex-col gap-3 rounded-xl bg-card/40 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-medium">Looking for people nearby…</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    You&apos;re visible to eligible people while Socialize is active.
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={refresh}
-                    disabled={isRefreshing}
-                    aria-label="Check again"
-                    aria-busy={isRefreshing}
-                  >
-                    {isRefreshing ? "Checking..." : "Check again"}
-                  </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={openSetup} aria-label="Edit area">
-                    Edit area
-                  </Button>
-                </div>
-              </div>
-            )}
-          </section>
-        </div>
-      ) : null}
-
+          </div>
+        ) : null}
+      </Modal>
 
       <Modal
         open={reportOpen}
@@ -459,10 +530,11 @@ export function SocializePage({
           }
         }}
         title="Report person"
-        description={menuPerson ? `Tell us what happened with ${capitalize(menuPerson.displayName)}.` : undefined}
+        variant="sheet"
+        compact
         footer={
           <>
-            <Button type="button" variant="outline" onClick={() => setReportOpen(false)}>
+            <Button type="button" variant="ghost" onClick={() => setReportOpen(false)}>
               Cancel
             </Button>
             <Button type="button" variant="danger" onClick={submitReport} disabled={isPending}>
@@ -471,11 +543,7 @@ export function SocializePage({
           </>
         }
       >
-        <Textarea
-          value={reportText}
-          onChange={(event) => setReportText(event.target.value)}
-          placeholder="Describe the issue."
-        />
+        <Textarea value={reportText} onChange={(event) => setReportText(event.target.value)} placeholder="Describe the issue." />
       </Modal>
 
       {toast ? (
@@ -492,131 +560,20 @@ export function SocializePage({
             )}
             <div className="min-w-0 flex-1">
               {toast.title ? <p className="text-sm font-semibold">{toast.title}</p> : null}
-              {toast.message ? (
-                <p className={cn(toast.title ? "text-xs text-white/70" : "text-sm")}>{toast.message}</p>
-              ) : null}
+              {toast.message ? <p className={cn(toast.title ? "text-xs text-white/70" : "text-sm")}>{toast.message}</p> : null}
             </div>
             <button
               type="button"
               onClick={() => setToast(null)}
               aria-label="Dismiss notification"
-              className="focus-ring -mr-2 -my-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-white/50 hover:bg-white/10 hover:text-white"
+              className="focus-ring -my-2 -mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-white/50 hover:bg-white/10 hover:text-white"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-/** Abstract "proximity radar" for the inactive state: concentric rings, a
- *  central brand node, and a few decorative orbiting presence dots. It never
- *  shows real or fabricated people — discovery only happens after opt-in. */
-function SocializeRadar({ reducedMotion }: { reducedMotion: boolean }) {
-  const nodes = [
-    { top: "14%", left: "18%" },
-    { top: "20%", right: "14%" },
-    { bottom: "16%", left: "24%" },
-    { bottom: "20%", right: "18%" }
-  ];
-  return (
-    <div className="relative mx-auto grid h-44 w-full max-w-[420px] place-items-center overflow-hidden rounded-2xl border border-violet-500/20 bg-gradient-to-b from-violet-500/[0.08] to-transparent">
-      <span className="absolute h-52 w-52 rounded-full border border-violet-500/10" aria-hidden="true" />
-      <span className="absolute h-40 w-40 rounded-full border border-violet-500/15" aria-hidden="true" />
-      <span className="absolute h-28 w-28 rounded-full border border-violet-500/20" aria-hidden="true" />
-      {nodes.map((position, index) => (
-        <span key={index} className="absolute" style={position} aria-hidden="true">
-          <span className="relative grid h-8 w-8 place-items-center rounded-full border border-violet-500/30 bg-violet-500/15">
-            <span className="h-2.5 w-2.5 rounded-full bg-violet-400/70" />
-            <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-background bg-emerald-500" />
-          </span>
-        </span>
-      ))}
-      <span
-        className={cn(
-          "relative grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-primary text-white shadow-[0_0_36px_hsl(270_80%_60%/0.45)]",
-          !reducedMotion && "proximity-halo proximity-halo-around"
-        )}
-        aria-hidden="true"
-      >
-        <FeatureIcon feature="socialize" size={26} decorative className="text-white" />
-      </span>
-    </div>
-  );
-}
-
-function PersonCard({
-  person,
-  reducedMotion,
-  disabled,
-  onWave,
-  onBlock,
-  onReport
-}: {
-  person: SocializePerson;
-  reducedMotion: boolean;
-  disabled: boolean;
-  onWave: () => void;
-  onBlock: () => void;
-  onReport: () => void;
-}) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const name = person.displayName || person.username;
-  const waved = person.waveState === "sent";
-  const received = person.waveState === "received";
-  return (
-    <div className="flex items-start gap-3 rounded-2xl border border-border/70 bg-card/50 p-4">
-      <GlowAvatar
-        name={name}
-        src={person.avatarUrl}
-        proximityLevel={person.proximityTier}
-        glowStrength={person.proximityTier === "very_close" ? 90 : person.proximityTier === "nearby" ? 64 : 34}
-        confidence="medium"
-        size="md"
-        reducedMotion={reducedMotion}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold">{capitalize(name)}</p>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          Open to {SOCIALIZE_ACTIVITY_LABELS[person.activity].toLowerCase()}
-        </p>
-        {person.note ? <p className="mt-0.5 truncate text-xs text-muted-foreground">&ldquo;{person.note}&rdquo;</p> : null}
-        <span className="mt-1 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-          {proximityLabels[person.proximityTier]}
-        </span>
-      </div>
-      <div className="flex shrink-0 flex-col items-end gap-1.5">
-        <AppMenu
-          open={menuOpen}
-          onOpenChange={setMenuOpen}
-          label={`Actions for ${capitalize(name)}`}
-          trigger={
-            <button
-              type="button"
-              aria-label={`More options for ${capitalize(name)}`}
-              className="focus-ring safe-motion grid h-11 w-11 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-            >
-              <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-            </button>
-          }
-          items={[
-            { id: "report", label: "Report", onSelect: onReport },
-            { id: "block", label: "Block", destructive: true, separatorBefore: true, onSelect: onBlock }
-          ]}
-        />
-        <Button
-          type="button"
-          size="sm"
-          variant={waved ? "outline" : "primary"}
-          disabled={disabled || waved}
-          onClick={onWave}
-        >
-          <FeatureIcon feature="wave" size={18} decorative />
-          {waved ? "Wave sent" : received ? "Wave back" : "Wave"}
-        </Button>
-      </div>
+      {isRefreshing ? <span className="sr-only" role="status">Refreshing nearby people…</span> : null}
     </div>
   );
 }
