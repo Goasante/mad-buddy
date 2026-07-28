@@ -68,6 +68,10 @@ type ApiNotification = {
 
 type NotificationsPageContentProps = {
   canSendCustomMessages?: boolean;
+  /** Server-fetched first page, so the list renders on first paint instead
+   * of behind a client fetch — the client effect below still polls for
+   * freshness, this only removes the initial blank/loading shell. */
+  initialNotifications?: ApiNotification[];
 };
 
 type PulseCategory = "all" | "nearby" | "social" | "plans" | "safety";
@@ -136,9 +140,12 @@ function categoryIconClass(category: ReturnType<typeof categoryForType>): string
 }
 
 export function NotificationsPageContent({
-  canSendCustomMessages = false
+  canSendCustomMessages = false,
+  initialNotifications = []
 }: NotificationsPageContentProps) {
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() =>
+    initialNotifications.map(toNotificationItem)
+  );
   const [nearbyAlerts, setNearbyAlerts] = useState(true);
   const [quietMode, setQuietMode] = useState(false);
   const [planAlerts, setPlanAlerts] = useState(true);
