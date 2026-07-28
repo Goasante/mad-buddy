@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { MapPin, Plus, Users, Vote, X } from "lucide-react";
+import { Lock, MapPin, Plus, Users, Vote, X } from "lucide-react";
 import { useId, useMemo, useState, useTransition } from "react";
 import {
   cancelPlanAction,
@@ -328,6 +328,21 @@ function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
   );
 }
 
+/** yyyy-mm-dd in local time for today + offset (matches <input type="date">). */
+function localDateValue(offsetDays: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** Days from today to the coming Saturday (0 when today is Saturday). */
+function daysUntilSaturday(): number {
+  return (6 - new Date().getDay() + 7) % 7;
+}
+
 function CreatePlanModal({
   open,
   invitees,
@@ -379,13 +394,22 @@ function CreatePlanModal({
   const showNameError = nameTouched && title.trim().length === 0;
   const fieldClassName = "h-12 focus-visible:ring-1 focus-visible:ring-offset-1";
 
+  // Quick "When?" presets set the date field; the Date/Time inputs stay the
+  // source of truth so nothing about the create payload changes.
+  const quickWhen: Array<{ id: string; label: string; date: () => string }> = [
+    { id: "today", label: "Today", date: () => localDateValue(0) },
+    { id: "tomorrow", label: "Tomorrow", date: () => localDateValue(1) },
+    { id: "weekend", label: "This weekend", date: () => localDateValue(daysUntilSaturday()) }
+  ];
+
   return (
     <Modal
       open={open}
       onOpenChange={handleOpenChange}
       title="Create a plan"
-      description="Add the details and invite your Muddies."
-      widthClassName="max-w-[700px]"
+      description="Make something happen with your Muddies."
+      widthClassName="max-w-[560px]"
+      variant="sheet"
       footer={
         <>
           <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
@@ -420,10 +444,10 @@ function CreatePlanModal({
         </>
       }
     >
-      <div className="space-y-4 pb-1 pr-1">
+      <div className="space-y-5 pb-1 pr-1">
         <FormField
           htmlFor={`${formId}-title`}
-          label="Plan name"
+          label="What are we doing?"
           error={showNameError ? "Enter a plan name." : undefined}
         >
           <Input
@@ -436,40 +460,63 @@ function CreatePlanModal({
           />
         </FormField>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField htmlFor={`${formId}-date`} label="Date (optional)">
-            <Input
-              id={`${formId}-date`}
-              type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-              className={fieldClassName}
-            />
-          </FormField>
-          <FormField htmlFor={`${formId}-time`} label="Time (optional)">
-            <Input
-              id={`${formId}-time`}
-              type="time"
-              value={time}
-              onChange={(event) => setTime(event.target.value)}
-              className={fieldClassName}
-            />
-          </FormField>
+        <div>
+          <p className="mb-1.5 text-sm font-medium">When?</p>
+          <div className="mb-3 flex flex-wrap gap-2">
+            {quickWhen.map((option) => {
+              const active = date === option.date();
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setDate(option.date())}
+                  aria-pressed={active}
+                  className={cn(
+                    "focus-ring safe-motion rounded-full border px-3.5 py-1.5 text-sm font-medium",
+                    active
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border/70 text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                  )}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField htmlFor={`${formId}-date`} label="Date">
+              <Input
+                id={`${formId}-date`}
+                type="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+                className={fieldClassName}
+              />
+            </FormField>
+            <FormField htmlFor={`${formId}-time`} label="Time">
+              <Input
+                id={`${formId}-time`}
+                type="time"
+                value={time}
+                onChange={(event) => setTime(event.target.value)}
+                className={fieldClassName}
+              />
+            </FormField>
+          </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField htmlFor={`${formId}-place`} label="Meeting area (optional)">
-            <Input
-              id={`${formId}-place`}
-              value={placeText}
-              onChange={(event) => setPlaceText(event.target.value)}
-              placeholder="A café or nearby area"
-              className={fieldClassName}
-            />
-            <p className="mt-1.5 text-xs text-muted-foreground">Use a general area, not an exact address.</p>
-          </FormField>
-          <InviteMuddiesField invitees={invitees} selected={selected} onToggle={toggle} fieldClassName={fieldClassName} />
-        </div>
+        <FormField htmlFor={`${formId}-place`} label="Where? (optional)">
+          <Input
+            id={`${formId}-place`}
+            value={placeText}
+            onChange={(event) => setPlaceText(event.target.value)}
+            placeholder="Café or nearby area"
+            className={fieldClassName}
+          />
+          <p className="mt-1.5 text-xs text-muted-foreground">Keep it general — no exact addresses.</p>
+        </FormField>
+
+        <InviteMuddiesField invitees={invitees} selected={selected} onToggle={toggle} fieldClassName={fieldClassName} />
 
         <FormField htmlFor={`${formId}-description`} label="Notes (optional)">
           <Textarea
@@ -480,6 +527,11 @@ function CreatePlanModal({
             className="min-h-[90px] focus-visible:ring-1 focus-visible:ring-offset-1"
           />
         </FormField>
+
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Lock className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+          Only invited Muddies will see this plan.
+        </p>
       </div>
     </Modal>
   );
@@ -516,7 +568,7 @@ function InviteMuddiesField({
   return (
     <div>
       <AppMultiSelect
-        label="Invite Muddies"
+        label="Who's coming?"
         value={selected}
         options={invitees.map((invitee) => ({
           value: invitee.id,
