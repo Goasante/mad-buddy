@@ -65,7 +65,7 @@ describe("buildContentSecurityPolicy", () => {
   });
 
   it("degrades safely when Supabase env is absent", () => {
-    expect(withoutSupabase).toContain("img-src 'self' data: https://www.google-analytics.com");
+    expect(withoutSupabase).toContain("img-src 'self' data: https://www.googletagmanager.com https://www.google-analytics.com");
     expect(withoutSupabase).toContain("media-src 'self' data:");
     expect(withoutSupabase).toContain("connect-src 'self' data: https://www.googletagmanager.com");
   });

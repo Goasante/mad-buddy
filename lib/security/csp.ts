@@ -67,7 +67,10 @@ export function buildContentSecurityPolicy(options: {
     // Nonce upgrade planned before enforcement; see module comment.
     scriptSrc,
     `style-src 'self' 'unsafe-inline'`,
-    `img-src 'self' data:${supabase ? ` ${supabase}` : ""} ${ga}`,
+    // gtm here too: gtag.js falls back to an <img> beacon (not fetch/sendBeacon)
+    // in some browsers/ad-blocker configurations, requested from
+    // googletagmanager.com itself, not just the google-analytics.com domains.
+    `img-src 'self' data:${supabase ? ` ${supabase}` : ""} ${gtm} ${ga}`,
     // The Supabase origin is listed twice on purpose: once as https:// for
     // REST/auth, and once as wss:// for the Realtime socket. CSP scheme
     // matching does NOT let an https: source authorise a wss: connection, so
