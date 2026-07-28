@@ -12,6 +12,7 @@ import {
   type KeyboardEvent,
   type ReactNode
 } from "react";
+import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { cn } from "@/lib/utils";
 
 export type AppSelectOption<T extends string = string> = {
@@ -141,6 +142,7 @@ function StandardAppSelect<T extends string = string>({
   const [open, setOpen] = useState(false);
   const selected = options.find((option) => option.value === value);
   const ids = fieldIds(id, helperText, error);
+  useDismissOnBack(open, () => setOpen(false));
 
   return (
     <FieldFrame id={id} label={label} required={required} helperText={helperText} error={error} className={className}>
@@ -225,6 +227,7 @@ export function AppCombobox<T extends string = string>({
     );
   }, [options, query]);
   const enabledIndexes = filtered.map((option, index) => option.disabled ? -1 : index).filter((index) => index >= 0);
+  useDismissOnBack(open, () => setOpen(false));
 
   function choose(option: AppSelectOption<T>) {
     if (option.disabled) return;
@@ -359,6 +362,7 @@ export function AppMultiSelect<T extends string = string>({
   const id = providedId ?? generatedId;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
   const selected = options.filter((option) => value.includes(option.value));
   const filtered = useMemo(() => {
@@ -370,21 +374,41 @@ export function AppMultiSelect<T extends string = string>({
         .some((part) => part!.toLowerCase().includes(term))
     );
   }, [options, query]);
+  const enabledIndexes = filtered.map((option, index) => option.disabled ? -1 : index).filter((index) => index >= 0);
   const ids = fieldIds(id, helperText, error);
   const display = selected.length === 0
     ? placeholder
     : selected.length <= 2
       ? selected.map((option) => option.label).join(", ")
       : `${selected[0].label} and ${selected.length - 1} more`;
+  useDismissOnBack(open, () => setOpen(false));
 
   function toggle(option: AppSelectOption<T>) {
     if (option.disabled) return;
     onChange(value.includes(option.value) ? value.filter((item) => item !== option.value) : [...value, option.value]);
   }
 
+  function moveActive(direction: 1 | -1) {
+    if (enabledIndexes.length === 0) return;
+    const position = enabledIndexes.indexOf(activeIndex);
+    const nextPosition = position < 0 ? 0 : (position + direction + enabledIndexes.length) % enabledIndexes.length;
+    setActiveIndex(enabledIndexes[nextPosition]);
+  }
+
+  function handleListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "ArrowDown") { event.preventDefault(); moveActive(1); }
+    else if (event.key === "ArrowUp") { event.preventDefault(); moveActive(-1); }
+    else if (event.key === "Home") { event.preventDefault(); setActiveIndex(enabledIndexes[0] ?? 0); }
+    else if (event.key === "End") { event.preventDefault(); setActiveIndex(enabledIndexes.at(-1) ?? 0); }
+    else if ((event.key === "Enter" || event.key === " ") && filtered[activeIndex]) {
+      event.preventDefault();
+      toggle(filtered[activeIndex]);
+    }
+  }
+
   return (
     <FieldFrame id={id} label={label} required={required} helperText={helperText} error={error} className={className}>
-      <Popover.Root open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (nextOpen) setQuery(""); }}>
+      <Popover.Root open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (nextOpen) { setQuery(""); setActiveIndex(0); } }}>
         <Popover.Trigger asChild disabled={disabled}>
           <button id={id} type="button" className={cn("app-select-trigger", size === "compact" && "app-select-trigger-compact", error && "app-select-trigger-error", triggerClassName)} aria-haspopup="listbox" aria-expanded={open} aria-describedby={ids.describedBy}>
             <span className={cn("min-w-0 flex-1 truncate text-left", selected.length === 0 && "text-muted-foreground")}>{display}</span>
@@ -418,11 +442,26 @@ export function AppMultiSelect<T extends string = string>({
                 ) : null}
               </div>
             ) : null}
-            <div role="listbox" aria-multiselectable="true" className="max-h-[280px] overflow-y-auto overscroll-contain">
-              {filtered.map((option) => {
+            <div
+              role="listbox"
+              aria-multiselectable="true"
+              tabIndex={0}
+              onKeyDown={handleListKeyDown}
+              className="focus-ring max-h-[280px] overflow-y-auto overscroll-contain"
+            >
+              {filtered.map((option, index) => {
                 const checked = value.includes(option.value);
                 return (
-                  <button key={encodeValue(option.value)} type="button" role="option" aria-selected={checked} disabled={option.disabled} onClick={() => toggle(option)} className={cn("app-dropdown-option w-full", option.description && "app-dropdown-option-described", checked && "app-dropdown-option-selected")}>
+                  <button
+                    key={encodeValue(option.value)}
+                    type="button"
+                    role="option"
+                    aria-selected={checked}
+                    disabled={option.disabled}
+                    onMouseMove={() => !option.disabled && setActiveIndex(index)}
+                    onClick={() => toggle(option)}
+                    className={cn("app-dropdown-option w-full", option.description && "app-dropdown-option-described", checked && "app-dropdown-option-selected", index === activeIndex && "app-dropdown-option-active")}
+                  >
                     {option.icon ? <span className="shrink-0 text-muted-foreground" aria-hidden="true">{option.icon}</span> : null}
                     <span className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-medium">{option.label}</span>{option.description ? <span className="mt-0.5 block truncate text-xs text-muted-foreground">{option.description}</span> : null}</span>
                     {checked ? <Check className="h-4 w-4 shrink-0 text-[var(--color-brand-orange)]" aria-hidden="true" /> : <span className="h-4 w-4" />}
@@ -466,8 +505,13 @@ export function AppMenu({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isOpen = open ?? uncontrolledOpen;
+  const setIsOpen = onOpenChange ?? setUncontrolledOpen;
+  useDismissOnBack(isOpen, () => setIsOpen(false));
+
   return (
-    <DropdownMenu.Root open={open} onOpenChange={onOpenChange} modal={false}>
+    <DropdownMenu.Root open={isOpen} onOpenChange={setIsOpen} modal={false}>
       <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content side={side} align={align} sideOffset={7} collisionPadding={12} className="app-dropdown-content min-w-48" aria-label={label}>

@@ -27,6 +27,7 @@ import {
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LocationSignalSync } from "@/components/app-shell/location-signal-sync";
+import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { SessionBoundary } from "@/components/auth/session-boundary";
 import { useSecureLogout } from "@/components/auth/use-secure-logout";
 import { LiveSignalToast } from "@/components/notifications/live-signal-toast";
@@ -616,6 +617,7 @@ function AppHeader({
 }) {
   const pathname = usePathname();
   const [createOpen, setCreateOpen] = useState(false);
+  useDismissOnBack(createOpen, () => setCreateOpen(false));
 
   if (hasOwnHeader(pathname)) {
     return null;
@@ -721,6 +723,7 @@ function MobileAccountMenu({
   pathname: string;
 }) {
   const [open, setOpen] = useState(false);
+  useDismissOnBack(open, () => setOpen(false));
   const initial = currentUsername?.[0]?.toUpperCase() ?? "?";
   const { logout, isPending: logoutPending } = useSecureLogout();
 

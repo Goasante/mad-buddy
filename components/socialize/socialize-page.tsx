@@ -17,6 +17,7 @@ import { FeatureIcon } from "@/components/ui/feature-icon";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { proximityLabels } from "@/lib/proximity";
 import {
@@ -254,6 +255,8 @@ export function SocializePage({
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [isActive, refresh]);
+
+  useDismissOnBack(panelOpen, () => setPanelOpen(false));
 
   function handlePanelOpenChange(open: boolean) {
     if (open) {

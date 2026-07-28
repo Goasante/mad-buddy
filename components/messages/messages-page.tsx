@@ -24,6 +24,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { QUICK_ACTIONS, quickActionLabel, DELETED_MESSAGE_PLACEHOLDER } from "@/lib/messaging/rules";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
@@ -99,6 +100,7 @@ export function MessagesPageContent({
   const [reactingId, setReactingId] = useState<string | null>(null);
   const [newMessageOpen, setNewMessageOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  useDismissOnBack(infoOpen, () => setInfoOpen(false));
   const [pinEditMode, setPinEditMode] = useState(false);
   const [pinPickerOpen, setPinPickerOpen] = useState(false);
   const [isPending, startTransition] = useTransition();

@@ -36,6 +36,7 @@ import { AppMenu } from "@/components/ui/app-dropdown";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { PrivacyToggle } from "@/components/settings/privacy-toggle";
+import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { connectionResponsesFor } from "@/lib/meetups/connection-prompts";
 import {
   resolveNotificationDestination,
@@ -146,6 +147,7 @@ export function NotificationsPageContent({
   // is the dedicated Notification settings sheet. Keeping them apart is the
   // whole point of this screen — actions and preferences never compete.
   const [optionsOpen, setOptionsOpen] = useState(false);
+  useDismissOnBack(optionsOpen, () => setOptionsOpen(false));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<NotificationItem | null>(null);
   const [category, setCategory] = useState<PulseCategory>("all");

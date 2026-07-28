@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { connectionResponsesFor } from "@/lib/meetups/connection-prompts";
 import { formatRelativeTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,7 @@ export function MeetingPingsPage({ initialPings }: { initialPings: MeetingPingLi
   const [isPending, startTransition] = useTransition();
 
   const [helpOpen, setHelpOpen] = useState(false);
+  useDismissOnBack(helpOpen, () => setHelpOpen(false));
   const [newPingOpen, setNewPingOpen] = useState(false);
   const [friends, setFriends] = useState<MessageableFriend[]>([]);
   const [friendsLoaded, setFriendsLoaded] = useState(false);
