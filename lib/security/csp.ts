@@ -73,7 +73,12 @@ export function buildContentSecurityPolicy(options: {
     // matching does NOT let an https: source authorise a wss: connection, so
     // without the second entry every Realtime subscription breaks the moment
     // this policy moves from Report-Only to enforcing.
-    `connect-src 'self'${supabase ? ` ${supabase} ${supabase.replace(/^https:/, "wss:")}` : ""} ${gtm} ${ga}`,
+    // `data:` here is scoped to connect-src only (fetch/XHR/WebSocket targets,
+    // never a remote host) — gtag.js's own bootstrap dynamically imports a
+    // same-content `data:text/javascript;base64,...` module in some browsers,
+    // which connect-src otherwise blocks even though the gtag.js script tag
+    // itself is already trusted via the googletagmanager.com host source.
+    `connect-src 'self' data:${supabase ? ` ${supabase} ${supabase.replace(/^https:/, "wss:")}` : ""} ${gtm} ${ga}`,
     `font-src 'self'`,
     `frame-src 'none'`,
     `frame-ancestors 'none'`,

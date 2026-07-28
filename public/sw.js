@@ -24,7 +24,14 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET" || event.request.mode === "navigate") return;
-  event.respondWith(fetch(event.request));
+  // A bare `fetch(event.request)` here left any blocked/offline/failed
+  // request (a third-party script blocked by CSP or an ad-blocker, a dropped
+  // connection) as an unhandled promise rejection inside respondWith, which
+  // both spams the console and turns that single request into a network
+  // error. Still network-only (no caching added) — just fails safely.
+  event.respondWith(
+    fetch(event.request).catch(() => Response.error())
+  );
 });
 
 self.addEventListener("push", (event) => {

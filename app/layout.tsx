@@ -88,7 +88,7 @@ export default async function RootLayout({ children }: RootLayoutProps) {
           {children}
           <ServiceWorkerRegistration currentBuildId={buildId} />
         </ThemeProvider>
-        {gaMeasurementId ? <GoogleAnalytics gaId={gaMeasurementId} /> : null}
+        {gaMeasurementId ? <GoogleAnalytics gaId={gaMeasurementId} nonce={nonce} /> : null}
       </body>
     </html>
   );

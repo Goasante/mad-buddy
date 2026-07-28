@@ -126,7 +126,11 @@ describe("service worker never caches authenticated data", () => {
   });
 
   it("passes fetches straight through to the network", () => {
-    expect(serviceWorker).toMatch(/event\.respondWith\(\s*fetch\(event\.request\)\s*\)/);
+    // A trailing .catch() is allowed (it only prevents an unhandled promise
+    // rejection on a blocked/offline request) — it must not introduce a
+    // cache read/write, which the "uses no Cache Storage at all" test above
+    // already guards.
+    expect(serviceWorker).toMatch(/event\.respondWith\(\s*fetch\(event\.request\)(?:\s*\.catch\([\s\S]*?\))?\s*\)/);
   });
 });
 

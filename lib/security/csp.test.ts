@@ -26,7 +26,7 @@ describe("buildContentSecurityPolicy", () => {
   it("includes the Supabase origin only where the app needs it (image, media, and connect)", () => {
     expect(withSupabase).toContain("img-src 'self' data: https://abc123.supabase.co");
     expect(withSupabase).toContain("media-src 'self' data: https://abc123.supabase.co");
-    expect(withSupabase).toContain("connect-src 'self' https://abc123.supabase.co");
+    expect(withSupabase).toContain("connect-src 'self' data: https://abc123.supabase.co");
     // Never in script-src, Supabase is data/auth, not a script host.
     expect(withSupabase).not.toContain("script-src 'self' 'unsafe-inline' https://abc123.supabase.co");
   });
@@ -67,7 +67,7 @@ describe("buildContentSecurityPolicy", () => {
   it("degrades safely when Supabase env is absent", () => {
     expect(withoutSupabase).toContain("img-src 'self' data: https://www.google-analytics.com");
     expect(withoutSupabase).toContain("media-src 'self' data:");
-    expect(withoutSupabase).toContain("connect-src 'self' https://www.googletagmanager.com");
+    expect(withoutSupabase).toContain("connect-src 'self' data: https://www.googletagmanager.com");
   });
 
   it("locks down framing, objects, base, and forms", () => {
