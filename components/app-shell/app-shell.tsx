@@ -863,14 +863,21 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
  *             a broken URL never breaks the page.
  */
 function WallpaperLayer({ wallpaper }: { wallpaper: ResolvedWallpaper | null }) {
+  // On phones the document scrolls and <main> is only ~viewport tall, so an
+  // absolute layer would end mid-page and leave a gap when you scroll/overscroll.
+  // Pin it to the viewport (`fixed`) on mobile so it always fills the screen and
+  // stays put behind scrolling content; on desktop <main> is its own scroll
+  // panel, so keep it contained (`md:absolute`). Chrome (header/nav) and modals
+  // keep their opaque surfaces above it.
+  const base = "fixed inset-0 -z-10 md:absolute";
   const mode = wallpaper?.renderMode ?? "ambient";
   if (mode === "plain") return null;
   if (mode === "image") {
     const light = wallpaper?.lightUrl ?? wallpaper?.darkUrl ?? null;
     const dark = wallpaper?.darkUrl ?? wallpaper?.lightUrl ?? null;
-    if (!light && !dark) return <div className="app-wallpaper absolute inset-0 -z-10" aria-hidden="true" />;
+    if (!light && !dark) return <div className={cn("app-wallpaper", base)} aria-hidden="true" />;
     return (
-      <div className="absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+      <div className={cn(base, "overflow-hidden")} aria-hidden="true">
         <div
           className="app-wallpaper-image absolute inset-0"
           style={
@@ -884,7 +891,7 @@ function WallpaperLayer({ wallpaper }: { wallpaper: ResolvedWallpaper | null }) 
       </div>
     );
   }
-  return <div className="app-wallpaper absolute inset-0 -z-10" aria-hidden="true" />;
+  return <div className={cn("app-wallpaper", base)} aria-hidden="true" />;
 }
 
 function UnreadBadge({ count }: { count: number }) {
