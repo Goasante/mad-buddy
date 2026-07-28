@@ -2040,6 +2040,20 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["conversations"]["Insert"]>;
         Relationships: [];
       };
+      conversation_pins: {
+        Row: {
+          user_id: string;
+          conversation_id: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          conversation_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["conversation_pins"]["Insert"]>;
+        Relationships: [];
+      };
       conversation_members: {
         Row: {
           id: string;

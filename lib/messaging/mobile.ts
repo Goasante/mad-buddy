@@ -57,6 +57,7 @@ export type ConversationView = {
   lastMessageAt: string | null;
   unreadCount: number;
   muted: boolean;
+  pinned: boolean;
   contextBadge: string | null;
 };
 
@@ -302,6 +303,13 @@ export async function listConversations(userId: string): Promise<ConversationVie
     .order("last_message_at", { ascending: false, nullsFirst: false });
 
   const membershipById = new Map((memberships ?? []).map((row) => [row.conversation_id, row]));
+  // The user's pinned conversations (cosmetic ordering only).
+  const { data: pins } = await admin
+    .from("conversation_pins")
+    .select("conversation_id")
+    .eq("user_id", userId)
+    .in("conversation_id", conversationIds);
+  const pinnedIds = new Set((pins ?? []).map((row) => row.conversation_id));
   const nowIso = new Date().toISOString();
   const views: ConversationView[] = [];
 
