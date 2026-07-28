@@ -21,6 +21,7 @@ import {
   Send,
   ShieldAlert,
   ShieldCheck,
+  SlidersHorizontal,
   Trash2,
   UserPlus,
   UsersRound,
@@ -140,6 +141,11 @@ export function NotificationsPageContent({
   const [nearbyAlerts, setNearbyAlerts] = useState(true);
   const [quietMode, setQuietMode] = useState(false);
   const [planAlerts, setPlanAlerts] = useState(true);
+  // Two separate surfaces, deliberately: `optionsOpen` is the lightweight
+  // Pulse-management popover (Mark all as read / Select updates), `settingsOpen`
+  // is the dedicated Notification settings sheet. Keeping them apart is the
+  // whole point of this screen — actions and preferences never compete.
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<NotificationItem | null>(null);
   const [category, setCategory] = useState<PulseCategory>("all");
@@ -434,7 +440,7 @@ export function NotificationsPageContent({
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Pulse</h1>
           <div className="flex items-center gap-2">
-            <Popover.Root open={settingsOpen} onOpenChange={setSettingsOpen}>
+            <Popover.Root open={optionsOpen} onOpenChange={setOptionsOpen}>
               <Popover.Trigger asChild>
                 <Button
                   type="button"
@@ -448,22 +454,25 @@ export function NotificationsPageContent({
                 </Button>
               </Popover.Trigger>
               <Popover.Portal>
+                {/* Management actions only — real notification preferences live
+                    in their own sheet (opened from "Notification settings"
+                    below), so the two never compete for the same small space. */}
                 <Popover.Content
                   align="end"
                   sideOffset={8}
                   collisionPadding={12}
-                  className="compact-drop-popover app-dropdown-content w-[min(320px,calc(100vw-1.5rem))] p-2"
+                  className="compact-drop-popover app-dropdown-content w-[min(280px,calc(100vw-1.5rem))] p-1.5"
                 >
-                  <div className="grid gap-0.5 pb-1">
+                  <div className="grid gap-0.5">
                     {unreadCount > 0 ? (
                       <button
                         type="button"
                         onClick={() => {
                           markAllRead();
-                          setSettingsOpen(false);
+                          setOptionsOpen(false);
                         }}
                         disabled={isPending}
-                        className="focus-ring flex items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm hover:bg-secondary disabled:opacity-60"
+                        className="focus-ring flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left text-sm hover:bg-secondary disabled:opacity-60"
                       >
                         <CheckCheck className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                         {isPending ? "Marking…" : "Mark all as read"}
@@ -473,49 +482,73 @@ export function NotificationsPageContent({
                       type="button"
                       onClick={() => {
                         setSelectionMode(true);
-                        setSettingsOpen(false);
+                        setOptionsOpen(false);
                       }}
-                      className="focus-ring flex items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm hover:bg-secondary"
+                      className="focus-ring flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left text-sm hover:bg-secondary"
                     >
                       <ListChecks className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                       Select updates
                     </button>
-                  </div>
-                  <p className="border-t border-border/60 px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Notification settings
-                  </p>
-                  <div className="grid gap-0.5">
-                    <PrivacyToggle
-                      icon={MapPinOff}
-                      title="Nearby alerts"
-                      description="Get occasional alerts when approved Muddies are nearby."
-                      checked={nearbyAlerts}
-                      onCheckedChange={(checked) => {
-                        setNearbyAlerts(checked);
-                        // Nothing to quiet once nearby alerts are off; clear it
-                        // so the two can never sit in a contradictory state.
-                        if (!checked) setQuietMode(false);
+                    <div className="my-0.5 border-t border-border/60" aria-hidden="true" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOptionsOpen(false);
+                        setSettingsOpen(true);
                       }}
-                    />
-                    <PrivacyToggle
-                      icon={Bell}
-                      title="Quiet nearby alerts"
-                      description="Temporarily silence nearby alerts."
-                      checked={quietMode}
-                      disabled={!nearbyAlerts}
-                      onCheckedChange={setQuietMode}
-                    />
-                    <PrivacyToggle
-                      icon={CalendarCheck2}
-                      title="Plan alerts"
-                      description="Get updates about invitations, changes, and reminders."
-                      checked={planAlerts}
-                      onCheckedChange={setPlanAlerts}
-                    />
+                      className="focus-ring flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left text-sm hover:bg-secondary"
+                    >
+                      <SlidersHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      Notification settings
+                    </button>
                   </div>
                 </Popover.Content>
               </Popover.Portal>
             </Popover.Root>
+
+            {/* A real bottom sheet — solid surface + dimmed backdrop, not a
+                floating menu — so it reads as its own interaction layer rather
+                than a translucent panel Pulse content stays visible through.
+                Tap-outside and Android back both dismiss it (built into
+                Modal's sheet variant). */}
+            <Modal
+              open={settingsOpen}
+              onOpenChange={setSettingsOpen}
+              title="Notification settings"
+              description="Choose which updates can alert you."
+              variant="sheet"
+              compact
+            >
+              <div className="divide-y divide-border/60">
+                <PrivacyToggle
+                  icon={MapPinOff}
+                  title="Nearby alerts"
+                  description="Get occasional alerts when approved Muddies are nearby."
+                  checked={nearbyAlerts}
+                  onCheckedChange={(checked) => {
+                    setNearbyAlerts(checked);
+                    // Nothing to quiet once nearby alerts are off; clear it
+                    // so the two can never sit in a contradictory state.
+                    if (!checked) setQuietMode(false);
+                  }}
+                />
+                <PrivacyToggle
+                  icon={Bell}
+                  title="Quiet nearby alerts"
+                  description="Temporarily silence nearby alerts."
+                  checked={quietMode}
+                  disabled={!nearbyAlerts}
+                  onCheckedChange={setQuietMode}
+                />
+                <PrivacyToggle
+                  icon={CalendarCheck2}
+                  title="Plan alerts"
+                  description="Get updates about plans and invitations."
+                  checked={planAlerts}
+                  onCheckedChange={setPlanAlerts}
+                />
+              </div>
+            </Modal>
           </div>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">What&apos;s happening with your Muddies.</p>
