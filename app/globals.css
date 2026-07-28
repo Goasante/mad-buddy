@@ -613,6 +613,21 @@ html.dark {
   }
 }
 
+/* -------------------------------------------------------------------------
+ * Authenticated app shell header (distinct from the landing nav above — this
+ * one is mobile-only and fixed, not sticky; see components/app-shell). One
+ * canonical source of truth for the header's footprint, consumed by BOTH the
+ * header itself (its own height) and the scroll viewport's top offset, so
+ * they can never drift out of sync. `--app-header-content-height` is the
+ * header's own row (logo/actions), independent of device notches;
+ * `--app-header-height` adds the safe-area inset on top of that — the number
+ * any page-local sticky control should offset from (`top: var(--app-header-
+ * height)`), never `top: 0`, to avoid stacking under the fixed header. */
+:root {
+  --app-header-content-height: 4.25rem;
+  --app-header-height: calc(env(safe-area-inset-top, 0px) + var(--app-header-content-height));
+}
+
 html {
   /* Theme-aware base so any overscroll/rubber-band reveal matches the app
      surface instead of flashing a hardcoded light colour behind the dark

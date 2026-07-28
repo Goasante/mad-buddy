@@ -5,7 +5,10 @@ export function PlanComparisonTable() {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[44rem] border-collapse text-sm">
-        <thead className="sticky top-0 z-10 bg-card/95 text-left backdrop-blur-xl">
+        {/* Renders inside the authenticated shell (AppShell), which has its own
+            fixed top header — offset below it, not the literal viewport top,
+            so this local sticky thead never sticks underneath that header. */}
+        <thead className="sticky top-[var(--app-header-height)] z-10 bg-card/95 text-left backdrop-blur-xl">
             <tr>
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Feature</th>
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Free</th>

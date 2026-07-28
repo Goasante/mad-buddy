@@ -80,6 +80,29 @@ const navigationItems: Array<{
 const PRIMARY_HREFS = ["/dashboard", "/friends", "/notifications", "/messages"] as const;
 const SECONDARY_HREFS = ["/plans", "/moments", "/events", "/groups", "/discover"] as const;
 
+/**
+ * Routes that render their own in-page title instead of the shared AppHeader
+ * (AppHeader returns null for them). Shared between AppShell — which needs it
+ * to decide how much top offset <main> reserves — and AppHeader — which needs
+ * it to decide whether to render at all — so the two can never drift apart.
+ */
+const PAGES_WITH_OWN_HEADER = [
+  "/notifications",
+  "/profile",
+  "/settings",
+  "/plans",
+  "/messages",
+  "/events",
+  "/groups",
+  "/discover",
+  "/meeting-pings",
+  "/moments"
+] as const;
+
+function hasOwnHeader(pathname: string): boolean {
+  return PAGES_WITH_OWN_HEADER.some((href) => pathname === href || pathname.startsWith(`${href}/`));
+}
+
 export type AppShellProps = {
   children: ReactNode;
   showAdminLink?: boolean;
@@ -174,9 +197,19 @@ export function AppShell({
   const visibleNavigationItems = showAdminLink
     ? [...enabledNavigationItems, { href: "/admin" as const, label: "Admin", icon: Gauge }]
     : enabledNavigationItems;
+  // Whether the shared AppHeader renders for this route — decides how much
+  // top offset <main> reserves below. Kept in sync with AppHeader's own check
+  // via the shared PAGES_WITH_OWN_HEADER list (see hasOwnHeader above), so the
+  // two can never disagree about whether a header is actually on screen.
+  const hasGlobalHeader = !hasOwnHeader(pathname);
 
   return (
-    <div className="flex min-h-[100svh] min-h-[100dvh] flex-col bg-background pb-[calc(88px+env(safe-area-inset-bottom))] pt-[env(safe-area-inset-top)] dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]">
+    // The safe-area top inset is no longer padded here: it's reserved exactly
+    // once, either by the fixed AppHeader (which pages using it get via
+    // --app-header-height on <main> below) or, for pages with their own
+    // in-page header, by <main>'s own env(safe-area-inset-top) padding — never
+    // both, and never as a blanket guess applied regardless of route.
+    <div className="flex min-h-[100svh] min-h-[100dvh] flex-col bg-background pb-[calc(88px+env(safe-area-inset-bottom))] dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]">
       <a
         href="#app-main-content"
         className="focus-ring sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:shadow-lg"
@@ -209,7 +242,18 @@ export function AppShell({
           currentAvatarUrl={currentAvatarUrl}
           showAdminLink={showAdminLink}
         />
-          <main id="app-main-content" className="relative flex-1 px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:overflow-y-auto">
+          <main
+          id="app-main-content"
+          className={cn(
+            "relative flex-1 px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:overflow-y-auto md:pt-0",
+            // The fixed AppHeader is out of normal flow, so <main> reserves its
+            // exact footprint here — the one place this offset is computed, so
+            // no page ever needs its own top-padding guess. Pages with their
+            // own in-page header (AppHeader renders nothing for them) still
+            // need the bare safe-area inset so their own title clears the notch.
+            hasGlobalHeader ? "pt-[var(--app-header-height)]" : "pt-[env(safe-area-inset-top,0px)]"
+          )}
+        >
           <div className="mx-auto w-full max-w-[1200px]">{children}</div>
         </main>
         </div>
@@ -573,32 +617,27 @@ function AppHeader({
   const pathname = usePathname();
   const [createOpen, setCreateOpen] = useState(false);
 
-  const pagesWithOwnHeader = [
-    "/notifications",
-    "/profile",
-    "/settings",
-    "/plans",
-    "/messages",
-    "/events",
-    "/groups",
-    "/discover",
-    "/meeting-pings",
-    "/moments"
-  ];
-
-  if (pagesWithOwnHeader.some((href) => pathname === href || pathname.startsWith(`${href}/`))) {
+  if (hasOwnHeader(pathname)) {
     return null;
   }
 
   return (
-    // `top` uses the safe-area inset (not 0): a plain `top-0` sticky element
-    // clamps to the literal top of the viewport when scrolled, which sits
-    // BEHIND the notch/dynamic island once content scrolls past it — the outer
-    // shell's one-time safe-area padding only affects the header's resting
-    // position before any scroll, not where "stuck" clamps to. Anchoring to the
-    // inset keeps the header (and its background) below the notch at all times.
-    <header className="sticky top-[env(safe-area-inset-top)] z-30 border-b border-border/70 bg-background/90 py-3 backdrop-blur-xl dark:border-white/10 dark:bg-[#111112]/90">
-      <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+    // `fixed`, not `sticky`: sticky's "stuck" offset depends on the nearest
+    // scrolling ancestor and a definite `top` value — fragile in a deeply
+    // nested flex shell, and any ancestor coupling overflow-x with an implicit
+    // overflow-y (or a non-supporting env()) silently drops it back to static,
+    // which is exactly how page content ends up scrolling up over the header.
+    // Fixed positioning has no such dependency: it always anchors to the true
+    // viewport and (with an explicit z-index) always paints above in-flow
+    // content, on every browser. <main>'s top offset is the corresponding
+    // --app-header-height (see globals.css) — one shared value instead of a
+    // per-page padding guess. Desktop reverts to a normal in-flow row (the
+    // header never needs to "float" there — it already sits permanently above
+    // the independently-scrolling desktop panel).
+    <header
+      className="fixed inset-x-0 top-0 z-30 border-b border-border/70 bg-background/90 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl dark:border-white/10 dark:bg-[#111112]/90 md:static md:pt-0"
+    >
+      <div className="mx-auto flex h-[var(--app-header-content-height)] w-full max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         {/* Mobile: logo only, the greeting below establishes the page, so no
             "Home" title competes with it. Desktop keeps the in-panel page
             title (the sidebar carries the logo there). */}
