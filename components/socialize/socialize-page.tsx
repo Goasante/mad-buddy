@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import * as Popover from "@radix-ui/react-popover";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, Eye, Info, RefreshCcw, ShieldCheck, X } from "lucide-react";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
 import {
@@ -11,7 +12,6 @@ import {
   updateSocializeAction
 } from "@/app/(app)/socialize-actions";
 import type { SocializePerson, SocializeSession } from "@/lib/social/socialize-mobile";
-import { AppSelect } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import { Modal } from "@/components/ui/modal";
@@ -65,6 +65,40 @@ const TIER_PILL: Record<Tier, string> = {
   around: "bg-sky-500"
 };
 
+const DURATION_SHORT: Record<SocializeDuration, string> = { "30m": "30 min", "1h": "1 hr", "3h": "3 hr" };
+
+function ChipRow<T extends string>({
+  options,
+  value,
+  onSelect
+}: {
+  options: Array<{ value: T; label: string }>;
+  value: T | null;
+  onSelect: (value: T) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((option) => {
+        const selected = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onSelect(option.value)}
+            aria-pressed={selected}
+            className={cn(
+              "focus-ring safe-motion rounded-full border px-3 py-1.5 text-xs font-medium",
+              selected ? "border-primary bg-primary/10 text-primary" : "border-border/70 text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+            )}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 type RadarSlot = { person: SocializePerson; left: number; top: number; tier: Tier };
 
 function radarSlots(people: SocializePerson[]): RadarSlot[] {
@@ -107,7 +141,7 @@ export function SocializePage({
   const [controlsOpen, setControlsOpen] = useState(false);
   const [areaTier, setAreaTier] = useState<SocializeAreaTier | null>(null);
   const [duration, setDuration] = useState<SocializeDuration | null>(null);
-  const [attempted, setAttempted] = useState(false);
+  const [, setAttempted] = useState(false);
 
   const [previewPerson, setPreviewPerson] = useState<SocializePerson | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
@@ -168,19 +202,8 @@ export function SocializePage({
     };
   }, [isActive, refresh]);
 
-  // The central profile is the interaction: tap it to configure (OFF) or to
-  // see compact session controls (ON).
-  function tapCenter() {
-    if (isActive) {
-      setControlsOpen(true);
-      return;
-    }
-    setAreaTier(session?.areaTier ?? "nearby");
-    setDuration(null);
-    setAttempted(false);
-    setSetupOpen(true);
-  }
-
+  // The central profile is the interaction: the popover anchored to it prefills
+  // on open (OFF → setup chips, ON → session controls).
   function openChange() {
     setControlsOpen(false);
     setAreaTier(session?.areaTier ?? "nearby");
@@ -350,25 +373,115 @@ export function SocializePage({
             );
           })}
 
-          {/* Central profile — the main control. */}
-          <button
-            type="button"
-            onClick={tapCenter}
-            disabled={isPending && activating}
-            aria-label={isActive ? "Socialize controls" : "Turn on Socialize"}
-            className="focus-ring safe-motion absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
-          >
-            <span
-              className={cn(
-                "block rounded-full p-1",
-                isActive
-                  ? "bg-gradient-to-br from-primary to-orange-500 shadow-[0_0_44px_hsl(var(--primary)/0.45)]"
-                  : "bg-gradient-to-br from-violet-500 to-primary shadow-[0_0_40px_hsl(270_80%_60%/0.4)]"
-              )}
+          {/* Central profile — the main control. A small popover drops out just
+              beneath it (chips, no nested dropdowns) so picking a value never
+              dismisses the panel. */}
+          {isActive ? (
+            <Popover.Root open={controlsOpen} onOpenChange={setControlsOpen}>
+              <Popover.Trigger asChild>
+                <button
+                  type="button"
+                  aria-label="Socialize controls"
+                  className="focus-ring safe-motion absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                >
+                  <span className="block rounded-full bg-gradient-to-br from-primary to-orange-500 p-1 shadow-[0_0_44px_hsl(var(--primary)/0.45)]">
+                    <UserAvatar src={myAvatarUrl} name={myName || "You"} size="xl" decorative className="h-24 w-24 border-4 border-background" />
+                  </span>
+                </button>
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content
+                  side="bottom"
+                  align="center"
+                  sideOffset={14}
+                  collisionPadding={16}
+                  className="compact-drop-popover app-dropdown-content z-50 w-[min(300px,calc(100vw-2rem))] space-y-3 p-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                      <Clock className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{session ? remainingLabel(session.expiresAt, nowMs) : ""}</p>
+                      <p className="text-xs text-muted-foreground">Range: {session ? SOCIALIZE_AREA_LABELS[session.areaTier] : ""}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" size="sm" className="flex-1" onClick={openChange} disabled={isPending}>
+                      <RefreshCcw className="h-4 w-4" aria-hidden="true" />
+                      Change
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="flex-1 border-red-400/40 text-red-500" onClick={turnOff} disabled={isPending}>
+                      <X className="h-4 w-4" aria-hidden="true" />
+                      Turn off
+                    </Button>
+                  </div>
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
+          ) : (
+            <Popover.Root
+              open={setupOpen}
+              onOpenChange={(open) => {
+                if (open) {
+                  setAreaTier(session?.areaTier ?? "nearby");
+                  setDuration(null);
+                  setAttempted(false);
+                }
+                setSetupOpen(open);
+              }}
             >
-              <UserAvatar src={myAvatarUrl} name={myName || "You"} size="xl" decorative className="h-24 w-24 border-4 border-background" />
-            </span>
-          </button>
+              <Popover.Trigger asChild>
+                <button
+                  type="button"
+                  aria-label="Turn on Socialize"
+                  className="focus-ring safe-motion absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                >
+                  <span className="block rounded-full bg-gradient-to-br from-violet-500 to-primary p-1 shadow-[0_0_40px_hsl(270_80%_60%/0.4)]">
+                    <UserAvatar src={myAvatarUrl} name={myName || "You"} size="xl" decorative className="h-24 w-24 border-4 border-background" />
+                  </span>
+                </button>
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content
+                  side="bottom"
+                  align="center"
+                  sideOffset={14}
+                  collisionPadding={16}
+                  className="compact-drop-popover app-dropdown-content z-50 w-[min(300px,calc(100vw-2rem))] space-y-3 p-3"
+                >
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-muted-foreground">How long?</p>
+                    <ChipRow
+                      options={SOCIALIZE_DURATIONS.map((option) => ({ value: option.id, label: DURATION_SHORT[option.id] }))}
+                      value={duration}
+                      onSelect={setDuration}
+                    />
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-muted-foreground">How far?</p>
+                    <ChipRow
+                      options={SOCIALIZE_AREA_TIERS.map((option) => ({ value: option.id, label: option.label }))}
+                      value={areaTier}
+                      onSelect={setAreaTier}
+                    />
+                  </div>
+                  <p className="flex items-start gap-1.5 text-[11px] leading-4 text-muted-foreground">
+                    <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0 text-primary" aria-hidden="true" />
+                    Approximate proximity — your exact location is never shared.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={submitSetup}
+                    disabled={isPending || !canSubmit}
+                    className="w-full bg-gradient-to-r from-primary to-orange-500 text-white hover:opacity-95"
+                  >
+                    {isPending ? "Turning on…" : "Turn on Socialize"}
+                  </Button>
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
+          )}
 
           {/* Status pill hugging the avatar's lower edge. */}
           <span className="absolute left-1/2 top-1/2 inline-flex -translate-x-1/2 translate-y-[3.25rem] items-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 bg-background/90 px-3 py-1 text-xs font-medium backdrop-blur">
@@ -387,87 +500,6 @@ export function SocializePage({
           </p>
         )}
       </div>
-
-      {/* Setup sheet — only How long? + How far? */}
-      <Modal
-        open={setupOpen}
-        onOpenChange={setSetupOpen}
-        title="Turn on Socialize"
-        description="Spontaneous and private — pick a time and range."
-        variant="sheet"
-        compact
-        footer={
-          <>
-            <Button type="button" variant="ghost" onClick={() => setSetupOpen(false)} disabled={isPending}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={submitSetup}
-              disabled={isPending || !canSubmit}
-              className="bg-gradient-to-r from-primary to-orange-500 text-white hover:opacity-95"
-            >
-              {isPending ? "Turning on…" : isActive ? "Save changes" : "Turn on Socialize"}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <AppSelect
-            id="socialize-duration"
-            label="How long?"
-            value={duration}
-            options={SOCIALIZE_DURATIONS.map((option) => ({ value: option.id, label: option.label }))}
-            placeholder="Choose a duration"
-            error={attempted && !duration ? "Choose how long." : undefined}
-            size="compact"
-            triggerClassName="!w-full"
-            onChange={setDuration}
-          />
-          <AppSelect
-            id="socialize-area"
-            label="How far?"
-            value={areaTier}
-            options={SOCIALIZE_AREA_TIERS.map((option) => ({ value: option.id, label: option.label }))}
-            placeholder="Choose a range"
-            error={attempted && !areaTier ? "Choose a range." : undefined}
-            size="compact"
-            triggerClassName="!w-full"
-            onChange={setAreaTier}
-          />
-          <p className="flex items-start gap-2 rounded-lg border border-border/60 bg-card/40 p-2.5 text-xs text-muted-foreground">
-            <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-            Approximate proximity — we never share your exact location.
-          </p>
-        </div>
-      </Modal>
-
-      {/* Session controls sheet (ACTIVE). */}
-      <Modal open={controlsOpen} onOpenChange={setControlsOpen} title="Socialize is on" variant="sheet" compact>
-        <div className="space-y-3">
-          <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/40 p-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-              <Clock className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">{session ? remainingLabel(session.expiresAt, nowMs) : ""}</p>
-              <p className="text-xs text-muted-foreground">
-                Range: {session ? SOCIALIZE_AREA_LABELS[session.areaTier] : ""}
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" className="flex-1" onClick={openChange} disabled={isPending}>
-              <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-              Change
-            </Button>
-            <Button type="button" variant="outline" className="flex-1 border-red-400/40 text-red-500" onClick={turnOff} disabled={isPending}>
-              <X className="h-4 w-4" aria-hidden="true" />
-              Turn off
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Person preview → connect via the existing Muddy-request flow. */}
       <Modal
