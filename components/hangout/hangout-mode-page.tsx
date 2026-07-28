@@ -150,6 +150,10 @@ export function HangoutModePage({
   const [duration, setDuration] = useState<Duration>("1h");
   const [message, setMessage] = useState("");
   const [attempted, setAttempted] = useState(false);
+  // Inline, in-sheet failure — a toast can render behind/underneath an open
+  // sheet, so activation failure needs to be visible where the user is
+  // actually looking, without dismissing the sheet.
+  const [setupError, setSetupError] = useState("");
 
   const [feedback, setFeedback] = useState("");
   const [toast, setToast] = useState<Toast>(null);
@@ -258,6 +262,7 @@ export function HangoutModePage({
       setDuration("1h");
     }
     setAttempted(false);
+    setSetupError("");
     setSetupOpen(true);
   }
 
@@ -277,6 +282,7 @@ export function HangoutModePage({
 
   function submitSetup() {
     setAttempted(true);
+    setSetupError("");
     if (!activity) return;
 
     const chosen = durationOptions.find((option) => option.id === duration) ?? durationOptions[1];
@@ -290,6 +296,7 @@ export function HangoutModePage({
       if (editing && previousId) {
         const ended = await endHangoutAction(previousId);
         if (!ended.ok) {
+          setSetupError(ended.message);
           showToast(ended.message, true);
           return;
         }
@@ -322,6 +329,7 @@ export function HangoutModePage({
         // If an edit ended the old session but the new one failed, the mode is
         // now genuinely off; reflect that rather than showing stale details.
         if (editing) setActiveHangout(null);
+        setSetupError(result.message);
         showToast(result.message, true);
       }
     });
@@ -629,11 +637,34 @@ export function HangoutModePage({
         onOpenChange={setSetupOpen}
         title={isActive ? "Update Hangout Mode" : "Turn on Hangout Mode"}
         description="Let your Muddies know what you're open to."
+        variant="sheet"
+        compact
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setSetupOpen(false)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={submitSetup} disabled={isPending || (attempted && !activity)}>
+              {isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                  {isActive ? "Saving…" : "Turning on…"}
+                </>
+              ) : isActive ? (
+                "Save changes"
+              ) : (
+                "Turn on Hangout"
+              )}
+            </Button>
+          </>
+        }
       >
-        <div className="max-h-[65vh] space-y-5 overflow-y-auto pr-1">
+        <div className="space-y-4">
           <fieldset>
-            <legend className="mb-2 text-sm font-medium">What are you open to?</legend>
-            <div className="flex flex-wrap gap-2">
+            <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              What are you open to?
+            </legend>
+            <div className="flex flex-wrap gap-1.5">
               {activityOptions.map((option) => (
                 <button
                   key={option.id}
@@ -652,13 +683,15 @@ export function HangoutModePage({
               ))}
             </div>
             {attempted && !activity ? (
-              <p className="mt-2 text-xs text-red-500">Choose an activity to continue.</p>
+              <p className="mt-1.5 text-xs text-red-500">Choose an activity to continue.</p>
             ) : null}
           </fieldset>
 
           <fieldset>
-            <legend className="mb-2 text-sm font-medium">Visible to</legend>
-            <div className="flex flex-wrap gap-2">
+            <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Visible to
+            </legend>
+            <div className="flex gap-1.5">
               {audienceOptions.map((option) => (
                 <button
                   key={option.id}
@@ -666,7 +699,7 @@ export function HangoutModePage({
                   onClick={() => setAudience(option.id)}
                   aria-pressed={audience === option.id}
                   className={cn(
-                    "focus-ring safe-motion rounded-full border px-3 py-1.5 text-sm font-medium",
+                    "focus-ring safe-motion flex-1 rounded-full border px-2 py-1.5 text-sm font-medium",
                     audience === option.id
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-border text-muted-foreground hover:bg-secondary"
@@ -679,8 +712,10 @@ export function HangoutModePage({
           </fieldset>
 
           <fieldset>
-            <legend className="mb-2 text-sm font-medium">Duration</legend>
-            <div className="flex flex-wrap gap-2">
+            <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Duration
+            </legend>
+            <div className="flex gap-1.5">
               {durationOptions.map((option) => (
                 <button
                   key={option.id}
@@ -688,7 +723,7 @@ export function HangoutModePage({
                   onClick={() => setDuration(option.id)}
                   aria-pressed={duration === option.id}
                   className={cn(
-                    "focus-ring safe-motion rounded-full border px-3 py-1.5 text-sm font-medium",
+                    "focus-ring safe-motion flex-1 rounded-full border px-2 py-1.5 text-sm font-medium",
                     duration === option.id
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-border text-muted-foreground hover:bg-secondary"
@@ -701,8 +736,8 @@ export function HangoutModePage({
           </fieldset>
 
           <div>
-            <label htmlFor="hangout-note" className="mb-1.5 block text-sm font-medium">
-              Add a note (optional)
+            <label htmlFor="hangout-note" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Note (optional)
             </label>
             <input
               id="hangout-note"
@@ -715,19 +750,17 @@ export function HangoutModePage({
             />
           </div>
 
-          <p className="flex items-start gap-2 text-xs text-muted-foreground">
-            <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-            Only your availability is shared. Your exact location stays private.
-          </p>
-        </div>
-
-        <div className="mt-5 flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => setSetupOpen(false)} disabled={isPending}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={submitSetup} disabled={isPending || (attempted && !activity)}>
-            {isPending ? "Saving..." : isActive ? "Save changes" : "Turn on Hangout Mode"}
-          </Button>
+          {setupError ? (
+            <p className="flex items-start gap-1.5 text-xs text-red-500" role="alert">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {setupError}
+            </p>
+          ) : (
+            <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+              <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+              Only your availability is shared. Your exact location stays private.
+            </p>
+          )}
         </div>
       </Modal>
 
