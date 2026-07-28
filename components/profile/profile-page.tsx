@@ -79,6 +79,17 @@ export function ProfilePageContent({
     };
   }, [avatarPreviewUrl]);
 
+  // Auto-dismiss the status banner ("Profile updated.", validation errors,
+  // upload results) so it never lingers until a manual refresh. Messages tied
+  // to an in-progress avatar choice — the preview's "Save the photo when it
+  // looks right" and the upload-in-progress notice — stay put instead, since
+  // Cancel/Save are still on screen and the text is part of that decision.
+  useEffect(() => {
+    if (!feedback || selectedAvatarFile || isAvatarPending) return;
+    const timer = window.setTimeout(() => setFeedback(""), 4000);
+    return () => window.clearTimeout(timer);
+  }, [feedback, selectedAvatarFile, isAvatarPending]);
+
   function beginEditing() {
     setDisplayName(savedProfile.displayName);
     setUsername(savedProfile.username);
