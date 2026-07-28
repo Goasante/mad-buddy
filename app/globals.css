@@ -614,7 +614,14 @@ html.dark {
 }
 
 html {
-  background: var(--bg-primary);
+  /* Theme-aware base so any overscroll/rubber-band reveal matches the app
+     surface instead of flashing a hardcoded light colour behind the dark
+     shell. Landing/auth pages paint their own gradient on top via `body`. */
+  background: hsl(var(--background));
+  /* Kill scroll-chaining + the document rubber-band that revealed a mismatched
+     gap "outside" the app in installed PWA / Capacitor WebView. This is the
+     root-level fix — pages never add ad-hoc height to compensate. */
+  overscroll-behavior: none;
 }
 
 /* Landing page only (class toggled on <html> while the page is mounted):
@@ -725,6 +732,7 @@ body {
   color: hsl(var(--foreground));
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   transition: background-color 300ms ease, color 300ms ease;
+  overscroll-behavior: none;
 }
 
 /* -------------------------------------------------------------------------

@@ -17,7 +17,6 @@ import {
   Info,
   Loader2,
   Lock,
-  ShieldCheck,
   Sparkles,
   Trophy,
   Users,
@@ -120,15 +119,6 @@ function visibleToLabel(audience: HangoutAudienceType, muddyCount: number): stri
 }
 
 type Toast = { title?: string; message: string; error: boolean } | null;
-
-function HangoutPillar({ icon: Icon, title }: { icon: typeof Hand; title: string }) {
-  return (
-    <div className="flex flex-col items-center gap-1.5">
-      <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
-      <p className="text-xs font-semibold leading-tight">{title}</p>
-    </div>
-  );
-}
 
 export function HangoutModePage({
   initialActiveHangout = null,
@@ -566,15 +556,19 @@ export function HangoutModePage({
             Turn on Hangout Mode
           </Button>
 
-          <div className="grid grid-cols-3 gap-3 rounded-2xl border border-border/70 bg-card/40 p-4 text-center">
-            <HangoutPillar icon={Users} title="Only approved Muddies" />
-            <HangoutPillar icon={Clock} title="Visible for a limited time" />
-            <HangoutPillar icon={ShieldCheck} title="You're in control" />
-          </div>
-
-          <p className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
-            <Lock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            Your exact location is <span className="font-medium text-primary">never</span> shared.
+          {/* One lightweight reassurance line (was three large blocks). */}
+          <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <Users className="h-3.5 w-3.5 text-primary" aria-hidden="true" /> Approved Muddies only
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className="inline-flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5 text-primary" aria-hidden="true" /> Limited time
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className="inline-flex items-center gap-1">
+              <Lock className="h-3.5 w-3.5 text-primary" aria-hidden="true" /> Location never shared
+            </span>
           </p>
         </>
       )}

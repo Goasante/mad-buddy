@@ -7,6 +7,7 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { getCurrentUser } from "@/lib/supabase/auth";
+import { currentActiveHangout } from "@/lib/social/planning";
 
 export const dynamic = "force-dynamic";
 
@@ -37,14 +38,11 @@ export default async function HangoutModeRoute() {
     avatarUrl = profile?.avatar_url ?? null;
     displayName = profile?.full_name?.trim() ?? "";
     muddyCount = muddies;
-    const { data: session } = await admin
-      .from("hangout_sessions")
-      .select("id, activity_type, audience_type, message, ends_at, status")
-      .eq("owner_id", user.id)
-      .in("status", ["active", "paused", "full"])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+
+    // Canonical, server-authoritative resolve: sweeps expired sessions and
+    // returns the single genuinely-active one (or null). A reopen never shows a
+    // stale ACTIVE, and expired rows stop counting toward the active limit.
+    const session = await currentActiveHangout(admin, user.id);
 
     if (session) {
       activeHangout = {

@@ -123,11 +123,67 @@ export async function activePlanCount(admin: Admin, creatorId: string): Promise<
 }
 
 /** Count of the user's currently active hangout sessions (spec §55). */
+/**
+ * Statuses that MIGHT still be live. Whether one actually counts as active also
+ * depends on `ends_at > now()` — the single canonical definition of an active
+ * Hangout used everywhere (RLS `muddies read active hangouts` gates the same
+ * way). A session that is expired/cancelled/converted, or whose window has
+ * elapsed, is never active.
+ */
+export const LIVE_HANGOUT_STATUSES = ["active", "paused", "full"] as const;
+
+/**
+ * Reconciles a user's own expired-but-unswept sessions: any live-status session
+ * whose window has elapsed is flipped to `expired`. There is no background job
+ * for this, so it runs on the authoritative reads (activation + page load),
+ * making the server the source of truth and stopping stale rows from counting
+ * toward the active-Hangout limit forever. Returns how many were reconciled.
+ */
+export async function sweepExpiredHangouts(admin: Admin, ownerId: string): Promise<number> {
+  const nowIso = new Date().toISOString();
+  const { data } = await admin
+    .from("hangout_sessions")
+    .update({ status: "expired", updated_at: nowIso })
+    .eq("owner_id", ownerId)
+    .in("status", [...LIVE_HANGOUT_STATUSES])
+    .lte("ends_at", nowIso)
+    .select("id");
+  return data?.length ?? 0;
+}
+
+/**
+ * Count of the user's genuinely-active Hangouts: a live status AND a window
+ * that has not yet elapsed. This is the value the activation limit checks. It
+ * sweeps first so expired rows are both un-counted here and cleaned up.
+ */
 export async function activeHangoutCount(admin: Admin, ownerId: string): Promise<number> {
+  await sweepExpiredHangouts(admin, ownerId);
+  const nowIso = new Date().toISOString();
   const { count } = await admin
     .from("hangout_sessions")
     .select("id", { count: "exact", head: true })
     .eq("owner_id", ownerId)
-    .in("status", ["active", "paused", "full"]);
+    .in("status", [...LIVE_HANGOUT_STATUSES])
+    .gt("ends_at", nowIso);
   return count ?? 0;
+}
+
+/**
+ * The user's current canonical active Hangout (or null). Sweeps expired rows
+ * first, then returns the single most recent live, not-yet-elapsed session — so
+ * a page load/reopen always resolves the authoritative state.
+ */
+export async function currentActiveHangout(admin: Admin, ownerId: string) {
+  await sweepExpiredHangouts(admin, ownerId);
+  const nowIso = new Date().toISOString();
+  const { data } = await admin
+    .from("hangout_sessions")
+    .select("id, activity_type, audience_type, message, ends_at, status")
+    .eq("owner_id", ownerId)
+    .in("status", [...LIVE_HANGOUT_STATUSES])
+    .gt("ends_at", nowIso)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
 }

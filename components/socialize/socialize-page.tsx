@@ -4,8 +4,6 @@ import { useCallback, useEffect, useRef, useState, useTransition, type CSSProper
 import {
   AlertTriangle,
   CheckCircle2,
-  Eye,
-  Info,
   MapPin,
   MoreHorizontal,
   Send,
@@ -14,7 +12,6 @@ import {
   X
 } from "lucide-react";
 import type { ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
 import {
   deactivateSocializeAction,
@@ -335,36 +332,15 @@ export function SocializePage({
       </div>
 
       {!isActive ? (
-        // Inactive: the mockup hero — radar, status + toggle, privacy pillars,
-        // the big turn-on CTA, and a reassurance card. No people are shown or
-        // fabricated before opt-in; the radar is purely abstract.
+        // Inactive: compact — radar, a short status line, the CTA (kept above
+        // the fold), and one lightweight reassurance line. No people are shown
+        // or fabricated before opt-in; the radar is purely abstract.
         <>
           <SocializeRadar reducedMotion={reducedMotion} />
 
-          <div className="rounded-2xl border border-border/70 bg-card/50 p-4">
-            <div className="flex items-center gap-3">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500" aria-hidden="true" />
-              <p className="flex-1 text-base font-semibold">Socialize is off</p>
-              <button
-                type="button"
-                onClick={openSetup}
-                role="switch"
-                aria-checked={false}
-                aria-label="Turn on Socialize"
-                className="focus-ring safe-motion relative h-7 w-12 shrink-0 rounded-full bg-secondary transition-colors"
-              >
-                <span className="absolute left-1 top-1 h-5 w-5 rounded-full bg-muted-foreground/70 transition-transform" />
-              </button>
-            </div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Turn it on to discover people nearby who are also open to connecting.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3 rounded-2xl border border-border/70 bg-card/40 p-4 text-center">
-            <SocializePillar icon={MapPin} title="Approximate proximity" description="We never show exact locations." />
-            <SocializePillar icon={Eye} title="You choose when you're visible" description="Turn on only when you want to connect." />
-            <SocializePillar icon={ShieldCheck} title="Turn off anytime" description="Your privacy is always in your control." />
+          <div className="text-center">
+            <p className="text-base font-semibold">Socialize is off</p>
+            <p className="mt-1 text-sm text-muted-foreground">Discover people around you.</p>
           </div>
 
           {renderSetup(
@@ -378,15 +354,15 @@ export function SocializePage({
             </Button>
           )}
 
-          <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card/40 p-3.5">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-violet-500/12 text-violet-500 dark:text-violet-300">
-              <Info className="h-5 w-5" aria-hidden="true" />
+          <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" aria-hidden="true" /> Approximate proximity
             </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">Discover. Connect. Build great experiences.</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">You&apos;re in control of when and who you see.</p>
-            </div>
-          </div>
+            <span aria-hidden="true">·</span>
+            <span className="inline-flex items-center gap-1">
+              <ShieldCheck className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" aria-hidden="true" /> You&apos;re in control
+            </span>
+          </p>
         </>
       ) : session ? (
         <div className="space-y-6">
@@ -446,8 +422,10 @@ export function SocializePage({
               // screens and stacked on mobile. The only refresh action lives here.
               <div className="flex flex-col gap-3 rounded-xl bg-card/40 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-medium">No one nearby is socializing yet</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Check again later or widen your area.</p>
+                  <p className="text-sm font-medium">Looking for people nearby…</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    You&apos;re visible to eligible people while Socialize is active.
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -544,7 +522,7 @@ function SocializeRadar({ reducedMotion }: { reducedMotion: boolean }) {
     { bottom: "20%", right: "18%" }
   ];
   return (
-    <div className="relative mx-auto grid h-56 w-full max-w-[420px] place-items-center overflow-hidden rounded-2xl border border-violet-500/20 bg-gradient-to-b from-violet-500/[0.08] to-transparent">
+    <div className="relative mx-auto grid h-44 w-full max-w-[420px] place-items-center overflow-hidden rounded-2xl border border-violet-500/20 bg-gradient-to-b from-violet-500/[0.08] to-transparent">
       <span className="absolute h-52 w-52 rounded-full border border-violet-500/10" aria-hidden="true" />
       <span className="absolute h-40 w-40 rounded-full border border-violet-500/15" aria-hidden="true" />
       <span className="absolute h-28 w-28 rounded-full border border-violet-500/20" aria-hidden="true" />
@@ -565,16 +543,6 @@ function SocializeRadar({ reducedMotion }: { reducedMotion: boolean }) {
       >
         <FeatureIcon feature="socialize" size={26} decorative className="text-white" />
       </span>
-    </div>
-  );
-}
-
-function SocializePillar({ icon: Icon, title, description }: { icon: LucideIcon; title: string; description: string }) {
-  return (
-    <div className="flex flex-col items-center gap-1.5">
-      <Icon className="h-5 w-5 text-violet-500 dark:text-violet-300" aria-hidden="true" />
-      <p className="text-xs font-semibold leading-tight">{title}</p>
-      <p className="text-[11px] leading-tight text-muted-foreground">{description}</p>
     </div>
   );
 }
