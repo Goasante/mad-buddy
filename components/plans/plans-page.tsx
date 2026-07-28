@@ -1,7 +1,25 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Lock, MapPin, Plus, Users, Vote, X } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronRight,
+  Clock,
+  Dumbbell,
+  Flame,
+  Gamepad2,
+  Heart,
+  Lock,
+  MapPin,
+  PartyPopper,
+  Plus,
+  Sun,
+  Users,
+  Utensils,
+  Vote,
+  X
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useId, useMemo, useState, useTransition } from "react";
 import {
   cancelPlanAction,
@@ -13,7 +31,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AppMultiSelect, AppSelect } from "@/components/ui/app-dropdown";
-import { Card } from "@/components/ui/card";
 import { FormField } from "@/components/auth/form-field";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Input } from "@/components/ui/input";
@@ -206,14 +223,16 @@ export function PlansPageContent({
     });
   }
 
+  const inviteCount = useMemo(() => plans.filter((plan) => bucketFor(plan) === "invites").length, [plans]);
+
   return (
-    <div className="mx-auto max-w-[1050px] pt-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <div className="mx-auto max-w-[640px] pt-5">
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Plans</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Make plans and organise meet-ups with your Muddies.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Plan something with your Muddies.</p>
         </div>
-        <Button type="button" onClick={() => setCreateOpen(true)}>
+        <Button type="button" variant="outline" className="shrink-0 whitespace-nowrap" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           New plan
         </Button>
@@ -225,37 +244,54 @@ export function PlansPageContent({
         </div>
       ) : null}
 
-      <nav className="mt-4 overflow-x-auto border-b border-border/70" aria-label="Plans tabs">
-        <div className="flex min-w-max gap-1">
-          {bucketTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={cn(
-                "focus-ring safe-motion border-b-2 px-4 py-3 text-sm font-medium",
-                activeBucket === tab.id
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-              onClick={() => setActiveBucket(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
+      <nav className="no-scrollbar -mx-4 mt-4 overflow-x-auto border-b border-border/70 px-4 sm:mx-0 sm:px-0" aria-label="Plans tabs">
+        <div className="flex w-max gap-1 pr-4 sm:pr-0">
+          {bucketTabs.map((tab) => {
+            const active = activeBucket === tab.id;
+            const showCount = tab.id === "invites" && inviteCount > 0;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "focus-ring safe-motion inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium",
+                  active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+                )}
+                onClick={() => setActiveBucket(tab.id)}
+              >
+                {tab.label}
+                {showCount ? (
+                  <span className="grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-primary px-1 text-[11px] font-bold leading-none text-primary-foreground">
+                    {inviteCount}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
       </nav>
 
-      <div className="mt-6">
+      <div className="mt-4">
         {visiblePlans.length > 0 ? (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {visiblePlans.map((plan) => (
-              <PlanCard key={plan.id} plan={plan} onView={() => setSelectedPlanId(plan.id)} />
-            ))}
-          </div>
+          <>
+            <div className="mb-1 flex items-center justify-between">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {bucketSectionLabel[activeBucket]}
+              </h2>
+            </div>
+            <ul className="divide-y divide-border/60">
+              {visiblePlans.map((plan) => (
+                <PlanCard key={plan.id} plan={plan} onView={() => setSelectedPlanId(plan.id)} />
+              ))}
+            </ul>
+            <div className="mt-5 rounded-2xl border border-border/60 bg-card/40 py-6 text-center">
+              <CalendarDays className="mx-auto h-6 w-6 text-primary" aria-hidden="true" />
+              <p className="mt-2 text-sm font-semibold">{listEndCopy[activeBucket].title}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{listEndCopy[activeBucket].description}</p>
+            </div>
+          </>
         ) : (
-          // Compact inline state, not the bordered EmptyState panel, a
-          // full card-style empty state for "nothing here yet" was reading
-          // as an oversized, disconnected block on a tabbed list page.
           <div className="py-12 text-center">
             <p className="text-base font-semibold">{emptyCopy[activeBucket].title}</p>
             <p className="mt-1 text-sm text-muted-foreground">{emptyCopy[activeBucket].description}</p>
@@ -292,39 +328,167 @@ const emptyCopy: Record<PlanBucket, { title: string; description: string }> = {
   past: { title: "No past plans", description: "Plans you've joined will appear here." }
 };
 
-function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
-  const goingCount = plan.attendees.filter((attendee) => attendee.rsvp === "going").length;
-  const maybeCount = plan.attendees.filter((attendee) => attendee.rsvp === "maybe").length;
+const bucketSectionLabel: Record<PlanBucket, string> = {
+  upcoming: "Upcoming plans",
+  invites: "Invitations",
+  hosting: "Created by you",
+  past: "Past plans"
+};
 
-  const muddyCount = plan.attendees.length;
+const listEndCopy: Record<PlanBucket, { title: string; description: string }> = {
+  upcoming: { title: "No more upcoming plans", description: "Create a plan to meet up with your Muddies." },
+  invites: { title: "That's every invitation", description: "New plan invitations will appear here." },
+  hosting: { title: "That's all you've created", description: "Start another plan whenever you're ready." },
+  past: { title: "You've reached the start", description: "Older plans stay here for reference." }
+};
+
+/** A small, decorative icon chosen from the plan title (a display choice over
+ *  user text — not stored data). Falls back to a calendar. */
+const PLAN_ICON_RULES: Array<{ match: RegExp; icon: LucideIcon; className: string }> = [
+  { match: /fish/i, icon: Users, className: "bg-primary/10 text-primary" },
+  { match: /gym|work ?out|run|fitness|train/i, icon: Dumbbell, className: "bg-blue-500/12 text-blue-500 dark:text-blue-300" },
+  { match: /beach|swim|pool|sun/i, icon: Sun, className: "bg-amber-500/12 text-amber-500 dark:text-amber-300" },
+  { match: /bonfire|fire|camp/i, icon: Flame, className: "bg-violet-500/12 text-violet-500 dark:text-violet-300" },
+  { match: /date|dinner|romant|valentine/i, icon: Heart, className: "bg-pink-500/12 text-pink-500 dark:text-pink-300" },
+  { match: /lunch|brunch|food|eat|restaurant|meal/i, icon: Utensils, className: "bg-primary/10 text-primary" },
+  { match: /party|club|celebrat|birthday/i, icon: PartyPopper, className: "bg-violet-500/12 text-violet-500 dark:text-violet-300" },
+  { match: /game|match|football|soccer|ball|play/i, icon: Gamepad2, className: "bg-emerald-500/12 text-emerald-500 dark:text-emerald-300" }
+];
+
+function planIcon(title: string): { icon: LucideIcon; className: string } {
+  const rule = PLAN_ICON_RULES.find((entry) => entry.match.test(title));
+  return rule ?? { icon: CalendarDays, className: "bg-primary/10 text-primary" };
+}
+
+function rsvpPill(myRsvp: string, isHost: boolean): { label: string; className: string } | null {
+  if (isHost) return { label: "Hosting", className: "border-primary/40 bg-primary/10 text-primary" };
+  switch (myRsvp) {
+    case "going":
+      return { label: "Going", className: "border-emerald-400/40 bg-emerald-400/10 text-emerald-600 dark:text-emerald-300" };
+    case "maybe":
+      return { label: "Maybe", className: "border-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-200" };
+    case "invited":
+    case "viewed":
+      return { label: "Invited", className: "border-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-200" };
+    case "not_going":
+    case "declined":
+      return { label: "Not going", className: "border-border text-muted-foreground" };
+    default:
+      return null;
+  }
+}
+
+function DateChip({ startAt }: { startAt: string | null }) {
+  if (!startAt) {
+    return (
+      <span className="grid h-14 w-12 shrink-0 place-content-center rounded-xl border border-border/70 bg-card/50 text-center leading-none">
+        <span className="text-[10px] font-semibold uppercase text-muted-foreground">TBD</span>
+      </span>
+    );
+  }
+  const date = new Date(startAt);
+  const month = date.toLocaleString([], { month: "short" }).toUpperCase();
+  const day = date.toLocaleString([], { day: "numeric" });
+  const weekday = date.toLocaleString([], { weekday: "short" }).toUpperCase();
+  return (
+    <span
+      className="grid h-14 w-12 shrink-0 place-content-center rounded-xl border border-border/70 bg-card/50 text-center leading-none"
+      suppressHydrationWarning
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">{month}</span>
+      <span className="mt-0.5 text-xl font-bold">{day}</span>
+      <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">{weekday}</span>
+    </span>
+  );
+}
+
+function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
+  const going = plan.attendees.filter((attendee) => attendee.rsvp === "going");
+  const goingCount = going.length;
+  const timeLabel = plan.startAt
+    ? new Date(plan.startAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : plan.planType === "poll"
+      ? "Time being decided"
+      : "Time TBD";
+  const { icon: Icon, className: iconClass } = planIcon(plan.title);
+  const pill = rsvpPill(plan.myRsvp, plan.isHost);
 
   return (
-    <Card className="p-4">
-      <div className="flex items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-          <Users className="h-4 w-4" aria-hidden="true" />
+    <li>
+      <button
+        type="button"
+        onClick={onView}
+        className="focus-ring safe-motion flex w-full items-start gap-3 py-4 text-left hover:bg-secondary/20"
+        aria-label={`${plan.title}, ${dateLabel(plan)}`}
+      >
+        <DateChip startAt={plan.startAt} />
+        <span className={cn("mt-0.5 grid h-11 w-11 shrink-0 place-items-center rounded-xl", iconClass)}>
+          <Icon className="h-5 w-5" aria-hidden="true" />
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-base font-semibold">{plan.title}</h3>
-            {plan.isHost ? <Badge variant="orange">Host</Badge> : null}
-            {plan.myRsvp === "invited" ? <Badge variant="violet">Invited</Badge> : null}
-            {TERMINAL.has(plan.status) ? <Badge variant="default">{plan.status}</Badge> : null}
-          </div>
-          {/* Overview cards intentionally omit exact place text, that's
-              only shown once a Muddy opens the plan's own details. */}
-          <p className="mt-1 text-sm text-muted-foreground">{dateLabel(plan)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Organised by {plan.organiserName} · {muddyCount} {muddyCount === 1 ? "Muddy" : "Muddies"}
-            {goingCount > 0 ? ` · ${goingCount} going` : ""}
-            {maybeCount > 0 ? ` · ${maybeCount} maybe` : ""}
-          </p>
-        </div>
-      </div>
-      <Button type="button" variant="outline" className="mt-3 w-full" onClick={onView}>
-        View
-      </Button>
-    </Card>
+
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-base font-semibold">{plan.title}</span>
+            {plan.myRsvp === "going" && !plan.isHost ? (
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+            ) : null}
+          </span>
+          <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground" suppressHydrationWarning>
+            <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{timeLabel}</span>
+            {plan.placeText ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{plan.placeText}</span>
+              </>
+            ) : null}
+          </span>
+          {goingCount > 0 ? (
+            <span className="mt-1.5 flex items-center gap-2">
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                {goingCount} going
+              </span>
+              <span className="flex -space-x-1.5" aria-hidden="true">
+                {going.slice(0, 3).map((attendee, index) => (
+                  <span
+                    key={`${attendee.name}-${index}`}
+                    className="grid h-6 w-6 place-items-center overflow-hidden rounded-full border-2 border-background bg-secondary text-[9px] font-semibold uppercase text-muted-foreground"
+                  >
+                    {attendee.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={attendee.avatarUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      attendee.name.trim().charAt(0).toUpperCase() || "?"
+                    )}
+                  </span>
+                ))}
+                {goingCount > 3 ? (
+                  <span className="grid h-6 w-6 place-items-center rounded-full border-2 border-background bg-secondary text-[9px] font-semibold text-muted-foreground">
+                    +{goingCount - 3}
+                  </span>
+                ) : null}
+              </span>
+            </span>
+          ) : null}
+        </span>
+
+        <span className="flex shrink-0 flex-col items-end gap-1.5">
+          <span className="inline-flex items-center gap-0.5">
+            {pill ? (
+              <span className={cn("rounded-full border px-2.5 py-0.5 text-xs font-semibold", pill.className)}>
+                {pill.label}
+              </span>
+            ) : null}
+            <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          </span>
+          <span className="max-w-[7.5rem] truncate text-right text-[11px] text-muted-foreground">
+            {plan.isHost ? "Organised by you" : `Organised by ${plan.organiserName}`}
+          </span>
+        </span>
+      </button>
+    </li>
   );
 }
 
