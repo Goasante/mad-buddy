@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import * as Popover from "@radix-ui/react-popover";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, Eye, Info, Loader2, MapPin, RefreshCcw, X } from "lucide-react";
@@ -52,18 +52,17 @@ const RANGE_OPTIONS: Array<{ value: SocializeAreaTier; label: string }> = [
   { value: "wider_area", label: "Wider" }
 ];
 
-// Avatar/geometry constants (px). CENTER stays the largest (96px avatar + the
-// 4px glow ring on each side). Nearby avatars are smaller so mine dominates.
-const CENTER_D = 104;
+// Geometry (px). My centre avatar is the largest; nearby avatars are smaller.
+const CENTER_D = 104; // 96px avatar + 4px glow ring each side
 const PEOPLE_D = 56;
-const GAP = 12;
-const EDGE = 10;
-
-function hashCode(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) hash = (hash * 31 + value.charCodeAt(i)) | 0;
-  return Math.abs(hash);
-}
+const GAP = 14;
+const EDGE = 12;
+// Protected zone around ME: clearance from my centre, plus a band below that
+// covers the status pill so nobody can sit on my avatar or pill.
+const CENTER_MIN = CENTER_D / 2 + PEOPLE_D / 2 + GAP; // 96
+const PILL_HALF = 66; // half the pill's width + a margin
+const PILL_TOP = 24; // pill band starts just below the avatar
+const PILL_BOTTOM = CENTER_D / 2 + 46; // approx pill lower edge below centre
 
 type PlacedPerson = { person: SocializePerson; x: number; y: number; tier: Tier };
 type RadarLayout = {
@@ -71,59 +70,69 @@ type RadarLayout = {
   overflow: number;
   cx: number;
   cy: number;
-  ringR: Record<Tier, number>;
-  outerR: number;
+  rx: number;
+  ry: number;
+  ringFrac: Record<Tier, number>;
 };
 
 /**
- * Distributes discovered people around the centred profile: each sits on a ring
- * chosen by proximity tier, at a collision-free angle (greedy golden-angle
- * search). Never overlaps the centre or another avatar, never clips the edges.
- * Anyone who can't fit cleanly rolls into a "+N" on the outer ring.
+ * Orbital, collision-safe placement. Nearby people are distributed AROUND my
+ * centred profile on an elliptical field (so both width and height are used).
+ * Ring = proximity tier (very_close inner → around outer); angle = a golden-
+ * spiral slot (upper-right start) nudged until it clears my avatar, the status
+ * pill, every other avatar, and the screen edges. Anyone who can't fit cleanly
+ * rolls into a "+N" on the outer ring — never stacked or shrunk.
  */
 function computeRadarLayout(people: SocializePerson[], w: number, h: number): RadarLayout {
   const cx = w / 2;
   const cy = h / 2;
-  const centerR = CENTER_D / 2;
-  const peopleR = PEOPLE_D / 2;
-  const outer = Math.min(w, h) / 2 - peopleR - EDGE;
-  const inner = centerR + peopleR + GAP + 6;
-  const ringR: Record<Tier, number> = {
-    very_close: inner,
-    nearby: inner + (outer - inner) * 0.5,
-    around: outer
-  };
-  if (w < 60 || h < 60 || outer <= inner) {
-    return { placed: [], overflow: people.length, cx, cy, ringR, outerR: outer };
+  const rx = w / 2 - EDGE - PEOPLE_D / 2;
+  const ry = Math.min(h / 2 - EDGE - PEOPLE_D / 2, rx * 1.55);
+  const minAxis = Math.min(rx, ry);
+  const fallbackFrac: Record<Tier, number> = { very_close: 0.6, nearby: 0.8, around: 1 };
+  if (w < 80 || h < 80 || minAxis < CENTER_MIN + 10) {
+    return { placed: [], overflow: people.length, cx, cy, rx, ry, ringFrac: fallbackFrac };
   }
+
+  const fInner = Math.min(0.84, Math.max(0.5, (CENTER_MIN + 10) / minAxis));
+  const ringFrac: Record<Tier, number> = { very_close: fInner, nearby: (fInner + 1) / 2, around: 1 };
+
+  const inProtected = (x: number, y: number) => {
+    if (Math.hypot(x - cx, y - cy) < CENTER_MIN) return true; // avatar + glow
+    const dx = x - cx;
+    const dy = y - cy;
+    if (Math.abs(dx) < PILL_HALF + PEOPLE_D / 2 && dy > PILL_TOP && dy < PILL_BOTTOM + PEOPLE_D / 2 + GAP) return true; // pill band
+    return false;
+  };
 
   const sorted = [...people].sort((a, b) => TIER_ORDER[a.proximityTier] - TIER_ORDER[b.proximityTier]);
   const placed: PlacedPerson[] = [];
   let overflow = 0;
-  const minDist = PEOPLE_D + GAP; // between two people centres
-  const centerMin = centerR + peopleR + GAP; // person vs centre
-  const golden = (137.508 * Math.PI) / 180;
+  const minDist = PEOPLE_D + GAP; // between two avatars' centres
+  const GOLDEN = (137.508 * Math.PI) / 180;
+  const START = (-60 * Math.PI) / 180; // first person lands upper-right, never bottom
 
-  for (const person of sorted) {
-    const base = ringR[person.proximityTier];
-    const seed = ((hashCode(person.userId) % 360) * Math.PI) / 180;
+  sorted.forEach((person, index) => {
+    const baseFrac = ringFrac[person.proximityTier];
+    const baseAngle = START + index * GOLDEN;
     let done = false;
-    for (let attempt = 0; attempt < 30 && !done; attempt += 1) {
-      const angle = seed + attempt * golden;
-      const rr = base + (attempt >= 15 ? Math.min(20, (attempt - 14) * 3) : 0);
-      if (rr > outer + 8) break;
-      const x = cx + rr * Math.cos(angle);
-      const y = cy + rr * Math.sin(angle);
-      if (x < peopleR + 2 || x > w - peopleR - 2 || y < peopleR + 2 || y > h - peopleR - 2) continue;
-      if (Math.hypot(x - cx, y - cy) < centerMin) continue;
+    for (let attempt = 0; attempt < 56 && !done; attempt += 1) {
+      const step = Math.ceil(attempt / 2);
+      const dir = attempt % 2 === 0 ? 1 : -1;
+      const angle = baseAngle + dir * step * ((13 * Math.PI) / 180);
+      const fr = Math.min(1, baseFrac + Math.floor(attempt / 14) * 0.09);
+      const x = cx + fr * rx * Math.cos(angle);
+      const y = cy + fr * ry * Math.sin(angle);
+      if (x < PEOPLE_D / 2 + 2 || x > w - PEOPLE_D / 2 - 2 || y < PEOPLE_D / 2 + 2 || y > h - PEOPLE_D / 2 - 2) continue;
+      if (inProtected(x, y)) continue;
       if (placed.some((p) => Math.hypot(p.x - x, p.y - y) < minDist)) continue;
       placed.push({ person, x, y, tier: person.proximityTier });
       done = true;
     }
     if (!done) overflow += 1;
-  }
+  });
 
-  return { placed, overflow, cx, cy, ringR, outerR: outer };
+  return { placed, overflow, cx, cy, rx, ry, ringFrac };
 }
 
 function ChipRow<T extends string>({
@@ -198,7 +207,6 @@ export function SocializePage({
 
   const isActive = session !== null && Date.parse(session.expiresAt) > nowMs;
 
-  // Measure the radar box and follow resizes so placement uses real pixels.
   useEffect(() => {
     const el = radarRef.current;
     if (!el) return;
@@ -229,8 +237,6 @@ export function SocializePage({
     });
   }, []);
 
-  // Live discovery while ON: refresh on focus + a modest 60s cadence, paused
-  // while hidden. Restrained, not aggressive.
   useEffect(() => {
     if (!isActive) return;
     const onFocus = () => refresh();
@@ -272,11 +278,8 @@ export function SocializePage({
       const result = editing ? await updateSocializeAction(input) : await activateSocializeAction(input);
       if (result.ok && result.session) {
         setSession(result.session);
-        if (editing) {
-          setControlsMode("view");
-        } else {
-          setPanelOpen(false);
-        }
+        if (editing) setControlsMode("view");
+        else setPanelOpen(false);
         setPeople(await discoverSocializePeopleAction());
       } else {
         showToast(result.message || "Couldn’t turn on Socialize. Try again.", true);
@@ -339,7 +342,7 @@ export function SocializePage({
   }
 
   const layout = useMemo(() => computeRadarLayout(isActive ? people : [], size.w, size.h), [isActive, people, size]);
-  const measured = size.w > 60 && size.h > 60;
+  const measured = size.w > 80 && size.h > 80;
   const ringTiers: Tier[] = ["around", "nearby", "very_close"];
 
   return (
@@ -368,7 +371,8 @@ export function SocializePage({
       {/* The radar IS the interface — it fills the space to the bottom nav. */}
       <div
         ref={radarRef}
-        className={cn("relative mt-2 min-h-[66svh] w-full flex-1", activating && "socialize-radar-activating")}
+        className={cn("relative mt-2 w-full", activating && "socialize-radar-activating")}
+        style={{ height: "calc(100svh - 11.5rem - env(safe-area-inset-bottom))" } as CSSProperties}
       >
         {measured ? (
           <>
@@ -377,19 +381,19 @@ export function SocializePage({
                 key={tier}
                 aria-hidden="true"
                 className={cn(
-                  "socialize-ring-breathe absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border",
+                  "socialize-ring-breathe absolute -translate-x-1/2 -translate-y-1/2 rounded-[50%] border",
                   isActive ? "border-primary/45" : "border-violet-400/45",
                   index === 1 && "socialize-ring-2",
                   index === 2 && "socialize-ring-3"
                 )}
-                style={{ width: 2 * layout.ringR[tier], height: 2 * layout.ringR[tier], top: layout.cy, left: layout.cx }}
+                style={{ width: 2 * layout.ringFrac[tier] * layout.rx, height: 2 * layout.ringFrac[tier] * layout.ry, top: layout.cy, left: layout.cx }}
               />
             ))}
             {!reducedMotion ? (
               <span
                 aria-hidden="true"
-                className={cn("socialize-radar-ping absolute rounded-full border", isActive ? "border-primary/50" : "border-violet-400/50")}
-                style={{ width: 2 * layout.outerR, height: 2 * layout.outerR, top: layout.cy, left: layout.cx }}
+                className={cn("socialize-radar-ping absolute rounded-[50%] border", isActive ? "border-primary/50" : "border-violet-400/50")}
+                style={{ width: 2 * layout.rx, height: 2 * layout.ry, top: layout.cy, left: layout.cx }}
               />
             ) : null}
 
@@ -424,7 +428,7 @@ export function SocializePage({
                 onClick={refresh}
                 aria-label={`${layout.overflow} more nearby`}
                 className="focus-ring safe-motion absolute grid h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-dashed border-primary/50 bg-background/85 text-xs font-bold text-primary backdrop-blur"
-                style={{ left: layout.cx, top: layout.cy + layout.outerR }}
+                style={{ left: layout.cx, top: layout.cy + layout.ry }}
               >
                 +{layout.overflow}
               </button>
@@ -432,7 +436,7 @@ export function SocializePage({
           </>
         ) : null}
 
-        {/* Central profile = the control. Anchored chip popover drops beneath. */}
+        {/* MY profile = the control. A tiny attached popover drops beneath it. */}
         <Popover.Root open={panelOpen} onOpenChange={handlePanelOpenChange}>
           <Popover.Trigger asChild>
             <button
@@ -445,19 +449,24 @@ export function SocializePage({
                   "block rounded-full p-1",
                   isActive
                     ? "bg-gradient-to-br from-primary to-orange-500 shadow-[0_0_46px_hsl(var(--primary)/0.5)]"
-                    : "bg-gradient-to-br from-violet-500 to-primary shadow-[0_0_38px_hsl(270_80%_60%/0.38)]"
+                    : "bg-gradient-to-br from-violet-500 to-primary shadow-[0_0_36px_hsl(270_80%_60%/0.32)]"
                 )}
               >
                 <UserAvatar src={myAvatarUrl} name={myName || "You"} size="xl" decorative className="border-4 border-background" />
               </span>
-              {/* Status pill — a child of the trigger, so tapping it also opens. */}
-              <span className="absolute left-1/2 top-full mt-2 inline-flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 bg-background/90 px-3 py-1 text-xs font-medium backdrop-blur">
-                {activating ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
-                ) : (
-                  <Eye className={cn("h-3.5 w-3.5", isActive ? "text-primary" : "text-muted-foreground")} aria-hidden="true" />
+              {/* Small status badge — subtle, content-width. Tappable too. */}
+              <span
+                className={cn(
+                  "absolute left-1/2 top-full mt-1.5 inline-flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                  isActive ? "border-primary/40 bg-primary/10 text-primary" : "border-border/60 bg-background/70 text-muted-foreground"
                 )}
-                {activating ? "Turning on…" : isActive ? "Socialize is ON" : "Socialize is OFF"}
+              >
+                {activating ? (
+                  <Loader2 className="h-3 w-3 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
+                ) : (
+                  <Eye className="h-3 w-3" aria-hidden="true" />
+                )}
+                {activating ? "Turning on…" : isActive ? "Socialize ON" : "Socialize OFF"}
               </span>
             </button>
           </Popover.Trigger>
@@ -465,53 +474,31 @@ export function SocializePage({
             <Popover.Content
               side="bottom"
               align="center"
-              sideOffset={44}
+              sideOffset={38}
               collisionPadding={16}
-              className="compact-drop-popover app-dropdown-content z-50 w-[min(248px,calc(100vw-2rem))] space-y-2.5 p-2.5"
+              className="compact-drop-popover app-dropdown-content z-50 w-[min(240px,calc(100vw-2rem))] space-y-2 p-2.5"
             >
               {!isActive ? (
                 <>
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    <ChipRow
-                      label="How long"
-                      options={SOCIALIZE_DURATIONS.map((option) => ({ value: option.id, label: DURATION_SHORT[option.id] }))}
-                      value={duration}
-                      onSelect={setDuration}
-                    />
+                    <ChipRow label="How long" options={SOCIALIZE_DURATIONS.map((option) => ({ value: option.id, label: DURATION_SHORT[option.id] }))} value={duration} onSelect={setDuration} />
                   </div>
                   <div className="flex items-center gap-2">
                     <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                     <ChipRow label="How far" options={RANGE_OPTIONS} value={areaTier} onSelect={setAreaTier} />
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={submitSetup}
-                    disabled={isPending || !canSubmit}
-                    className="w-full bg-gradient-to-r from-primary to-orange-500 text-white hover:opacity-95"
-                  >
+                  <Button type="button" size="sm" onClick={submitSetup} disabled={isPending || !canSubmit} className="w-full bg-gradient-to-r from-primary to-orange-500 text-white hover:opacity-95">
                     {isPending ? "Turning on…" : "Turn on"}
                   </Button>
                 </>
               ) : controlsMode === "view" ? (
                 <>
-                  <div className="px-0.5 text-center">
-                    <p className="text-sm font-semibold">{session ? remainingLabel(session.expiresAt, nowMs) : ""}</p>
-                    <p className="text-xs text-muted-foreground">{session ? `${SOCIALIZE_AREA_LABELS[session.areaTier]} range` : ""}</p>
-                  </div>
+                  <p className="text-center text-xs font-medium">
+                    {session ? remainingLabel(session.expiresAt, nowMs) : ""} · {session ? SOCIALIZE_AREA_LABELS[session.areaTier] : ""}
+                  </p>
                   <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => {
-                        setAreaTier(session?.areaTier ?? "nearby");
-                        setDuration(null);
-                        setControlsMode("change");
-                      }}
-                    >
+                    <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => { setAreaTier(session?.areaTier ?? "nearby"); setDuration(null); setControlsMode("change"); }}>
                       <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
                       Change
                     </Button>
@@ -525,12 +512,7 @@ export function SocializePage({
                 <>
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    <ChipRow
-                      label="How long"
-                      options={SOCIALIZE_DURATIONS.map((option) => ({ value: option.id, label: DURATION_SHORT[option.id] }))}
-                      value={duration}
-                      onSelect={setDuration}
-                    />
+                    <ChipRow label="How long" options={SOCIALIZE_DURATIONS.map((option) => ({ value: option.id, label: DURATION_SHORT[option.id] }))} value={duration} onSelect={setDuration} />
                   </div>
                   <div className="flex items-center gap-2">
                     <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -545,63 +527,52 @@ export function SocializePage({
           </Popover.Portal>
         </Popover.Root>
 
-        {/* Only when ON with nobody yet — never permanent instructional text. */}
         {isActive && !activating && layout.placed.length === 0 && layout.overflow === 0 ? (
-          <p
-            aria-live="polite"
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 translate-y-[5.25rem] text-center text-xs text-muted-foreground"
-          >
+          <p aria-live="polite" className="absolute left-1/2 top-1/2 -translate-x-1/2 translate-y-[5rem] text-center text-xs text-muted-foreground">
             Looking for people nearby…
           </p>
         ) : null}
       </div>
 
-      {/* Tap a nearby profile → preview → connect via the existing Muddy flow. */}
-      <Modal
-        open={Boolean(previewPerson)}
-        onOpenChange={(open) => {
-          if (!open) setPreviewPerson(null);
-        }}
-        title="Open to connect"
-        variant="sheet"
-        compact
-      >
-        {previewPerson ? (
-          <div className="space-y-4">
+      {/* Tap a nearby profile → compact floating card (radar dimmed behind). */}
+      {previewPerson ? (
+        <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label={`Connect with ${capitalize(previewPerson.displayName || previewPerson.username)}`}>
+          <button type="button" aria-label="Close" className="absolute inset-0 bg-black/45" onClick={() => setPreviewPerson(null)} />
+          <div className="absolute bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 w-[calc(100%-1.5rem)] max-w-[400px] -translate-x-1/2 rounded-2xl border border-border/70 bg-card p-3 shadow-[0_18px_60px_hsl(var(--shadow)/0.3)] md:bottom-6">
             <div className="flex items-center gap-3">
               <UserAvatar
                 src={previewPerson.avatarUrl}
                 name={previewPerson.displayName || previewPerson.username}
-                size="lg"
+                size="md"
                 decorative
                 className={cn("ring-2 ring-offset-2 ring-offset-background", TIER_RING[previewPerson.proximityTier])}
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-base font-semibold">{capitalize(previewPerson.displayName || previewPerson.username)}</p>
+                <p className="truncate text-sm font-semibold">{capitalize(previewPerson.displayName || previewPerson.username)}</p>
                 <p className="truncate text-xs text-muted-foreground">@{previewPerson.username}</p>
-                <span className={cn("mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-white", TIER_PILL[previewPerson.proximityTier])}>
+                <span className={cn("mt-0.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white", TIER_PILL[previewPerson.proximityTier])}>
                   {proximityLabels[previewPerson.proximityTier]}
                 </span>
               </div>
             </div>
             {previewPerson.note ? (
-              <p className="rounded-lg bg-secondary/40 px-3 py-2 text-sm text-muted-foreground">“{previewPerson.note}”</p>
+              <p className="mt-2 truncate rounded-lg bg-secondary/40 px-2.5 py-1.5 text-xs text-muted-foreground">“{previewPerson.note}”</p>
             ) : null}
-            <Button type="button" className="w-full" disabled={isPending || previewPerson.waveState === "sent"} onClick={() => wave(previewPerson)}>
+            <Button type="button" className="mt-3 w-full" disabled={isPending || previewPerson.waveState === "sent"} onClick={() => wave(previewPerson)}>
               <FeatureIcon feature="wave" size={18} decorative />
               {previewPerson.waveState === "sent" ? "Request sent" : previewPerson.waveState === "received" ? "Accept & connect" : "Connect"}
             </Button>
-            <div className="flex justify-between gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setReportOpen(true)} disabled={isPending}>
+            <div className="mt-1.5 flex items-center justify-between px-1 text-xs">
+              <button type="button" onClick={() => setReportOpen(true)} disabled={isPending} className="focus-ring rounded px-1 py-0.5 font-medium text-muted-foreground hover:text-foreground">
                 Report
-              </Button>
-              <Button type="button" variant="ghost" size="sm" className="text-red-500" onClick={() => blockPerson(previewPerson)} disabled={isPending}>
+              </button>
+              <button type="button" onClick={() => blockPerson(previewPerson)} disabled={isPending} className="focus-ring rounded px-1 py-0.5 font-medium text-red-500 hover:text-red-600">
                 Block
-              </Button>
+              </button>
             </div>
           </div>
-        ) : null}
-      </Modal>
+        </div>
+      ) : null}
 
       <Modal
         open={reportOpen}
@@ -632,7 +603,7 @@ export function SocializePage({
         <div
           role="status"
           aria-live="polite"
-          className="toast-in fixed bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-2rem)] max-w-[320px] -translate-x-1/2 md:bottom-6"
+          className="toast-in fixed bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 z-[60] w-[calc(100%-2rem)] max-w-[320px] -translate-x-1/2 md:bottom-6"
         >
           <div className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-[#1b1b1d] px-4 py-3 text-white shadow-lg">
             {toast.error ? (
