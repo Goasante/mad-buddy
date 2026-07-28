@@ -395,15 +395,20 @@ export async function listMessages(userId: string, conversationId: string): Prom
   const access = await resolveConversationAccess(admin, userId, conversationId);
   if (!access.canView) return []; // Never serve a guessed conversation id.
 
+  // Descending + limit, then reverse: this window must be the most RECENT
+  // 200 messages. Ascending + limit was returning the oldest 200 after the
+  // visibility cutoff instead — once an active conversation passed 200
+  // total messages, every message sent after that point silently stopped
+  // appearing here, forever, because the same oldest slice kept winning.
   const { data: messages } = await admin
     .from("messages")
     .select("id, sender_id, message_type, text_content, quick_action_type, status, created_at, edited_at, deleted_at")
     .eq("conversation_id", conversationId)
     .gte("created_at", access.historyVisibleFrom ?? new Date(0).toISOString())
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(200);
 
-  const rows = messages ?? [];
+  const rows = (messages ?? []).reverse();
   if (rows.length === 0) return [];
 
   const [{ data: hides }, { data: reactions }] = await Promise.all([
