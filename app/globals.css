@@ -1210,22 +1210,37 @@ select {
 }
 
 /* -------------------------------------------------------------------------
- * Socialize radar — concentric proximity rings that pulse outward around the
- * user's centred profile. Motion is opt-in via prefers-reduced-motion (rings
- * stay static, still legible). Transform/opacity only, so it stays cheap. */
-@keyframes socialize-ring-pulse {
-  0% { transform: translate(-50%, -50%) scale(0.82); opacity: 0.55; }
-  70% { opacity: 0.14; }
-  100% { transform: translate(-50%, -50%) scale(1.12); opacity: 0; }
+ * Socialize radar. The concentric rings are geometrically STABLE — they never
+ * resize. Calm life comes from a slow opacity "breathe" (no layout, no blur),
+ * plus ONE lightweight ghost ring that scales outward every few seconds (a
+ * single GPU-composited element, low opacity). Reduced motion → everything is
+ * static but still legible. Smooth on low-end Android. */
+@keyframes socialize-ring-breathe {
+  0%, 100% { opacity: 0.16; }
+  50% { opacity: 0.42; }
+}
+
+@keyframes socialize-radar-ping {
+  0% { transform: translate(-50%, -50%) scale(0.55); opacity: 0.28; }
+  80% { opacity: 0.04; }
+  100% { transform: translate(-50%, -50%) scale(1.02); opacity: 0; }
+}
+
+/* Nearby profiles fade in gently (opacity only — never touches transform, which
+ * carries their -50%/-50% centring, so there's no jump). */
+@keyframes socialize-person-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .socialize-ring-animate {
-    animation: socialize-ring-pulse 3.4s ease-out infinite;
+  .socialize-ring-breathe { animation: socialize-ring-breathe 5.5s ease-in-out infinite; }
+  .socialize-ring-breathe.socialize-ring-2 { animation-delay: 0.9s; }
+  .socialize-ring-breathe.socialize-ring-3 { animation-delay: 1.8s; }
+  .socialize-radar-ping {
+    animation: socialize-radar-ping 6s ease-out infinite;
     will-change: transform, opacity;
   }
-  .socialize-ring-animate.socialize-ring-2 { animation-delay: 1.1s; }
-  .socialize-ring-animate.socialize-ring-3 { animation-delay: 2.2s; }
-  /* A slightly quicker, brighter pulse while activating. */
-  .socialize-radar-activating .socialize-ring-animate { animation-duration: 1.9s; }
+  .socialize-radar-activating .socialize-radar-ping { animation-duration: 2.4s; }
+  .socialize-person-in { animation: socialize-person-in 0.45s ease-out both; }
 }
