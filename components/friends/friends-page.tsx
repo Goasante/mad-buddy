@@ -39,7 +39,6 @@ import { AppMenu } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import { EmptyState } from "@/components/ui/empty-state";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
@@ -375,7 +374,6 @@ export function FriendsPageContent({
       key={user.id}
       user={user}
       proximity={proximityByFriendId[user.id]}
-      glowColorId={glowColorByFriendId[user.id] ?? null}
       isCloseFriend={closeFriendIds.includes(user.id)}
       circles={circles}
       onViewProfile={() => setProfileUser(user)}
@@ -494,7 +492,6 @@ export function FriendsPageContent({
                     <ActiveNowStrip
                       friends={activeFriends}
                       proximityByFriendId={proximityByFriendId}
-                      glowColorByFriendId={glowColorByFriendId}
                       onSelect={setProfileUser}
                     />
                   ) : null}
@@ -810,7 +807,6 @@ function FriendsEmptyState({
 type UserRowProps = {
   user: UserSummary;
   proximity?: ProximityInfo;
-  glowColorId?: string | null;
   isCloseFriend: boolean;
   circles: Circle[];
   onViewProfile: () => void;
@@ -832,8 +828,24 @@ const PROXIMITY_TEXT_CLASS: Partial<Record<ProximityLevel, string>> = {
   around: "text-blue-600 dark:text-blue-300"
 };
 
+/** Same palette, as a ring colour. On this page's compact rows the animated
+ *  glow halo reads as noise against the row's own borders/dividers at this
+ *  size, so avatars here use a plain solid outline in the proximity colour
+ *  instead — same information, easier to read at a glance. */
+const PROXIMITY_RING_CLASS: Partial<Record<ProximityLevel, string>> = {
+  very_close: "ring-primary",
+  nearby: "ring-violet-500",
+  around: "ring-blue-500"
+};
+
 function isActiveLevel(level: ProximityLevel): boolean {
   return level === "very_close" || level === "nearby" || level === "around";
+}
+
+/** ring-2 + offset in the proximity colour when glowing; no ring otherwise. */
+function proximityRingClassName(level: ProximityLevel): string | undefined {
+  if (!isActiveLevel(level)) return undefined;
+  return cn("ring-2 ring-offset-2 ring-offset-background", PROXIMITY_RING_CLASS[level] ?? "ring-primary");
 }
 
 /** A small presence marker on the avatar: eye-off when hidden, a live dot when
@@ -864,7 +876,6 @@ function PresenceDot({ level }: { level: ProximityLevel }) {
 function MuddyRow({
   user,
   proximity,
-  glowColorId = null,
   isCloseFriend,
   circles,
   onViewProfile,
@@ -890,14 +901,12 @@ function MuddyRow({
         className="focus-ring safe-motion relative shrink-0 rounded-full"
         aria-label={`${user.displayName}, ${proximityLabels[level]}`}
       >
-        <GlowAvatar
+        <UserAvatar
           name={user.displayName}
           src={user.avatarUrl}
-          proximityLevel={level}
-          glowStrength={proximity?.glowStrength ?? 0}
-          confidence={proximity?.confidence ?? "low"}
-          glowColorId={glowColorId}
           size="sm"
+          decorative
+          className={proximityRingClassName(level)}
         />
         <PresenceDot level={level} />
       </button>
@@ -978,12 +987,10 @@ function MuddyRow({
 function ActiveNowStrip({
   friends,
   proximityByFriendId,
-  glowColorByFriendId,
   onSelect
 }: {
   friends: UserSummary[];
   proximityByFriendId: Record<string, ProximityInfo>;
-  glowColorByFriendId: Record<string, string>;
   onSelect: (user: UserSummary) => void;
 }) {
   return (
@@ -1009,14 +1016,12 @@ function ActiveNowStrip({
                 aria-label={`${friend.displayName}, ${proximityLabels[level]}`}
               >
                 <span className="relative">
-                  <GlowAvatar
+                  <UserAvatar
                     name={friend.displayName}
                     src={friend.avatarUrl}
-                    proximityLevel={level}
-                    glowStrength={proximity?.glowStrength ?? 0}
-                    confidence={proximity?.confidence ?? "low"}
-                    glowColorId={glowColorByFriendId[friend.id] ?? null}
                     size="md"
+                    decorative
+                    className={proximityRingClassName(level)}
                   />
                   <span className="absolute bottom-0.5 right-0.5 z-[2] h-3 w-3 rounded-full border-2 border-background bg-emerald-500" aria-hidden="true" />
                 </span>

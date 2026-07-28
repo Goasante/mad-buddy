@@ -59,6 +59,7 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
       }}
       title={muddy?.displayName ?? "Muddy"}
       description={muddy ? `@${muddy.username}` : undefined}
+      variant="sheet"
       compact
     >
       {muddy ? (

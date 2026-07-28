@@ -426,7 +426,11 @@ function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
           <Icon className="h-5 w-5" aria-hidden="true" />
         </span>
 
-        <span className="min-w-0 flex-1">
+        {/* overflow-hidden is the real fix: without it, the going/avatars row
+            below can render wider than this column's computed flex width and
+            visually bleed into the pill/organiser column beside it rather than
+            wrapping or clipping within its own box. */}
+        <span className="min-w-0 flex-1 overflow-hidden">
           <span className="flex items-center gap-1.5">
             <span className="truncate text-base font-semibold">{plan.title}</span>
             {plan.myRsvp === "going" && !plan.isHost ? (
@@ -445,16 +449,12 @@ function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
             ) : null}
           </span>
           {goingCount > 0 ? (
-            <span className="mt-1.5 flex items-center gap-2">
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                {goingCount} going
-              </span>
-              <span className="flex -space-x-1.5" aria-hidden="true">
-                {going.slice(0, 3).map((attendee, index) => (
+            <span className="mt-1.5 flex min-w-0 items-center gap-1.5">
+              <span className="flex shrink-0 -space-x-1.5" aria-hidden="true">
+                {going.slice(0, 2).map((attendee, index) => (
                   <span
                     key={`${attendee.name}-${index}`}
-                    className="grid h-6 w-6 place-items-center overflow-hidden rounded-full border-2 border-background bg-secondary text-[9px] font-semibold uppercase text-muted-foreground"
+                    className="grid h-5 w-5 place-items-center overflow-hidden rounded-full border-2 border-background bg-secondary text-[8px] font-semibold uppercase text-muted-foreground"
                   >
                     {attendee.avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -464,27 +464,23 @@ function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
                     )}
                   </span>
                 ))}
-                {goingCount > 3 ? (
-                  <span className="grid h-6 w-6 place-items-center rounded-full border-2 border-background bg-secondary text-[9px] font-semibold text-muted-foreground">
-                    +{goingCount - 3}
-                  </span>
-                ) : null}
               </span>
+              <span className="min-w-0 truncate text-xs text-muted-foreground">{goingCount} going</span>
             </span>
           ) : null}
         </span>
 
-        <span className="flex shrink-0 flex-col items-end gap-1.5">
+        <span className="flex max-w-[6.5rem] shrink-0 flex-col items-end gap-1.5">
           <span className="inline-flex items-center gap-0.5">
             {pill ? (
-              <span className={cn("rounded-full border px-2.5 py-0.5 text-xs font-semibold", pill.className)}>
+              <span className={cn("whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold", pill.className)}>
                 {pill.label}
               </span>
             ) : null}
-            <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           </span>
-          <span className="max-w-[7.5rem] truncate text-right text-[11px] text-muted-foreground">
-            {plan.isHost ? "Organised by you" : `Organised by ${plan.organiserName}`}
+          <span className="w-full truncate text-right text-[11px] leading-tight text-muted-foreground">
+            {plan.isHost ? "By you" : plan.organiserName}
           </span>
         </span>
       </button>
@@ -802,9 +798,18 @@ function PlanDetailsModal({
   onAddPoll: (question: string, pollType: string, options: string[]) => void;
 }) {
   return (
-    <Modal open={Boolean(plan)} onOpenChange={onOpenChange} title={plan?.title ?? "Plan"} description={plan ? dateLabel(plan) : undefined}>
+    <Modal
+      open={Boolean(plan)}
+      onOpenChange={onOpenChange}
+      title={plan?.title ?? "Plan"}
+      description={plan ? dateLabel(plan) : undefined}
+      variant="sheet"
+    >
       {plan ? (
-        <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+        // Modal's own middle section already scrolls (variant="sheet" caps the
+        // whole sheet at ~88svh); a second inner max-h/overflow here just
+        // wasted space and doubled the scroll region.
+        <div className="space-y-4">
           {plan.placeText ? (
             <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />

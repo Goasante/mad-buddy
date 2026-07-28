@@ -196,16 +196,20 @@ export function AppShell({
         currentUsername={currentUsername}
         currentAvatarUrl={currentAvatarUrl}
       />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background dark:bg-[#111112]">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-background dark:bg-[#111112]">
+        {/* Branded wallpaper, painted behind the header AND the content (chrome
+            here means bottom nav / modals, which keep their own opaque
+            surfaces). Mounted at this level — not inside <main> — so the
+            header's translucent/blurred background shows the same wallpaper
+            rather than sitting on top of it as a flat, non-blending bar.
+            Purely decorative. */}
+        <WallpaperLayer wallpaper={wallpaper} />
         <AppHeader
           currentUsername={currentUsername}
           currentAvatarUrl={currentAvatarUrl}
           showAdminLink={showAdminLink}
         />
-          <main id="app-main-content" className="relative isolate flex-1 px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:overflow-y-auto">
-          {/* Branded wallpaper, painted behind the content only (chrome, nav and
-              modals keep their own opaque surfaces). Purely decorative. */}
-          <WallpaperLayer wallpaper={wallpaper} />
+          <main id="app-main-content" className="relative flex-1 px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:overflow-y-auto">
           <div className="mx-auto w-full max-w-[1200px]">{children}</div>
         </main>
         </div>
@@ -587,7 +591,13 @@ function AppHeader({
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border/70 bg-background/90 py-3 backdrop-blur-xl dark:border-white/10 dark:bg-[#111112]/90">
+    // `top` uses the safe-area inset (not 0): a plain `top-0` sticky element
+    // clamps to the literal top of the viewport when scrolled, which sits
+    // BEHIND the notch/dynamic island once content scrolls past it — the outer
+    // shell's one-time safe-area padding only affects the header's resting
+    // position before any scroll, not where "stuck" clamps to. Anchoring to the
+    // inset keeps the header (and its background) below the notch at all times.
+    <header className="sticky top-[env(safe-area-inset-top)] z-30 border-b border-border/70 bg-background/90 py-3 backdrop-blur-xl dark:border-white/10 dark:bg-[#111112]/90">
       <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         {/* Mobile: logo only, the greeting below establishes the page, so no
             "Home" title competes with it. Desktop keeps the in-panel page
@@ -863,13 +873,18 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
  *             a broken URL never breaks the page.
  */
 function WallpaperLayer({ wallpaper }: { wallpaper: ResolvedWallpaper | null }) {
-  // On phones the document scrolls and <main> is only ~viewport tall, so an
-  // absolute layer would end mid-page and leave a gap when you scroll/overscroll.
-  // Pin it to the viewport (`fixed`) on mobile so it always fills the screen and
-  // stays put behind scrolling content; on desktop <main> is its own scroll
-  // panel, so keep it contained (`md:absolute`). Chrome (header/nav) and modals
-  // keep their opaque surfaces above it.
-  const base = "fixed inset-0 -z-10 md:absolute";
+  // Mounted as the first child of the header+main column (a sibling BEFORE
+  // both), so normal DOM paint order already puts it behind them — no
+  // z-index needed, and nothing here can end up painted behind the column's
+  // own opaque background.
+  //
+  // On phones the document scrolls and <main> alone is only ~viewport tall, so
+  // an absolute layer scoped to just <main> would end mid-page and leave a gap
+  // when scrolling/overscrolling. Pin it to the viewport (`fixed`) on mobile so
+  // it always fills the screen and stays put; on desktop the column is a fixed-
+  // height panel (main scrolls internally), so keep it contained (`md:absolute`)
+  // to that column — behind the header AND main, not the sidebar.
+  const base = "fixed inset-0 md:absolute";
   const mode = wallpaper?.renderMode ?? "ambient";
   if (mode === "plain") return null;
   if (mode === "image") {
