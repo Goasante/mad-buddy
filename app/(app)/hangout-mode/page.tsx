@@ -16,12 +16,27 @@ export default async function HangoutModeRoute() {
   const env = getSupabaseServerEnv();
   let activeHangout: ActiveHangout | null = null;
   let requests: HangoutRequestSummary[] = [];
+  let avatarUrl: string | null = null;
+  let displayName = "";
+  let muddyCount = 0;
   const feedPromise: Promise<VisibleHangout[]> = user
     ? getVisibleHangoutsAction()
     : Promise.resolve([]);
 
   if (user && env.url && env.serviceRoleKey) {
     const admin = createSupabaseAdminClient();
+
+    const [{ data: profile }, muddies] = await Promise.all([
+      admin.from("profiles").select("full_name, avatar_url").eq("user_id", user.id).maybeSingle(),
+      admin
+        .from("friendships")
+        .select("user_one_id", { count: "exact", head: true })
+        .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
+        .then((result) => result.count ?? 0)
+    ]);
+    avatarUrl = profile?.avatar_url ?? null;
+    displayName = profile?.full_name?.trim() ?? "";
+    muddyCount = muddies;
     const { data: session } = await admin
       .from("hangout_sessions")
       .select("id, activity_type, audience_type, message, ends_at, status")
@@ -69,5 +84,14 @@ export default async function HangoutModeRoute() {
 
   const feed = await feedPromise;
 
-  return <HangoutModePage initialActiveHangout={activeHangout} initialRequests={requests} initialFeed={feed} />;
+  return (
+    <HangoutModePage
+      initialActiveHangout={activeHangout}
+      initialRequests={requests}
+      initialFeed={feed}
+      avatarUrl={avatarUrl}
+      displayName={displayName}
+      muddyCount={muddyCount}
+    />
+  );
 }

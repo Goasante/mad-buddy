@@ -4,16 +4,23 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition, type CSSProperties } from "react";
 import {
   AlertTriangle,
+  ArrowLeft,
   BookOpen,
   CheckCircle2,
+  ChevronRight,
+  Clock,
   Coffee,
   Dumbbell,
   Footprints,
   Gamepad2,
   Hand,
+  Info,
   Loader2,
+  Lock,
+  ShieldCheck,
   Sparkles,
   Trophy,
+  Users,
   UtensilsCrossed,
   X
 } from "lucide-react";
@@ -28,6 +35,7 @@ import {
 } from "@/app/(app)/hangout-actions";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 import { countActiveRequests } from "@/lib/social/hangout-requests";
@@ -93,16 +101,49 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+/** Human "1h 20m remaining" from an end time (empty once elapsed). */
+function remainingLabel(endsAt: string, nowMs: number): string {
+  const totalMinutes = Math.max(0, Math.round((Date.parse(endsAt) - nowMs) / 60000));
+  if (totalMinutes === 0) return "ending now";
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) return `${hours}h ${minutes}m remaining`;
+  return `${minutes}m remaining`;
+}
+
+/** Short audience label for the "Visible to …" pill. */
+function visibleToLabel(audience: HangoutAudienceType, muddyCount: number): string {
+  if (audience === "all_muddies") return `${muddyCount} ${muddyCount === 1 ? "Muddy" : "Muddies"}`;
+  if (audience === "close_friends") return "Close Friends";
+  if (audience === "selected_circles") return "selected circles";
+  return "selected Muddies";
+}
+
 type Toast = { title?: string; message: string; error: boolean } | null;
+
+function HangoutPillar({ icon: Icon, title }: { icon: typeof Hand; title: string }) {
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
+      <p className="text-xs font-semibold leading-tight">{title}</p>
+    </div>
+  );
+}
 
 export function HangoutModePage({
   initialActiveHangout = null,
   initialRequests = [],
-  initialFeed = []
+  initialFeed = [],
+  avatarUrl = null,
+  displayName = "",
+  muddyCount = 0
 }: {
   initialActiveHangout?: ActiveHangout | null;
   initialRequests?: HangoutRequestSummary[];
   initialFeed?: VisibleHangout[];
+  avatarUrl?: string | null;
+  displayName?: string;
+  muddyCount?: number;
 }) {
   const router = useRouter();
   const requestedHangoutId = useSearchParams().get("hangout");
@@ -338,185 +379,256 @@ export function HangoutModePage({
   const OrbIcon = isActive ? ACTIVITY_ICONS[activityType] ?? Hand : Hand;
   const activatingGlow = isActive && !reducedMotion;
 
+  const remaining = isActive && activeHangout ? remainingLabel(activeHangout.endsAt, nowMs) : "";
+
   return (
-    <div className="mx-auto max-w-[1000px] space-y-8 pt-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Hangout Mode</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Let approved Muddies know you&apos;re open to do something. Your exact location is never shared.
-        </p>
+    <div className="mx-auto max-w-[560px] space-y-6 pb-4 pt-5">
+      {isActive ? (
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            aria-label="Back"
+            className="focus-ring safe-motion grid h-10 w-10 place-items-center rounded-full border border-border/70 text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          </button>
+          <h1 className="text-lg font-semibold">Hangout Mode</h1>
+          <button
+            type="button"
+            onClick={() => router.push("/safety-center")}
+            aria-label="How Hangout Mode keeps you safe"
+            className="focus-ring safe-motion grid h-10 w-10 place-items-center rounded-full border border-border/70 text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+          >
+            <Info className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      ) : (
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Hangout Mode</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Let approved Muddies know you&apos;re open to do something. Your exact location is{" "}
+            <span className="font-medium text-primary">never</span> shared.
+          </p>
+        </div>
+      )}
+
+      {/* Avatar hero — tap to set up / edit. */}
+      <div className="flex flex-col items-center text-center">
+        <button
+          type="button"
+          onClick={openSetup}
+          disabled={isPending}
+          aria-label={isActive ? "Edit your Hangout Mode details" : "Set up Hangout Mode"}
+          className={cn(
+            "focus-ring safe-motion relative isolate rounded-full p-1.5 transition-all",
+            isActive
+              ? cn(
+                  "bg-gradient-to-br from-primary to-orange-500 shadow-[0_0_44px_hsl(var(--primary)/0.45)]",
+                  activatingGlow && "proximity-halo proximity-halo-nearby proximity-halo-animate"
+                )
+              : "bg-gradient-to-br from-primary/35 to-orange-400/20"
+          )}
+          style={
+            activatingGlow ? ({ "--halo-active-opacity": 0.7, "--halo-rest-opacity": 0.4 } as CSSProperties) : undefined
+          }
+        >
+          {isPending ? (
+            <span className="grid h-32 w-32 place-items-center rounded-full border-4 border-background bg-secondary text-muted-foreground">
+              <Loader2 className="h-10 w-10 animate-spin" aria-hidden="true" />
+            </span>
+          ) : (
+            <UserAvatar
+              src={avatarUrl}
+              name={displayName || "You"}
+              size="profile"
+              decorative
+              className="h-32 w-32 border-4 border-background"
+            />
+          )}
+          {!isActive ? (
+            <span className="absolute bottom-1 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-border/70 bg-background/90 px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+              <Hand className="h-3 w-3" aria-hidden="true" /> Hangout off
+            </span>
+          ) : null}
+        </button>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:items-start">
-        {/* Orb + state summary */}
-        <section className="space-y-5">
-          <div className="grid place-items-center px-6 py-4">
-            <button
-              type="button"
-              onClick={openSetup}
-              disabled={isPending}
-              aria-label={isActive ? "Edit your Hangout Mode details" : "Set up Hangout Mode"}
-              className={cn(
-                "focus-ring relative isolate grid h-40 w-40 place-items-center rounded-full transition-all",
-                isActive
-                  ? cn(
-                      "proximity-halo proximity-halo-nearby bg-primary/10 text-primary",
-                      activatingGlow && "proximity-halo-animate"
-                    )
-                  : "border border-dashed border-primary/30 bg-card/40 text-muted-foreground hover:border-primary/50 hover:text-primary"
-              )}
-              style={
-                isActive
-                  ? ({ "--halo-active-opacity": 0.7, "--halo-rest-opacity": 0.4 } as CSSProperties)
-                  : undefined
-              }
-            >
-              {isPending ? (
-                <Loader2 className="h-12 w-12 animate-spin" aria-hidden="true" />
-              ) : (
-                <OrbIcon className="h-12 w-12" aria-hidden="true" />
-              )}
-            </button>
+      {isActive && activeHangout ? (
+        <>
+          <div className="text-center">
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary">I&apos;m open to</p>
+            <p className="mt-1 flex items-center justify-center gap-2 text-2xl font-bold">
+              {HANGOUT_ACTIVITY_LABELS[activeHangout.activityType] ?? "Anything"}
+              <OrbIcon className="h-6 w-6 text-primary" aria-hidden="true" />
+            </p>
+            {activeHangout.message ? (
+              <p className="mt-1 text-sm text-muted-foreground">&ldquo;{activeHangout.message}&rdquo;</p>
+            ) : null}
+            <p className="mt-2 inline-flex items-center gap-1.5 text-sm" suppressHydrationWarning>
+              <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
+              <span className="font-medium text-emerald-600 dark:text-emerald-300">Active</span>
+              <span className="text-muted-foreground">• {remaining}</span>
+            </p>
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={openSetup}
+                className="focus-ring safe-motion inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/50 px-3.5 py-1.5 text-sm font-medium hover:bg-secondary/40"
+              >
+                <Users className="h-4 w-4 text-primary" aria-hidden="true" />
+                Visible to {visibleToLabel(activeHangout.audienceType, muddyCount)}
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              </button>
+            </div>
           </div>
 
-          {isActive && activeHangout ? (
-            <div className="space-y-4 rounded-2xl border border-primary/40 bg-primary/5 p-5">
-              <div className="space-y-1 text-center">
-                <p className="text-base font-semibold text-primary">You&apos;re open to hang out</p>
-                <p className="text-sm text-muted-foreground">
-                  Visible to {audienceLabel[activeHangout.audienceType]} until {formatTime(activeHangout.endsAt)}
-                </p>
-                <p className="text-sm text-foreground">
-                  Open to{" "}
-                  <span className="font-medium">
-                    {HANGOUT_ACTIVITY_LABELS[activeHangout.activityType]?.toLowerCase() ?? "anything"}
-                  </span>
-                </p>
-                {activeHangout.message ? (
-                  <p className="text-sm text-muted-foreground">&ldquo;{activeHangout.message}&rdquo;</p>
-                ) : null}
-              </div>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" className="flex-1" onClick={openSetup} disabled={isPending}>
-                  Update
-                </Button>
-                <Button type="button" variant="danger" className="flex-1" onClick={turnOff} disabled={isPending}>
-                  Turn off
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3 rounded-2xl border border-border/70 bg-card/50 p-5 text-center">
-              <p className="text-base font-semibold">Hangout Mode is off</p>
-              <p className="text-sm text-muted-foreground">
-                Turn it on to let your Muddies know you&apos;re around and up for something.
-              </p>
-              <Button type="button" variant="primary" className="w-full" onClick={openSetup} disabled={isPending}>
-                Turn on Hangout Mode
-              </Button>
-            </div>
-          )}
+          <div className="flex gap-3">
+            <Button type="button" variant="outline" className="flex-1" onClick={openSetup} disabled={isPending}>
+              Update
+            </Button>
+            <Button type="button" variant="outline" className="flex-1 border-primary/40 text-primary" onClick={turnOff} disabled={isPending}>
+              Turn off
+            </Button>
+          </div>
 
-          {isActive && activeHangout ? (
-            <div className="rounded-2xl border border-border/70 bg-card/50 p-4">
-              <p className="mb-2 text-sm font-semibold">Requests to join ({countActiveRequests(requests)})</p>
-              {requests.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No requests yet. We&apos;ll let you know.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {requests.map((request) => (
-                    <li
-                      key={request.id}
-                      id={`hangout-${request.id}`}
-                      className={cn(
-                        "flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card/60 p-3",
-                        requestedHangoutId === request.id && "ring-2 ring-primary/35"
-                      )}
-                    >
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                        {request.requesterName}
-                        {request.message ? (
-                          <span className="ml-1 text-xs font-normal text-muted-foreground">: {request.message}</span>
-                        ) : null}
-                      </span>
-                      {request.status === "pending" ? (
-                        <span className="flex gap-1.5">
-                          <Button type="button" size="sm" onClick={() => respond(request.id, "accepted")} disabled={isPending}>
-                            Accept
-                          </Button>
-                          <Button type="button" size="sm" variant="outline" onClick={() => respond(request.id, "maybe")} disabled={isPending}>
-                            Maybe
-                          </Button>
-                          <Button type="button" size="sm" variant="ghost" onClick={() => respond(request.id, "declined")} disabled={isPending}>
-                            Decline
-                          </Button>
-                        </span>
-                      ) : (
-                        <span className="text-xs font-medium capitalize text-muted-foreground">{request.status}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {acceptedCount > 0 ? (
-                <Button type="button" variant="primary" className="mt-3 w-full" onClick={convertToPlan} disabled={isPending}>
-                  Create a group plan with {acceptedCount} {acceptedCount === 1 ? "person" : "people"}
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
-
-          {feedback ? (
-            <p className="text-center text-sm text-muted-foreground" role="status">
-              {feedback}
-            </p>
-          ) : null}
-        </section>
-
-        {/* Muddies available now */}
-        <section className="space-y-3">
-          <h2 className="text-base font-semibold">Muddies available now</h2>
-          {feed.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nobody&apos;s open right now. When a Muddy turns on Hangout Mode, they&apos;ll show up here.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {feed.map((hangout) => (
-                <li
-                  key={hangout.id}
-                  id={`hangout-${hangout.id}`}
-                  className={cn(
-                    "flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-card/50 p-4",
-                    requestedHangoutId === hangout.id && "ring-2 ring-primary/35"
-                  )}
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">
-                      {hangout.ownerName} is open to{" "}
-                      {HANGOUT_ACTIVITY_LABELS[hangout.activityType]?.toLowerCase() ?? "hang out"}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {hangout.message ? `“${hangout.message}” · ` : ""}
-                      {hangout.broadAreaText ? `${hangout.broadAreaText} · ` : ""}
-                      Until {formatTime(hangout.endsAt)}
-                    </p>
-                  </div>
-                  {hangout.myRequestStatus ? (
-                    <span className="text-xs font-medium capitalize text-muted-foreground">
-                      {hangout.myRequestStatus === "pending" ? "Requested" : hangout.myRequestStatus}
+          <section className="rounded-2xl border border-border/70 bg-card/50 p-4">
+            <p className="mb-2 text-sm font-semibold">Requests to join ({countActiveRequests(requests)})</p>
+            {requests.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No requests yet. We&apos;ll let you know.</p>
+            ) : (
+              <ul className="space-y-2">
+                {requests.map((request) => (
+                  <li
+                    key={request.id}
+                    id={`hangout-${request.id}`}
+                    className={cn(
+                      "flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card/60 p-3",
+                      requestedHangoutId === request.id && "ring-2 ring-primary/35"
+                    )}
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                      {request.requesterName}
+                      {request.message ? (
+                        <span className="ml-1 text-xs font-normal text-muted-foreground">: {request.message}</span>
+                      ) : null}
                     </span>
-                  ) : (
-                    <Button type="button" size="sm" disabled={isPending} onClick={() => requestToJoin(hangout.id)}>
-                      I&apos;m interested
-                    </Button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+                    {request.status === "pending" ? (
+                      <span className="flex gap-1.5">
+                        <Button type="button" size="sm" onClick={() => respond(request.id, "accepted")} disabled={isPending}>
+                          Accept
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => respond(request.id, "maybe")} disabled={isPending}>
+                          Maybe
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => respond(request.id, "declined")} disabled={isPending}>
+                          Decline
+                        </Button>
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium capitalize text-muted-foreground">{request.status}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {acceptedCount > 0 ? (
+              <Button type="button" variant="primary" className="mt-3 w-full" onClick={convertToPlan} disabled={isPending}>
+                Create a group plan with {acceptedCount} {acceptedCount === 1 ? "person" : "people"}
+              </Button>
+            ) : null}
+          </section>
+
+          <p className="flex items-center justify-center gap-2 pt-1 text-center text-xs text-muted-foreground">
+            <Lock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+            Your safety. Your choice. Your community.
+          </p>
+        </>
+      ) : (
+        <>
+          <div className="text-center">
+            <p className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Users className="h-4 w-4 text-primary" aria-hidden="true" />
+              Let your Muddies know
+            </p>
+            <h2 className="mt-1 text-3xl font-bold">Up for something?</h2>
+            <span className="mx-auto mt-2 block h-1 w-16 rounded-full bg-primary" aria-hidden="true" />
+            <p className="mt-3 text-sm text-muted-foreground">Turn on Hangout Mode and let your Muddies know.</p>
+          </div>
+
+          <Button
+            type="button"
+            disabled={isPending}
+            onClick={openSetup}
+            className="h-12 w-full rounded-full bg-gradient-to-r from-primary to-orange-500 text-base font-semibold text-white shadow-[0_10px_30px_hsl(var(--primary)/0.35)] hover:opacity-95"
+          >
+            <Hand className="h-4 w-4" aria-hidden="true" />
+            Turn on Hangout Mode
+          </Button>
+
+          <div className="grid grid-cols-3 gap-3 rounded-2xl border border-border/70 bg-card/40 p-4 text-center">
+            <HangoutPillar icon={Users} title="Only approved Muddies" />
+            <HangoutPillar icon={Clock} title="Visible for a limited time" />
+            <HangoutPillar icon={ShieldCheck} title="You're in control" />
+          </div>
+
+          <p className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
+            <Lock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+            Your exact location is <span className="font-medium text-primary">never</span> shared.
+          </p>
+        </>
+      )}
+
+      {/* Muddies open right now — real feed; hidden when empty. */}
+      {feed.length > 0 ? (
+        <section className="pt-1">
+          <h2 className="mb-2 text-sm font-semibold">
+            {feed.length} {feed.length === 1 ? "Muddy is" : "Muddies are"} open too
+          </h2>
+          <ul className="divide-y divide-border/60">
+            {feed.map((hangout) => (
+              <li
+                key={hangout.id}
+                id={`hangout-${hangout.id}`}
+                className={cn(
+                  "flex items-center gap-3 py-3",
+                  requestedHangoutId === hangout.id && "rounded-xl ring-2 ring-primary/35"
+                )}
+              >
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
+                  {hangout.ownerName.trim().charAt(0).toUpperCase() || "?"}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">
+                    {hangout.ownerName} is open to{" "}
+                    {HANGOUT_ACTIVITY_LABELS[hangout.activityType]?.toLowerCase() ?? "hang out"}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {hangout.message ? `“${hangout.message}” · ` : ""}
+                    {hangout.broadAreaText ? `${hangout.broadAreaText} · ` : ""}
+                    Until {formatTime(hangout.endsAt)}
+                  </p>
+                </div>
+                {hangout.myRequestStatus ? (
+                  <span className="shrink-0 text-xs font-medium capitalize text-muted-foreground">
+                    {hangout.myRequestStatus === "pending" ? "Requested" : hangout.myRequestStatus}
+                  </span>
+                ) : (
+                  <Button type="button" size="sm" className="shrink-0" disabled={isPending} onClick={() => requestToJoin(hangout.id)}>
+                    I&apos;m interested
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
         </section>
-      </div>
+      ) : null}
+
+      {feedback ? (
+        <p className="text-center text-sm text-muted-foreground" role="status">
+          {feedback}
+        </p>
+      ) : null}
 
       <Modal
         open={setupOpen}
