@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, Info, MessagesSquare, PenSquare, Search, Send, VolumeX } from "lucide-react";
+import { CalendarCheck2, ChevronLeft, Info, MessagesSquare, PenSquare, Plus, Search, Send, Star, UsersRound, VolumeX, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
@@ -13,7 +14,8 @@ import {
   muteConversationAction,
   openDirectConversationAction,
   reactToMessageAction,
-  sendMessageAction
+  sendMessageAction,
+  setConversationPinnedAction
 } from "@/app/(app)/messaging-actions";
 import type { ChatMessageView, ConversationView, MessageableFriend } from "@/lib/messaging/mobile";
 import { Badge } from "@/components/ui/badge";
@@ -27,13 +29,15 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
-const tabs = [
-  { id: "all", label: "All" },
-  { id: "unread", label: "Unread" },
-  // "Plans" filters conversation_type === "plan" (the group chat attached to
-  // a specific Plan), a real, working filter linked to existing plans.
-  { id: "plans", label: "Plans" }
-] as const;
+// "Groups" filters conversation_type === "group"; "Plans" filters
+// conversation_type === "plan" (the group chat attached to a specific Plan).
+// Both are real, working filters over data already loaded.
+const tabs: Array<{ id: "all" | "unread" | "groups" | "plans"; label: string; icon: LucideIcon | null }> = [
+  { id: "all", label: "All", icon: null },
+  { id: "unread", label: "Unread", icon: null },
+  { id: "groups", label: "Groups", icon: UsersRound },
+  { id: "plans", label: "Plans", icon: CalendarCheck2 }
+];
 
 type TabId = (typeof tabs)[number]["id"];
 
@@ -95,6 +99,8 @@ export function MessagesPageContent({
   const [reactingId, setReactingId] = useState<string | null>(null);
   const [newMessageOpen, setNewMessageOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [pinEditMode, setPinEditMode] = useState(false);
+  const [pinPickerOpen, setPinPickerOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const loadRequestIdRef = useRef(0);
 
@@ -294,11 +300,25 @@ export function MessagesPageContent({
     const term = query.trim().toLowerCase();
     return uniqueConversations.filter((conversation) => {
       if (activeTab === "unread" && conversation.unreadCount === 0) return false;
+      if (activeTab === "groups" && conversation.kind !== "group") return false;
       if (activeTab === "plans" && conversation.kind !== "plan") return false;
       if (term && !conversation.title.toLowerCase().includes(term)) return false;
       return true;
     });
   }, [uniqueConversations, activeTab, query]);
+
+  const pinnedConversations = useMemo(
+    () => uniqueConversations.filter((conversation) => conversation.pinned),
+    [uniqueConversations]
+  );
+  const unpinnedConversations = useMemo(
+    () => uniqueConversations.filter((conversation) => !conversation.pinned),
+    [uniqueConversations]
+  );
+  const unreadConversationCount = useMemo(
+    () => uniqueConversations.filter((conversation) => conversation.unreadCount > 0).length,
+    [uniqueConversations]
+  );
 
   /**
    * Opening a conversation is an event, not a render side effect, so the load
@@ -363,6 +383,37 @@ export function MessagesPageContent({
     });
   }
 
+  function togglePin(conversationId: string, next: boolean) {
+    // Optimistic; revert on failure.
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === conversationId ? { ...conversation, pinned: next } : conversation
+      )
+    );
+    startTransition(async () => {
+      try {
+        const result = await withTimeout(setConversationPinnedAction(conversationId, next), {
+          operation: "pin conversation"
+        });
+        if (!result.ok) {
+          setFeedback(result.message);
+          setConversations((current) =>
+            current.map((conversation) =>
+              conversation.id === conversationId ? { ...conversation, pinned: !next } : conversation
+            )
+          );
+        }
+      } catch (error) {
+        setFeedback(messageFailure(error));
+        setConversations((current) =>
+          current.map((conversation) =>
+            conversation.id === conversationId ? { ...conversation, pinned: !next } : conversation
+          )
+        );
+      }
+    });
+  }
+
   /** Reuses the existing no-manual-create-step flow (spec §4): opening a
    * direct conversation server-side either finds the existing one or creates
    * it, re-validating eligibility regardless of what this picker shows. */
@@ -390,19 +441,23 @@ export function MessagesPageContent({
   return (
     <div className="mx-auto max-w-[1200px] pt-6">
       <header className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Messages</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Chat privately with your approved Muddies.</p>
+        <div className="min-w-0">
+          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+            <MessagesSquare className="h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
+            Messages
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">Chat privately with your approved Muddies.</p>
         </div>
         <Button
           type="button"
-          className="shrink-0 whitespace-nowrap"
+          variant="outline"
+          size="icon"
+          className="shrink-0 rounded-full"
           onClick={() => setNewMessageOpen(true)}
           aria-label="New message"
           title="New message"
         >
           <PenSquare className="h-4 w-4" aria-hidden="true" />
-          New message
         </Button>
       </header>
 
@@ -444,23 +499,96 @@ export function MessagesPageContent({
               />
             </div>
 
-            <nav className="flex gap-1 border-b border-border/70" aria-label="Message filters">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    "focus-ring safe-motion border-b-2 px-3 py-2 text-sm font-medium",
-                    activeTab === tab.id
-                      ? "border-primary text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            <nav className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1" aria-label="Message filters">
+              {tabs.map((tab) => {
+                const active = activeTab === tab.id;
+                const Icon = tab.icon;
+                const showCount = tab.id === "unread" && unreadConversationCount > 0;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "focus-ring safe-motion inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium",
+                      active
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border/70 text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                    )}
+                  >
+                    {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+                    {tab.label}
+                    {showCount ? (
+                      <span className="grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-primary px-1 text-[11px] font-bold leading-none text-primary-foreground">
+                        {unreadConversationCount}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
             </nav>
+
+            {/* Pinned strip — the user's pinned conversations, plus "Pin more". */}
+            {pinnedConversations.length > 0 || unpinnedConversations.length > 0 ? (
+              <section aria-label="Pinned conversations">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <h2 className="text-sm font-semibold">Pinned</h2>
+                  {pinnedConversations.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setPinEditMode((value) => !value)}
+                      className="focus-ring safe-motion rounded text-sm font-medium text-primary hover:underline"
+                    >
+                      {pinEditMode ? "Done" : "Edit"}
+                    </button>
+                  ) : null}
+                </div>
+                <ul className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1 pt-1">
+                  {pinnedConversations.map((conversation) => (
+                    <li key={conversation.id} className="shrink-0">
+                      <div className="relative w-[64px]">
+                        <button
+                          type="button"
+                          onClick={() => openConversation(conversation.id)}
+                          className="focus-ring safe-motion flex w-full flex-col items-center gap-1.5 rounded-xl text-center"
+                          aria-label={`Open ${conversation.title}`}
+                        >
+                          <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="md" />
+                          <span className="w-full truncate text-xs font-medium">{conversation.title}</span>
+                        </button>
+                        {pinEditMode ? (
+                          <button
+                            type="button"
+                            onClick={() => togglePin(conversation.id, false)}
+                            aria-label={`Unpin ${conversation.title}`}
+                            title="Unpin"
+                            className="focus-ring absolute -right-0.5 -top-0.5 grid h-6 w-6 place-items-center rounded-full border-2 border-background bg-secondary text-foreground hover:bg-destructive/15 hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" aria-hidden="true" />
+                          </button>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                  {!pinEditMode && unpinnedConversations.length > 0 ? (
+                    <li className="shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPinPickerOpen(true)}
+                        className="focus-ring safe-motion flex w-[64px] flex-col items-center gap-1.5 text-center"
+                        aria-label="Pin more conversations"
+                      >
+                        <span className="grid h-14 w-14 place-items-center rounded-full border-2 border-dashed border-border/70 text-muted-foreground">
+                          <Plus className="h-5 w-5" aria-hidden="true" />
+                        </span>
+                        <span className="w-full truncate text-xs text-muted-foreground">Pin more</span>
+                      </button>
+                    </li>
+                  ) : null}
+                </ul>
+              </section>
+            ) : null}
 
             {visible.length === 0 ? (
               <p className="px-1 py-6 text-center text-sm text-muted-foreground">
@@ -483,13 +611,18 @@ export function MessagesPageContent({
                           "focus-ring safe-motion flex min-h-[72px] w-full items-center gap-3 rounded-xl border border-l-2 p-3 text-left transition-colors active:bg-secondary/70",
                           isSelected
                             ? "border-transparent border-l-primary bg-primary/5"
-                            : "border-transparent border-l-transparent hover:bg-secondary"
+                            : conversation.pinned || conversation.unreadCount > 0
+                              ? "border-transparent border-l-primary/70 hover:bg-secondary"
+                              : "border-transparent border-l-transparent hover:bg-secondary"
                         )}
                       >
                         <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" />
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-1.5">
                             <span className="truncate text-sm font-semibold">{conversation.title}</span>
+                            {conversation.pinned ? (
+                              <Star className="h-3 w-3 shrink-0 fill-primary text-primary" aria-label="Pinned" />
+                            ) : null}
                             {conversation.contextBadge ? <Badge variant="violet">{conversation.contextBadge}</Badge> : null}
                             {conversation.muted ? (
                               <VolumeX className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Muted" />
@@ -778,7 +911,75 @@ export function MessagesPageContent({
       )}
 
       <NewMessageModal open={newMessageOpen} onOpenChange={setNewMessageOpen} onSelect={startConversationWith} />
+      <PinPickerModal
+        open={pinPickerOpen}
+        onOpenChange={setPinPickerOpen}
+        conversations={unpinnedConversations}
+        onPin={(id) => {
+          togglePin(id, true);
+          setPinPickerOpen(false);
+        }}
+      />
     </div>
+  );
+}
+
+function PinPickerModal({
+  open,
+  onOpenChange,
+  conversations,
+  onPin
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  conversations: ConversationView[];
+  onPin: (conversationId: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const term = query.trim().toLowerCase();
+  const visible = term
+    ? conversations.filter((conversation) => conversation.title.toLowerCase().includes(term))
+    : conversations;
+
+  return (
+    <Modal open={open} onOpenChange={onOpenChange} title="Pin a conversation" compact>
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search conversations"
+            aria-label="Search conversations to pin"
+            className="pl-9"
+          />
+        </div>
+        {visible.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            {conversations.length === 0 ? "Every conversation is already pinned." : "No conversations match your search."}
+          </p>
+        ) : (
+          <ul className="max-h-80 space-y-1 overflow-y-auto">
+            {visible.map((conversation) => (
+              <li key={conversation.id}>
+                <button
+                  type="button"
+                  onClick={() => onPin(conversation.id)}
+                  className="focus-ring safe-motion flex w-full items-center gap-3 rounded-xl p-2.5 text-left hover:bg-secondary"
+                >
+                  <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" />
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{conversation.title}</span>
+                  <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary">
+                    <Star className="h-3.5 w-3.5" aria-hidden="true" />
+                    Pin
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Modal>
   );
 }
 

@@ -23,6 +23,7 @@ import {
   markConversationRead,
   openDirectConversation,
   sendMessage,
+  setConversationPinned,
   type ChatMessageView,
   type ConversationView,
   type MessageableFriend
@@ -133,6 +134,20 @@ export async function muteConversationAction(
     .eq("user_id", userId);
 
   return { ok: true, message: mutedUntil ? "Conversation muted." : "Conversation unmuted." };
+}
+
+export async function setConversationPinnedAction(
+  conversationId: string,
+  pinned: boolean
+): Promise<MessagingActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  if (!uuidSchema.safeParse(conversationId).success) return { ok: false, message: "Not found." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  return setConversationPinned(userId, conversationId, pinned);
 }
 
 // ---------------------------------------------------------------------------

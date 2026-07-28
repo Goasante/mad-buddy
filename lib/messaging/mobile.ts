@@ -372,6 +372,7 @@ export async function listConversations(userId: string): Promise<ConversationVie
       lastMessageAt: conversation.last_message_at,
       unreadCount: unread ?? 0,
       muted: Boolean(membership?.muted_until && membership.muted_until > nowIso),
+      pinned: pinnedIds.has(conversation.id),
       contextBadge:
         conversation.context_type === "plan"
           ? "Plan"
@@ -480,4 +481,39 @@ export async function markConversationRead(userId: string, conversationId: strin
   }
 
   return { ok: true, message: "Marked read." };
+}
+
+/**
+ * Pins or unpins a conversation for a user. A pin is a private cosmetic
+ * preference; the user must be a joined member of the conversation (checked
+ * here under the service role) before any row is written.
+ */
+export async function setConversationPinned(
+  userId: string,
+  conversationId: string,
+  pinned: boolean
+): Promise<MessagingResult> {
+  const envMessage = serviceRoleEnvMessage();
+  if (envMessage) return { ok: false, message: envMessage };
+  if (!uuidSchema.safeParse(conversationId).success) return { ok: false, message: "Not found." };
+
+  const admin = createSupabaseAdminClient();
+  const access = await resolveConversationAccess(admin, userId, conversationId);
+  if (!access.canView) return { ok: false, message: "Not found." };
+
+  if (pinned) {
+    const { error } = await admin
+      .from("conversation_pins")
+      .upsert({ user_id: userId, conversation_id: conversationId }, { onConflict: "user_id,conversation_id" });
+    if (error) return { ok: false, message: "Could not pin this chat. Try again." };
+    return { ok: true, message: "Pinned." };
+  }
+
+  const { error } = await admin
+    .from("conversation_pins")
+    .delete()
+    .eq("user_id", userId)
+    .eq("conversation_id", conversationId);
+  if (error) return { ok: false, message: "Could not unpin this chat. Try again." };
+  return { ok: true, message: "Unpinned." };
 }
