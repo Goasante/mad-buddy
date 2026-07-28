@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
+import { Suspense } from "react";
 import { Activity, ArrowRight, CreditCard, Headphones, ShieldAlert, UsersRound } from "lucide-react";
 import {
   AdminEmptyState,
@@ -26,7 +27,27 @@ const PLAN_COLORS: Record<string, string> = {
   buddy_pro: "#184f95"
 };
 
-export default async function AdminOverviewPage() {
+// The layout above this already gates on admin auth + role before rendering
+// anything, so there is no security reason for THIS page's 11-query metrics
+// fetch to also block first paint. Splitting it into its own Suspense
+// boundary lets the header (and the surrounding AdminShell chrome) reach the
+// browser immediately, so the page never sits fully blank while Supabase
+// answers eleven parallel queries — it shows the shell, then the numbers.
+export default function AdminOverviewPage() {
+  return (
+    <div className="space-y-7">
+      <AdminPageHeader
+        title="Overview"
+        description="A live operational summary of accounts, safety, support, billing, privacy, and platform readiness."
+      />
+      <Suspense fallback={<AdminOverviewSkeleton />}>
+        <AdminOverviewData />
+      </Suspense>
+    </div>
+  );
+}
+
+async function AdminOverviewData() {
   const admin = createSupabaseAdminClient();
   const since = new Date(new Date().getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
   const [
@@ -67,12 +88,10 @@ export default async function AdminOverviewPage() {
   const hasQueryError = [usersResult, reportsResult, premiumResult, supportResult, privacyResult].some((result) => result.error);
 
   return (
-    <div className="space-y-7">
-      <AdminPageHeader
-        title="Overview"
-        description="A live operational summary of accounts, safety, support, billing, privacy, and platform readiness."
-        meta={<AdminStatus label={readiness.ok ? "Systems ready" : "Needs attention"} tone={readiness.ok ? "success" : "warning"} />}
-      />
+    <>
+      <div className="flex justify-end">
+        <AdminStatus label={readiness.ok ? "Systems ready" : "Needs attention"} tone={readiness.ok ? "success" : "warning"} />
+      </div>
 
       {hasQueryError ? <AdminQueryError message="Some overview metrics could not be loaded. Available data is still shown." /> : null}
 
@@ -176,7 +195,7 @@ export default async function AdminOverviewPage() {
           </Card>
         )}
       </AdminSection>
-    </div>
+    </>
   );
 }
 
@@ -189,5 +208,28 @@ function QueueRow({ label, value, href }: { label: string; value: number; href: 
         <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
       </span>
     </Link>
+  );
+}
+
+// Mirrors the loaded layout's approximate shape (metric-card grid, two
+// side-by-side sections) so nothing jumps when the real content swaps in.
+function AdminOverviewSkeleton() {
+  return (
+    <div className="animate-pulse space-y-7" aria-hidden="true">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="h-24 rounded-2xl bg-secondary/60" />
+        ))}
+      </section>
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,0.9fr)]">
+        <div className="h-64 rounded-2xl bg-secondary/60" />
+        <div className="h-64 rounded-2xl bg-secondary/60" />
+      </div>
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+        <div className="h-48 rounded-2xl bg-secondary/60" />
+        <div className="h-48 rounded-2xl bg-secondary/60" />
+      </div>
+      <div className="h-56 rounded-2xl bg-secondary/60" />
+    </div>
   );
 }

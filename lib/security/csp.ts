@@ -53,7 +53,10 @@ export function buildContentSecurityPolicy(options: {
   // Google Analytics (gtag.js): the tag loads from googletagmanager.com and
   // beacons to google-analytics.com (both endpoints + regional subdomains).
   const gtm = "https://www.googletagmanager.com";
-  const ga = "https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com";
+  // https://www.google.com: gtag's Google Signals / cross-device linking
+  // feature (only reachable now that the inline bootstrap script actually
+  // carries our nonce — previously it was blocked before it could even try).
+  const ga = "https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.google.com";
   // A nonce is added alongside 'unsafe-inline': nonce-aware browsers ignore
   // 'unsafe-inline' (CSP2+), so they only run scripts carrying this nonce,
   // while older browsers fall back to 'unsafe-inline' and still work.
