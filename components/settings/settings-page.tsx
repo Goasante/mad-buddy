@@ -107,18 +107,11 @@ export function SettingsPageContent({
 
   return (
     <div className="mr-auto max-w-[980px] space-y-6 pt-6">
-      <header className="flex items-start justify-between gap-4 border-b border-border/70 pb-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Settings</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Manage your account and app preferences.
-          </p>
-        </div>
-        <Button type="button" variant="outline" size="icon" asChild>
-          <Link href="/notifications" aria-label="Notifications" title="Notifications">
-            <Bell className="h-4 w-4" aria-hidden="true" />
-          </Link>
-        </Button>
+      <header className="border-b border-border/70 pb-4">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Settings</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Manage your account and app preferences.
+        </p>
       </header>
 
       <div className="space-y-6">

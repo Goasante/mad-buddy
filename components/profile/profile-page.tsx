@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Camera, ChevronRight, Edit3, Ghost, MessageSquareText, Smile, Sparkles, Star, UsersRound } from "lucide-react";
+import { Camera, ChevronRight, Edit3, Ghost, MessageSquareText, Smile, Sparkles, Star, UsersRound } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updateProfileAction, uploadAvatarAction } from "@/app/(app)/actions";
 import { FormField } from "@/components/auth/form-field";
@@ -226,11 +226,6 @@ export function ProfilePageContent({
           <p className="mt-1 text-sm text-muted-foreground">How approved friends see you.</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button type="button" variant="outline" size="icon" className="rounded-full" asChild>
-            <Link href="/notifications" aria-label="Notifications" title="Notifications">
-              <Bell className="h-4 w-4" aria-hidden="true" />
-            </Link>
-          </Button>
           {!editing ? (
             <Button type="button" variant="outline" onClick={beginEditing} aria-label="Edit profile" title="Edit profile">
               <Edit3 className="h-4 w-4" aria-hidden="true" />
