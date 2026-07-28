@@ -382,6 +382,19 @@ export function DashboardPageContent({
 
   const plan = upcomingPlans[0];
 
+  // Quick actions are split once here so the launcher row, the More sheet and
+  // the bottom gap-filler stay in agreement: whatever the filler promotes is
+  // removed from More, and returns to More when the space is needed again.
+  const { primary: primaryActions, secondary: secondaryActions } = useMemo(
+    () => splitQuickActions(hiddenQuickActionHrefs),
+    [hiddenQuickActionHrefs]
+  );
+  const [promotedCount, setPromotedCount] = useState(0);
+  const moreActions = useMemo(
+    () => secondaryActions.slice(promotedCount),
+    [secondaryActions, promotedCount]
+  );
+
   return (
     // A focused, centred column — Home answers "who's nearby?" at a glance, so
     // it stays narrow on every width rather than spreading into a dashboard.
@@ -530,10 +543,15 @@ export function DashboardPageContent({
       />
 
       {/* Quick actions: three primary + More */}
-      <QuickActionsHome hiddenHrefs={hiddenQuickActionHrefs} />
+      <QuickActionsHome primary={primaryActions} secondary={moreActions} />
 
       {/* Compact upcoming plan — only when one genuinely exists. */}
       {plan ? <UpcomingPlanRow plan={plan} /> : null}
+
+      {/* Fills leftover space above the bottom nav with extra shortcuts; they
+          retract into "More" as soon as real content needs the room. */}
+      <HomeGapFillerActions pool={secondaryActions} onPromotedChange={setPromotedCount} />
+
 
       {promptFeedback ? (
         <div
@@ -771,10 +789,13 @@ const quickActions: QuickAction[] = [
 
 const PRIMARY_ACTION_HREFS = ["/hangout-mode", "/discover", "/safe-arrival"];
 
-function QuickActionsHome({ hiddenHrefs = [] }: { hiddenHrefs?: string[] }) {
-  const [moreOpen, setMoreOpen] = useState(false);
+/**
+ * Splits the flag-filtered actions into the three primary tiles and the rest
+ * ("More"). Shared by the launcher row and the bottom gap-filler so a promoted
+ * action is never shown twice.
+ */
+function splitQuickActions(hiddenHrefs: string[]): { primary: QuickAction[]; secondary: QuickAction[] } {
   const available = quickActions.filter((action) => !hiddenHrefs.includes(action.href));
-
   // Keep three primary tiles. If one (e.g. Socialize) is disabled by Owner
   // controls, backfill from the remaining actions so there is never an empty
   // gap where a feature used to be.
@@ -783,7 +804,17 @@ function QuickActionsHome({ hiddenHrefs = [] }: { hiddenHrefs?: string[] }) {
   while (primary.length < 3 && rest.length > 0) {
     primary.push(rest.shift()!);
   }
-  const secondary = rest;
+  return { primary, secondary: rest };
+}
+
+function QuickActionsHome({
+  primary,
+  secondary
+}: {
+  primary: QuickAction[];
+  secondary: QuickAction[];
+}) {
+  const [moreOpen, setMoreOpen] = useState(false);
 
   return (
     <section aria-labelledby="home-actions-heading">
@@ -849,6 +880,102 @@ function QuickActionTile({ action }: { action: QuickAction }) {
           forces horizontal scroll because it only ever wraps within the cell. */}
       <span className="line-clamp-2 w-full text-[11px] font-medium leading-tight">{action.label}</span>
     </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Bottom gap filler — turns leftover space into useful shortcuts.
+// ---------------------------------------------------------------------------
+
+/** One tile row (min-h 68px) plus the grid gap. */
+const FILLER_ROW_HEIGHT = 72;
+/** Section heading + its margin. */
+const FILLER_HEADING = 26;
+/** Never push past two extra rows — this fills space, it doesn't become a hub. */
+const FILLER_MAX_ROWS = 2;
+const FILLER_PER_ROW = 4;
+
+/**
+ * Measures the space left between where it sits and the bottom navigation, and
+ * fills it with as many extra quick actions as cleanly fit. When real content
+ * (an upcoming plan, Safe Arrival, more nearby Muddies…) grows into that space,
+ * the count drops and those actions retract back into "More" — the parent
+ * excludes whatever is promoted here, so nothing is ever listed twice.
+ *
+ * The measurement uses this element's own document offset, which does NOT
+ * depend on how many tiles it renders, so growing the filler can't feed back
+ * into the measurement and oscillate.
+ */
+function HomeGapFillerActions({
+  pool,
+  onPromotedChange
+}: {
+  pool: QuickAction[];
+  onPromotedChange: (count: number) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [rows, setRows] = useState(0);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element || pool.length === 0) {
+      setRows(0);
+      return;
+    }
+
+    let frame = 0;
+    const measure = () => {
+      // The real bottom bar (mobile only) already includes its safe-area pad.
+      const nav = document.querySelector('nav[aria-label="Mobile navigation"]');
+      const navHeight = nav ? nav.getBoundingClientRect().height : 0;
+      const topInDocument = element.getBoundingClientRect().top + window.scrollY;
+      const firstScreenBottom = window.innerHeight - navHeight - 12;
+      const gap = firstScreenBottom - topInDocument;
+      const fit = Math.floor((gap - FILLER_HEADING) / FILLER_ROW_HEIGHT);
+      const maxRows = Math.min(FILLER_MAX_ROWS, Math.ceil(pool.length / FILLER_PER_ROW));
+      setRows(Math.max(0, Math.min(maxRows, fit)));
+    };
+    const schedule = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(measure);
+    };
+
+    schedule();
+    // Re-measure when the column's content height changes (a plan arrives, a
+    // banner is dismissed, Muddies load) or the viewport changes.
+    const observer = new ResizeObserver(schedule);
+    if (element.parentElement) observer.observe(element.parentElement);
+    window.addEventListener("resize", schedule);
+    window.addEventListener("orientationchange", schedule);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("orientationchange", schedule);
+    };
+  }, [pool.length]);
+
+  const shown = useMemo(() => pool.slice(0, rows * FILLER_PER_ROW), [pool, rows]);
+
+  useEffect(() => {
+    onPromotedChange(shown.length);
+  }, [shown.length, onPromotedChange]);
+
+  return (
+    <div ref={containerRef}>
+      {shown.length > 0 ? (
+        <section aria-labelledby="home-more-actions-heading">
+          <h2 id="home-more-actions-heading" className="mb-2 text-sm font-semibold text-muted-foreground">
+            More to explore
+          </h2>
+          <div className="grid grid-cols-4 gap-1">
+            {shown.map((action) => (
+              <QuickActionTile key={action.href} action={action} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </div>
   );
 }
 
