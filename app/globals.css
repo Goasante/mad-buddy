@@ -169,6 +169,21 @@
   background: hsl(var(--muted-foreground) / 0.08);
   border-color: hsl(var(--border));
 }
+/* OFF state: the same mark, at rest — a static outer ring instead of a
+ * looping pulse, so Safe Arrival has one recognisable visual before and
+ * after activation without implying a journey is already live. */
+.journey-mark-idle {
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.08);
+  border-color: hsl(var(--primary) / 0.2);
+}
+.journey-mark-idle::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  border: 1px solid hsl(var(--primary) / 0.15);
+}
 
 /* The breathing ring sits behind the mark via ::before; a calm "alive" bloom
  * with no directional motion. */
