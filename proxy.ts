@@ -5,6 +5,7 @@ import { safeAuthNext } from "@/lib/auth/oauth-redirect";
 import { buildContentSecurityPolicy, supabaseOriginFromEnv } from "@/lib/security/csp";
 import { supabaseCookieOptions } from "@/lib/supabase/cookie-options";
 import type { Database } from "@/lib/supabase/database.types";
+import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 
 /**
  * Cheap pre-check: without a Supabase auth cookie the visitor cannot have a
@@ -102,9 +103,26 @@ export async function proxy(request: NextRequest) {
     }
   });
 
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  // getUser() is a network round trip to Supabase Auth on every protected/
+  // guest-only page navigation, with no built-in timeout — a slow or
+  // unreachable auth endpoint used to hang the whole page load (the "taking
+  // longer than expected" dialog). On timeout or any other failure here we
+  // fail open on the REDIRECT decision only (let the request through as-is);
+  // RLS and the page/action-level auth checks still gate actual data access,
+  // so this never grants access to anything the backend wouldn't already
+  // allow — it only stops the middleware itself from being a single point of
+  // app-wide slowness.
+  let user: { id: string } | null = null;
+  try {
+    const result = await withTimeout(supabase.auth.getUser(), {
+      operation: "proxy.getUser",
+      timeoutMs: 5_000
+    });
+    user = result.data.user;
+  } catch (error) {
+    if (!isRequestTimeoutError(error)) throw error;
+    return response;
+  }
 
   // Signed out on a protected page: send them to the right login screen and
   // remember where they were headed.
