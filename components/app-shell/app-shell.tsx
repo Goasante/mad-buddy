@@ -27,7 +27,6 @@ import {
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { Suspense, use, useCallback, useEffect, useRef, useState } from "react";
 import { LocationSignalSync } from "@/components/app-shell/location-signal-sync";
-import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { SessionBoundary } from "@/components/auth/session-boundary";
 import { useSecureLogout } from "@/components/auth/use-secure-logout";
 import { LiveSignalToast } from "@/components/notifications/live-signal-toast";
@@ -648,8 +647,10 @@ function AppHeader({
   showAdminLink: boolean;
 }) {
   const pathname = usePathname();
+  // NO useDismissOnBack here either — same reason as MobileAccountMenu below:
+  // this menu's actions are <Link>s, so closing it is itself part of starting
+  // a navigation, and the hook's history.back() cleanup would cancel it.
   const [createOpen, setCreateOpen] = useState(false);
-  useDismissOnBack(createOpen, () => setCreateOpen(false));
 
   if (hasOwnHeader(pathname)) {
     return null;
@@ -756,7 +757,13 @@ function MobileAccountMenu({
   pathname: string;
 }) {
   const [open, setOpen] = useState(false);
-  useDismissOnBack(open, () => setOpen(false));
+  // NO useDismissOnBack here. This menu's items are <Link>s, and that hook's
+  // cleanup calls history.back() when the menu closes — which, because the
+  // menu closes as part of the click that starts the navigation, reverses the
+  // in-flight App Router transition before it can commit. See the warning in
+  // hooks/use-dismiss-on-back.ts. Radix still closes this on Escape and on
+  // outside tap; Android Back leaving the page is the correct, expected
+  // behaviour for a small anchored menu.
   const initial = currentUsername?.[0]?.toUpperCase() ?? "?";
   const { logout, isPending: logoutPending } = useSecureLogout();
 

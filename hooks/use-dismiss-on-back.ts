@@ -12,6 +12,20 @@ import { useEffect } from "react";
  *
  * The pushState keeps the current URL, so route-watching chrome (the mobile
  * nav, the navigation watchdog) sees no navigation.
+ *
+ * ⚠️ NEVER use this on an overlay that contains navigation links (<Link>, or
+ * anything calling router.push). Closing such an overlay is itself part of the
+ * click that STARTS a navigation, so the cleanup below fires history.back()
+ * while an App Router client transition is still in flight — the RSC payload
+ * has not arrived, so Next has not committed its own history entry yet, our
+ * sentinel is still the current entry, the guard passes, and the pop reverses
+ * the navigation. The route never commits, the pathname never changes, and the
+ * 15s NavigationWatchdog fires "navigation did not complete". A hard reload
+ * (the watchdog's Retry) then works, which makes this look like a slow server
+ * rather than a cancelled transition.
+ *
+ * This is safe for sheets/modals/pickers whose contents are forms, options or
+ * actions — the overwhelming majority of callers. It is NOT safe for menus.
  */
 export function useDismissOnBack(open: boolean, onDismiss: () => void) {
   useEffect(() => {
