@@ -28,6 +28,10 @@ const legacyPermissions: Record<AdminAccessRole, readonly AdminPermission[]> = {
     "admin.analytics.view",
     "admin.revenue.view",
     "admin.feature_flags.manage",
+    // Publishing a tour is a global consumer-facing change, comparable in
+    // blast radius to a feature flag, so it sits with owner/admin. Support
+    // deliberately does NOT get it (see the `support` list below).
+    "admin.tours.manage",
     // Pausing the whole app is owner/admin only: it takes the product offline
     // for every user, which is a wider blast radius than a support role needs.
     "admin.maintenance.manage"

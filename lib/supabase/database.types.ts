@@ -1065,21 +1065,25 @@ export type Database = {
           id: string;
           tour_id: string;
           version: number;
-          status: "draft" | "published" | "retired";
+          status: "draft" | "published" | "paused" | "retired";
           audience: Json;
           starts_at: string | null;
           ends_at: string | null;
           published_at: string | null;
+          updated_by: string | null;
+          publish_reason: string | null;
         };
         Insert: {
           id?: string;
           tour_id: string;
           version: number;
-          status?: "draft" | "published" | "retired";
+          status?: "draft" | "published" | "paused" | "retired";
           audience?: Json;
           starts_at?: string | null;
           ends_at?: string | null;
           published_at?: string | null;
+          updated_by?: string | null;
+          publish_reason?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -3904,6 +3908,21 @@ export type Database = {
         Returns: LocationConfidence;
       };
       prepare_deleted_user_reports: { Args: { target_user_id: string }; Returns: undefined };
+      admin_tour_analytics: {
+        Args: { p_tour_version_id: string };
+        Returns: Array<{
+          scope: string;
+          step_id: string | null;
+          event_type: string;
+          subscription_plan: SubscriptionPlan | null;
+          event_count: number;
+          user_count: number;
+        }>;
+      };
+      admin_tour_eligible_count: {
+        Args: { p_tour_version_id: string };
+        Returns: number;
+      };
       get_cancellation_reason_counts: {
         Args: { p_since: string };
         Returns: Array<{ reason: string; count: number }>;
