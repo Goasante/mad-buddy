@@ -14,7 +14,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { resolveGlobalFeatureFlag, SOCIALIZE_FLAG } from "@/lib/features/feature-flags";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { resolveWallpaperForRender } from "@/lib/wallpapers/service";
-import { defaultResolvedWallpaper } from "@/lib/wallpapers/catalog";
+import { defaultResolvedWallpaper, type ResolvedWallpaper } from "@/lib/wallpapers/catalog";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 
 type ProtectedAppLayoutProps = {
@@ -80,23 +80,23 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
     redirect("/maintenance");
   }
 
-  // Server-authoritative wallpaper resolve. Never throws (its own try/catch),
-  // and is now also time-boxed: a wallpaper — including the live Storage
-  // signed-URL call a custom wallpaper requires — must never be the thing
-  // that makes navigation itself feel broken. A slow resolve falls back to
-  // the safe Mad Buddy Default exactly like an outright failure already did.
-  let wallpaper = defaultResolvedWallpaper();
-  if (user && access) {
-    try {
-      wallpaper = await withTimeout(resolveWallpaperForRender(createSupabaseAdminClient(), user.id, access.plan), {
-        operation: "resolveWallpaperForRender",
-        timeoutMs: 3_000
-      });
-    } catch (error) {
-      if (!isRequestTimeoutError(error)) throw error;
-      // keep the default
-    }
-  }
+  // Server-authoritative wallpaper resolve — deliberately NOT awaited here.
+  // AppShell unwraps this promise itself, inside its own Suspense boundary,
+  // so the route commits (and navigation is considered complete) without
+  // ever waiting on it, including the live Storage signed-URL call a custom
+  // wallpaper requires. Still time-boxed and still never throws: a slow or
+  // failed resolve falls back to the safe Mad Buddy Default, same as before,
+  // just without blocking anything to get there.
+  const wallpaperPromise: Promise<ResolvedWallpaper | null> =
+    user && access
+      ? withTimeout(resolveWallpaperForRender(createSupabaseAdminClient(), user.id, access.plan), {
+          operation: "resolveWallpaperForRender",
+          timeoutMs: 3_000
+        }).catch((error) => {
+          if (!isRequestTimeoutError(error)) throw error;
+          return defaultResolvedWallpaper(true);
+        })
+      : Promise.resolve(defaultResolvedWallpaper());
 
   return (
     <AppShell
@@ -107,7 +107,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
       currentAvatarUrl={profileResult.data?.avatar_url ?? null}
       currentUserId={user?.id ?? null}
       hiddenNavigationHrefs={resolveGlobalFeatureFlag(socializeFlagResult.data) ? [] : ["/discover"]}
-      wallpaper={wallpaper}
+      wallpaperPromise={wallpaperPromise}
     >
       {children}
       {/* Only offered once the user is signed in (mounted in the authed layout). */}

@@ -25,7 +25,7 @@ import {
   UsersRound
 } from "lucide-react";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useRef, useState } from "react";
 import { LocationSignalSync } from "@/components/app-shell/location-signal-sync";
 import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { SessionBoundary } from "@/components/auth/session-boundary";
@@ -113,9 +113,19 @@ export type AppShellProps = {
   currentAvatarUrl?: string | null;
   currentUserId?: string | null;
   hiddenNavigationHrefs?: string[];
-  /** Server-resolved wallpaper (entitlement-checked, always safe). */
-  wallpaper?: ResolvedWallpaper | null;
+  /**
+   * Server-resolved wallpaper (entitlement-checked, always safe), as a
+   * PROMISE rather than an already-awaited value — the layout never awaits
+   * this itself, so a slow resolve (including the live Storage signed-URL
+   * call a custom wallpaper needs) can never delay the route committing.
+   * Unwrapped with use() inside its own Suspense boundary below, so only the
+   * wallpaper visual is pending while the rest of the shell and the actual
+   * destination content render immediately.
+   */
+  wallpaperPromise?: Promise<ResolvedWallpaper | null>;
 };
+
+const resolvedDefaultWallpaper = Promise.resolve<ResolvedWallpaper | null>(null);
 
 export function AppShell({
   children,
@@ -126,7 +136,7 @@ export function AppShell({
   currentAvatarUrl = null,
   currentUserId = null,
   hiddenNavigationHrefs = [],
-  wallpaper = null
+  wallpaperPromise = resolvedDefaultWallpaper
 }: AppShellProps) {
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
@@ -237,7 +247,9 @@ export function AppShell({
             header's translucent/blurred background shows the same wallpaper
             rather than sitting on top of it as a flat, non-blending bar.
             Purely decorative. */}
-        <WallpaperLayer wallpaper={wallpaper} />
+        <Suspense fallback={<WallpaperLayer wallpaper={null} />}>
+          <WallpaperLayerAsync wallpaperPromise={wallpaperPromise} />
+        </Suspense>
         <AppHeader
           currentUsername={currentUsername}
           currentAvatarUrl={currentAvatarUrl}
@@ -903,6 +915,16 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
       </ul>
     </nav>
   );
+}
+
+/**
+ * Unwraps the wallpaper promise with use(), inside its own Suspense boundary
+ * at the call site — so a slow/pending resolve suspends only this leaf, never
+ * the header, <main>, or the destination page content around it.
+ */
+function WallpaperLayerAsync({ wallpaperPromise }: { wallpaperPromise: Promise<ResolvedWallpaper | null> }) {
+  const wallpaper = use(wallpaperPromise);
+  return <WallpaperLayer wallpaper={wallpaper} />;
 }
 
 /**
