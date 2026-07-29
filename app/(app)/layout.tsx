@@ -15,6 +15,7 @@ import { resolveGlobalFeatureFlag, SOCIALIZE_FLAG } from "@/lib/features/feature
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { resolveWallpaperForRender } from "@/lib/wallpapers/service";
 import { defaultResolvedWallpaper } from "@/lib/wallpapers/catalog";
+import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 
 type ProtectedAppLayoutProps = {
   children: ReactNode;
@@ -31,9 +32,23 @@ export const dynamic = "force-dynamic";
 
 export default async function ProtectedAppLayout({ children }: ProtectedAppLayoutProps) {
   // getCurrentUser() is the shared per-request auth round trip; the RLS client
-  // below is only for this layout's own queries.
-  const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
-  const [adminContext, unreadResult, profileResult, socializeFlagResult] = await Promise.all([
+  // below is only for this layout's own queries. ensureMaintenanceWarm() needs
+  // no user, so it starts here too instead of waiting behind everything else.
+  const env = getSupabaseServerEnv();
+  const [supabase, user, maintenance] = await Promise.all([
+    createSupabaseServerClient(),
+    getCurrentUser(),
+    env.url && env.serviceRoleKey ? ensureMaintenanceWarm(createSupabaseAdminClient()) : Promise.resolve(null)
+  ]);
+
+  // Every remaining lookup here only needs `user`/`env`, not each other's
+  // results, so they run together instead of one sequential await chain
+  // (auth -> maintenance -> subscription -> wallpaper) that previously meant
+  // this layout's total latency was the SUM of five round trips instead of
+  // the slowest one. This was blocking every page behind this layout, which
+  // is why unrelated destinations (Profile, Settings, Billing, Help, Admin)
+  // were all affected together.
+  const [adminContext, unreadResult, profileResult, socializeFlagResult, access] = await Promise.all([
     getSafetyAdminContext(),
     user
       ? supabase
@@ -55,27 +70,30 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
           .select("status, default_value")
           .eq("key", SOCIALIZE_FLAG)
           .maybeSingle()
-      : Promise.resolve({ data: null })
+      : Promise.resolve({ data: null }),
+    user && env.url && env.serviceRoleKey ? getCurrentSubscriptionAccess(user.id) : Promise.resolve(null)
   ]);
 
   // Global pause. Staff are exempt so someone can still reach /admin to turn
   // it back off and verify the fix before reopening the app.
-  const env = getSupabaseServerEnv();
-  if (env.url && env.serviceRoleKey) {
-    const maintenance = await ensureMaintenanceWarm(createSupabaseAdminClient());
-    if (shouldBlockForMaintenance({ isActive: maintenance.isActive, isStaff: adminContext.ok })) {
-      redirect("/maintenance");
-    }
+  if (maintenance && shouldBlockForMaintenance({ isActive: maintenance.isActive, isStaff: adminContext.ok })) {
+    redirect("/maintenance");
   }
 
-  // Server-authoritative wallpaper resolve. Never throws; failure → the safe
-  // Mad Buddy Default, so the background never blocks or breaks a page.
+  // Server-authoritative wallpaper resolve. Never throws (its own try/catch),
+  // and is now also time-boxed: a wallpaper — including the live Storage
+  // signed-URL call a custom wallpaper requires — must never be the thing
+  // that makes navigation itself feel broken. A slow resolve falls back to
+  // the safe Mad Buddy Default exactly like an outright failure already did.
   let wallpaper = defaultResolvedWallpaper();
-  if (user && env.url && env.serviceRoleKey) {
+  if (user && access) {
     try {
-      const access = await getCurrentSubscriptionAccess(user.id);
-      wallpaper = await resolveWallpaperForRender(createSupabaseAdminClient(), user.id, access.plan);
-    } catch {
+      wallpaper = await withTimeout(resolveWallpaperForRender(createSupabaseAdminClient(), user.id, access.plan), {
+        operation: "resolveWallpaperForRender",
+        timeoutMs: 3_000
+      });
+    } catch (error) {
+      if (!isRequestTimeoutError(error)) throw error;
       // keep the default
     }
   }
