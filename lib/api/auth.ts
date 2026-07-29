@@ -5,6 +5,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
 import type { Database } from "@/lib/supabase/database.types";
+import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 
 export type ApiAuth = {
   user: User;
@@ -43,20 +44,30 @@ export async function resolveApiUser(request: Request): Promise<ApiAuth | null> 
       global: { headers: { Authorization: `Bearer ${token}` } }
     });
 
-    const {
-      data: { user },
-      error
-    } = await supabase.auth.getUser(token);
-    if (error || !user) return null;
-    return { user, supabase };
+    try {
+      const {
+        data: { user },
+        error
+      } = await withTimeout(supabase.auth.getUser(token), { operation: "resolveApiUser.bearer", timeoutMs: 5_000 });
+      if (error || !user) return null;
+      return { user, supabase };
+    } catch (error) {
+      if (isRequestTimeoutError(error)) return null;
+      throw error;
+    }
   }
 
   // Web: the cookie session, unchanged.
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser();
-  if (error || !user) return null;
-  return { user, supabase };
+  try {
+    const {
+      data: { user },
+      error
+    } = await withTimeout(supabase.auth.getUser(), { operation: "resolveApiUser.cookie", timeoutMs: 5_000 });
+    if (error || !user) return null;
+    return { user, supabase };
+  } catch (error) {
+    if (isRequestTimeoutError(error)) return null;
+    throw error;
+  }
 }

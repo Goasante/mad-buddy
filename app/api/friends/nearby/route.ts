@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import {
   assertPrivacySafeResponse,
   buildSafeNearbyFriends,
@@ -246,26 +246,33 @@ export async function GET(request: Request) {
   const response = nearbyFriendsResponseSchema.parse({ friends });
   assertPrivacySafeResponse(response);
 
-  // Single batched insert instead of one write per friend (audit I-13).
-  if (response.friends.length > 0) {
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    await admin.from("proximity_events").insert(
-      response.friends.map((friend) => ({
-        user_id: user.id,
-        friend_id: friend.friend_id,
-        proximity_level: friend.proximity_level,
-        glow_strength: friend.glow_strength,
-        confidence: friend.confidence,
-        expires_at: expiresAt
-      }))
-    );
-  }
+  // Neither of these writes affects what the caller gets back (the `friends`
+  // array above is already final) — they're bookkeeping (the proximity-event
+  // history row) and a side-effect notification, not something this request
+  // needs to wait on. Deferred via after() so a slow write here can no longer
+  // add to this route's own latency.
+  after(async () => {
+    // Single batched insert instead of one write per friend (audit I-13).
+    if (response.friends.length > 0) {
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      await admin.from("proximity_events").insert(
+        response.friends.map((friend) => ({
+          user_id: user.id,
+          friend_id: friend.friend_id,
+          proximity_level: friend.proximity_level,
+          glow_strength: friend.glow_strength,
+          confidence: friend.confidence,
+          expires_at: expiresAt
+        }))
+      );
+    }
 
-  await createNearbyNotificationsIfAllowed(admin, {
-    userId: user.id,
-    friends: response.friends
-      .filter((friend) => friend.proximity_level === "very_close" || friend.proximity_level === "nearby")
-      .map((friend) => ({ friendId: friend.friend_id, displayName: friend.display_name }))
+    await createNearbyNotificationsIfAllowed(admin, {
+      userId: user.id,
+      friends: response.friends
+        .filter((friend) => friend.proximity_level === "very_close" || friend.proximity_level === "nearby")
+        .map((friend) => ({ friendId: friend.friend_id, displayName: friend.display_name }))
+    });
   });
 
   logBackendEvent("info", {
