@@ -290,6 +290,12 @@ export function SettingsPageContent({
             href="/help"
           />
           <SettingsLinkRow
+            icon={Sparkles}
+            title="App walkthrough"
+            description="Take the Mad Buddy tour again."
+            href="/settings/walkthrough"
+          />
+          <SettingsLinkRow
             icon={MessageSquare}
             title="Send feedback"
             description="Rate Mad Buddy or suggest an idea."
@@ -361,6 +367,7 @@ type SettingsLinkRowProps = {
     | "/settings/language"
     | "/settings/data-storage"
     | "/settings/feedback"
+    | "/settings/walkthrough"
     | "/help"
     | "/invite"
     | "/safe-arrival"

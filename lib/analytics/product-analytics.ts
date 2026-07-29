@@ -44,6 +44,17 @@ export const PRODUCT_EVENT_NAMES = [
   ,"premium_wallpaper_attempted"
   ,"custom_wallpaper_uploaded"
   ,"custom_wallpaper_applied"
+  // Guided product tours. Tour-level events carry the tour_version uuid as the
+  // resource id; step-level events carry the tour_step uuid, because
+  // record_product_event dedupes on (event_name, resource_type, resource_id,
+  // actor_id) — per-step ids are what make step drop-off measurable.
+  ,"tour_shown"
+  ,"tour_started"
+  ,"tour_step_viewed"
+  ,"tour_step_completed"
+  ,"tour_skipped"
+  ,"tour_completed"
+  ,"tour_cta_clicked"
 ] as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT_NAMES)[number];

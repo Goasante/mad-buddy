@@ -925,6 +925,10 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
               <Link
                 href={item.href}
                 prefetch={false}
+                // Stable targeting contract for guided tours. Derived from the
+                // route, so a tour step never depends on a fragile positional
+                // selector like :nth-child.
+                data-tour-id={`nav-${item.href.slice(1)}`}
                 aria-label={ariaLabel}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(

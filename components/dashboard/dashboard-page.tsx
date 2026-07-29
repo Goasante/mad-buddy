@@ -643,7 +643,9 @@ function NearbyHero({
   const remaining = total - shown.length;
 
   return (
-    <section aria-labelledby="home-nearby-heading">
+    // data-tour-id is the guided tour's stable targeting contract; the tour
+    // spotlights this real section rather than showing a screenshot of it.
+    <section aria-labelledby="home-nearby-heading" data-tour-id="home-nearby">
       <div className="mb-2 flex items-center justify-between">
         <h2 id="home-nearby-heading" className="text-base font-semibold tracking-tight">
           Nearby Muddies

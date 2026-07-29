@@ -50,6 +50,7 @@ export type RateLimitAction =
   | "feedback.submit"
   | "support.request"
   | "notifications.mutate"
+  | "tours.progress"
   | "account.export"
   | "account.delete"
   | "admin.mutate"
@@ -115,6 +116,9 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "feedback.submit": { limit: 5, windowSeconds: 60 * 60 },
   "support.request": { limit: 5, windowSeconds: 60 * 60 },
   "notifications.mutate": { limit: 120, windowSeconds: 60 * 60 },
+  // A tour is a few dozen step writes at most; this only stops a stuck client
+  // from looping, it is not a product limit anyone should ever reach.
+  "tours.progress": { limit: 200, windowSeconds: 60 * 60 },
   "account.export": { limit: 3, windowSeconds: 60 * 60 },
   "account.delete": { limit: 3, windowSeconds: 24 * 60 * 60 },
   "admin.mutate": { limit: 120, windowSeconds: 60 * 60 },

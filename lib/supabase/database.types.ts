@@ -1040,6 +1040,112 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["user_preferences"]["Insert"]>;
         Relationships: [];
       };
+      tours: {
+        Row: RowWithTimestamps & {
+          id: string;
+          slug: string;
+          title: string;
+          description: string;
+          kind: "main" | "feature";
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          title: string;
+          description?: string;
+          kind?: "main" | "feature";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["tours"]["Insert"]>;
+        Relationships: [];
+      };
+      tour_versions: {
+        Row: RowWithTimestamps & {
+          id: string;
+          tour_id: string;
+          version: number;
+          status: "draft" | "published" | "retired";
+          audience: Json;
+          starts_at: string | null;
+          ends_at: string | null;
+          published_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          tour_id: string;
+          version: number;
+          status?: "draft" | "published" | "retired";
+          audience?: Json;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          published_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["tour_versions"]["Insert"]>;
+        Relationships: [];
+      };
+      tour_steps: {
+        Row: {
+          id: string;
+          tour_version_id: string;
+          position: number;
+          step_key: string;
+          title: string;
+          body: string;
+          target_id: string | null;
+          route: string | null;
+          media_path: string | null;
+          cta_label: string | null;
+          cta_href: string | null;
+          requires_feature_flag: string | null;
+          entitlement_keys: string[];
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tour_version_id: string;
+          position: number;
+          step_key: string;
+          title: string;
+          body: string;
+          target_id?: string | null;
+          route?: string | null;
+          media_path?: string | null;
+          cta_label?: string | null;
+          cta_href?: string | null;
+          requires_feature_flag?: string | null;
+          entitlement_keys?: string[];
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["tour_steps"]["Insert"]>;
+        Relationships: [];
+      };
+      user_tour_progress: {
+        Row: {
+          id: string;
+          user_id: string;
+          tour_version_id: string;
+          status: "started" | "completed" | "skipped" | "dismissed";
+          current_step_key: string | null;
+          started_at: string;
+          completed_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          tour_version_id: string;
+          status: "started" | "completed" | "skipped" | "dismissed";
+          current_step_key?: string | null;
+          started_at?: string;
+          completed_at?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["user_tour_progress"]["Insert"]>;
+        Relationships: [];
+      };
       app_feedback: {
         Row: RowWithTimestamps & {
           id: string;

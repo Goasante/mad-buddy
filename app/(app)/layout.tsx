@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell/app-shell";
+import { TourHost } from "@/components/tours/tour-host";
 import { EnableNotificationsPrompt } from "@/components/pwa/enable-notifications-prompt";
 import { InstallAppPrompt } from "@/components/pwa/install-app-prompt";
 import { ensureMaintenanceWarm } from "@/lib/maintenance/loader";
@@ -113,6 +114,15 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
       {/* Only offered once the user is signed in (mounted in the authed layout). */}
       <InstallAppPrompt />
       {user ? <EnableNotificationsPrompt userId={user.id} /> : null}
+      {/* Guided tours, behind their own Suspense boundary so tour eligibility
+          can never delay the route committing — the lesson from the wallpaper
+          regression. Renders nothing for anyone who has already resolved the
+          current tour version, which is nearly every load. */}
+      {user ? (
+        <Suspense fallback={null}>
+          <TourHost userId={user.id} />
+        </Suspense>
+      ) : null}
     </AppShell>
   );
 }
