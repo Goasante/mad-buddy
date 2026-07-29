@@ -48,6 +48,36 @@ export function bucketDailyCounts(isoDates: (string | null | undefined)[], days:
   return buckets;
 }
 
+/**
+ * Same shape as bucketDailyCounts, but the input is already grouped by day
+ * (a Postgres date_trunc+count aggregate) instead of one row per record —
+ * for call sites that would otherwise ship thousands of raw timestamps to
+ * the app server just to count them.
+ */
+export function bucketsFromDailyCounts(
+  dailyCounts: { day: string; count: number }[],
+  days: number,
+  now: Date = new Date()
+): DailyBucket[] {
+  const buckets: DailyBucket[] = [];
+  const index = new Map<string, number>();
+
+  for (let offset = days - 1; offset >= 0; offset -= 1) {
+    const date = new Date(now.getTime() - offset * 24 * 60 * 60 * 1000);
+    const key = dayKey(date);
+    index.set(key, buckets.length);
+    buckets.push({ key, label: labelFor(key), count: 0 });
+  }
+
+  for (const row of dailyCounts) {
+    const key = row.day.slice(0, 10);
+    const position = index.get(key);
+    if (position !== undefined) buckets[position].count = row.count;
+  }
+
+  return buckets;
+}
+
 export function bucketTotal(buckets: DailyBucket[]): number {
   return buckets.reduce((sum, bucket) => sum + bucket.count, 0);
 }
@@ -73,6 +103,14 @@ const PLAN_MIX_LABELS: Record<string, string> = {
 export function planMix(plans: string[]): PlanMixRow[] {
   const counts = new Map<string, number>();
   for (const plan of plans) counts.set(plan, (counts.get(plan) ?? 0) + 1);
+  return (["free", "buddy_plus", "buddy_pro"] as const)
+    .map((plan) => ({ plan, label: PLAN_MIX_LABELS[plan], count: counts.get(plan) ?? 0 }));
+}
+
+/** Same as planMix, but the input is already grouped by plan (a Postgres
+ * `group by plan` aggregate) instead of one row per subscription. */
+export function planMixFromCounts(rows: { plan: string; count: number }[]): PlanMixRow[] {
+  const counts = new Map(rows.map((row) => [row.plan, row.count]));
   return (["free", "buddy_plus", "buddy_pro"] as const)
     .map((plan) => ({ plan, label: PLAN_MIX_LABELS[plan], count: counts.get(plan) ?? 0 }));
 }

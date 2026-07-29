@@ -3798,6 +3798,28 @@ export type Database = {
         Returns: LocationConfidence;
       };
       prepare_deleted_user_reports: { Args: { target_user_id: string }; Returns: undefined };
+      get_cancellation_reason_counts: {
+        Args: { p_since: string };
+        Returns: Array<{ reason: string; count: number }>;
+      };
+      admin_daily_signup_counts: {
+        Args: { p_since: string };
+        Returns: Array<{ day: string; count: number }>;
+      };
+      admin_active_plan_mix: {
+        Args: Record<string, never>;
+        Returns: Array<{ plan: string; count: number }>;
+      };
+      conversation_previews: {
+        Args: { p_user_id: string; p_conversation_ids: string[] };
+        Returns: Array<{
+          conversation_id: string;
+          last_text: string | null;
+          last_message_type: string | null;
+          last_created_at: string | null;
+          unread_count: number;
+        }>;
+      };
     };
     Enums: {
       friend_request_status: FriendRequestStatus;

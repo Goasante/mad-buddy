@@ -137,13 +137,13 @@ export function AppShell({
 
     const refresh = (async () => {
       try {
-        const response = await fetchWithTimeout("/api/notifications", {
+        const response = await fetchWithTimeout("/api/notifications/unread-count", {
           credentials: "include",
           cache: "no-store"
         }, 12_000, "refresh unread notifications");
         if (!response.ok) return;
-        const data = (await response.json()) as { notifications: Array<{ is_read: boolean }> };
-        setUnreadCount(data.notifications.filter((notification) => !notification.is_read).length);
+        const data = (await response.json()) as { unreadCount: number };
+        setUnreadCount(data.unreadCount);
       } catch {
         // Keep the last known count when the notification service is unavailable.
       } finally {

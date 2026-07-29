@@ -220,7 +220,9 @@ export function HangoutModePage({
     // Initial refetch is scheduled (not called synchronously in the effect body)
     // so it never triggers a cascading render on mount.
     const initial = setTimeout(() => void refreshRequests(), 0);
-    const interval = setInterval(() => void refreshRequests(), 15_000);
+    const interval = setInterval(() => {
+      if (!document.hidden) void refreshRequests();
+    }, 15_000);
     const onFocus = () => void refreshRequests();
     window.addEventListener("focus", onFocus);
     return () => {

@@ -277,11 +277,6 @@ export async function listMessageableFriends(userId: string): Promise<Messageabl
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
-async function readTimestampFor(admin: Admin, messageId: string): Promise<string> {
-  const { data } = await admin.from("messages").select("created_at").eq("id", messageId).maybeSingle();
-  return data?.created_at ?? new Date(0).toISOString();
-}
-
 export async function listConversations(userId: string): Promise<ConversationView[]> {
   if (!hasServiceRoleEnv()) return [];
 
@@ -303,13 +298,40 @@ export async function listConversations(userId: string): Promise<ConversationVie
     .order("last_message_at", { ascending: false, nullsFirst: false });
 
   const membershipById = new Map((memberships ?? []).map((row) => [row.conversation_id, row]));
-  // The user's pinned conversations (cosmetic ordering only).
-  const { data: pins } = await admin
-    .from("conversation_pins")
-    .select("conversation_id")
-    .eq("user_id", userId)
-    .in("conversation_id", conversationIds);
+
+  // Batched, not per-conversation: one .in() for direct-chat other-user
+  // profiles, one .in() for group/plan/event conversation names, one RPC for
+  // every conversation's last message + unread count in a single round trip
+  // (see conversation_previews in supabase/migrations). Previously this loop
+  // issued up to 4 sequential queries PER conversation.
+  const directConversations = (conversations ?? []).filter(
+    (conversation) => conversation.conversation_type === "direct" && conversation.direct_key
+  );
+  const otherIdByConversation = new Map<string, string>();
+  for (const conversation of directConversations) {
+    const otherId = conversation.direct_key!.split(":").find((id) => id !== userId);
+    if (otherId) otherIdByConversation.set(conversation.id, otherId);
+  }
+  const otherIds = [...new Set(otherIdByConversation.values())];
+  const groupConversationIds = (conversations ?? [])
+    .filter((conversation) => conversation.conversation_type !== "direct")
+    .map((conversation) => conversation.id);
+
+  const [{ data: pins }, { data: otherProfiles }, { data: groupSettings }, { data: previews }] = await Promise.all([
+    admin.from("conversation_pins").select("conversation_id").eq("user_id", userId).in("conversation_id", conversationIds),
+    otherIds.length > 0
+      ? admin.from("profiles").select("user_id, full_name, username, avatar_url").in("user_id", otherIds)
+      : Promise.resolve({ data: [] }),
+    groupConversationIds.length > 0
+      ? admin.from("group_settings").select("conversation_id, name").in("conversation_id", groupConversationIds)
+      : Promise.resolve({ data: [] }),
+    admin.rpc("conversation_previews", { p_user_id: userId, p_conversation_ids: conversationIds })
+  ]);
+
   const pinnedIds = new Set((pins ?? []).map((row) => row.conversation_id));
+  const profileByUserId = new Map((otherProfiles ?? []).map((profile) => [profile.user_id, profile]));
+  const groupNameByConversation = new Map((groupSettings ?? []).map((row) => [row.conversation_id, row.name]));
+  const previewByConversation = new Map((previews ?? []).map((row) => [row.conversation_id, row]));
   const nowIso = new Date().toISOString();
   const views: ConversationView[] = [];
 
@@ -318,48 +340,19 @@ export async function listConversations(userId: string): Promise<ConversationVie
     let otherUsername: string | null = null;
     let avatarUrl: string | null = null;
     if (conversation.conversation_type === "direct" && conversation.direct_key) {
-      const otherId = conversation.direct_key.split(":").find((id) => id !== userId);
-      if (otherId) {
-        const { data: profile } = await admin
-          .from("profiles")
-          .select("full_name, username, avatar_url")
-          .eq("user_id", otherId)
-          .maybeSingle();
-        title = profile?.full_name?.trim() || "A Muddy";
-        otherUsername = profile?.username ?? null;
-        avatarUrl = profile?.avatar_url ?? null;
-      }
+      const otherId = otherIdByConversation.get(conversation.id);
+      const profile = otherId ? profileByUserId.get(otherId) : undefined;
+      title = profile?.full_name?.trim() || "A Muddy";
+      otherUsername = profile?.username ?? null;
+      avatarUrl = profile?.avatar_url ?? null;
     } else {
-      const { data: settings } = await admin
-        .from("group_settings")
-        .select("name")
-        .eq("conversation_id", conversation.id)
-        .maybeSingle();
-      title = settings?.name ?? (conversation.conversation_type === "plan" ? "Plan chat" : "Group");
+      title =
+        groupNameByConversation.get(conversation.id) ??
+        (conversation.conversation_type === "plan" ? "Plan chat" : "Group");
     }
 
-    const { data: lastMessage } = await admin
-      .from("messages")
-      .select("text_content, message_type, created_at")
-      .eq("conversation_id", conversation.id)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
     const membership = membershipById.get(conversation.id);
-    const { count: unread } = await admin
-      .from("messages")
-      .select("id", { count: "exact", head: true })
-      .eq("conversation_id", conversation.id)
-      .neq("sender_id", userId)
-      .is("deleted_at", null)
-      .gt(
-        "created_at",
-        membership?.last_read_message_id
-          ? await readTimestampFor(admin, membership.last_read_message_id)
-          : new Date(0).toISOString()
-      );
+    const preview = previewByConversation.get(conversation.id);
 
     views.push({
       id: conversation.id,
@@ -368,9 +361,9 @@ export async function listConversations(userId: string): Promise<ConversationVie
       otherUsername,
       kind: conversation.conversation_type,
       lastMessagePreview:
-        lastMessage?.message_type === "voice_note" ? "Voice note" : lastMessage?.text_content ?? null,
+        preview?.last_message_type === "voice_note" ? "Voice note" : preview?.last_text ?? null,
       lastMessageAt: conversation.last_message_at,
-      unreadCount: unread ?? 0,
+      unreadCount: preview?.unread_count ?? 0,
       muted: Boolean(membership?.muted_until && membership.muted_until > nowIso),
       pinned: pinnedIds.has(conversation.id),
       contextBadge:

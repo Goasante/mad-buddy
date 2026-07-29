@@ -35,6 +35,37 @@ export async function isBlockedEitherDirection(admin: Admin, userA: string, user
   return Boolean(data?.length);
 }
 
+/**
+ * Batched replacement for calling `areApprovedMuddies`+`isBlockedEitherDirection`
+ * once per candidate id (an N+1 that showed up independently in plan invites
+ * and Hangout's "selected Muddies" audience check). One friendships query and
+ * one blocked_users query for `ownerId`, regardless of how many candidates.
+ */
+export async function batchEligibleMuddyIds(
+  admin: Admin,
+  ownerId: string,
+  candidateIds: string[]
+): Promise<Set<string>> {
+  const unique = [...new Set(candidateIds)].filter((id) => id && id !== ownerId);
+  if (unique.length === 0) return new Set();
+
+  // Matches areApprovedMuddies/isBlockedEitherDirection's exact semantics
+  // (no ended_at filter) so this is a pure query-count reduction, not a
+  // behavior change, at every call site that previously called those two
+  // functions once per candidate.
+  const [{ data: friendships }, { data: blocks }] = await Promise.all([
+    admin.from("friendships").select("user_one_id, user_two_id").or(`user_one_id.eq.${ownerId},user_two_id.eq.${ownerId}`),
+    admin.from("blocked_users").select("blocker_id, blocked_id").or(`blocker_id.eq.${ownerId},blocked_id.eq.${ownerId}`)
+  ]);
+
+  const friendIds = new Set(
+    (friendships ?? []).map((row) => (row.user_one_id === ownerId ? row.user_two_id : row.user_one_id))
+  );
+  const blocked = new Set((blocks ?? []).flatMap((row) => [row.blocker_id, row.blocked_id]));
+
+  return new Set(unique.filter((id) => friendIds.has(id) && !blocked.has(id)));
+}
+
 export async function isCloseFriend(admin: Admin, ownerId: string, viewerId: string): Promise<boolean> {
   const { data } = await admin
     .from("close_friend_relationships")

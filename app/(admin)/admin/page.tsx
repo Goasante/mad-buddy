@@ -17,7 +17,7 @@ import { Card } from "@/components/ui/card";
 import { BarList } from "@/components/admin/overview/bar-list";
 import { TrendChart } from "@/components/admin/overview/trend-chart";
 import { getReadinessReport } from "@/lib/health/readiness";
-import { bucketDailyCounts, bucketTotal, planMix } from "@/lib/admin/overview";
+import { bucketTotal, bucketsFromDailyCounts, planMixFromCounts } from "@/lib/admin/overview";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 // Validated reference palette — ordinal blue ramp for the plan tiers (dark surface).
@@ -72,15 +72,16 @@ async function AdminOverviewData() {
     admin.from("friend_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
     admin.from("emergency_controls").select("control_key, is_disabled").order("control_key"),
     admin.from("admin_audit_events").select("id, action, target_type, created_at").order("created_at", { ascending: false }).limit(6),
-    // Safe aggregates only — timestamps and plan labels, no identifiers.
-    admin.from("profiles").select("created_at").is("deleted_at", null).gte("created_at", since).limit(10000),
-    admin.from("subscriptions").select("plan").in("status", ["active", "trialing"]).neq("plan", "free").limit(10000)
+    // Grouped in Postgres (date_trunc+count / group by plan) instead of
+    // shipping up to 10,000 raw rows to the app server just to count them.
+    admin.rpc("admin_daily_signup_counts", { p_since: since }),
+    admin.rpc("admin_active_plan_mix")
   ]);
 
   const disabledControls = (controlsResult.data ?? []).filter((control) => control.is_disabled);
-  const signupBuckets = bucketDailyCounts((signupsResult.data ?? []).map((row) => row.created_at), 14);
+  const signupBuckets = bucketsFromDailyCounts(signupsResult.data ?? [], 14);
   const signupTotal = bucketTotal(signupBuckets);
-  const planRows = planMix((planMixResult.data ?? []).map((row) => row.plan)).map((row) => ({
+  const planRows = planMixFromCounts(planMixResult.data ?? []).map((row) => ({
     label: row.label,
     value: row.count,
     color: PLAN_COLORS[row.plan] ?? "#3987e5"

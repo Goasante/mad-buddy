@@ -237,19 +237,9 @@ async function loadMediaStorage(): Promise<MediaStorageRow[]> {
 
 async function loadCancellationReasons(startIso: string) {
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("subscription_changes")
-    .select("reason")
-    .eq("change_type", "cancel")
-    .gte("requested_at", startIso)
-    .not("reason", "is", null);
+  const { data, error } = await admin.rpc("get_cancellation_reason_counts", { p_since: startIso });
   if (error) throw new Error(`Could not load cancellation reasons: ${error.message}`);
-  const counts = new Map<string, number>();
-  for (const row of data ?? []) {
-    const reason = row.reason?.trim();
-    if (reason) counts.set(reason, (counts.get(reason) ?? 0) + 1);
-  }
-  return [...counts.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
+  return (data ?? []).map((row) => ({ reason: row.reason, count: Number(row.count) }));
 }
 
 async function loadFinancialSnapshots(startDay: string): Promise<FinancialSnapshotRow[]> {

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
+import { areApprovedMuddies, batchEligibleMuddyIds, isBlockedEitherDirection } from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { PlanRole, RsvpStatus } from "@/lib/supabase/database.types";
 
@@ -33,17 +33,14 @@ export async function canInviteToPlan(
   return mutual && !blocked;
 }
 
-/** Filters a candidate invitee list down to the eligible ids (batched-ish). */
+/** Filters a candidate invitee list down to the eligible ids. */
 export async function eligibleInvitees(
   admin: Admin,
   creatorId: string,
   candidateIds: string[]
 ): Promise<string[]> {
-  const unique = [...new Set(candidateIds)].filter((id) => id && id !== creatorId);
-  const results = await Promise.all(
-    unique.map(async (id) => ((await canInviteToPlan(admin, creatorId, id)) ? id : null))
-  );
-  return results.filter((id): id is string => id !== null);
+  const eligible = await batchEligibleMuddyIds(admin, creatorId, candidateIds);
+  return [...eligible];
 }
 
 export type PlanAccess = {

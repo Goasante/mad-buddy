@@ -232,9 +232,21 @@ export function SocializePage({
     toastTimer.current = setTimeout(() => setToast(null), 3500);
   }, []);
 
+  // Focus, visibilitychange, and the 60s interval below can all call this
+  // within moments of each other (e.g. switching back to the tab fires focus
+  // then visibilitychange back-to-back). Without a guard, two overlapping
+  // discoverSocializePeopleAction() calls can resolve out of order and the
+  // later-resolving one — not necessarily the more recent request — wins.
+  const refreshInFlightRef = useRef(false);
   const refresh = useCallback(() => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
     startTransition(async () => {
-      setPeople(await discoverSocializePeopleAction());
+      try {
+        setPeople(await discoverSocializePeopleAction());
+      } finally {
+        refreshInFlightRef.current = false;
+      }
     });
   }, []);
 

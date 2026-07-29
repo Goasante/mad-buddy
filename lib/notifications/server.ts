@@ -1,5 +1,6 @@
 import "server-only";
 
+import { after } from "next/server";
 import { applyEngagementGuards, clampNotificationBudget } from "@/lib/engagement/rules";
 import {
   DEFAULT_RECIPIENT_TIMEZONE,
@@ -161,23 +162,37 @@ export async function deliverNotification(
 
   if (decision.push) {
     const safePush = privacySafePushPayload(input);
-    // Real web push transport; silent no-op until VAPID keys are configured.
-    const { sendPushToUser } = await import("@/lib/notifications/push");
-    await sendPushToUser(supabase, input.userId, safePush);
+    // The in-app row above is what "immediate consistency" actually means
+    // here — the recipient's own Pulse feed. The push round trip is a real
+    // network call to an external provider (web push / FCM / APNs) with no
+    // bearing on that, so it has no reason to hold open the ACTOR's request
+    // (e.g. "Plan created" waiting on every invitee's push delivery). Deferred
+    // via Next's after() — same established pattern as onboarding's milestone
+    // recording — so it still runs to completion, just not on the response's
+    // critical path. Errors are swallowed either way: a push failure must
+    // never surface as a failure of the action that triggered it.
+    after(async () => {
+      try {
+        const { sendPushToUser } = await import("@/lib/notifications/push");
+        await sendPushToUser(supabase, input.userId, safePush);
+      } catch {
+        // swallow — the in-app notification already landed
+      }
 
-    // Native push (FCM/APNs) to the user's mobile devices. Best-effort and a
-    // silent no-op until FIREBASE_SERVICE_ACCOUNT_BASE64 is configured; never
-    // let a push transport error interrupt in-app delivery.
-    try {
-      const { sendNativePushToUser } = await import("@/lib/notifications/fcm");
-      await sendNativePushToUser(input.userId, {
-        title: safePush.title,
-        body: safePush.body,
-        data: { url: safePush.url, type: input.type }
-      });
-    } catch {
-      // swallow — the in-app notification already landed
-    }
+      // Native push (FCM/APNs) to the user's mobile devices. Best-effort and a
+      // silent no-op until FIREBASE_SERVICE_ACCOUNT_BASE64 is configured; never
+      // let a push transport error interrupt in-app delivery.
+      try {
+        const { sendNativePushToUser } = await import("@/lib/notifications/fcm");
+        await sendNativePushToUser(input.userId, {
+          title: safePush.title,
+          body: safePush.body,
+          data: { url: safePush.url, type: input.type }
+        });
+      } catch {
+        // swallow — the in-app notification already landed
+      }
+    });
   }
 
   // Only budgeted pushes consume the budget, critical/high bypass it, so

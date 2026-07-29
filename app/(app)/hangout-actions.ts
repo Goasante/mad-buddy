@@ -6,6 +6,7 @@ import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { deliverNotification } from "@/lib/notifications/server";
 import {
   areApprovedMuddies,
+  batchEligibleMuddyIds,
   isBlockedEitherDirection,
   isCloseFriend,
   viewerCircleIds
@@ -197,14 +198,7 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
     }));
     if (rows.length > 0) await admin.from("hangout_audience_targets").insert(rows);
   } else if (parsed.data.audienceType === "selected_muddies" && parsed.data.muddyIds?.length) {
-    const eligible: string[] = [];
-    for (const muddyId of [...new Set(parsed.data.muddyIds)]) {
-      const [mutual, blocked] = await Promise.all([
-        areApprovedMuddies(admin, userId, muddyId),
-        isBlockedEitherDirection(admin, userId, muddyId)
-      ]);
-      if (mutual && !blocked) eligible.push(muddyId);
-    }
+    const eligible = [...(await batchEligibleMuddyIds(admin, userId, parsed.data.muddyIds))];
     if (eligible.length > 0) {
       await admin.from("hangout_audience_targets").insert(
         eligible.map((muddyId) => ({

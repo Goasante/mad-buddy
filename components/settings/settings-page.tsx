@@ -26,6 +26,7 @@ import {
   UserRound
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
   updateNotificationPreferenceAction,
@@ -34,11 +35,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { PrivacyToggle } from "@/components/settings/privacy-toggle";
-import { DeleteAccountModal } from "@/components/settings/delete-account-modal";
 import { DataExportButton } from "@/components/settings/data-export-button";
 import { LocationForGlowSetting } from "@/components/settings/location-for-glow-setting";
 import type { VisibilityStatus } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
+
+// Deferred: most visits to Settings never open this — no reason to ship its
+// JS on every Settings page load.
+const DeleteAccountModal = dynamic(() =>
+  import("@/components/settings/delete-account-modal").then((mod) => mod.DeleteAccountModal)
+);
 
 type SettingsPageContentProps = {
   initialVisibilityStatus?: VisibilityStatus;
