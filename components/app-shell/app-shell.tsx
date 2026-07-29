@@ -44,6 +44,24 @@ import { NavigationWatchdog } from "@/components/navigation/navigation-watchdog"
 // Order matters for MobileNav, which just takes the first five (minus
 // admin/billing). Primary destinations are listed first so the bottom bar's
 // slice keeps showing the same four the desktop sidebar treats as primary.
+//
+// PREFETCH IS DISABLED on every shell nav/menu Link below (`prefetch={false}`).
+// This is deliberate and load-bearing — do not remove it without re-measuring.
+// Every destination here lives under app/(app)/layout.tsx, which is
+// `force-dynamic`, so a prefetch cannot be cached and instead executes a FULL
+// server render: middleware auth round trip + layout auth round trip + the
+// notifications/profile/feature-flag/subscription queries. With ~17 shell
+// links, default prefetch turned a single page view into a burst of a dozen
+// such renders — production logs showed 8 dynamic route renders inside 1.4s,
+// with /dashboard, /friends and /plans each rendered twice, which no human
+// click pattern can produce. Opening the account dropdown was the worst case:
+// it mounts five Links at once, firing five full renders, and then the user's
+// actual click had to queue behind the five prefetches their own tap had just
+// started — which is exactly the reported "open profile menu, navigate, stall"
+// symptom, and why a Retry (by then the burst had drained) worked.
+// For a force-dynamic route prefetch buys almost nothing anyway: it can only
+// reach the loading.tsx boundary, so the real render still happens on click.
+// Near-zero benefit, very high cost.
 const navigationItems: Array<{
   href:
     | "/dashboard"
@@ -316,6 +334,7 @@ function DesktopSidebar({
     >
       <Link
         href="/dashboard"
+        prefetch={false}
         aria-label="Mad Buddy home"
         title="Mad Buddy home"
         className="focus-ring grid h-14 shrink-0 place-items-center border-b border-border/70 dark:border-white/10"
@@ -340,6 +359,7 @@ function DesktopSidebar({
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  prefetch={false}
                   aria-current={isActive ? "page" : undefined}
                   aria-label={ariaLabel}
                   title={item.label}
@@ -486,7 +506,7 @@ function MoreMenu({
             const isActive = isNavigationItemActive(item, pathname);
             return (
               <DropdownMenu.Item key={item.href} asChild className={flyoutItemClassName(isActive)}>
-                <Link href={item.href} aria-current={isActive ? "page" : undefined}>
+                <Link href={item.href} prefetch={false} aria-current={isActive ? "page" : undefined}>
                   <NavItemIcon item={item} lucideClass="h-5 w-5 shrink-0" size={20} isActive={isActive} />
                   {item.label}
                 </Link>
@@ -610,7 +630,7 @@ function AccountMenuItem({
 }) {
   return (
     <DropdownMenu.Item asChild className={flyoutItemClassName(isActive)}>
-      <Link href={href} aria-current={isActive ? "page" : undefined}>
+      <Link href={href} prefetch={false} aria-current={isActive ? "page" : undefined}>
         <Icon className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
         {label}
       </Link>
@@ -657,6 +677,7 @@ function AppHeader({
             title (the sidebar carries the logo there). */}
         <Link
           href="/dashboard"
+          prefetch={false}
           aria-label="Mad Buddy home"
           title="Mad Buddy home"
           className="focus-ring shrink-0 md:hidden"
@@ -688,7 +709,7 @@ function AppHeader({
                     asChild
                     className="focus-ring safe-motion flex w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2.5 text-left outline-none data-[highlighted]:bg-secondary"
                   >
-                    <Link href={action.href}>
+                    <Link href={action.href} prefetch={false}>
                       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
                         <FeatureIcon feature={action.featureIcon} size={20} decorative />
                       </span>
@@ -896,6 +917,7 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
             <li key={item.href} className="flex-1">
               <Link
                 href={item.href}
+                prefetch={false}
                 aria-label={ariaLabel}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
