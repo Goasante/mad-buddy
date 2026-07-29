@@ -13,7 +13,7 @@ import {
   type LiveSignal
 } from "@/lib/notifications/live-signal";
 import { fetchWithTimeout } from "@/lib/network/resilience";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type ActiveSignal = {
   /** Notification row id — also the React key, so a repeat restarts the animation. */
@@ -183,14 +183,26 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
               void present(row.id, parsed);
             }
           )
-          .subscribe((status) => {
-            // Silent failure here is what makes "nothing animated" impossible
-            // to diagnose, so surface it. The poll fallback still covers it.
-            if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-              console.warn(`[live-signal] realtime ${status}; using poll fallback.`);
-            }
-          })
       : null;
+
+    // The channel is built above but deliberately NOT subscribed yet: the
+    // socket needs this user's JWT first, or Realtime evaluates the
+    // user_id-filtered subscription with only the publishable key, sees
+    // nothing through RLS, and closes it with CHANNEL_ERROR. If there's no
+    // session to attach, skip Realtime entirely and let the poll above carry
+    // it, rather than opening a socket that is guaranteed to fail.
+    if (supabase && channel) {
+      void authenticateRealtime(supabase).then(() => {
+        if (cancelled) return;
+        channel.subscribe((status) => {
+          // Silent failure here is what makes "nothing animated" impossible
+          // to diagnose, so surface it. The poll fallback still covers it.
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            console.warn(`[live-signal] realtime ${status}; using poll fallback.`);
+          }
+        });
+      });
+    }
 
     return () => {
       cancelled = true;

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { resolveJourneyState, watcherSummary, type JourneyTiming } from "@/lib/safety/journey-status";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { SafeArrivalStatus } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 
@@ -106,17 +106,23 @@ export function JourneyStatusCard({
         refresh
       );
     }
-    channel.subscribe((subscriptionStatus) => {
+    // Authenticate the socket before subscribing: these filters are on
+    // RLS-protected tables, and a socket carrying only the publishable key sees
+    // nothing through RLS and is closed with CHANNEL_ERROR.
+    void authenticateRealtime(supabase).then(() => {
       if (disposed) return;
-      if (subscriptionStatus === "SUBSCRIBED") {
-        setRealtimeState("connected");
-      } else if (
-        subscriptionStatus === "CHANNEL_ERROR" ||
-        subscriptionStatus === "TIMED_OUT" ||
-        subscriptionStatus === "CLOSED"
-      ) {
-        setRealtimeState("offline");
-      }
+      channel.subscribe((subscriptionStatus) => {
+        if (disposed) return;
+        if (subscriptionStatus === "SUBSCRIBED") {
+          setRealtimeState("connected");
+        } else if (
+          subscriptionStatus === "CHANNEL_ERROR" ||
+          subscriptionStatus === "TIMED_OUT" ||
+          subscriptionStatus === "CLOSED"
+        ) {
+          setRealtimeState("offline");
+        }
+      });
     });
 
     const handleOffline = () => setRealtimeState("offline");

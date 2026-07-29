@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { QUICK_ACTIONS, quickActionLabel, DELETED_MESSAGE_PLACEHOLDER } from "@/lib/messaging/rules";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
@@ -289,8 +289,16 @@ export function MessagesPageContent({
           // preferences are re-applied, never trust the raw event payload.
           scheduleRefresh();
         }
-      )
-      .subscribe();
+      );
+
+    // Authenticate the socket before subscribing: this filter is on an
+    // RLS-protected table, and a socket carrying only the publishable key sees
+    // nothing through RLS and is closed with CHANNEL_ERROR.
+    void authenticateRealtime(supabase).then(() => {
+      if (disposed) return;
+      channel.subscribe();
+    });
+
     return () => {
       disposed = true;
       if (refreshTimer) clearTimeout(refreshTimer);

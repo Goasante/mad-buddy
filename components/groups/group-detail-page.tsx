@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import type { GroupDetailView, GroupInviteCandidate } from "@/lib/groups/types";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
@@ -89,8 +89,16 @@ export function GroupDetailPage({
         "postgres_changes",
         { event: "*", schema: "public", table: "messages", filter: `conversation_id=eq.${group.id}` },
         scheduleRefresh
-      )
-      .subscribe();
+      );
+
+    // Authenticate the socket before subscribing: this filter is on an
+    // RLS-protected table, and a socket carrying only the publishable key sees
+    // nothing through RLS and is closed with CHANNEL_ERROR.
+    void authenticateRealtime(supabase).then(() => {
+      if (disposed) return;
+      channel.subscribe();
+    });
+
     return () => {
       disposed = true;
       if (refreshTimer) clearTimeout(refreshTimer);

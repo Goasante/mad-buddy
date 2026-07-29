@@ -36,10 +36,21 @@ describe("navigation is never cancelled by the back-dismiss sentinel", () => {
     }
   });
 
-  it("the hook documents that it must not wrap navigation links", () => {
+  it("the back-dismiss hook never performs a history navigation", () => {
+    // The actual invariant. A pop on the current route is seen by the App
+    // Router as a route change, which cancelled in-flight menu navigations AND
+    // reverted post-mutation state (Socialize/Hangout activating, then showing
+    // OFF again). Neutralising the sentinel with replaceState has neither
+    // effect. Back-to-close still works: that path pops before this cleanup
+    // runs, so the `mbSheet` guard skips it.
     const hook = readFileSync(join(ROOT, "hooks/use-dismiss-on-back.ts"), "utf8");
-    expect(hook).toMatch(/NEVER use this on an overlay that contains navigation links/i);
-    // The pop itself is still correct for form/action sheets — it should stay.
-    expect(hook).toContain("window.history.back()");
+    const code = hook
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("*") && !line.trimStart().startsWith("//"))
+      .join("\n");
+    expect(code).not.toMatch(/history\.(back|forward|go)\s*\(/);
+    expect(code).toContain("window.history.replaceState");
+    // The sentinel push is what makes Back-to-close possible at all.
+    expect(code).toContain("window.history.pushState");
   });
 });
