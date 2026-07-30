@@ -163,6 +163,13 @@ export function resolveMomentVisibility(input: MomentVisibilityInput): MomentVis
 
   if (!input.areApprovedMuddies) return { visible: false, reason: "not_muddies" };
 
+  // Every approved Muddy, with no further narrowing. The Muddy check above is
+  // the whole audience rule, so no target rows are needed and adding a new
+  // Muddy widens the audience of a live Moment automatically.
+  if (input.audienceType === "all_muddies") {
+    return { visible: true, reason: "visible" };
+  }
+
   if (input.audienceType === "nearby_muddies") {
     // Nearby needs BOTH audience eligibility and a fresh, in-band presence.
     if (!input.viewerNearbyAndFresh) return { visible: false, reason: "not_nearby" };
@@ -236,6 +243,8 @@ export function resolveDropUnlock(input: DropUnlockInput): DropUnlockResult {
 
 export function audienceSummaryLabel(audienceType: MomentAudienceType, targetNames: string[]): string {
   switch (audienceType) {
+    case "all_muddies":
+      return "All Muddies";
     case "close_friends":
       return "Close Friends";
     case "nearby_muddies":
@@ -251,4 +260,136 @@ export function audienceSummaryLabel(audienceType: MomentAudienceType, targetNam
     case "public":
       return "Everyone on Mad Buddy";
   }
+}
+
+/** The Spotlight audience, named for the product surface rather than the column. */
+export const SPOTLIGHT_AUDIENCE_TYPE = "public" as const;
+
+export function isSpotlightAudience(audienceType: MomentAudienceType): boolean {
+  return audienceType === SPOTLIGHT_AUDIENCE_TYPE;
+}
+
+// ---------------------------------------------------------------------------
+// Reactions
+// ---------------------------------------------------------------------------
+
+/**
+ * The canonical reaction set, matching the `moment_reactions.reaction_type`
+ * check constraint already in the database. Reused rather than extended: adding
+ * emoji here without a migration would fail at insert time.
+ *
+ * Every reaction is POSITIVE by construction. There is no dislike, no downvote
+ * and no negative score anywhere in this model, and none can be added without
+ * changing the constraint. Disapproval routes to report/block, which are
+ * separate systems and deliberately not part of engagement.
+ */
+export const MOMENT_REACTIONS = [
+  { id: "heart", emoji: "❤️", label: "Love" },
+  { id: "fire", emoji: "🔥", label: "Fire" },
+  { id: "laugh", emoji: "😂", label: "Funny" },
+  { id: "clap", emoji: "👏", label: "Applause" },
+  { id: "wave", emoji: "👋", label: "Wave" }
+] as const;
+
+export type MomentReactionId = (typeof MOMENT_REACTIONS)[number]["id"];
+
+export function reactionEmoji(id: string): string {
+  return MOMENT_REACTIONS.find((reaction) => reaction.id === id)?.emoji ?? "❤️";
+}
+
+export function isSupportedReaction(id: string): id is MomentReactionId {
+  return MOMENT_REACTIONS.some((reaction) => reaction.id === id);
+}
+
+/**
+ * Compact aggregate presentation: the top few reactions by count, plus a total.
+ * A card shows at most `limit` emoji so a busy Moment does not turn into a wall
+ * of counters.
+ */
+export function summarizeReactions(
+  breakdown: Record<string, number>,
+  limit = 3
+): { entries: { id: string; emoji: string; count: number }[]; total: number } {
+  const entries = Object.entries(breakdown)
+    .filter(([id, count]) => count > 0 && isSupportedReaction(id))
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([id, count]) => ({ id, emoji: reactionEmoji(id), count }));
+  const total = Object.values(breakdown).reduce((sum, count) => sum + count, 0);
+  return { entries, total };
+}
+
+// ---------------------------------------------------------------------------
+// Tune In
+// ---------------------------------------------------------------------------
+
+/**
+ * Tune In is one-way content interest, NOT a follow graph and NOT a Muddy
+ * relationship:
+ *  - One-way: the creator does not tune in back, and is never told who did.
+ *  - Private: only the viewer can see their own list.
+ *  - Silent: no notification is produced, so there is no social pressure.
+ *
+ * It is deliberately independent of reactions. Reacting never tunes you in and
+ * tuning in never reacts, because they answer different questions ("I liked
+ * this" vs "show me more from this person").
+ */
+export function tuneInLabel(isTunedIn: boolean): string {
+  return isTunedIn ? "Tuned In" : "Tune In";
+}
+
+/** "428 Tuned In". Never "followers", and there is no "following" counterpart. */
+export function tunedInCountLabel(count: number): string {
+  return `${count.toLocaleString()} Tuned In`;
+}
+
+// ---------------------------------------------------------------------------
+// Spotlight ranking
+// ---------------------------------------------------------------------------
+
+export type SpotlightRankingInput = {
+  momentId: string;
+  createdAtMs: number;
+  /** Viewer has tuned in to this creator. */
+  tunedIn: boolean;
+  /** Viewer and creator are approved Muddies. */
+  isMuddy: boolean;
+  reactionCount: number;
+  viewCount: number;
+};
+
+/**
+ * Blended Spotlight ranking (spec §22): tuned-in creators are boosted but never
+ * take over the feed, so discovery of new creators survives.
+ *
+ * Recency is the base so the feed stays fresh and temporary content does not sit
+ * stale at the top. Quality uses the reaction RATE rather than raw counts, so a
+ * small creator with a well-received Moment can out-rank a large creator's
+ * ignored one, and raw view count cannot be farmed into permanent dominance.
+ *
+ * Pure and deterministic: `nowMs` is passed in, never read here.
+ */
+export function scoreSpotlightMoment(input: SpotlightRankingInput, nowMs: number): number {
+  const ageHours = Math.max(0, (nowMs - input.createdAtMs) / 3_600_000);
+  // Halves roughly every 6 hours, matching the lifespan of the content.
+  const recency = 1 / (1 + ageHours / 6);
+
+  // Bounded engagement rate, so one viral Moment cannot dwarf the whole feed.
+  const rate = input.viewCount > 0 ? input.reactionCount / input.viewCount : 0;
+  const quality = Math.min(1, rate);
+
+  const affinity = (input.tunedIn ? 0.35 : 0) + (input.isMuddy ? 0.15 : 0);
+
+  // Weights: recency leads, affinity boosts, quality breaks ties. Affinity is
+  // capped at 0.5 so a tuned-in creator's stale Moment still loses to a fresh
+  // one from someone new.
+  return recency * 1 + affinity + quality * 0.4;
+}
+
+/** Sorts a Spotlight page by blended score, highest first. */
+export function rankSpotlightMoments<T extends SpotlightRankingInput>(moments: T[], nowMs: number): T[] {
+  return [...moments]
+    .map((moment) => ({ moment, score: scoreSpotlightMoment(moment, nowMs) }))
+    .sort((a, b) => b.score - a.score || b.moment.createdAtMs - a.moment.createdAtMs)
+    .map((entry) => entry.moment);
 }

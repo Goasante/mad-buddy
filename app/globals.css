@@ -350,6 +350,47 @@
   .journey-rail-dot { transition: none; }
 }
 
+/* ---------------------------------------------------------------------------
+ * Moments: temporary-content ring.
+ *
+ * Mad Buddy's own gradient (brand orange into violet) rather than a copy of any
+ * other app's ring. Three states carry meaning: live-with-something-new, already
+ * seen, and idle/empty. The optional shimmer is a slow gradient drift, not a
+ * spinner, and it stops entirely under prefers-reduced-motion — the colour
+ * difference alone still distinguishes the states.
+ * ------------------------------------------------------------------------- */
+.moment-ring {
+  background: linear-gradient(135deg, hsl(25 95% 53%), hsl(275 70% 60%));
+}
+.moment-ring-seen {
+  background: hsl(var(--border));
+}
+.moment-ring-idle {
+  background: linear-gradient(135deg, hsl(25 95% 53% / 0.35), hsl(275 70% 60% / 0.35));
+}
+.moment-ring-live {
+  background: linear-gradient(135deg, hsl(25 95% 53%), hsl(275 70% 60%), hsl(25 95% 53%));
+  background-size: 200% 200%;
+  animation: moment-ring-drift 6s ease-in-out infinite;
+}
+@keyframes moment-ring-drift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moment-ring-live { animation: none; background-size: 100% 100%; }
+}
+
+/* Spotlight card surface: a little more presence than a private Moment, since
+ * Spotlight is meant to feel public and alive while Moments feels personal. */
+.spotlight-card {
+  border: 1px solid hsl(275 70% 60% / 0.22);
+  background:
+    radial-gradient(120% 90% at 50% 0%, hsl(275 70% 60% / 0.1), transparent 60%),
+    hsl(var(--card) / 0.6);
+}
+
 /* Approved watcher avatars: a soft breathing ring so their presence reads as
  * "here with you", never a surveillance eye. */
 .journey-watcher { display: inline-flex; border-radius: 9999px; }

@@ -24,7 +24,8 @@ export function MomentImage({
   onRetry,
   unavailableLabel = "Image unavailable",
   className,
-  fallbackClassName
+  fallbackClassName,
+  priority = false
 }: {
   src: string | null;
   alt: string;
@@ -33,6 +34,12 @@ export function MomentImage({
   unavailableLabel?: string;
   className?: string;
   fallbackClassName?: string;
+  /**
+   * Opts the FIRST above-the-fold image out of lazy loading. Everything else
+   * stays lazy: a Moments feed is image-heavy, and eagerly fetching a whole page
+   * of signed URLs would waste bandwidth on cards the viewer may never scroll to.
+   */
+  priority?: boolean;
 }) {
   // Derived reset: when the src prop changes (e.g. a regenerated signed URL),
   // clear the retry/fail flags so the new URL gets a fresh attempt. This is the
@@ -74,7 +81,8 @@ export function MomentImage({
         className
       )}
       draggable={false}
-      loading="lazy"
+      loading={priority ? "eager" : "lazy"}
+      fetchPriority={priority ? "high" : "auto"}
       decoding="async"
       onError={() => {
         // The signed URL may simply have expired — retry once before giving up.

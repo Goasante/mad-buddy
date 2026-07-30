@@ -1,6 +1,6 @@
 import "server-only";
 
-import { resolveMomentVisibility } from "@/lib/content/moments";
+import { rankSpotlightMoments, resolveMomentVisibility } from "@/lib/content/moments";
 import { isOpenMomentsEnabled } from "@/lib/features/feature-flags";
 import { loadNearbyForUser } from "@/lib/proximity/nearby-service";
 import { isCloseFriend, viewerCircleIds } from "@/lib/social/permissions";
@@ -73,9 +73,28 @@ export type VisibleMoment = {
   myReaction: string | null;
   /** Total reactions on this Moment (aggregate only — never who reacted). */
   reactionCount: number;
+  /**
+   * Count per reaction type, for the compact aggregate display. Still an
+   * aggregate: it says five people used 🔥, never which five.
+   */
+  reactionBreakdown: Record<string, number>;
   isAuthor: boolean;
   /** Author-only: what audience this went to (spec §9). */
   audienceLabel: string | null;
+  /**
+   * Author-only reach. Null for everyone else: a Spotlight viewer must not be
+   * able to read how many people saw someone else's Moment, and never who.
+   */
+  viewCount: number | null;
+  /**
+   * Author-only: how many people tuned in to the author BECAUSE of this Moment.
+   * A count, never identities.
+   */
+  tunedInFromThis: number | null;
+  /** Whether the VIEWER has tuned in to this creator. Their own state only. */
+  creatorTunedIn: boolean;
+  /** The creator's public aggregate. Never a list. */
+  creatorTunedInCount: number;
 };
 
 /**
@@ -142,15 +161,31 @@ export async function buildMomentFeed(
     admin.from("moment_audience_targets").select("moment_id, target_type, target_id").in("moment_id", momentIds),
     admin.from("profiles").select("user_id, full_name, avatar_url, visibility_status").in("user_id", otherAuthorIds),
     admin.from("moment_reactions").select("moment_id, reaction_type").eq("user_id", viewerId).in("moment_id", momentIds),
-    // Aggregate reaction totals per Moment — the count only, never who reacted.
-    admin.from("moment_reactions").select("moment_id").in("moment_id", momentIds)
+    // Aggregate reaction totals per Moment — types and counts only, never who
+    // reacted. reaction_type is needed for the compact per-emoji breakdown.
+    admin.from("moment_reactions").select("moment_id, reaction_type").in("moment_id", momentIds)
   ]);
 
   const profileById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
   const reactionByMoment = new Map((myReactions ?? []).map((row) => [row.moment_id, row.reaction_type]));
   const reactionCountByMoment = new Map<string, number>();
+  const breakdownByMoment = new Map<string, Record<string, number>>();
   for (const row of allReactions ?? []) {
     reactionCountByMoment.set(row.moment_id, (reactionCountByMoment.get(row.moment_id) ?? 0) + 1);
+    const breakdown = breakdownByMoment.get(row.moment_id) ?? {};
+    breakdown[row.reaction_type] = (breakdown[row.reaction_type] ?? 0) + 1;
+    breakdownByMoment.set(row.moment_id, breakdown);
+  }
+
+  // Reach for the viewer's OWN Moments only, so nothing else needs filtering
+  // downstream.
+  const ownIds = candidates.filter((entry) => entry.author_id === viewerId).map((entry) => entry.id);
+  const viewCountByMoment = new Map<string, number>();
+  if (ownIds.length > 0) {
+    const { data: viewRows } = await admin.from("moment_views").select("moment_id").in("moment_id", ownIds);
+    for (const row of viewRows ?? []) {
+      viewCountByMoment.set(row.moment_id, (viewCountByMoment.get(row.moment_id) ?? 0) + 1);
+    }
   }
 
   const targetsByMoment = new Map<string, Array<{ target_type: string; target_id: string }>>();
@@ -255,8 +290,16 @@ export async function buildMomentFeed(
       createdAt: moment.created_at,
       myReaction: reactionByMoment.get(moment.id) ?? null,
       reactionCount: reactionCountByMoment.get(moment.id) ?? 0,
+      reactionBreakdown: breakdownByMoment.get(moment.id) ?? {},
       isAuthor,
-      audienceLabel: isAuthor ? moment.audience_type : null
+      audienceLabel: isAuthor ? moment.audience_type : null,
+      // Reach is the author's own figure. A Muddy viewing a private Moment
+      // learns nothing about how many others saw it.
+      viewCount: isAuthor ? (viewCountByMoment.get(moment.id) ?? 0) : null,
+      // Tune In is a Spotlight concept; a private Moment attributes none.
+      tunedInFromThis: null,
+      creatorTunedIn: false,
+      creatorTunedInCount: 0
     });
   }
 
@@ -268,7 +311,22 @@ export async function buildMomentFeed(
  * recency-only for the first release: no location, proximity, sensitive
  * attributes, or fabricated engagement signals influence discovery.
  */
-export async function buildOpenMomentFeed(
+/**
+ * The Spotlight feed: live public Moments, ranked for this viewer.
+ *
+ * Ranking blends recency, engagement rate and affinity (see
+ * `rankSpotlightMoments`), so tuning in boosts a creator without turning the
+ * feed into a private timeline. Discovery of new creators always survives.
+ *
+ * Authorization order matters and is unchanged: the feature flag, then blocks,
+ * then report-and-hide, then the shared visibility rules. Ranking runs LAST, on
+ * an already-authorized set, so a scoring change can never widen visibility.
+ *
+ * Kept as `buildOpenMomentFeed`'s replacement rather than a parallel function:
+ * two feeds over the same rows would be two places for an authorization rule to
+ * drift out of sync.
+ */
+export async function buildSpotlightFeed(
   admin: Admin,
   viewerId: string,
   nowMs = Date.now()
@@ -276,30 +334,39 @@ export async function buildOpenMomentFeed(
   if (!(await isOpenMomentsEnabled(admin))) return [];
 
   const nowIso = new Date(nowMs).toISOString();
-  const [{ data: blocks }, { data: hidden }, { data: moments }] = await Promise.all([
-    admin
-      .from("blocked_users")
-      .select("blocker_id, blocked_id")
-      .or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`),
-    admin.from("hidden_content").select("content_id").eq("user_id", viewerId).eq("content_type", "moment"),
-    admin
-      .from("moments")
-      .select(
-        "id, author_id, content_type, text_content, media_id, caption, audience_type, status, expires_at, created_at"
-      )
-      .eq("audience_type", "public")
-      .eq("status", "active")
-      .gt("expires_at", nowIso)
-      .order("created_at", { ascending: false })
-      .limit(50)
-  ]);
+  const [{ data: blocks }, { data: hidden }, { data: moments }, { data: friendships }, { data: myTuneIns }] =
+    await Promise.all([
+      admin
+        .from("blocked_users")
+        .select("blocker_id, blocked_id")
+        .or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`),
+      admin.from("hidden_content").select("content_id").eq("user_id", viewerId).eq("content_type", "moment"),
+      admin
+        .from("moments")
+        .select(
+          "id, author_id, content_type, text_content, media_id, caption, audience_type, status, expires_at, created_at"
+        )
+        .eq("audience_type", "public")
+        .eq("status", "active")
+        .gt("expires_at", nowIso)
+        .order("created_at", { ascending: false })
+        .limit(80),
+      admin
+        .from("friendships")
+        .select("user_one_id, user_two_id")
+        .or(`user_one_id.eq.${viewerId},user_two_id.eq.${viewerId}`),
+      admin.from("tune_ins").select("creator_id").eq("viewer_id", viewerId)
+    ]);
 
   const blockedIds = new Set(
-    (blocks ?? []).map((block) =>
-      block.blocker_id === viewerId ? block.blocked_id : block.blocker_id
-    )
+    (blocks ?? []).map((block) => (block.blocker_id === viewerId ? block.blocked_id : block.blocker_id))
   );
   const hiddenIds = new Set((hidden ?? []).map((row) => row.content_id));
+  const muddyIds = new Set(
+    (friendships ?? []).map((row) => (row.user_one_id === viewerId ? row.user_two_id : row.user_one_id))
+  );
+  const tunedInIds = new Set((myTuneIns ?? []).map((row) => row.creator_id));
+
   const candidates = (moments ?? []).filter(
     (moment) => !blockedIds.has(moment.author_id) && !hiddenIds.has(moment.id)
   );
@@ -307,41 +374,86 @@ export async function buildOpenMomentFeed(
 
   const momentIds = candidates.map((moment) => moment.id);
   const authorIds = [...new Set(candidates.map((moment) => moment.author_id))];
-  const [{ data: profiles }, { data: myReactions }, { data: allReactions }] = await Promise.all([
-    admin.from("profiles").select("user_id, full_name, avatar_url, visibility_status").in("user_id", authorIds),
-    admin.from("moment_reactions").select("moment_id, reaction_type").eq("user_id", viewerId).in("moment_id", momentIds),
-    admin.from("moment_reactions").select("moment_id").in("moment_id", momentIds)
-  ]);
+
+  const [{ data: profiles }, { data: myReactions }, { data: allReactions }, { data: engagement }, { data: creatorCounts }] =
+    await Promise.all([
+      admin.from("profiles").select("user_id, full_name, avatar_url, visibility_status").in("user_id", authorIds),
+      admin.from("moment_reactions").select("moment_id, reaction_type").eq("user_id", viewerId).in("moment_id", momentIds),
+      admin.from("moment_reactions").select("moment_id, reaction_type").in("moment_id", momentIds),
+      // Aggregates only. The RPC is security definer so it can COUNT rows the
+      // caller cannot read individually, which is what keeps tune-in identities
+      // unreachable while the totals stay visible.
+      admin.rpc("moment_engagement", { moment_ids: momentIds }),
+      admin.rpc("tune_in_counts", { creator_ids: authorIds })
+    ]);
 
   const profileById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
   const reactionByMoment = new Map((myReactions ?? []).map((row) => [row.moment_id, row.reaction_type]));
   const reactionCountByMoment = new Map<string, number>();
+  const breakdownByMoment = new Map<string, Record<string, number>>();
   for (const row of allReactions ?? []) {
     reactionCountByMoment.set(row.moment_id, (reactionCountByMoment.get(row.moment_id) ?? 0) + 1);
+    const breakdown = breakdownByMoment.get(row.moment_id) ?? {};
+    breakdown[row.reaction_type] = (breakdown[row.reaction_type] ?? 0) + 1;
+    breakdownByMoment.set(row.moment_id, breakdown);
   }
+  const engagementByMoment = new Map(
+    (engagement ?? []).map((row) => [
+      row.moment_id,
+      { views: Number(row.view_count), tunedIn: Number(row.tuned_in_count) }
+    ])
+  );
+  const tuneInCountByCreator = new Map(
+    (creatorCounts ?? []).map((row) => [row.creator_id, Number(row.tuned_in_count)])
+  );
 
-  const visible: VisibleMoment[] = [];
-  for (const moment of candidates) {
+  // Authorize first, rank second.
+  const authorized = candidates.filter((moment) => {
     const isAuthor = moment.author_id === viewerId;
     const profile = profileById.get(moment.author_id);
-    if (!profile && !isAuthor) continue;
-
-    const decision = resolveMomentVisibility({
+    if (!profile && !isAuthor) return false;
+    return resolveMomentVisibility({
       isAuthor,
       status: moment.status,
       expiresAtMs: Date.parse(moment.expires_at),
       nowMs,
-      areApprovedMuddies: false,
+      areApprovedMuddies: muddyIds.has(moment.author_id),
       isBlockedEitherDirection: blockedIds.has(moment.author_id),
       authorGhostMode: profile?.visibility_status === "ghost",
       viewerHidThis: hiddenIds.has(moment.id),
       audienceType: "public",
       viewerInAudience: true,
       viewerNearbyAndFresh: false
-    });
-    if (!decision.visible) continue;
+    }).visible;
+  });
 
-    visible.push({
+  const ranked = rankSpotlightMoments(
+    authorized.map((moment) => ({
+      moment,
+      momentId: moment.id,
+      createdAtMs: Date.parse(moment.created_at),
+      tunedIn: tunedInIds.has(moment.author_id),
+      isMuddy: muddyIds.has(moment.author_id),
+      reactionCount: reactionCountByMoment.get(moment.id) ?? 0,
+      viewCount: engagementByMoment.get(moment.id)?.views ?? 0
+    })),
+    nowMs
+  );
+
+  // Signing is a network round trip per asset, so the whole page is signed in
+  // parallel rather than sequentially inside the loop.
+  const signed = await Promise.all(
+    ranked.map((entry) =>
+      entry.moment.media_id ? signMediaForAsset(admin, entry.moment.media_id, "feed") : Promise.resolve(null)
+    )
+  );
+
+  return ranked.map((entry, index) => {
+    const moment = entry.moment;
+    const isAuthor = moment.author_id === viewerId;
+    const profile = profileById.get(moment.author_id);
+    const stats = engagementByMoment.get(moment.id);
+    return {
       id: moment.id,
       authorId: moment.author_id,
       authorName: isAuthor ? "You" : profile?.full_name?.trim() || "A Muddy",
@@ -349,17 +461,186 @@ export async function buildOpenMomentFeed(
       contentType: moment.content_type,
       textContent: moment.text_content,
       caption: moment.caption,
-      mediaUrl: moment.media_id ? await signMediaForAsset(admin, moment.media_id, "feed") : null,
+      mediaUrl: signed[index],
       expiresAt: moment.expires_at,
       createdAt: moment.created_at,
       myReaction: reactionByMoment.get(moment.id) ?? null,
       reactionCount: reactionCountByMoment.get(moment.id) ?? 0,
+      reactionBreakdown: breakdownByMoment.get(moment.id) ?? {},
       isAuthor,
-      audienceLabel: isAuthor ? "public" : null
-    });
-  }
+      audienceLabel: isAuthor ? "public" : null,
+      // Reach and attributed tune-ins are the author's own analytics. Other
+      // viewers get null, so a Spotlight card cannot become a scoreboard of
+      // someone else's numbers.
+      viewCount: isAuthor ? (stats?.views ?? 0) : null,
+      tunedInFromThis: isAuthor ? (stats?.tunedIn ?? 0) : null,
+      creatorTunedIn: tunedInIds.has(moment.author_id),
+      creatorTunedInCount: tuneInCountByCreator.get(moment.author_id) ?? 0
+    };
+  });
+}
 
-  return visible;
+/**
+ * Records that a viewer saw a Moment. Idempotent: one row per viewer per
+ * Moment, so re-opening never inflates reach. Authorization is the caller's
+ * job — this is only reached from an action that has already built a feed the
+ * viewer is allowed to see.
+ */
+export async function recordMomentView(admin: Admin, momentId: string, viewerId: string): Promise<void> {
+  await admin
+    .from("moment_views")
+    .upsert({ moment_id: momentId, viewer_id: viewerId }, { onConflict: "moment_id,viewer_id", ignoreDuplicates: true });
+}
+
+export type TuneInEntry = {
+  creatorId: string;
+  name: string;
+  avatarUrl: string | null;
+  tunedInAt: string;
+};
+
+/**
+ * The viewer's own Tune In list. Visible to nobody else: the RLS select policy
+ * on tune_ins is scoped to viewer_id, and there is deliberately no policy that
+ * would let a creator read the rows pointing at them.
+ */
+export async function loadMyTuneIns(admin: Admin, viewerId: string): Promise<TuneInEntry[]> {
+  const { data: rows } = await admin
+    .from("tune_ins")
+    .select("creator_id, created_at")
+    .eq("viewer_id", viewerId)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (!rows?.length) return [];
+
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("user_id, full_name, avatar_url")
+    .in(
+      "user_id",
+      rows.map((row) => row.creator_id)
+    );
+  const byId = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
+
+  return rows.map((row) => ({
+    creatorId: row.creator_id,
+    name: byId.get(row.creator_id)?.full_name?.trim() || "A Muddy",
+    avatarUrl: byId.get(row.creator_id)?.avatar_url ?? null,
+    tunedInAt: row.created_at
+  }));
+}
+
+export type MomentsCreatorHub = {
+  creatorId: string;
+  name: string;
+  avatarUrl: string | null;
+  /** The public aggregate. Never a list, and never called "followers". */
+  tunedInCount: number;
+  /** Live Spotlight Moments this viewer can see from the creator. */
+  liveSpotlightCount: number;
+  viewerTunedIn: boolean;
+  viewerIsMuddy: boolean;
+  isSelf: boolean;
+};
+
+/**
+ * A creator's Moments hub: a content surface layered on the existing profile,
+ * not a replacement for it.
+ *
+ * Deliberately narrow. It exposes a display name, an avatar, an aggregate
+ * tune-in count and a live-Moment count, and nothing else — no location, status,
+ * Muddy list, contact details or private profile fields, so a Spotlight viewer
+ * cannot use it to learn anything the creator did not publish.
+ */
+export async function loadMomentsCreatorHub(
+  admin: Admin,
+  viewerId: string,
+  creatorId: string,
+  nowMs = Date.now()
+): Promise<MomentsCreatorHub | null> {
+  const [{ data: profile }, { data: blocks }] = await Promise.all([
+    admin.from("profiles").select("user_id, full_name, avatar_url").eq("user_id", creatorId).maybeSingle(),
+    admin
+      .from("blocked_users")
+      .select("blocker_id")
+      .or(
+        `and(blocker_id.eq.${viewerId},blocked_id.eq.${creatorId}),and(blocker_id.eq.${creatorId},blocked_id.eq.${viewerId})`
+      )
+      .limit(1)
+  ]);
+  if (!profile) return null;
+  // A blocked creator has no hub for this viewer at all.
+  if (blocks?.length) return null;
+
+  const nowIso = new Date(nowMs).toISOString();
+  const [{ data: counts }, { data: mine }, { data: friendship }, { count: liveCount }] = await Promise.all([
+    admin.rpc("tune_in_counts", { creator_ids: [creatorId] }),
+    admin.from("tune_ins").select("id").eq("viewer_id", viewerId).eq("creator_id", creatorId).maybeSingle(),
+    admin
+      .from("friendships")
+      .select("user_one_id")
+      .or(
+        `and(user_one_id.eq.${viewerId},user_two_id.eq.${creatorId}),and(user_one_id.eq.${creatorId},user_two_id.eq.${viewerId})`
+      )
+      .limit(1),
+    admin
+      .from("moments")
+      .select("id", { count: "exact", head: true })
+      .eq("author_id", creatorId)
+      .eq("audience_type", "public")
+      .eq("status", "active")
+      .gt("expires_at", nowIso)
+  ]);
+
+  return {
+    creatorId,
+    name: profile.full_name?.trim() || "A Muddy",
+    avatarUrl: profile.avatar_url,
+    tunedInCount: Number((counts ?? [])[0]?.tuned_in_count ?? 0),
+    liveSpotlightCount: liveCount ?? 0,
+    viewerTunedIn: Boolean(mine),
+    viewerIsMuddy: Boolean(friendship?.length),
+    isSelf: creatorId === viewerId
+  };
+}
+
+export type MomentsRingEntry = {
+  authorId: string;
+  name: string;
+  avatarUrl: string | null;
+  momentCount: number;
+  /** True when the viewer has not yet opened every live Moment from them. */
+  hasUnseen: boolean;
+};
+
+/**
+ * The horizontal avatar row on Moments Home: Muddies with at least one live
+ * private Moment the viewer can see, plus the viewer's own.
+ *
+ * Built from the ALREADY-AUTHORIZED feed rather than a second query, so the row
+ * can never surface someone whose Moment the feed excluded.
+ */
+export function buildMomentsRing(feed: VisibleMoment[], seenIds: Set<string>): MomentsRingEntry[] {
+  const byAuthor = new Map<string, MomentsRingEntry>();
+  for (const moment of feed) {
+    const entry = byAuthor.get(moment.authorId) ?? {
+      authorId: moment.authorId,
+      name: moment.authorName,
+      avatarUrl: moment.authorAvatarUrl,
+      momentCount: 0,
+      hasUnseen: false
+    };
+    entry.momentCount += 1;
+    if (!seenIds.has(moment.id)) entry.hasUnseen = true;
+    byAuthor.set(moment.authorId, entry);
+  }
+  // Own row first, then unseen, then alphabetical — so there is something new to
+  // look at before anything already read.
+  return [...byAuthor.values()].sort((a, b) => {
+    if ((a.name === "You") !== (b.name === "You")) return a.name === "You" ? -1 : 1;
+    if (a.hasUnseen !== b.hasUnseen) return a.hasUnseen ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
 }
 
 /** Hides content for one viewer only (spec §50 report-and-hide). */

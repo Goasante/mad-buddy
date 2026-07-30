@@ -60,6 +60,24 @@ export const PRODUCT_EVENT_NAMES = [
   // distort conversion metrics.
   ,"tour_replay_started"
   ,"tour_replay_completed"
+  // Moments, Spotlight and Tune In. Resource ids are uuids (the moment, or the
+  // creator for a tune-in); caption text is never recorded.
+  ,"moment_create_started"
+  ,"moment_published"
+  ,"moment_viewed"
+  ,"moment_reacted"
+  ,"moment_reaction_changed"
+  ,"moment_deleted"
+  ,"moment_expired"
+  ,"spotlight_viewed"
+  ,"spotlight_publish_attempted"
+  ,"spotlight_published"
+  // Tune In events carry the CREATOR as the resource. They never identify the
+  // viewer to the creator; the actor column is the viewer's own row, which only
+  // admin analytics aggregates over.
+  ,"tune_in_added"
+  ,"tune_in_removed"
+  ,"tune_in_from_moment"
 ] as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT_NAMES)[number];

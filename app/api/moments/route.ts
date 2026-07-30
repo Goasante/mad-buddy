@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveApiUser } from "@/lib/api/auth";
 import { preflightResponse, withCors } from "@/lib/api/cors";
-import { buildMomentFeed, buildOpenMomentFeed } from "@/lib/content/service";
+import { buildMomentFeed, buildSpotlightFeed } from "@/lib/content/service";
 import { createTextMoment, deleteMoment } from "@/lib/content/moment-mobile";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   const open = new URL(request.url).searchParams.get("feed") === "open";
   const admin = createSupabaseAdminClient();
   const moments = open
-    ? await buildOpenMomentFeed(admin, auth.user.id)
+    ? await buildSpotlightFeed(admin, auth.user.id)
     : await buildMomentFeed(admin, auth.user.id);
   return withCors(NextResponse.json({ moments }), request);
 }

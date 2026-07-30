@@ -3,14 +3,20 @@
 import { z } from "zod";
 import {
   buildMomentFeed,
-  buildOpenMomentFeed,
+  buildSpotlightFeed,
   hideContentForUser,
+  loadMomentsCreatorHub,
+  loadMyTuneIns,
   queueMediaDeletion,
+  recordMomentView,
   type VisibleMoment
 } from "@/lib/content/service";
+import { recordProductEvent } from "@/lib/analytics/track";
 import {
   contentTierLimitsFor,
+  isSupportedReaction,
   resolveMomentVisibility,
+  SPOTLIGHT_AUDIENCE_TYPE,
   validateExpiry,
   validateMomentContent
 } from "@/lib/content/moments";
@@ -49,7 +55,13 @@ import type {
   ReportableContentType
 } from "@/lib/supabase/database.types";
 
-export type MomentActionState = {
+/**
+ * Deliberately NOT exported. A `"use server"` module must never export a type:
+ * Turbopack's action transform emits a runtime reference for it, which is
+ * `undefined` at runtime and throws `ReferenceError` on EVERY action in the
+ * file. Nothing outside this module referenced it.
+ */
+type MomentActionState = {
   ok: boolean;
   message: string;
   momentId?: string;
@@ -299,7 +311,8 @@ const createMomentSchema = z.object({
     "nearby_muddies",
     "event_circle",
     "plan",
-    "public"
+    "public",
+    "all_muddies"
   ]),
   targetIds: z.array(uuidSchema).max(50).optional(),
   publicAudienceConfirmed: z.boolean().optional(),
@@ -340,16 +353,29 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
   const limits = contentTierLimitsFor(access.plan);
   const risk = detectLocationRisk(`${parsed.data.textContent ?? ""} ${parsed.data.caption ?? ""}`);
 
-  if (parsed.data.audienceType === "public") {
+  const isSpotlight = parsed.data.audienceType === SPOTLIGHT_AUDIENCE_TYPE;
+  if (isSpotlight) {
+    await recordProductEvent(admin, {
+      eventName: "spotlight_publish_attempted",
+      actorId: userId,
+      resourceType: "user",
+      resourceId: userId,
+      featureKey: "moments"
+    });
+
     const [enabled, entitlements] = await Promise.all([
       isOpenMomentsEnabled(admin),
       resolveUserEntitlements(admin, userId, nowMs)
     ]);
     if (!enabled) {
-      return { ok: false, message: "Open Moments aren't available right now." };
+      return { ok: false, message: "Spotlight isn't available right now." };
     }
+    // The canonical publishing capability. `public_moments` already existed as
+    // the Spotlight entitlement, so no parallel `spotlight_publish` key is
+    // introduced. resolveUserEntitlements honours admin tier/user overrides and
+    // billing grace, and this check is the authority — the UI only explains it.
     if (!checkFeature(entitlements, "public_moments")) {
-      return { ok: false, message: "Publishing Open Moments is included with Buddy Pro." };
+      return { ok: false, message: "Publishing to Spotlight is included with Buddy Pro." };
     }
     if (!parsed.data.publicAudienceConfirmed) {
       return { ok: false, message: "Confirm that anyone on Mad Buddy may see this Moment." };
@@ -357,7 +383,7 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
     if (risk.warn) {
       return {
         ok: false,
-        message: "Remove exact location details before sharing an Open Moment."
+        message: "Remove exact location details before sharing to Spotlight."
       };
     }
   }
@@ -478,9 +504,28 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
     await grantMomentAchievements(admin, userId);
   }
 
+  // Privacy-safe analytics: the Moment id only. Caption and text content are
+  // never recorded.
+  await recordProductEvent(admin, {
+    eventName: "moment_published",
+    actorId: userId,
+    resourceType: "moment",
+    resourceId: moment.id,
+    featureKey: "moments"
+  });
+  if (isSpotlight) {
+    await recordProductEvent(admin, {
+      eventName: "spotlight_published",
+      actorId: userId,
+      resourceType: "moment",
+      resourceId: moment.id,
+      featureKey: "moments"
+    });
+  }
+
   return {
     ok: true,
-    message: parsed.data.audienceType === "public" ? "Open Moment shared." : "Moment shared.",
+    message: isSpotlight ? "Shared to Spotlight." : "Moment shared.",
     momentId: moment.id,
     locationWarning: risk.warn ? LOCATION_WARNING_MESSAGE : undefined
   };
@@ -517,6 +562,14 @@ export async function deleteMomentAction(momentId: string): Promise<MomentAction
   // Deleting the parent revokes access and queues the media (spec §45).
   if (moment.media_id) await queueMediaDeletion(admin, moment.media_id, "parent_deleted");
 
+  await recordProductEvent(admin, {
+    eventName: "moment_deleted",
+    actorId: userId,
+    resourceType: "moment",
+    resourceId: momentId,
+    featureKey: "moments"
+  });
+
   return { ok: true, message: "Moment deleted." };
 }
 
@@ -536,7 +589,7 @@ export async function getOpenMomentFeedAction(): Promise<VisibleMoment[]> {
   if (!env.url || !env.serviceRoleKey) return [];
   const userId = await getAuthedUserId();
   if (!userId) return [];
-  return buildOpenMomentFeed(createSupabaseAdminClient(), userId);
+  return buildSpotlightFeed(createSupabaseAdminClient(), userId);
 }
 
 // ---------------------------------------------------------------------------
@@ -551,8 +604,9 @@ export async function reactToMomentAction(
   if (missing) return missing;
   if (!uuidSchema.safeParse(momentId).success) return { ok: false, message: "Moment not found." };
 
-  const parsed = z.enum(["heart", "laugh", "wave", "fire", "clap"]).safeParse(reaction);
-  if (!parsed.success) return { ok: false, message: "Choose a valid reaction." };
+  // Only the canonical positive set. There is no dislike or downvote to accept,
+  // and the database check constraint would reject one anyway.
+  if (!isSupportedReaction(reaction)) return { ok: false, message: "Choose a valid reaction." };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
@@ -566,13 +620,30 @@ export async function reactToMomentAction(
     return { ok: false, message: "That Moment isn't available." };
   }
 
+  // One reaction per user per Moment: the unique constraint plus this upsert
+  // means changing your mind UPDATES the row rather than stacking a second one.
+  const { data: existing } = await admin
+    .from("moment_reactions")
+    .select("reaction_type")
+    .eq("moment_id", momentId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
   const { error } = await admin
     .from("moment_reactions")
     .upsert(
-      { moment_id: momentId, user_id: userId, reaction_type: parsed.data as ReactionType },
+      { moment_id: momentId, user_id: userId, reaction_type: reaction as ReactionType },
       { onConflict: "moment_id,user_id" }
     );
   if (error) return { ok: false, message: "Couldn't add your reaction." };
+
+  await recordProductEvent(admin, {
+    eventName: existing ? "moment_reaction_changed" : "moment_reacted",
+    actorId: userId,
+    resourceType: "moment",
+    resourceId: momentId,
+    featureKey: "moments"
+  });
   return { ok: true, message: "Reaction added." };
 }
 
@@ -703,4 +774,178 @@ export async function reportContentAction(input: unknown): Promise<MomentActionS
 export async function checkLocationRiskAction(text: string): Promise<{ warn: boolean; message: string | null }> {
   const risk = detectLocationRisk(text ?? "");
   return { warn: risk.warn, message: risk.warn ? LOCATION_WARNING_MESSAGE : null };
+}
+
+// ---------------------------------------------------------------------------
+// Views
+// ---------------------------------------------------------------------------
+
+/**
+ * Records that the viewer saw a Moment. Idempotent, so re-opening the same
+ * Moment never inflates its reach.
+ *
+ * Visibility is re-checked rather than trusted: a client could otherwise post
+ * arbitrary Moment ids and manufacture reach on content it was never shown.
+ */
+export async function recordMomentViewAction(momentId: string): Promise<MomentActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  if (!uuidSchema.safeParse(momentId).success) return { ok: false, message: "Moment not found." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  if (!(await canViewMoment(admin, userId, momentId))) {
+    return { ok: false, message: "That Moment isn't available." };
+  }
+
+  await recordMomentView(admin, momentId, userId);
+  await recordProductEvent(admin, {
+    eventName: "moment_viewed",
+    actorId: userId,
+    resourceType: "moment",
+    resourceId: momentId,
+    featureKey: "moments"
+  });
+  return { ok: true, message: "" };
+}
+
+/** Spotlight feed impression, for funnel analysis. Aggregate only. */
+export async function recordSpotlightViewedAction(): Promise<MomentActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  await recordProductEvent(admin, {
+    eventName: "spotlight_viewed",
+    actorId: userId,
+    resourceType: "user",
+    resourceId: userId,
+    featureKey: "moments"
+  });
+  return { ok: true, message: "" };
+}
+
+// ---------------------------------------------------------------------------
+// Tune In
+// ---------------------------------------------------------------------------
+
+/**
+ * One-way, private content interest.
+ *
+ * Three rules are enforced here, not in the UI:
+ *  - The creator is NEVER notified. No deliverNotification call exists in this
+ *    path, deliberately, so nobody feels watched or obliged.
+ *  - Idempotent: the unique (viewer_id, creator_id) constraint plus this upsert
+ *    means one user can tune in to another exactly once.
+ *  - It never touches reactions. Tuning in does not react, and reacting does not
+ *    tune in, because they answer different questions.
+ *
+ * `sourceMomentId` attributes the tune-in to the Spotlight Moment that caused
+ * it, which is what lets a creator see "+36 Tuned In" for a post without
+ * learning who those people are.
+ */
+export async function tuneInAction(
+  creatorId: string,
+  sourceMomentId?: string
+): Promise<MomentActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  if (!uuidSchema.safeParse(creatorId).success) return { ok: false, message: "Creator not found." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+  if (userId === creatorId) return { ok: false, message: "You can't tune in to yourself." };
+
+  const rateLimit = await consumeRateLimit({ action: "moments.react", userId });
+  if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
+
+  const admin = createSupabaseAdminClient();
+
+  // A blocked creator cannot be tuned in to, in either direction.
+  const { data: blocks } = await admin
+    .from("blocked_users")
+    .select("blocker_id")
+    .or(
+      `and(blocker_id.eq.${userId},blocked_id.eq.${creatorId}),and(blocker_id.eq.${creatorId},blocked_id.eq.${userId})`
+    )
+    .limit(1);
+  if (blocks?.length) return { ok: false, message: "That creator isn't available." };
+
+  const source =
+    sourceMomentId && uuidSchema.safeParse(sourceMomentId).success ? sourceMomentId : null;
+  // Only attribute a source the viewer could actually see, so attribution
+  // cannot be forged from an arbitrary id.
+  const attributedSource = source && (await canViewMoment(admin, userId, source)) ? source : null;
+
+  const { error } = await admin
+    .from("tune_ins")
+    .upsert(
+      { viewer_id: userId, creator_id: creatorId, source_moment_id: attributedSource },
+      { onConflict: "viewer_id,creator_id", ignoreDuplicates: true }
+    );
+  if (error) return { ok: false, message: "Couldn't tune in right now." };
+
+  await recordProductEvent(admin, {
+    eventName: "tune_in_added",
+    actorId: userId,
+    resourceType: "user",
+    resourceId: creatorId,
+    featureKey: "moments"
+  });
+  if (attributedSource) {
+    await recordProductEvent(admin, {
+      eventName: "tune_in_from_moment",
+      actorId: userId,
+      resourceType: "moment",
+      resourceId: attributedSource,
+      featureKey: "moments"
+    });
+  }
+
+  return { ok: true, message: "Tuned in." };
+}
+
+/** Tune Out. Low friction by design: no confirmation, and the creator is not told. */
+export async function tuneOutAction(creatorId: string): Promise<MomentActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  if (!uuidSchema.safeParse(creatorId).success) return { ok: false, message: "Creator not found." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  await admin.from("tune_ins").delete().eq("viewer_id", userId).eq("creator_id", creatorId);
+
+  await recordProductEvent(admin, {
+    eventName: "tune_in_removed",
+    actorId: userId,
+    resourceType: "user",
+    resourceId: creatorId,
+    featureKey: "moments"
+  });
+  return { ok: true, message: "Tuned out." };
+}
+
+/** The viewer's own Tune In list. Nobody else can read it. */
+export async function getMyTuneInsAction() {
+  const env = getSupabaseServerEnv();
+  if (!env.url || !env.serviceRoleKey) return [];
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+  return loadMyTuneIns(createSupabaseAdminClient(), userId);
+}
+
+/** A creator's Moments hub. Returns null when blocked or missing. */
+export async function getMomentsCreatorHubAction(creatorId: string) {
+  const env = getSupabaseServerEnv();
+  if (!env.url || !env.serviceRoleKey) return null;
+  if (!uuidSchema.safeParse(creatorId).success) return null;
+  const userId = await getAuthedUserId();
+  if (!userId) return null;
+  return loadMomentsCreatorHub(createSupabaseAdminClient(), userId, creatorId);
 }

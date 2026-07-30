@@ -1976,6 +1976,46 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["moment_reactions"]["Insert"]>;
         Relationships: [];
       };
+      /** One row per viewer per Moment: reach, not a hit counter. */
+      moment_views: {
+        Row: {
+          id: string;
+          moment_id: string;
+          viewer_id: string;
+          viewed_at: string;
+        };
+        Insert: {
+          id?: string;
+          moment_id: string;
+          viewer_id: string;
+          viewed_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["moment_views"]["Insert"]>;
+        Relationships: [];
+      };
+      /**
+       * One-way, private content interest. Deliberately not a follow graph:
+       * there is no "following" direction and no creator-readable list.
+       */
+      tune_ins: {
+        Row: {
+          id: string;
+          viewer_id: string;
+          creator_id: string;
+          /** The Spotlight Moment that led here, when there was one. */
+          source_moment_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          viewer_id: string;
+          creator_id: string;
+          source_moment_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["tune_ins"]["Insert"]>;
+        Relationships: [];
+      };
       muddy_drops: {
         Row: {
           id: string;
@@ -3814,6 +3854,20 @@ export type Database = {
        * 'created' audit event in one transaction. Returns the session id, and
        * replays the same id for a duplicate submit within two minutes.
        */
+      /**
+       * Public tune-in totals. security definer so it can COUNT rows the caller
+       * cannot read individually — the asymmetry that keeps identities private
+       * while the aggregate stays visible.
+       */
+      tune_in_counts: {
+        Args: { creator_ids: string[] };
+        Returns: { creator_id: string; tuned_in_count: number }[];
+      };
+      /** Per-Moment aggregates: views, reactions, attributed tune-ins. */
+      moment_engagement: {
+        Args: { moment_ids: string[] };
+        Returns: { moment_id: string; view_count: number; reaction_count: number; tuned_in_count: number }[];
+      };
       start_safe_arrival: {
         Args: {
           p_traveller_id: string;
@@ -4147,6 +4201,7 @@ export type ModerationStatus =
 export type MomentContentType = "text" | "photo" | "video";
 export type DropContentType = "text" | "photo";
 export type MomentAudienceType =
+  | "all_muddies"
   | "close_friends"
   | "selected_muddies"
   | "selected_circles"
