@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowRight, Sparkles, X } from "lucide-react";
 import { recordTourProgressAction, recordTourStepEventAction } from "@/app/(app)/tour-actions";
+import { exitTourPreviewAction } from "@/app/(admin)/admin/tours/preview-actions";
 import { Button } from "@/components/ui/button";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,10 @@ export type TourRunnerProps = {
   preview?: boolean;
   /** Skip the invitation and start immediately (manual replay). */
   autoStart?: boolean;
+  /** Admin editor to return to when a draft preview is exited. */
+  previewReturnTo?: string;
+  /** Banner text naming the version being previewed. */
+  previewLabel?: string;
 };
 
 const SPOTLIGHT_CLASS = "tour-spotlight-target";
@@ -70,7 +75,9 @@ export function TourRunner({
   plan,
   entitlements,
   preview = false,
-  autoStart = false
+  autoStart = false,
+  previewReturnTo,
+  previewLabel
 }: TourRunnerProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -79,6 +86,8 @@ export function TourRunner({
   const [index, setIndex] = useState(() => Math.min(Math.max(startIndex, 0), Math.max(steps.length - 1, 0)));
   const cardRef = useRef<HTMLDivElement>(null);
   const spotlitRef = useRef<HTMLElement | null>(null);
+  // Preview-only signal: the current step named a target that is not on screen.
+  const [targetMissing, setTargetMissing] = useState(false);
   const step = steps[index];
 
   const record = useCallback(
@@ -110,12 +119,23 @@ export function TourRunner({
       spotlitRef.current.classList.remove(SPOTLIGHT_CLASS);
       spotlitRef.current = null;
     }
+    // No target: nothing to resolve. The warning below is gated on the step
+    // declaring a target, so a stale flag from a previous step cannot show here.
     if (!step.targetId) return;
 
-    // Wait a frame so a just-navigated route has painted its targets.
+    // Wait a frame so a just-navigated route has painted its targets. The
+    // missing/found flag is set here rather than in the effect body, so this
+    // never becomes a synchronous setState during render.
     const frame = window.requestAnimationFrame(() => {
       const element = document.querySelector<HTMLElement>(`[data-tour-id="${step.targetId}"]`);
-      if (!element) return; // Absent target: plain card, no failure.
+      if (!element) {
+        // Absent target: plain card, no failure. Consumers see nothing unusual;
+        // in preview an admin gets told, because a typo'd target would
+        // otherwise look like a working step.
+        setTargetMissing(true);
+        return;
+      }
+      setTargetMissing(false);
       element.classList.add(SPOTLIGHT_CLASS);
       spotlitRef.current = element;
       element.scrollIntoView({
@@ -240,6 +260,34 @@ export function TourRunner({
         aria-describedby="tour-step-body"
         className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[95] max-h-[70svh] w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 overflow-y-auto overscroll-contain rounded-2xl border border-border bg-card p-4 shadow-xl focus:outline-none md:bottom-5"
       >
+        {/* Persistent but unobtrusive preview banner, with the way out always
+            visible so an admin is never stranded inside a preview. */}
+        {preview && previewReturnTo ? (
+          <div className="-mx-4 -mt-4 mb-3 flex items-center justify-between gap-2 rounded-t-2xl bg-primary/10 px-4 py-2">
+            <p className="min-w-0 truncate text-[0.6875rem] font-semibold uppercase tracking-wide text-primary">
+              {previewLabel ?? "Preview mode"}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                void exitTourPreviewAction().then(() => {
+                  setPhase("closed");
+                  router.push(previewReturnTo as Parameters<typeof router.push>[0]);
+                });
+              }}
+              className="focus-ring safe-motion shrink-0 rounded-full px-2 py-1 text-[0.6875rem] font-semibold text-primary hover:bg-primary/10"
+            >
+              Exit preview
+            </button>
+          </div>
+        ) : null}
+
+        {preview && targetMissing && step?.targetId ? (
+          <p className="mb-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+            Target not found in preview: {step.targetId}. Consumers would see this step without a spotlight.
+          </p>
+        ) : null}
+
         <div className="flex items-start justify-between gap-3">
           <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
             {preview ? "Preview · " : ""}Step {index + 1} of {steps.length}

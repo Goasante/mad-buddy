@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
-import type { Route } from "next";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cloneTourVersionAction, setTourAudienceAction, setTourStatusAction } from "@/app/(admin)/admin/tours/actions";
+import { startTourPreviewAction } from "@/app/(admin)/admin/tours/preview-actions";
 import { canTransition, type AdminTourStatus } from "@/lib/tours/admin-model";
 import { cn } from "@/lib/utils";
 
@@ -34,15 +34,14 @@ export function TourVersionControls({
   versionId,
   status,
   plans,
-  cohort,
-  slug
+  cohort
 }: {
   versionId: string;
   status: AdminTourStatus;
   plans: string[];
   cohort: "all" | "new" | "existing";
-  slug: string;
 }) {
+  const router = useRouter();
   const [reason, setReason] = useState("");
   const [selectedPlans, setSelectedPlans] = useState<string[]>(plans);
   const [selectedCohort, setSelectedCohort] = useState(cohort);
@@ -108,10 +107,32 @@ export function TourVersionControls({
           <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={() => run(() => cloneTourVersionAction({ sourceVersionId: versionId }))}>
             Create next version
           </Button>
-          <Button type="button" size="sm" variant="ghost" asChild>
-            {/* Preview runs the real engine in the real shell; phase 1's preview
-                mode records no progress and emits no consumer analytics. */}
-            <Link href={`/settings/walkthrough?preview=${slug}` as Route}>Preview</Link>
+          {/* Draft preview: opens a permission-checked preview session and drops
+              into the real consumer renderer inside the real app shell, so
+              route-aware steps and live spotlights behave exactly as they will
+              for users. Records no progress and emits no consumer analytics. */}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={isPending}
+            onClick={() => {
+              setFeedback(null);
+              startTransition(async () => {
+                const started = await startTourPreviewAction({
+                  versionId,
+                  returnTo: `/admin/tours/${versionId}`
+                });
+                if (!started.ok) {
+                  setFeedback(started);
+                  return;
+                }
+                // Step 1's own route takes over from here if it declares one.
+                router.push("/dashboard");
+              });
+            }}
+          >
+            Preview draft
           </Button>
         </div>
 

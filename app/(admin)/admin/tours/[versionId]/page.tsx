@@ -87,7 +87,6 @@ export default async function AdminTourVersionPage({ params }: { params: Promise
           status={status}
           plans={audience.plans ?? ["free", "buddy_plus", "buddy_pro"]}
           cohort={(audience.cohort as "all" | "new" | "existing") ?? "all"}
-          slug={tour.slug}
         />
       </AdminSection>
 
