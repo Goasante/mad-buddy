@@ -27,7 +27,7 @@ export function HomeMomentsCarousel({ creators }: { creators: HomeMomentCreator[
         <Link
           href="/moments"
           prefetch={false}
-          className="focus-ring safe-motion inline-flex min-h-[28px] items-center rounded-full px-2 py-1 text-[10px] font-semibold text-primary hover:bg-primary/10 md:text-sm"
+          className="focus-ring safe-motion inline-flex min-h-[28px] items-center rounded-full px-2 py-1 text-[10px] font-semibold text-orange-500 hover:bg-orange-500/10 md:text-sm"
         >
           See all <span aria-hidden="true">›</span>
         </Link>

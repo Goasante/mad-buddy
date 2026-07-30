@@ -564,7 +564,7 @@ function NearbyHero({
         <Link
           href="/friends"
           prefetch={false}
-          className="focus-ring safe-motion inline-flex min-h-[28px] items-center rounded-full px-2 py-1 text-[10px] font-semibold text-primary hover:bg-primary/10 md:text-sm"
+          className="focus-ring safe-motion inline-flex min-h-[28px] items-center rounded-full px-2 py-1 text-[10px] font-semibold text-orange-500 hover:bg-orange-500/10 md:text-sm"
         >
           View all <span aria-hidden="true">›</span>
         </Link>
@@ -627,7 +627,7 @@ function NearbyHero({
             <Link
               href="/friends?tab=add"
               prefetch={false}
-              className="focus-ring safe-motion mt-2 inline-flex rounded-full px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10"
+              className="focus-ring safe-motion mt-2 inline-flex rounded-full px-3 py-1.5 text-xs font-semibold text-orange-500 hover:bg-orange-500/10"
             >
               Add Muddies
             </Link>
@@ -717,20 +717,24 @@ function HappeningNow({
   ];
 
   const visibleFeatures = features.filter((feature) => !hiddenHrefs.includes(feature.href));
+  const { scrollRef, pageCount, activePage, goToPage } = useHorizontalPages(visibleFeatures.length);
 
   return (
     <section aria-labelledby="home-happening-heading">
       <h2 id="home-happening-heading" className="mb-2 text-[13px] font-semibold tracking-tight md:mb-3 md:text-lg">
         What&apos;s happening now
       </h2>
-      <div className="-mx-0.5 grid snap-x grid-flow-col auto-cols-[minmax(50px,1fr)] gap-1.5 overflow-x-auto px-0.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex md:gap-3 md:pb-2">
+      <div
+        ref={scrollRef}
+        className="-mx-1.5 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-flow-col md:auto-cols-fr md:gap-3 md:overflow-visible md:px-0 md:pb-2"
+      >
         {visibleFeatures.map((feature) => (
           <Link
             key={feature.href}
             href={feature.href}
             prefetch={false}
             className={cn(
-              "focus-ring safe-motion flex min-h-[94px] min-w-[58px] snap-start flex-col items-center justify-between rounded-xl border border-current/20 p-2 text-center hover:-translate-y-0.5 md:min-h-[116px] md:w-[132px] md:shrink-0 md:items-start md:rounded-2xl md:p-3 md:text-left",
+              "focus-ring safe-motion flex min-h-[98px] w-[128px] shrink-0 snap-start flex-col items-center justify-between rounded-xl border border-current/20 p-2 text-center hover:-translate-y-0.5 md:min-h-[116px] md:w-auto md:shrink md:items-start md:rounded-2xl md:p-3 md:text-left",
               feature.surfaceClass
             )}
           >
@@ -744,6 +748,7 @@ function HappeningNow({
           </Link>
         ))}
       </div>
+      <CarouselDots count={pageCount} active={activePage} onSelect={goToPage} label="What's happening now" />
     </section>
   );
 }

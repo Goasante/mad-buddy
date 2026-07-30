@@ -38,7 +38,7 @@ export async function DashboardMomentsSection({ userId }: { userId: string }) {
       avatarUrl: moment.authorAvatarUrl,
       previewUrl: moment.contentType === "photo" ? moment.mediaUrl : null,
       onAir: true,
-      subtitle: "ON AIR"
+      subtitle: "Public"
     });
   }
 
