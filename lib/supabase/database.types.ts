@@ -3809,6 +3809,23 @@ export type Database = {
         Args: { p_definition: Json; p_created_by: string };
         Returns: string;
       };
+      /**
+       * Atomic Safe Arrival start: the session, its watcher rows and the
+       * 'created' audit event in one transaction. Returns the session id, and
+       * replays the same id for a duplicate submit within two minutes.
+       */
+      start_safe_arrival: {
+        Args: {
+          p_traveller_id: string;
+          p_destination_label: string;
+          p_expected_arrival_at: string;
+          p_grace_period_minutes: number;
+          p_note: string | null;
+          p_contact_ids: string[];
+          p_max_active: number;
+        };
+        Returns: string;
+      };
       process_experiment_schedules: {
         Args: Record<PropertyKey, never>;
         Returns: number;

@@ -75,13 +75,68 @@ export function validateGracePeriod(minutes: number): string | null {
 
 export function validateContactCount(count: number, plan: SubscriptionPlan): string | null {
   const limits = safeArrivalLimitsFor(plan);
-  if (count < 1) return "Choose at least one trusted contact.";
+  if (count < 1) return "Choose at least one Muddy to watch over your journey.";
   if (count > limits.maxContacts) {
     return plan === "free"
-      ? `Free plan allows up to ${limits.maxContacts} trusted contacts. Upgrade for more.`
-      : `You can choose up to ${limits.maxContacts} trusted contacts.`;
+      ? `Your plan lets ${limits.maxContacts} Muddies watch over a journey. Upgrade to choose more.`
+      : `You can choose up to ${limits.maxContacts} Muddies.`;
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Arrival-time composition
+// ---------------------------------------------------------------------------
+
+/**
+ * Combines a calendar day with a wall-clock time into an instant, in the
+ * VIEWER's own timezone.
+ *
+ * This exists because the previous setup form built its timestamp from two
+ * independent `<input type="date">` / `<input type="time">` fields and required
+ * BOTH to be filled. The date defaulted to empty, so a traveller who only set a
+ * time ("I'll be there by 9") produced no timestamp at all and Start stayed
+ * disabled with nothing explaining why. Reaching for tomorrow happened to open
+ * the date picker, which populated the missing field, which is why later-today
+ * appeared broken while next-day worked. Day is now always known (today by
+ * default), so a time alone is always sufficient.
+ *
+ * `dayOffset` is 0 for today and 1 for tomorrow. `time` is "HH:MM" (24h, as
+ * emitted by <input type="time">). Returns NaN when the time is unparseable.
+ */
+export function composeArrivalMs(input: {
+  dayOffset: number;
+  time: string;
+  /** The viewer's "now"; the day offset is applied to ITS local calendar day. */
+  nowMs: number;
+}): number {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(input.time.trim());
+  if (!match) return Number.NaN;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return Number.NaN;
+
+  // Built via the local-time Date constructor, so the result is the correct
+  // instant in whatever zone the traveller is in (Africa/Accra included) and
+  // survives conversion to UTC for storage. Day arithmetic goes through
+  // setDate, which handles month/year rollover and DST shifts for us.
+  const base = new Date(input.nowMs);
+  const composed = new Date(base.getFullYear(), base.getMonth(), base.getDate(), hours, minutes, 0, 0);
+  composed.setDate(composed.getDate() + input.dayOffset);
+  return composed.getTime();
+}
+
+/**
+ * "in 2h 15m" / "in 45 min". Deliberately duration-only: it says how long the
+ * journey has, never where anyone is.
+ */
+export function durationUntilLabel(targetMs: number, nowMs: number): string | null {
+  const totalMinutes = Math.round((targetMs - nowMs) / 60_000);
+  if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) return null;
+  if (totalMinutes < 60) return `${totalMinutes} min`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +245,52 @@ export function arrivedMessage(travellerName: string): string {
 
 export function extendedMessage(travellerName: string, extraMinutes: number): string {
   return `${travellerName} needs ${extraMinutes} more minutes.`;
+}
+
+/**
+ * The watcher-facing notification set: one title/message pair per lifecycle
+ * event. Centralised so the traveller's screen, the watcher's screen, and the
+ * overdue job all describe the same event identically, and so the privacy rule
+ * is enforced in one place: a notification may name the destination LABEL, the
+ * expected time, and the status. Never a position, distance, route, or speed.
+ *
+ * `timeLabel` is pre-formatted by the caller in the RECIPIENT-neutral way the
+ * rest of the app formats times, and is optional so a missing time degrades to
+ * a still-useful message rather than "undefined".
+ */
+export type SafeArrivalNotificationEvent = "started" | "extended" | "overdue" | "arrived" | "cancelled";
+
+export function safeArrivalNotification(
+  event: SafeArrivalNotificationEvent,
+  input: { travellerName: string; destinationLabel?: string; timeLabel?: string }
+): { title: string; message: string } {
+  const who = input.travellerName;
+  switch (event) {
+    case "started":
+      return {
+        title: `${who} started Safe Arrival`,
+        message:
+          input.destinationLabel && input.timeLabel
+            ? `Expected at ${input.destinationLabel} by ${input.timeLabel}.`
+            : `${who} asked you to check they get there safely.`
+      };
+    case "extended":
+      return {
+        title: `${who} updated their arrival time`,
+        message: input.timeLabel ? `New expected arrival: ${input.timeLabel}.` : `${who} needs a little longer.`
+      };
+    case "overdue":
+      // Neutral by construction (spec §9): the confirmation simply has not
+      // landed. Never "missing", never an emergency.
+      return {
+        title: `${who} hasn't confirmed arrival yet`,
+        message: input.timeLabel ? `Expected arrival was ${input.timeLabel}.` : unconfirmedAlertMessage(who)
+      };
+    case "arrived":
+      return { title: `${who} has arrived safely`, message: arrivedMessage(who) };
+    case "cancelled":
+      return { title: "Safe Arrival ended", message: `${who} ended Safe Arrival.` };
+  }
 }
 
 /** Sent to the traveller when a chosen contact accepts. No location, ever. */

@@ -1,10 +1,11 @@
 import "server-only";
 
 import { deliverNotification } from "@/lib/notifications/server";
+import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 import {
   gracePeriodEndMs,
-  shouldSendUnconfirmedAlert,
-  unconfirmedAlertMessage
+  safeArrivalNotification,
+  shouldSendUnconfirmedAlert
 } from "@/lib/safety/safe-arrival";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { JobType } from "@/lib/jobs/rules";
@@ -99,15 +100,27 @@ export const handleSafeArrivalUnconfirmedAlert: JobHandler = async (admin) => {
       .eq("session_id", session.id)
       .neq("acknowledgement_status", "declined");
 
+    // Neutral by construction, never "missing", never an emergency (batch 5 §9).
+    // Same copy helper the traveller-initiated events use, so every lifecycle
+    // notification for a journey reads consistently.
+    const overdue = safeArrivalNotification("overdue", {
+      travellerName: name,
+      timeLabel: new Date(timing.expectedArrivalMs).toLocaleTimeString("en-GB", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: DEFAULT_RECIPIENT_TIMEZONE
+      })
+    });
     await Promise.all(
       (contacts ?? []).map((contact) =>
         deliverNotification(admin, {
           userId: contact.contact_user_id,
           priority: "critical",
+          // Deep-links to this exact journey, not the feature root.
           type: `safe_arrival:${session.id}`,
-          title: "Safe Arrival check",
-          // Neutral by construction, never "missing" (batch 5 §9).
-          message: unconfirmedAlertMessage(name)
+          title: overdue.title,
+          message: overdue.message
         })
       )
     );

@@ -151,6 +151,12 @@ const BUDDY_PRO: Entitlements = {
   ...BUDDY_PLUS,
   max_muddies: UNLIMITED,
   max_close_friends: 100,
+  // Safe Arrival watchers: Pro previously inherited Plus's 5, so the top tier
+  // bought nothing here. Kept a finite number rather than UNLIMITED — every
+  // watcher is a real person who gets a critical-priority notification on
+  // start/extend/arrive/overdue, so an unbounded fan-out is a notification
+  // problem, not a feature.
+  max_safe_arrival_contacts: 10,
   max_plan_participants: 500,
   max_private_groups: 100,
   max_group_members: 1000,
@@ -383,6 +389,8 @@ export function upgradePromptFor(key: NumericEntitlementKey, currentPlan: Subscr
       return "Free hangouts include up to 5 people. Buddy Plus includes up to 50.";
     case "max_polls_per_plan":
       return "Free includes one poll per plan. Buddy Plus includes unlimited polls.";
+    case "max_safe_arrival_contacts":
+      return "Free lets 2 Muddies watch over a journey. Buddy Plus lets 5, and Buddy Pro lets 10.";
     default:
       return null;
   }

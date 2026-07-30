@@ -234,6 +234,79 @@
 .journey-status-dot-cancelled,
 .journey-status-dot-expired { background: hsl(var(--border)); }
 
+/* ---------------------------------------------------------------------------
+ * Safe Arrival journey scene.
+ *
+ * A symbolic destination motif: a soft tinted stage with a dashed path curving
+ * toward a pin. It is decorative and aria-hidden. NOTHING here encodes position,
+ * progress, distance or a route — the dash animation drifts at a constant slow
+ * rate and is not derived from journey data, precisely so it can never be read
+ * as a live marker moving along a route. Tone follows journey status: orange in
+ * transit, green on arrival, red once a confirmation is overdue.
+ * ------------------------------------------------------------------------- */
+.journey-scene {
+  border: 1px solid hsl(var(--border) / 0.7);
+  background:
+    radial-gradient(120% 90% at 50% 118%, hsl(var(--journey-tint) / 0.22), transparent 70%),
+    linear-gradient(180deg, hsl(var(--card) / 0.5), hsl(var(--card) / 0.75));
+}
+.journey-scene-transit,
+.journey-scene-extended { --journey-tint: 25 95% 53%; }
+.journey-scene-arrived { --journey-tint: 142 71% 45%; }
+.journey-scene-overdue { --journey-tint: 0 72% 51%; }
+.journey-scene-ended { --journey-tint: 220 9% 46%; }
+
+.journey-scene-path { color: hsl(var(--journey-tint) / 0.34); }
+/* Constant-rate drift only. 9s is slow enough to read as ambient rather than
+ * as motion along the path. */
+.journey-scene-dash { animation: journey-dash 9s linear infinite; }
+@keyframes journey-dash {
+  to { stroke-dashoffset: -32; }
+}
+
+.journey-pin {
+  color: hsl(var(--journey-tint));
+  background: hsl(var(--journey-tint) / 0.16);
+  border: 1px solid hsl(var(--journey-tint) / 0.4);
+  box-shadow: 0 0 24px hsl(var(--journey-tint) / 0.18);
+  transition: background-color 300ms ease, border-color 300ms ease, color 300ms ease;
+}
+.journey-pin-transit,
+.journey-pin-extended { --journey-tint: 25 95% 53%; }
+.journey-pin-arrived { --journey-tint: 142 71% 45%; }
+.journey-pin-overdue { --journey-tint: 0 72% 51%; }
+.journey-pin-ended { --journey-tint: 220 9% 46%; }
+
+/* A slow "session is alive" breath. Not a heartbeat, not a radar sweep. */
+.journey-pin-breathe::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 9999px;
+  border: 1.5px solid currentColor;
+  opacity: 0.35;
+  animation: journey-breathe 3.6s ease-in-out infinite;
+}
+/* One-shot success ring on arrival, then still. */
+.journey-pin-arrived::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 9999px;
+  border: 2px solid currentColor;
+  animation: journey-arrived 900ms ease-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey-scene-dash,
+  .journey-pin-breathe::before,
+  .journey-pin-arrived::before {
+    animation: none;
+  }
+  /* Keep the static ring so "active" still reads without motion. */
+  .journey-pin-breathe::before { opacity: 0.3; transform: scale(1); }
+}
+
 /* Approved watcher avatars: a soft breathing ring so their presence reads as
  * "here with you", never a surveillance eye. */
 .journey-watcher { display: inline-flex; border-radius: 9999px; }
