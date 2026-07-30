@@ -4,6 +4,7 @@ import { createRequestId, errorType, logBackendEvent } from "@/lib/observability
 import { paystackRequest, type PaystackCustomer, type PaystackInitializeTransaction } from "@/lib/paystack/client";
 import { getAppUrl, getMissingPaystackConfig, getPaystackPlan, type PaidPlanId } from "@/lib/paystack/config";
 import { guardFeature } from "@/lib/admin/enforcement";
+import { invalidMutationOriginResponse } from "@/lib/security/csrf";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -14,6 +15,9 @@ const initializeRequestSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const originError = invalidMutationOriginResponse(request);
+  if (originError) return originError;
+
   const requestId = createRequestId();
   const startedAt = Date.now();
   const route = "/api/paystack/initialize";

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { invalidMutationOriginResponse } from "@/lib/security/csrf";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -23,7 +24,10 @@ export async function GET() {
   return response;
 }
 
-export async function POST() {
+export async function POST(request: Request) {
+  const originError = invalidMutationOriginResponse(request);
+  if (originError) return originError;
+
   const auth = await authenticatedUser();
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const limit = await consumeRateLimit({ action: "trials.start", userId: auth.user.id });
@@ -40,7 +44,10 @@ export async function POST() {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const originError = invalidMutationOriginResponse(request);
+  if (originError) return originError;
+
   const auth = await authenticatedUser();
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const cancelled = await cancelUserTrial(createSupabaseAdminClient(), auth.user.id);

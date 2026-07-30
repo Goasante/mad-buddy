@@ -53,6 +53,7 @@ export function buildContentSecurityPolicy(options: {
   // Google Analytics (gtag.js): the tag loads from googletagmanager.com and
   // beacons to google-analytics.com (both endpoints + regional subdomains).
   const gtm = "https://www.googletagmanager.com";
+  const turnstile = "https://challenges.cloudflare.com";
   // https://www.google.com: gtag's Google Signals / cross-device linking
   // feature (only reachable now that the inline bootstrap script actually
   // carries our nonce — previously it was blocked before it could even try).
@@ -62,8 +63,8 @@ export function buildContentSecurityPolicy(options: {
   // while older browsers fall back to 'unsafe-inline' and still work.
   const noncePart = options.nonce ? ` 'nonce-${options.nonce}'` : "";
   const scriptSrc = options.allowDevEval
-    ? `script-src 'self'${noncePart} 'unsafe-inline' 'unsafe-eval' ${gtm}`
-    : `script-src 'self'${noncePart} 'unsafe-inline' ${gtm}`;
+    ? `script-src 'self'${noncePart} 'unsafe-inline' 'unsafe-eval' ${gtm} ${turnstile}`
+    : `script-src 'self'${noncePart} 'unsafe-inline' ${gtm} ${turnstile}`;
 
   const directives = [
     `default-src 'self'`,
@@ -84,9 +85,9 @@ export function buildContentSecurityPolicy(options: {
     // same-content `data:text/javascript;base64,...` module in some browsers,
     // which connect-src otherwise blocks even though the gtag.js script tag
     // itself is already trusted via the googletagmanager.com host source.
-    `connect-src 'self' data:${supabase ? ` ${supabase} ${supabase.replace(/^https:/, "wss:")}` : ""} ${gtm} ${ga}`,
+    `connect-src 'self' data:${supabase ? ` ${supabase} ${supabase.replace(/^https:/, "wss:")}` : ""} ${gtm} ${ga} ${turnstile}`,
     `font-src 'self'`,
-    `frame-src 'none'`,
+    `frame-src ${turnstile}`,
     `frame-ancestors 'none'`,
     `object-src 'none'`,
     `base-uri 'self'`,

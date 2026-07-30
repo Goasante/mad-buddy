@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
+import { invalidMutationOriginResponse } from "@/lib/security/csrf";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 
 // Backward compatible: an empty body still marks every notification read.
@@ -16,6 +17,9 @@ const markReadRequestSchema = z.object({
 });
 
 export async function PATCH(request: Request) {
+  const originError = invalidMutationOriginResponse(request);
+  if (originError) return originError;
+
   const env = getSupabaseBrowserEnv();
 
   if (!env.url || !env.anonKey) {

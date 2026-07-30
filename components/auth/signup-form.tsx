@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { signUpAction, type AuthActionState } from "@/app/(auth)/actions";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
+import { TurnstileWidget } from "@/components/security/turnstile-widget";
 
 const signupSchema = z.object({
   email: z.string().email("Enter a valid email address."),
@@ -27,8 +28,11 @@ type SignupFormProps = {
 };
 
 export function SignupForm({ initialError = null }: SignupFormProps) {
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
   const [isPending, startTransition] = useTransition();
   const [showPassword, setShowPassword] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const [actionState, setActionState] = useState<AuthActionState | null>(
     initialError ? { ok: false, message: initialError } : null
   );
@@ -50,13 +54,19 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
     setActionState(null);
     startTransition(async () => {
       try {
-        const result = await withTimeout(signUpAction(values), {
+        const result = await withTimeout(signUpAction({ ...values, turnstileToken }), {
           operation: "create account",
           timeoutMs: 20_000
         });
         setActionState(result);
+        if (!result.ok) {
+          setTurnstileToken(null);
+          setTurnstileResetKey((current) => current + 1);
+        }
         if (result.ok && result.redirectTo) window.location.assign(result.redirectTo);
       } catch (error) {
+        setTurnstileToken(null);
+        setTurnstileResetKey((current) => current + 1);
         setActionState({
           ok: false,
           message: isRequestTimeoutError(error)
@@ -66,6 +76,10 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
       }
     });
   }
+
+  const onTurnstileTokenChange = useCallback((token: string | null) => {
+    setTurnstileToken(token);
+  }, []);
 
   return (
     <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
@@ -129,6 +143,13 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
         ) : null}
       </div>
 
+      <TurnstileWidget
+        siteKey={turnstileSiteKey}
+        action="signup"
+        onTokenChange={onTurnstileTokenChange}
+        resetKey={turnstileResetKey}
+      />
+
       {actionState ? (
         <div
           className={`flex items-center gap-2 rounded-xl border p-3 text-sm ${
@@ -147,7 +168,11 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
         </div>
       ) : null}
 
-      <Button type="submit" className="w-full" disabled={isPending}>
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={isPending || Boolean(turnstileSiteKey && !turnstileToken)}
+      >
         {isPending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
         {isPending ? "Creating account..." : "Create account"}
       </Button>

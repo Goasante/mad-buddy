@@ -1,16 +1,15 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useCallback, useState } from "react";
+import { Link } from "react-router-dom";
 import { AlertTriangle, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
 import { api } from "../lib/api";
-import { supabase } from "../lib/supabase";
-import { assertEnv } from "../lib/env";
+import { assertEnv, env } from "../lib/env";
 import { BrandMark } from "../components/BrandMark";
+import { TurnstileWidget } from "@/components/security/turnstile-widget";
 
 export function SignupScreen() {
-  const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -20,7 +19,13 @@ export function SignupScreen() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const [busy, setBusy] = useState(false);
+  const onTurnstileTokenChange = useCallback((token: string | null) => {
+    setTurnstileToken(token);
+  }, []);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -31,7 +36,8 @@ export function SignupScreen() {
 
     setBusy(true);
     setError("");
-    const result = await api.post<{ ok: boolean; message: string }>(
+    setNotice("");
+    const result = await api.post<{ ok: boolean; message: string; requiresEmailConfirmation?: boolean }>(
       "/api/auth/signup",
       {
         fullName: fullName.trim(),
@@ -39,17 +45,19 @@ export function SignupScreen() {
         email: email.trim(),
         password,
         acceptedPolicy: true,
-        policyVersion: PRIVACY_POLICY_VERSION
+        policyVersion: PRIVACY_POLICY_VERSION,
+        turnstileToken
       },
       { auth: false }
     );
     if (!result.ok) {
+      setTurnstileToken(null);
+      setTurnstileResetKey((current) => current + 1);
       setBusy(false);
       return setError(result.error);
     }
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setBusy(false);
-    navigate(signInError ? "/login" : "/onboarding");
+    setNotice(result.data.message);
   }
 
   return (
@@ -141,6 +149,13 @@ export function SignupScreen() {
               </span>
             </label>
 
+            <TurnstileWidget
+              siteKey={env.turnstileSiteKey}
+              action="signup"
+              onTokenChange={onTurnstileTokenChange}
+              resetKey={turnstileResetKey}
+            />
+
             {error ? (
               <div className="flex items-center gap-2 rounded-lg border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-50" role="status">
                 <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -148,10 +163,17 @@ export function SignupScreen() {
               </div>
             ) : null}
 
+            {notice ? (
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-3 text-sm text-emerald-50" role="status">
+                <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {notice}
+              </div>
+            ) : null}
+
             <Button
               type="submit"
               className="w-full shadow-[0_12px_30px_hsl(var(--primary)/0.28)] transition-shadow hover:shadow-[0_16px_38px_hsl(var(--primary)/0.4)]"
-              disabled={busy}
+              disabled={busy || Boolean(env.turnstileSiteKey && !turnstileToken)}
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
               {busy ? "Creating your account…" : "Create account"}

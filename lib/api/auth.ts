@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
 import type { Database } from "@/lib/supabase/database.types";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
+import { validateMutationRequest } from "@/lib/security/csrf";
 
 export type ApiAuth = {
   user: User;
@@ -24,10 +25,12 @@ export type ApiAuth = {
  * queries under RLS as that user. Privileged operations still use the
  * service-role admin client as before. Returns null when unauthenticated.
  *
- * This is additive: the cookie branch is byte-for-byte what the existing
- * handlers already do, so retrofitting a route never changes web behaviour.
+ * Cookie-authenticated mutations also require same-origin request evidence.
+ * Bearer-authenticated native requests are not subject to browser CSRF.
  */
 export async function resolveApiUser(request: Request): Promise<ApiAuth | null> {
+  if (!validateMutationRequest(request).ok) return null;
+
   const header = request.headers.get("authorization");
 
   if (header?.toLowerCase().startsWith("bearer ")) {

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import {
   consumeRateLimit,
@@ -8,9 +9,11 @@ import {
 } from "@/lib/security/rate-limit";
 import { createRequestId, logBackendEvent } from "@/lib/observability/logger";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getSupabaseServerEnv } from "@/lib/supabase/env";
+import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
 import { normalizeUsername, validateUsername } from "@/lib/profile/rules";
+import { getSiteUrl } from "@/lib/seo";
+import { turnstileErrorMessage, verifyTurnstileToken } from "@/lib/security/turnstile";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -73,31 +76,33 @@ const mobileSignupSchema = z
     email: z.string().email(),
     password: z.string().min(8),
     acceptedPolicy: z.literal(true),
-    policyVersion: z.literal(PRIVACY_POLICY_VERSION)
+    policyVersion: z.literal(PRIVACY_POLICY_VERSION),
+    turnstileToken: z.string().max(2048).optional()
   })
   .superRefine((data, context) => {
     const usernameError = validateUsername(data.username);
     if (usernameError) context.addIssue({ code: "custom", path: ["username"], message: usernameError });
   });
 
-export type MobileSignUpResult = { ok: boolean; message: string };
+export type MobileSignUpResult = {
+  ok: boolean;
+  message: string;
+  requiresEmailConfirmation?: boolean;
+};
 
 /**
- * Registers a new account for the native app. Unlike the web action (which
- * relies on cookie-session sign-up), the mobile client establishes its own
- * Supabase session afterwards, so this endpoint just needs to create a
- * confirmed user and bootstrap its rows. Email is confirmed on creation for the
- * same reason web auto-confirms: sign-up must never depend on email delivery.
- *
- * Any creation error returns the same generic message, so this cannot be used
- * to discover which email addresses are already registered.
+ * Registers a native-app account through the same public Supabase sign-up flow
+ * as web. Supabase owns email verification; the native client must not receive
+ * a session before the address is confirmed. Any creation error stays generic
+ * so this endpoint cannot be used to discover registered email addresses.
  */
-export async function registerConfirmedUser(input: unknown): Promise<MobileSignUpResult> {
+export async function registerUserWithEmailVerification(input: unknown): Promise<MobileSignUpResult> {
   const requestId = createRequestId();
   const startedAt = Date.now();
 
-  const env = getSupabaseServerEnv();
-  if (!env.url || !env.serviceRoleKey) {
+  const serverEnv = getSupabaseServerEnv();
+  const publicEnv = getSupabaseBrowserEnv();
+  if (!serverEnv.url || !serverEnv.serviceRoleKey || !publicEnv.url || !publicEnv.anonKey) {
     return { ok: false, message: "Sign-up is not available right now." };
   }
 
@@ -115,14 +120,24 @@ export async function registerConfirmedUser(input: unknown): Promise<MobileSignU
     return { ok: false, message: "Please check the signup form and try again." };
   }
 
+  const challenge = await verifyTurnstileToken(parsed.data.turnstileToken, "signup");
+  if (!challenge.ok) {
+    return { ok: false, message: turnstileErrorMessage(challenge) };
+  }
+
   const { fullName, username, email, password } = parsed.data;
+  const authClient = createClient(publicEnv.url, publicEnv.anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+  });
   const admin = createSupabaseAdminClient();
 
-  const { data, error } = await admin.auth.admin.createUser({
+  const { data, error } = await authClient.auth.signUp({
     email,
     password,
-    email_confirm: true,
-    user_metadata: { full_name: fullName, username }
+    options: {
+      emailRedirectTo: `${getSiteUrl().origin}/auth/callback?next=/login`,
+      data: { full_name: fullName, username }
+    }
   });
 
   if (error || !data.user) {
@@ -136,6 +151,18 @@ export async function registerConfirmedUser(input: unknown): Promise<MobileSignU
       errorType: error?.name ?? "create_user_failed"
     });
     return { ok: false, message: "Your account could not be created. Check the form and try again." };
+  }
+
+  if (data.user.identities?.length === 0) {
+    return {
+      ok: true,
+      message: "Check your email for the confirmation link.",
+      requiresEmailConfirmation: true
+    };
+  }
+
+  if (data.session) {
+    await authClient.auth.signOut({ scope: "local" });
   }
 
   const bootstrapResults = await bootstrapNewUser(admin, {
@@ -177,5 +204,9 @@ export async function registerConfirmedUser(input: unknown): Promise<MobileSignU
     userId: data.user.id
   });
 
-  return { ok: true, message: "Account created. Continue onboarding." };
+  return {
+    ok: true,
+    message: "Check your email and open the confirmation link before logging in.",
+    requiresEmailConfirmation: true
+  };
 }

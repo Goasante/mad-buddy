@@ -3,6 +3,7 @@ import { z } from "zod";
 import { CANCELLATION_REASONS, cancellationReasonLabel } from "@/lib/revenue/cancellation";
 import { recordBillingEvent } from "@/lib/revenue/events";
 import { paystackRequest } from "@/lib/paystack/client";
+import { invalidMutationOriginResponse } from "@/lib/security/csrf";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -11,6 +12,9 @@ const reasonValues = CANCELLATION_REASONS.map((reason) => reason.value) as [stri
 const schema = z.object({ reason: z.enum(reasonValues).default("prefer_not_to_say") });
 
 export async function POST(request: Request) {
+  const originError = invalidMutationOriginResponse(request);
+  if (originError) return originError;
+
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "Choose a valid cancellation reason." }, { status: 400 });
   const supabase = await createSupabaseServerClient();

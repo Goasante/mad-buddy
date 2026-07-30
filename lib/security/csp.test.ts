@@ -46,6 +46,13 @@ describe("buildContentSecurityPolicy", () => {
     expect(withSupabase).toContain("https://www.google-analytics.com");
   });
 
+  it("allows only Cloudflare Turnstile's script, verification connection, and challenge frame", () => {
+    expect(withSupabase).toContain("script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://challenges.cloudflare.com");
+    expect(withSupabase).toContain("connect-src 'self'");
+    expect(withSupabase).toContain("https://challenges.cloudflare.com");
+    expect(withSupabase).toContain("frame-src https://challenges.cloudflare.com");
+  });
+
   it("adds the per-request nonce to script-src, keeping unsafe-inline as the legacy fallback", () => {
     const nonced = buildContentSecurityPolicy({
       supabaseOrigin: "https://abc123.supabase.co",
@@ -73,7 +80,7 @@ describe("buildContentSecurityPolicy", () => {
   it("locks down framing, objects, base, and forms", () => {
     for (const directive of [
       "frame-ancestors 'none'",
-      "frame-src 'none'",
+      "frame-src https://challenges.cloudflare.com",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { invalidMutationOriginResponse } from "@/lib/security/csrf";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const subscriptionSchema = z.object({
@@ -12,6 +13,9 @@ const subscriptionSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const originError = invalidMutationOriginResponse(request);
+  if (originError) return originError;
+
   const supabase = await createSupabaseServerClient();
   const {
     data: { user }

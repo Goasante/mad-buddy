@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { invalidMutationOriginResponse } from "@/lib/security/csrf";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { recordBillingEvent } from "@/lib/revenue/events";
 
-export async function POST() {
+export async function POST(request: Request) {
+  const originError = invalidMutationOriginResponse(request);
+  if (originError) return originError;
+
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new NextResponse(null, { status: 204 });
@@ -30,4 +34,3 @@ export async function POST() {
   }
   return new NextResponse(null, { status: 204 });
 }
-

@@ -11,7 +11,10 @@ major_version = 15
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:3000/onboarding"]
+additional_redirect_urls = ["http://localhost:3000/auth/callback", "http://localhost:3000/onboarding"]
+
+[auth.email]
+enable_confirmations = true
 
 [storage]
 enabled = true

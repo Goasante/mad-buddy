@@ -13,6 +13,8 @@ App:
 
 - `NEXT_PUBLIC_APP_URL`
 - `ADMIN_EMAILS`
+- `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+- `TURNSTILE_SECRET_KEY`
 
 Paystack, required before live billing:
 
@@ -38,6 +40,12 @@ Paystack, required before live billing:
 - `/api/health/readiness` should return `200` only after required production env is configured.
 - Paystack webhook endpoint should be `/api/paystack/webhook`.
 - Paystack callback URL should be `/subscription-success`.
+- Cloudflare Turnstile must allow the production hostname and `localhost` for
+  native builds served from `https://localhost`.
+- Supabase Auth email confirmation must be enabled. Allow
+  `https://mad-buddy.com/auth/callback` as an authentication redirect.
+- Complete every provider check in
+  [`docs/security-provider-operations.md`](./security-provider-operations.md).
 - Paystack webhook events should include:
   - `charge.success`
   - `subscription.create`

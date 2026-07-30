@@ -14,10 +14,11 @@ import { getAdminEmailAccess } from "@/lib/safety/admin";
 import { bootstrapNewUser } from "@/lib/auth/bootstrap";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
+import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
 import { createPlaceholderUsername, PLACEHOLDER_DISPLAY_NAME } from "@/lib/profile/placeholder-identity";
 import { safeAuthNext } from "@/lib/auth/oauth-redirect";
+import { turnstileErrorMessage, verifyTurnstileToken } from "@/lib/security/turnstile";
 
 export type AuthActionState = {
   ok: boolean;
@@ -29,7 +30,8 @@ const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   acceptedPolicy: z.literal(true),
-  policyVersion: z.literal(PRIVACY_POLICY_VERSION)
+  policyVersion: z.literal(PRIVACY_POLICY_VERSION),
+  turnstileToken: z.string().max(2048).optional()
 });
 
 const loginSchema = z.object({
@@ -39,7 +41,8 @@ const loginSchema = z.object({
 });
 
 const forgotPasswordSchema = z.object({
-  email: z.string().email()
+  email: z.string().email(),
+  turnstileToken: z.string().max(2048).optional()
 });
 
 const resetPasswordSchema = z
@@ -136,35 +139,35 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     return { ok: false, message: "Please check the signup form and try again." };
   }
 
+  const challenge = await verifyTurnstileToken(parsed.data.turnstileToken, "signup");
+  if (!challenge.ok) {
+    logBackendEvent("warn", {
+      requestId,
+      action: "auth.signup_turnstile",
+      statusCode: challenge.reason === "missing_secret" ? 503 : 400,
+      latencyMs: Date.now() - startedAt,
+      errorType: challenge.reason
+    });
+    return { ok: false, message: turnstileErrorMessage(challenge) };
+  }
+
   const { email, password } = parsed.data;
 
-  const env = getSupabaseServerEnv();
-  if (!env.url || !env.serviceRoleKey) {
-    logBackendEvent("error", {
-      requestId,
-      action: "auth.signup",
-      statusCode: 500,
-      latencyMs: Date.now() - startedAt,
-      errorType: "missing_service_role"
-    });
-    return { ok: false, message: "Sign-up is temporarily unavailable. Please try again shortly." };
-  }
-  const admin = createSupabaseAdminClient();
+  const supabase = await createSupabaseServerClient();
+  const origin = await resolveRequestOrigin();
 
-  // Create a pre-confirmed account with the admin API. This never sends a
-  // confirmation email, so sign-up can't be blocked by the provider's email
-  // rate limit — the built-in SMTP allows only a few messages per hour, and once
-  // it was exhausted `auth.signUp` failed outright, so real sign-ups silently
-  // created no account and those users then hit "wrong password" on login. The
-  // app already auto-confirms and never uses the email link, so email delivery
-  // must never gate sign-up. Mirrors the mobile /api/auth/signup path.
+  // Ordinary accounts use Supabase's public sign-up flow. The provider owns
+  // email verification and does not issue an application session until the
+  // address has been confirmed.
   // TODO(consent): Persist a PolicyConsentEvent through ConsentLogger after
   // consent_logs RLS, retention, and audit access are approved.
-  const { data: created, error: createError } = await admin.auth.admin.createUser({
+  const { data: created, error: createError } = await supabase.auth.signUp({
     email,
     password,
-    email_confirm: true,
-    user_metadata: { full_name: PLACEHOLDER_DISPLAY_NAME }
+    options: {
+      emailRedirectTo: `${origin}/auth/callback?next=/onboarding`,
+      data: { full_name: PLACEHOLDER_DISPLAY_NAME }
+    }
   });
 
   if (createError || !created?.user) {
@@ -176,7 +179,7 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
       /already|registered|exists/i.test(createError?.message ?? "");
     if (duplicate) {
       logBackendEvent("info", { requestId, action: "auth.signup", statusCode: 200, latencyMs: Date.now() - startedAt });
-      return { ok: true, message: "Check your email to continue.", redirectTo: "/login" };
+      return { ok: true, message: "Check your email for the confirmation link." };
     }
     logBackendEvent("warn", {
       requestId,
@@ -187,6 +190,16 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     });
     return { ok: false, message: "Your account could not be created. Check the form and try again." };
   }
+
+  if (created.user.identities?.length === 0) {
+    return { ok: true, message: "Check your email for the confirmation link." };
+  }
+
+  if (created.session) {
+    await supabase.auth.signOut({ scope: "local" });
+  }
+
+  const admin = createSupabaseAdminClient();
 
   // Per-user rows (profile / subscription / preferences). Idempotent; shared
   // with the mobile path (lib/auth/bootstrap) so the two can't drift.
@@ -223,23 +236,6 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     };
   }
 
-  // Establish the cookie session so they continue straight into onboarding. The
-  // account is already confirmed, so a failure here is transient — and even then
-  // the user can just log in, so no one is stranded.
-  const supabase = await createSupabaseServerClient();
-  const { error: sessionError } = await supabase.auth.signInWithPassword({ email, password });
-  if (sessionError) {
-    logBackendEvent("warn", {
-      requestId,
-      action: "auth.signup",
-      statusCode: 200,
-      latencyMs: Date.now() - startedAt,
-      userId: created.user.id,
-      errorType: "auto_signin_failed"
-    });
-    return { ok: true, message: "Account created. Log in to continue.", redirectTo: "/login" };
-  }
-
   logBackendEvent("info", {
     requestId,
     action: "auth.signup",
@@ -247,7 +243,10 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     latencyMs: Date.now() - startedAt,
     userId: created.user.id
   });
-  return { ok: true, message: "Account created. Continue onboarding.", redirectTo: "/onboarding" };
+  return {
+    ok: true,
+    message: "Check your email and open the confirmation link to continue."
+  };
 }
 
 export async function loginAction(input: unknown): Promise<AuthActionState> {
@@ -443,6 +442,11 @@ export async function forgotPasswordAction(input: unknown): Promise<AuthActionSt
     return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
   }
 
+  const challenge = await verifyTurnstileToken(parsed.data.turnstileToken, "password_recovery");
+  if (!challenge.ok) {
+    return { ok: false, message: turnstileErrorMessage(challenge) };
+  }
+
   const origin = await resolveRequestOrigin();
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
@@ -505,6 +509,21 @@ export async function resetPasswordAction(input: unknown): Promise<AuthActionSta
   });
 
   if (error) return { ok: false, message: "Your password could not be updated. Request a new reset link and try again." };
+
+  const { error: signOutError } = await supabase.auth.signOut({ scope: "global" });
+  if (signOutError) {
+    logBackendEvent("error", {
+      action: "auth.password_reset_session_revoke",
+      statusCode: 500,
+      userId: user.id,
+      errorType: errorType(signOutError)
+    });
+    await supabase.auth.signOut({ scope: "local" });
+    return {
+      ok: false,
+      message: "Your password was changed, but not every session could be closed. Contact support before continuing."
+    };
+  }
 
   return { ok: true, message: "Password updated. You can now log in with the new password.", redirectTo: "/login" };
 }
