@@ -18,14 +18,14 @@ export function HomeMomentsCarousel({ creators }: { creators: HomeMomentCreator[
 
   return (
     <section aria-labelledby="home-moments-heading">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 id="home-moments-heading" className="text-lg font-semibold tracking-tight">
+      <div className="mb-2 flex items-center justify-between gap-3 md:mb-3">
+        <h2 id="home-moments-heading" className="text-[13px] font-semibold tracking-tight md:text-lg">
           Moments
         </h2>
         <Link
           href="/moments"
           prefetch={false}
-          className="focus-ring safe-motion inline-flex items-center rounded-full px-2 py-1 text-sm font-semibold text-primary hover:bg-primary/10"
+          className="focus-ring safe-motion inline-flex min-h-[28px] items-center rounded-full px-2 py-1 text-[10px] font-semibold text-primary hover:bg-primary/10 md:text-sm"
         >
           See all <span aria-hidden="true">›</span>
         </Link>
@@ -33,19 +33,19 @@ export function HomeMomentsCarousel({ creators }: { creators: HomeMomentCreator[
 
       <div
         ref={scrollRef}
-        className="glow-scroll-boundary -mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="glow-scroll-boundary -mx-1 flex snap-x snap-mandatory gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:gap-4"
         aria-label="Active Moments"
       >
         <Link
           href="/moments?create=1"
           prefetch={false}
-          className="focus-ring safe-motion flex w-[76px] shrink-0 snap-start flex-col items-center gap-2 text-center"
+          className="focus-ring safe-motion flex min-h-[70px] w-[58px] shrink-0 snap-start flex-col items-center gap-1 text-center md:w-[76px] md:gap-2"
           aria-label="Create your Moment"
         >
-          <span className="grid h-16 w-16 place-items-center rounded-full border-2 border-dashed border-primary/65 bg-primary/[0.06] text-primary">
-            <Plus className="h-6 w-6" aria-hidden="true" />
+          <span className="grid h-11 w-11 place-items-center rounded-full border-2 border-dashed border-primary/65 bg-primary/[0.06] text-primary md:h-16 md:w-16">
+            <Plus className="h-4 w-4 md:h-6 md:w-6" aria-hidden="true" />
           </span>
-          <span className="line-clamp-2 text-xs font-semibold leading-4">Your Moment</span>
+          <span className="line-clamp-2 text-[9px] font-semibold leading-3 md:text-xs md:leading-4">Your Moment</span>
         </Link>
 
         {creators.map((creator) => (
@@ -57,7 +57,7 @@ export function HomeMomentsCarousel({ creators }: { creators: HomeMomentCreator[
                 : `/moments?author=${encodeURIComponent(creator.authorId)}`
             }
             prefetch={false}
-            className="focus-ring safe-motion flex w-[76px] shrink-0 snap-start flex-col items-center gap-2 text-center"
+            className="focus-ring safe-motion flex min-h-[70px] w-[58px] shrink-0 snap-start flex-col items-center gap-1 text-center md:w-[76px] md:gap-2"
             aria-label={`Open ${creator.name}'s ${creator.onAir ? "Air Moment" : "Moment"}`}
           >
             <span className="relative rounded-full border-2 border-primary p-0.5">
@@ -66,15 +66,15 @@ export function HomeMomentsCarousel({ creators }: { creators: HomeMomentCreator[
                 name={creator.name}
                 size="lg"
                 decorative
-                className="h-[58px] w-[58px]"
+                className="h-10 w-10 md:h-[58px] md:w-[58px]"
               />
               {creator.onAir ? (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-red-600 px-1.5 py-0.5 text-[8px] font-bold leading-none text-white shadow-sm">
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-red-600 px-1 py-0.5 text-[6px] font-bold leading-none text-white shadow-sm md:px-1.5 md:text-[8px]">
                   <span aria-hidden="true">●</span> ON AIR
                 </span>
               ) : null}
             </span>
-            <span className="w-full truncate text-xs font-semibold">{creator.name}</span>
+            <span className="w-full truncate text-[9px] font-semibold md:text-xs">{creator.name}</span>
           </Link>
         ))}
       </div>

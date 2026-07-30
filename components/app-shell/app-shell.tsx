@@ -692,7 +692,13 @@ function AppHeader({
           title="Mad Buddy home"
           className="focus-ring shrink-0 md:hidden"
         >
-          <BrandMark className="h-9 w-9" priority />
+          {pathname === "/dashboard" ? (
+            <span className="text-sm font-black tracking-[-0.08em] text-foreground" aria-hidden="true">
+              M<span className="text-primary">3</span>
+            </span>
+          ) : (
+            <BrandMark className="h-9 w-9" priority />
+          )}
         </Link>
         {/* Home and Friends get a header title here; every other page carries
             its own H1 in its content, so the generic "App / Mad Buddy" fallback

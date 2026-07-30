@@ -16,7 +16,7 @@ export function CarouselDots({
   if (count <= 1) return null;
 
   return (
-    <div className="mt-3 flex justify-center gap-1.5" role="group" aria-label={`${label} pages`}>
+    <div className="mt-1.5 flex justify-center gap-1 md:mt-3 md:gap-1.5" role="group" aria-label={`${label} pages`}>
       {Array.from({ length: count }, (_, page) => (
         <button
           key={page}
@@ -25,8 +25,8 @@ export function CarouselDots({
           aria-label={`Show ${label} page ${page + 1}`}
           aria-current={page === active ? "true" : undefined}
           className={cn(
-            "focus-ring safe-motion h-2 min-h-2 rounded-full",
-            page === active ? "w-5 bg-primary" : "w-2 bg-muted-foreground/35 hover:bg-muted-foreground/60"
+            "focus-ring safe-motion h-1.5 min-h-1.5 rounded-full md:h-2 md:min-h-2",
+            page === active ? "w-4 bg-primary md:w-5" : "w-1.5 bg-muted-foreground/35 hover:bg-muted-foreground/60 md:w-2"
           )}
         />
       ))}

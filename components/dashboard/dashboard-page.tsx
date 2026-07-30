@@ -4,14 +4,11 @@ import Link from "next/link";
 import type { Route } from "next";
 import {
   AlertTriangle,
-  CalendarDays,
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
   CircleDollarSign,
   Eye,
   EyeOff,
-  MapPin,
   MessageSquareText,
   RefreshCcw,
   X
@@ -126,10 +123,6 @@ const PROXIMITY_LABEL_CLASS: Partial<Record<ProximityLevel, string>> = {
 
 function capitalize(name: string) {
   return name ? name.charAt(0).toUpperCase() + name.slice(1) : name;
-}
-
-function initialOf(name: string) {
-  return name.trim().charAt(0).toUpperCase() || "?";
 }
 
 function statusDisplay(note?: string, availability?: AvailabilityType): string {
@@ -354,17 +347,16 @@ export function DashboardPageContent({
     });
   }
 
-  const plan = upcomingPlans[0];
   const activeSafeArrivalCount =
     (safeArrival?.travelling.length ?? 0) + (safeArrival?.checkingOn.length ?? 0);
   const safeArrivalInviteCount = safeArrival?.invitations.length ?? 0;
 
   return (
-    <div className="mx-auto w-full max-w-[920px] space-y-6 pt-4 sm:pt-6">
+    <div className="mx-auto w-full max-w-[680px] space-y-4 pt-2 sm:pt-4 md:space-y-6">
       <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
       <PendingInvitePrompt />
 
-      <div className="flex items-center gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex items-center justify-end gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:justify-start md:gap-2">
         <button
           type="button"
           onClick={toggleVisibility}
@@ -372,13 +364,13 @@ export function DashboardPageContent({
           aria-label={ghostMode ? "Resume visibility" : "Pause visibility"}
           title={ghostMode ? "Resume visibility" : "Pause visibility"}
           className={cn(
-            "focus-ring safe-motion inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-3 text-sm font-semibold",
+            "focus-ring safe-motion inline-flex h-7 min-w-[44px] shrink-0 items-center justify-center gap-1.5 rounded-full border px-2.5 text-[10px] font-semibold md:h-10 md:gap-2 md:px-3 md:text-sm",
             ghostMode
               ? "border-border bg-secondary/60 text-muted-foreground"
               : "border-emerald-500/30 bg-emerald-500/10 text-foreground"
           )}
         >
-          {ghostMode ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+          {ghostMode ? <EyeOff className="h-3 w-3 md:h-4 md:w-4" aria-hidden="true" /> : <Eye className="h-3 w-3 md:h-4 md:w-4" aria-hidden="true" />}
           {ghostMode ? "Paused" : "Visible"}
           <span className={cn("h-2 w-2 rounded-full", ghostMode ? "bg-muted-foreground/60" : "bg-emerald-500")} aria-hidden="true" />
         </button>
@@ -400,13 +392,13 @@ export function DashboardPageContent({
             <button
               type="button"
               title={hasActiveStatus ? "Edit your status" : "Add a status"}
-              className="focus-ring safe-motion inline-flex h-10 max-w-[190px] shrink-0 items-center gap-2 rounded-full border border-border/70 bg-card/60 px-3 text-sm font-semibold hover:bg-secondary/60"
+              className="focus-ring safe-motion inline-flex h-7 min-w-[44px] max-w-[130px] shrink-0 items-center justify-center gap-1.5 rounded-full border border-border/70 bg-card/60 px-2.5 text-[10px] font-semibold hover:bg-secondary/60 md:h-10 md:max-w-[190px] md:gap-2 md:px-3 md:text-sm"
             >
-              <MessageSquareText className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+              <MessageSquareText className="h-3 w-3 shrink-0 text-primary md:h-4 md:w-4" aria-hidden="true" />
               <span className="truncate">
                 {hasActiveStatus ? statusDisplay(initialStatusNote, initialStatusAvailability) : "Link up?"}
               </span>
-              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground md:h-3.5 md:w-3.5" aria-hidden="true" />
             </button>
           }
         />
@@ -419,7 +411,7 @@ export function DashboardPageContent({
           disabled={isPending}
           aria-label="Check nearby Muddies again"
           title="Check nearby Muddies again"
-          className="h-10 w-10 shrink-0 rounded-full border border-border/70"
+          className="hidden h-10 w-10 shrink-0 rounded-full border border-border/70 md:inline-flex"
         >
           <RefreshCcw
             className={cn("h-4 w-4", isCheckingNearby && "animate-spin motion-reduce:animate-none")}
@@ -450,7 +442,6 @@ export function DashboardPageContent({
         hiddenHrefs={hiddenQuickActionHrefs}
       />
 
-      {plan ? <UpcomingPlanRow plan={plan} /> : null}
       {momentsSection}
 
       {safeArrival &&
@@ -558,14 +549,14 @@ function NearbyHero({
 
   return (
     <section aria-labelledby="home-nearby-heading" data-tour-id="home-nearby">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 id="home-nearby-heading" className="text-lg font-semibold tracking-tight">
+      <div className="mb-2 flex items-center justify-between gap-3 md:mb-3">
+        <h2 id="home-nearby-heading" className="text-[13px] font-semibold tracking-tight md:text-lg">
           Nearby Muddies
         </h2>
         <Link
           href="/friends"
           prefetch={false}
-          className="focus-ring safe-motion inline-flex items-center rounded-full px-2 py-1 text-sm font-semibold text-primary hover:bg-primary/10"
+          className="focus-ring safe-motion inline-flex min-h-[28px] items-center rounded-full px-2 py-1 text-[10px] font-semibold text-primary hover:bg-primary/10 md:text-sm"
         >
           View all <span aria-hidden="true">›</span>
         </Link>
@@ -575,7 +566,7 @@ function NearbyHero({
         <>
           <div
             ref={scrollRef}
-            className="glow-strip glow-scroll-boundary -mx-2 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="glow-strip glow-scroll-boundary -mx-2 flex snap-x snap-mandatory gap-1.5 overflow-x-auto px-2 pb-1 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:gap-4 md:px-4 md:pb-2 md:pt-3"
             aria-label="Nearby Muddies"
           >
             {friends.map((friend) => {
@@ -585,7 +576,7 @@ function NearbyHero({
                   key={friend.friendId}
                   type="button"
                   onClick={() => onSelect(friend.friendId)}
-                  className="focus-ring safe-motion flex w-[78px] shrink-0 snap-start flex-col items-center gap-1.5 text-center"
+                  className="focus-ring safe-motion flex min-h-[76px] w-[58px] shrink-0 snap-start flex-col items-center gap-1 text-center md:w-[78px] md:gap-1.5"
                   aria-label={`${capitalize(name)}, ${proximityLabels[friend.proximityLevel]}`}
                 >
                   <span className="relative">
@@ -596,17 +587,18 @@ function NearbyHero({
                       glowStrength={friend.glowStrength}
                       confidence={friend.confidence}
                       glowColorId={glowColorByFriendId[friend.friendId] ?? null}
-                      size="md"
+                      size="sm"
+                      className="md:[&>span]:h-14 md:[&>span]:w-14"
                       reducedMotion={reducedMotion}
                     />
                     {friend.freshnessState === "live" ? (
                       <span className="absolute bottom-0 right-0 z-[2] h-3 w-3 rounded-full border-2 border-background bg-emerald-500" aria-hidden="true" />
                     ) : null}
                   </span>
-                  <span className="mt-0.5 w-full truncate text-xs font-semibold">{capitalize(name)}</span>
+                  <span className="w-full truncate text-[10px] font-semibold md:mt-0.5 md:text-xs">{capitalize(name)}</span>
                   <span
                     className={cn(
-                      "inline-flex max-w-full items-center truncate rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                      "inline-flex max-w-full items-center truncate rounded-full px-1.5 py-0.5 text-[8px] font-semibold md:px-2 md:text-[10px]",
                       PROXIMITY_LABEL_CLASS[friend.proximityLevel] ?? "bg-primary/10 text-primary"
                     )}
                   >
@@ -619,7 +611,7 @@ function NearbyHero({
           <CarouselDots count={pageCount} active={activePage} onSelect={goToPage} label="Nearby Muddies" />
         </>
       ) : (
-        <div className="rounded-2xl bg-secondary/35 px-4 py-5 text-center">
+        <div className="rounded-xl bg-secondary/35 px-3 py-3 text-center md:rounded-2xl md:px-4 md:py-5">
           <p className="text-sm font-semibold">{ghostMode ? "Visibility is paused" : "No Muddies nearby"}</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
             {ghostMode ? "Resume visibility to check nearby." : "Approved Muddies will glow here when they're around."}
@@ -721,111 +713,30 @@ function HappeningNow({
 
   return (
     <section aria-labelledby="home-happening-heading">
-      <h2 id="home-happening-heading" className="mb-3 text-lg font-semibold tracking-tight">
+      <h2 id="home-happening-heading" className="mb-2 text-[13px] font-semibold tracking-tight md:mb-3 md:text-lg">
         What&apos;s happening now
       </h2>
-      <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="-mx-0.5 grid snap-x grid-flow-col auto-cols-[minmax(50px,1fr)] gap-1.5 overflow-x-auto px-0.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex md:gap-3 md:pb-2">
         {visibleFeatures.map((feature) => (
           <Link
             key={feature.href}
             href={feature.href}
             prefetch={false}
             className={cn(
-              "focus-ring safe-motion flex min-h-[108px] w-[124px] shrink-0 snap-start flex-col justify-between rounded-2xl p-3 hover:-translate-y-0.5",
+              "focus-ring safe-motion flex min-h-[74px] min-w-[50px] snap-start flex-col items-center justify-between rounded-xl p-1.5 text-center hover:-translate-y-0.5 md:min-h-[108px] md:w-[124px] md:shrink-0 md:items-start md:rounded-2xl md:p-3 md:text-left",
               feature.surfaceClass
             )}
           >
-            <span className={cn("grid h-9 w-9 place-items-center rounded-full bg-background/75", feature.accentClass)}>
-              <FeatureIcon feature={feature.featureIcon} size={19} decorative />
+            <span className={cn("grid h-7 w-7 place-items-center rounded-lg bg-background/75 md:h-9 md:w-9 md:rounded-full", feature.accentClass)}>
+              <FeatureIcon feature={feature.featureIcon} size={18} decorative />
             </span>
             <span>
-              <span className="block text-sm font-semibold">{feature.label}</span>
-              <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">{feature.description}</span>
+              <span className="block text-[9px] font-semibold leading-3 md:text-sm md:leading-normal">{feature.label}</span>
+              <span className="mt-0.5 line-clamp-2 block text-[7px] leading-[10px] text-muted-foreground md:text-[11px] md:leading-4">{feature.description}</span>
             </span>
           </Link>
         ))}
       </div>
-    </section>
-  );
-}
-
-function rsvpLabel(rsvp: string): string {
-  switch (rsvp) {
-    case "going":
-      return "Going";
-    case "maybe":
-      return "Maybe";
-    case "not_going":
-    case "declined":
-      return "Not going";
-    default:
-      return "Respond";
-  }
-}
-
-function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
-  const when = new Date(plan.startAt).toLocaleString([], {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  });
-
-  return (
-    <section aria-labelledby="home-plan-heading">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 id="home-plan-heading" className="text-sm font-semibold">
-          Upcoming
-        </h2>
-        <Link href="/plans" prefetch={false} className="text-xs font-medium text-primary hover:underline">
-          All plans
-        </Link>
-      </div>
-      <Link
-        href="/plans"
-        prefetch={false}
-        aria-label={`${capitalize(plan.title)}, ${when}, ${rsvpLabel(plan.myRsvp)}`}
-        className="focus-ring safe-motion flex items-center gap-3 rounded-2xl border border-border/70 bg-card/50 p-3 hover:border-border hover:bg-secondary/40"
-      >
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-          <CalendarDays className="h-[18px] w-[18px]" aria-hidden="true" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{capitalize(plan.title)}</p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground" suppressHydrationWarning>
-            {when}
-            {plan.placeText ? (
-              <>
-                {" · "}
-                <MapPin className="mr-0.5 inline-block h-3 w-3 -translate-y-px" aria-hidden="true" />
-                {capitalize(plan.placeText)}
-              </>
-            ) : null}
-          </p>
-        </div>
-        {plan.attendees.length > 0 ? (
-          <span className="hidden shrink-0 -space-x-1.5 min-[400px]:flex" aria-hidden="true">
-            {plan.attendees.slice(0, 3).map((attendee, index) => (
-              <span
-                key={`${attendee.name}-${index}`}
-                className="grid h-6 w-6 place-items-center overflow-hidden rounded-full border-2 border-background bg-secondary text-[9px] font-semibold uppercase text-muted-foreground"
-              >
-                {attendee.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={attendee.avatarUrl} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  initialOf(attendee.name)
-                )}
-              </span>
-            ))}
-          </span>
-        ) : null}
-        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/12 px-2 py-0.5 text-xs font-semibold text-primary">
-          {rsvpLabel(plan.myRsvp)}
-          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-        </span>
-      </Link>
     </section>
   );
 }
