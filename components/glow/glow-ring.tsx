@@ -30,11 +30,11 @@ export function GlowRing({
   const shouldPulse = !isMuted && !reducedMotion;
   const stateOpacity =
     proximityLevel === "very_close"
-      ? 0.62
+      ? 0.98
       : proximityLevel === "nearby"
-        ? 0.4
+        ? 0.76
         : proximityLevel === "around"
-          ? 0.2
+          ? 0.5
           : 0;
   const activeHaloOpacity = stateOpacity * confidenceMultiplier * strengthMultiplier;
   // The breathing animation cycles opacity between these rest/active values
@@ -58,9 +58,9 @@ export function GlowRing({
   const glowStyle = {
     ...props.style,
     "--halo-active-opacity": activeHaloOpacity,
-    "--halo-rest-opacity": activeHaloOpacity * 0.62,
-    "--halo-aura-active-opacity": activeHaloOpacity * 0.34,
-    "--halo-aura-rest-opacity": activeHaloOpacity * 0.22,
+    "--halo-rest-opacity": activeHaloOpacity * 0.78,
+    "--halo-aura-active-opacity": activeHaloOpacity * 0.72,
+    "--halo-aura-rest-opacity": activeHaloOpacity * 0.55,
     ...colorStyle
   } as CSSProperties;
 

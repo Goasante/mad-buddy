@@ -10,28 +10,12 @@ import { getCurrentUser } from "@/lib/supabase/auth";
 
 export const dynamic = "force-dynamic";
 
-export default async function MomentsRoute({
-  searchParams
-}: {
-  searchParams: Promise<{ feed?: string; author?: string; create?: string }>;
-}) {
-  const [user, query] = await Promise.all([getCurrentUser(), searchParams]);
-  const requestedFeed = query.feed === "air" ? "spotlight" : "moments";
-  const requestedAuthor = query.author?.trim() || null;
-  const requestedCreate = query.create === "1";
+export default async function MomentsRoute() {
+  const user = await getCurrentUser();
 
   const env = getSupabaseServerEnv();
   if (!user || !env.url || !env.serviceRoleKey) {
-    return (
-      <MomentsPage
-        initialMoments={[]}
-        initialOpenMoments={[]}
-        muddies={[]}
-        initialFeed={requestedFeed}
-        initialAuthorId={requestedAuthor}
-        initiallyCreating={requestedCreate}
-      />
-    );
+    return <MomentsPage initialMoments={[]} initialOpenMoments={[]} muddies={[]} />;
   }
 
   const admin = createSupabaseAdminClient();
@@ -60,9 +44,6 @@ export default async function MomentsRoute({
       // Close Friends is only offered when the viewer actually has some, so the
       // audience list never shows an option that would reach nobody.
       closeFriendsAvailable={(closeFriends.count ?? 0) > 0}
-      initialFeed={requestedFeed}
-      initialAuthorId={requestedAuthor}
-      initiallyCreating={requestedCreate}
     />
   );
 }

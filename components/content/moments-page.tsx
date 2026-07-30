@@ -74,10 +74,7 @@ export function MomentsPage({
   canPublishOpenMoments = false,
   viewerName = "You",
   viewerAvatarUrl = null,
-  closeFriendsAvailable = false,
-  initialFeed = "moments",
-  initialAuthorId = null,
-  initiallyCreating = false
+  closeFriendsAvailable = false
 }: {
   initialMoments?: VisibleMoment[];
   initialOpenMoments?: VisibleMoment[];
@@ -88,25 +85,20 @@ export function MomentsPage({
   viewerName?: string;
   viewerAvatarUrl?: string | null;
   closeFriendsAvailable?: boolean;
-  initialFeed?: "moments" | "spotlight";
-  initialAuthorId?: string | null;
-  initiallyCreating?: boolean;
 }) {
   const router = useRouter();
   const nowMs = useMomentClock();
   const [moments, setMoments] = useState(initialMoments);
   const [spotlight, setSpotlight] = useState(initialOpenMoments);
-  const [tab, setTab] = useState<"moments" | "spotlight">(
-    initialFeed === "spotlight" && openMomentsEnabled ? "spotlight" : "moments"
-  );
-  const [composerOpen, setComposerOpen] = useState(initiallyCreating);
+  const [tab, setTab] = useState<"moments" | "spotlight">("moments");
+  const [composerOpen, setComposerOpen] = useState(false);
   const [reportFor, setReportFor] = useState<VisibleMoment | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [hub, setHub] = useState<MomentsCreatorHub | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
   const [myTuneIns, setMyTuneIns] = useState<TuneInEntry[]>([]);
   const [feedback, setFeedback] = useState("");
-  const [authorFilter, setAuthorFilter] = useState<string | null>(initialAuthorId);
+  const [authorFilter, setAuthorFilter] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   // State, not a ref: the avatar ring reads this during render to show the
   // "something new" ring, so it has to participate in rendering.

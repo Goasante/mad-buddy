@@ -1,9 +1,4 @@
-import { Suspense } from "react";
 import { DashboardPageContent } from "@/components/dashboard/dashboard-page";
-import {
-  DashboardMomentsSection,
-  DashboardMomentsSkeleton
-} from "@/components/dashboard/dashboard-moments-section";
 import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
@@ -59,6 +54,7 @@ export default async function DashboardPage() {
       subscriptionPlan={access?.plan}
       hasPremium={access?.hasPremium}
       initialVisibilityStatus={profile?.visibility_status ?? "visible"}
+      displayName={profile?.full_name?.split(" ")[0] || ""}
       hasActiveStatus={hasActiveStatus}
       initialStatusAvailability={hasActiveStatus ? status?.availability_type : undefined}
       initialStatusActivity={hasActiveStatus ? status?.activity_type ?? null : null}
@@ -83,13 +79,6 @@ export default async function DashboardPage() {
           : null
       }
       hiddenQuickActionHrefs={socializeEnabled ? [] : ["/discover"]}
-      momentsSection={
-        user ? (
-          <Suspense fallback={<DashboardMomentsSkeleton />}>
-            <DashboardMomentsSection userId={user.id} />
-          </Suspense>
-        ) : null
-      }
     />
   );
 }
