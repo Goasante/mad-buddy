@@ -643,42 +643,42 @@
   }
 }
 
-/* Mobile Nearby-Muddies strip: a contained, subtler glow (~35-40% smaller
- * blur/spread than the default halo) so it never bleeds past the item bounds
+/* Mobile Nearby-Muddies strip: a contained, subtler glow so it never bleeds
+ * past the item bounds
  * or clips at the horizontal scroller's edges. Scoped to .glow-strip and left
  * unlayered so it overrides the layered proximity-halo-* defaults while the
  * desktop cards and profile modal keep the fuller glow. Proximity hierarchy
  * is preserved: very-close strongest, around subtlest. */
 .glow-strip .proximity-halo-very-close {
-  --halo-blur: 16px;
-  --halo-spread: 5px;
+  --halo-blur: 12px;
+  --halo-spread: 2.5px;
 }
 
 .glow-strip .proximity-halo-nearby {
-  --halo-blur: 12px;
-  --halo-spread: 4px;
+  --halo-blur: 9px;
+  --halo-spread: 1.5px;
 }
 
 .glow-strip .proximity-halo-around {
-  --halo-blur: 9px;
-  --halo-spread: 2px;
+  --halo-blur: 6px;
+  --halo-spread: 0.5px;
 }
 
 /* Keep profile-preview halos within the compact drop panel so their soft
  * edges never meet a scroll boundary and turn into a sharp rectangle. */
 .muddy-profile-preview .proximity-halo-very-close {
-  --halo-blur: 17px;
-  --halo-spread: 5px;
+  --halo-blur: 14px;
+  --halo-spread: 3px;
 }
 
 .muddy-profile-preview .proximity-halo-nearby {
-  --halo-blur: 14px;
-  --halo-spread: 4px;
+  --halo-blur: 10px;
+  --halo-spread: 2px;
 }
 
 .muddy-profile-preview .proximity-halo-around {
-  --halo-blur: 10px;
-  --halo-spread: 2px;
+  --halo-blur: 7px;
+  --halo-spread: 1px;
 }
 
 :root {
@@ -1120,27 +1120,27 @@ select {
   .proximity-halo-very-close {
     --halo-color: 251 146 60;
     --halo-ring: linear-gradient(135deg, #fdba74 0%, #f97316 52%, #c2410c 100%);
-    --halo-blur: 26px;
-    --halo-spread: 8px;
-    --halo-scale: 1.055;
+    --halo-blur: 18px;
+    --halo-spread: 4px;
+    --halo-scale: 1.025;
     --halo-duration: 2.2s;
   }
 
   .proximity-halo-nearby {
     --halo-color: 249 115 22;
     --halo-ring: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
-    --halo-blur: 20px;
-    --halo-spread: 6px;
-    --halo-scale: 1.04;
+    --halo-blur: 13px;
+    --halo-spread: 2.5px;
+    --halo-scale: 1.018;
     --halo-duration: 2.8s;
   }
 
   .proximity-halo-around {
     --halo-color: 249 115 22;
     --halo-ring: linear-gradient(135deg, rgb(251 146 60 / 0.72) 0%, rgb(234 88 12 / 0.62) 100%);
-    --halo-blur: 14px;
-    --halo-spread: 3px;
-    --halo-scale: 1.025;
+    --halo-blur: 8px;
+    --halo-spread: 1px;
+    --halo-scale: 1.01;
     --halo-duration: 3.4s;
   }
 

@@ -272,6 +272,7 @@ export function AppShell({
           currentUsername={currentUsername}
           currentAvatarUrl={currentAvatarUrl}
           showAdminLink={showAdminLink}
+          unreadCount={unreadCount}
         />
           <main
           id="app-main-content"
@@ -294,7 +295,7 @@ export function AppShell({
         </main>
         </div>
       </div>
-      <MobileNav navigationItems={visibleNavigationItems} unreadCount={unreadCount} />
+      <MobileNav navigationItems={visibleNavigationItems} />
     </div>
   );
 }
@@ -646,11 +647,13 @@ function AccountMenuItem({
 function AppHeader({
   currentUsername,
   currentAvatarUrl,
-  showAdminLink
+  showAdminLink,
+  unreadCount
 }: {
   currentUsername: string | null;
   currentAvatarUrl: string | null;
   showAdminLink: boolean;
+  unreadCount: number;
 }) {
   const pathname = usePathname();
   // NO useDismissOnBack here either — same reason as MobileAccountMenu below:
@@ -743,6 +746,7 @@ function AppHeader({
               currentAvatarUrl={currentAvatarUrl}
               showAdminLink={showAdminLink}
               pathname={pathname}
+              unreadCount={unreadCount}
             />
           </div>
         </div>
@@ -755,12 +759,14 @@ function MobileAccountMenu({
   currentUsername,
   currentAvatarUrl,
   showAdminLink,
-  pathname
+  pathname,
+  unreadCount
 }: {
   currentUsername: string | null;
   currentAvatarUrl: string | null;
   showAdminLink: boolean;
   pathname: string;
+  unreadCount: number;
 }) {
   const [open, setOpen] = useState(false);
   // NO useDismissOnBack here. This menu's items are <Link>s, and that hook's
@@ -800,6 +806,12 @@ function MobileAccountMenu({
               @{currentUsername}
             </p>
           ) : null}
+          <AccountMenuItem
+            href="/notifications"
+            label={unreadCount > 0 ? `Notifications (${unreadCount})` : "Notifications"}
+            icon={Bell}
+            isActive={pathname === "/notifications"}
+          />
           <AccountMenuItem href="/profile" label="Profile" icon={UserRound} isActive={pathname === "/profile"} />
           <AccountMenuItem
             href="/settings"
@@ -901,30 +913,28 @@ const createActions: Array<{
 const MOBILE_NAV_LABELS: Record<string, string> = {
   "/dashboard": "Home",
   "/friends": "Muddies",
-  "/notifications": "Pulse",
-  "/messages": "Messages",
-  "/plans": "Plans"
+  "/moments": "Moments",
+  "/messages": "Chats",
+  "/profile": "Profile"
 };
 
-function MobileNav({ navigationItems, unreadCount }: { navigationItems: NavigationItem[]; unreadCount: number }) {
+function MobileNav({ navigationItems }: { navigationItems: NavigationItem[] }) {
   const pathname = usePathname();
-  const mobileItems = navigationItems
-    .filter((item) => item.href !== "/admin" && item.href !== "/billing")
-    .slice(0, 5);
+  const mobileHrefs = ["/dashboard", "/friends", "/moments", "/messages", "/profile"] as const;
+  const mobileItems = mobileHrefs
+    .map((href) => navigationItems.find((item) => item.href === href))
+    .filter((item): item is NavigationItem => Boolean(item));
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl dark:border-white/10 dark:bg-[#111112]/95 md:hidden"
+      className="fixed inset-x-3 bottom-[calc(8px+env(safe-area-inset-bottom))] z-50 rounded-[1.4rem] border border-border/80 bg-background/95 px-1 shadow-[0_14px_45px_hsl(var(--shadow)/0.32)] backdrop-blur-xl dark:border-white/10 dark:bg-[#171719]/95 md:hidden"
       aria-label="Mobile navigation"
     >
-      <ul className="mx-auto flex w-full max-w-[30rem] items-stretch justify-between px-1">
+      <ul className="mx-auto grid w-full max-w-[28rem] grid-cols-5">
         {mobileItems.map((item) => {
           const isActive = isNavigationItemActive(item, pathname);
           const label = MOBILE_NAV_LABELS[item.href] ?? item.label;
-          const ariaLabel =
-            item.href === "/notifications"
-              ? notificationAriaLabel(label, unreadCount)
-              : label;
+          const ariaLabel = label;
 
           return (
             <li key={item.href} className="flex-1">
@@ -938,15 +948,16 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
                 aria-label={ariaLabel}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "safe-motion flex min-h-[56px] flex-col items-center justify-center gap-1 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  "safe-motion flex min-h-[58px] min-w-0 flex-col items-center justify-center gap-1 rounded-[1.1rem] px-0.5 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                   isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 <span className="relative">
-                  <NavItemIcon item={item} lucideClass="h-6 w-6" size={24} isActive={isActive} fillActive />
-                  {item.href === "/notifications" ? <UnreadBadge count={unreadCount} /> : null}
+                  <NavItemIcon item={item} lucideClass="h-[22px] w-[22px]" size={22} isActive={isActive} fillActive />
                 </span>
-                <span className="text-[11px] font-medium leading-none">{label}</span>
+                <span className="max-w-full truncate text-[10px] font-semibold leading-none min-[360px]:text-[11px]">
+                  {label}
+                </span>
               </Link>
             </li>
           );
