@@ -9,8 +9,8 @@ import {
   CircleDollarSign,
   Eye,
   EyeOff,
-  MessageSquareText,
   RefreshCcw,
+  Smile,
   X
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
@@ -394,7 +394,7 @@ export function DashboardPageContent({
               title={hasActiveStatus ? "Edit your status" : "Add a status"}
               className="focus-ring safe-motion inline-flex h-7 min-w-[44px] max-w-[130px] shrink-0 items-center justify-center gap-1.5 rounded-full border border-border/70 bg-card/60 px-2.5 text-[10px] font-semibold hover:bg-secondary/60 md:h-10 md:max-w-[190px] md:gap-2 md:px-3 md:text-sm"
             >
-              <MessageSquareText className="h-3 w-3 shrink-0 text-primary md:h-4 md:w-4" aria-hidden="true" />
+              <Smile className="h-3 w-3 shrink-0 text-violet-500 md:h-4 md:w-4" aria-hidden="true" />
               <span className="truncate">
                 {hasActiveStatus ? statusDisplay(initialStatusNote, initialStatusAvailability) : "Link up?"}
               </span>
@@ -576,7 +576,7 @@ function NearbyHero({
                   key={friend.friendId}
                   type="button"
                   onClick={() => onSelect(friend.friendId)}
-                  className="focus-ring safe-motion flex min-h-[76px] w-[58px] shrink-0 snap-start flex-col items-center gap-1 text-center md:w-[78px] md:gap-1.5"
+                  className="focus-ring safe-motion flex min-h-[94px] w-[66px] shrink-0 snap-start flex-col items-center gap-1 text-center md:w-[78px] md:gap-1.5"
                   aria-label={`${capitalize(name)}, ${proximityLabels[friend.proximityLevel]}`}
                 >
                   <span className="relative">
@@ -587,8 +587,7 @@ function NearbyHero({
                       glowStrength={friend.glowStrength}
                       confidence={friend.confidence}
                       glowColorId={glowColorByFriendId[friend.friendId] ?? null}
-                      size="sm"
-                      className="md:[&>span]:h-14 md:[&>span]:w-14"
+                      size="md"
                       reducedMotion={reducedMotion}
                     />
                     {friend.freshnessState === "live" ? (
@@ -723,7 +722,7 @@ function HappeningNow({
             href={feature.href}
             prefetch={false}
             className={cn(
-              "focus-ring safe-motion flex min-h-[74px] min-w-[50px] snap-start flex-col items-center justify-between rounded-xl p-1.5 text-center hover:-translate-y-0.5 md:min-h-[108px] md:w-[124px] md:shrink-0 md:items-start md:rounded-2xl md:p-3 md:text-left",
+              "focus-ring safe-motion flex min-h-[82px] min-w-[50px] snap-start flex-col items-center justify-between rounded-xl border border-current/20 p-1.5 text-center hover:-translate-y-0.5 md:min-h-[108px] md:w-[124px] md:shrink-0 md:items-start md:rounded-2xl md:p-3 md:text-left",
               feature.surfaceClass
             )}
           >

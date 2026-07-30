@@ -23,7 +23,9 @@ export async function DashboardMomentsSection({ userId }: { userId: string }) {
       authorId: moment.authorId,
       name: moment.authorName,
       avatarUrl: moment.authorAvatarUrl,
-      onAir: false
+      previewUrl: moment.contentType === "photo" ? moment.mediaUrl : null,
+      onAir: false,
+      subtitle: formatMomentAge(moment.createdAt)
     });
   }
   // Air takes precedence for the badge/link when a creator appears in both
@@ -34,11 +36,20 @@ export async function DashboardMomentsSection({ userId }: { userId: string }) {
       authorId: moment.authorId,
       name: moment.authorName,
       avatarUrl: moment.authorAvatarUrl,
-      onAir: true
+      previewUrl: moment.contentType === "photo" ? moment.mediaUrl : null,
+      onAir: true,
+      subtitle: "ON AIR"
     });
   }
 
   return <HomeMomentsCarousel creators={[...creators.values()]} />;
+}
+
+function formatMomentAge(createdAt: string): string {
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - Date.parse(createdAt)) / 60_000));
+  if (elapsedMinutes < 1) return "Now";
+  if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
+  return `${Math.floor(elapsedMinutes / 60)}h ago`;
 }
 
 export function DashboardMomentsSkeleton() {

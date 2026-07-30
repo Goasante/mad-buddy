@@ -693,7 +693,7 @@ function AppHeader({
           className="focus-ring shrink-0 md:hidden"
         >
           {pathname === "/dashboard" ? (
-            <span className="text-sm font-black tracking-[-0.08em] text-foreground" aria-hidden="true">
+            <span className="text-xl font-black tracking-[-0.08em] text-foreground" aria-hidden="true">
               M<span className="text-primary">3</span>
             </span>
           ) : (
@@ -792,7 +792,10 @@ function MobileAccountMenu({
           type="button"
           aria-label="Account"
           title="Account"
-          className="focus-ring grid h-11 w-11 place-items-center rounded-full border border-border/70"
+          className={cn(
+            "focus-ring grid h-11 w-11 place-items-center rounded-full border border-border/70",
+            pathname === "/dashboard" && "border-primary/70 shadow-[0_0_18px_hsl(var(--primary)/0.18)]"
+          )}
         >
           <span className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-secondary text-sm font-semibold text-foreground dark:bg-white/[0.06]">
             <AccountAvatar src={currentAvatarUrl} initial={initial} />
