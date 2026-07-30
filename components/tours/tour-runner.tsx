@@ -10,6 +10,8 @@ import { BrandMark } from "@/components/brand/brand-mark";
 import { Button } from "@/components/ui/button";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
+import { cheapestPaidPrice, planPrice } from "@/lib/billing/upgrade-copy";
+import { PLAN_BILLING_INTERVAL } from "@/lib/billing/pricing";
 
 /**
  * The guided-tour engine.
@@ -363,72 +365,76 @@ export function TourRunner({
         ) : null}
 
         {stepEntitlements.length > 0 ? (
-          // Subscription education. Deliberately a distinct, more memorable
-          // presentation than an ordinary step body: three compact plan columns
-          // with a short promise each, then the real per-plan values.
+          // Subscription education. Deliberately a distinct, more substantial
+          // presentation than an ordinary feature step, because this is the ONE
+          // place tiers are explained: every other step is about a feature and
+          // carries no entitlement keys at all.
           //
-          // Every figure comes from canonical entitlement data resolved on the
-          // server, so this can never disagree with Pricing or Plan and Billing.
-          // The tour asserts no capability of its own.
+          // Laid out as one stacked block PER PLAN rather than a four-column
+          // grid. The grid squeezed feature names into fragments like
+          // "Max active han...", which tells a user nothing; a full-width row
+          // per plan keeps every label readable down to 320px.
+          //
+          // Prices come from the canonical display-price source and per-plan
+          // values from the entitlement registry resolved on the server, so this
+          // can never disagree with Pricing or Plan and Billing.
           <div className="mt-3 space-y-2">
-            <div className="grid grid-cols-3 gap-1.5">
-              {(
-                [
-                  { key: "free", label: "Free", promise: "The essentials." },
-                  { key: "buddy_plus", label: "Plus", promise: "More ways to connect." },
-                  { key: "buddy_pro", label: "Pro", promise: "The fullest experience." }
-                ] as const
-              ).map((tier) => {
-                const isCurrent = plan === tier.key;
-                return (
-                  <div
-                    key={tier.key}
-                    className={cn(
-                      "rounded-xl border px-2 py-2",
-                      // Plus and Pro carry more emphasis, but Free is never
-                      // styled as lesser: it stays a legitimate choice.
-                      isCurrent ? "border-2 bg-primary/[0.06]" : "border-border/70",
-                      tier.key !== "free" && !isCurrent && "bg-secondary/40"
-                    )}
-                    style={isCurrent ? { borderColor: "var(--color-brand-orange)" } : undefined}
-                  >
-                    <p className="text-[0.6875rem] font-semibold">{tier.label}</p>
-                    <p className="mt-0.5 text-[0.625rem] leading-4 text-muted-foreground">{tier.promise}</p>
+            {(
+              [
+                { key: "free", label: "Free", promise: "Everything you need to start" },
+                { key: "buddy_plus", label: "Buddy Plus", promise: "More room to connect" },
+                { key: "buddy_pro", label: "Buddy Pro", promise: "The full Mad Buddy experience" }
+              ] as const
+            ).map((tier) => {
+              const isCurrent = plan === tier.key;
+              return (
+                <div
+                  key={tier.key}
+                  className={cn(
+                    "rounded-xl border p-2.5",
+                    isCurrent ? "border-2 bg-primary/[0.06]" : "border-border/70",
+                    // Paid tiers carry a little more presence, but Free is never
+                    // styled as lesser: it stays a legitimate choice.
+                    tier.key !== "free" && !isCurrent && "bg-secondary/30"
+                  )}
+                  style={isCurrent ? { borderColor: "var(--color-brand-orange)" } : undefined}
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="min-w-0 text-xs font-semibold">{tier.label}</p>
                     {isCurrent ? (
                       <p
-                        className="mt-1 text-[0.5625rem] font-semibold uppercase tracking-wide"
+                        className="shrink-0 text-[0.5625rem] font-bold uppercase tracking-wide"
                         style={{ color: "var(--color-brand-orange)" }}
                       >
                         Your plan
                       </p>
-                    ) : null}
+                    ) : (
+                      <p className="shrink-0 text-[0.6875rem] font-semibold tabular-nums text-muted-foreground">
+                        {planPrice(tier.key)}
+                      </p>
+                    )}
                   </div>
-                );
-              })}
-            </div>
+                  <p className="mt-0.5 text-[0.6875rem] leading-4 text-muted-foreground">{tier.promise}</p>
 
-            <div className="overflow-hidden rounded-xl border border-border/70">
-              {stepEntitlements.map((entry) => (
-                <div
-                  key={entry.key}
-                  className="grid grid-cols-[1.4fr_repeat(3,minmax(0,1fr))] gap-1.5 border-b border-border/60 px-2.5 py-1.5 text-[0.6875rem] last:border-b-0"
-                >
-                  <span className="min-w-0 truncate text-muted-foreground">{entry.label}</span>
-                  <span className={cn("tabular-nums", plan === "free" && "font-semibold text-foreground")}>{entry.free}</span>
-                  <span className={cn("tabular-nums", plan === "buddy_plus" && "font-semibold text-foreground")}>
-                    {entry.buddyPlus}
-                  </span>
-                  <span className={cn("tabular-nums", plan === "buddy_pro" && "font-semibold text-foreground")}>
-                    {entry.buddyPro}
-                  </span>
+                  {/* Full-width label + value rows: nothing truncates. */}
+                  <dl className="mt-2 space-y-1">
+                    {stepEntitlements.map((entry) => (
+                      <div key={entry.key} className="flex items-baseline justify-between gap-3">
+                        <dt className="min-w-0 text-[0.6875rem] leading-4 text-muted-foreground">{entry.label}</dt>
+                        <dd className="shrink-0 text-[0.6875rem] font-medium tabular-nums">
+                          {tier.key === "free" ? entry.free : tier.key === "buddy_plus" ? entry.buddyPlus : entry.buddyPro}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
                 </div>
-              ))}
-            </div>
+              );
+            })}
 
-            <p className="text-[0.6875rem] text-muted-foreground">
+            <p className="text-[0.6875rem] leading-5 text-muted-foreground">
               {plan === "buddy_pro"
-                ? "You're on Buddy Pro, so you already have the highest limits."
-                : "Nothing to decide now. You can explore plans whenever you like."}
+                ? "You're on Buddy Pro, so you already have the full Mad Buddy experience, including publishing to Spotlight."
+                : `Nothing to decide now. Upgrade from as low as ${cheapestPaidPrice()} a ${PLAN_BILLING_INTERVAL} whenever you like.`}
             </p>
           </div>
         ) : null}

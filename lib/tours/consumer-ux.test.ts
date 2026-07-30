@@ -213,7 +213,14 @@ describe("subscription education uses canonical data only", () => {
   });
 
   it("keeps Free respectable rather than styling it as lesser", () => {
-    expect(runner).toContain("The essentials.");
+    // Asserts the INTENT rather than one copy string, which changed when the
+    // vague promises ("The essentials.") were replaced with concrete ones.
+    expect(runner).toContain("Everything you need to start");
+    // Free gets a real promise and a real column, and is never dimmed or
+    // labelled as limited relative to the paid tiers.
+    const block = runner.slice(runner.indexOf("{stepEntitlements.length > 0 ? ("));
+    expect(block).toContain('{ key: "free", label: "Free"');
+    expect(block).not.toMatch(/free[\s\S]{0,120}opacity-\d/);
   });
 });
 

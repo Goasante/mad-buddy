@@ -92,6 +92,18 @@ export function capabilityLabel(key: BooleanEntitlementKey): string | null {
   return CAPABILITY_LABELS[key] ?? null;
 }
 
+/**
+ * The cheapest PAID plan's display price, for "from as low as" copy.
+ *
+ * Derived from the plan order rather than assumed to be Plus, so a pricing or
+ * tier change cannot leave the phrase quoting a price that is no longer the
+ * cheapest upgrade.
+ */
+export function cheapestPaidPrice(): string {
+  const paid = PLAN_ORDER.filter((plan) => plan !== "free");
+  return planPrice(paid[0] ?? "buddy_plus");
+}
+
 /** Numeric limits worth showing on a plan card, in the order they should appear. */
 export const HEADLINE_LIMITS: { key: NumericEntitlementKey; label: string }[] = [
   { key: "max_muddies", label: "Muddies" },
