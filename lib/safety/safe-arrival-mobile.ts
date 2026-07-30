@@ -48,8 +48,12 @@ export type SafeArrivalSessionSummary = {
   isTraveller: boolean;
   myAcknowledgement: "pending" | "watching" | "declined" | null;
   startedAt: string;
+  /** Contacts who ACCEPTED, and are therefore actually checking in. */
   watchers: Array<{ id: string; name: string; avatarUrl: string | null }>;
+  /** Accepted count. Never the invite count: an invite is not cover. */
   sharedCount: number;
+  /** Invited but unanswered, so a client can show "2 confirmed · 1 awaiting". */
+  invitedCount: number;
 };
 
 export type SafeArrivalData = {
@@ -131,17 +135,25 @@ function toSummary(journey: SafeArrivalJourney): SafeArrivalSessionSummary {
     status: journey.status,
     travellerName: journey.travellerName,
     isTraveller: journey.isTraveller,
-    // "invited" is the canonical name for a dispatched, unanswered request; the
-    // wire contract calls it "pending".
+    // The wire contract predates the product vocabulary: it calls an unanswered
+    // invite "pending" and an acceptance "watching". Mapped here so the shipped
+    // client keeps working while the rest of the app uses invited/accepted.
     myAcknowledgement:
-      journey.myAcknowledgement === "invited" ? "pending" : journey.myAcknowledgement,
+      journey.myAcknowledgement === "invited"
+        ? "pending"
+        : journey.myAcknowledgement === "accepted"
+          ? "watching"
+          : journey.myAcknowledgement,
     startedAt: journey.startedAt,
-    // Everyone chosen who has not declined, not only those who have accepted:
-    // the old behaviour made a freshly started journey look watcher-less.
-    watchers: journey.watchers
-      .filter((watcher) => watcher.state !== "declined")
-      .map((watcher) => ({ id: watcher.id, name: watcher.name, avatarUrl: watcher.avatarUrl })),
-    sharedCount: journey.alertableWatcherCount
+    // ACCEPTED only. An invitation is not somebody checking in on you, and
+    // counting one as the other is what made three invites with two acceptances
+    // report three people. Anonymous contacts are excluded: they carry no
+    // identity to send, and the counts below already describe them.
+    watchers: journey.contacts
+      .filter((contact) => contact.state === "accepted" && contact.id !== null)
+      .map((contact) => ({ id: contact.id as string, name: contact.name ?? "A Muddy", avatarUrl: contact.avatarUrl })),
+    sharedCount: journey.acceptedCount,
+    invitedCount: journey.invitedCount
   };
 }
 
@@ -156,7 +168,7 @@ export async function loadSafeArrival(userId: string): Promise<SafeArrivalData> 
 
   return {
     mySessions: journeys.travelling.map(toSummary),
-    watching: journeys.watching.map(toSummary),
+    watching: journeys.checkingOn.map(toSummary),
     contacts: options.map((option) => ({
       id: option.id,
       name: option.name,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveJourneyState, watcherSummary } from "@/lib/safety/journey-status";
+import { contactStatusLine, resolveJourneyState } from "@/lib/safety/journey-status";
 
 const HOUR = 60 * 60 * 1000;
 const now = Date.parse("2026-07-23T12:00:00.000Z");
@@ -70,25 +70,41 @@ describe("resolveJourneyState", () => {
   });
 });
 
-describe("watcherSummary", () => {
-  it("reassures when nobody has accepted yet", () => {
-    expect(watcherSummary([], 0)).toBe("Your approved contacts can view your journey status.");
+describe("contactStatusLine", () => {
+  it("says nobody is on the journey when there are no contacts", () => {
+    expect(contactStatusLine({ acceptedCount: 0, invitedCount: 0 })).toBe("No Safe Arrival contacts on this journey.");
   });
 
-  it("uses the safe shared-with wording when only a count is known", () => {
-    expect(watcherSummary([], 3)).toBe("Shared with 3 approved Muddies.");
-    expect(watcherSummary([], 1)).toBe("Shared with 1 approved Muddy.");
+  it("reports invitations as waiting, never as cover", () => {
+    const line = contactStatusLine({ acceptedCount: 0, invitedCount: 3 });
+    expect(line).toBe("Waiting on 3 invitations.");
+    expect(contactStatusLine({ acceptedCount: 0, invitedCount: 1 })).toBe("Waiting on 1 invitation.");
+    // The count must not be presented as anyone actually checking in.
+    expect(line.toLowerCase()).not.toContain("checking in");
+    expect(line.toLowerCase()).not.toContain("confirmed");
   });
 
-  it("names one or two watchers, then falls back to a count", () => {
-    expect(watcherSummary(["Ama"], 1)).toBe("Ama is watching your journey");
-    expect(watcherSummary(["Ama", "Kojo"], 2)).toBe("Ama and Kojo are watching your journey");
-    expect(watcherSummary(["Ama", "Kojo", "Efua"], 3)).toBe("3 approved Muddies are watching your journey");
+  it("counts ONLY accepted contacts as confirmed", () => {
+    // The reported bug: 3 invited, 2 accepted must never read as 3.
+    expect(contactStatusLine({ acceptedCount: 2, invitedCount: 1 })).toBe("2 confirmed · 1 awaiting response");
+    expect(contactStatusLine({ acceptedCount: 2, invitedCount: 1 })).not.toContain("3");
   });
 
-  it("never says 'monitoring'", () => {
-    for (const copy of [watcherSummary([], 2), watcherSummary(["Ama"], 1), watcherSummary(["A", "B", "C"], 3)]) {
-      expect(copy.toLowerCase()).not.toContain("monitor");
+  it("drops the awaiting clause once everyone has answered", () => {
+    expect(contactStatusLine({ acceptedCount: 3, invitedCount: 0 })).toBe("3 confirmed");
+  });
+
+  it("never uses surveillance wording", () => {
+    const lines = [
+      contactStatusLine({ acceptedCount: 0, invitedCount: 2 }),
+      contactStatusLine({ acceptedCount: 1, invitedCount: 1 }),
+      contactStatusLine({ acceptedCount: 3, invitedCount: 0 })
+    ];
+    for (const line of lines) {
+      const lower = line.toLowerCase();
+      for (const word of ["monitor", "watching", "watch over", "tracking"]) {
+        expect(lower).not.toContain(word);
+      }
     }
   });
 });

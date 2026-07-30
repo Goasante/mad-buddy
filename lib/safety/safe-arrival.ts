@@ -75,10 +75,10 @@ export function validateGracePeriod(minutes: number): string | null {
 
 export function validateContactCount(count: number, plan: SubscriptionPlan): string | null {
   const limits = safeArrivalLimitsFor(plan);
-  if (count < 1) return "Choose at least one Muddy to watch over your journey.";
+  if (count < 1) return "Choose at least one Muddy to check in on your journey.";
   if (count > limits.maxContacts) {
     return plan === "free"
-      ? `Your plan lets ${limits.maxContacts} Muddies watch over a journey. Upgrade to choose more.`
+      ? `Your plan lets ${limits.maxContacts} Muddies check in on a journey. Upgrade to choose more.`
       : `You can choose up to ${limits.maxContacts} Muddies.`;
   }
   return null;
@@ -236,7 +236,7 @@ export function validateExtension(minutes: number): string | null {
 // ---------------------------------------------------------------------------
 
 export function unconfirmedAlertMessage(travellerName: string): string {
-  return `${travellerName} has not confirmed arrival yet.`;
+  return `${travellerName} has not checked in yet.`;
 }
 
 export function arrivedMessage(travellerName: string): string {
@@ -267,12 +267,13 @@ export function safeArrivalNotification(
   const who = input.travellerName;
   switch (event) {
     case "started":
+      // Framed as a request to check on someone, not as a monitoring assignment.
       return {
-        title: `${who} started Safe Arrival`,
+        title: `Can you check on ${who}?`,
         message:
           input.destinationLabel && input.timeLabel
-            ? `Expected at ${input.destinationLabel} by ${input.timeLabel}.`
-            : `${who} asked you to check they get there safely.`
+            ? `${who} wants you as a Safe Arrival contact. Expected at ${input.destinationLabel} by ${input.timeLabel}.`
+            : `${who} wants you as a Safe Arrival contact. We'll let you know when they arrive or if they don't check in on time.`
       };
     case "extended":
       return {
@@ -283,7 +284,7 @@ export function safeArrivalNotification(
       // Neutral by construction (spec §9): the confirmation simply has not
       // landed. Never "missing", never an emergency.
       return {
-        title: `${who} hasn't confirmed arrival yet`,
+        title: `${who} hasn't checked in yet`,
         message: input.timeLabel ? `Expected arrival was ${input.timeLabel}.` : unconfirmedAlertMessage(who)
       };
     case "arrived":
@@ -295,7 +296,60 @@ export function safeArrivalNotification(
 
 /** Sent to the traveller when a chosen contact accepts. No location, ever. */
 export function watcherAcceptedMessage(watcherName: string): string {
-  return `${watcherName} is watching your journey.`;
+  return `${watcherName} will check in on your Safe Arrival.`;
+}
+
+// ---------------------------------------------------------------------------
+// Contact coverage copy
+// ---------------------------------------------------------------------------
+
+/**
+ * The one place that turns canonical contact counts into words.
+ *
+ * Every surface (Home, the journey screen, the contact list) reads from here, so
+ * they cannot drift into disagreeing about how many people are actually checking
+ * in. The rule this encodes: an INVITATION IS NOT COVER. Only an acceptance is
+ * described as somebody checking in; anything still unanswered is reported
+ * separately as awaiting a response, never folded into the confirmed number.
+ *
+ * Copy is deliberately plain rather than surveillance-flavoured: "checking in
+ * on you", never "watching over you" or "monitoring".
+ */
+export function contactCoverageSummary(input: { acceptedCount: number; invitedCount: number }): {
+  headline: string;
+  detail: string;
+} {
+  const { acceptedCount, invitedCount } = input;
+
+  if (acceptedCount === 0 && invitedCount === 0) {
+    return { headline: "No Safe Arrival contacts", detail: "Nobody is set to check in on this journey." };
+  }
+
+  if (acceptedCount === 0) {
+    return {
+      headline: "Waiting for your Muddies",
+      detail: `${invitedCount} ${invitedCount === 1 ? "invitation" : "invitations"} sent`
+    };
+  }
+
+  const headline =
+    acceptedCount === 1 ? "1 Muddy is checking in on you" : `${acceptedCount} Muddies are checking in on you`;
+
+  if (invitedCount === 0) {
+    return { headline, detail: `${acceptedCount} confirmed` };
+  }
+  return { headline, detail: `${acceptedCount} confirmed · ${invitedCount} awaiting response` };
+}
+
+/**
+ * The same counts from a CONTACT's point of view. Names are never used here:
+ * a contact may be told how many other people are involved but not who they
+ * are, unless they are already the contact's own Muddy (resolved server-side).
+ */
+export function contactPeerSummary(otherAcceptedCount: number): string {
+  if (otherAcceptedCount <= 0) return "You're checking in";
+  if (otherAcceptedCount === 1) return "You and 1 other are checking in";
+  return `You and ${otherAcceptedCount} others are checking in`;
 }
 
 /** Sent to watchers when the traveller ends the session. No location, ever. */

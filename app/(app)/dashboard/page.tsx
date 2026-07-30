@@ -2,7 +2,7 @@ import { DashboardPageContent } from "@/components/dashboard/dashboard-page";
 import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
-import { loadSafeArrival } from "@/lib/safety/safe-arrival-mobile";
+import { loadSafeArrivalJourneys } from "@/lib/safety/safe-arrival-service";
 import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/auth";
@@ -32,7 +32,7 @@ export default async function DashboardPage() {
           .select("avatar_url, bio, mood_status")
           .eq("user_id", user.id)
           .maybeSingle(),
-        loadSafeArrival(user.id),
+        loadSafeArrivalJourneys(createSupabaseAdminClient(), user.id),
         loadFriendGlowColors(createSupabaseAdminClient(), user.id),
         isSocializeEnabled(createSupabaseAdminClient())
       ])
@@ -62,10 +62,16 @@ export default async function DashboardPage() {
       upcomingPlans={upcoming?.plans ?? []}
       hasMorePlans={upcoming?.hasMore ?? false}
       glowColorByFriendId={glowColorByFriendId}
-      safeArrivalSession={
-        safeArrival?.mySessions[0] ??
-        safeArrival?.watching.find((item) => item.myAcknowledgement === "watching") ??
-        null
+      safeArrival={
+        safeArrival
+          ? {
+              travelling: safeArrival.travelling,
+              // Accepted only: an unanswered invite belongs in `invitations`,
+              // where it is still actionable, not in the accepted list.
+              checkingOn: safeArrival.checkingOn.filter((journey) => journey.myAcknowledgement === "accepted"),
+              invitations: safeArrival.checkingOn.filter((journey) => journey.myAcknowledgement === "invited")
+            }
+          : null
       }
       profileReminder={
         user && missingProfileItems.length > 0

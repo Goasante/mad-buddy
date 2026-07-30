@@ -38,12 +38,12 @@ export type SafeArrivalSetupInput = {
 type Step = "details" | "watchers" | "review";
 const STEPS: { key: Step; label: string }[] = [
   { key: "details", label: "Details" },
-  { key: "watchers", label: "Watchers" },
+  { key: "watchers", label: "Contacts" },
   { key: "review", label: "Review" }
 ];
 
 /**
- * Safe Arrival setup: Details → Watchers → Review, in one bottom sheet.
+ * Safe Arrival setup: Details → Contacts → Review, in one bottom sheet.
  *
  * The form keeps every field on failure so a rejected start can be retried
  * without retyping. It never closes itself: the parent closes it only after the
@@ -146,7 +146,7 @@ export function SafeArrivalSetup({
       ) : null}
       {step === "details" ? (
         <Button type="button" className="w-full" disabled={!detailsReady} onClick={() => setStep("watchers")}>
-          Next: Choose Watchers
+          Next: Choose Contacts
         </Button>
       ) : step === "watchers" ? (
         <Button type="button" className="w-full" disabled={!watchersReady} onClick={() => setStep("review")}>
@@ -311,9 +311,9 @@ export function SafeArrivalSetup({
         {step === "watchers" ? (
           <div className="space-y-3">
             <div>
-              <p className="text-sm font-semibold">Who&apos;s watching over you?</p>
+              <p className="text-sm font-semibold">Who should check on you?</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                They&apos;re notified when you start, extend, arrive, or don&apos;t confirm.
+                They&apos;ll know when you arrive, and if you miss your check-in.
               </p>
             </div>
 
@@ -345,13 +345,13 @@ export function SafeArrivalSetup({
                 <p className="flex items-start gap-2 text-xs font-semibold text-orange-800 dark:text-orange-100">
                   <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   {maxWatchers === 1
-                    ? `${PLAN_LABEL[plan]} lets one Muddy watch over a journey.`
-                    : `${PLAN_LABEL[plan]} lets ${maxWatchers} Muddies watch over a journey.`}
+                    ? `${PLAN_LABEL[plan]} lets one Muddy check in on a journey.`
+                    : `${PLAN_LABEL[plan]} lets ${maxWatchers} Muddies check in on a journey.`}
                 </p>
                 {plan !== "buddy_pro" ? (
                   <>
                     <p className="mt-1 text-xs text-orange-800/80 dark:text-orange-100/80">
-                      Upgrade to have more Muddies looking out for you on one journey.
+                      Upgrade to have more Muddies checking in on one journey.
                     </p>
                     {/* The existing upgrade surface. No second checkout flow. */}
                     <Link
@@ -369,7 +369,7 @@ export function SafeArrivalSetup({
               <div className="rounded-xl border border-border/70 bg-card/60 p-4 text-center">
                 <p className="text-sm font-medium">No Muddies yet</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Add a Muddy first, then they can watch over your journeys.
+                  Add a Muddy first, then they can check in on your journeys.
                 </p>
                 <Link
                   href="/friends"
@@ -456,7 +456,7 @@ export function SafeArrivalSetup({
             </dl>
 
             <div className="rounded-[1.25rem] border border-border/70 bg-card/60 p-4">
-              <p className="text-sm font-semibold">Watching over you</p>
+              <p className="text-sm font-semibold">Checking in on you</p>
               <div className="mt-2.5 flex flex-wrap items-center gap-2">
                 <div className="flex -space-x-2">
                   {selectedOptions.slice(0, 5).map((option) => (
@@ -486,7 +486,7 @@ export function SafeArrivalSetup({
 
             <p className="flex items-start gap-2 rounded-xl bg-secondary/50 p-3 text-xs text-muted-foreground">
               <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              Your Muddies see your destination label and expected time. No live location is shared.
+              Your contacts see your destination label and expected time. No live location is shared.
             </p>
           </div>
         ) : null}

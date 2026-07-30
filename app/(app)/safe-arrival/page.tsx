@@ -23,7 +23,7 @@ export default async function SafeArrivalRoute({
 
   const env = getSupabaseServerEnv();
   let travelling: SafeArrivalJourney[] = [];
-  let watching: SafeArrivalJourney[] = [];
+  let checkingOn: SafeArrivalJourney[] = [];
   let watcherOptions: SafeArrivalWatcherOption[] = [];
   let maxWatchers = 0;
   let plan: "free" | "buddy_plus" | "buddy_pro" = "free";
@@ -41,7 +41,7 @@ export default async function SafeArrivalRoute({
     ]);
 
     travelling = journeys.travelling;
-    watching = journeys.watching;
+    checkingOn = journeys.checkingOn;
     watcherOptions = options;
     plan = access.plan;
     // Resolved on the SERVER so admin tier overrides and grace periods are
@@ -49,7 +49,7 @@ export default async function SafeArrivalRoute({
     maxWatchers = safeArrivalLimitsFor(access.plan).maxContacts;
 
     const requested = params.session;
-    if (requested && !journeys.watching.some((journey) => journey.id === requested)) {
+    if (requested && !journeys.checkingOn.some((journey: SafeArrivalJourney) => journey.id === requested)) {
       // Not in the live watching list: either the traveller's own journey, or a
       // journey that has already ended. loadSafeArrivalJourneyById re-checks
       // access, so an id belonging to somebody else resolves to null.
@@ -60,7 +60,7 @@ export default async function SafeArrivalRoute({
   return (
     <SafeArrivalPage
       travelling={travelling}
-      watching={watching}
+      checkingOn={checkingOn}
       watcherOptions={watcherOptions}
       maxWatchers={maxWatchers}
       plan={plan}

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { entitlementsFor, upgradePromptFor } from "@/lib/billing/entitlements";
 import {
   composeArrivalMs,
+  contactCoverageSummary,
   durationUntilLabel,
   safeArrivalLimitsFor,
   safeArrivalNotification,
@@ -15,15 +16,19 @@ import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 const ROOT = join(__dirname, "..", "..");
 const read = (path: string) => readFileSync(join(ROOT, path), "utf8");
 
-/** Code with comment lines removed, so an assertion matches the implementation
- *  rather than the prose that explains it. */
+/**
+ * Code with comments removed.
+ *
+ * Block comments are stripped as SPANS, not line by line. A line-based filter
+ * misses JSX comments (`{/* ... *\/}`) and every continuation line of a
+ * multi-line block, which meant a rule about user-visible copy was matching the
+ * prose explaining why that copy was changed.
+ */
 const stripComments = (text: string) =>
   text
+    .replace(/\/\*[\s\S]*?\*\//g, "")
     .split("\n")
-    .filter((line) => {
-      const trimmed = line.trimStart();
-      return !trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*");
-    })
+    .filter((line) => !line.trimStart().startsWith("//"))
     .join("\n");
 
 /** A local wall-clock instant, so these tests hold in any machine timezone. */
@@ -199,14 +204,17 @@ describe("watcher notification set", () => {
     }
   });
 
-  it("names the traveller and the expected time on start", () => {
+  it("frames the start as a request to check on someone", () => {
     const notification = safeArrivalNotification("started", {
       travellerName: "Ama",
       destinationLabel: "Campus",
       timeLabel: "9:00 PM"
     });
-    expect(notification.title).toBe("Ama started Safe Arrival");
-    expect(notification.message).toBe("Expected at Campus by 9:00 PM.");
+    // An invitation, not a monitoring assignment.
+    expect(notification.title).toBe("Can you check on Ama?");
+    expect(notification.message).toContain("Safe Arrival contact");
+    expect(notification.message).toContain("Campus");
+    expect(notification.message).toContain("9:00 PM");
   });
 
   it("states the NEW time when a journey is extended", () => {
@@ -217,7 +225,7 @@ describe("watcher notification set", () => {
 
   it("keeps the overdue alert neutral, never an emergency", () => {
     const notification = safeArrivalNotification("overdue", { travellerName: "Ama", timeLabel: "9:00 PM" });
-    expect(notification.title).toBe("Ama hasn't confirmed arrival yet");
+    expect(notification.title).toBe("Ama hasn't checked in yet");
     const text = `${notification.title} ${notification.message}`.toLowerCase();
     for (const alarmist of ["missing", "emergency", "danger", "unsafe", "urgent", "alert!", "help"]) {
       expect(text).not.toContain(alarmist);
@@ -229,6 +237,20 @@ describe("watcher notification set", () => {
       const notification = safeArrivalNotification(event, { travellerName: "Ama" });
       expect(notification.message).not.toContain("undefined");
       expect(notification.message.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it("uses no surveillance vocabulary in any event", () => {
+    for (const event of events) {
+      const notification = safeArrivalNotification(event, {
+        travellerName: "Ama",
+        destinationLabel: "Campus",
+        timeLabel: "9:00 PM"
+      });
+      const text = `${notification.title} ${notification.message}`.toLowerCase();
+      for (const word of ["watching", "watch over", "monitor", "tracking", "surveil"]) {
+        expect(text, `${event} uses "${word}"`).not.toContain(word);
+      }
     }
   });
 
@@ -396,26 +418,64 @@ describe("start hands back the active journey", () => {
   });
 });
 
-describe("traveller sees the watchers they actually chose", () => {
+describe("traveller sees who actually accepted", () => {
   const service = stripComments(read("lib/safety/safe-arrival-service.ts"));
 
-  it("treats an unanswered invite as a real watcher state", () => {
-    expect(service).toContain('"invited"');
+  it("models all three contact states explicitly", () => {
+    for (const state of ['"invited"', '"accepted"', '"declined"']) {
+      expect(service).toContain(state);
+    }
     // The previous read kept only accepted rows, so a fresh journey showed none.
     expect(service).not.toMatch(/filter\([^)]*acknowledgement_status === "watching"\)/);
   });
 
-  it("counts everyone who will be alerted, not only acceptances", () => {
-    expect(service).toContain("alertableWatcherCount");
-    expect(service).toContain('watcher.state !== "declined"');
+  it("derives counts from canonical status, never from the invite list", () => {
+    expect(service).toContain("acceptedCount");
+    expect(service).toContain("invitedCount");
+    const fn = service.slice(service.indexOf("function contactCounts"));
+    const body = fn.slice(0, fn.indexOf("\n}"));
+    // acceptedCount counts ONLY accepted; invited is reported separately.
+    expect(body).toContain('row.state === "accepted"');
+    expect(body).toContain('row.state === "invited"');
   });
 
-  it("shows invited watchers in the strip and marks accepted ones distinctly", () => {
+  it("never counts an invitation as somebody checking in", () => {
+    // 3 invited / 2 accepted must read as 2 confirmed, 1 awaiting.
+    const summary = contactCoverageSummary({ acceptedCount: 2, invitedCount: 1 });
+    expect(summary.headline).toBe("2 Muddies are checking in on you");
+    expect(summary.detail).toBe("2 confirmed · 1 awaiting response");
+    expect(`${summary.headline} ${summary.detail}`).not.toContain("3");
+  });
+
+  it("says nobody is confirmed yet when only invitations are out", () => {
+    const summary = contactCoverageSummary({ acceptedCount: 0, invitedCount: 3 });
+    expect(summary.headline).toBe("Waiting for your Muddies");
+    expect(summary.detail).toBe("3 invitations sent");
+  });
+
+  it("switches to a singular confirmed count after one acceptance", () => {
+    const summary = contactCoverageSummary({ acceptedCount: 1, invitedCount: 2 });
+    expect(summary.headline).toBe("1 Muddy is checking in on you");
+    expect(summary.detail).toBe("1 confirmed · 2 awaiting response");
+  });
+
+  it("takes counts as props rather than measuring the avatar list", () => {
     const parts = stripComments(read("components/safety/journey-parts.tsx"));
-    expect(parts).toContain('watcher.state !== "declined"');
-    expect(parts).toContain('watcher.state === "watching"');
+    // Anchored to the next top-level export, NOT to the first "\n}": the
+    // destructured props block ends with `}: {` at column zero, which closed the
+    // window before the body and made this assertion pass on nothing.
+    const start = parts.indexOf("export function ContactStrip");
+    const next = parts.indexOf("\nexport ", start + 1);
+    const body = parts.slice(start, next === -1 ? undefined : next);
+    expect(body).toContain("return (");
+    // Privacy filtering can shorten the visible list, so its length is not the
+    // count. The canonical numbers arrive as props.
+    expect(body).toContain("acceptedCount");
+    expect(body).toContain("invitedCount");
+    expect(body).not.toMatch(/contacts\.filter\([^)]*\)\.length/);
+    expect(body).toContain('contact.state === "accepted"');
     // State is also announced, so the check badge is not the only carrier.
-    expect(parts).toContain("sr-only");
+    expect(body).toContain("sr-only");
   });
 });
 

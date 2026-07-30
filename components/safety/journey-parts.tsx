@@ -1,11 +1,16 @@
 "use client";
 
-import { Check, Clock, MapPin } from "lucide-react";
+import { Check, Clock, MapPin, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
-import { durationUntilLabel, gracePeriodEndMs } from "@/lib/safety/safe-arrival";
-import type { SafeArrivalJourney, SafeArrivalWatcher } from "@/lib/safety/safe-arrival-service";
+import {
+  contactCoverageSummary,
+  contactPeerSummary,
+  durationUntilLabel,
+  gracePeriodEndMs
+} from "@/lib/safety/safe-arrival";
+import type { SafeArrivalContact, SafeArrivalJourney } from "@/lib/safety/safe-arrival-service";
 import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 import { cn } from "@/lib/utils";
 
@@ -279,93 +284,133 @@ export function JourneyTimeline({
 }
 
 // ---------------------------------------------------------------------------
-// Watcher strip
+// Contact strip
 // ---------------------------------------------------------------------------
 
+/** A single avatar, which may be an anonymous contact this viewer may not name. */
+function ContactAvatar({ contact, animate }: { contact: SafeArrivalContact; animate: boolean }) {
+  return (
+    <span className="relative">
+      <span
+        className={cn(
+          "journey-watcher rounded-full ring-2 ring-card",
+          animate && contact.state === "accepted" && "journey-watcher-pulse"
+        )}
+      >
+        {contact.name ? (
+          <UserAvatar src={contact.avatarUrl} name={contact.name} size="sm" decorative />
+        ) : (
+          // No id, name or avatar for this person was ever sent to the client.
+          // The placeholder is not a hidden profile, it is the absence of one.
+          <span
+            className="grid h-9 w-9 place-items-center rounded-full bg-secondary text-muted-foreground"
+            aria-hidden="true"
+          >
+            <UserRound className="h-4 w-4" />
+          </span>
+        )}
+      </span>
+      {contact.state === "accepted" ? (
+        <span
+          className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full bg-emerald-500 ring-2 ring-card"
+          aria-hidden="true"
+        >
+          <Check className="h-2.5 w-2.5 text-white" strokeWidth={4} />
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 /**
- * "Watching over you" — real watcher data only.
+ * "Checking in on you" for the traveller, "You and N others" for a contact.
  *
- * Everyone the traveller CHOSE is shown, including those who have not answered
- * yet. Showing only accepted watchers is what previously made a freshly started
- * journey look like nobody had been invited. An accepted watcher carries a check
- * so cover is still distinguishable at a glance; a declined watcher is dropped,
- * since they will not be alerted.
+ * Two rules are enforced here rather than in callers:
+ *
+ *  1. Counts come from the canonical `acceptedCount` / `invitedCount` the server
+ *     derived, NOT from the length of the avatar list. Privacy filtering can make
+ *     that list shorter than the real roster, and an invitation is not cover, so
+ *     deriving the number from what happens to be rendered has been wrong in both
+ *     directions before.
+ *  2. A contact with no name is rendered as an anonymous placeholder. The server
+ *     already withheld their identity; nothing here can reveal it.
  */
-export function WatcherStrip({
-  watchers,
-  title,
-  emptyLabel,
+export function ContactStrip({
+  contacts,
+  acceptedCount,
+  invitedCount,
+  viewerIsTraveller,
   maxVisible = 4,
   onOpenList
 }: {
-  watchers: SafeArrivalWatcher[];
-  title: string;
-  emptyLabel?: string;
+  contacts: SafeArrivalContact[];
+  acceptedCount: number;
+  invitedCount: number;
+  viewerIsTraveller: boolean;
   maxVisible?: number;
   onOpenList?: () => void;
 }) {
   const reducedMotion = useReducedMotion();
-  const alertable = watchers.filter((watcher) => watcher.state !== "declined");
-  const visible = alertable.slice(0, maxVisible);
-  const overflow = alertable.length - visible.length;
+  const visible = contacts.slice(0, maxVisible);
+  const overflow = contacts.length - visible.length;
 
-  if (alertable.length === 0) {
-    return emptyLabel ? (
+  const summary = contactCoverageSummary({ acceptedCount, invitedCount });
+  // A contact is told how many OTHER people accepted, never who they are.
+  const otherAccepted = acceptedCount - (contacts.some((contact) => contact.isSelf && contact.state === "accepted") ? 1 : 0);
+  const headline = viewerIsTraveller ? "Checking in on you" : contactPeerSummary(otherAccepted);
+  const detail = viewerIsTraveller
+    ? summary.detail
+    : invitedCount > 0
+      ? `${acceptedCount} confirmed · ${invitedCount} awaiting response`
+      : `${acceptedCount} confirmed`;
+
+  if (contacts.length === 0 && acceptedCount === 0 && invitedCount === 0) {
+    return (
       <div className="rounded-[1.25rem] border border-border/70 bg-card/60 p-4">
-        <p className="text-sm font-semibold">{title}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{emptyLabel}</p>
+        <p className="text-sm font-semibold">{viewerIsTraveller ? "Checking in on you" : "Safe Arrival contacts"}</p>
+        <p className="mt-1 text-xs text-muted-foreground">Nobody is set to check in on this journey.</p>
       </div>
-    ) : null;
+    );
   }
 
   const body = (
     <>
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold">{title}</p>
-        <p className="shrink-0 text-xs text-muted-foreground">
-          {alertable.length} {alertable.length === 1 ? "Muddy" : "Muddies"}
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="min-w-0 truncate text-sm font-semibold">
+          {viewerIsTraveller && acceptedCount === 0 ? summary.headline : headline}
         </p>
+        <p className="shrink-0 text-xs text-muted-foreground">{detail}</p>
       </div>
-      <div className="mt-3 flex items-start gap-3">
-        {visible.map((watcher) => (
-          <div key={watcher.id} className="flex min-w-0 flex-col items-center gap-1.5">
-            <span className="relative">
-              <span
-                className={cn(
-                  "journey-watcher rounded-full ring-2 ring-card",
-                  !reducedMotion && watcher.state === "watching" && "journey-watcher-pulse"
-                )}
-              >
-                <UserAvatar src={watcher.avatarUrl} name={watcher.name} size="sm" decorative />
+      {visible.length > 0 ? (
+        <div className="mt-3 flex items-start gap-3">
+          {visible.map((contact) => (
+            <div key={contact.key} className="flex min-w-0 flex-col items-center gap-1.5">
+              <ContactAvatar contact={contact} animate={!reducedMotion} />
+              <span className="max-w-[4.5rem] truncate text-[0.6875rem] text-muted-foreground">
+                {contact.isSelf ? "You" : contact.name ? contact.name.split(" ")[0] : "Muddy"}
               </span>
-              {watcher.state === "watching" ? (
-                <span
-                  className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full bg-emerald-500 ring-2 ring-card"
-                  aria-hidden="true"
-                >
-                  <Check className="h-2.5 w-2.5 text-white" strokeWidth={4} />
-                </span>
-              ) : null}
-            </span>
-            <span className="max-w-[4.5rem] truncate text-[0.6875rem] text-muted-foreground">
-              {watcher.name.split(" ")[0]}
-            </span>
-          </div>
-        ))}
-        {overflow > 0 ? (
-          <div className="flex flex-col items-center gap-1.5">
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-secondary text-xs font-semibold ring-2 ring-card">
-              +{overflow}
-            </span>
-            <span className="text-[0.6875rem] text-muted-foreground">more</span>
-          </div>
-        ) : null}
-      </div>
-      {/* Screen readers get the full roster and each person's state, so the
-          check badge is never the only carrier of that information. */}
+            </div>
+          ))}
+          {overflow > 0 ? (
+            <div className="flex flex-col items-center gap-1.5">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-secondary text-xs font-semibold ring-2 ring-card">
+                +{overflow}
+              </span>
+              <span className="text-[0.6875rem] text-muted-foreground">more</span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {/* State is announced too, so the green check is never the only carrier. */}
       <p className="sr-only">
-        {alertable
-          .map((watcher) => `${watcher.name}: ${watcher.state === "watching" ? "watching" : "invited"}`)
+        {detail}.{" "}
+        {visible
+          .map(
+            (contact) =>
+              `${contact.isSelf ? "You" : (contact.name ?? "Another Muddy")}: ${
+                contact.state === "accepted" ? "confirmed" : "awaiting response"
+              }`
+          )
           .join(". ")}
       </p>
     </>
@@ -378,13 +423,14 @@ export function WatcherStrip({
     <button
       type="button"
       onClick={onOpenList}
-      aria-label={`${title}. ${alertable.length} chosen. Open the full list.`}
+      aria-label={`${headline}. ${detail}. Open the full list.`}
       className="focus-ring safe-motion w-full rounded-[1.25rem] border border-border/70 bg-card/60 p-4 text-left hover:bg-secondary/40"
     >
       {body}
     </button>
   );
 }
+
 
 // ---------------------------------------------------------------------------
 // Countdown line

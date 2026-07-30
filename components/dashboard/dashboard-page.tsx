@@ -36,7 +36,12 @@ import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { PendingInvitePrompt } from "@/components/discovery/pending-invite-prompt";
 import { ProfileCompletionReminder } from "@/components/profile/profile-completion-reminder";
-import { JourneyStatusCard } from "@/components/safety/journey-status-card";
+import {
+  ContactInvitationHomeCard,
+  ContactJourneyHomeCard,
+  TravellerJourneyHomeCard
+} from "@/components/safety/safe-arrival-home-cards";
+import type { SafeArrivalJourney } from "@/lib/safety/safe-arrival-service";
 import { StatusComposer } from "@/components/social/status-composer";
 import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
@@ -49,8 +54,7 @@ import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import { type FreshnessState } from "@/lib/proximity/freshness";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import type { ActivityType, AvailabilityType, SubscriptionPlan } from "@/lib/supabase/database.types";
-import type { SafeArrivalStatus } from "@/lib/supabase/database.types";
-import { cn, formatRelativeTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 type DashboardFriend = {
   friendId: string;
@@ -101,16 +105,15 @@ type DashboardPageContentProps = {
     userId: string;
     missingItems: string[];
   } | null;
-  safeArrivalSession?: {
-    id: string;
-    expectedArrivalAt: string;
-    gracePeriodMinutes: number;
-    status: string;
-    travellerName: string;
-    isTraveller: boolean;
-    startedAt: string;
-    watchers: Array<{ id: string; name: string; avatarUrl: string | null }>;
-    sharedCount: number;
+  /**
+   * Canonical Safe Arrival journeys for this viewer, already privacy-filtered by
+   * the server. Passed whole rather than flattened so the cards read real
+   * per-contact state instead of re-deriving counts from an avatar list.
+   */
+  safeArrival?: {
+    travelling: SafeArrivalJourney[];
+    checkingOn: SafeArrivalJourney[];
+    invitations: SafeArrivalJourney[];
   } | null;
   hiddenQuickActionHrefs?: string[];
 };
@@ -170,7 +173,7 @@ export function DashboardPageContent({
   upcomingPlans = [],
   glowColorByFriendId = {},
   profileReminder = null,
-  safeArrivalSession = null,
+  safeArrival = null,
   hiddenQuickActionHrefs = []
 }: DashboardPageContentProps) {
   const reducedMotion = useReducedMotion();
@@ -509,26 +512,28 @@ export function DashboardPageContent({
         <ProfileCompletionReminder userId={profileReminder.userId} missingItems={profileReminder.missingItems} />
       ) : null}
 
-      {/* Live Safe Arrival — only present during an active journey. */}
-      {safeArrivalSession ? (
-        <section aria-labelledby="home-safe-arrival-heading">
-          <div className="mb-2 flex items-center justify-between gap-3">
+      {/* Safe Arrival on Home: my live journey, journeys I've accepted, and any
+          invitation still awaiting my answer. Absent entirely when there is
+          nothing live, so Home never carries an empty placeholder. */}
+      {safeArrival && (safeArrival.travelling.length > 0 || safeArrival.checkingOn.length > 0 || safeArrival.invitations.length > 0) ? (
+        <section aria-labelledby="home-safe-arrival-heading" className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
             <h2 id="home-safe-arrival-heading" className="text-sm font-semibold">
               Safe Arrival
             </h2>
-            <Link href="/safe-arrival" className="text-xs font-medium text-primary hover:underline">
-              View journey
+            <Link href="/safe-arrival" prefetch={false} className="text-xs font-medium text-primary hover:underline">
+              Open
             </Link>
           </div>
-          <JourneyStatusCard
-            role={safeArrivalSession.isTraveller ? "traveller" : "watcher"}
-            sessionId={safeArrivalSession.id}
-            status={safeArrivalSession.status as SafeArrivalStatus}
-            travellerName={safeArrivalSession.travellerName}
-            watchers={safeArrivalSession.watchers}
-            sharedCount={safeArrivalSession.sharedCount}
-            startedAtLabel={formatRelativeTime(safeArrivalSession.startedAt)}
-          />
+          {safeArrival.invitations.map((journey) => (
+            <ContactInvitationHomeCard key={journey.id} journey={journey} />
+          ))}
+          {safeArrival.travelling.map((journey) => (
+            <TravellerJourneyHomeCard key={journey.id} journey={journey} />
+          ))}
+          {safeArrival.checkingOn.map((journey) => (
+            <ContactJourneyHomeCard key={journey.id} journey={journey} />
+          ))}
         </section>
       ) : null}
 

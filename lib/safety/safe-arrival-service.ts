@@ -1,6 +1,6 @@
 import "server-only";
 
-import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
+import { areApprovedMuddies, batchEligibleMuddyIds, isBlockedEitherDirection } from "@/lib/social/permissions";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SafeArrivalStatus } from "@/lib/supabase/database.types";
 
@@ -125,19 +125,40 @@ export const LIVE_SAFE_ARRIVAL_STATUSES: SafeArrivalStatus[] = [
 ];
 
 /**
- * Per-watcher state. `invited` means the request was dispatched and no answer
- * has come back yet — it is NOT the same as "not chosen", which is the
- * distinction the traveller's screen previously lost: it rendered only
- * `watching` rows, so a journey whose watchers had not yet tapped accept showed
- * nobody at all and looked like the invites had never been sent.
+ * Contact lifecycle state, mapped from the stored `acknowledgement_status`
+ * (`pending` / `watching` / `declined`) onto the product's vocabulary.
+ *
+ * These three are NOT interchangeable and the difference is load-bearing:
+ *  - `invited`  the request was dispatched, no answer yet.
+ *  - `accepted` the contact confirmed they will check in.
+ *  - `declined` they said no. They are not alerted and are not shown as cover.
+ *
+ * Only `accepted` counts as somebody actually checking in on the traveller.
+ * Both directions of that have been wrong here before: the screen once showed
+ * only accepted contacts (so a fresh journey looked like nobody was invited),
+ * and then counted every non-declined contact as confirmed (so three invites
+ * with two acceptances claimed three people were checking in).
  */
-export type SafeArrivalWatcherState = "invited" | "watching" | "declined";
+export type SafeArrivalContactState = "invited" | "accepted" | "declined";
 
-export type SafeArrivalWatcher = {
-  id: string;
-  name: string;
+/**
+ * A contact as a PARTICULAR viewer is allowed to see them.
+ *
+ * `id`, `name` and `avatarUrl` are null when the viewer is not entitled to know
+ * who this is. That happens for a contact looking at a journey alongside other
+ * contacts who are not their own Muddies: they may see that other people are
+ * checking in, never who those people are. The fields are omitted by the SERVER,
+ * so an anonymous contact's identity is never sent to the client at all.
+ */
+export type SafeArrivalContact = {
+  /** Stable React key. For an anonymous contact this is positional, never a user id. */
+  key: string;
+  id: string | null;
+  name: string | null;
   avatarUrl: string | null;
-  state: SafeArrivalWatcherState;
+  state: SafeArrivalContactState;
+  /** True for the viewer's own row, so their screen can say "You and 2 others". */
+  isSelf: boolean;
 };
 
 export type SafeArrivalJourney = {
@@ -154,18 +175,96 @@ export type SafeArrivalJourney = {
   travellerName: string;
   travellerAvatarUrl: string | null;
   isTraveller: boolean;
-  /** This viewer's own answer, when they are a watcher rather than the traveller. */
-  myAcknowledgement: SafeArrivalWatcherState | null;
-  watchers: SafeArrivalWatcher[];
-  /** Watchers who have not declined: the set that will actually be alerted. */
-  alertableWatcherCount: number;
+  /** This viewer's own answer, when they are a contact rather than the traveller. */
+  myAcknowledgement: SafeArrivalContactState | null;
+  /** Contacts, already filtered to what THIS viewer may see. */
+  contacts: SafeArrivalContact[];
+  /**
+   * Counts derived from canonical contact status, never from the length of the
+   * visible list (which privacy filtering can shorten) and never from the invite
+   * count. `accepted` is the only number that means "someone is checking in".
+   */
+  acceptedCount: number;
+  invitedCount: number;
+  /** Accepted + invited: everyone who will actually be alerted. */
+  alertableCount: number;
 };
 
 const JOURNEY_COLUMNS =
   "id, traveller_id, destination_label, expected_arrival_at, grace_period_minutes, note, status, started_at, confirmed_at, cancelled_at";
 
-function watcherStateOf(acknowledgement: string): SafeArrivalWatcherState {
-  return acknowledgement === "watching" ? "watching" : acknowledgement === "declined" ? "declined" : "invited";
+/** Stored `acknowledgement_status` to product vocabulary. */
+function contactStateOf(acknowledgement: string): SafeArrivalContactState {
+  return acknowledgement === "watching" ? "accepted" : acknowledgement === "declined" ? "declined" : "invited";
+}
+
+const CONTACT_ORDER: Record<SafeArrivalContactState, number> = { accepted: 0, invited: 1, declined: 2 };
+
+/**
+ * Applies contact-identity privacy for one viewer.
+ *
+ * The traveller chose everybody, so they see every contact and every state. A
+ * CONTACT sees themselves, plus other contacts who are their own approved,
+ * unblocked Muddies; everyone else is reduced to an anonymous row with no id,
+ * name or avatar. Being asked to check in on a shared friend must not hand out
+ * the identities of that friend's other contacts.
+ *
+ * Declined contacts are dropped from the visible list entirely: they are not
+ * cover, and their refusal is not the other contacts' business.
+ */
+async function visibleContactsFor(
+  admin: Admin,
+  input: {
+    viewerId: string;
+    isTraveller: boolean;
+    rows: { contactUserId: string; state: SafeArrivalContactState }[];
+    profiles: Map<string, ProfileLite>;
+  }
+): Promise<SafeArrivalContact[]> {
+  const active = input.rows.filter((row) => row.state !== "declined");
+
+  // One batched friendships+blocks read for the viewer, regardless of how many
+  // contacts a journey has.
+  const knownToViewer = input.isTraveller
+    ? new Set(active.map((row) => row.contactUserId))
+    : await batchEligibleMuddyIds(
+        admin,
+        input.viewerId,
+        active.map((row) => row.contactUserId)
+      );
+
+  return active
+    .map((row, index) => {
+      const isSelf = row.contactUserId === input.viewerId;
+      const mayIdentify = isSelf || knownToViewer.has(row.contactUserId);
+      if (!mayIdentify) {
+        // Positional key only. No identifier of any kind leaves the server.
+        return { key: `anon-${index}`, id: null, name: null, avatarUrl: null, state: row.state, isSelf: false };
+      }
+      return {
+        key: row.contactUserId,
+        id: row.contactUserId,
+        name: input.profiles.get(row.contactUserId)?.name ?? "A Muddy",
+        avatarUrl: input.profiles.get(row.contactUserId)?.avatarUrl ?? null,
+        state: row.state,
+        isSelf
+      };
+    })
+    .sort((a, b) => {
+      // Self first, then accepted before invited, then identified before
+      // anonymous, then by name. Anonymous rows never affect ordering by name.
+      if (a.isSelf !== b.isSelf) return a.isSelf ? -1 : 1;
+      if (a.state !== b.state) return CONTACT_ORDER[a.state] - CONTACT_ORDER[b.state];
+      if (Boolean(a.name) !== Boolean(b.name)) return a.name ? -1 : 1;
+      return (a.name ?? "").localeCompare(b.name ?? "");
+    });
+}
+
+/** Counts straight from canonical status, independent of what the viewer may see. */
+function contactCounts(rows: { state: SafeArrivalContactState }[]) {
+  const acceptedCount = rows.filter((row) => row.state === "accepted").length;
+  const invitedCount = rows.filter((row) => row.state === "invited").length;
+  return { acceptedCount, invitedCount, alertableCount: acceptedCount + invitedCount };
 }
 
 type JourneyRow = {
@@ -196,16 +295,16 @@ async function loadProfiles(admin: Admin, userIds: string[]): Promise<Map<string
 }
 
 /**
- * Assembles full journey records for a viewer: the journeys they are travelling
- * and the journeys they were asked to watch. Two queries for the journeys, one
- * for all watcher rows, one for all profiles — flat regardless of journey or
- * watcher count.
+ * Assembles journey records for a viewer: the journeys they are travelling and
+ * the journeys they were asked to check in on. Flat query count regardless of
+ * how many journeys or contacts are involved, plus one batched friendship read
+ * per viewer for contact-identity privacy.
  */
 export async function loadSafeArrivalJourneys(
   admin: Admin,
   userId: string
-): Promise<{ travelling: SafeArrivalJourney[]; watching: SafeArrivalJourney[] }> {
-  const [{ data: ownRows }, { data: myWatchRows }] = await Promise.all([
+): Promise<{ travelling: SafeArrivalJourney[]; checkingOn: SafeArrivalJourney[] }> {
+  const [{ data: ownRows }, { data: myContactRows }] = await Promise.all([
     admin
       .from("safe_arrival_sessions")
       .select(JOURNEY_COLUMNS)
@@ -215,26 +314,26 @@ export async function loadSafeArrivalJourneys(
     admin.from("safe_arrival_contacts").select("session_id, acknowledgement_status").eq("contact_user_id", userId)
   ]);
 
-  const watchedIds = (myWatchRows ?? []).map((row) => row.session_id);
-  const myAckBySession = new Map(
-    (myWatchRows ?? []).map((row) => [row.session_id, watcherStateOf(row.acknowledgement_status)])
+  const invitedIds = (myContactRows ?? []).map((row) => row.session_id);
+  const myStateBySession = new Map(
+    (myContactRows ?? []).map((row) => [row.session_id, contactStateOf(row.acknowledgement_status)])
   );
 
-  let watchedRows: JourneyRow[] = [];
-  if (watchedIds.length > 0) {
+  let invitedRows: JourneyRow[] = [];
+  if (invitedIds.length > 0) {
     const { data } = await admin
       .from("safe_arrival_sessions")
       .select(JOURNEY_COLUMNS)
-      .in("id", watchedIds)
+      .in("id", invitedIds)
       .in("status", LIVE_SAFE_ARRIVAL_STATUSES)
       .order("expected_arrival_at", { ascending: true });
-    watchedRows = (data ?? []) as JourneyRow[];
+    invitedRows = (data ?? []) as JourneyRow[];
   }
 
-  const allRows = [...((ownRows ?? []) as JourneyRow[]), ...watchedRows];
-  if (allRows.length === 0) return { travelling: [], watching: [] };
+  const allRows = [...((ownRows ?? []) as JourneyRow[]), ...invitedRows];
+  if (allRows.length === 0) return { travelling: [], checkingOn: [] };
 
-  const { data: watcherRows } = await admin
+  const { data: contactRows } = await admin
     .from("safe_arrival_contacts")
     .select("session_id, contact_user_id, acknowledgement_status")
     .in(
@@ -244,29 +343,19 @@ export async function loadSafeArrivalJourneys(
 
   const profiles = await loadProfiles(admin, [
     ...allRows.map((row) => row.traveller_id),
-    ...(watcherRows ?? []).map((row) => row.contact_user_id)
+    ...(contactRows ?? []).map((row) => row.contact_user_id)
   ]);
 
-  const watchersBySession = new Map<string, SafeArrivalWatcher[]>();
-  for (const row of watcherRows ?? []) {
-    const list = watchersBySession.get(row.session_id) ?? [];
-    list.push({
-      id: row.contact_user_id,
-      name: profiles.get(row.contact_user_id)?.name ?? "A Muddy",
-      avatarUrl: profiles.get(row.contact_user_id)?.avatarUrl ?? null,
-      state: watcherStateOf(row.acknowledgement_status)
-    });
-    watchersBySession.set(row.session_id, list);
+  const rowsBySession = new Map<string, { contactUserId: string; state: SafeArrivalContactState }[]>();
+  for (const row of contactRows ?? []) {
+    const list = rowsBySession.get(row.session_id) ?? [];
+    list.push({ contactUserId: row.contact_user_id, state: contactStateOf(row.acknowledgement_status) });
+    rowsBySession.set(row.session_id, list);
   }
 
-  const toJourney = (row: JourneyRow): SafeArrivalJourney => {
+  const build = async (row: JourneyRow): Promise<SafeArrivalJourney> => {
     const isTraveller = row.traveller_id === userId;
-    // Accepted watchers first so the avatar strip leads with confirmed cover,
-    // then still-invited, then declined.
-    const order: Record<SafeArrivalWatcherState, number> = { watching: 0, invited: 1, declined: 2 };
-    const watchers = (watchersBySession.get(row.id) ?? []).sort(
-      (a, b) => order[a.state] - order[b.state] || a.name.localeCompare(b.name)
-    );
+    const rows = rowsBySession.get(row.id) ?? [];
     return {
       id: row.id,
       destinationLabel: row.destination_label,
@@ -278,24 +367,26 @@ export async function loadSafeArrivalJourneys(
       confirmedAt: row.confirmed_at,
       cancelledAt: row.cancelled_at,
       travellerId: row.traveller_id,
+      // The traveller is always identifiable to the people they asked.
       travellerName: isTraveller ? "You" : (profiles.get(row.traveller_id)?.name ?? "A Muddy"),
       travellerAvatarUrl: profiles.get(row.traveller_id)?.avatarUrl ?? null,
       isTraveller,
-      myAcknowledgement: isTraveller ? null : (myAckBySession.get(row.id) ?? null),
-      watchers,
-      alertableWatcherCount: watchers.filter((watcher) => watcher.state !== "declined").length
+      myAcknowledgement: isTraveller ? null : (myStateBySession.get(row.id) ?? null),
+      contacts: await visibleContactsFor(admin, { viewerId: userId, isTraveller, rows, profiles }),
+      ...contactCounts(rows)
     };
   };
 
-  return {
-    travelling: ((ownRows ?? []) as JourneyRow[]).map(toJourney),
-    watching: watchedRows.map(toJourney)
-  };
+  const [travelling, checkingOn] = await Promise.all([
+    Promise.all(((ownRows ?? []) as JourneyRow[]).map(build)),
+    Promise.all(invitedRows.map(build))
+  ]);
+  return { travelling, checkingOn };
 }
 
 /**
  * A single journey by id, for the notification deep link. Returns null unless
- * the viewer is the traveller or one of its watchers, and reads TERMINAL states
+ * the viewer is the traveller or one of its contacts, and reads TERMINAL states
  * too: tapping "arrived safely" must open the journey that just completed, not
  * a dead end.
  */
@@ -314,7 +405,7 @@ export async function loadSafeArrivalJourneyById(
     .maybeSingle();
   if (!row) return null;
 
-  const { data: watcherRows } = await admin
+  const { data: contactRows } = await admin
     .from("safe_arrival_contacts")
     .select("contact_user_id, acknowledgement_status")
     .eq("session_id", sessionId);
@@ -322,19 +413,15 @@ export async function loadSafeArrivalJourneyById(
   const journeyRow = row as JourneyRow;
   const profiles = await loadProfiles(admin, [
     journeyRow.traveller_id,
-    ...(watcherRows ?? []).map((entry) => entry.contact_user_id)
+    ...(contactRows ?? []).map((entry) => entry.contact_user_id)
   ]);
-  const order: Record<SafeArrivalWatcherState, number> = { watching: 0, invited: 1, declined: 2 };
-  const watchers: SafeArrivalWatcher[] = (watcherRows ?? [])
-    .map((entry) => ({
-      id: entry.contact_user_id,
-      name: profiles.get(entry.contact_user_id)?.name ?? "A Muddy",
-      avatarUrl: profiles.get(entry.contact_user_id)?.avatarUrl ?? null,
-      state: watcherStateOf(entry.acknowledgement_status)
-    }))
-    .sort((a, b) => order[a.state] - order[b.state] || a.name.localeCompare(b.name));
 
+  const rows = (contactRows ?? []).map((entry) => ({
+    contactUserId: entry.contact_user_id,
+    state: contactStateOf(entry.acknowledgement_status)
+  }));
   const isTraveller = journeyRow.traveller_id === userId;
+
   return {
     id: journeyRow.id,
     destinationLabel: journeyRow.destination_label,
@@ -351,11 +438,12 @@ export async function loadSafeArrivalJourneyById(
     isTraveller,
     myAcknowledgement: isTraveller
       ? null
-      : (watchers.find((watcher) => watcher.id === userId)?.state ?? null),
-    watchers,
-    alertableWatcherCount: watchers.filter((watcher) => watcher.state !== "declined").length
+      : (rows.find((entry) => entry.contactUserId === userId)?.state ?? null),
+    contacts: await visibleContactsFor(admin, { viewerId: userId, isTraveller, rows, profiles }),
+    ...contactCounts(rows)
   };
 }
+
 
 export type SafeArrivalWatcherOption = {
   id: string;

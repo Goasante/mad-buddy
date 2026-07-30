@@ -105,21 +105,21 @@ export function resolveJourneyState(status: SafeArrivalStatus, timing?: JourneyT
 }
 
 /**
- * Privacy-safe watcher wording for the traveller. Uses the SAFE framing the
- * spec mandates ("Shared with N approved Muddies") because the canonical data
- * records who has *accepted* to watch, not who currently has the screen open —
- * so we never overstate a live "currently watching" count we can't prove.
+ * Privacy-safe contact wording for the traveller, built from CANONICAL contact
+ * counts rather than from a list of names.
  *
- * When names are available for a small audience we name them, otherwise we
- * fall back to a count. Zero accepted watchers yields the reassurance copy.
+ * The rule this exists to enforce: only an ACCEPTED contact is described as
+ * checking in. Counting invitations as cover is how "3 approved Muddies are
+ * watching your journey" appeared for a journey where only two had accepted.
+ * Names are no longer taken at all, because the visible roster can be shortened
+ * by contact-identity privacy filtering and would understate the real count.
  */
-export function watcherSummary(names: string[], sharedCount: number): string {
-  if (names.length === 0) {
-    return sharedCount > 0
-      ? `Shared with ${sharedCount} approved ${sharedCount === 1 ? "Muddy" : "Muddies"}.`
-      : "Your approved contacts can view your journey status.";
+export function contactStatusLine(input: { acceptedCount: number; invitedCount: number }): string {
+  const { acceptedCount, invitedCount } = input;
+  if (acceptedCount === 0 && invitedCount === 0) return "No Safe Arrival contacts on this journey.";
+  if (acceptedCount === 0) {
+    return `Waiting on ${invitedCount} ${invitedCount === 1 ? "invitation" : "invitations"}.`;
   }
-  if (names.length === 1) return `${names[0]} is watching your journey`;
-  if (names.length === 2) return `${names[0]} and ${names[1]} are watching your journey`;
-  return `${names.length} approved Muddies are watching your journey`;
+  const confirmed = `${acceptedCount} confirmed`;
+  return invitedCount > 0 ? `${confirmed} · ${invitedCount} awaiting response` : confirmed;
 }

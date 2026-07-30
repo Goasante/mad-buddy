@@ -137,7 +137,7 @@ describe("extension (spec §9)", () => {
 describe("neutral copy (spec §9)", () => {
   it("never implies an emergency", () => {
     const message = unconfirmedAlertMessage("Ama");
-    expect(message).toBe("Ama has not confirmed arrival yet.");
+    expect(message).toBe("Ama has not checked in yet.");
     expect(message).not.toMatch(/missing|emergency|danger|help/i);
     expect(arrivedMessage("Ama")).toBe("Ama has arrived safely.");
   });
@@ -145,9 +145,11 @@ describe("neutral copy (spec §9)", () => {
   it("watcher-accepted and cancelled copy never leaks a destination or location", () => {
     const accepted = watcherAcceptedMessage("Kojo");
     const cancelled = cancelledMessage("Ama");
-    expect(accepted).toBe("Kojo is watching your journey.");
+    expect(accepted).toBe("Kojo will check in on your Safe Arrival.");
     expect(cancelled).toBe("Ama's Safe Arrival was cancelled.");
     for (const copy of [accepted, cancelled]) {
+      // Nor surveillance framing: a contact checks in, they do not watch over.
+      expect(copy.toLowerCase()).not.toMatch(/watching|watch over|monitor|tracking/);
       // No geography ever reaches a lock screen.
       expect(copy.toLowerCase()).not.toMatch(
         /\bkm\b|metre|meter|mile|coordinate|latitude|longitude|street|route|distance|heading to|address/

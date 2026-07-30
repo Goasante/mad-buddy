@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing, ChevronRight, Clock, MapPin, RefreshCcw, ShieldCheck, WifiOff } from "lucide-react";
+import { BellRing, ChevronRight, Clock, MapPin, RefreshCcw, ShieldCheck, UserRound, WifiOff } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -16,7 +16,7 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { useBrowserPush } from "@/hooks/use-browser-push";
 import { useJourneyClock, useJourneyRealtime } from "@/hooks/use-journey-realtime";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
-import { EXTENSION_OPTIONS_MINUTES, gracePeriodEndMs } from "@/lib/safety/safe-arrival";
+import { contactPeerSummary, EXTENSION_OPTIONS_MINUTES, gracePeriodEndMs } from "@/lib/safety/safe-arrival";
 import type { SafeArrivalJourney, SafeArrivalWatcherOption } from "@/lib/safety/safe-arrival-service";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
@@ -26,7 +26,7 @@ import {
   JourneyStatusChip,
   JourneyTimeline,
   JourneyVisual,
-  WatcherStrip,
+  ContactStrip,
   journeyDayTime,
   journeyTime,
   journeyTone
@@ -44,7 +44,7 @@ import { SafeArrivalSetup, type SafeArrivalSetupInput } from "@/components/safet
  */
 export function SafeArrivalPage({
   travelling,
-  watching,
+  checkingOn,
   watcherOptions,
   maxWatchers,
   plan,
@@ -52,7 +52,7 @@ export function SafeArrivalPage({
   requestedSessionId
 }: {
   travelling: SafeArrivalJourney[];
-  watching: SafeArrivalJourney[];
+  checkingOn: SafeArrivalJourney[];
   watcherOptions: SafeArrivalWatcherOption[];
   maxWatchers: number;
   plan: SubscriptionPlan;
@@ -80,10 +80,10 @@ export function SafeArrivalPage({
     if (!optimistic) return null;
     return (
       travelling.find((journey) => journey.id === optimistic.id) ??
-      watching.find((journey) => journey.id === optimistic.id) ??
+      checkingOn.find((journey) => journey.id === optimistic.id) ??
       (focusedJourney?.id === optimistic.id ? focusedJourney : null)
     );
-  }, [optimistic, travelling, watching, focusedJourney]);
+  }, [optimistic, travelling, checkingOn, focusedJourney]);
 
   const liveTravelling = travelling[0] ?? null;
   // The journey the traveller is looking at, in priority order: the one we hold
@@ -102,15 +102,15 @@ export function SafeArrivalPage({
   // rather than burying it under the viewer's own empty state.
   const watcherFocus = useMemo(() => {
     if (!requestedSessionId) return null;
-    const fromList = watching.find((journey) => journey.id === requestedSessionId);
+    const fromList = checkingOn.find((journey) => journey.id === requestedSessionId);
     if (fromList) return fromList;
     if (focusedJourney && !focusedJourney.isTraveller) return focusedJourney;
     return null;
-  }, [requestedSessionId, watching, focusedJourney]);
+  }, [requestedSessionId, checkingOn, focusedJourney]);
 
   const otherWatching = useMemo(
-    () => watching.filter((journey) => journey.id !== watcherFocus?.id),
-    [watching, watcherFocus]
+    () => checkingOn.filter((journey) => journey.id !== watcherFocus?.id),
+    [checkingOn, watcherFocus]
   );
 
   function runAction(action: () => Promise<{ ok: boolean; message: string; journey?: SafeArrivalJourney | null }>) {
@@ -196,7 +196,7 @@ export function SafeArrivalPage({
       {otherWatching.length > 0 ? (
         <section>
           <h2 className="mb-2 px-1 text-sm font-semibold">
-            {watcherFocus || activeJourney || arrivedJourney ? "Also watching over" : "You're watching over"}
+            {watcherFocus || activeJourney || arrivedJourney ? "Also checking in on" : "You're checking in on"}
           </h2>
           <ul className="space-y-2">
             {otherWatching.map((journey) => (
@@ -283,7 +283,7 @@ function SafeArrivalHome({ onStart }: { onStart: () => void }) {
         <ol className="space-y-3">
           {[
             "You set your destination, expected arrival time, and grace period.",
-            "You choose trusted Muddies to watch over your journey.",
+            "You choose trusted Muddies to check in on your journey.",
             "They're notified when you start, extend, arrive, or don't confirm.",
             "No live location is shared. Your privacy stays protected."
           ].map((line, index) => (
@@ -348,16 +348,17 @@ function ActiveJourneyView({
           role="status"
           className="rounded-[1rem] border border-red-400/25 bg-red-400/10 px-3 py-2.5 text-xs leading-5 text-red-800 dark:text-red-100"
         >
-          Your grace period has passed, so your Muddies have been asked to check in with you. Confirm below
-          whenever you can.
+          Your grace period has passed, so your Safe Arrival contacts have been told you have not checked in
+          yet. Check in below whenever you can.
         </p>
       ) : null}
 
-      <WatcherStrip
-        watchers={journey.watchers}
-        title="Watching over you"
-        emptyLabel="Nobody is watching this journey yet."
-        onOpenList={journey.watchers.length > 0 ? () => setWatcherListOpen(true) : undefined}
+      <ContactStrip
+        contacts={journey.contacts}
+        acceptedCount={journey.acceptedCount}
+        invitedCount={journey.invitedCount}
+        viewerIsTraveller
+        onOpenList={journey.contacts.length > 0 ? () => setWatcherListOpen(true) : undefined}
       />
 
       <JourneyTimeline journey={journey} nowMs={nowMs} />
@@ -508,13 +509,16 @@ function WatcherJourneyView({
       })
     ).toISOString()
   );
-  const otherWatchers = journey.watchers.filter((watcher) => watcher.state !== "declined");
+  // Already privacy-filtered by the server: contacts who are not this viewer
+  // own Muddies arrive with no id, name or avatar at all.
+  const contacts = journey.contacts;
+  const otherAccepted = journey.acceptedCount - (journey.myAcknowledgement === "accepted" ? 1 : 0);
 
   return (
     <div className="space-y-4">
       <header className="px-1 text-center">
         <h1 className="text-xl font-semibold tracking-tight">Safe Arrival</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">Watching {firstName}</p>
+        <p className="mt-0.5 text-sm text-muted-foreground">Checking in on {firstName}</p>
       </header>
 
       <div className="rounded-[1.25rem] border border-border/70 bg-card/60 p-4">
@@ -556,21 +560,31 @@ function WatcherJourneyView({
         </dl>
       </div>
 
-      {/* The reassurance panel. Deliberately says "watching over", never
-          "tracking": the watcher cannot see the traveller move, and the copy must
-          not imply otherwise. */}
+      {/* Reassurance panel. Says "checking in on", never "watching over" or
+          "tracking": this viewer cannot see the traveller move and the copy must
+          not imply they can. Anonymous contacts render as placeholders because
+          the server sent no identity for them at all. */}
       <div className="rounded-[1.25rem] border border-border/70 bg-card/60 p-5 text-center">
         <div className="flex justify-center">
           <div className="flex -space-x-2">
-            {otherWatchers.slice(0, 4).map((watcher) => (
+            {contacts.slice(0, 4).map((contact) => (
               <span
-                key={watcher.id}
+                key={contact.key}
                 className={cn(
                   "journey-watcher rounded-full ring-2 ring-card",
-                  !reducedMotion && watcher.state === "watching" && "journey-watcher-pulse"
+                  !reducedMotion && contact.state === "accepted" && "journey-watcher-pulse"
                 )}
               >
-                <UserAvatar src={watcher.avatarUrl} name={watcher.name} size="sm" decorative />
+                {contact.name ? (
+                  <UserAvatar src={contact.avatarUrl} name={contact.name} size="sm" decorative />
+                ) : (
+                  <span
+                    className="grid h-9 w-9 place-items-center rounded-full bg-secondary text-muted-foreground"
+                    aria-hidden="true"
+                  >
+                    <UserRound className="h-4 w-4" />
+                  </span>
+                )}
               </span>
             ))}
           </div>
@@ -578,24 +592,28 @@ function WatcherJourneyView({
         <p className="mt-3 text-base font-semibold">
           {journey.status === "completed"
             ? `${firstName} arrived safely`
-            : `You're watching over ${firstName}`}
+            : `You're checking on ${firstName}`}
         </p>
         <p className="mx-auto mt-1 max-w-[18rem] text-xs leading-5 text-muted-foreground">
           {journey.status === "completed"
             ? "Nothing more to do. Thanks for looking out for them."
-            : `We'll notify you if ${firstName} doesn't confirm arrival by ${graceEnd}.`}
+            : `We'll let you know when ${firstName} arrives, or if they miss their check-in at ${graceEnd}.`}
         </p>
+        {journey.myAcknowledgement === "accepted" ? (
+          <p className="mt-2 text-xs font-medium text-muted-foreground">{contactPeerSummary(otherAccepted)}</p>
+        ) : null}
       </div>
 
       {journey.myAcknowledgement === "invited" ? (
         <div className="rounded-[1.25rem] border border-orange-400/25 bg-orange-400/10 p-4">
-          <p className="text-sm font-semibold">Can you keep an eye out?</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {firstName} will know you accepted. You&apos;ll be alerted either way if they don&apos;t confirm.
+          <p className="text-sm font-semibold">Can you check on {firstName}?</p>
+          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+            {firstName} wants you as a Safe Arrival contact. We&apos;ll let you know when they arrive or if they
+            don&apos;t check in on time.
           </p>
           <div className="mt-3 flex gap-2">
             <Button type="button" className="flex-1" disabled={isPending} onClick={() => onRespond("watching")}>
-              I&apos;ll watch over them
+              Count me in
             </Button>
             <Button
               type="button"
@@ -604,7 +622,7 @@ function WatcherJourneyView({
               disabled={isPending}
               onClick={() => onRespond("declined")}
             >
-              Can&apos;t this time
+              Not this time
             </Button>
           </div>
         </div>
@@ -673,7 +691,10 @@ function ArrivedJourneyView({
   nowMs: number;
   onDone: () => void;
 }) {
-  const notified = journey.watchers.filter((watcher) => watcher.state !== "declined");
+  // Everyone who was alerted: accepted plus still-invited, since both receive
+  // the arrival notification. Declined contacts are not alerted, and the
+  // server already dropped them.
+  const notified = journey.contacts;
 
   return (
     <div className="space-y-4">
@@ -692,19 +713,31 @@ function ArrivedJourneyView({
       {notified.length > 0 ? (
         <div className="rounded-[1.25rem] border border-border/70 bg-card/60 p-4">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold">Watchers notified</p>
+            <p className="text-sm font-semibold">Contacts notified</p>
             <p className="shrink-0 text-xs font-medium text-emerald-600 dark:text-emerald-400">All notified</p>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <div className="flex -space-x-2">
-              {notified.slice(0, 5).map((watcher) => (
-                <span key={watcher.id} className="rounded-full ring-2 ring-card">
-                  <UserAvatar src={watcher.avatarUrl} name={watcher.name} size="sm" decorative />
+              {notified.slice(0, 5).map((contact) => (
+                <span key={contact.key} className="rounded-full ring-2 ring-card">
+                  {contact.name ? (
+                    <UserAvatar src={contact.avatarUrl} name={contact.name} size="sm" decorative />
+                  ) : (
+                    <span
+                      className="grid h-9 w-9 place-items-center rounded-full bg-secondary text-muted-foreground"
+                      aria-hidden="true"
+                    >
+                      <UserRound className="h-4 w-4" />
+                    </span>
+                  )}
                 </span>
               ))}
             </div>
             <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-              {notified.map((watcher) => watcher.name).join(", ")}
+              {notified
+                .map((contact) => contact.name)
+                .filter((name): name is string => Boolean(name))
+                .join(", ")}
             </p>
           </div>
         </div>
@@ -782,30 +815,41 @@ function WatcherListModal({
   journey: SafeArrivalJourney;
 }) {
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Watching over you" variant="sheet" compact>
+    <Modal open={open} onOpenChange={onOpenChange} title="Checking in on you" variant="sheet" compact>
       <ul className="space-y-1.5">
-        {journey.watchers.map((watcher) => (
-          <li key={watcher.id} className="flex items-center gap-3 rounded-xl border border-border/70 px-3 py-2.5">
-            <UserAvatar src={watcher.avatarUrl} name={watcher.name} size="sm" decorative />
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">{watcher.name}</span>
+        {journey.contacts.map((contact) => (
+          <li key={contact.key} className="flex items-center gap-3 rounded-xl border border-border/70 px-3 py-2.5">
+            {contact.name ? (
+              <UserAvatar src={contact.avatarUrl} name={contact.name} size="sm" decorative />
+            ) : (
+              <span
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground"
+                aria-hidden="true"
+              >
+                <UserRound className="h-4 w-4" />
+              </span>
+            )}
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              {contact.isSelf ? "You" : (contact.name ?? "Another Muddy")}
+            </span>
             <span
               className={cn(
                 "shrink-0 text-xs font-semibold",
-                watcher.state === "watching"
+                contact.state === "accepted"
                   ? "text-emerald-600 dark:text-emerald-400"
-                  : watcher.state === "declined"
+                  : contact.state === "declined"
                     ? "text-muted-foreground"
                     : "text-orange-600 dark:text-orange-300"
               )}
             >
-              {watcher.state === "watching" ? "Watching" : watcher.state === "declined" ? "Not this time" : "Invited"}
+              {contact.state === "accepted" ? "Confirmed" : "Awaiting response"}
             </span>
           </li>
         ))}
       </ul>
       <p className="mt-3 text-xs text-muted-foreground">
-        Everyone here is notified when you arrive, extend, or don&apos;t confirm. Invited Muddies are alerted
-        even if they haven&apos;t opened the request.
+        Everyone here is told when you arrive, extend, or miss a check-in. Invited Muddies are alerted even
+        if they have not answered yet, but only confirmed Muddies are counted as checking in on you.
       </p>
     </Modal>
   );

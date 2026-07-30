@@ -307,6 +307,49 @@
   .journey-pin-breathe::before { opacity: 0.3; transform: scale(1); }
 }
 
+/* ---------------------------------------------------------------------------
+ * Safe Arrival Home card.
+ *
+ * A tinted surface plus a time-based progress rail. The rail's width comes from
+ * elapsed TIME between started_at and expected_arrival_at, never from a position,
+ * and the whole rail is aria-hidden so it is never announced as movement. The
+ * glow is a slow opacity breath, not a travelling highlight, so it cannot be
+ * mistaken for a live marker.
+ * ------------------------------------------------------------------------- */
+.journey-home-card {
+  border: 1px solid hsl(var(--journey-tint) / 0.28);
+  background:
+    radial-gradient(130% 100% at 0% 0%, hsl(var(--journey-tint) / 0.13), transparent 62%),
+    hsl(var(--card) / 0.6);
+}
+.journey-home-transit,
+.journey-home-extended { --journey-tint: 25 95% 53%; }
+.journey-home-arrived { --journey-tint: 142 71% 45%; }
+.journey-home-overdue { --journey-tint: 0 72% 51%; }
+.journey-home-ended { --journey-tint: 220 9% 46%; }
+
+.journey-rail { background: hsl(var(--border) / 0.9); }
+.journey-rail-fill {
+  background: linear-gradient(90deg, hsl(var(--journey-tint) / 0.45), hsl(var(--journey-tint)));
+  transition: width 600ms ease;
+}
+.journey-rail-dot {
+  background: hsl(var(--journey-tint));
+  box-shadow: 0 0 0 3px hsl(var(--journey-tint) / 0.22);
+  transition: left 600ms ease;
+}
+.journey-rail-glow { animation: journey-rail-breathe 4.5s ease-in-out infinite; }
+@keyframes journey-rail-breathe {
+  0%, 100% { opacity: 0.82; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey-rail-glow { animation: none; }
+  .journey-rail-fill,
+  .journey-rail-dot { transition: none; }
+}
+
 /* Approved watcher avatars: a soft breathing ring so their presence reads as
  * "here with you", never a surveillance eye. */
 .journey-watcher { display: inline-flex; border-radius: 9999px; }
