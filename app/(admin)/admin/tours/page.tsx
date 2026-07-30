@@ -10,6 +10,7 @@ import {
   humanizeAdminValue
 } from "@/components/admin/admin-ui";
 import { Card } from "@/components/ui/card";
+import { CreateTourButton } from "@/components/admin/tours/create-tour-button";
 import { requireAdminPagePermission } from "@/lib/admin/access";
 import { listAdminTours, loadTourAnalytics } from "@/lib/tours/admin-service";
 import type { DisplayStatus } from "@/lib/tours/admin-model";
@@ -42,7 +43,8 @@ export default async function AdminToursPage() {
     <div className="space-y-7">
       <AdminPageHeader
         title="Product tours"
-        description="Versioned feature education. Publishing a new version is how a tour is shown again — completion history is never deleted."
+        description="Versioned feature education. Publishing a new version is how a tour is shown again; completion history is never deleted."
+        action={<CreateTourButton />}
       />
 
       {tours.length === 0 ? (

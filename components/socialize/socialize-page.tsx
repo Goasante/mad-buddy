@@ -386,6 +386,7 @@ export function SocializePage({
       {/* The radar IS the interface — it fills the space to the bottom nav. */}
       <div
         ref={radarRef}
+        data-tour-id="socialize-radar"
         className={cn("relative mt-2 w-full", activating && "socialize-radar-activating")}
         style={{ height: "calc(100svh - 11.5rem - env(safe-area-inset-bottom))" } as CSSProperties}
       >
@@ -456,6 +457,7 @@ export function SocializePage({
           <Popover.Trigger asChild>
             <button
               type="button"
+              data-tour-id="socialize-activation"
               aria-label={isActive ? "Socialize controls" : "Turn on Socialize"}
               className="focus-ring safe-motion absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
             >

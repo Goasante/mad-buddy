@@ -4,7 +4,6 @@ import { CheckCircle2, ChevronLeft, Play, TrendingUp, UsersRound } from "lucide-
 import {
   AdminMetricCard,
   AdminPageHeader,
-  AdminQueryError,
   AdminSection,
   AdminStatus,
   formatAdminDate,
@@ -12,9 +11,11 @@ import {
 } from "@/components/admin/admin-ui";
 import { Card } from "@/components/ui/card";
 import { requireAdminPagePermission } from "@/lib/admin/access";
+import { MANAGED_FEATURES } from "@/lib/features/feature-flags";
 import type { AdminTourStatus } from "@/lib/tours/admin-model";
 import { loadTourAnalytics, loadVersionSteps, resolveDisplayStatus, validateVersion } from "@/lib/tours/admin-service";
 import { TourVersionControls } from "@/components/admin/tours/tour-version-controls";
+import { StepEditor } from "@/components/admin/tours/step-editor";
 
 export const dynamic = "force-dynamic";
 
@@ -90,44 +91,43 @@ export default async function AdminTourVersionPage({ params }: { params: Promise
         />
       </AdminSection>
 
-      <AdminSection title="Steps" description="Order is what consumers see. Steps behind a disabled feature are skipped at render time.">
-        {steps.length === 0 ? (
-          <AdminQueryError message="This version has no steps yet." />
-        ) : (
-          <Card className="divide-y divide-border/70 overflow-hidden p-0">
-            {steps.map((step) => {
-              const drop = analytics.dropOff.find((entry) => entry.stepKey === step.stepKey);
-              return (
-                <div key={step.stepKey} className="px-4 py-3">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold">
-                        <span className="text-muted-foreground">{step.position}. </span>
-                        {step.title}
-                      </p>
-                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{step.body}</p>
-                      <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[0.6875rem] text-muted-foreground">
-                        <span>key: {step.stepKey}</span>
-                        {step.targetId ? <span>target: {step.targetId}</span> : null}
-                        {step.route ? <span>route: {step.route}</span> : null}
-                        {step.mediaPath ? <span>media: {step.mediaPath}</span> : null}
-                        {step.requiresFeatureFlag ? <span>flag: {step.requiresFeatureFlag}</span> : null}
-                        {step.entitlementKeys.length > 0 ? <span>entitlements: {step.entitlementKeys.join(", ")}</span> : null}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-sm font-semibold tabular-nums">{drop ? `${drop.retention}%` : "—"}</p>
-                      <p className="text-[0.6875rem] text-muted-foreground">{drop ? `${drop.viewers} viewers` : "no data"}</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </Card>
-        )}
+      <AdminSection
+        title="Steps"
+        description={
+          status === "draft"
+            ? "Add, edit, reorder or remove steps. Nothing here reaches users until you publish."
+            : "Order is what consumers see. Steps behind a disabled feature are skipped at render time."
+        }
+      >
+        <StepEditor
+          versionId={versionId}
+          steps={steps}
+          editable={status === "draft"}
+          featureOptions={MANAGED_FEATURES.map((feature) => ({ key: feature.key, title: feature.title }))}
+        />
       </AdminSection>
 
-      {analytics.byPlan.length > 0 ? (
+      {/* Analytics are kept separate from configuration, and hidden entirely for
+          a draft where every number would be zero and meaningless. */}
+      {status !== "draft" && analytics.dropOff.length > 0 ? (
+        <AdminSection title="Step drop-off" description="Viewers per step, relative to step one.">
+          <Card className="divide-y divide-border/70 overflow-hidden p-0">
+            {analytics.dropOff.map((entry) => (
+              <div key={entry.stepKey} className="flex items-center justify-between gap-4 px-4 py-3">
+                <p className="min-w-0 truncate text-sm">
+                  <span className="text-muted-foreground">{entry.position}. </span>
+                  {entry.title}
+                </p>
+                <span className="shrink-0 text-sm tabular-nums">
+                  {entry.retention}% <span className="text-muted-foreground">({entry.viewers})</span>
+                </span>
+              </div>
+            ))}
+          </Card>
+        </AdminSection>
+      ) : null}
+
+      {status !== "draft" && analytics.byPlan.length > 0 ? (
         <AdminSection title="By plan" description="Whether premium education is landing. Counts only, never individual users.">
           <Card className="divide-y divide-border/70 overflow-hidden p-0">
             {analytics.byPlan.map((row) => (
