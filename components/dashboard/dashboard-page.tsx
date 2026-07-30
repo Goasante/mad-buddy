@@ -35,7 +35,7 @@ import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 import { type FreshnessState } from "@/lib/proximity/freshness";
-import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
+import { type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import type { SafeArrivalJourney } from "@/lib/safety/safe-arrival-service";
 import { formatMuddyStatusLabel } from "@/lib/social/rules";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
@@ -119,6 +119,14 @@ const PROXIMITY_LABEL_CLASS: Partial<Record<ProximityLevel, string>> = {
   very_close: "bg-primary/12 text-primary",
   nearby: "bg-orange-500/10 text-orange-600 dark:text-orange-300",
   around: "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+};
+
+const DASHBOARD_PROXIMITY_LABEL: Record<ProximityLevel, string> = {
+  very_close: "Close",
+  nearby: "Nearby",
+  around: "A bit far",
+  far: "Far",
+  hidden: "Hidden"
 };
 
 function capitalize(name: string) {
@@ -352,7 +360,7 @@ export function DashboardPageContent({
   const safeArrivalInviteCount = safeArrival?.invitations.length ?? 0;
 
   return (
-    <div className="mx-auto w-full max-w-[680px] space-y-4 pt-2 sm:pt-4 md:space-y-6">
+    <div className="mx-auto w-full max-w-[680px] space-y-3 pt-1.5 sm:pt-3 md:space-y-5">
       <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
       <PendingInvitePrompt />
 
@@ -421,9 +429,13 @@ export function DashboardPageContent({
       </div>
 
       {statusMessage || isCheckingNearby ? (
-        <p className="-mt-4 text-xs text-muted-foreground" role="status">
+        <p className="-mt-2 text-xs text-muted-foreground" role="status">
           {isCheckingNearby ? "Checking nearby Muddies…" : statusMessage}
         </p>
+      ) : null}
+
+      {profileReminder ? (
+        <ProfileCompletionReminder userId={profileReminder.userId} missingItems={profileReminder.missingItems} />
       ) : null}
 
       <NearbyHero
@@ -467,10 +479,6 @@ export function DashboardPageContent({
             <ContactJourneyHomeCard key={journey.id} journey={journey} />
           ))}
         </section>
-      ) : null}
-
-      {profileReminder ? (
-        <ProfileCompletionReminder userId={profileReminder.userId} missingItems={profileReminder.missingItems} />
       ) : null}
 
       {promptFeedback ? (
@@ -566,7 +574,7 @@ function NearbyHero({
         <>
           <div
             ref={scrollRef}
-            className="glow-strip glow-scroll-boundary -mx-2 flex snap-x snap-mandatory gap-1.5 overflow-x-auto px-2 pb-1 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:gap-4 md:px-4 md:pb-2 md:pt-3"
+            className="glow-strip glow-scroll-boundary -mx-3 flex snap-x snap-mandatory gap-2 overflow-x-auto px-3 pb-1 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:-mx-4 md:gap-4 md:px-4 md:pb-2 md:pt-3"
             aria-label="Nearby Muddies"
           >
             {friends.map((friend) => {
@@ -576,8 +584,8 @@ function NearbyHero({
                   key={friend.friendId}
                   type="button"
                   onClick={() => onSelect(friend.friendId)}
-                  className="focus-ring safe-motion flex min-h-[94px] w-[66px] shrink-0 snap-start flex-col items-center gap-1 text-center md:w-[78px] md:gap-1.5"
-                  aria-label={`${capitalize(name)}, ${proximityLabels[friend.proximityLevel]}`}
+                  className="focus-ring safe-motion flex min-h-[112px] w-[84px] shrink-0 snap-start flex-col items-center gap-1.5 text-center md:w-[92px] md:gap-2"
+                  aria-label={`${capitalize(name)}, ${DASHBOARD_PROXIMITY_LABEL[friend.proximityLevel]}`}
                 >
                   <span className="relative">
                     <GlowAvatar
@@ -587,21 +595,21 @@ function NearbyHero({
                       glowStrength={friend.glowStrength}
                       confidence={friend.confidence}
                       glowColorId={glowColorByFriendId[friend.friendId] ?? null}
-                      size="md"
+                      size="lg"
                       reducedMotion={reducedMotion}
                     />
                     {friend.freshnessState === "live" ? (
-                      <span className="absolute bottom-0 right-0 z-[2] h-3 w-3 rounded-full border-2 border-background bg-emerald-500" aria-hidden="true" />
+                      <span className="absolute bottom-1 right-0 z-[2] h-3 w-3 rounded-full border-2 border-background bg-emerald-500" aria-hidden="true" />
                     ) : null}
                   </span>
-                  <span className="w-full truncate text-[10px] font-semibold md:mt-0.5 md:text-xs">{capitalize(name)}</span>
+                  <span className="w-full truncate text-[10px] font-semibold leading-4 md:text-xs">{capitalize(name)}</span>
                   <span
                     className={cn(
-                      "inline-flex max-w-full items-center truncate rounded-full px-1.5 py-0.5 text-[8px] font-semibold md:px-2 md:text-[10px]",
+                      "inline-flex max-w-full items-center truncate rounded-full px-2 py-0.5 text-[8px] font-semibold md:px-2.5 md:text-[10px]",
                       PROXIMITY_LABEL_CLASS[friend.proximityLevel] ?? "bg-primary/10 text-primary"
                     )}
                   >
-                    {proximityLabels[friend.proximityLevel]}
+                    {DASHBOARD_PROXIMITY_LABEL[friend.proximityLevel]}
                   </span>
                 </button>
               );
@@ -722,16 +730,16 @@ function HappeningNow({
             href={feature.href}
             prefetch={false}
             className={cn(
-              "focus-ring safe-motion flex min-h-[82px] min-w-[50px] snap-start flex-col items-center justify-between rounded-xl border border-current/20 p-1.5 text-center hover:-translate-y-0.5 md:min-h-[108px] md:w-[124px] md:shrink-0 md:items-start md:rounded-2xl md:p-3 md:text-left",
+              "focus-ring safe-motion flex min-h-[94px] min-w-[58px] snap-start flex-col items-center justify-between rounded-xl border border-current/20 p-2 text-center hover:-translate-y-0.5 md:min-h-[116px] md:w-[132px] md:shrink-0 md:items-start md:rounded-2xl md:p-3 md:text-left",
               feature.surfaceClass
             )}
           >
-            <span className={cn("grid h-7 w-7 place-items-center rounded-lg bg-background/75 md:h-9 md:w-9 md:rounded-full", feature.accentClass)}>
-              <FeatureIcon feature={feature.featureIcon} size={18} decorative />
+            <span className={cn("grid h-8 w-8 place-items-center rounded-lg bg-background/75 md:h-10 md:w-10 md:rounded-full", feature.accentClass)}>
+              <FeatureIcon feature={feature.featureIcon} size={20} decorative />
             </span>
             <span>
-              <span className="block text-[9px] font-semibold leading-3 md:text-sm md:leading-normal">{feature.label}</span>
-              <span className="mt-0.5 line-clamp-2 block text-[7px] leading-[10px] text-muted-foreground md:text-[11px] md:leading-4">{feature.description}</span>
+              <span className="block text-[10px] font-semibold leading-4 md:text-sm md:leading-normal">{feature.label}</span>
+              <span className="mt-0.5 line-clamp-1 block text-[8px] leading-3 text-muted-foreground md:text-[11px] md:leading-4">{feature.description}</span>
             </span>
           </Link>
         ))}

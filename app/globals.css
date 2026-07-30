@@ -650,18 +650,18 @@
  * desktop cards and profile modal keep the fuller glow. Proximity hierarchy
  * is preserved: very-close strongest, around subtlest. */
 .glow-strip .proximity-halo-very-close {
-  --halo-blur: 12px;
-  --halo-spread: 2.5px;
+  --halo-blur: 10px;
+  --halo-spread: 2px;
 }
 
 .glow-strip .proximity-halo-nearby {
-  --halo-blur: 9px;
-  --halo-spread: 1.5px;
+  --halo-blur: 7px;
+  --halo-spread: 1px;
 }
 
 .glow-strip .proximity-halo-around {
-  --halo-blur: 6px;
-  --halo-spread: 0.5px;
+  --halo-blur: 4px;
+  --halo-spread: 0.25px;
 }
 
 /* Keep profile-preview halos within the compact drop panel so their soft
@@ -830,7 +830,7 @@ html.dark {
  * any page-local sticky control should offset from (`top: var(--app-header-
  * height)`), never `top: 0`, to avoid stacking under the fixed header. */
 :root {
-  --app-header-content-height: 4.25rem;
+  --app-header-content-height: 4rem;
   --app-header-height: calc(env(safe-area-inset-top, 0px) + var(--app-header-content-height));
 }
 
@@ -1120,28 +1120,28 @@ select {
   .proximity-halo-very-close {
     --halo-color: 251 146 60;
     --halo-ring: linear-gradient(135deg, #fdba74 0%, #f97316 52%, #c2410c 100%);
-    --halo-blur: 18px;
-    --halo-spread: 4px;
-    --halo-scale: 1.025;
-    --halo-duration: 2.2s;
+    --halo-blur: 14px;
+    --halo-spread: 3px;
+    --halo-scale: 1.018;
+    --halo-duration: 2.4s;
   }
 
   .proximity-halo-nearby {
     --halo-color: 249 115 22;
     --halo-ring: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
-    --halo-blur: 13px;
-    --halo-spread: 2.5px;
-    --halo-scale: 1.018;
-    --halo-duration: 2.8s;
+    --halo-blur: 10px;
+    --halo-spread: 2px;
+    --halo-scale: 1.012;
+    --halo-duration: 3s;
   }
 
   .proximity-halo-around {
     --halo-color: 249 115 22;
     --halo-ring: linear-gradient(135deg, rgb(251 146 60 / 0.72) 0%, rgb(234 88 12 / 0.62) 100%);
-    --halo-blur: 8px;
-    --halo-spread: 1px;
-    --halo-scale: 1.01;
-    --halo-duration: 3.4s;
+    --halo-blur: 6px;
+    --halo-spread: 0.75px;
+    --halo-scale: 1.006;
+    --halo-duration: 3.6s;
   }
 
   .proximity-halo-muted {
