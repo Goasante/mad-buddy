@@ -291,7 +291,7 @@ export function SettingsPageContent({
           />
           <SettingsLinkRow
             icon={Sparkles}
-            title="App walkthrough"
+            title="Replay app walkthrough"
             description="Take the Mad Buddy tour again."
             href="/settings/walkthrough"
           />

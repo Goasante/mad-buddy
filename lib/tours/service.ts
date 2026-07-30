@@ -9,6 +9,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import {
   isEligibleForTour,
+  isTourVersionLive,
   parseTourAudience,
   replayableTours,
   resolveSteps,
@@ -387,5 +388,31 @@ export async function recordTourStepEvent(input: {
     });
   } catch {
     return false;
+  }
+}
+
+/**
+ * Loads a PUBLISHED version by id for manual replay, ignoring eligibility and
+ * prior progress. Always starts at step one.
+ *
+ * Separate from getTourToOffer because replay deliberately bypasses the
+ * one-time offer rule, and separate from the preview loader because it must
+ * refuse anything that is not published.
+ */
+export async function getPublishedTourById(userId: string, versionId: string): Promise<ResolvedTour | null> {
+  try {
+    const admin = createSupabaseAdminClient();
+    const subject = await loadSubject(admin, userId);
+    if (!subject) return null;
+
+    const versions = await loadPublishedVersions(admin);
+    const version = versions.find((candidate) => candidate.id === versionId);
+    if (!version) return null;
+    if (!isTourVersionLive(version, Date.now())) return null;
+
+    const resolved = resolve(version, subject, null);
+    return resolved.steps.length > 0 ? resolved : null;
+  } catch {
+    return null;
   }
 }

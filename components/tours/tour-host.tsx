@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
-import { getTourToOffer } from "@/lib/tours/service";
+import { getPublishedTourById, getTourToOffer } from "@/lib/tours/service";
 import { loadTourForPreview } from "@/lib/tours/preview-service";
 import { decodeTourPreview, TOUR_PREVIEW_COOKIE } from "@/lib/tours/preview";
+import { decodeTourReplay, TOUR_REPLAY_COOKIE } from "@/lib/tours/replay";
 import { TourRunner } from "@/components/tours/tour-runner";
 
 /**
@@ -51,6 +52,41 @@ export async function TourHost({ userId }: { userId: string }) {
           autoStart
           previewReturnTo={preview.returnTo}
           previewLabel={`Previewing ${draft.title} v${draft.version} (${draft.status})`}
+        />
+      );
+    }
+  }
+
+  // Manual replay. Rendered here, in the shell, for the same reason preview is:
+  // step 1 of the main walkthrough routes to /dashboard, so a runner mounted on
+  // /settings/walkthrough was destroyed by the tour's own first navigation.
+  const replayVersionId = decodeTourReplay(store.get(TOUR_REPLAY_COOKIE)?.value);
+  if (replayVersionId) {
+    const replay = await getPublishedTourById(userId, replayVersionId);
+    if (replay) {
+      return (
+        <TourRunner
+          tourVersionId={replay.tourVersionId}
+          title={replay.title}
+          description={replay.description}
+          steps={replay.steps.map((step) => ({
+            id: step.id,
+            stepKey: step.stepKey,
+            title: step.title,
+            body: step.body,
+            targetId: step.targetId,
+            route: step.route,
+            mediaPath: step.mediaPath,
+            ctaLabel: step.ctaLabel,
+            ctaHref: step.ctaHref,
+            entitlementKeys: step.entitlementKeys
+          }))}
+          // Replay always starts from the beginning, never a resumed index.
+          startIndex={0}
+          plan={replay.plan}
+          entitlements={replay.entitlements}
+          autoStart
+          replay
         />
       );
     }

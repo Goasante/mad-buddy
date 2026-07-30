@@ -9,8 +9,17 @@ export default async function WalkthroughPage() {
 
   return (
     <div className="mr-auto max-w-[560px] space-y-6 pt-6">
-      <SettingsSubHeader title="App walkthrough" description="Revisit any Mad Buddy tour whenever you like." />
-      <WalkthroughReplay tours={tours} />
+      <SettingsSubHeader title="Replay app walkthrough" description="Take the Mad Buddy tour again." />
+      <WalkthroughReplay
+        tours={tours.map((tour) => ({
+          tourVersionId: tour.tourVersionId,
+          slug: tour.slug,
+          title: tour.title,
+          description: tour.description,
+          version: tour.version,
+          stepCount: tour.steps.length
+        }))}
+      />
     </div>
   );
 }

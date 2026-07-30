@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { PlayCircle } from "lucide-react";
+import { startTourReplayAction } from "@/app/(app)/tour-replay-actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { TourRunner } from "@/components/tours/tour-runner";
 
 type ReplayableTour = {
   tourVersionId: string;
@@ -13,31 +14,26 @@ type ReplayableTour = {
   title: string;
   description: string;
   version: number;
-  steps: Array<{
-    id: string;
-    stepKey: string;
-    title: string;
-    body: string;
-    targetId: string | null;
-    route: string | null;
-    mediaPath: string | null;
-    ctaLabel: string | null;
-    ctaHref: string | null;
-    entitlementKeys: string[];
-  }>;
-  plan: "free" | "buddy_plus" | "buddy_pro";
-  entitlements: Record<
-    string,
-    { key: string; label: string; free: string; buddyPlus: string; buddyPro: string; current: string }
-  >;
+  stepCount: number;
 };
 
 /**
- * Manual replay (brief §20). Replay always starts at step one and still records
- * progress normally — a deliberate replay is real engagement, not preview.
+ * Manual replay launcher.
+ *
+ * It deliberately does NOT render the tour itself. It used to, and that was the
+ * bug: the first step of the main walkthrough routes to /dashboard, so the
+ * tour's own navigation unmounted this page and took the running tour with it,
+ * which looked like the tour cutting off after one step.
+ *
+ * Instead this opens a replay session (a cookie) and navigates into the app.
+ * TourHost, which lives in the (app) layout, picks the session up and renders
+ * the tour there, so it survives every subsequent route change. The user's
+ * historical completion or skip is untouched: replay writes no progress.
  */
 export function WalkthroughReplay({ tours }: { tours: ReplayableTour[] }) {
-  const [active, setActive] = useState<ReplayableTour | null>(null);
+  const router = useRouter();
+  const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
 
   if (tours.length === 0) {
     return (
@@ -49,38 +45,48 @@ export function WalkthroughReplay({ tours }: { tours: ReplayableTour[] }) {
     );
   }
 
-  return (
-    <>
-      <div className="space-y-3">
-        {tours.map((tour) => (
-          <Card key={tour.tourVersionId} className="flex items-center justify-between gap-4 p-4">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{tour.title}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {tour.steps.length} {tour.steps.length === 1 ? "step" : "steps"}
-                {tour.description ? ` · ${tour.description}` : ""}
-              </p>
-            </div>
-            <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => setActive(tour)}>
-              Start
-            </Button>
-          </Card>
-        ))}
-      </div>
+  const start = (tour: ReplayableTour) => {
+    setError("");
+    startTransition(async () => {
+      const result = await startTourReplayAction({ versionId: tour.tourVersionId });
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      // Step 1 takes over routing from here if it declares a route of its own.
+      router.push("/dashboard");
+    });
+  };
 
-      {active ? (
-        <TourRunner
-          key={active.tourVersionId}
-          tourVersionId={active.tourVersionId}
-          title={active.title}
-          description={active.description}
-          steps={active.steps}
-          startIndex={0}
-          plan={active.plan}
-          entitlements={active.entitlements}
-          autoStart
-        />
-      ) : null}
-    </>
+  return (
+    <div className="space-y-3">
+      {error ? <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p> : null}
+
+      {tours.map((tour) => (
+        <Card key={tour.tourVersionId} className="flex items-center justify-between gap-4 p-4">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{tour.title}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {tour.stepCount} {tour.stepCount === 1 ? "step" : "steps"}
+              {tour.description ? ` · ${tour.description}` : ""}
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="shrink-0"
+            disabled={isPending}
+            onClick={() => start(tour)}
+          >
+            {isPending ? "Starting..." : "Replay"}
+          </Button>
+        </Card>
+      ))}
+
+      <p className="text-xs text-muted-foreground">
+        Replaying does not reset your history. Your original walkthrough progress stays as it is.
+      </p>
+    </div>
   );
 }

@@ -55,6 +55,11 @@ export const PRODUCT_EVENT_NAMES = [
   ,"tour_skipped"
   ,"tour_completed"
   ,"tour_cta_clicked"
+  // Manual replay is deliberately separate from the first-time funnel: a user
+  // revisiting the tour must not count as another first-time completion or
+  // distort conversion metrics.
+  ,"tour_replay_started"
+  ,"tour_replay_completed"
 ] as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT_NAMES)[number];

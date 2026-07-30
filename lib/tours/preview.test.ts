@@ -165,15 +165,18 @@ describe("preview runs the real renderer inside the real shell", () => {
 describe("published replay still works independently of preview", () => {
   it("the replay screen still renders published tours without a preview session", () => {
     const replay = readFileSync(join(ROOT, "components/tours/walkthrough-replay.tsx"), "utf8");
-    expect(replay).toContain("TourRunner");
-    // Replay is deliberately NOT preview: a deliberate user replay is real
-    // engagement and is recorded. Checked against code with comments stripped,
-    // since the file legitimately explains that distinction in prose.
+    // Replay now starts a session and lets TourHost render the tour, rather than
+    // mounting the runner itself. That was the fix for replay cutting off: the
+    // tour's own first route change unmounted the page hosting it.
+    expect(replay).not.toContain("TourRunner");
+    expect(replay).toContain("startTourReplayAction");
+
+    // Replay must not borrow the PREVIEW session; the two are independent paths.
     const code = replay
       .split("\n")
       .filter((line) => !line.trimStart().startsWith("*") && !line.trimStart().startsWith("//"))
       .join("\n");
-    expect(code).not.toMatch(/\bpreview\b/);
+    expect(code).not.toMatch(/\bpreview\b/i);
     const page = readFileSync(join(ROOT, "app/(app)/settings/walkthrough/page.tsx"), "utf8");
     expect(page).toContain("getReplayableTours");
   });

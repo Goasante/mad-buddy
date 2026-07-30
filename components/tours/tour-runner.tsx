@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowRight, Sparkles, X } from "lucide-react";
+import { ArrowRight, X } from "lucide-react";
 import { recordTourProgressAction, recordTourStepEventAction } from "@/app/(app)/tour-actions";
 import { exitTourPreviewAction } from "@/app/(admin)/admin/tours/preview-actions";
+import { endTourReplayAction } from "@/app/(app)/tour-replay-actions";
+import { BrandMark } from "@/components/brand/brand-mark";
 import { Button } from "@/components/ui/button";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
@@ -62,6 +64,11 @@ export type TourRunnerProps = {
   previewReturnTo?: string;
   /** Banner text naming the version being previewed. */
   previewLabel?: string;
+  /**
+   * Manual replay. Records replay-specific analytics and writes NO progress, so
+   * the user's original first-time completion or skip is preserved exactly.
+   */
+  replay?: boolean;
 };
 
 const SPOTLIGHT_CLASS = "tour-spotlight-target";
@@ -77,7 +84,8 @@ export function TourRunner({
   preview = false,
   autoStart = false,
   previewReturnTo,
-  previewLabel
+  previewLabel,
+  replay = false
 }: TourRunnerProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -92,16 +100,20 @@ export function TourRunner({
 
   const record = useCallback(
     (status: "started" | "completed" | "skipped" | "dismissed", currentStepKey?: string | null) => {
-      void recordTourProgressAction({ tourVersionId, status, currentStepKey, preview });
+      // A replay must not overwrite the original outcome. Passing `preview` for
+      // replay reuses the existing server-side short-circuit so no progress row
+      // is written and no first-time funnel event is emitted; replay reports
+      // itself through its own tour_replay_* events instead.
+      void recordTourProgressAction({ tourVersionId, status, currentStepKey, preview: preview || replay });
     },
-    [tourVersionId, preview]
+    [tourVersionId, preview, replay]
   );
 
   const recordStep = useCallback(
     (stepId: string, event: "tour_step_viewed" | "tour_cta_clicked" | "tour_shown") => {
-      void recordTourStepEventAction({ stepId, event, preview });
+      void recordTourStepEventAction({ stepId, event, preview: preview || replay });
     },
-    [preview]
+    [preview, replay]
   );
 
   // The invitation itself is a measurable impression (brief §22).
@@ -179,13 +191,17 @@ export function TourRunner({
 
   const finish = useCallback(() => {
     record("completed", step?.stepKey ?? null);
+    // Clears the replay cookie so the tour ends cleanly instead of restarting on
+    // the next navigation, and records the replay-specific completion.
+    if (replay) void endTourReplayAction({ versionId: tourVersionId, completed: true });
     setPhase("closed");
-  }, [record, step]);
+  }, [record, step, replay, tourVersionId]);
 
   const skip = useCallback(() => {
     record("skipped", step?.stepKey ?? null);
+    if (replay) void endTourReplayAction({ versionId: tourVersionId, completed: false });
     setPhase("closed");
-  }, [record, step]);
+  }, [record, step, replay, tourVersionId]);
 
   // Escape dismisses the tour — it is never a blocking, unescapable layer.
   useEffect(() => {
@@ -212,16 +228,21 @@ export function TourRunner({
         aria-labelledby="tour-invite-title"
         className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[95] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-border bg-card p-4 shadow-xl focus:outline-none md:bottom-5"
       >
+        {/* The brand mark, not a generic sparkle: the first thing a user sees of
+            the walkthrough should read as Mad Buddy. */}
         <p id="tour-invite-title" className="flex items-center gap-2 text-sm font-semibold">
-          <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <BrandMark className="h-5 w-5 shrink-0" />
           {title}
         </p>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          {description || `A quick look at how Mad Buddy works — about ${Math.max(1, Math.round(steps.length / 6))} min.`}
+          {description ||
+            "Take a quick tour of how to find nearby Muddies, connect, make plans, and stay in control of your privacy."}
         </p>
         <div className="mt-3 flex justify-end gap-2">
+          {/* "Not now" before the tour has begun; "Skip tour" only applies once
+              the user is actually inside it. */}
           <Button type="button" size="sm" variant="ghost" onClick={skip}>
-            Skip
+            Not now
           </Button>
           <Button
             type="button"
@@ -231,7 +252,7 @@ export function TourRunner({
               setPhase("running");
             }}
           >
-            Show me
+            Take the tour
           </Button>
         </div>
       </aside>
@@ -296,10 +317,29 @@ export function TourRunner({
             type="button"
             onClick={skip}
             aria-label="Skip tour"
-            className="focus-ring -mr-1 -mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary"
+            className="focus-ring -mr-2 -mt-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
+        </div>
+
+        {/* Thin brand-orange progress bar: present, but not competing with the
+            highlighted app UI for attention. */}
+        <div
+          className="mt-1.5 h-0.5 w-full overflow-hidden rounded-full bg-border/70"
+          role="progressbar"
+          aria-valuemin={1}
+          aria-valuemax={steps.length}
+          aria-valuenow={index + 1}
+          aria-label={`Step ${index + 1} of ${steps.length}`}
+        >
+          <div
+            className={cn("h-full rounded-full", !reducedMotion && "transition-[width] duration-200")}
+            style={{
+              width: `${((index + 1) / steps.length) * 100}%`,
+              backgroundColor: "var(--color-brand-orange)"
+            }}
+          />
         </div>
 
         <h2 id="tour-step-title" className="mt-1 text-base font-semibold">
@@ -323,29 +363,72 @@ export function TourRunner({
         ) : null}
 
         {stepEntitlements.length > 0 ? (
-          <div className="mt-3 overflow-hidden rounded-xl border border-border/70">
-            <div className="grid grid-cols-4 gap-2 bg-secondary/50 px-3 py-2 text-[0.625rem] font-semibold uppercase tracking-wide text-muted-foreground">
-              <span className="col-span-1">Plan</span>
-              <span>Free</span>
-              <span>Plus</span>
-              <span>Pro</span>
+          // Subscription education. Deliberately a distinct, more memorable
+          // presentation than an ordinary step body: three compact plan columns
+          // with a short promise each, then the real per-plan values.
+          //
+          // Every figure comes from canonical entitlement data resolved on the
+          // server, so this can never disagree with Pricing or Plan and Billing.
+          // The tour asserts no capability of its own.
+          <div className="mt-3 space-y-2">
+            <div className="grid grid-cols-3 gap-1.5">
+              {(
+                [
+                  { key: "free", label: "Free", promise: "The essentials." },
+                  { key: "buddy_plus", label: "Plus", promise: "More ways to connect." },
+                  { key: "buddy_pro", label: "Pro", promise: "The fullest experience." }
+                ] as const
+              ).map((tier) => {
+                const isCurrent = plan === tier.key;
+                return (
+                  <div
+                    key={tier.key}
+                    className={cn(
+                      "rounded-xl border px-2 py-2",
+                      // Plus and Pro carry more emphasis, but Free is never
+                      // styled as lesser: it stays a legitimate choice.
+                      isCurrent ? "border-2 bg-primary/[0.06]" : "border-border/70",
+                      tier.key !== "free" && !isCurrent && "bg-secondary/40"
+                    )}
+                    style={isCurrent ? { borderColor: "var(--color-brand-orange)" } : undefined}
+                  >
+                    <p className="text-[0.6875rem] font-semibold">{tier.label}</p>
+                    <p className="mt-0.5 text-[0.625rem] leading-4 text-muted-foreground">{tier.promise}</p>
+                    {isCurrent ? (
+                      <p
+                        className="mt-1 text-[0.5625rem] font-semibold uppercase tracking-wide"
+                        style={{ color: "var(--color-brand-orange)" }}
+                      >
+                        Your plan
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
-            {stepEntitlements.map((entry) => (
-              <div key={entry.key} className="grid grid-cols-4 gap-2 border-t border-border/60 px-3 py-2 text-xs">
-                <span className="col-span-1 min-w-0 truncate text-muted-foreground">{entry.label}</span>
-                <span className={cn("tabular-nums", plan === "free" && "font-semibold text-foreground")}>{entry.free}</span>
-                <span className={cn("tabular-nums", plan === "buddy_plus" && "font-semibold text-foreground")}>
-                  {entry.buddyPlus}
-                </span>
-                <span className={cn("tabular-nums", plan === "buddy_pro" && "font-semibold text-foreground")}>
-                  {entry.buddyPro}
-                </span>
-              </div>
-            ))}
-            <p className="border-t border-border/60 px-3 py-2 text-[0.6875rem] text-muted-foreground">
+
+            <div className="overflow-hidden rounded-xl border border-border/70">
+              {stepEntitlements.map((entry) => (
+                <div
+                  key={entry.key}
+                  className="grid grid-cols-[1.4fr_repeat(3,minmax(0,1fr))] gap-1.5 border-b border-border/60 px-2.5 py-1.5 text-[0.6875rem] last:border-b-0"
+                >
+                  <span className="min-w-0 truncate text-muted-foreground">{entry.label}</span>
+                  <span className={cn("tabular-nums", plan === "free" && "font-semibold text-foreground")}>{entry.free}</span>
+                  <span className={cn("tabular-nums", plan === "buddy_plus" && "font-semibold text-foreground")}>
+                    {entry.buddyPlus}
+                  </span>
+                  <span className={cn("tabular-nums", plan === "buddy_pro" && "font-semibold text-foreground")}>
+                    {entry.buddyPro}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-[0.6875rem] text-muted-foreground">
               {plan === "buddy_pro"
-                ? "You're on Buddy Pro — you already have the highest limits."
-                : "Your current plan is highlighted."}
+                ? "You're on Buddy Pro, so you already have the highest limits."
+                : "Nothing to decide now. You can explore plans whenever you like."}
             </p>
           </div>
         ) : null}
@@ -368,8 +451,14 @@ export function TourRunner({
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  if (step) recordStep(step.id, "tour_cta_clicked");
-                  finish();
+                  if (!step?.ctaHref) return;
+                  recordStep(step.id, "tour_cta_clicked");
+                  // Must NOT finish() here: following a CTA is not completing the
+                  // tour, and marking it complete would both lie to analytics and
+                  // stop the tour ever being offered again. Instead record the
+                  // NEXT step as the resume point, so returning to the app picks
+                  // the walkthrough back up where it left off.
+                  record("started", steps[Math.min(index + 1, steps.length - 1)]?.stepKey ?? null);
                   router.push(step.ctaHref as Parameters<typeof router.push>[0]);
                 }}
               >
@@ -377,7 +466,7 @@ export function TourRunner({
               </Button>
             ) : null}
             <Button type="button" size="sm" onClick={() => (isLast ? finish() : setIndex((value) => value + 1))}>
-              {isLast ? "Finish" : "Next"}
+              {isLast ? "Done" : "Next"}
               {isLast ? null : <ArrowRight className="h-4 w-4" aria-hidden="true" />}
             </Button>
           </div>
