@@ -350,6 +350,17 @@
   .journey-rail-dot { transition: none; }
 }
 
+/* ON AIR dot: a gentle pulse, not a livestream/recording indicator. Static red
+ * dot under prefers-reduced-motion, since colour alone still carries the state. */
+.on-air-pulse { animation: on-air-pulse 1.8s ease-in-out infinite; }
+@keyframes on-air-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .on-air-pulse { animation: none; }
+}
+
 /* Pull-to-refresh spinner. One slow rotation, and nothing at all under
  * prefers-reduced-motion — the arc's fill state already communicates progress. */
 .pull-refresh-spin { animation: pull-refresh-spin 900ms linear infinite; }

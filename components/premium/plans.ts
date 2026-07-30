@@ -60,7 +60,7 @@ export const pricingPlans: PricingPlan[] = [
     features: [
       "Nearby glow with approved Muddies",
       "Private Moments with your Muddies",
-      "View Spotlight",
+      "View Air",
       "Safe Arrival check-ins",
       "Ghost Mode"
     ],
@@ -79,9 +79,9 @@ export const pricingPlans: PricingPlan[] = [
     id: "pro",
     name: "Buddy Pro",
     price: planDisplayPrices.pro,
-    description: "Publish to Spotlight and get the fullest Mad Buddy.",
+    description: "Publish to Air and get the fullest Mad Buddy.",
     badge: "Most flexible",
-    // capabilityLines puts "Publish images to Spotlight" here automatically,
+    // capabilityLines puts "Publish images to Air" here automatically,
     // because public_moments is the entitlement Pro adds.
     features: ["Everything in Buddy Plus", ...capabilityLines("buddy_pro")],
     limits: limitLines("buddy_pro")
@@ -94,7 +94,7 @@ export const pricingPlans: PricingPlan[] = [
  * claim something the entitlement check would refuse.
  */
 const COMPARISON_CAPABILITIES: { key: BooleanEntitlementKey; feature: string }[] = [
-  { key: "public_moments", feature: "Publish to Spotlight" },
+  { key: "public_moments", feature: "Publish to Air" },
   { key: "custom_glow_styles", feature: "Custom glow styles" },
   { key: "advanced_visibility_schedules", feature: "Scheduled visibility" },
   { key: "recurring_plans", feature: "Recurring plans" },

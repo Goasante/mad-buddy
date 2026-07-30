@@ -38,10 +38,10 @@ export const BOOLEAN_ENTITLEMENTS: { key: BooleanEntitlementKey; label: string }
   { key: "event_circle_creation", label: "Event circle creation" },
   { key: "event_drops", label: "Event Drops" },
   { key: "photo_moments", label: "Photo Moments" },
-  // The capability is unchanged; only the product name moved on. "Open Moments"
-  // was the old name for what is now Spotlight, and this label is what the tour,
-  // the admin entitlement UI and the pricing comparison all render.
-  { key: "public_moments", label: "Publish to Spotlight" },
+  // The capability is unchanged; only the product name moved on. "Open Moments",
+  // then "Spotlight", and now "Air". This label is what the tour, the admin
+  // entitlement UI and the pricing comparison all render.
+  { key: "public_moments", label: "Publish to Air" },
   { key: "qr_check_in", label: "QR check-in" },
   { key: "attendance_export", label: "Attendance export" },
   { key: "community_roles", label: "Community roles" },

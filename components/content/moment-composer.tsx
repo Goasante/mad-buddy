@@ -212,7 +212,7 @@ export function MomentComposer({
             </Button>
           ) : step === "review" ? (
             <Button type="button" className="w-full" disabled={!canPublish || isPublishing} onClick={publish}>
-              {isPublishing ? "Sharing…" : "Share Moment"}
+              {isPublishing ? "Sharing…" : isSpotlight ? "Go On Air" : "Share Moment"}
             </Button>
           ) : null}
         </div>
@@ -406,7 +406,7 @@ export function MomentComposer({
                   <Globe2 className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5 text-sm font-semibold">
-                      Spotlight
+                      Air
                       {!canPublishSpotlight ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-orange-400/15 px-1.5 py-0.5 text-[0.625rem] font-bold uppercase tracking-wide text-orange-700 dark:text-orange-200">
                           <Crown className="h-2.5 w-2.5" aria-hidden="true" />
@@ -458,7 +458,7 @@ export function MomentComposer({
                 <dt className="shrink-0 text-xs text-muted-foreground">Audience</dt>
                 <dd className="min-w-0 truncate text-sm font-semibold">
                   {isSpotlight
-                    ? "Spotlight · Public"
+                    ? "Air · Public"
                     : audienceSummaryLabel(
                         audience,
                         muddies.filter((muddy) => selectedMuddies.includes(muddy.id)).map((muddy) => muddy.name)
@@ -520,9 +520,9 @@ function SpotlightUpgradeNote() {
     <div className="mt-2 rounded-xl border border-orange-400/25 bg-orange-400/10 p-3.5">
       <p className="flex items-center gap-1.5 text-[0.625rem] font-bold uppercase tracking-[0.1em] text-orange-700 dark:text-orange-200">
         <TuneInIcon className="h-3.5 w-3.5 shrink-0" />
-        Share on Spotlight
+        Go On Air
       </p>
-      <p className="mt-1.5 text-sm font-semibold">Take your Moments beyond your Muddies.</p>
+      <p className="mt-1.5 text-sm font-semibold">Share your Moment beyond your Muddies.</p>
       <p className="mt-1 text-xs leading-5 text-muted-foreground">{copy.body}</p>
 
       {copy.benefits.length > 0 ? (

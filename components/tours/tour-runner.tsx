@@ -433,7 +433,7 @@ export function TourRunner({
 
             <p className="text-[0.6875rem] leading-5 text-muted-foreground">
               {plan === "buddy_pro"
-                ? "You're on Buddy Pro, so you already have the full Mad Buddy experience, including publishing to Spotlight."
+                ? "You're on Buddy Pro, so you already have the full Mad Buddy experience, including publishing to Air."
                 : `Nothing to decide now. Upgrade from as low as ${cheapestPaidPrice()} a ${PLAN_BILLING_INTERVAL} whenever you like.`}
             </p>
           </div>

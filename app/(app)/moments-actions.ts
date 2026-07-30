@@ -526,7 +526,7 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
 
   return {
     ok: true,
-    message: isSpotlight ? "Shared to Spotlight." : "Moment shared.",
+    message: isSpotlight ? "You're On Air." : "Moment shared.",
     momentId: moment.id,
     locationWarning: risk.warn ? LOCATION_WARNING_MESSAGE : undefined
   };

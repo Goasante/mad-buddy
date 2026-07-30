@@ -208,7 +208,7 @@ describe("Spotlight publishing stays Buddy Pro only", () => {
     for (const benefit of copy.benefits) {
       expect(granted, `${benefit} is not a real Pro capability`).toContain(benefit);
     }
-    expect(copy.benefits).toContain("Publish images to Spotlight");
+    expect(copy.benefits).toContain("Publish images to Air");
   });
 
   it("hardcodes no price in any Moments component", () => {
@@ -245,10 +245,10 @@ describe("pricing page matches the entitlement registry", () => {
     expect(muddiesLine).not.toContain("Unlimited");
   });
 
-  it("shows Spotlight publishing on Buddy Pro", () => {
+  it("shows Air publishing on Buddy Pro", () => {
     const pro = pricingPlans.find((plan) => plan.id === "pro");
-    expect(pro?.features.join(" ")).toContain("Publish images to Spotlight");
-    const spotlightRow = comparisonRows.find((row) => row.feature === "Publish to Spotlight");
+    expect(pro?.features.join(" ")).toContain("Publish images to Air");
+    const spotlightRow = comparisonRows.find((row) => row.feature === "Publish to Air");
     expect(spotlightRow).toMatchObject({ free: false, plus: false, pro: true });
   });
 

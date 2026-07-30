@@ -395,21 +395,53 @@ export function MomentMedia({
   );
 }
 
+/**
+ * "ON AIR": a creator currently has an active public Air Moment.
+ *
+ * Not livestreaming and not a viewer count, just a status. Derived entirely
+ * from existing Moment status/expiry data (no new field), so it is only ever
+ * shown where that is already known to be true.
+ */
+export function OnAirBadge({ className }: { className?: string }) {
+  const reducedMotion = useReducedMotion();
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[0.625rem] font-bold uppercase tracking-wide text-red-600 dark:text-red-400",
+        className
+      )}
+    >
+      <span
+        className={cn("h-1.5 w-1.5 shrink-0 rounded-full bg-red-500", !reducedMotion && "on-air-pulse")}
+        aria-hidden="true"
+      />
+      <span aria-hidden="true">ON AIR</span>
+      <span className="sr-only">Currently on Air</span>
+    </span>
+  );
+}
+
 /** Small header row shared by both card styles. */
 export function MomentHeader({
   moment,
   nowMs,
   onOpenCreator,
+  onAir = false,
   children
 }: {
   moment: VisibleMoment;
   nowMs: number;
   onOpenCreator?: (creatorId: string) => void;
+  /** Shows the ON AIR badge beside the name. */
+  onAir?: boolean;
   children?: React.ReactNode;
 }) {
   const nameNode = (
     <span className="min-w-0">
-      <span className="block truncate text-sm font-semibold">{moment.authorName}</span>
+      <span className="flex items-center gap-1.5">
+        <span className="min-w-0 truncate text-sm font-semibold">{moment.authorName}</span>
+        {onAir ? <OnAirBadge /> : null}
+      </span>
       <span className="flex items-center gap-1 text-[0.6875rem] text-muted-foreground">
         <Clock className="h-3 w-3 shrink-0" aria-hidden="true" />
         {timeRemainingLabel(moment.expiresAt, nowMs)}

@@ -33,6 +33,7 @@ import {
   MomentHeader,
   MomentMedia,
   MomentsRing,
+  OnAirBadge,
   ReactionControl,
   TuneInButton,
   TunedInCount,
@@ -344,7 +345,7 @@ export function MomentsPage({
               aria-selected={tab === option}
               onClick={() => selectTab(option)}
               className={cn(
-                "focus-ring safe-motion min-h-9 flex-1 rounded-full text-sm font-semibold capitalize",
+                "focus-ring safe-motion min-h-9 flex-1 rounded-full text-sm font-semibold",
                 tab === option
                   ? option === "spotlight"
                     ? "bg-orange-500 text-white"
@@ -352,7 +353,9 @@ export function MomentsPage({
                   : "text-muted-foreground hover:bg-secondary"
               )}
             >
-              {option}
+              {/* "spotlight" stays the internal tab key; "Air" is the
+                  user-facing rename. */}
+              {option === "spotlight" ? "Air" : "Moments"}
             </button>
           ))}
         </div>
@@ -441,7 +444,7 @@ export function MomentsPage({
           />
           {shown.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-10 text-center">
-          <p className="text-base font-semibold">Spotlight is quiet right now</p>
+          <p className="text-base font-semibold">Air is quiet right now</p>
           <p className="max-w-xs text-sm text-muted-foreground">
             Public Moments from across Mad Buddy show up here. Check back soon.
           </p>
@@ -629,7 +632,9 @@ function SpotlightCard(
   const ref = useSeenOnce(props.moment.id, props.moment.isAuthor, props.onSeen);
   return (
     <div ref={ref} className="spotlight-card space-y-3 rounded-[1.25rem] p-3">
-      <MomentHeader moment={props.moment} nowMs={props.nowMs} onOpenCreator={props.onOpenCreator}>
+      {/* Every card in this feed is a live, unexpired Air Moment, so its
+          author is by definition currently on Air. */}
+      <MomentHeader moment={props.moment} nowMs={props.nowMs} onOpenCreator={props.onOpenCreator} onAir>
         <div className="flex shrink-0 items-center gap-1.5">
           {!props.moment.isAuthor ? (
             <TuneInButton
@@ -755,7 +760,10 @@ function CreatorHubModal({
         <div className="space-y-4 text-center">
           <div className="flex flex-col items-center gap-2">
             <UserAvatar src={hub.avatarUrl} name={hub.name} size="xl" decorative />
-            <p className="text-lg font-semibold">{hub.name}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-lg font-semibold">{hub.name}</p>
+              {hub.liveSpotlightCount > 0 ? <OnAirBadge /> : null}
+            </div>
             <div className="flex flex-wrap items-center justify-center gap-3">
               <TunedInCount count={hub.tunedInCount} />
               <span className="text-xs text-muted-foreground">

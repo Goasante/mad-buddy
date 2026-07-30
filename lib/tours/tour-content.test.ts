@@ -209,10 +209,11 @@ describe("the subscription step uses canonical data", () => {
     expect(PLAN_ENTITLEMENTS.buddy_pro.public_moments).toBe(true);
   });
 
-  it("labels that capability as Spotlight, not by its old name", () => {
+  it("labels that capability as Air, not by an old name", () => {
     const label = BOOLEAN_ENTITLEMENTS.find((entry) => entry.key === "public_moments")?.label ?? "";
-    expect(label).toContain("Spotlight");
+    expect(label).toContain("Air");
     expect(label).not.toContain("Open Moments");
+    expect(label).not.toContain("Spotlight");
   });
 
   it("seeds no value, price or tier figure into the tour data", () => {
@@ -259,7 +260,7 @@ describe("the subscription step is presented as a real comparison", () => {
   it("still teaches a Buddy Pro user what they have", () => {
     const tail = RUNNER.slice(RUNNER.indexOf('plan === "buddy_pro"'));
     expect(tail.slice(0, 300)).toContain("full Mad Buddy experience");
-    expect(tail.slice(0, 300)).toContain("Spotlight");
+    expect(tail.slice(0, 300)).toContain("Air");
   });
 
   it("lays out full-width rows so feature names cannot truncate", () => {

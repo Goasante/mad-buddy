@@ -66,7 +66,7 @@ export function TunedInStrip({
                 className="focus-ring safe-motion flex w-[4.25rem] flex-col items-center gap-1"
                 aria-label={
                   entry.hasUnviewed
-                    ? `${entry.name}, new Spotlight Moment`
+                    ? `${entry.name}, new Air Moment`
                     : entry.liveMomentCount > 0
                       ? `${entry.name}, ${entry.liveMomentCount} live`
                       : entry.name
@@ -139,7 +139,7 @@ export function TunedInManageModal({
     >
       {entries.length === 0 ? (
         <p className="py-4 text-center text-sm text-muted-foreground">
-          You haven&apos;t tuned in to anyone yet. Tune In from Spotlight to see more of what you like.
+          You haven&apos;t tuned in to anyone yet. Tune In from Air to see more of what you like.
         </p>
       ) : (
         <ul className="space-y-1.5">
@@ -177,7 +177,7 @@ export function TunedInManageModal({
 }
 
 /**
- * The Tuned In viewing lane: an immersive, full-screen Spotlight viewer.
+ * The Tuned In viewing lane: an immersive, full-screen Air viewer.
  *
  * Tapping a creator opens their current Moment directly rather than routing to a
  * hub first. Advancing walks that creator's Moments, then continues into the
@@ -261,7 +261,7 @@ export function TunedInViewer({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`Spotlight Moment from ${moment.authorName}`}
+      aria-label={`Air Moment from ${moment.authorName}`}
       className="fixed inset-0 z-[60] flex flex-col bg-black/95 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]"
     >
       {/* Segment bar for this creator's Moments. */}

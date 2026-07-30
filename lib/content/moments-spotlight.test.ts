@@ -518,8 +518,8 @@ describe("Spotlight publishing is server-enforced", () => {
 
   it("explains the upgrade rather than silently disabling the row", () => {
     const composer = read("components/content/moment-composer.tsx");
-    expect(composer).toContain("Share on Spotlight");
-    expect(composer).toContain("Take your Moments beyond your Muddies.");
+    expect(composer).toContain("Go On Air");
+    expect(composer).toContain("Share your Moment beyond your Muddies.");
     // The body, plan name, price and benefits all come from canonical billing
     // data rather than being written in the component.
     expect(composer).toContain("spotlightUpgradeCopy()");

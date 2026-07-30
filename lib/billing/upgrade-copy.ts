@@ -72,7 +72,7 @@ export function capabilitiesAddedBy(plan: SubscriptionPlan): BooleanEntitlementK
 
 /** Human labels for the boolean capabilities that are worth naming in copy. */
 const CAPABILITY_LABELS: Partial<Record<BooleanEntitlementKey, string>> = {
-  public_moments: "Publish images to Spotlight",
+  public_moments: "Publish images to Air",
   advanced_visibility_schedules: "Scheduled visibility and Ghost Mode",
   recurring_plans: "Recurring plans",
   multiple_plan_polls: "Multiple polls per plan",
@@ -125,7 +125,9 @@ export type SpotlightUpgradeCopy = {
 };
 
 /**
- * The Spotlight upgrade explanation.
+ * The Air (public Moments) upgrade explanation. Type/function names keep the
+ * internal "spotlight" identifier for continuity with the rest of the codebase;
+ * only the user-facing copy says "Air".
  *
  * Names the plan that actually grants `public_moments` and quotes its real
  * display price. The "from as low as" phrasing is only used when the cheapest
@@ -137,7 +139,7 @@ export function spotlightUpgradeCopy(): SpotlightUpgradeCopy {
   if (!plan) {
     return {
       plan: null,
-      body: "Spotlight publishing isn't available right now.",
+      body: "Air publishing isn't available right now.",
       cta: "See plans",
       priceNote: null,
       benefits: []
@@ -153,7 +155,7 @@ export function spotlightUpgradeCopy(): SpotlightUpgradeCopy {
 
   return {
     plan,
-    body: `With ${label} you can publish images to Spotlight, reach people across Mad Buddy, and grow your Tune In audience.`,
+    body: `With ${label} you can publish images to Air, reach people across Mad Buddy, and grow your Tune In audience.`,
     cta: `See ${label}`,
     // Cheapest granting plan by construction, since that is what
     // cheapestPlanGranting returns.
