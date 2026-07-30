@@ -240,10 +240,10 @@ describe("Tune In is not a follower graph", () => {
   });
 
   it("is reversible with no confirmation and no notification", () => {
-    const page = read("components/content/moments-page.tsx");
-    expect(page).toContain("Tune Out");
-    // No confirm dialog stands between the tap and the delete.
-    const modal = declaration(page, "function MyTuneInsModal");
+    // The management list moved into the dedicated strip module.
+    const strip = read("components/content/tuned-in-strip.tsx");
+    expect(strip).toContain("Tune Out");
+    const modal = declaration(strip, "export function TunedInManageModal");
     expect(modal).not.toContain("Are you sure");
     expect(modal).toContain("onTuneOut(entry.creatorId)");
   });
@@ -518,8 +518,12 @@ describe("Spotlight publishing is server-enforced", () => {
 
   it("explains the upgrade rather than silently disabling the row", () => {
     const composer = read("components/content/moment-composer.tsx");
-    expect(composer).toContain("Share publicly with Spotlight");
-    expect(composer).toContain("grow your Tune In audience");
+    expect(composer).toContain("Share on Spotlight");
+    expect(composer).toContain("Take your Moments beyond your Muddies.");
+    // The body, plan name, price and benefits all come from canonical billing
+    // data rather than being written in the component.
+    expect(composer).toContain("spotlightUpgradeCopy()");
+    expect(composer).not.toMatch(/GHS\s?\d/);
     // Routes into the EXISTING upgrade flow, not a second checkout.
     expect(composer).toContain('href="/upgrade"');
     expect(composer).not.toContain("paystack");

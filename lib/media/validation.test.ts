@@ -73,10 +73,22 @@ describe("validateImageUpload", () => {
 
   it("enforces per-context size caps", () => {
     expect(maxUploadBytesFor("profile")).toBe(5 * 1024 * 1024);
-    expect(maxUploadBytesFor("moment")).toBe(3 * 1024 * 1024);
-    expect(validateImageUpload(upload({ sizeBytes: 4 * 1024 * 1024 })).valid).toBe(false);
+    // Raised from 3 MB, which rejected ordinary phone photos. Still the hard
+    // safety bound, and still under the 6 MB Server Action body limit; the client
+    // now downscales before upload so users no longer meet it.
+    expect(maxUploadBytesFor("moment")).toBe(5 * 1024 * 1024);
+    expect(validateImageUpload(upload({ sizeBytes: 4 * 1024 * 1024 })).valid).toBe(true);
+    expect(validateImageUpload(upload({ sizeBytes: 6 * 1024 * 1024 })).valid).toBe(false);
     expect(validateImageUpload(upload({ sizeBytes: 4 * 1024 * 1024, context: "profile" })).valid).toBe(true);
     expect(validateImageUpload(upload({ sizeBytes: 6 * 1024 * 1024, context: "profile" })).valid).toBe(false);
+  });
+
+  it("keeps every Server Action upload cap under the configured body limit", () => {
+    // The real constraint. If a cap ever exceeded this, uploads would fail at
+    // the framework boundary with no useful message.
+    for (const context of ["profile", "moment"] as const) {
+      expect(maxUploadBytesFor(context)).toBeLessThan(6 * 1024 * 1024);
+    }
   });
 
   it("accepts HEIC for profile photos only", () => {

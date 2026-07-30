@@ -1,12 +1,15 @@
 "use client";
 
-import { Check, Clock, Eye, Plus, Radio, Sparkles } from "lucide-react";
-import { useEffect, useRef, useState, useTransition } from "react";
+import * as Popover from "@radix-ui/react-popover";
+import { Clock, Eye, Plus } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
 import { MomentImage } from "@/components/ui/moment-image";
+import { TuneInIcon } from "@/components/content/tune-in-icon";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import {
   MOMENT_REACTIONS,
+  reactionEmoji,
   summarizeReactions,
   tunedInCountLabel,
   type MomentReactionId
@@ -68,61 +71,47 @@ export function ReactionControl({
   onRemove: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
   const summary = summarizeReactions(moment.reactionBreakdown);
 
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
-
   return (
-    <div ref={containerRef} className="relative flex items-center gap-2">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        disabled={pending}
-        aria-expanded={open}
-        aria-label={moment.myReaction ? "Change your reaction" : "Add a reaction"}
-        className={cn(
-          "focus-ring safe-motion inline-flex min-h-9 items-center gap-1.5 rounded-full border px-2.5 text-sm font-semibold",
-          moment.myReaction
-            ? "border-orange-400/40 bg-orange-400/12 text-orange-700 dark:text-orange-200"
-            : "border-border bg-card/60 text-muted-foreground hover:bg-secondary"
-        )}
-      >
-        {summary.entries.length > 0 ? (
-          <span aria-hidden="true">{summary.entries.map((entry) => entry.emoji).join("")}</span>
-        ) : (
-          <span aria-hidden="true">❤️</span>
-        )}
-        {summary.total > 0 ? <span className="tabular-nums">{summary.total.toLocaleString()}</span> : null}
-      </button>
-
-      {open ? (
-        <div
-          role="menu"
+    <Popover.Root open={open} onOpenChange={setOpen} modal={false}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          disabled={pending}
+          aria-label={moment.myReaction ? "Change your reaction" : "Add a reaction"}
+          className={cn(
+            "focus-ring safe-motion inline-flex min-h-9 items-center gap-1.5 rounded-full border px-2.5 text-sm font-semibold",
+            moment.myReaction
+              ? "border-orange-400/40 bg-orange-400/12 text-orange-700 dark:text-orange-200"
+              : "border-border bg-card/60 text-muted-foreground hover:bg-secondary"
+          )}
+        >
+          {summary.entries.length > 0 ? (
+            <span aria-hidden="true">{summary.entries.map((entry) => entry.emoji).join("")}</span>
+          ) : (
+            <span aria-hidden="true">{reactionEmoji("heart")}</span>
+          )}
+          {summary.total > 0 ? <span className="tabular-nums">{summary.total.toLocaleString()}</span> : null}
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        {/* side="top" with collisionPadding: flips below automatically when
+            there is not enough room above, so the picker is never clipped. */}
+        <Popover.Content
+          side="top"
+          align="start"
+          sideOffset={8}
+          collisionPadding={12}
           aria-label="Choose a reaction"
-          className="absolute bottom-full left-0 z-20 mb-2 flex gap-0.5 rounded-full border border-border bg-card/95 p-1 shadow-lg supports-[backdrop-filter]:bg-card/90"
+          className="z-50 flex gap-0.5 rounded-full border border-border bg-card/95 p-1 shadow-lg supports-[backdrop-filter]:bg-card/90"
         >
           {MOMENT_REACTIONS.map((reaction) => (
             <button
               key={reaction.id}
               type="button"
-              role="menuitemradio"
               aria-label={reaction.label}
-              aria-checked={moment.myReaction === reaction.id}
+              aria-pressed={moment.myReaction === reaction.id}
               disabled={pending}
               onClick={() => {
                 setOpen(false);
@@ -131,16 +120,16 @@ export function ReactionControl({
                 else onReact(reaction.id);
               }}
               className={cn(
-                "focus-ring safe-motion grid h-9 w-9 place-items-center rounded-full text-lg",
+                "focus-ring safe-motion grid h-11 w-11 place-items-center rounded-full text-lg",
                 moment.myReaction === reaction.id ? "bg-orange-400/20" : "hover:bg-secondary"
               )}
             >
               <span aria-hidden="true">{reaction.emoji}</span>
             </button>
           ))}
-        </div>
-      ) : null}
-    </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 
@@ -195,17 +184,8 @@ export function TuneInButton({
           : "border-transparent bg-orange-500 text-white hover:bg-orange-600"
       )}
     >
-      {active ? (
-        <>
-          <Check className={size === "sm" ? "h-3 w-3" : "h-3.5 w-3.5"} aria-hidden="true" />
-          Tuned In
-        </>
-      ) : (
-        <>
-          <Plus className={size === "sm" ? "h-3 w-3" : "h-3.5 w-3.5"} aria-hidden="true" />
-          Tune In
-        </>
-      )}
+      <TuneInIcon className={size === "sm" ? "h-3.5 w-3.5 shrink-0" : "h-4 w-4 shrink-0"} />
+      {active ? "Tuned In" : "Tune In"}
     </button>
   );
 }
@@ -214,7 +194,7 @@ export function TuneInButton({
 export function TunedInCount({ count, className }: { count: number; className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-1.5 text-xs text-muted-foreground", className)}>
-      <Radio className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <TuneInIcon className="h-3.5 w-3.5 shrink-0" />
       {tunedInCountLabel(count)}
     </span>
   );
@@ -244,7 +224,7 @@ export function AuthorInsights({ moment }: { moment: VisibleMoment }) {
         // People who discovered the author through THIS Moment. A count only:
         // the author never learns who they are.
         <span className="inline-flex items-center gap-1 font-semibold text-orange-600 dark:text-orange-300">
-          <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />+
+          <TuneInIcon className="h-3.5 w-3.5 shrink-0" />+
           {moment.tunedInFromThis.toLocaleString()} Tuned In
         </span>
       ) : null}

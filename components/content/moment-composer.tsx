@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Check, Crown, Globe2, ImagePlus, LockKeyhole, Sparkles, Users, X } from "lucide-react";
+import { ArrowLeft, Check, Crown, Globe2, ImagePlus, LockKeyhole, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { createMomentAction, uploadMomentMediaAction } from "@/app/(app)/moments-actions";
@@ -15,9 +15,12 @@ import {
   type ExpiryPresetId
 } from "@/lib/content/moments";
 import { detectLocationRisk, LOCATION_WARNING_MESSAGE } from "@/lib/content/safety";
-import { validateImageSelection } from "@/lib/media/validation";
+import { validateImageSelection, validateImageSource } from "@/lib/media/validation";
+import { compressImageForUpload, MAX_SOURCE_IMAGE_BYTES } from "@/lib/media/client-compress";
 import type { MomentAudienceType } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
+import { spotlightUpgradeCopy } from "@/lib/billing/upgrade-copy";
+import { TuneInIcon } from "@/components/content/tune-in-icon";
 
 export type MomentMuddyOption = { id: string; name: string; avatarUrl: string | null };
 
@@ -88,29 +91,59 @@ export function MomentComposer({
     if (!next) reset();
   }
 
+  function clearPickers() {
+    if (fileRef.current) fileRef.current.value = "";
+    if (cameraRef.current) cameraRef.current.value = "";
+  }
+
   function upload(file: File) {
     // Images only: a video file is refused here rather than silently accepted.
-    const selectionError = file.type.startsWith("video/")
-      ? "Moments are photos for now. Choose an image."
-      : validateImageSelection(file, "moment");
-    if (selectionError) {
-      setError(selectionError);
-      if (fileRef.current) fileRef.current.value = "";
-      if (cameraRef.current) cameraRef.current.value = "";
+    if (file.type.startsWith("video/")) {
+      setError("Moments are photos for now. Choose an image.");
+      clearPickers();
+      return;
+    }
+    // The SOURCE is validated on format and a generous bound only. A big camera
+    // photo is fine input; the byte cap applies after compression, which is why
+    // an ordinary phone photo no longer gets rejected outright.
+    const sourceError = validateImageSource(file, "moment", MAX_SOURCE_IMAGE_BYTES);
+    if (sourceError) {
+      setError(sourceError);
+      clearPickers();
       return;
     }
 
-    // Local preview first so the image appears immediately, while the real
-    // upload (EXIF-stripped and re-encoded server-side) runs.
+    // Local preview first so the image appears immediately.
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") setPreview(reader.result);
     };
     reader.readAsDataURL(file);
 
-    const formData = new FormData();
-    formData.set("media", file);
     startUpload(async () => {
+      const compressed = await compressImageForUpload(file);
+      if (!compressed.ok) {
+        // A real, actionable reason rather than a bare size complaint.
+        setPreview(null);
+        setError(compressed.reason);
+        clearPickers();
+        return;
+      }
+
+      // The post-compression file still has to satisfy the server cap; if it
+      // somehow does not, say so before spending an upload round trip.
+      const uploadError = validateImageSelection(compressed.file, "moment");
+      if (uploadError) {
+        setPreview(null);
+        setError(uploadError);
+        clearPickers();
+        return;
+      }
+
+      const formData = new FormData();
+      formData.set("media", compressed.file);
+      // The server still re-encodes with sharp (which is what actually strips
+      // EXIF, since a client can be bypassed) and still builds thumb/feed.
       const result = await uploadMomentMediaAction(formData);
       if (result.ok && result.mediaId) {
         setMediaId(result.mediaId);
@@ -120,8 +153,7 @@ export function MomentComposer({
         setPreview(null);
         setError(result.message);
       }
-      if (fileRef.current) fileRef.current.value = "";
-      if (cameraRef.current) cameraRef.current.value = "";
+      clearPickers();
     });
   }
 
@@ -233,7 +265,7 @@ export function MomentComposer({
             </button>
             {isUploading ? (
               <p className="text-xs text-muted-foreground" role="status">
-                Preparing your photo…
+                Optimising your photo…
               </p>
             ) : null}
           </div>
@@ -389,24 +421,7 @@ export function MomentComposer({
                   {isSpotlight ? <Check className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" /> : null}
                 </button>
 
-                {showUpgrade ? (
-                  <div className="mt-2 rounded-xl border border-orange-400/25 bg-orange-400/10 p-3">
-                    <p className="flex items-start gap-2 text-xs font-semibold text-orange-800 dark:text-orange-100">
-                      <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                      Share publicly with Spotlight
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-orange-800/80 dark:text-orange-100/80">
-                      Reach people across Mad Buddy and grow your Tune In audience. Everything else in Moments stays
-                      exactly as it is.
-                    </p>
-                    <Link
-                      href="/upgrade"
-                      className="focus-ring safe-motion mt-2 inline-flex min-h-9 items-center rounded-full bg-orange-500 px-3 text-xs font-semibold text-white hover:bg-orange-600"
-                    >
-                      See plans
-                    </Link>
-                  </div>
-                ) : null}
+                {showUpgrade ? <SpotlightUpgradeNote /> : null}
               </div>
             ) : null}
 
@@ -487,5 +502,48 @@ export function MomentComposer({
         ) : null}
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Explains WHY Spotlight is worth upgrading for, rather than just saying
+ * "Premium" and dropping the user on a plan page.
+ *
+ * The price comes from `spotlightUpgradeCopy()`, which reads the canonical
+ * display prices and the entitlement registry to work out which plan actually
+ * grants publishing and what the cheapest one costs. No price string, plan name
+ * or benefit is written here, so this component cannot drift from billing.
+ */
+function SpotlightUpgradeNote() {
+  const copy = spotlightUpgradeCopy();
+  return (
+    <div className="mt-2 rounded-xl border border-orange-400/25 bg-orange-400/10 p-3.5">
+      <p className="flex items-center gap-1.5 text-[0.625rem] font-bold uppercase tracking-[0.1em] text-orange-700 dark:text-orange-200">
+        <TuneInIcon className="h-3.5 w-3.5 shrink-0" />
+        Share on Spotlight
+      </p>
+      <p className="mt-1.5 text-sm font-semibold">Take your Moments beyond your Muddies.</p>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">{copy.body}</p>
+
+      {copy.benefits.length > 0 ? (
+        <ul className="mt-2.5 space-y-1">
+          {copy.benefits.map((benefit) => (
+            <li key={benefit} className="flex items-start gap-1.5 text-xs">
+              <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" aria-hidden="true" />
+              <span className="min-w-0">{benefit}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      <Link
+        href="/upgrade"
+        prefetch={false}
+        className="focus-ring safe-motion mt-3 inline-flex min-h-10 items-center rounded-full bg-orange-500 px-4 text-sm font-semibold text-white hover:bg-orange-600"
+      >
+        {copy.cta}
+      </Link>
+      {copy.priceNote ? <p className="mt-1.5 text-[0.6875rem] text-muted-foreground">{copy.priceNote}</p> : null}
+    </div>
   );
 }

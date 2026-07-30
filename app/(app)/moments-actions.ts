@@ -5,6 +5,7 @@ import {
   buildMomentFeed,
   buildSpotlightFeed,
   hideContentForUser,
+  loadCreatorSpotlightMoments,
   loadMomentsCreatorHub,
   loadMyTuneIns,
   queueMediaDeletion,
@@ -948,4 +949,17 @@ export async function getMomentsCreatorHubAction(creatorId: string) {
   const userId = await getAuthedUserId();
   if (!userId) return null;
   return loadMomentsCreatorHub(createSupabaseAdminClient(), userId, creatorId);
+}
+
+/**
+ * A creator's live Spotlight Moments, for the Tuned In viewing lane. Authorized
+ * through the same Spotlight feed everything else uses.
+ */
+export async function getCreatorSpotlightMomentsAction(creatorId: string) {
+  const env = getSupabaseServerEnv();
+  if (!env.url || !env.serviceRoleKey) return [];
+  if (!uuidSchema.safeParse(creatorId).success) return [];
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+  return loadCreatorSpotlightMoments(createSupabaseAdminClient(), userId, creatorId);
 }

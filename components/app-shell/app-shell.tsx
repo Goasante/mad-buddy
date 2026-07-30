@@ -33,6 +33,7 @@ import { LiveSignalToast } from "@/components/notifications/live-signal-toast";
 import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { PullToRefresh } from "@/components/ui/pull-to-refresh";
 import { cn } from "@/lib/utils";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import type { ResolvedWallpaper } from "@/lib/wallpapers/catalog";
@@ -284,7 +285,12 @@ export function AppShell({
             hasGlobalHeader ? "pt-[var(--app-header-height)]" : "pt-[env(safe-area-inset-top,0px)]"
           )}
         >
-          <div className="mx-auto w-full max-w-[1200px]">{children}</div>
+          {/* One pull-to-refresh for the whole authenticated app, mounted here
+              rather than repeated per page. It re-runs the server render and
+              notifies any page that keeps canonical data in client state. */}
+          <PullToRefresh>
+            <div className="mx-auto w-full max-w-[1200px]">{children}</div>
+          </PullToRefresh>
         </main>
         </div>
       </div>

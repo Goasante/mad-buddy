@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { PlanId } from "@/components/premium/plans";
+import type { PlanId } from "@/lib/billing/pricing";
 import { getSiteUrl } from "@/lib/seo";
 
 export type PaidPlanId = Exclude<PlanId, "free">;

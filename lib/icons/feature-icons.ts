@@ -29,7 +29,11 @@ export type FeatureIconSource = { src: string; label: string };
 export const FEATURE_ICON_SOURCES: Record<FeatureIconKey, FeatureIconSource> = {
   moments: { src: "/icons/features/moments.png", label: "Moments" },
   safeArrival: { src: "/icons/features/arrival.png", label: "Safe Arrival" },
-  hangout: { src: "/icons/features/hangout.png", label: "Hangout" },
+  // Two people linking up, replacing the previous glyph. Authored in-project as
+  // an SVG rather than pulled from another icon library; the mask rendering in
+  // FeatureIcon works identically for SVG and PNG, so nothing else changes and
+  // every Hangout surface picks it up from this one mapping.
+  hangout: { src: "/icons/features/hangout-linkup.svg", label: "Hangout" },
   events: { src: "/icons/features/event.png", label: "Events" },
   groups: { src: "/icons/features/group.png", label: "Groups" },
   socialize: { src: "/icons/features/socialize.png", label: "Socialize" },
@@ -51,7 +55,9 @@ export function featureIconSource(feature: FeatureIconKey): FeatureIconSource {
 export const FEATURE_ICON_CREDITS: { label: string; author: string; href: string }[] = [
   { label: "Gallery", author: "Azland Studio", href: "https://www.flaticon.com/free-icons/gallery" },
   { label: "Arrival Time", author: "I3oundless", href: "https://www.flaticon.com/free-icons/arrival-time" },
-  { label: "Hangout", author: "Mayor Icons", href: "https://www.flaticon.com/free-icons/hangout" },
+  // Hangout is no longer a Flaticon asset — it is the in-project
+  // hangout-linkup.svg — so its third-party credit is removed rather than left
+  // attributing an author whose work is not being used.
   { label: "Event", author: "Magnific", href: "https://www.flaticon.com/free-icons/event" },
   { label: "Members", author: "KP Arts", href: "https://www.flaticon.com/free-icons/members" },
   { label: "Social Media Management", author: "mia elysia", href: "https://www.flaticon.com/free-icons/social-media-management" },

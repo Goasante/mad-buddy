@@ -143,10 +143,16 @@ export function sniffVideoKind(bytes: Uint8Array): VideoKind | null {
 
 // Size caps by context (spec §40).
 export const MAX_UPLOAD_BYTES: Record<MediaContextType, number> = {
-  // These contexts currently upload through Server Actions. The profile limit
-  // leaves multipart headroom beneath the configured 6 MB request cap.
+  // These contexts currently upload through Server Actions. The limits leave
+  // multipart headroom beneath the configured 6 MB request cap.
+  //
+  // `moment` was 3 MB, which rejected ordinary phone-camera photos (routinely
+  // 4-12 MB) with "Use an image smaller than 3 MB". The cap is now 5 MB, still
+  // safely under the body limit, and the client downscales to ~1.6 MB before
+  // upload (see lib/media/client-compress.ts), so this is the hard SAFETY bound
+  // rather than the thing users bump into.
   profile: 5 * 1024 * 1024,
-  moment: 3 * 1024 * 1024,
+  moment: 5 * 1024 * 1024,
   drop: 15 * 1024 * 1024,
   event: 15 * 1024 * 1024,
   plan: 15 * 1024 * 1024,
@@ -158,6 +164,47 @@ export const MAX_MOMENT_VIDEO_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 export function maxUploadBytesFor(context: MediaContextType): number {
   return MAX_UPLOAD_BYTES[context] ?? MAX_UPLOAD_BYTES.moment;
+}
+
+/**
+ * Validates a freshly PICKED file, before any client-side processing.
+ *
+ * Deliberately does NOT apply the upload byte cap: a large camera photo is
+ * perfectly acceptable input and gets downscaled before upload. Only the format
+ * and a generous sanity bound are checked here, so the size cap is enforced
+ * where it actually applies (post-compression, and again on the server).
+ */
+export function validateImageSource(
+  file: { size: number; type: string; name?: string },
+  context: MediaContextType,
+  maxSourceBytes: number
+): string | null {
+  if (file.size <= 0) return "Choose an image first.";
+  const formatError = imageFormatError(file, context);
+  if (formatError) return formatError;
+  if (file.size > maxSourceBytes) return "That image is unusually large. Choose another one.";
+  return null;
+}
+
+/** Shared format check for both the source and the post-compression checks. */
+function imageFormatError(
+  file: { type: string; name?: string },
+  context: MediaContextType
+): string | null {
+  const extension = file.name?.split(".").pop()?.toLowerCase();
+  const extensionKind =
+    extension === "jpg" || extension === "jpeg"
+      ? "jpg"
+      : extension === "png" || extension === "webp" || extension === "heic" || extension === "heif"
+        ? extension === "heif"
+          ? "heic"
+          : extension
+        : null;
+  const kind = kindForMimeType(file.type) ?? extensionKind;
+  if (!kind || (kind === "heic" && context !== "profile")) {
+    return "Upload a JPG, JPEG, PNG, WebP, or HEIC image.";
+  }
+  return null;
 }
 
 /** Fast browser-side feedback before a file is sent to the server. */

@@ -56,8 +56,15 @@ describe("feature icon mapping", () => {
 });
 
 describe("feature icon attribution", () => {
-  it("credits all twelve Flaticon sources with Flaticon links", () => {
-    expect(FEATURE_ICON_CREDITS).toHaveLength(12);
+  it("credits every Flaticon source it still uses, and only those", () => {
+    // Hangout is no longer a Flaticon asset (it is the in-project
+    // hangout-linkup.svg), so its credit was removed rather than left
+    // attributing an author whose work is not being used. The count follows the
+    // assets rather than being pinned to a number that has to be edited by hand.
+    const flaticonAssets = FEATURE_ICON_KEYS.filter(
+      (key) => !FEATURE_ICON_SOURCES[key].src.endsWith(".svg")
+    );
+    expect(FEATURE_ICON_CREDITS).toHaveLength(flaticonAssets.length);
     for (const credit of FEATURE_ICON_CREDITS) {
       expect(credit.author.length).toBeGreaterThan(0);
       expect(credit.href).toContain("flaticon.com");

@@ -1,6 +1,6 @@
 "use client";
 
-import { Flag, MoreHorizontal, Plus, Radio, Trash2, Users, X } from "lucide-react";
+import { Flag, MoreHorizontal, Plus, Trash2, Users, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -8,6 +8,7 @@ import {
   deleteMomentAction,
   getMomentFeedAction,
   getMomentsCreatorHubAction,
+  getCreatorSpotlightMomentsAction,
   getMyTuneInsAction,
   getOpenMomentFeedAction,
   reactToMomentAction,
@@ -18,6 +19,7 @@ import {
   tuneInAction,
   tuneOutAction
 } from "@/app/(app)/moments-actions";
+import { AppMenu } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,6 +39,14 @@ import {
   useMomentClock
 } from "@/components/content/moment-parts";
 import { MomentComposer, type MomentMuddyOption } from "@/components/content/moment-composer";
+import { TuneInIcon } from "@/components/content/tune-in-icon";
+import {
+  TunedInManageModal,
+  TunedInStrip,
+  TunedInViewer,
+  useTunedInLane
+} from "@/components/content/tuned-in-strip";
+import { usePullRefreshListener } from "@/components/ui/pull-to-refresh";
 
 /** Retained for the route's existing prop contract. */
 export type MomentAudienceOption = { id: string; name: string };
@@ -84,7 +94,7 @@ export function MomentsPage({
   const [reportFor, setReportFor] = useState<VisibleMoment | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [hub, setHub] = useState<MomentsCreatorHub | null>(null);
-  const [tuneInsOpen, setTuneInsOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const [myTuneIns, setMyTuneIns] = useState<TuneInEntry[]>([]);
   const [feedback, setFeedback] = useState("");
   const [authorFilter, setAuthorFilter] = useState<string | null>(null);
@@ -94,6 +104,10 @@ export function MomentsPage({
   const [seenIds, setSeenIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const feed = tab === "spotlight" ? spotlight : moments;
+
+  // This page holds its feeds in client state, so a server re-render alone will
+  // not update them. The shell owns the gesture; this just says what to reload.
+  usePullRefreshListener(() => refreshFeeds());
 
   useEffect(() => {
     if (!feedback) return;
@@ -143,6 +157,7 @@ export function MomentsPage({
       ]);
       setMoments(fresh);
       setSpotlight(freshSpotlight);
+      if (openMomentsEnabled) setMyTuneIns(await getMyTuneInsAction());
     });
   }
 
@@ -264,9 +279,27 @@ export function MomentsPage({
     });
   }
 
-  function openMyTuneIns() {
-    setTuneInsOpen(true);
+  const loadTuneIns = useCallback(() => {
     startTransition(async () => setMyTuneIns(await getMyTuneInsAction()));
+  }, []);
+
+  // Loaded when Spotlight is opened, so the strip reflects unviewed content
+  // without any polling.
+  useEffect(() => {
+    if (tab === "spotlight") loadTuneIns();
+  }, [tab, loadTuneIns]);
+
+  const fetchCreatorMoments = useCallback(
+    (creatorId: string) => getCreatorSpotlightMomentsAction(creatorId),
+    []
+  );
+  const viewerLane = useTunedInLane(fetchCreatorMoments);
+
+  function openTunedInCreator(entry: TuneInEntry) {
+    // Straight into their current Moment when there is one; the hub is only the
+    // fallback for a creator with nothing live.
+    if (entry.liveMomentCount > 0) viewerLane.open(myTuneIns, entry);
+    else openHub(entry.creatorId);
   }
 
   function selectTab(next: "moments" | "spotlight") {
@@ -283,12 +316,15 @@ export function MomentsPage({
           {openMomentsEnabled ? (
             <button
               type="button"
-              onClick={openMyTuneIns}
+              onClick={() => {
+                setManageOpen(true);
+                loadTuneIns();
+              }}
               aria-label="My Tuned In"
               title="My Tuned In"
               className="focus-ring safe-motion grid h-11 w-11 place-items-center rounded-full text-muted-foreground hover:bg-secondary"
             >
-              <Radio className="h-5 w-5" aria-hidden="true" />
+              <TuneInIcon className="h-5 w-5" />
             </button>
           ) : null}
           <Button type="button" size="sm" onClick={() => setComposerOpen(true)}>
@@ -373,7 +409,7 @@ export function MomentsPage({
                     priority={index === 0}
                     pending={isPending}
                     menuOpen={menuFor === moment.id}
-                    onToggleMenu={() => setMenuFor((current) => (current === moment.id ? null : moment.id))}
+                    onToggleMenu={(open) => setMenuFor(open ? moment.id : null)}
                     onSeen={markViewed}
                     onReact={(reaction) => react(moment, reaction)}
                     onRemoveReaction={() => unreact(moment)}
@@ -396,7 +432,14 @@ export function MomentsPage({
             </ul>
           )}
         </>
-      ) : shown.length === 0 ? (
+      ) : (
+        <>
+          <TunedInStrip
+            entries={myTuneIns}
+            onOpenCreator={openTunedInCreator}
+            onManage={() => setManageOpen(true)}
+          />
+          {shown.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-10 text-center">
           <p className="text-base font-semibold">Spotlight is quiet right now</p>
           <p className="max-w-xs text-sm text-muted-foreground">
@@ -413,7 +456,7 @@ export function MomentsPage({
                 priority={index === 0}
                 pending={isPending}
                 menuOpen={menuFor === moment.id}
-                onToggleMenu={() => setMenuFor((current) => (current === moment.id ? null : moment.id))}
+                onToggleMenu={(open) => setMenuFor(open ? moment.id : null)}
                 onSeen={markViewed}
                 onReact={(reaction) => react(moment, reaction)}
                 onRemoveReaction={() => unreact(moment)}
@@ -437,6 +480,8 @@ export function MomentsPage({
             </li>
           ))}
         </ul>
+          )}
+        </>
       )}
 
       <MomentComposer
@@ -462,7 +507,25 @@ export function MomentsPage({
         onTuneOut={handleTuneOut}
       />
 
-      <MyTuneInsModal open={tuneInsOpen} entries={myTuneIns} onOpenChange={setTuneInsOpen} onTuneOut={handleTuneOut} />
+      <TunedInManageModal
+        open={manageOpen}
+        entries={myTuneIns}
+        onOpenChange={setManageOpen}
+        onTuneOut={handleTuneOut}
+      />
+
+      {viewerLane.lane.length > 0 ? (
+        <TunedInViewer
+          lane={viewerLane.lane}
+          index={viewerLane.index}
+          pending={isPending}
+          onClose={viewerLane.close}
+          onIndexChange={viewerLane.setIndex}
+          onSeen={markViewed}
+          onReact={react}
+          onRemoveReaction={unreact}
+        />
+      ) : null}
 
       <ReportModal
         moment={reportFor}
@@ -515,7 +578,7 @@ type CardProps = {
   priority: boolean;
   pending: boolean;
   menuOpen: boolean;
-  onToggleMenu: () => void;
+  onToggleMenu: (open: boolean) => void;
   onSeen: (momentId: string, isAuthor: boolean) => void;
   onReact: (reaction: MomentReactionId) => void;
   onRemoveReaction: () => void;
@@ -603,6 +666,16 @@ function SpotlightCard(
   );
 }
 
+/**
+ * The overflow menu.
+ *
+ * Uses the shared `AppMenu` (Radix DropdownMenu) rather than a hand-rolled
+ * panel. The previous version was a plain absolutely-positioned div, which is
+ * exactly why tapping empty space left it open: nothing was listening for an
+ * outside press or Escape. Radix brings dismiss-on-outside-press,
+ * dismiss-on-Escape, focus return, arrow-key navigation and collision flipping,
+ * so this behaves like every other menu in the app instead of being a one-off.
+ */
 function MomentMenu({
   moment,
   menuOpen,
@@ -611,47 +684,42 @@ function MomentMenu({
   onDelete
 }: Pick<CardProps, "moment" | "menuOpen" | "onToggleMenu" | "onReport" | "onDelete">) {
   return (
-    <div className="relative shrink-0">
-      <button
-        type="button"
-        onClick={onToggleMenu}
-        aria-expanded={menuOpen}
-        aria-label="More options"
-        className="focus-ring safe-motion grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-secondary"
-      >
-        <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-      </button>
-      {menuOpen ? (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-20 mt-1 w-40 overflow-hidden rounded-xl border border-border bg-card/95 shadow-lg supports-[backdrop-filter]:bg-card/90"
+    <AppMenu
+      label="Moment options"
+      open={menuOpen}
+      onOpenChange={onToggleMenu}
+      items={
+        moment.isAuthor
+          ? [
+              {
+                id: "delete",
+                label: "Delete",
+                destructive: true,
+                icon: <Trash2 className="h-4 w-4" aria-hidden="true" />,
+                onSelect: onDelete
+              }
+            ]
+          : [
+              // Report and block are the EXISTING systems. Disapproval is
+              // moderation, never a negative reaction.
+              {
+                id: "report",
+                label: "Report",
+                icon: <Flag className="h-4 w-4" aria-hidden="true" />,
+                onSelect: onReport
+              }
+            ]
+      }
+      trigger={
+        <button
+          type="button"
+          aria-label="More options"
+          className="focus-ring safe-motion grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary"
         >
-          {moment.isAuthor ? (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={onDelete}
-              className="focus-ring safe-motion flex min-h-11 w-full items-center gap-2 px-3 text-left text-sm text-red-600 hover:bg-secondary dark:text-red-400"
-            >
-              <Trash2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-              Delete
-            </button>
-          ) : (
-            // Report and block are the EXISTING systems. Disapproval is
-            // moderation, never a negative reaction.
-            <button
-              type="button"
-              role="menuitem"
-              onClick={onReport}
-              className="focus-ring safe-motion flex min-h-11 w-full items-center gap-2 px-3 text-left text-sm hover:bg-secondary"
-            >
-              <Flag className="h-4 w-4 shrink-0" aria-hidden="true" />
-              Report
-            </button>
-          )}
-        </div>
-      ) : null}
-    </div>
+          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+        </button>
+      }
+    />
   );
 }
 
@@ -724,63 +792,6 @@ function CreatorHubModal({
           </p>
         </div>
       ) : null}
-    </Modal>
-  );
-}
-
-/** The viewer's own Tune In list. Visible to nobody else. */
-function MyTuneInsModal({
-  open,
-  entries,
-  onOpenChange,
-  onTuneOut
-}: {
-  open: boolean;
-  entries: TuneInEntry[];
-  onOpenChange: (open: boolean) => void;
-  onTuneOut: (creatorId: string) => Promise<boolean>;
-}) {
-  const [busy, setBusy] = useState<string | null>(null);
-  return (
-    <Modal
-      open={open}
-      onOpenChange={onOpenChange}
-      title="My Tuned In"
-      description="Only you can see this list."
-      variant="sheet"
-      compact
-    >
-      {entries.length === 0 ? (
-        <p className="py-4 text-center text-sm text-muted-foreground">
-          You haven&apos;t tuned in to anyone yet. Tune In from Spotlight to see more of what you like.
-        </p>
-      ) : (
-        <ul className="space-y-1.5">
-          {entries.map((entry) => (
-            <li
-              key={entry.creatorId}
-              className="flex items-center gap-3 rounded-xl border border-border/70 px-3 py-2.5"
-            >
-              <UserAvatar src={entry.avatarUrl} name={entry.name} size="sm" decorative />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">{entry.name}</span>
-              {/* No confirmation dialog: tuning out is low friction and
-                  reversible, and the creator is not notified either way. */}
-              <button
-                type="button"
-                disabled={busy === entry.creatorId}
-                onClick={async () => {
-                  setBusy(entry.creatorId);
-                  await onTuneOut(entry.creatorId);
-                  setBusy(null);
-                }}
-                className="focus-ring safe-motion shrink-0 rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground hover:bg-secondary"
-              >
-                Tune Out
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </Modal>
   );
 }

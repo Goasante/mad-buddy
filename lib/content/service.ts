@@ -497,6 +497,13 @@ export type TuneInEntry = {
   name: string;
   avatarUrl: string | null;
   tunedInAt: string;
+  /** Live Spotlight Moments from this creator that the viewer may see. */
+  liveMomentCount: number;
+  /**
+   * At least one live Moment the viewer has not opened. Drives the gentle signal
+   * animation, which is a CONTENT state rather than a notification.
+   */
+  hasUnviewed: boolean;
 };
 
 /**
@@ -504,7 +511,11 @@ export type TuneInEntry = {
  * on tune_ins is scoped to viewer_id, and there is deliberately no policy that
  * would let a creator read the rows pointing at them.
  */
-export async function loadMyTuneIns(admin: Admin, viewerId: string): Promise<TuneInEntry[]> {
+export async function loadMyTuneIns(
+  admin: Admin,
+  viewerId: string,
+  nowMs = Date.now()
+): Promise<TuneInEntry[]> {
   const { data: rows } = await admin
     .from("tune_ins")
     .select("creator_id, created_at")
@@ -513,21 +524,104 @@ export async function loadMyTuneIns(admin: Admin, viewerId: string): Promise<Tun
     .limit(200);
   if (!rows?.length) return [];
 
-  const { data: profiles } = await admin
-    .from("profiles")
-    .select("user_id, full_name, avatar_url")
-    .in(
-      "user_id",
-      rows.map((row) => row.creator_id)
-    );
+  const creatorIds = rows.map((row) => row.creator_id);
+  const nowIso = new Date(nowMs).toISOString();
+
+  // Four flat queries regardless of how many creators are tuned in: profiles,
+  // their live Spotlight Moments, this viewer's view rows, and blocks. No
+  // per-creator round trip.
+  const [{ data: profiles }, { data: liveMoments }, { data: blocks }] = await Promise.all([
+    admin.from("profiles").select("user_id, full_name, avatar_url, visibility_status").in("user_id", creatorIds),
+    admin
+      .from("moments")
+      .select("id, author_id")
+      .in("author_id", creatorIds)
+      .eq("audience_type", "public")
+      .eq("status", "active")
+      .gt("expires_at", nowIso),
+    admin
+      .from("blocked_users")
+      .select("blocker_id, blocked_id")
+      .or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`)
+  ]);
+
+  const momentIds = (liveMoments ?? []).map((row) => row.id);
+  const { data: myViews } = momentIds.length
+    ? await admin.from("moment_views").select("moment_id").eq("viewer_id", viewerId).in("moment_id", momentIds)
+    : { data: [] as { moment_id: string }[] };
+
+  const blockedIds = new Set(
+    (blocks ?? []).map((row) => (row.blocker_id === viewerId ? row.blocked_id : row.blocker_id))
+  );
+  const viewedIds = new Set((myViews ?? []).map((row) => row.moment_id));
   const byId = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
 
-  return rows.map((row) => ({
-    creatorId: row.creator_id,
-    name: byId.get(row.creator_id)?.full_name?.trim() || "A Muddy",
-    avatarUrl: byId.get(row.creator_id)?.avatar_url ?? null,
-    tunedInAt: row.created_at
-  }));
+  const liveByCreator = new Map<string, { total: number; unviewed: number }>();
+  for (const moment of liveMoments ?? []) {
+    // A ghosting author's Moments are not shown, matching the feed's own rule.
+    if (byId.get(moment.author_id)?.visibility_status === "ghost") continue;
+    const entry = liveByCreator.get(moment.author_id) ?? { total: 0, unviewed: 0 };
+    entry.total += 1;
+    if (!viewedIds.has(moment.id)) entry.unviewed += 1;
+    liveByCreator.set(moment.author_id, entry);
+  }
+
+  return rows
+    .filter((row) => !blockedIds.has(row.creator_id))
+    .map((row) => {
+      const live = liveByCreator.get(row.creator_id);
+      return {
+        creatorId: row.creator_id,
+        name: byId.get(row.creator_id)?.full_name?.trim() || "A Muddy",
+        avatarUrl: byId.get(row.creator_id)?.avatar_url ?? null,
+        tunedInAt: row.created_at,
+        liveMomentCount: live?.total ?? 0,
+        hasUnviewed: (live?.unviewed ?? 0) > 0
+      };
+    })
+    // Unviewed content first, then creators with live-but-seen Moments, then
+    // everyone else — so new content is never something the user has to hunt for.
+    .sort((a, b) => {
+      if (a.hasUnviewed !== b.hasUnviewed) return a.hasUnviewed ? -1 : 1;
+      if ((a.liveMomentCount > 0) !== (b.liveMomentCount > 0)) return a.liveMomentCount > 0 ? -1 : 1;
+      return Date.parse(b.tunedInAt) - Date.parse(a.tunedInAt);
+    });
+}
+
+/**
+ * A single creator's live Spotlight Moments, for the Tuned In viewing lane.
+ *
+ * Reuses the Spotlight feed rather than querying moments directly, so every
+ * authorization rule (feature flag, blocks, ghost mode, report-and-hide, expiry)
+ * applies identically and cannot drift. Unviewed Moments come first so tapping a
+ * creator with something new opens the new thing.
+ */
+export async function loadCreatorSpotlightMoments(
+  admin: Admin,
+  viewerId: string,
+  creatorId: string,
+  nowMs = Date.now()
+): Promise<VisibleMoment[]> {
+  const feed = await buildSpotlightFeed(admin, viewerId, nowMs);
+  const mine = feed.filter((moment) => moment.authorId === creatorId);
+  if (mine.length === 0) return [];
+
+  const { data: myViews } = await admin
+    .from("moment_views")
+    .select("moment_id")
+    .eq("viewer_id", viewerId)
+    .in(
+      "moment_id",
+      mine.map((moment) => moment.id)
+    );
+  const viewedIds = new Set((myViews ?? []).map((row) => row.moment_id));
+
+  return [...mine].sort((a, b) => {
+    const aSeen = viewedIds.has(a.id);
+    const bSeen = viewedIds.has(b.id);
+    if (aSeen !== bSeen) return aSeen ? 1 : -1;
+    return Date.parse(b.createdAt) - Date.parse(a.createdAt);
+  });
 }
 
 export type MomentsCreatorHub = {

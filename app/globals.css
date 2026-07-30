@@ -350,6 +350,29 @@
   .journey-rail-dot { transition: none; }
 }
 
+/* Pull-to-refresh spinner. One slow rotation, and nothing at all under
+ * prefers-reduced-motion — the arc's fill state already communicates progress. */
+.pull-refresh-spin { animation: pull-refresh-spin 900ms linear infinite; }
+@keyframes pull-refresh-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pull-refresh-spin { animation: none; }
+}
+
+/* Tune In new-content signal: a slow outward breath on the avatar ring, saying
+ * "there is something new here". A CONTENT state, not a notification, so it is
+ * deliberately gentle and never flashes. */
+.tune-in-live { animation: tune-in-live 2.8s ease-in-out infinite; }
+@keyframes tune-in-live {
+  0%, 100% { opacity: 0.55; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Static and fully visible: the indicator still reads without motion. */
+  .tune-in-live { animation: none; opacity: 1; transform: none; }
+}
+
 /* ---------------------------------------------------------------------------
  * Moments: temporary-content ring.
  *

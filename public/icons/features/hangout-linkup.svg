@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!--
+    Hangout: two people linking up.
+
+    Two simplified figures leaning toward each other with their inner arms
+    joined by a link in the middle, which is the whole idea: meeting up and
+    doing something together, not waving at someone and not a safety shield.
+
+    Solid black on transparent because FeatureIcon draws these assets as a CSS
+    mask filled with currentColor, so only coverage matters, never colour. Shapes
+    are chunky and separated by clear gaps so it still reads at 16px, where thin
+    strokes would smear into one blob.
+  -->
+  <g fill="#000">
+    <!-- Left figure: head and a body angled toward the centre. -->
+    <circle cx="17" cy="15.5" r="7.5" />
+    <path d="M17 25.5c6.2 0 10.8 4.1 11.6 10.2l.9 6.8a3.2 3.2 0 0 1-3.2 3.6h-3.1l1.1 9.6a3.4 3.4 0 0 1-3.4 3.8h-7.8a3.4 3.4 0 0 1-3.4-3.8l1.6-13.9-3.7 4.6a3.3 3.3 0 0 1-5.2-4.1l4.6-6.6C9.4 27.9 12.8 25.5 17 25.5Z" />
+    <!-- Right figure: mirrored, so the pair reads as facing each other. -->
+    <circle cx="47" cy="15.5" r="7.5" />
+    <path d="M47 25.5c-6.2 0-10.8 4.1-11.6 10.2l-.9 6.8a3.2 3.2 0 0 0 3.2 3.6h3.1l-1.1 9.6a3.4 3.4 0 0 0 3.4 3.8h7.8a3.4 3.4 0 0 0 3.4-3.8l-1.6-13.9 3.7 4.6a3.3 3.3 0 0 0 5.2-4.1l-4.6-6.6C54.6 27.9 51.2 25.5 47 25.5Z" />
+    <!-- The link between them: the connection itself. -->
+    <rect x="27" y="33.5" width="10" height="6" rx="3" />
+  </g>
+</svg>
