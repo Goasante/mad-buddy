@@ -449,7 +449,7 @@ export function MessagesPageContent({
   const hasAnyConversations = uniqueConversations.length > 0;
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-[1200px] overflow-x-clip pt-6">
+    <div className="mx-auto w-full min-w-0 max-w-[1200px] pt-6">
       <header className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-3xl">
