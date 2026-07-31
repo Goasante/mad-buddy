@@ -533,8 +533,8 @@ export function MessagesPageContent({
           }
         />
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
-          <div className={cn("space-y-3", selectedId && "hidden lg:block")}>
+        <div className="grid min-w-0 gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
+          <div className={cn("min-w-0 space-y-3", selectedId && "hidden lg:block")}>
             <div className="relative">
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -714,7 +714,7 @@ export function MessagesPageContent({
 
           <div
             className={cn(
-              "flex h-[calc(100dvh-13rem)] max-h-[720px] min-h-[420px] flex-col rounded-2xl border border-border/70 bg-card/40",
+              "flex h-[calc(100dvh-13rem)] max-h-[720px] min-h-[420px] min-w-0 flex-col rounded-2xl border border-border/70 bg-card/40",
               !selectedId && "hidden lg:flex"
             )}
           >
