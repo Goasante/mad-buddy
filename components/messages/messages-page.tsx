@@ -1,7 +1,23 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarCheck2, ChevronLeft, Info, MessagesSquare, PenSquare, Plus, Search, Send, Star, UsersRound, VolumeX, X } from "lucide-react";
+import {
+  CalendarCheck2,
+  ChevronLeft,
+  Clock3,
+  Info,
+  MapPin,
+  MessagesSquare,
+  PenSquare,
+  Plus,
+  Search,
+  Send,
+  Star,
+  UsersRound,
+  Volume2,
+  VolumeX,
+  X
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -74,6 +90,63 @@ function messageFailure(error: unknown) {
     : "Messages could not be updated. Try again.";
 }
 
+const MESSAGE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit"
+});
+
+const MESSAGE_DAY_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric"
+});
+
+function startOfLocalDay(value: Date) {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
+}
+
+function formatMessageTime(createdAt: string) {
+  return MESSAGE_TIME_FORMATTER.format(new Date(createdAt));
+}
+
+function formatMessageDayLabel(createdAt: string) {
+  const now = new Date();
+  const messageDate = new Date(createdAt);
+  const dayDiff = Math.round((startOfLocalDay(now) - startOfLocalDay(messageDate)) / (24 * 60 * 60 * 1000));
+  if (dayDiff === 0) return "Today";
+  if (dayDiff === 1) return "Yesterday";
+  return MESSAGE_DAY_FORMATTER.format(messageDate);
+}
+
+function isSameMessageDay(previous: ChatMessageView | null, current: ChatMessageView) {
+  if (!previous) return false;
+  const previousDate = new Date(previous.createdAt);
+  const currentDate = new Date(current.createdAt);
+  return startOfLocalDay(previousDate) === startOfLocalDay(currentDate);
+}
+
+function isGroupedMessage(previous: ChatMessageView | null, current: ChatMessageView) {
+  if (!previous || previous.messageType === "system" || current.messageType === "system") return false;
+  if (previous.senderId !== current.senderId) return false;
+  if (previous.isMine !== current.isMine) return false;
+  const previousDate = new Date(previous.createdAt).getTime();
+  const currentDate = new Date(current.createdAt).getTime();
+  return isSameMessageDay(previous, current) && currentDate - previousDate <= 10 * 60 * 1000;
+}
+
+function quickReplyMeta(actionId: string): { icon: LucideIcon; className: string } {
+  switch (actionId) {
+    case "on_my_way":
+      return { icon: Send, className: "text-primary" };
+    case "im_here":
+      return { icon: MapPin, className: "text-primary" };
+    case "running_late":
+      return { icon: Clock3, className: "text-primary" };
+    default:
+      return { icon: Send, className: "text-muted-foreground" };
+  }
+}
+
 export function MessagesPageContent({
   initialConversations = []
 }: {
@@ -105,6 +178,8 @@ export function MessagesPageContent({
   const [pinPickerOpen, setPinPickerOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const loadRequestIdRef = useRef(0);
+  const messageListRef = useRef<HTMLDivElement>(null);
+  const stayAtLatestRef = useRef(true);
 
   const loadConversation = useCallback(async (conversationId: string) => {
     const requestId = ++loadRequestIdRef.current;
@@ -220,6 +295,17 @@ export function MessagesPageContent({
   }, [uniqueConversations]);
 
   const selected = uniqueConversations.find((conversation) => conversation.id === selectedId) ?? null;
+  const latestMessageId = messages.at(-1)?.id ?? null;
+
+  useEffect(() => {
+    if (!selectedId || loadingMessages || !stayAtLatestRef.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      const list = messageListRef.current;
+      if (!list) return;
+      list.scrollTop = list.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [latestMessageId, loadingMessages, selectedId]);
 
   useEffect(() => {
     if (
@@ -335,6 +421,7 @@ export function MessagesPageContent({
    * lives in the handler. Loads the thread, then marks it read.
    */
   function openConversation(conversationId: string) {
+    stayAtLatestRef.current = true;
     setSelectedId(conversationId);
     setMessages([]);
     void loadConversation(conversationId);
@@ -347,6 +434,7 @@ export function MessagesPageContent({
 
     // Idempotency key: a retry can never create a second message (spec §7).
     const clientMessageId = crypto.randomUUID();
+    stayAtLatestRef.current = true;
     setDraft("");
     startTransition(async () => {
       try {
@@ -449,20 +537,22 @@ export function MessagesPageContent({
   const hasAnyConversations = uniqueConversations.length > 0;
 
   return (
-    <div className="mx-auto max-w-[1200px] pt-6">
-      <header className="mb-4 flex items-start justify-between gap-3">
+    <div className="mx-auto max-w-[1280px] px-4 pb-6 pt-5 sm:px-6 lg:px-8">
+      <header className="mb-5 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-            <MessagesSquare className="h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
+          <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight text-foreground sm:text-[2.2rem]">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-orange-400/25 bg-orange-500/10 text-orange-400 shadow-[0_0_0_1px_rgba(249,115,22,0.08)]">
+              <MessagesSquare className="h-5 w-5" aria-hidden="true" />
+            </span>
             Messages
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">Chat privately with your approved Muddies.</p>
+          <p className="mt-1 text-sm text-muted-foreground sm:text-[0.98rem]">Chat privately with your approved Muddies.</p>
         </div>
         <Button
           type="button"
           variant="outline"
           size="icon"
-          className="shrink-0 rounded-full"
+          className="safe-motion shrink-0 rounded-full border-orange-400/20 bg-orange-500/10 text-orange-400 hover:bg-orange-500/15 hover:text-orange-300"
           onClick={() => setNewMessageOpen(true)}
           aria-label="New message"
           title="New message"
@@ -482,7 +572,7 @@ export function MessagesPageContent({
         // right panel until there's something for them to operate on.
         <EmptyState
           icon={MessagesSquare}
-          className="!min-h-0 mx-auto max-w-md !shadow-none py-4"
+          className="mx-auto max-w-md !min-h-0 !shadow-none py-4"
           title="No conversations yet"
           description="Message an approved Muddy to start one."
           action={
@@ -493,8 +583,8 @@ export function MessagesPageContent({
           }
         />
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
-          <div className={cn("space-y-3", selectedId && "hidden lg:block")}>
+        <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
+          <div className={cn("space-y-3", selectedId && "hidden xl:block")}>
             <div className="relative">
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -674,8 +764,8 @@ export function MessagesPageContent({
 
           <div
             className={cn(
-              "flex h-[calc(100dvh-13rem)] max-h-[720px] min-h-[420px] flex-col rounded-2xl border border-border/70 bg-card/40",
-              !selectedId && "hidden lg:flex"
+              "-mx-4 flex h-[calc(100dvh-13rem)] min-h-0 flex-col overflow-hidden border-y border-border/60 bg-background/35 shadow-[0_18px_48px_rgba(0,0,0,0.12)] backdrop-blur-[2px] sm:mx-0 sm:rounded-[1.75rem] sm:border xl:h-[calc(100dvh-9.5rem)] xl:min-h-[34rem] xl:max-h-[780px]",
+              !selectedId && "hidden xl:flex"
             )}
           >
             {!selected ? (
@@ -689,27 +779,34 @@ export function MessagesPageContent({
               </div>
             ) : (
               <div className="flex min-h-0 flex-1 flex-col">
-                <div className="flex min-h-[68px] items-center gap-2 border-b border-border/70 px-3">
+                <div className="flex min-h-[76px] items-center gap-2.5 border-b border-border/50 bg-background/60 px-3 py-2.5 backdrop-blur-md sm:gap-3 sm:px-4">
                   <button
                     type="button"
                     onClick={() => setSelectedId(null)}
                     aria-label="Back to conversations"
                     title="Back to conversations"
-                    className="focus-ring safe-motion -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground lg:hidden"
+                    className="focus-ring safe-motion -ml-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary/80 hover:text-foreground xl:hidden"
                   >
-                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                    <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                   </button>
-                  <GlowAvatar name={selected.title} src={selected.avatarUrl} size="sm" />
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{selected.title}</span>
+                  <GlowAvatar name={selected.title} src={selected.avatarUrl} size="lg" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-base font-semibold leading-tight sm:text-lg">{selected.title}</span>
+                    {selected.otherUsername || selected.contextBadge ? (
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                        {selected.otherUsername ? `@${selected.otherUsername}` : selected.contextBadge}
+                      </span>
+                    ) : null}
+                  </span>
                   <Popover.Root open={infoOpen} onOpenChange={setInfoOpen}>
                     <Popover.Trigger asChild>
                       <button
                         type="button"
                         aria-label="Message information"
                         title="Message information"
-                        className="focus-ring safe-motion grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        className="focus-ring safe-motion grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border/60 bg-background/60 text-muted-foreground hover:bg-secondary hover:text-foreground"
                       >
-                        <Info className="h-4 w-4" aria-hidden="true" />
+                        <Info className="h-5 w-5" aria-hidden="true" />
                       </button>
                     </Popover.Trigger>
                     <Popover.Portal>
@@ -732,170 +829,208 @@ export function MessagesPageContent({
                     disabled={isPending}
                     aria-label={selected.muted ? "Unmute conversation" : "Mute conversation"}
                     title={selected.muted ? "Unmute conversation" : "Mute conversation"}
-                    className="focus-ring safe-motion grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
+                    className="focus-ring safe-motion grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border/60 bg-background/60 text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
                   >
-                    <VolumeX className="h-4 w-4" aria-hidden="true" />
+                    {selected.muted ? <VolumeX className="h-5 w-5" aria-hidden="true" /> : <Volume2 className="h-5 w-5" aria-hidden="true" />}
                   </button>
                 </div>
-
-                <div className="flex-1 space-y-2 overflow-y-auto p-3">
+                <div
+                  ref={messageListRef}
+                  onScroll={(event) => {
+                    const list = event.currentTarget;
+                    stayAtLatestRef.current =
+                      list.scrollHeight - list.scrollTop - list.clientHeight < 96;
+                  }}
+                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background/10 px-3 py-4 sm:px-5"
+                  aria-label={`Conversation with ${selected.title}`}
+                  aria-live="polite"
+                >
                   {loadingMessages ? (
-                    <p className="text-center text-xs text-muted-foreground">Loading…</p>
+                    <div className="space-y-3" aria-label="Loading messages" role="status">
+                      <span className="sr-only">Loading messages</span>
+                      <div className="h-14 w-2/5 rounded-[1.35rem] rounded-bl-md bg-secondary/70 motion-safe:animate-pulse" />
+                      <div className="ml-auto h-16 w-3/5 rounded-[1.35rem] rounded-br-md bg-primary/25 motion-safe:animate-pulse" />
+                      <div className="h-12 w-1/3 rounded-[1.35rem] rounded-bl-md bg-secondary/70 motion-safe:animate-pulse" />
+                    </div>
                   ) : messages.length === 0 ? (
-                    <div className="flex h-full flex-col items-center justify-center text-center">
-                      <p className="text-sm font-semibold">Start the conversation</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Send a message to {selected.title}.</p>
+                    <div className="flex h-full min-h-40 flex-col items-center justify-center px-6 text-center">
+                      <span className="grid h-12 w-12 place-items-center rounded-full bg-secondary/80 text-primary">
+                        <MessagesSquare className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <p className="mt-3 text-sm font-semibold">No messages yet</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Say hi to {selected.title}.</p>
                     </div>
                   ) : (
-                    messages.map((message) =>
-                      message.messageType === "system" ? (
-                        <p key={message.id} className="py-1 text-center text-xs text-muted-foreground">
-                          {message.text}
-                        </p>
-                      ) : (
-                        <div
-                          key={message.id}
-                          className={cn("group flex", message.isMine ? "justify-end" : "justify-start")}
-                        >
-                          <div className={cn("max-w-[75%]", message.isMine && "flex flex-col items-end")}>
-                            <div
-                              className={cn(
-                                "rounded-2xl px-3 py-2",
-                                message.isMine ? "bg-primary text-white" : "bg-secondary"
-                              )}
-                            >
-                              {editingId === message.id ? (
-                                <form
-                                  className="flex items-center gap-1.5"
-                                  onSubmit={(event) => {
-                                    event.preventDefault();
-                                    saveEdit(message.id);
-                                  }}
-                                >
-                                  <Input
-                                    value={editDraft}
-                                    maxLength={2000}
-                                    autoFocus
-                                    onChange={(event) => setEditDraft(event.target.value)}
-                                    aria-label="Edit message"
-                                    className="h-7 bg-white text-sm text-foreground"
-                                  />
-                                  <Button type="submit" size="sm" disabled={!editDraft.trim() || isPending}>
-                                    Save
-                                  </Button>
-                                  <Button type="button" variant="ghost" size="sm" onClick={() => setEditingId(null)}>
-                                    Cancel
-                                  </Button>
-                                </form>
-                              ) : (
-                                <p className={cn("text-sm", message.deleted && "italic opacity-70")}>
-                                  {message.deleted
-                                    ? DELETED_MESSAGE_PLACEHOLDER
-                                    : message.quickActionType
-                                      ? quickActionLabel(message.quickActionType)
-                                      : message.text}
-                                </p>
-                              )}
-                              <p
-                                className={cn(
-                                  "mt-0.5 text-[10px]",
-                                  message.isMine ? "text-white/70" : "text-muted-foreground"
-                                )}
-                              >
-                                {formatRelativeTime(message.createdAt)}
-                                {message.editedAt ? " · edited" : ""}
-                                {message.isMine ? ` · ${stateLabel(message.state)}` : ""}
-                              </p>
-                            </div>
+                    <>
+                      {messages.map((message, index) => {
+                        const previous = index > 0 ? messages[index - 1] : null;
+                        const showDay = !previous || !isSameMessageDay(previous, message);
+                        const grouped = isGroupedMessage(previous, message);
 
-                            {message.myReaction ? (
-                              <button
-                                type="button"
-                                onClick={() => react(message.id, message.myReaction as string)}
-                                title="Remove reaction"
-                                className="focus-ring -mt-1 w-fit rounded-full border border-border bg-card px-1.5 text-xs"
-                              >
-                                {reactionEmoji(message.myReaction)}
-                              </button>
-                            ) : null}
-
-                            {!message.deleted ? (
-                              <div
-                                className={cn(
-                                  "mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
-                                  message.isMine ? "justify-end" : "justify-start"
-                                )}
-                              >
-                                {reactingId === message.id ? (
-                                  REACTIONS.map((reaction) => (
-                                    <button
-                                      key={reaction.id}
-                                      type="button"
-                                      onClick={() => react(message.id, reaction.id)}
-                                      aria-label={`React with ${reaction.id}`}
-                                      className="focus-ring rounded px-0.5 text-sm hover:scale-110"
-                                    >
-                                      {reaction.emoji}
-                                    </button>
-                                  ))
-                                ) : (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => setReactingId(message.id)}
-                                      className="focus-ring rounded px-1 hover:text-foreground"
-                                    >
-                                      React
-                                    </button>
-                                    {message.isMine && message.messageType === "text" ? (
-                                      <>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setEditingId(message.id);
-                                            setEditDraft(message.text ?? "");
-                                          }}
-                                          className="focus-ring rounded px-1 hover:text-foreground"
-                                        >
-                                          Edit
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => remove(message.id)}
-                                          className="focus-ring rounded px-1 hover:text-destructive"
-                                        >
-                                          Delete
-                                        </button>
-                                      </>
-                                    ) : null}
-                                  </>
-                                )}
+                        return (
+                          <div key={message.id}>
+                            {showDay ? (
+                              <div className="py-4 text-center">
+                                <span className="inline-flex items-center rounded-full border border-white/8 bg-background/60 px-4 py-1 text-sm text-muted-foreground shadow-sm">
+                                  {formatMessageDayLabel(message.createdAt)}
+                                </span>
                               </div>
                             ) : null}
+                            {message.messageType === "system" ? (
+                              <p className="py-2 text-center text-xs text-muted-foreground">{message.text}</p>
+                            ) : (
+                              <div className={cn("group flex", message.isMine ? "justify-end" : "justify-start", grouped ? "mt-1" : "mt-3")}>
+                                <div className={cn("max-w-[84%] sm:max-w-[72%]", message.isMine && "flex flex-col items-end")}>
+                                  <div
+                                    className={cn(
+                                      "min-w-[4.5rem] rounded-[1.35rem] px-3.5 py-2.5 shadow-sm",
+                                      message.isMine
+                                        ? "rounded-br-md bg-primary text-primary-foreground"
+                                        : "rounded-bl-md border border-border/35 bg-secondary/90 text-secondary-foreground"
+                                    )}
+                                  >
+                                    {editingId === message.id ? (
+                                      <form
+                                        className="flex items-center gap-2"
+                                        onSubmit={(event) => {
+                                          event.preventDefault();
+                                          saveEdit(message.id);
+                                        }}
+                                      >
+                                        <Input
+                                          value={editDraft}
+                                          maxLength={2000}
+                                          autoFocus
+                                          onChange={(event) => setEditDraft(event.target.value)}
+                                          aria-label="Edit message"
+                                          className="h-9 bg-white text-sm text-foreground"
+                                        />
+                                        <Button type="submit" size="sm" disabled={!editDraft.trim() || isPending}>
+                                          Save
+                                        </Button>
+                                        <Button type="button" variant="ghost" size="sm" onClick={() => setEditingId(null)}>
+                                          Cancel
+                                        </Button>
+                                      </form>
+                                    ) : (
+                                      <p className={cn("whitespace-pre-wrap break-words text-[0.95rem] leading-relaxed", message.deleted && "italic opacity-70")}>
+                                        {message.deleted
+                                          ? DELETED_MESSAGE_PLACEHOLDER
+                                          : message.quickActionType
+                                            ? quickActionLabel(message.quickActionType)
+                                            : message.text}
+                                      </p>
+                                    )}
+                                    <p
+                                      className={cn(
+                                        "mt-1 text-[11px] leading-none",
+                                        message.isMine ? "text-primary-foreground/70" : "text-muted-foreground"
+                                      )}
+                                    >
+                                      {formatMessageTime(message.createdAt)}
+                                      {message.editedAt ? " • edited" : ""}
+                                      {message.isMine ? ` • ${stateLabel(message.state)}` : ""}
+                                    </p>
+                                  </div>
+
+                                  {message.myReaction ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => react(message.id, message.myReaction as string)}
+                                      title="Remove reaction"
+                                      className="focus-ring -mt-2 w-fit rounded-full border border-border/80 bg-card px-2 py-0.5 text-xs shadow-sm"
+                                    >
+                                      {reactionEmoji(message.myReaction)}
+                                    </button>
+                                  ) : null}
+
+                                  {!message.deleted ? (
+                                    <div
+                                      className={cn(
+                                        "mt-1 flex items-center gap-1 text-[11px] text-muted-foreground opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100",
+                                        message.isMine ? "justify-end" : "justify-start"
+                                      )}
+                                    >
+                                      {reactingId === message.id ? (
+                                        REACTIONS.map((reaction) => (
+                                          <button
+                                            key={reaction.id}
+                                            type="button"
+                                            onClick={() => react(message.id, reaction.id)}
+                                            aria-label={`React with ${reaction.id}`}
+                                            className="focus-ring grid min-h-8 min-w-8 place-items-center rounded-full text-sm hover:bg-secondary"
+                                          >
+                                            {reaction.emoji}
+                                          </button>
+                                        ))
+                                      ) : (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => setReactingId(message.id)}
+                                            className="focus-ring min-h-8 rounded-full px-2 hover:bg-secondary hover:text-foreground"
+                                          >
+                                            React
+                                          </button>
+                                          {message.isMine && message.messageType === "text" ? (
+                                            <>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setEditingId(message.id);
+                                                  setEditDraft(message.text ?? "");
+                                                }}
+                                                className="focus-ring min-h-8 rounded-full px-2 hover:bg-secondary hover:text-foreground"
+                                              >
+                                                Edit
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => remove(message.id)}
+                                                className="focus-ring min-h-8 rounded-full px-2 hover:bg-destructive/10 hover:text-destructive"
+                                              >
+                                                Delete
+                                              </button>
+                                            </>
+                                          ) : null}
+                                        </>
+                                      )}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      )
-                    )
+                        );
+                      })}
+                    </>
                   )}
                 </div>
 
                 {/* Quick coordination actions (spec §39), no location attached. */}
-                <div className="flex flex-wrap gap-1.5 border-t border-border/70 px-3 pt-2">
-                  {QUICK_ACTIONS.slice(0, 3).map((action) => (
-                    <button
-                      key={action.id}
-                      type="button"
-                      onClick={() => send("", action.id)}
-                      disabled={isPending}
-                      className="focus-ring safe-motion rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-secondary"
-                    >
-                      {action.label}
-                    </button>
-                  ))}
+                <div className="border-t border-border/40 bg-background/45 px-3 pb-2 pt-3 backdrop-blur-sm sm:px-4">
+                  <div className="no-scrollbar flex gap-2 overflow-x-auto">
+                    {QUICK_ACTIONS.slice(0, 3).map((action) => {
+                      const meta = quickReplyMeta(action.id);
+                      const Icon = meta.icon;
+                      return (
+                        <button
+                          key={action.id}
+                          type="button"
+                          onClick={() => send("", action.id)}
+                          disabled={isPending}
+                          className="focus-ring safe-motion inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3.5 py-2 text-sm font-medium text-foreground hover:border-primary/30 hover:bg-primary/10 hover:text-primary disabled:opacity-60"
+                        >
+                          <Icon className={cn("h-4 w-4", meta.className)} aria-hidden="true" />
+                          {action.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <form
-                  className="flex items-center gap-2 p-3"
+                  className="message-composer flex items-center gap-2 border-t border-border/40 bg-background/70 px-3 py-3 backdrop-blur-md sm:gap-3 sm:px-4"
                   onSubmit={(event) => {
                     event.preventDefault();
                     send(draft);
@@ -907,11 +1042,17 @@ export function MessagesPageContent({
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder={`Message ${selected.title}`}
                     aria-label={`Message ${selected.title}`}
-                    className="flex-1"
+                    className="h-12 min-w-0 flex-1 rounded-full border-border/70 bg-background/75 px-4 text-[0.98rem]"
                   />
-                  <Button type="submit" size="sm" disabled={!draft.trim() || isPending}>
-                    <Send className="h-4 w-4" aria-hidden="true" />
-                    Send
+                  <Button
+                    type="submit"
+                    size="icon"
+                    disabled={!draft.trim() || isPending}
+                    aria-label="Send message"
+                    title="Send message"
+                    className="focus-ring safe-motion grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_28px_hsl(var(--primary)/0.3)] hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    <Send className="h-5 w-5" aria-hidden="true" />
                   </Button>
                 </form>
               </div>
