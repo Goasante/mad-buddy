@@ -104,6 +104,19 @@ export function HelpCenterPage({ initialThreads = [] }: { initialThreads?: Suppo
         <h2 id="help-more-heading" className="text-xs font-semibold uppercase tracking-wide text-violet-500 dark:text-violet-300">
           Need more help?
         </h2>
+        <Link
+          href="/settings/walkthrough"
+          className="focus-ring safe-motion flex w-full items-center gap-3.5 rounded-2xl border border-border/70 bg-card/50 p-3.5 text-left hover:bg-secondary/40"
+        >
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+            <Rocket className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">Feature guides</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">Learn or replay any Mad Buddy feature.</span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </Link>
         <button
           type="button"
           onClick={() => setContactOpen(true)}

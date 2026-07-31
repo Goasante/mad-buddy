@@ -40,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { countActiveRequests } from "@/lib/social/hangout-requests";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
 import { withTimeout } from "@/lib/network/resilience";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import type {
   HangoutActivityType,
   HangoutAudienceType,
@@ -417,6 +418,7 @@ export function HangoutModePage({
       <div className="flex flex-col items-center text-center">
         <button
           type="button"
+          data-tour-id={TOUR_TARGET_IDS.HANGOUT_TOGGLE}
           onClick={openSetup}
           disabled={isPending}
           aria-label={isActive ? "Edit your Hangout Mode details" : "Set up Hangout Mode"}
@@ -456,7 +458,7 @@ export function HangoutModePage({
 
       {isActive && activeHangout ? (
         <>
-          <div className="text-center">
+          <div data-tour-id={TOUR_TARGET_IDS.HANGOUT_ACTIVE} className="text-center">
             <p className="text-xs font-semibold uppercase tracking-wide text-primary">I&apos;m open to</p>
             <p className="mt-1 flex items-center justify-center gap-2 text-2xl font-bold">
               {HANGOUT_ACTIVITY_LABELS[activeHangout.activityType] ?? "Anything"}
@@ -558,6 +560,7 @@ export function HangoutModePage({
 
           <Button
             type="button"
+            data-tour-id={TOUR_TARGET_IDS.HANGOUT_TOGGLE}
             disabled={isPending}
             onClick={openSetup}
             className="h-12 w-full rounded-full bg-gradient-to-r from-primary to-orange-500 text-base font-semibold text-white shadow-[0_10px_30px_hsl(var(--primary)/0.35)] hover:opacity-95"
@@ -585,7 +588,7 @@ export function HangoutModePage({
 
       {/* Muddies open right now — real feed; hidden when empty. */}
       {feed.length > 0 ? (
-        <section className="pt-1">
+        <section data-tour-id={TOUR_TARGET_IDS.HANGOUT_DISCOVERY} className="pt-1">
           <h2 className="mb-2 text-sm font-semibold">
             {feed.length} {feed.length === 1 ? "Muddy is" : "Muddies are"} open too
           </h2>

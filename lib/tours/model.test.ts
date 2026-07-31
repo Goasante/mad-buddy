@@ -157,9 +157,13 @@ describe("isEligibleForTour", () => {
   it("never re-offers a version the user already resolved", () => {
     // Completed, skipped and dismissed all mean "resolved" — this is the
     // guarantee that a tour does not reappear for the same version.
-    for (const status of ["completed", "skipped", "dismissed", "started"] as const) {
+    for (const status of ["completed", "skipped", "dismissed"] as const) {
       expect(isEligibleForTour(version(), subject(), done(status), NOW)).toBe(false);
     }
+  });
+
+  it("keeps an interrupted started version eligible so it can resume", () => {
+    expect(isEligibleForTour(version(), subject(), done("started"), NOW)).toBe(true);
   });
 
   it("re-opens the tour when a new version is published", () => {

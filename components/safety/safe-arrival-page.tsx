@@ -20,6 +20,7 @@ import { contactPeerSummary, EXTENSION_OPTIONS_MINUTES, gracePeriodEndMs } from 
 import type { SafeArrivalJourney, SafeArrivalWatcherOption } from "@/lib/safety/safe-arrival-service";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import {
   JourneyCountdown,
   JourneyMark,
@@ -240,7 +241,7 @@ function SafeArrivalHome({ onStart }: { onStart: () => void }) {
   const [howOpen, setHowOpen] = useState(false);
 
   return (
-    <div className="space-y-5">
+    <div data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_OVERVIEW} className="space-y-5">
       <header className="px-1 text-center">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Safe Arrival</h1>
         <p className="mx-auto mt-1.5 max-w-[16rem] text-sm text-muted-foreground">
@@ -267,7 +268,13 @@ function SafeArrivalHome({ onStart }: { onStart: () => void }) {
       </ul>
 
       <div className="space-y-2 px-1">
-        <Button type="button" size="lg" className="w-full" onClick={onStart}>
+        <Button
+          type="button"
+          size="lg"
+          className="w-full"
+          onClick={onStart}
+          data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_START}
+        >
           Start Safe Arrival
         </Button>
         <button
@@ -330,7 +337,7 @@ function ActiveJourneyView({
   const extraExtensions = EXTENSION_OPTIONS_MINUTES.filter((minutes) => minutes !== 10 && minutes !== 20);
 
   return (
-    <div className="space-y-4">
+    <div data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_ACTIVE} className="space-y-4">
       <JourneyHeader title="Safe Arrival" tone={tone} />
 
       <JourneyVisual tone={tone} className="min-h-[10rem]">
@@ -353,13 +360,15 @@ function ActiveJourneyView({
         </p>
       ) : null}
 
-      <ContactStrip
-        contacts={journey.contacts}
-        acceptedCount={journey.acceptedCount}
-        invitedCount={journey.invitedCount}
-        viewerIsTraveller
-        onOpenList={journey.contacts.length > 0 ? () => setWatcherListOpen(true) : undefined}
-      />
+      <div data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_WATCHERS}>
+        <ContactStrip
+          contacts={journey.contacts}
+          acceptedCount={journey.acceptedCount}
+          invitedCount={journey.invitedCount}
+          viewerIsTraveller
+          onOpenList={journey.contacts.length > 0 ? () => setWatcherListOpen(true) : undefined}
+        />
+      </div>
 
       <JourneyTimeline journey={journey} nowMs={nowMs} />
 
@@ -515,7 +524,7 @@ function WatcherJourneyView({
   const otherAccepted = journey.acceptedCount - (journey.myAcknowledgement === "accepted" ? 1 : 0);
 
   return (
-    <div className="space-y-4">
+    <div data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_OVERVIEW} className="space-y-4">
       <header className="px-1 text-center">
         <h1 className="text-xl font-semibold tracking-tight">Safe Arrival</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">Checking in on {firstName}</p>
@@ -605,7 +614,10 @@ function WatcherJourneyView({
       </div>
 
       {journey.myAcknowledgement === "invited" ? (
-        <div className="rounded-[1.25rem] border border-orange-400/25 bg-orange-400/10 p-4">
+        <div
+          data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_WATCHER_REQUEST}
+          className="rounded-[1.25rem] border border-orange-400/25 bg-orange-400/10 p-4"
+        >
           <p className="text-sm font-semibold">Can you check on {firstName}?</p>
           <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
             {firstName} wants you as a Safe Arrival contact. We&apos;ll let you know when they arrive or if they

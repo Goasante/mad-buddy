@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import type { EventGlowMuddyList } from "@/lib/events/types";
 import { cn } from "@/lib/utils";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 type EventTab = "upcoming" | "live" | "mine";
 
@@ -202,7 +203,7 @@ export function EventsPageContent({ initialEvents = [] }: { initialEvents?: Even
             Check in to see which Muddies are at the same event. Venue names only, never exact location.
           </p>
         </div>
-        <Button type="button" onClick={() => setCreateOpen(true)}>
+        <Button type="button" onClick={() => setCreateOpen(true)} data-tour-id={TOUR_TARGET_IDS.EVENTS_CREATE}>
           <CalendarPlus className="h-4 w-4" aria-hidden="true" />
           Create Event
         </Button>
@@ -214,7 +215,11 @@ export function EventsPageContent({ initialEvents = [] }: { initialEvents?: Even
         </p>
       ) : null}
 
-      <nav className="overflow-x-auto border-b border-border/70" aria-label="Events tabs">
+      <nav
+        data-tour-id={TOUR_TARGET_IDS.EVENTS_TABS}
+        className="overflow-x-auto border-b border-border/70"
+        aria-label="Events tabs"
+      >
         <div className="flex min-w-max gap-1">
           {eventTabs.map((tab) => (
             <button
@@ -235,7 +240,7 @@ export function EventsPageContent({ initialEvents = [] }: { initialEvents?: Even
       </nav>
 
       {visibleEvents.length > 0 ? (
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div data-tour-id={TOUR_TARGET_IDS.EVENTS_LIST} className="grid gap-3 lg:grid-cols-2">
           {visibleEvents.map((event) => (
             <EventCard
               key={event.id}
@@ -249,18 +254,20 @@ export function EventsPageContent({ initialEvents = [] }: { initialEvents?: Even
           ))}
         </div>
       ) : (
-        <EmptyState
-          icon={CalendarPlus}
-          className="!min-h-0 !shadow-none p-5"
-          title={activeTab === "mine" ? "You're not hosting anything yet" : "No events here yet"}
-          description="Create an event and Muddies who check in can find each other there."
-          action={
-            <Button type="button" onClick={() => setCreateOpen(true)}>
-              <CalendarPlus className="h-4 w-4" aria-hidden="true" />
-              Create Event
-            </Button>
-          }
-        />
+        <div data-tour-id={TOUR_TARGET_IDS.EVENTS_LIST}>
+          <EmptyState
+            icon={CalendarPlus}
+            className="!min-h-0 !shadow-none p-5"
+            title={activeTab === "mine" ? "You're not hosting anything yet" : "No events here yet"}
+            description="Create an event and Muddies who check in can find each other there."
+            action={
+              <Button type="button" onClick={() => setCreateOpen(true)}>
+                <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+                Create Event
+              </Button>
+            }
+          />
+        </div>
       )}
 
       <CreateEventModal open={createOpen} onOpenChange={setCreateOpen} pending={isPending} onCreate={createEvent} />
@@ -316,7 +323,7 @@ function EventCard({
         <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         Hosted by {event.hostName}
       </p>
-      <div className="mt-4 flex gap-2">
+      <div data-tour-id={TOUR_TARGET_IDS.EVENTS_ACTIONS} className="mt-4 flex gap-2">
         <Button type="button" variant="outline" className="flex-1" onClick={onView}>
           View
         </Button>

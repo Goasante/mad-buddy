@@ -63,6 +63,8 @@ export type ResolvedTour = {
   plan: SubscriptionPlan;
   /** Entitlements named by any step, keyed by entitlement key. */
   entitlements: Record<string, ResolvedEntitlement>;
+  /** Existing first-use outcome, shown in Feature Guides. */
+  progressStatus: TourProgressStatus | null;
 };
 
 function formatEntitlementValue(value: unknown): string {
@@ -259,8 +261,41 @@ function resolve(version: TourVersion, subject: TourSubject, progress: TourProgr
     steps,
     startIndex: resumeIndex(steps, progress),
     plan: subject.plan,
-    entitlements: resolveEntitlements(steps, subject.plan)
+    entitlements: resolveEntitlements(steps, subject.plan),
+    progressStatus: progress?.status ?? null
   };
+}
+
+/**
+ * Every unresolved published feature tour this user may encounter. The client
+ * host chooses from this already-authorised list using the current pathname.
+ * That keeps first-use triggering contextual without trusting the client to
+ * decide plan, flag, cohort, or completion eligibility.
+ */
+export async function getToursToOffer(userId: string): Promise<ResolvedTour[]> {
+  try {
+    const admin = createSupabaseAdminClient();
+    const subject = await loadSubject(admin, userId);
+    if (!subject) return [];
+
+    const [versions, progressByVersion] = await Promise.all([
+      loadPublishedVersions(admin),
+      loadProgress(admin, userId)
+    ]);
+    const nowMs = Date.now();
+
+    return versions
+      .filter((version) => version.kind === "feature")
+      .filter((version) => isEligibleForTour(version, subject, progressByVersion.get(version.id) ?? null, nowMs))
+      .sort((a, b) => {
+        const aTime = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+        const bTime = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+        return bTime - aTime;
+      })
+      .map((version) => resolve(version, subject, progressByVersion.get(version.id) ?? null));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -286,7 +321,7 @@ export async function getTourToOffer(userId: string): Promise<ResolvedTour | nul
     );
 
     const chosen = selectTourToOffer(eligible);
-    return chosen ? resolve(chosen, subject, null) : null;
+    return chosen ? resolve(chosen, subject, progressByVersion.get(chosen.id) ?? null) : null;
   } catch {
     // Feature education must never be able to break the app it explains.
     return null;
@@ -300,8 +335,13 @@ export async function getReplayableTours(userId: string): Promise<ResolvedTour[]
     const subject = await loadSubject(admin, userId);
     if (!subject) return [];
 
-    const versions = await loadPublishedVersions(admin);
-    return replayableTours(versions, subject, Date.now()).map((version) => resolve(version, subject, null));
+    const [versions, progressByVersion] = await Promise.all([
+      loadPublishedVersions(admin),
+      loadProgress(admin, userId)
+    ]);
+    return replayableTours(versions, subject, Date.now()).map((version) =>
+      resolve(version, subject, progressByVersion.get(version.id) ?? null)
+    );
   } catch {
     return [];
   }
@@ -329,19 +369,17 @@ export async function recordTourProgress(input: {
 
   try {
     const admin = createSupabaseAdminClient();
-    const terminal = input.status === "completed" || input.status === "skipped" || input.status === "dismissed";
-    const { error } = await admin.from("user_tour_progress").upsert(
-      {
-        user_id: input.userId,
-        tour_version_id: input.tourVersionId,
-        status: input.status,
-        current_step_key: input.currentStepKey ?? null,
-        completed_at: input.status === "completed" ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString()
-      },
-      { onConflict: "user_id,tour_version_id" }
-    );
+    const { data: persistedStatus, error } = await admin.rpc("record_user_tour_progress", {
+      p_user_id: input.userId,
+      p_tour_version_id: input.tourVersionId,
+      p_status: input.status,
+      p_current_step_key: input.currentStepKey ?? null
+    });
     if (error) return false;
+    // A terminal row is monotonic. If an older in-flight request arrived late,
+    // the RPC preserved the terminal state and we must not emit a contradictory
+    // funnel event for the rejected transition.
+    if (persistedStatus !== input.status) return true;
 
     const eventName =
       input.status === "completed"
@@ -356,10 +394,6 @@ export async function recordTourProgress(input: {
       resourceId: input.tourVersionId,
       featureKey: "tours"
     });
-    // `terminal` is intentionally unused beyond documenting intent: the unique
-    // (user_id, tour_version_id) row is what enforces "never offered again",
-    // regardless of which terminal status landed.
-    void terminal;
     return true;
   } catch {
     return false;

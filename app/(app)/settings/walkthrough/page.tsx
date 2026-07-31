@@ -8,8 +8,8 @@ export default async function WalkthroughPage() {
   const tours = user ? await getReplayableTours(user.id) : [];
 
   return (
-    <div className="mr-auto max-w-[560px] space-y-6 pt-6">
-      <SettingsSubHeader title="Replay app walkthrough" description="Take the Mad Buddy tour again." />
+    <div className="mr-auto max-w-[720px] space-y-6 pt-6">
+      <SettingsSubHeader title="Feature guides" description="Learn a feature for the first time or replay any guide." />
       <WalkthroughReplay
         tours={tours.map((tour) => ({
           tourVersionId: tour.tourVersionId,
@@ -17,7 +17,8 @@ export default async function WalkthroughPage() {
           title: tour.title,
           description: tour.description,
           version: tour.version,
-          stepCount: tour.steps.length
+          stepCount: tour.steps.length,
+          progressStatus: tour.progressStatus
         }))}
       />
     </div>

@@ -47,6 +47,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import { cn } from "@/lib/utils";
 import { fetchWithTimeout } from "@/lib/network/resilience";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 type FriendTab = "all" | "circles" | "close" | "requests" | "blocked";
 
@@ -415,7 +416,7 @@ export function FriendsPageContent({
     <div className="mx-auto w-full min-w-0 max-w-[1200px] space-y-4 overflow-x-clip pt-5">
       <header className="flex min-w-0 items-center justify-between gap-3">
         <p className="min-w-0 truncate text-sm text-muted-foreground">Your Muddies, all in one place.</p>
-        <Button type="button" size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAddOpen(true)}>
+        <Button data-tour-id={TOUR_TARGET_IDS.MUDDIES_ADD} type="button" size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAddOpen(true)}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           Add Muddy
         </Button>
@@ -423,7 +424,7 @@ export function FriendsPageContent({
 
       {/* Scrollable tab bar. The extra end padding + no-scrollbar utility stop
           the last tab (Blocked) from clipping on narrow screens. */}
-      <nav className="no-scrollbar -mx-4 max-w-[calc(100%+2rem)] overflow-x-auto border-b border-border/70 px-4 sm:mx-0 sm:max-w-full sm:px-0" aria-label="Muddies tabs">
+      <nav data-tour-id={TOUR_TARGET_IDS.MUDDIES_TABS} className="no-scrollbar -mx-4 max-w-[calc(100%+2rem)] overflow-x-auto border-b border-border/70 px-4 sm:mx-0 sm:max-w-full sm:px-0" aria-label="Muddies tabs">
         <div className="flex w-max gap-1 pr-4 sm:pr-0">
           {tabs.map((tab) => (
             <button
@@ -461,7 +462,7 @@ export function FriendsPageContent({
 
 
       {activeTab === "all" || activeTab === "close" || (activeTab === "circles" && activeCircleId) ? (
-        <div className="space-y-4">
+        <div data-tour-id={TOUR_TARGET_IDS.MUDDIES_LIST} className="space-y-4">
           <div className="flex items-center gap-2">
             <div className="relative min-w-0 flex-1 sm:max-w-sm">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -897,6 +898,7 @@ function MuddyRow({
     <li className="flex items-center gap-3 py-2.5">
       <button
         type="button"
+        data-tour-id={TOUR_TARGET_IDS.MUDDIES_PROFILE}
         onClick={onViewProfile}
         className="focus-ring safe-motion relative shrink-0 rounded-full"
         aria-label={`${user.displayName}, ${proximityLabels[level]}`}

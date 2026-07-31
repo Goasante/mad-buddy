@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
 import type { VisibilityMode, VisibilityStatus } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 type Circle = { id: string; name: string; icon: string | null };
 type Duration = "30m" | "1h" | "3h" | "until_hide";
@@ -99,7 +100,10 @@ export function GlowVisibilityPage({
   }
 
   return (
-    <div className="mr-auto max-w-[640px] space-y-6 pt-6">
+    <div
+      data-tour-id={TOUR_TARGET_IDS.GLOW_VISIBILITY_OVERVIEW}
+      className="mr-auto max-w-[640px] space-y-6 pt-6"
+    >
       <div className="flex items-center justify-between gap-3">
         <SettingsSubHeader title="Glow & Visibility" description="Control who can see you and for how long." />
       </div>
@@ -109,14 +113,21 @@ export function GlowVisibilityPage({
           <Sparkles className="h-4 w-4" aria-hidden="true" />
           {isPaused ? "Glow paused" : "Glow active"}
         </span>
-        <Button type="button" variant={isPaused ? "primary" : "outline"} size="sm" onClick={toggleGlow} disabled={isPending}>
+        <Button
+          type="button"
+          variant={isPaused ? "primary" : "outline"}
+          size="sm"
+          onClick={toggleGlow}
+          disabled={isPending}
+          data-tour-id={TOUR_TARGET_IDS.GLOW_VISIBILITY_TOGGLE}
+        >
           <Ghost className="h-4 w-4" aria-hidden="true" />
           {isPaused ? "Resume Glow" : "Pause Glow"}
         </Button>
       </div>
       {feedback ? <p className="text-sm text-muted-foreground" role="status">{feedback}</p> : null}
 
-      <section>
+      <section data-tour-id={TOUR_TARGET_IDS.GLOW_VISIBILITY_AUDIENCE}>
         <h2 className="mb-3 text-sm font-semibold">Who can see your Glow</h2>
         <div className="grid grid-cols-2 gap-3">
           {audienceOptions.map((option) => (
@@ -171,7 +182,7 @@ export function GlowVisibilityPage({
         </section>
       ) : null}
 
-      <section>
+      <section data-tour-id={TOUR_TARGET_IDS.GLOW_VISIBILITY_DURATION}>
         <h2 className="mb-3 text-sm font-semibold">For how long?</h2>
         <div className="flex flex-wrap gap-2">
           {durationOptions.map((option) => (

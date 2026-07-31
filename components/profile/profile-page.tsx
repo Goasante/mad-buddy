@@ -14,6 +14,7 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { validateImageSelection } from "@/lib/media/validation";
 import { cn } from "@/lib/utils";
 import type { VisibilityStatus } from "@/lib/supabase/database.types";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 type ProfilePageContentProps = {
   initialDisplayName: string;
@@ -219,7 +220,7 @@ export function ProfilePageContent({
   );
 
   return (
-    <div className="mx-auto w-full max-w-[520px] space-y-6 pb-4 pt-5">
+    <div data-tour-id={TOUR_TARGET_IDS.PROFILE_OVERVIEW} className="mx-auto w-full max-w-[520px] space-y-6 pb-4 pt-5">
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Profile</h1>
@@ -227,7 +228,14 @@ export function ProfilePageContent({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {!editing ? (
-            <Button type="button" variant="outline" onClick={beginEditing} aria-label="Edit profile" title="Edit profile">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={beginEditing}
+              aria-label="Edit profile"
+              title="Edit profile"
+              data-tour-id={TOUR_TARGET_IDS.PROFILE_EDIT}
+            >
               <Edit3 className="h-4 w-4" aria-hidden="true" />
               Edit profile
             </Button>
@@ -272,7 +280,7 @@ export function ProfilePageContent({
       ) : (
         <>
           {/* Identity — avatar with glow ring + camera, name, visibility, stats */}
-          <section className="flex flex-col items-center text-center">
+          <section data-tour-id={TOUR_TARGET_IDS.PROFILE_PHOTO} className="flex flex-col items-center text-center">
             <div className="relative">
               <span className="block rounded-full bg-gradient-to-br from-violet-500 via-fuchsia-500 to-primary p-1 shadow-[0_0_36px_hsl(var(--primary)/0.25)]">
                 <UserAvatar
@@ -358,7 +366,7 @@ export function ProfilePageContent({
           </section>
 
           {/* About */}
-          <section aria-labelledby="profile-about-heading">
+          <section data-tour-id={TOUR_TARGET_IDS.PROFILE_ABOUT} aria-labelledby="profile-about-heading">
             <h3 id="profile-about-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               About
             </h3>
@@ -381,7 +389,7 @@ export function ProfilePageContent({
           </section>
 
           {/* Privacy */}
-          <section aria-labelledby="profile-privacy-heading">
+          <section data-tour-id={TOUR_TARGET_IDS.PROFILE_PRIVACY} aria-labelledby="profile-privacy-heading">
             <h3 id="profile-privacy-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Privacy
             </h3>

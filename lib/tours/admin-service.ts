@@ -17,6 +17,7 @@ import {
   type TourFunnel,
   type ValidationIssue
 } from "@/lib/tours/admin-model";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -82,6 +83,11 @@ export async function collectKnownTargetIds(): Promise<string[]> {
         const text = await readFile(path, "utf8");
         for (const match of text.matchAll(/data-tour-id=["']([a-z0-9-]+)["']/g)) {
           found.add(match[1]);
+        }
+        // Canonical component usage, e.g. tourTarget(TOUR_TARGET_IDS.HOME_NEARBY).
+        for (const match of text.matchAll(/TOUR_TARGET_IDS\.([A-Z0-9_]+)/g)) {
+          const id = TOUR_TARGET_IDS[match[1] as keyof typeof TOUR_TARGET_IDS];
+          if (id) found.add(id);
         }
         // Route-derived ids, e.g. data-tour-id={`nav-${item.href.slice(1)}`}
         for (const match of text.matchAll(/data-tour-id=\{`([a-z-]+)-\$\{/g)) {

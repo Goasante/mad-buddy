@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { MANAGED_FEATURES } from "@/lib/features/feature-flags";
 import { isSafeInternalPath } from "@/lib/tours/admin-model";
-import { TOUR_ROUTES, TOUR_TARGETS, findRoute, findTarget, isKnownRoute, targetLabel } from "@/lib/tours/registry";
+import { TOUR_ROUTES, TOUR_TARGETS, TOUR_TARGET_IDS, findRoute, findTarget, isKnownRoute, targetLabel } from "@/lib/tours/registry";
 
 const ROOT = join(__dirname, "..", "..");
 
@@ -27,6 +27,10 @@ describe("tour target registry is honest about the real UI", () => {
   const templatePrefixes = new Set<string>();
   for (const text of sources) {
     for (const match of text.matchAll(/data-tour-id=["']([a-z0-9-]+)["']/g)) rendered.add(match[1]);
+    for (const match of text.matchAll(/TOUR_TARGET_IDS\.([A-Z0-9_]+)/g)) {
+      const id = TOUR_TARGET_IDS[match[1] as keyof typeof TOUR_TARGET_IDS];
+      if (id) rendered.add(id);
+    }
     // Route-derived ids, e.g. data-tour-id={`nav-${item.href.slice(1)}`}
     for (const match of text.matchAll(/data-tour-id=\{`([a-z-]+)-\$\{/g)) templatePrefixes.add(match[1]);
   }

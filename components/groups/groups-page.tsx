@@ -17,6 +17,7 @@ import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import type { GroupInvitation, GroupSummary, GroupsPageData } from "@/lib/groups/types";
 import { cn, formatRelativeTime } from "@/lib/utils";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 type GroupTab = "mine" | "discover" | "requests";
 
@@ -74,7 +75,7 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Groups</h1>
           <p className="mt-2 text-sm text-muted-foreground">Private spaces for conversations and shared plans.</p>
         </div>
-        <Button type="button" onClick={() => setCreateOpen(true)}>
+        <Button type="button" onClick={() => setCreateOpen(true)} data-tour-id={TOUR_TARGET_IDS.GROUPS_CREATE}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           Create group
         </Button>
@@ -82,7 +83,11 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
 
       {feedback ? <p className="rounded-xl bg-secondary/60 px-4 py-3 text-sm" role="status">{feedback}</p> : null}
 
-      <nav className="overflow-x-auto border-b border-border/70" aria-label="Groups tabs">
+      <nav
+        data-tour-id={TOUR_TARGET_IDS.GROUPS_TABS}
+        className="overflow-x-auto border-b border-border/70"
+        aria-label="Groups tabs"
+      >
         <div className="flex min-w-max gap-1">
           {groupTabs.map((tab) => (
             <button
@@ -120,7 +125,7 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
 
       {activeTab === "requests" ? (
         data.invitations.length > 0 ? (
-          <div className="space-y-3">
+          <div data-tour-id={TOUR_TARGET_IDS.GROUPS_INVITES} className="space-y-3">
             {data.invitations.map((invitation) => (
               <InvitationRow
                 key={invitation.id}
@@ -143,15 +148,17 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
             ))}
           </div>
         ) : (
-          <EmptyState
-            icon={Inbox}
-            className="!min-h-0 !shadow-none p-5"
-            title="No group invitations"
-            description="Invitations from approved Muddies will appear here."
-          />
+          <div data-tour-id={TOUR_TARGET_IDS.GROUPS_INVITES}>
+            <EmptyState
+              icon={Inbox}
+              className="!min-h-0 !shadow-none p-5"
+              title="No group invitations"
+              description="Invitations from approved Muddies will appear here."
+            />
+          </div>
         )
       ) : visibleGroups.length > 0 ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div data-tour-id={TOUR_TARGET_IDS.GROUPS_LIST} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {visibleGroups.map((group) => (
             <GroupCard
               key={group.id}
@@ -176,18 +183,20 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
           ))}
         </div>
       ) : (
-        <EmptyState
-          icon={activeTab === "discover" ? Search : Users2}
-          className="!min-h-0 !shadow-none p-5"
-          title={query ? "No matching groups" : activeTab === "discover" ? "No groups to discover" : "No groups yet"}
-          description={
-            query
-              ? "Try another search."
-              : activeTab === "discover"
-                ? "Discoverable groups created by approved Muddies will appear here."
-                : "Create a private group or accept an invitation to get started."
-          }
-        />
+        <div data-tour-id={TOUR_TARGET_IDS.GROUPS_LIST}>
+          <EmptyState
+            icon={activeTab === "discover" ? Search : Users2}
+            className="!min-h-0 !shadow-none p-5"
+            title={query ? "No matching groups" : activeTab === "discover" ? "No groups to discover" : "No groups yet"}
+            description={
+              query
+                ? "Try another search."
+                : activeTab === "discover"
+                  ? "Discoverable groups created by approved Muddies will appear here."
+                  : "Create a private group or accept an invitation to get started."
+            }
+          />
+        </div>
       )}
 
       <Modal

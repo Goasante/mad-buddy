@@ -29,6 +29,7 @@ import { QUICK_ACTIONS, quickActionLabel, DELETED_MESSAGE_PLACEHOLDER } from "@/
 import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 import { cn, formatRelativeTime } from "@/lib/utils";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 // "Groups" filters conversation_type === "group"; "Plans" filters
 // conversation_type === "plan" (the group chat attached to a specific Plan).
@@ -489,7 +490,7 @@ export function MessagesPageContent({
   const hasAnyConversations = uniqueConversations.length > 0;
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-[1200px] pt-6">
+    <div data-tour-id={TOUR_TARGET_IDS.MESSAGES_INBOX} className="mx-auto w-full min-w-0 max-w-[1200px] pt-6">
       <header className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -535,7 +536,7 @@ export function MessagesPageContent({
       ) : (
         <div className="grid min-w-0 gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
           <div className={cn("min-w-0 space-y-3", selectedId && "hidden lg:block")}>
-            <div className="relative">
+            <div data-tour-id={TOUR_TARGET_IDS.MESSAGES_SEARCH} className="relative">
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                 aria-hidden="true"
@@ -549,7 +550,11 @@ export function MessagesPageContent({
               />
             </div>
 
-            <nav className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4" aria-label="Message filters">
+            <nav
+              data-tour-id={TOUR_TARGET_IDS.MESSAGES_FILTERS}
+              className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4"
+              aria-label="Message filters"
+            >
               {tabs.map((tab) => {
                 const active = activeTab === tab.id;
                 const Icon = tab.icon;
@@ -581,7 +586,7 @@ export function MessagesPageContent({
 
             {/* Pinned strip — the user's pinned conversations, plus "Pin more". */}
             {pinnedConversations.length > 0 || unpinnedConversations.length > 0 ? (
-              <section aria-label="Pinned conversations">
+              <section data-tour-id={TOUR_TARGET_IDS.MESSAGES_PINNED} aria-label="Pinned conversations">
                 <div className="mb-1.5 flex items-center justify-between">
                   <h2 className="text-sm font-semibold">Pinned</h2>
                   {pinnedConversations.length > 0 ? (
@@ -646,7 +651,7 @@ export function MessagesPageContent({
                 Try another name or keyword.
               </p>
             ) : (
-              <ul className="space-y-1.5">
+              <ul data-tour-id={TOUR_TARGET_IDS.MESSAGES_CONVERSATIONS} className="space-y-1.5">
                 {visible.map((conversation) => {
                   const isSelected = selectedId === conversation.id;
                   const showUsername =
@@ -729,7 +734,10 @@ export function MessagesPageContent({
               </div>
             ) : (
               <div className="flex min-h-0 flex-1 flex-col">
-                <div className="flex min-h-[68px] items-center gap-2 border-b border-border/70 px-3">
+                <div
+                  data-tour-id={TOUR_TARGET_IDS.MESSAGES_CHAT_HEADER}
+                  className="flex min-h-[68px] items-center gap-2 border-b border-border/70 px-3"
+                >
                   <button
                     type="button"
                     onClick={closeConversation}
@@ -920,7 +928,10 @@ export function MessagesPageContent({
                 </div>
 
                 {/* Quick coordination actions (spec §39), no location attached. */}
-                <div className="flex flex-wrap gap-1.5 border-t border-border/70 px-3 pt-2">
+                <div
+                  data-tour-id={TOUR_TARGET_IDS.MESSAGES_QUICK_REPLIES}
+                  className="flex flex-wrap gap-1.5 border-t border-border/70 px-3 pt-2"
+                >
                   {QUICK_ACTIONS.slice(0, 3).map((action) => (
                     <button
                       key={action.id}
@@ -935,6 +946,7 @@ export function MessagesPageContent({
                 </div>
 
                 <form
+                  data-tour-id={TOUR_TARGET_IDS.MESSAGES_COMPOSER}
                   className="flex items-center gap-2 p-3"
                   onSubmit={(event) => {
                     event.preventDefault();

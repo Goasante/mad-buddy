@@ -8,6 +8,7 @@ import { pauseStreakAction, type EngagementOverview } from "@/app/(app)/engageme
 import { Button } from "@/components/ui/button";
 import { achievementIconPath } from "@/lib/achievements/achievement-catalog";
 import { cn } from "@/lib/utils";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 type BadgesTab = "achievements" | "streaks" | "recap";
 
@@ -75,7 +76,7 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
 
   return (
     <div className="mx-auto max-w-[1000px] space-y-6 pt-6">
-      <div>
+      <div data-tour-id={TOUR_TARGET_IDS.BADGES_OVERVIEW}>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Achievements & Recaps</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Private to you. Nothing here is ranked, compared, or shown to anyone else.
@@ -88,7 +89,7 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
         </p>
       ) : null}
 
-      <div className="flex gap-1 border-b border-border/70">
+      <div data-tour-id={TOUR_TARGET_IDS.BADGES_TABS} className="flex gap-1 border-b border-border/70">
         {tabs.map((item) => (
           <button
             key={item.id}
@@ -105,7 +106,7 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
       </div>
 
       {activeTab === "achievements" ? (
-        <div className="space-y-4">
+        <div data-tour-id={TOUR_TARGET_IDS.BADGES_LIST} className="space-y-4">
           <p className="text-sm text-muted-foreground">
             {earnedCount} of {overview.achievements.length} earned. Criteria are always visible, nothing is random.
           </p>

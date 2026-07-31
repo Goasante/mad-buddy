@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronRight, Eye, MessageCircle, ShieldCheck, UserRoundX } from "lucide-react";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 const privacyRows = [
   {
@@ -31,13 +32,22 @@ const privacyRows = [
 
 export function AccountPrivacyPage() {
   return (
-    <div className="mr-auto max-w-[680px] space-y-6 pt-6">
+    <div data-tour-id={TOUR_TARGET_IDS.PRIVACY_OVERVIEW} className="mr-auto max-w-[680px] space-y-6 pt-6">
       <SettingsSubHeader title="Account privacy" description="Manage the privacy controls that Mad Buddy currently enforces." />
       <nav className="divide-y divide-border/70 border-y border-border/70" aria-label="Privacy settings">
         {privacyRows.map((row) => (
           <Link
             key={row.href}
             href={row.href}
+            data-tour-id={
+              row.href === "/settings/glow-visibility"
+                ? TOUR_TARGET_IDS.PRIVACY_GLOW
+                : row.href === "/settings/communication"
+                  ? TOUR_TARGET_IDS.PRIVACY_MESSAGING
+                  : row.href === "/friends?tab=blocked"
+                    ? TOUR_TARGET_IDS.PRIVACY_BLOCKED
+                    : undefined
+            }
             className="focus-ring safe-motion flex min-h-[4.5rem] items-center gap-3 px-2 py-3 hover:bg-secondary/40"
           >
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">

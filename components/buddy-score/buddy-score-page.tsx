@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Activity, Award, CalendarCheck2, MessageSquare, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { BuddyScoreData } from "@/app/(app)/buddy-score-actions";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 const icons = [Users, CalendarCheck2, MessageSquare, Award, Activity];
 
@@ -10,7 +11,7 @@ export function BuddyScorePage({ score }: { score: BuddyScoreData }) {
   const circumference = 2 * Math.PI * 54;
   return (
     <div className="mx-auto max-w-[900px] space-y-6 pt-6">
-      <header>
+      <header data-tour-id={TOUR_TARGET_IDS.BUDDY_SCORE_OVERVIEW}>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Buddy Score</h1>
         <p className="mt-2 text-sm text-muted-foreground">A private summary of your real Mad Buddy activity.</p>
       </header>
@@ -25,7 +26,11 @@ export function BuddyScorePage({ score }: { score: BuddyScoreData }) {
           </div>
           <p className="mt-3 text-xs text-muted-foreground">Visible only to you</p>
         </section>
-        <section className="rounded-2xl border border-border/70 bg-card/50 p-4" aria-labelledby="score-breakdown-title">
+        <section
+          data-tour-id={TOUR_TARGET_IDS.BUDDY_SCORE_BREAKDOWN}
+          className="rounded-2xl border border-border/70 bg-card/50 p-4"
+          aria-labelledby="score-breakdown-title"
+        >
           <h2 id="score-breakdown-title" className="mb-3 text-sm font-semibold">Score breakdown</h2>
           <div className="space-y-3">
             {score.breakdown.map((item, index) => {

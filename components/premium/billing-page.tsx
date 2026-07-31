@@ -9,6 +9,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { SubscriptionPlan, SubscriptionStatus } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { planDisplayPrices } from "@/components/premium/plans";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 const planCards = [
   {
@@ -80,7 +81,10 @@ export async function BillingPageContent() {
 
   return (
     <div className="mr-auto w-full max-w-[clamp(64rem,82vw,92rem)] space-y-3 pt-3 sm:pt-4">
-      <section className="glass-panel overflow-hidden rounded-[1.25rem] p-0">
+      <section
+        data-tour-id={TOUR_TARGET_IDS.BILLING_OVERVIEW}
+        className="glass-panel overflow-hidden rounded-[1.25rem] p-0"
+      >
         <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-[clamp(1.2rem,1.5vw,1.5rem)] font-semibold tracking-tight">Billing</h1>
@@ -103,7 +107,11 @@ export async function BillingPageContent() {
             status={currentStatus}
             subscription={subscription}
           />
-          <section id="plans" className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <section
+            id="plans"
+            data-tour-id={TOUR_TARGET_IDS.BILLING_PLANS}
+            className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3"
+          >
             {planCards.map((plan) => (
               <PlanCard
                 key={plan.id}
@@ -115,7 +123,11 @@ export async function BillingPageContent() {
         </div>
       </section>
 
-      <section id="activity" className="glass-panel rounded-[1.25rem] p-4">
+      <section
+        id="activity"
+        data-tour-id={TOUR_TARGET_IDS.BILLING_ACTIVITY}
+        className="glass-panel rounded-[1.25rem] p-4"
+      >
         <div className="border-b border-border pb-3">
           <h2 className="text-lg font-semibold">Billing activity</h2>
           <p className="mt-1 text-xs text-muted-foreground">Paystack sync history.</p>

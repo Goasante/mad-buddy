@@ -38,6 +38,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PrivacyToggle } from "@/components/settings/privacy-toggle";
 import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { connectionResponsesFor } from "@/lib/meetups/connection-prompts";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import {
   resolveNotificationDestination,
   type NotificationDestination
@@ -445,7 +446,7 @@ export function NotificationsPageContent({
 
   return (
     <div className="mx-auto max-w-[1050px] space-y-4 pt-6">
-      <section>
+      <section data-tour-id={TOUR_TARGET_IDS.PULSE_OVERVIEW}>
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Pulse</h1>
           <div className="flex items-center gap-2">
@@ -608,7 +609,12 @@ export function NotificationsPageContent({
           </div>
         ) : (
           // Category chips (All / Nearby / Social / Plans / Safety), scrollable.
-          <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0" role="tablist" aria-label="Pulse filters">
+          <div
+            data-tour-id={TOUR_TARGET_IDS.PULSE_FILTERS}
+            className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
+            role="tablist"
+            aria-label="Pulse filters"
+          >
             {PULSE_CATEGORIES.map((option) => {
               const active = category === option.value;
               const Icon = option.icon;
@@ -634,7 +640,7 @@ export function NotificationsPageContent({
           </div>
         )}
 
-        <div>
+        <div data-tour-id={TOUR_TARGET_IDS.PULSE_LIST}>
           {visibleNotifications.length > 0 ? (
             <div className="space-y-5 pt-4">
               {notificationGroups.map((group) => (

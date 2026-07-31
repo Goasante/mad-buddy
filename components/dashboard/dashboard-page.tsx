@@ -55,6 +55,7 @@ import { type FreshnessState } from "@/lib/proximity/freshness";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import type { ActivityType, AvailabilityType, SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 type DashboardFriend = {
   friendId: string;
@@ -416,7 +417,7 @@ export function DashboardPageContent({
 
       {/* Visibility + status: one compact card, two labelled sections split by
           a divider, with the pause/refresh controls on the right. */}
-      <div className="rounded-2xl border border-border/70 bg-card/50 dark:bg-white/[0.035]">
+      <div data-tour-id={TOUR_TARGET_IDS.HOME_VISIBILITY} className="rounded-2xl border border-border/70 bg-card/50 dark:bg-white/[0.035]">
         <div className="flex items-center">
           {/* Visibility */}
           <div className="flex min-w-0 flex-1 items-center gap-2.5 p-3.5">
@@ -454,6 +455,7 @@ export function DashboardPageContent({
             trigger={
               <button
                 type="button"
+                data-tour-id={TOUR_TARGET_IDS.HOME_STATUS}
                 title={hasActiveStatus ? "Edit your status" : "Add a status"}
                 className="focus-ring safe-motion flex min-w-0 flex-1 items-center gap-2.5 p-3.5 text-left hover:bg-secondary/40"
               >
@@ -650,7 +652,7 @@ function NearbyHero({
   return (
     // data-tour-id is the guided tour's stable targeting contract; the tour
     // spotlights this real section rather than showing a screenshot of it.
-    <section aria-labelledby="home-nearby-heading" data-tour-id="home-nearby">
+    <section aria-labelledby="home-nearby-heading" data-tour-id={TOUR_TARGET_IDS.HOME_NEARBY}>
       <div className="mb-2 flex items-center justify-between">
         <h2 id="home-nearby-heading" className="text-base font-semibold tracking-tight">
           Nearby Muddies
@@ -824,7 +826,7 @@ function QuickActionsHome({
   const [moreOpen, setMoreOpen] = useState(false);
 
   return (
-    <section aria-labelledby="home-actions-heading">
+    <section aria-labelledby="home-actions-heading" data-tour-id={TOUR_TARGET_IDS.HOME_QUICK_ACTIONS}>
       <h2 id="home-actions-heading" className="mb-2 text-sm font-semibold">
         Quick actions
       </h2>
@@ -1014,7 +1016,7 @@ function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
   });
 
   return (
-    <section aria-labelledby="home-plan-heading">
+    <section aria-labelledby="home-plan-heading" data-tour-id={TOUR_TARGET_IDS.HOME_UPCOMING_PLAN}>
       <div className="mb-2 flex items-center justify-between">
         <h2 id="home-plan-heading" className="text-sm font-semibold">
           Upcoming

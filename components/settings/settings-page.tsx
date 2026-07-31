@@ -39,6 +39,7 @@ import { DataExportButton } from "@/components/settings/data-export-button";
 import { LocationForGlowSetting } from "@/components/settings/location-for-glow-setting";
 import type { VisibilityStatus } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 // Deferred: most visits to Settings never open this — no reason to ship its
 // JS on every Settings page load.
@@ -112,7 +113,7 @@ export function SettingsPageContent({
   }
 
   return (
-    <div className="mr-auto max-w-[980px] space-y-6 pt-6">
+    <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_OVERVIEW} className="mr-auto max-w-[980px] space-y-6 pt-6">
       <header className="border-b border-border/70 pb-4">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Settings</h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -121,6 +122,7 @@ export function SettingsPageContent({
       </header>
 
       <div className="space-y-6">
+        <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_ACCOUNT}>
         <SettingsSection title="Account">
           <SettingsLinkRow
             icon={UserRound}
@@ -153,7 +155,9 @@ export function SettingsPageContent({
             href="/buddy-score"
           />
         </SettingsSection>
+        </div>
 
+        <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_PRIVACY}>
         <SettingsSection title="Privacy & safety">
           <SettingsLinkRow
             icon={Sparkles}
@@ -167,14 +171,18 @@ export function SettingsPageContent({
             description="Let people know you're down to hang out right now."
             href="/hangout-mode"
           />
-          <LocationForGlowSetting onFeedback={showToast} />
-          <PrivacyToggle
-            icon={Ghost}
-            title="Ghost Mode"
-            description="Pause your visibility until you turn it back on."
-            checked={visibilityStatus === "ghost"}
-            onCheckedChange={(checked) => saveVisibility(checked ? "ghost" : "visible")}
-          />
+          <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_LOCATION_GLOW}>
+            <LocationForGlowSetting onFeedback={showToast} />
+          </div>
+          <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_GHOST_MODE}>
+            <PrivacyToggle
+              icon={Ghost}
+              title="Ghost Mode"
+              description="Pause your visibility until you turn it back on."
+              checked={visibilityStatus === "ghost"}
+              onCheckedChange={(checked) => saveVisibility(checked ? "ghost" : "visible")}
+            />
+          </div>
           <PrivacyToggle
             icon={MapPinOff}
             title="Only while app is open"
@@ -213,7 +221,9 @@ export function SettingsPageContent({
             href="/safety-center"
           />
         </SettingsSection>
+        </div>
 
+        <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_NOTIFICATIONS}>
         <SettingsSection title="Notifications">
           <PrivacyToggle
             icon={Bell}
@@ -247,6 +257,7 @@ export function SettingsPageContent({
             href="/reminders"
           />
         </SettingsSection>
+        </div>
 
         <SettingsSection title="Preferences">
           <SettingsLinkRow
@@ -282,6 +293,7 @@ export function SettingsPageContent({
           />
         </SettingsSection>
 
+        <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_SUPPORT}>
         <SettingsSection title="Support & feedback">
           <SettingsLinkRow
             icon={HelpCircle}
@@ -291,8 +303,8 @@ export function SettingsPageContent({
           />
           <SettingsLinkRow
             icon={Sparkles}
-            title="Replay app walkthrough"
-            description="Take the Mad Buddy tour again."
+            title="Feature guides"
+            description="Learn or replay any Mad Buddy feature."
             href="/settings/walkthrough"
           />
           <SettingsLinkRow
@@ -308,6 +320,7 @@ export function SettingsPageContent({
             href="/invite"
           />
         </SettingsSection>
+        </div>
 
         <section>
           <h2 className="text-base font-semibold text-red-700 dark:text-red-200">Danger zone</h2>

@@ -140,10 +140,9 @@ export function resolveSteps(version: TourVersion, subject: TourSubject): TourSt
 /**
  * Whether this user should be offered this version.
  *
- * Any existing progress row disqualifies it, whatever its status — completed,
- * skipped and dismissed all mean "already resolved for this version". That is
- * what stops a tour reappearing, and it is why re-showing a tour is done by
- * publishing a NEW version rather than deleting history.
+ * A terminal progress row disqualifies it. A started row remains eligible so
+ * an interrupted route-aware tour can resume at its recorded step. Completion,
+ * skip and dismissal still permanently resolve that version.
  */
 export function isEligibleForTour(
   version: TourVersion,
@@ -151,7 +150,7 @@ export function isEligibleForTour(
   progress: TourProgress | null,
   nowMs: number
 ): boolean {
-  if (progress) return false;
+  if (progress && progress.status !== "started") return false;
   if (!isTourVersionLive(version, nowMs)) return false;
   if (!version.audience.plans.includes(subject.plan)) return false;
   if (!matchesCohort(version, subject)) return false;

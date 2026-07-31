@@ -1,9 +1,10 @@
 import { cookies } from "next/headers";
-import { getPublishedTourById, getTourToOffer } from "@/lib/tours/service";
+import { getPublishedTourById, getToursToOffer } from "@/lib/tours/service";
 import { loadTourForPreview } from "@/lib/tours/preview-service";
 import { decodeTourPreview, TOUR_PREVIEW_COOKIE } from "@/lib/tours/preview";
 import { decodeTourReplay, TOUR_REPLAY_COOKIE } from "@/lib/tours/replay";
 import { TourRunner } from "@/components/tours/tour-runner";
+import { TourOfferController } from "@/components/tours/tour-offer-controller";
 
 /**
  * Server-side entry point for guided tours, consumer and preview.
@@ -92,29 +93,33 @@ export async function TourHost({ userId }: { userId: string }) {
     }
   }
 
-  const tour = await getTourToOffer(userId);
-  if (!tour) return null;
+  const tours = await getToursToOffer(userId);
+  if (tours.length === 0) return null;
 
   return (
-    <TourRunner
-      tourVersionId={tour.tourVersionId}
-      title={tour.title}
-      description={tour.description}
-      steps={tour.steps.map((step) => ({
-        id: step.id,
-        stepKey: step.stepKey,
-        title: step.title,
-        body: step.body,
-        targetId: step.targetId,
-        route: step.route,
-        mediaPath: step.mediaPath,
-        ctaLabel: step.ctaLabel,
-        ctaHref: step.ctaHref,
-        entitlementKeys: step.entitlementKeys
+    <TourOfferController
+      tours={tours.map((tour) => ({
+        tourVersionId: tour.tourVersionId,
+        slug: tour.slug,
+        title: tour.title,
+        description: tour.description,
+        steps: tour.steps.map((step) => ({
+          id: step.id,
+          stepKey: step.stepKey,
+          title: step.title,
+          body: step.body,
+          targetId: step.targetId,
+          route: step.route,
+          mediaPath: step.mediaPath,
+          ctaLabel: step.ctaLabel,
+          ctaHref: step.ctaHref,
+          entitlementKeys: step.entitlementKeys
+        })),
+        startIndex: tour.startIndex,
+        plan: tour.plan,
+        entitlements: tour.entitlements,
+        progressStatus: tour.progressStatus
       }))}
-      startIndex={tour.startIndex}
-      plan={tour.plan}
-      entitlements={tour.entitlements}
     />
   );
 }

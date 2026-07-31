@@ -3845,6 +3845,15 @@ export type Database = {
         };
         Returns: string | null;
       };
+      record_user_tour_progress: {
+        Args: {
+          p_user_id: string;
+          p_tour_version_id: string;
+          p_status: string;
+          p_current_step_key?: string | null;
+        };
+        Returns: string;
+      };
       create_experiment_definition: {
         Args: { p_definition: Json; p_created_by: string };
         Returns: string;

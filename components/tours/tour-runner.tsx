@@ -71,6 +71,8 @@ export type TourRunnerProps = {
    * the user's original first-time completion or skip is preserved exactly.
    */
   replay?: boolean;
+  /** Lets the contextual host offer another guide only after this one closes. */
+  onResolved?: (tourVersionId: string) => void;
 };
 
 const SPOTLIGHT_CLASS = "tour-spotlight-target";
@@ -87,7 +89,8 @@ export function TourRunner({
   autoStart = false,
   previewReturnTo,
   previewLabel,
-  replay = false
+  replay = false,
+  onResolved
 }: TourRunnerProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -112,7 +115,7 @@ export function TourRunner({
   );
 
   const recordStep = useCallback(
-    (stepId: string, event: "tour_step_viewed" | "tour_cta_clicked" | "tour_shown") => {
+    (stepId: string, event: "tour_step_viewed" | "tour_step_completed" | "tour_cta_clicked" | "tour_shown") => {
       void recordTourStepEventAction({ stepId, event, preview: preview || replay });
     },
     [preview, replay]
@@ -140,13 +143,17 @@ export function TourRunner({
     // Wait a frame so a just-navigated route has painted its targets. The
     // missing/found flag is set here rather than in the effect body, so this
     // never becomes a synchronous setState during render.
-    const frame = window.requestAnimationFrame(() => {
+    let retryTimer: number | null = null;
+    let attempts = 0;
+    const findTarget = () => {
       const element = document.querySelector<HTMLElement>(`[data-tour-id="${step.targetId}"]`);
       if (!element) {
-        // Absent target: plain card, no failure. Consumers see nothing unusual;
-        // in preview an admin gets told, because a typo'd target would
-        // otherwise look like a working step.
-        setTargetMissing(true);
+        // Route transitions, Suspense and mobile layout can paint a target a
+        // little later. Retry for roughly one second before degrading to the
+        // safe non-targeted card.
+        attempts += 1;
+        if (attempts < 12) retryTimer = window.setTimeout(findTarget, 90);
+        else setTargetMissing(true);
         return;
       }
       setTargetMissing(false);
@@ -157,9 +164,13 @@ export function TourRunner({
         // Toward the top, so the bottom-sheet card cannot sit over it.
         block: "start"
       });
-    });
+    };
+    const frame = window.requestAnimationFrame(findTarget);
 
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+    };
   }, [phase, step, pathname, reducedMotion]);
 
   // Always strip the spotlight when the tour goes away.
@@ -184,6 +195,13 @@ export function TourRunner({
     recordStep(step.id, "tour_step_viewed");
   }, [phase, step, recordStep]);
 
+  // Persist the real current step so closing the app or navigating away can
+  // resume this version instead of treating a started tour as resolved.
+  useEffect(() => {
+    if (phase !== "running" || !step) return;
+    record("started", step.stepKey);
+  }, [phase, step, record]);
+
   // Move focus into the card when it opens so keyboard and screen-reader users
   // land on the explanation rather than somewhere behind it.
   useEffect(() => {
@@ -197,13 +215,15 @@ export function TourRunner({
     // the next navigation, and records the replay-specific completion.
     if (replay) void endTourReplayAction({ versionId: tourVersionId, completed: true });
     setPhase("closed");
-  }, [record, step, replay, tourVersionId]);
+    onResolved?.(tourVersionId);
+  }, [record, step, replay, tourVersionId, onResolved]);
 
   const skip = useCallback(() => {
     record("skipped", step?.stepKey ?? null);
     if (replay) void endTourReplayAction({ versionId: tourVersionId, completed: false });
     setPhase("closed");
-  }, [record, step, replay, tourVersionId]);
+    onResolved?.(tourVersionId);
+  }, [record, step, replay, tourVersionId, onResolved]);
 
   // Escape dismisses the tour — it is never a blocking, unescapable layer.
   useEffect(() => {
@@ -318,7 +338,8 @@ export function TourRunner({
           <button
             type="button"
             onClick={skip}
-            aria-label="Skip tour"
+            aria-label="Close walkthrough"
+            title="Close walkthrough"
             className="focus-ring -mr-2 -mt-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary"
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -471,8 +492,16 @@ export function TourRunner({
                 {step.ctaLabel}
               </Button>
             ) : null}
-            <Button type="button" size="sm" onClick={() => (isLast ? finish() : setIndex((value) => value + 1))}>
-              {isLast ? "Done" : "Next"}
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                if (step) recordStep(step.id, "tour_step_completed");
+                if (isLast) finish();
+                else setIndex((value) => value + 1);
+              }}
+            >
+              {isLast ? "Finish" : "Next"}
               {isLast ? null : <ArrowRight className="h-4 w-4" aria-hidden="true" />}
             </Button>
           </div>

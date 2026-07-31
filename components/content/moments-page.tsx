@@ -28,6 +28,7 @@ import { REPORT_CATEGORIES } from "@/lib/content/safety";
 import type { MomentsCreatorHub, TuneInEntry, VisibleMoment } from "@/lib/content/service";
 import type { MomentReactionId } from "@/lib/content/moments";
 import { cn } from "@/lib/utils";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import {
   AuthorInsights,
   MomentHeader,
@@ -328,7 +329,12 @@ export function MomentsPage({
               <TuneInIcon className="h-5 w-5" />
             </button>
           ) : null}
-          <Button type="button" size="sm" onClick={() => setComposerOpen(true)}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setComposerOpen(true)}
+            data-tour-id={TOUR_TARGET_IDS.MOMENTS_SHARE}
+          >
             <Plus className="h-4 w-4" aria-hidden="true" />
             Share
           </Button>
@@ -336,13 +342,20 @@ export function MomentsPage({
       </header>
 
       {openMomentsEnabled ? (
-        <div role="tablist" aria-label="Moments feeds" className="flex gap-1.5 rounded-full bg-secondary/50 p-1">
+        <div
+          role="tablist"
+          aria-label="Moments feeds"
+          data-tour-id={TOUR_TARGET_IDS.MOMENTS_TABS}
+          className="flex gap-1.5 rounded-full bg-secondary/50 p-1"
+        >
           {(["moments", "spotlight"] as const).map((option) => (
             <button
               key={option}
               type="button"
               role="tab"
               aria-selected={tab === option}
+              data-tour-id={option === "spotlight" ? TOUR_TARGET_IDS.MOMENTS_AIR_TAB : undefined}
+              data-tour-active={option === "spotlight" && tab === option ? "true" : undefined}
               onClick={() => selectTab(option)}
               className={cn(
                 "focus-ring safe-motion min-h-9 flex-1 rounded-full text-sm font-semibold",
@@ -372,13 +385,15 @@ export function MomentsPage({
 
       {tab === "moments" ? (
         <>
-          <MomentsRing
-            entries={ring}
-            selfName={viewerName}
-            selfAvatarUrl={viewerAvatarUrl}
-            onCreate={() => setComposerOpen(true)}
-            onOpenAuthor={(authorId) => setAuthorFilter((current) => (current === authorId ? null : authorId))}
-          />
+          <div data-tour-id={TOUR_TARGET_IDS.MOMENTS_YOURS}>
+            <MomentsRing
+              entries={ring}
+              selfName={viewerName}
+              selfAvatarUrl={viewerAvatarUrl}
+              onCreate={() => setComposerOpen(true)}
+              onOpenAuthor={(authorId) => setAuthorFilter((current) => (current === authorId ? null : authorId))}
+            />
+          </div>
 
           {authorFilter ? (
             <button
@@ -391,6 +406,7 @@ export function MomentsPage({
             </button>
           ) : null}
 
+          <div data-tour-id={TOUR_TARGET_IDS.MOMENTS_FEED}>
           {shown.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <UserAvatar src={viewerAvatarUrl} name={viewerName} size="lg" decorative />
@@ -434,6 +450,7 @@ export function MomentsPage({
               ))}
             </ul>
           )}
+          </div>
         </>
       ) : (
         <>
@@ -442,6 +459,7 @@ export function MomentsPage({
             onOpenCreator={openTunedInCreator}
             onManage={() => setManageOpen(true)}
           />
+          <div data-tour-id={TOUR_TARGET_IDS.MOMENTS_FEED}>
           {shown.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-10 text-center">
           <p className="text-base font-semibold">Air is quiet right now</p>
@@ -484,6 +502,7 @@ export function MomentsPage({
           ))}
         </ul>
           )}
+          </div>
         </>
       )}
 
@@ -602,7 +621,7 @@ function PrivateMomentCard(props: CardProps) {
 
       {props.moment.caption ? <p className="text-sm leading-6">{props.moment.caption}</p> : null}
 
-      <div className="flex items-center justify-between gap-3">
+      <div data-tour-id={TOUR_TARGET_IDS.MOMENTS_REACTIONS} className="flex items-center justify-between gap-3">
         <ReactionControl
           moment={props.moment}
           pending={props.pending}
@@ -637,16 +656,18 @@ function SpotlightCard(
       <MomentHeader moment={props.moment} nowMs={props.nowMs} onOpenCreator={props.onOpenCreator} onAir>
         <div className="flex shrink-0 items-center gap-1.5">
           {!props.moment.isAuthor ? (
-            <TuneInButton
-              creatorId={props.moment.authorId}
-              // Attributes the tune-in to THIS Moment, which is what lets the
-              // creator see "+36 Tuned In" for the post without learning who.
-              sourceMomentId={props.moment.id}
-              tunedIn={props.moment.creatorTunedIn}
-              size="sm"
-              onTuneIn={props.onTuneIn}
-              onTuneOut={props.onTuneOut}
-            />
+            <span data-tour-id={TOUR_TARGET_IDS.MOMENTS_TUNE_IN}>
+              <TuneInButton
+                creatorId={props.moment.authorId}
+                // Attributes the tune-in to THIS Moment, which is what lets the
+                // creator see "+36 Tuned In" for the post without learning who.
+                sourceMomentId={props.moment.id}
+                tunedIn={props.moment.creatorTunedIn}
+                size="sm"
+                onTuneIn={props.onTuneIn}
+                onTuneOut={props.onTuneOut}
+              />
+            </span>
           ) : null}
           <MomentMenu {...props} />
         </div>
@@ -656,7 +677,7 @@ function SpotlightCard(
 
       {props.moment.caption ? <p className="text-sm leading-6">{props.moment.caption}</p> : null}
 
-      <div className="flex items-center justify-between gap-3">
+      <div data-tour-id={TOUR_TARGET_IDS.MOMENTS_REACTIONS} className="flex items-center justify-between gap-3">
         <ReactionControl
           moment={props.moment}
           pending={props.pending}

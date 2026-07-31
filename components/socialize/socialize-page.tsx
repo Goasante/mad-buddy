@@ -27,6 +27,7 @@ import {
   type SocializeDuration
 } from "@/lib/social/socialize";
 import { cn } from "@/lib/utils";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 function capitalize(text: string): string {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
@@ -386,7 +387,7 @@ export function SocializePage({
       {/* The radar IS the interface — it fills the space to the bottom nav. */}
       <div
         ref={radarRef}
-        data-tour-id="socialize-radar"
+        data-tour-id={TOUR_TARGET_IDS.SOCIALIZE_RADAR}
         className={cn("relative mt-2 w-full", activating && "socialize-radar-activating")}
         style={{ height: "calc(100svh - 11.5rem - env(safe-area-inset-bottom))" } as CSSProperties}
       >
@@ -457,7 +458,7 @@ export function SocializePage({
           <Popover.Trigger asChild>
             <button
               type="button"
-              data-tour-id="socialize-activation"
+              data-tour-id={TOUR_TARGET_IDS.SOCIALIZE_ACTIVATION}
               aria-label={isActive ? "Socialize controls" : "Turn on Socialize"}
               className="focus-ring safe-motion absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
             >
@@ -489,6 +490,7 @@ export function SocializePage({
           </Popover.Trigger>
           <Popover.Portal>
             <Popover.Content
+              data-tour-id={TOUR_TARGET_IDS.SOCIALIZE_CONTROLS}
               side="bottom"
               align="center"
               sideOffset={38}

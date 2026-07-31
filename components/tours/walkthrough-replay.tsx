@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { PlayCircle } from "lucide-react";
+import { CheckCircle2, Circle, PlayCircle, RotateCcw } from "lucide-react";
 import { startTourReplayAction } from "@/app/(app)/tour-replay-actions";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FEATURE_GUIDE_GROUPS, findFeatureGuide, type FeatureGuideGroupId } from "@/lib/tours/registry";
+import { cn } from "@/lib/utils";
 
 type ReplayableTour = {
   tourVersionId: string;
@@ -15,77 +16,110 @@ type ReplayableTour = {
   description: string;
   version: number;
   stepCount: number;
+  progressStatus: "started" | "completed" | "skipped" | "dismissed" | null;
 };
 
-/**
- * Manual replay launcher.
- *
- * It deliberately does NOT render the tour itself. It used to, and that was the
- * bug: the first step of the main walkthrough routes to /dashboard, so the
- * tour's own navigation unmounted this page and took the running tour with it,
- * which looked like the tour cutting off after one step.
- *
- * Instead this opens a replay session (a cookie) and navigates into the app.
- * TourHost, which lives in the (app) layout, picks the session up and renders
- * the tour there, so it survives every subsequent route change. The user's
- * historical completion or skip is untouched: replay writes no progress.
- */
+function guideStatus(status: ReplayableTour["progressStatus"]) {
+  if (status === "completed") return { label: "Completed", icon: CheckCircle2, tone: "text-emerald-600 dark:text-emerald-300" };
+  if (status === "started") return { label: "In progress", icon: PlayCircle, tone: "text-primary" };
+  if (status === "skipped" || status === "dismissed") return { label: "Not completed", icon: Circle, tone: "text-muted-foreground" };
+  return { label: "Not viewed", icon: Circle, tone: "text-muted-foreground" };
+}
+
 export function WalkthroughReplay({ tours }: { tours: ReplayableTour[] }) {
   const router = useRouter();
   const [error, setError] = useState("");
+  const [startingId, setStartingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const grouped = useMemo(() => {
+    const groups = new Map<FeatureGuideGroupId, ReplayableTour[]>();
+    for (const group of FEATURE_GUIDE_GROUPS) groups.set(group.id, []);
+    for (const tour of tours) {
+      const group = findFeatureGuide(tour.slug)?.group ?? "getting-started";
+      groups.get(group)?.push(tour);
+    }
+    return groups;
+  }, [tours]);
 
   if (tours.length === 0) {
     return (
       <EmptyState
         icon={PlayCircle}
-        title="No walkthroughs available"
-        description="Tours appear here as new Mad Buddy features launch."
+        title="No feature guides available"
+        description="Guides appear here as Mad Buddy features become available to you."
       />
     );
   }
 
   const start = (tour: ReplayableTour) => {
     setError("");
+    setStartingId(tour.tourVersionId);
     startTransition(async () => {
       const result = await startTourReplayAction({ versionId: tour.tourVersionId });
       if (!result.ok) {
         setError(result.message);
+        setStartingId(null);
         return;
       }
-      // Step 1 takes over routing from here if it declares a route of its own.
-      router.push("/dashboard");
+      router.push((findFeatureGuide(tour.slug)?.entryRoute ?? "/dashboard") as Parameters<typeof router.push>[0]);
     });
   };
 
   return (
-    <div className="space-y-3">
-      {error ? <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p> : null}
+    <div className="space-y-7">
+      {error ? <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive" role="alert">{error}</p> : null}
 
-      {tours.map((tour) => (
-        <Card key={tour.tourVersionId} className="flex items-center justify-between gap-4 p-4">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{tour.title}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {tour.stepCount} {tour.stepCount === 1 ? "step" : "steps"}
-              {tour.description ? ` · ${tour.description}` : ""}
-            </p>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="shrink-0"
-            disabled={isPending}
-            onClick={() => start(tour)}
-          >
-            {isPending ? "Starting..." : "Replay"}
-          </Button>
-        </Card>
-      ))}
+      {FEATURE_GUIDE_GROUPS.map((group) => {
+        const entries = grouped.get(group.id) ?? [];
+        if (entries.length === 0) return null;
+        return (
+          <section key={group.id} aria-labelledby={`feature-guide-${group.id}`}>
+            <h2 id={`feature-guide-${group.id}`} className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {group.label}
+            </h2>
+            <div className="overflow-hidden rounded-2xl border border-border/70 bg-card/45">
+              {entries.map((tour, index) => {
+                const state = guideStatus(tour.progressStatus);
+                const StateIcon = state.icon;
+                const replay = tour.progressStatus !== null;
+                return (
+                  <div
+                    key={tour.tourVersionId}
+                    className={cn(
+                      "flex min-h-[4.75rem] items-center gap-3 px-4 py-3",
+                      index > 0 && "border-t border-border/60"
+                    )}
+                  >
+                    <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full bg-secondary/70", state.tone)}>
+                      <StateIcon className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold">{findFeatureGuide(tour.slug)?.label ?? tour.title}</p>
+                      <p className={cn("mt-0.5 text-xs", state.tone)}>{state.label} · {tour.stepCount} {tour.stepCount === 1 ? "step" : "steps"}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={replay ? "outline" : "primary"}
+                      className="shrink-0"
+                      disabled={isPending}
+                      onClick={() => start(tour)}
+                      aria-label={`${replay ? "Replay" : "Start"} ${findFeatureGuide(tour.slug)?.label ?? tour.title} guide`}
+                    >
+                      {replay ? <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> : <PlayCircle className="h-3.5 w-3.5" aria-hidden="true" />}
+                      {startingId === tour.tourVersionId ? "Starting..." : replay ? "Replay" : "Start"}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
 
-      <p className="text-xs text-muted-foreground">
-        Replaying does not reset your history. Your original walkthrough progress stays as it is.
+      <p className="text-xs leading-5 text-muted-foreground">
+        Replaying a guide does not reset your history or change your feature access.
       </p>
     </div>
   );

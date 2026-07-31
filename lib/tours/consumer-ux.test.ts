@@ -169,8 +169,8 @@ describe("tour navigation and actions", () => {
     expect(runner).toContain("Skip tour");
   });
 
-  it("ends with Done rather than Finish", () => {
-    expect(runner).toContain('isLast ? "Done" : "Next"');
+  it("ends with the explicit Finish action", () => {
+    expect(runner).toContain('isLast ? "Finish" : "Next"');
   });
 
   it("a CTA does not complete the tour", () => {

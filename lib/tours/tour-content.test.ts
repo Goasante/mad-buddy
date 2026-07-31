@@ -306,7 +306,7 @@ describe("tour copy rules", () => {
 
 describe("existing tour behaviour is preserved", () => {
   it("keeps skip, back, next, done and the progress indicator", () => {
-    for (const control of ["Skip tour", "Back", 'isLast ? "Done" : "Next"', 'role="progressbar"']) {
+    for (const control of ["Skip tour", "Back", 'isLast ? "Finish" : "Next"', 'role="progressbar"']) {
       expect(RUNNER, control).toContain(control);
     }
   });

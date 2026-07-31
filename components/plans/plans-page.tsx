@@ -37,6 +37,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 export type PlanInvitee = { id: string; name: string; username?: string | null; avatarUrl?: string | null };
 
@@ -232,7 +233,13 @@ export function PlansPageContent({
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Plans</h1>
           <p className="mt-1 text-sm text-muted-foreground">Plan something with your Muddies.</p>
         </div>
-        <Button type="button" variant="outline" className="shrink-0 whitespace-nowrap" onClick={() => setCreateOpen(true)}>
+        <Button
+          type="button"
+          variant="outline"
+          className="shrink-0 whitespace-nowrap"
+          onClick={() => setCreateOpen(true)}
+          data-tour-id={TOUR_TARGET_IDS.PLANS_CREATE}
+        >
           <Plus className="h-4 w-4" aria-hidden="true" />
           New plan
         </Button>
@@ -244,7 +251,11 @@ export function PlansPageContent({
         </div>
       ) : null}
 
-      <nav className="no-scrollbar -mx-4 mt-4 overflow-x-auto border-b border-border/70 px-4 sm:mx-0 sm:px-0" aria-label="Plans tabs">
+      <nav
+        data-tour-id={TOUR_TARGET_IDS.PLANS_TABS}
+        className="no-scrollbar -mx-4 mt-4 overflow-x-auto border-b border-border/70 px-4 sm:mx-0 sm:px-0"
+        aria-label="Plans tabs"
+      >
         <div className="flex w-max gap-1 pr-4 sm:pr-0">
           {bucketTabs.map((tab) => {
             const active = activeBucket === tab.id;
@@ -272,7 +283,7 @@ export function PlansPageContent({
         </div>
       </nav>
 
-      <div className="mt-4">
+      <div data-tour-id={TOUR_TARGET_IDS.PLANS_LIST} className="mt-4">
         {visiblePlans.length > 0 ? (
           <>
             <div className="mb-1 flex items-center justify-between">
@@ -834,7 +845,7 @@ function PlanDetailsModal({
           </div>
 
           {!plan.isHost && !TERMINAL.has(plan.status) ? (
-            <div>
+            <div data-tour-id={TOUR_TARGET_IDS.PLANS_RSVP}>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your RSVP</p>
               <div className="flex flex-wrap gap-2">
                 <Button type="button" size="sm" variant={plan.myRsvp === "going" ? "primary" : "outline"} onClick={() => onRsvpChange("going")} disabled={pending}>
