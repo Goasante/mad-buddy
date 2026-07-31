@@ -238,7 +238,7 @@ export function AppShell({
     // --app-header-height on <main> below) or, for pages with their own
     // in-page header, by <main>'s own env(safe-area-inset-top) padding — never
     // both, and never as a blanket guess applied regardless of route.
-    <div className="flex min-h-[100svh] min-h-[100dvh] flex-col bg-background pb-[calc(var(--app-mobile-nav-height)+2rem+env(safe-area-inset-bottom,0px))] dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]">
+    <div className="flex min-h-[100svh] min-h-[100dvh] flex-col bg-background pb-[calc(88px+env(safe-area-inset-bottom))] dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]">
       <a
         href="#app-main-content"
         className="focus-ring sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:shadow-lg"
@@ -938,7 +938,7 @@ function MobileNav({ navigationItems, unreadCount }: { navigationItems: Navigati
                 aria-label={ariaLabel}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "safe-motion flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  "safe-motion flex min-h-[56px] flex-col items-center justify-center gap-1 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                   isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 )}
               >

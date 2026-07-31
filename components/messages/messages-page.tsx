@@ -1,24 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  CalendarCheck2,
-  ChevronLeft,
-  Clock3,
-  Info,
-  MapPin,
-  MessagesSquare,
-  PenSquare,
-  Plus,
-  Search,
-  Send,
-  Smile,
-  Star,
-  UsersRound,
-  Volume2,
-  VolumeX,
-  X
-} from "lucide-react";
+import { CalendarCheck2, ChevronLeft, Info, MessagesSquare, PenSquare, Plus, Search, Send, Star, UsersRound, VolumeX, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -91,63 +74,6 @@ function messageFailure(error: unknown) {
     : "Messages could not be updated. Try again.";
 }
 
-const MESSAGE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  hour: "numeric",
-  minute: "2-digit"
-});
-
-const MESSAGE_DAY_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  year: "numeric"
-});
-
-function startOfLocalDay(value: Date) {
-  return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
-}
-
-function formatMessageTime(createdAt: string) {
-  return MESSAGE_TIME_FORMATTER.format(new Date(createdAt));
-}
-
-function formatMessageDayLabel(createdAt: string) {
-  const now = new Date();
-  const messageDate = new Date(createdAt);
-  const dayDiff = Math.round((startOfLocalDay(now) - startOfLocalDay(messageDate)) / (24 * 60 * 60 * 1000));
-  if (dayDiff === 0) return "Today";
-  if (dayDiff === 1) return "Yesterday";
-  return MESSAGE_DAY_FORMATTER.format(messageDate);
-}
-
-function isSameMessageDay(previous: ChatMessageView | null, current: ChatMessageView) {
-  if (!previous) return false;
-  const previousDate = new Date(previous.createdAt);
-  const currentDate = new Date(current.createdAt);
-  return startOfLocalDay(previousDate) === startOfLocalDay(currentDate);
-}
-
-function isGroupedMessage(previous: ChatMessageView | null, current: ChatMessageView) {
-  if (!previous || previous.messageType === "system" || current.messageType === "system") return false;
-  if (previous.senderId !== current.senderId) return false;
-  if (previous.isMine !== current.isMine) return false;
-  const previousDate = new Date(previous.createdAt).getTime();
-  const currentDate = new Date(current.createdAt).getTime();
-  return isSameMessageDay(previous, current) && currentDate - previousDate <= 10 * 60 * 1000;
-}
-
-function quickReplyMeta(actionId: string): { icon: LucideIcon; className: string } {
-  switch (actionId) {
-    case "on_my_way":
-      return { icon: Send, className: "text-primary" };
-    case "im_here":
-      return { icon: MapPin, className: "text-primary" };
-    case "running_late":
-      return { icon: Clock3, className: "text-primary" };
-    default:
-      return { icon: Send, className: "text-muted-foreground" };
-  }
-}
-
 export function MessagesPageContent({
   initialConversations = []
 }: {
@@ -169,7 +95,6 @@ export function MessagesPageContent({
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
   const [feedback, setFeedback] = useState("");
-  const [toast, setToast] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [reactingId, setReactingId] = useState<string | null>(null);
@@ -180,22 +105,6 @@ export function MessagesPageContent({
   const [pinPickerOpen, setPinPickerOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const loadRequestIdRef = useRef(0);
-  const messageListRef = useRef<HTMLDivElement>(null);
-  const stayAtLatestRef = useRef(true);
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const showToast = useCallback((message: string) => {
-    setToast(message);
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToast(""), 2600);
-  }, []);
-
-  useEffect(
-    () => () => {
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    },
-    []
-  );
 
   const loadConversation = useCallback(async (conversationId: string) => {
     const requestId = ++loadRequestIdRef.current;
@@ -311,17 +220,6 @@ export function MessagesPageContent({
   }, [uniqueConversations]);
 
   const selected = uniqueConversations.find((conversation) => conversation.id === selectedId) ?? null;
-  const latestMessageId = messages.at(-1)?.id ?? null;
-
-  useEffect(() => {
-    if (!selectedId || loadingMessages || !stayAtLatestRef.current) return;
-    const frame = window.requestAnimationFrame(() => {
-      const list = messageListRef.current;
-      if (!list) return;
-      list.scrollTop = list.scrollHeight;
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [latestMessageId, loadingMessages, selectedId]);
 
   useEffect(() => {
     if (
@@ -437,7 +335,6 @@ export function MessagesPageContent({
    * lives in the handler. Loads the thread, then marks it read.
    */
   function openConversation(conversationId: string) {
-    stayAtLatestRef.current = true;
     setSelectedId(conversationId);
     setMessages([]);
     void loadConversation(conversationId);
@@ -450,7 +347,6 @@ export function MessagesPageContent({
 
     // Idempotency key: a retry can never create a second message (spec §7).
     const clientMessageId = crypto.randomUUID();
-    stayAtLatestRef.current = true;
     setDraft("");
     startTransition(async () => {
       try {
@@ -483,16 +379,13 @@ export function MessagesPageContent({
         const result = await withTimeout(muteConversationAction(selected.id, selected.muted ? 0 : 8), {
           operation: "update conversation mute"
         });
+        setFeedback(result.message);
         if (result.ok) {
-          setFeedback("");
-          showToast(selected.muted ? "Conversation unmuted" : "Conversation muted");
           setConversations((current) =>
             current.map((conversation) =>
               conversation.id === selected.id ? { ...conversation, muted: !conversation.muted } : conversation
             )
           );
-        } else {
-          setFeedback(result.message);
         }
       } catch (error) {
         setFeedback(messageFailure(error));
@@ -556,28 +449,20 @@ export function MessagesPageContent({
   const hasAnyConversations = uniqueConversations.length > 0;
 
   return (
-    <div
-      className={cn(
-        "mx-auto max-w-[1280px] px-4 pb-6 pt-4 sm:px-6 lg:px-8",
-        selectedId &&
-          "flex h-[calc(100dvh-var(--app-mobile-nav-height)-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] flex-col overflow-hidden pb-0 md:block md:h-auto md:overflow-visible md:pb-6"
-      )}
-    >
-      <header className="mb-3 flex shrink-0 items-start justify-between gap-4">
+    <div className="mx-auto max-w-[1200px] pt-6">
+      <header className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="flex items-center gap-2.5 text-2xl font-semibold tracking-tight text-foreground sm:text-[2rem]">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
-              <MessagesSquare className="h-5 w-5" aria-hidden="true" />
-            </span>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+            <MessagesSquare className="h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
             Messages
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground sm:text-[0.98rem]">Chat privately with your approved Muddies.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Chat privately with your approved Muddies.</p>
         </div>
         <Button
           type="button"
           variant="outline"
           size="icon"
-          className="safe-motion h-10 w-10 shrink-0 rounded-full border-primary/20 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+          className="shrink-0 rounded-full"
           onClick={() => setNewMessageOpen(true)}
           aria-label="New message"
           title="New message"
@@ -597,7 +482,7 @@ export function MessagesPageContent({
         // right panel until there's something for them to operate on.
         <EmptyState
           icon={MessagesSquare}
-          className="mx-auto max-w-md !min-h-0 !shadow-none py-4"
+          className="!min-h-0 mx-auto max-w-md !shadow-none py-4"
           title="No conversations yet"
           description="Message an approved Muddy to start one."
           action={
@@ -608,8 +493,8 @@ export function MessagesPageContent({
           }
         />
       ) : (
-        <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <div className={cn("space-y-3", selectedId && "hidden xl:block")}>
+        <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
+          <div className={cn("space-y-3", selectedId && "hidden lg:block")}>
             <div className="relative">
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -789,8 +674,8 @@ export function MessagesPageContent({
 
           <div
             className={cn(
-              "-mx-4 flex h-full min-h-0 flex-col overflow-hidden bg-transparent md:mx-0 md:h-[calc(100dvh-9.5rem)] md:rounded-[1.5rem] md:border md:border-border/50 md:bg-background/25 md:shadow-[0_14px_40px_rgba(0,0,0,0.1)] xl:min-h-[34rem] xl:max-h-[780px]",
-              !selectedId && "hidden xl:flex"
+              "flex h-[calc(100dvh-13rem)] max-h-[720px] min-h-[420px] flex-col rounded-2xl border border-border/70 bg-card/40",
+              !selectedId && "hidden lg:flex"
             )}
           >
             {!selected ? (
@@ -804,32 +689,25 @@ export function MessagesPageContent({
               </div>
             ) : (
               <div className="flex min-h-0 flex-1 flex-col">
-                <div className="flex min-h-[64px] shrink-0 items-center gap-2 border-b border-border/30 bg-background/45 px-2 py-2 backdrop-blur-md sm:gap-2.5 sm:px-3">
+                <div className="flex min-h-[68px] items-center gap-2 border-b border-border/70 px-3">
                   <button
                     type="button"
                     onClick={() => setSelectedId(null)}
                     aria-label="Back to conversations"
                     title="Back to conversations"
-                    className="focus-ring safe-motion -ml-1 grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary/80 hover:text-foreground xl:hidden"
+                    className="focus-ring safe-motion -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground lg:hidden"
                   >
-                    <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                   </button>
-                  <GlowAvatar name={selected.title} src={selected.avatarUrl} size="md" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-base font-semibold leading-tight sm:text-lg">{selected.title}</span>
-                    {selected.otherUsername || selected.contextBadge ? (
-                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                        {selected.otherUsername ? `@${selected.otherUsername}` : selected.contextBadge}
-                      </span>
-                    ) : null}
-                  </span>
+                  <GlowAvatar name={selected.title} src={selected.avatarUrl} size="sm" />
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{selected.title}</span>
                   <Popover.Root open={infoOpen} onOpenChange={setInfoOpen}>
                     <Popover.Trigger asChild>
                       <button
                         type="button"
                         aria-label="Message information"
                         title="Message information"
-                        className="focus-ring safe-motion grid h-10 w-10 shrink-0 place-items-center rounded-full bg-background/55 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        className="focus-ring safe-motion grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
                       >
                         <Info className="h-4 w-4" aria-hidden="true" />
                       </button>
@@ -854,210 +732,170 @@ export function MessagesPageContent({
                     disabled={isPending}
                     aria-label={selected.muted ? "Unmute conversation" : "Mute conversation"}
                     title={selected.muted ? "Unmute conversation" : "Mute conversation"}
-                    className="focus-ring safe-motion grid h-10 w-10 shrink-0 place-items-center rounded-full bg-background/55 text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
+                    className="focus-ring safe-motion grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
                   >
-                    {selected.muted ? <VolumeX className="h-4 w-4" aria-hidden="true" /> : <Volume2 className="h-4 w-4" aria-hidden="true" />}
+                    <VolumeX className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
-                <div
-                  ref={messageListRef}
-                  onScroll={(event) => {
-                    const list = event.currentTarget;
-                    stayAtLatestRef.current =
-                      list.scrollHeight - list.scrollTop - list.clientHeight < 96;
-                  }}
-                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2 sm:px-5 sm:py-3"
-                  aria-label={`Conversation with ${selected.title}`}
-                  aria-live="polite"
-                >
+
+                <div className="flex-1 space-y-2 overflow-y-auto p-3">
                   {loadingMessages ? (
-                    <div className="space-y-3" aria-label="Loading messages" role="status">
-                      <span className="sr-only">Loading messages</span>
-                      <div className="h-14 w-2/5 rounded-[1.35rem] rounded-bl-md bg-secondary/70 motion-safe:animate-pulse" />
-                      <div className="ml-auto h-16 w-3/5 rounded-[1.35rem] rounded-br-md bg-primary/25 motion-safe:animate-pulse" />
-                      <div className="h-12 w-1/3 rounded-[1.35rem] rounded-bl-md bg-secondary/70 motion-safe:animate-pulse" />
-                    </div>
+                    <p className="text-center text-xs text-muted-foreground">Loading…</p>
                   ) : messages.length === 0 ? (
-                    <div className="flex h-full min-h-40 flex-col items-center justify-center px-6 text-center">
-                      <span className="grid h-12 w-12 place-items-center rounded-full bg-secondary/80 text-primary">
-                        <MessagesSquare className="h-5 w-5" aria-hidden="true" />
-                      </span>
-                      <p className="mt-3 text-sm font-semibold">No messages yet</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Say hi to {selected.title}.</p>
+                    <div className="flex h-full flex-col items-center justify-center text-center">
+                      <p className="text-sm font-semibold">Start the conversation</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Send a message to {selected.title}.</p>
                     </div>
                   ) : (
-                    <>
-                      {messages.map((message, index) => {
-                        const previous = index > 0 ? messages[index - 1] : null;
-                        const showDay = !previous || !isSameMessageDay(previous, message);
-                        const grouped = isGroupedMessage(previous, message);
+                    messages.map((message) =>
+                      message.messageType === "system" ? (
+                        <p key={message.id} className="py-1 text-center text-xs text-muted-foreground">
+                          {message.text}
+                        </p>
+                      ) : (
+                        <div
+                          key={message.id}
+                          className={cn("group flex", message.isMine ? "justify-end" : "justify-start")}
+                        >
+                          <div className={cn("max-w-[75%]", message.isMine && "flex flex-col items-end")}>
+                            <div
+                              className={cn(
+                                "rounded-2xl px-3 py-2",
+                                message.isMine ? "bg-primary text-white" : "bg-secondary"
+                              )}
+                            >
+                              {editingId === message.id ? (
+                                <form
+                                  className="flex items-center gap-1.5"
+                                  onSubmit={(event) => {
+                                    event.preventDefault();
+                                    saveEdit(message.id);
+                                  }}
+                                >
+                                  <Input
+                                    value={editDraft}
+                                    maxLength={2000}
+                                    autoFocus
+                                    onChange={(event) => setEditDraft(event.target.value)}
+                                    aria-label="Edit message"
+                                    className="h-7 bg-white text-sm text-foreground"
+                                  />
+                                  <Button type="submit" size="sm" disabled={!editDraft.trim() || isPending}>
+                                    Save
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="sm" onClick={() => setEditingId(null)}>
+                                    Cancel
+                                  </Button>
+                                </form>
+                              ) : (
+                                <p className={cn("text-sm", message.deleted && "italic opacity-70")}>
+                                  {message.deleted
+                                    ? DELETED_MESSAGE_PLACEHOLDER
+                                    : message.quickActionType
+                                      ? quickActionLabel(message.quickActionType)
+                                      : message.text}
+                                </p>
+                              )}
+                              <p
+                                className={cn(
+                                  "mt-0.5 text-[10px]",
+                                  message.isMine ? "text-white/70" : "text-muted-foreground"
+                                )}
+                              >
+                                {formatRelativeTime(message.createdAt)}
+                                {message.editedAt ? " · edited" : ""}
+                                {message.isMine ? ` · ${stateLabel(message.state)}` : ""}
+                              </p>
+                            </div>
 
-                        return (
-                          <div key={message.id}>
-                            {showDay ? (
-                              <div className="py-2 text-center">
-                                <span className="inline-flex items-center rounded-full bg-background/60 px-3 py-1 text-[11px] font-medium text-muted-foreground shadow-sm">
-                                  {formatMessageDayLabel(message.createdAt)}
-                                </span>
-                              </div>
+                            {message.myReaction ? (
+                              <button
+                                type="button"
+                                onClick={() => react(message.id, message.myReaction as string)}
+                                title="Remove reaction"
+                                className="focus-ring -mt-1 w-fit rounded-full border border-border bg-card px-1.5 text-xs"
+                              >
+                                {reactionEmoji(message.myReaction)}
+                              </button>
                             ) : null}
-                            {message.messageType === "system" ? (
-                              <p className="py-2 text-center text-xs text-muted-foreground">{message.text}</p>
-                            ) : (
-                              <div className={cn("group flex", message.isMine ? "justify-end" : "justify-start", grouped ? "mt-1" : "mt-3")}>
-                                <div className={cn("max-w-[84%] sm:max-w-[72%]", message.isMine && "flex flex-col items-end")}>
-                                  <div
-                                    className={cn(
-                                      "min-w-[4.5rem] rounded-[1.35rem] px-3.5 py-2.5 shadow-sm",
-                                      message.isMine
-                                        ? "rounded-br-md bg-primary text-primary-foreground"
-                                        : "rounded-bl-md border border-border/35 bg-secondary/90 text-secondary-foreground"
-                                    )}
-                                  >
-                                    {editingId === message.id ? (
-                                      <form
-                                        className="flex items-center gap-2"
-                                        onSubmit={(event) => {
-                                          event.preventDefault();
-                                          saveEdit(message.id);
-                                        }}
-                                      >
-                                        <Input
-                                          value={editDraft}
-                                          maxLength={2000}
-                                          autoFocus
-                                          onChange={(event) => setEditDraft(event.target.value)}
-                                          aria-label="Edit message"
-                                          className="h-9 bg-white text-sm text-foreground"
-                                        />
-                                        <Button type="submit" size="sm" disabled={!editDraft.trim() || isPending}>
-                                          Save
-                                        </Button>
-                                        <Button type="button" variant="ghost" size="sm" onClick={() => setEditingId(null)}>
-                                          Cancel
-                                        </Button>
-                                      </form>
-                                    ) : (
-                                      <p className={cn("whitespace-pre-wrap break-words text-[0.95rem] leading-relaxed", message.deleted && "italic opacity-70")}>
-                                        {message.deleted
-                                          ? DELETED_MESSAGE_PLACEHOLDER
-                                          : message.quickActionType
-                                            ? quickActionLabel(message.quickActionType)
-                                            : message.text}
-                                      </p>
-                                    )}
-                                    <p
-                                      className={cn(
-                                        "mt-1 text-[11px] leading-none",
-                                        message.isMine ? "text-primary-foreground/70" : "text-muted-foreground"
-                                      )}
-                                    >
-                                      {formatMessageTime(message.createdAt)}
-                                      {message.editedAt ? " • edited" : ""}
-                                      {message.isMine ? ` • ${stateLabel(message.state)}` : ""}
-                                    </p>
-                                  </div>
 
-                                  {message.myReaction ? (
+                            {!message.deleted ? (
+                              <div
+                                className={cn(
+                                  "mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
+                                  message.isMine ? "justify-end" : "justify-start"
+                                )}
+                              >
+                                {reactingId === message.id ? (
+                                  REACTIONS.map((reaction) => (
+                                    <button
+                                      key={reaction.id}
+                                      type="button"
+                                      onClick={() => react(message.id, reaction.id)}
+                                      aria-label={`React with ${reaction.id}`}
+                                      className="focus-ring rounded px-0.5 text-sm hover:scale-110"
+                                    >
+                                      {reaction.emoji}
+                                    </button>
+                                  ))
+                                ) : (
+                                  <>
                                     <button
                                       type="button"
-                                      onClick={() => react(message.id, message.myReaction as string)}
-                                      title="Remove reaction"
-                                      className="focus-ring -mt-2 w-fit rounded-full border border-border/80 bg-card px-2 py-0.5 text-xs shadow-sm"
+                                      onClick={() => setReactingId(message.id)}
+                                      className="focus-ring rounded px-1 hover:text-foreground"
                                     >
-                                      {reactionEmoji(message.myReaction)}
+                                      React
                                     </button>
-                                  ) : null}
-
-                                  {!message.deleted ? (
-                                    <div
-                                      className={cn(
-                                        "mt-1 flex items-center gap-1 text-[11px] text-muted-foreground opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100",
-                                        message.isMine ? "justify-end" : "justify-start"
-                                      )}
-                                    >
-                                      {reactingId === message.id ? (
-                                        REACTIONS.map((reaction) => (
-                                          <button
-                                            key={reaction.id}
-                                            type="button"
-                                            onClick={() => react(message.id, reaction.id)}
-                                            aria-label={`React with ${reaction.id}`}
-                                            className="focus-ring grid min-h-8 min-w-8 place-items-center rounded-full text-sm hover:bg-secondary"
-                                          >
-                                            {reaction.emoji}
-                                          </button>
-                                        ))
-                                      ) : (
-                                        <>
-                                          <button
-                                            type="button"
-                                            onClick={() => setReactingId(message.id)}
-                                            aria-label="React to message"
-                                            title="React"
-                                            className="focus-ring grid h-8 w-8 place-items-center rounded-full hover:bg-secondary hover:text-foreground"
-                                          >
-                                            <Smile className="h-4 w-4" aria-hidden="true" />
-                                          </button>
-                                          {message.isMine && message.messageType === "text" ? (
-                                            <>
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  setEditingId(message.id);
-                                                  setEditDraft(message.text ?? "");
-                                                }}
-                                                className="focus-ring min-h-8 rounded-full px-2 hover:bg-secondary hover:text-foreground"
-                                              >
-                                                Edit
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={() => remove(message.id)}
-                                                className="focus-ring min-h-8 rounded-full px-2 hover:bg-destructive/10 hover:text-destructive"
-                                              >
-                                                Delete
-                                              </button>
-                                            </>
-                                          ) : null}
-                                        </>
-                                      )}
-                                    </div>
-                                  ) : null}
-                                </div>
+                                    {message.isMine && message.messageType === "text" ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setEditingId(message.id);
+                                            setEditDraft(message.text ?? "");
+                                          }}
+                                          className="focus-ring rounded px-1 hover:text-foreground"
+                                        >
+                                          Edit
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => remove(message.id)}
+                                          className="focus-ring rounded px-1 hover:text-destructive"
+                                        >
+                                          Delete
+                                        </button>
+                                      </>
+                                    ) : null}
+                                  </>
+                                )}
                               </div>
-                            )}
+                            ) : null}
                           </div>
-                        );
-                      })}
-                    </>
+                        </div>
+                      )
+                    )
                   )}
                 </div>
 
                 {/* Quick coordination actions (spec §39), no location attached. */}
-                <div className="max-w-full overflow-hidden bg-background/45 px-3 pb-1.5 pt-2 backdrop-blur-sm sm:px-4">
-                  <div className="no-scrollbar flex w-full max-w-full gap-1.5 overflow-x-auto overscroll-x-contain pr-8">
-                    {QUICK_ACTIONS.slice(0, 3).map((action) => {
-                      const meta = quickReplyMeta(action.id);
-                      const Icon = meta.icon;
-                      return (
-                        <button
-                          key={action.id}
-                          type="button"
-                          onClick={() => send("", action.id)}
-                          disabled={isPending}
-                          className="focus-ring safe-motion inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border/60 bg-background/70 px-3 text-xs font-medium text-foreground hover:border-primary/30 hover:bg-primary/10 hover:text-primary disabled:opacity-60"
-                        >
-                          <Icon className={cn("h-4 w-4", meta.className)} aria-hidden="true" />
-                          {action.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                <div className="flex flex-wrap gap-1.5 border-t border-border/70 px-3 pt-2">
+                  {QUICK_ACTIONS.slice(0, 3).map((action) => (
+                    <button
+                      key={action.id}
+                      type="button"
+                      onClick={() => send("", action.id)}
+                      disabled={isPending}
+                      className="focus-ring safe-motion rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-secondary"
+                    >
+                      {action.label}
+                    </button>
+                  ))}
                 </div>
 
                 <form
-                  className="message-composer flex shrink-0 items-center gap-2 bg-background/70 px-3 py-2 backdrop-blur-md sm:px-4"
+                  className="flex items-center gap-2 p-3"
                   onSubmit={(event) => {
                     event.preventDefault();
                     send(draft);
@@ -1069,17 +907,11 @@ export function MessagesPageContent({
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder={`Message ${selected.title}`}
                     aria-label={`Message ${selected.title}`}
-                    className="h-11 min-w-0 flex-1 rounded-full border-border/60 bg-background/75 px-4 text-sm"
+                    className="flex-1"
                   />
-                  <Button
-                    type="submit"
-                    size="icon"
-                    disabled={!draft.trim() || isPending}
-                    aria-label="Send message"
-                    title="Send message"
-                    className="focus-ring safe-motion grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_8px_22px_hsl(var(--primary)/0.28)] hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    <Send className="h-5 w-5" aria-hidden="true" />
+                  <Button type="submit" size="sm" disabled={!draft.trim() || isPending}>
+                    <Send className="h-4 w-4" aria-hidden="true" />
+                    Send
                   </Button>
                 </form>
               </div>
@@ -1087,23 +919,6 @@ export function MessagesPageContent({
           </div>
         </div>
       )}
-
-      {toast ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="toast-in fixed bottom-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom,0px)+0.75rem)] left-1/2 z-[60] -translate-x-1/2 md:bottom-6"
-        >
-          <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/70 bg-foreground px-3.5 py-2 text-sm font-medium text-background shadow-lg">
-            {toast === "Conversation muted" ? (
-              <VolumeX className="h-4 w-4" aria-hidden="true" />
-            ) : (
-              <Volume2 className="h-4 w-4" aria-hidden="true" />
-            )}
-            {toast}
-          </div>
-        </div>
-      ) : null}
 
       <NewMessageModal open={newMessageOpen} onOpenChange={setNewMessageOpen} onSelect={startConversationWith} />
       <PinPickerModal

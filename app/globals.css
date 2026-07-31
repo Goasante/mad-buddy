@@ -832,21 +832,6 @@ html.dark {
 :root {
   --app-header-content-height: 4.25rem;
   --app-header-height: calc(env(safe-area-inset-top, 0px) + var(--app-header-content-height));
-  --app-mobile-nav-height: 3.5rem;
-}
-
-/* Keep the chat composer above the mobile keyboard without leaving the global
-   bottom navigation floating between the conversation and the keyboard. The
-   canonical navigation is unchanged and returns as soon as focus leaves the
-   composer. */
-@media (max-width: 767px) {
-  body:has(.message-composer:focus-within) nav[aria-label="Mobile navigation"] {
-    display: none;
-  }
-
-  .message-composer {
-    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
-  }
 }
 
 html {
