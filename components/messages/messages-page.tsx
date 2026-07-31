@@ -449,7 +449,7 @@ export function MessagesPageContent({
   const hasAnyConversations = uniqueConversations.length > 0;
 
   return (
-    <div className="mx-auto max-w-[1200px] pt-6">
+    <div className="mx-auto w-full min-w-0 max-w-[1200px] overflow-x-clip pt-6">
       <header className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -509,7 +509,7 @@ export function MessagesPageContent({
               />
             </div>
 
-            <nav className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1" aria-label="Message filters">
+            <nav className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4" aria-label="Message filters">
               {tabs.map((tab) => {
                 const active = activeTab === tab.id;
                 const Icon = tab.icon;
@@ -554,7 +554,7 @@ export function MessagesPageContent({
                     </button>
                   ) : null}
                 </div>
-                <ul className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1 pt-1">
+                <ul className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 pt-1">
                   {pinnedConversations.map((conversation) => (
                     <li key={conversation.id} className="shrink-0">
                       <div className="relative w-[64px]">
