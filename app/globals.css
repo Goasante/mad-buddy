@@ -832,6 +832,7 @@ html.dark {
 :root {
   --app-header-content-height: 4.25rem;
   --app-header-height: calc(env(safe-area-inset-top, 0px) + var(--app-header-content-height));
+  --app-mobile-nav-height: 3.5rem;
 }
 
 /* Keep the chat composer above the mobile keyboard without leaving the global
@@ -844,7 +845,7 @@ html.dark {
   }
 
   .message-composer {
-    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
   }
 }
 

@@ -12,6 +12,7 @@ import {
   Plus,
   Search,
   Send,
+  Smile,
   Star,
   UsersRound,
   Volume2,
@@ -168,6 +169,7 @@ export function MessagesPageContent({
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [toast, setToast] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [reactingId, setReactingId] = useState<string | null>(null);
@@ -180,6 +182,20 @@ export function MessagesPageContent({
   const loadRequestIdRef = useRef(0);
   const messageListRef = useRef<HTMLDivElement>(null);
   const stayAtLatestRef = useRef(true);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(""), 2600);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    },
+    []
+  );
 
   const loadConversation = useCallback(async (conversationId: string) => {
     const requestId = ++loadRequestIdRef.current;
@@ -467,13 +483,16 @@ export function MessagesPageContent({
         const result = await withTimeout(muteConversationAction(selected.id, selected.muted ? 0 : 8), {
           operation: "update conversation mute"
         });
-        setFeedback(result.message);
         if (result.ok) {
+          setFeedback("");
+          showToast(selected.muted ? "Conversation unmuted" : "Conversation muted");
           setConversations((current) =>
             current.map((conversation) =>
               conversation.id === selected.id ? { ...conversation, muted: !conversation.muted } : conversation
             )
           );
+        } else {
+          setFeedback(result.message);
         }
       } catch (error) {
         setFeedback(messageFailure(error));
@@ -537,11 +556,17 @@ export function MessagesPageContent({
   const hasAnyConversations = uniqueConversations.length > 0;
 
   return (
-    <div className="mx-auto max-w-[1280px] px-4 pb-6 pt-5 sm:px-6 lg:px-8">
-      <header className="mb-5 flex items-start justify-between gap-4">
+    <div
+      className={cn(
+        "mx-auto max-w-[1280px] px-4 pb-6 pt-4 sm:px-6 lg:px-8",
+        selectedId &&
+          "flex h-[calc(100dvh-var(--app-mobile-nav-height)-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] flex-col overflow-hidden pb-0 md:block md:h-auto md:overflow-visible md:pb-6"
+      )}
+    >
+      <header className="mb-3 flex shrink-0 items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight text-foreground sm:text-[2.2rem]">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-orange-400/25 bg-orange-500/10 text-orange-400 shadow-[0_0_0_1px_rgba(249,115,22,0.08)]">
+          <h1 className="flex items-center gap-2.5 text-2xl font-semibold tracking-tight text-foreground sm:text-[2rem]">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
               <MessagesSquare className="h-5 w-5" aria-hidden="true" />
             </span>
             Messages
@@ -552,7 +577,7 @@ export function MessagesPageContent({
           type="button"
           variant="outline"
           size="icon"
-          className="safe-motion shrink-0 rounded-full border-orange-400/20 bg-orange-500/10 text-orange-400 hover:bg-orange-500/15 hover:text-orange-300"
+          className="safe-motion h-10 w-10 shrink-0 rounded-full border-primary/20 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
           onClick={() => setNewMessageOpen(true)}
           aria-label="New message"
           title="New message"
@@ -583,7 +608,7 @@ export function MessagesPageContent({
           }
         />
       ) : (
-        <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
+        <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
           <div className={cn("space-y-3", selectedId && "hidden xl:block")}>
             <div className="relative">
               <Search
@@ -764,7 +789,7 @@ export function MessagesPageContent({
 
           <div
             className={cn(
-              "-mx-4 flex h-[calc(100dvh-13rem)] min-h-0 flex-col overflow-hidden border-y border-border/60 bg-background/35 shadow-[0_18px_48px_rgba(0,0,0,0.12)] backdrop-blur-[2px] sm:mx-0 sm:rounded-[1.75rem] sm:border xl:h-[calc(100dvh-9.5rem)] xl:min-h-[34rem] xl:max-h-[780px]",
+              "-mx-4 flex h-full min-h-0 flex-col overflow-hidden bg-transparent md:mx-0 md:h-[calc(100dvh-9.5rem)] md:rounded-[1.5rem] md:border md:border-border/50 md:bg-background/25 md:shadow-[0_14px_40px_rgba(0,0,0,0.1)] xl:min-h-[34rem] xl:max-h-[780px]",
               !selectedId && "hidden xl:flex"
             )}
           >
@@ -779,17 +804,17 @@ export function MessagesPageContent({
               </div>
             ) : (
               <div className="flex min-h-0 flex-1 flex-col">
-                <div className="flex min-h-[76px] items-center gap-2.5 border-b border-border/50 bg-background/60 px-3 py-2.5 backdrop-blur-md sm:gap-3 sm:px-4">
+                <div className="flex min-h-[64px] shrink-0 items-center gap-2 border-b border-border/30 bg-background/45 px-2 py-2 backdrop-blur-md sm:gap-2.5 sm:px-3">
                   <button
                     type="button"
                     onClick={() => setSelectedId(null)}
                     aria-label="Back to conversations"
                     title="Back to conversations"
-                    className="focus-ring safe-motion -ml-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary/80 hover:text-foreground xl:hidden"
+                    className="focus-ring safe-motion -ml-1 grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary/80 hover:text-foreground xl:hidden"
                   >
                     <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                   </button>
-                  <GlowAvatar name={selected.title} src={selected.avatarUrl} size="lg" />
+                  <GlowAvatar name={selected.title} src={selected.avatarUrl} size="md" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-base font-semibold leading-tight sm:text-lg">{selected.title}</span>
                     {selected.otherUsername || selected.contextBadge ? (
@@ -804,9 +829,9 @@ export function MessagesPageContent({
                         type="button"
                         aria-label="Message information"
                         title="Message information"
-                        className="focus-ring safe-motion grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border/60 bg-background/60 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        className="focus-ring safe-motion grid h-10 w-10 shrink-0 place-items-center rounded-full bg-background/55 text-muted-foreground hover:bg-secondary hover:text-foreground"
                       >
-                        <Info className="h-5 w-5" aria-hidden="true" />
+                        <Info className="h-4 w-4" aria-hidden="true" />
                       </button>
                     </Popover.Trigger>
                     <Popover.Portal>
@@ -829,9 +854,9 @@ export function MessagesPageContent({
                     disabled={isPending}
                     aria-label={selected.muted ? "Unmute conversation" : "Mute conversation"}
                     title={selected.muted ? "Unmute conversation" : "Mute conversation"}
-                    className="focus-ring safe-motion grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border/60 bg-background/60 text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
+                    className="focus-ring safe-motion grid h-10 w-10 shrink-0 place-items-center rounded-full bg-background/55 text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
                   >
-                    {selected.muted ? <VolumeX className="h-5 w-5" aria-hidden="true" /> : <Volume2 className="h-5 w-5" aria-hidden="true" />}
+                    {selected.muted ? <VolumeX className="h-4 w-4" aria-hidden="true" /> : <Volume2 className="h-4 w-4" aria-hidden="true" />}
                   </button>
                 </div>
                 <div
@@ -841,7 +866,7 @@ export function MessagesPageContent({
                     stayAtLatestRef.current =
                       list.scrollHeight - list.scrollTop - list.clientHeight < 96;
                   }}
-                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background/10 px-3 py-4 sm:px-5"
+                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2 sm:px-5 sm:py-3"
                   aria-label={`Conversation with ${selected.title}`}
                   aria-live="polite"
                 >
@@ -870,8 +895,8 @@ export function MessagesPageContent({
                         return (
                           <div key={message.id}>
                             {showDay ? (
-                              <div className="py-4 text-center">
-                                <span className="inline-flex items-center rounded-full border border-white/8 bg-background/60 px-4 py-1 text-sm text-muted-foreground shadow-sm">
+                              <div className="py-2 text-center">
+                                <span className="inline-flex items-center rounded-full bg-background/60 px-3 py-1 text-[11px] font-medium text-muted-foreground shadow-sm">
                                   {formatMessageDayLabel(message.createdAt)}
                                 </span>
                               </div>
@@ -968,9 +993,11 @@ export function MessagesPageContent({
                                           <button
                                             type="button"
                                             onClick={() => setReactingId(message.id)}
-                                            className="focus-ring min-h-8 rounded-full px-2 hover:bg-secondary hover:text-foreground"
+                                            aria-label="React to message"
+                                            title="React"
+                                            className="focus-ring grid h-8 w-8 place-items-center rounded-full hover:bg-secondary hover:text-foreground"
                                           >
-                                            React
+                                            <Smile className="h-4 w-4" aria-hidden="true" />
                                           </button>
                                           {message.isMine && message.messageType === "text" ? (
                                             <>
@@ -1008,8 +1035,8 @@ export function MessagesPageContent({
                 </div>
 
                 {/* Quick coordination actions (spec §39), no location attached. */}
-                <div className="border-t border-border/40 bg-background/45 px-3 pb-2 pt-3 backdrop-blur-sm sm:px-4">
-                  <div className="no-scrollbar flex gap-2 overflow-x-auto">
+                <div className="max-w-full overflow-hidden bg-background/45 px-3 pb-1.5 pt-2 backdrop-blur-sm sm:px-4">
+                  <div className="no-scrollbar flex w-full max-w-full gap-1.5 overflow-x-auto overscroll-x-contain pr-8">
                     {QUICK_ACTIONS.slice(0, 3).map((action) => {
                       const meta = quickReplyMeta(action.id);
                       const Icon = meta.icon;
@@ -1019,7 +1046,7 @@ export function MessagesPageContent({
                           type="button"
                           onClick={() => send("", action.id)}
                           disabled={isPending}
-                          className="focus-ring safe-motion inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3.5 py-2 text-sm font-medium text-foreground hover:border-primary/30 hover:bg-primary/10 hover:text-primary disabled:opacity-60"
+                          className="focus-ring safe-motion inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border/60 bg-background/70 px-3 text-xs font-medium text-foreground hover:border-primary/30 hover:bg-primary/10 hover:text-primary disabled:opacity-60"
                         >
                           <Icon className={cn("h-4 w-4", meta.className)} aria-hidden="true" />
                           {action.label}
@@ -1030,7 +1057,7 @@ export function MessagesPageContent({
                 </div>
 
                 <form
-                  className="message-composer flex items-center gap-2 border-t border-border/40 bg-background/70 px-3 py-3 backdrop-blur-md sm:gap-3 sm:px-4"
+                  className="message-composer flex shrink-0 items-center gap-2 bg-background/70 px-3 py-2 backdrop-blur-md sm:px-4"
                   onSubmit={(event) => {
                     event.preventDefault();
                     send(draft);
@@ -1042,7 +1069,7 @@ export function MessagesPageContent({
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder={`Message ${selected.title}`}
                     aria-label={`Message ${selected.title}`}
-                    className="h-12 min-w-0 flex-1 rounded-full border-border/70 bg-background/75 px-4 text-[0.98rem]"
+                    className="h-11 min-w-0 flex-1 rounded-full border-border/60 bg-background/75 px-4 text-sm"
                   />
                   <Button
                     type="submit"
@@ -1050,7 +1077,7 @@ export function MessagesPageContent({
                     disabled={!draft.trim() || isPending}
                     aria-label="Send message"
                     title="Send message"
-                    className="focus-ring safe-motion grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_28px_hsl(var(--primary)/0.3)] hover:bg-primary/90 disabled:opacity-50"
+                    className="focus-ring safe-motion grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_8px_22px_hsl(var(--primary)/0.28)] hover:bg-primary/90 disabled:opacity-50"
                   >
                     <Send className="h-5 w-5" aria-hidden="true" />
                   </Button>
@@ -1060,6 +1087,23 @@ export function MessagesPageContent({
           </div>
         </div>
       )}
+
+      {toast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="toast-in fixed bottom-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom,0px)+0.75rem)] left-1/2 z-[60] -translate-x-1/2 md:bottom-6"
+        >
+          <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/70 bg-foreground px-3.5 py-2 text-sm font-medium text-background shadow-lg">
+            {toast === "Conversation muted" ? (
+              <VolumeX className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Volume2 className="h-4 w-4" aria-hidden="true" />
+            )}
+            {toast}
+          </div>
+        </div>
+      ) : null}
 
       <NewMessageModal open={newMessageOpen} onOpenChange={setNewMessageOpen} onSelect={startConversationWith} />
       <PinPickerModal
