@@ -221,6 +221,46 @@ export function MessagesPageContent({
 
   const selected = uniqueConversations.find((conversation) => conversation.id === selectedId) ?? null;
 
+  const dismissConversation = useCallback(() => {
+    openedRequestedConversation.current = true;
+    setSelectedId(null);
+    setMessages([]);
+    if (requestedConversationId) router.replace("/messages", { scroll: false });
+  }, [requestedConversationId, router]);
+
+  /* A conversation is page-level UI inside /messages, not a separate route.
+   * Give it one same-URL history entry so browser swipe-back and Android/PWA
+   * Back close the chat before leaving Messages. Preserve Next's existing
+   * history state, and ignore the first pop when a nested info sheet closes. */
+  useEffect(() => {
+    if (!selectedId || typeof window === "undefined") return;
+
+    window.history.pushState({ ...window.history.state, mbConversation: true }, "");
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.mbConversation) return;
+      dismissConversation();
+    };
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      if (window.history.state?.mbConversation) {
+        const nextState = { ...window.history.state };
+        delete nextState.mbConversation;
+        window.history.replaceState(nextState, "");
+      }
+    };
+  }, [dismissConversation, selectedId]);
+
+  const closeConversation = useCallback(() => {
+    if (typeof window !== "undefined" && window.history.state?.mbConversation) {
+      window.history.back();
+      return;
+    }
+    dismissConversation();
+  }, [dismissConversation]);
+
   useEffect(() => {
     if (
       openedRequestedConversation.current ||
@@ -692,7 +732,7 @@ export function MessagesPageContent({
                 <div className="flex min-h-[68px] items-center gap-2 border-b border-border/70 px-3">
                   <button
                     type="button"
-                    onClick={() => setSelectedId(null)}
+                    onClick={closeConversation}
                     aria-label="Back to conversations"
                     title="Back to conversations"
                     className="focus-ring safe-motion -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground lg:hidden"
