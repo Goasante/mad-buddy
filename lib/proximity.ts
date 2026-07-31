@@ -1,11 +1,10 @@
-export type ProximityLevel = "very_close" | "nearby" | "around" | "far" | "hidden";
+export type ProximityLevel = "close" | "near" | "far" | "hidden";
 export type ConfidenceLevel = "high" | "medium" | "low";
 
 export const proximityLabels: Record<ProximityLevel, string> = {
-  very_close: "Very close",
-  nearby: "Nearby",
-  around: "Around you",
-  far: "Not glowing right now",
+  close: "Close",
+  near: "Near",
+  far: "Far",
   hidden: "Hidden"
 };
 
@@ -16,15 +15,15 @@ export const confidenceLabels: Record<ConfidenceLevel, string> = {
 };
 
 export function getGlowClass(proximityLevel: ProximityLevel) {
-  if (proximityLevel === "hidden" || proximityLevel === "far") {
+  if (proximityLevel === "hidden") {
     return "proximity-halo-muted";
   }
 
-  if (proximityLevel === "very_close") {
+  if (proximityLevel === "close") {
     return "proximity-halo-very-close";
   }
 
-  if (proximityLevel === "nearby") {
+  if (proximityLevel === "near") {
     return "proximity-halo-nearby";
   }
 

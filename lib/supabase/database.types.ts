@@ -11,7 +11,7 @@ export type FriendRequestStatus =
   | "expired";
 export type VisibilityStatus = "visible" | "ghost" | "app_open_only";
 export type LocationConfidence = "high" | "medium" | "low";
-export type ProximityLevel = "very_close" | "nearby" | "around" | "far" | "hidden";
+export type ProximityLevel = "close" | "near" | "far" | "hidden";
 export type SubscriptionPlan = "free" | "buddy_plus" | "buddy_pro";
 export type SubscriptionStatus =
   | "free"

@@ -104,7 +104,10 @@ export function HomeScreen() {
     });
   }, [loadNearby]);
 
-  const visibleFriends = friends.filter((f) => f.proximity_level !== "hidden" && f.proximity_level !== "far");
+  // The server has already excluded everyone beyond 15km. Close, Near and Far
+  // are therefore all valid Nearby Muddies; only a privacy-hidden/stale signal
+  // stays out of this strip.
+  const visibleFriends = friends.filter((f) => f.proximity_level !== "hidden");
   const nearbyCount = visibleFriends.length;
 
   async function toggleVisibility() {
@@ -231,7 +234,7 @@ export function HomeScreen() {
                 <GlowAvatar name={friend.display_name} src={friend.avatar_url} proximityLevel={friend.proximity_level} glowStrength={friend.glow_strength} confidence={friend.confidence ?? "medium"} size="lg" />
                 <span className="max-w-full truncate text-sm font-medium">{friend.display_name.split(" ")[0]}</span>
                 <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
-                  {friend.proximity_level === "very_close" ? "Very close" : friend.proximity_level === "nearby" ? "Nearby" : "Around"}
+                  {friend.proximity_level === "close" ? "Close" : friend.proximity_level === "near" ? "Near" : "Far"}
                 </span>
               </button>
             ))}

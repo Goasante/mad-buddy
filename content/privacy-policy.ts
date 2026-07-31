@@ -21,7 +21,7 @@ Mad Buddy ("we", "us") is a private social proximity app operated by ${legalCont
 * **Account information:** your email address, display name, username, and password (stored as a hash by our authentication provider; we never see your plain-text password).
 * **Profile information you choose to add:** a bio, a mood status, and a profile photo.
 * **A single location signal:** when your glow is on, your device sends your current coordinates over an encrypted connection. We store only your most recent signal: each update overwrites the previous one. We do not keep a location history.
-* **Derived proximity signals:** short-lived records of which proximity tier (Very close, Nearby, Around you) applied between you and a Muddy, kept for the app's recent-activity features and designed to expire after 15 minutes.
+* **Derived proximity signals:** short-lived records of which proximity tier (Close, Near, or Far) applied between you and a Muddy, kept for the app's recent-activity features and designed to expire after 15 minutes.
 * **Notifications and social activity:** friend requests, waves, meet-up pings, and in-app notifications you send or receive.
 * **Billing information:** if you subscribe, our payment provider (Paystack) processes your payment. We store a reference to your subscription status and plan, never your card number.
 
@@ -34,7 +34,7 @@ Mad Buddy ("we", "us") is a private social proximity app operated by ${legalCont
 
 ## What your Muddies can see
 
-* A privacy-safe proximity tier: Very close, Nearby, or Around you.
+* A privacy-safe proximity tier: Close, Near, or Far.
 * Your chosen display name, username, profile photo, bio, and mood status.
 * Whether you have chosen to be visible right now.
 

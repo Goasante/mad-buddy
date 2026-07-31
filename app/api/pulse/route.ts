@@ -81,7 +81,7 @@ export async function GET() {
         priority: basePriorityFor("proximity"),
         createdAtMs: now,
         expiresAtMs: null,
-        isVeryClose: friend.proximity_level === "very_close",
+        isVeryClose: friend.proximity_level === "close",
         data: {
           displayName: friend.display_name,
           proximityLevel: friend.proximity_level,

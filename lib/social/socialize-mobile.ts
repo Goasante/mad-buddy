@@ -41,7 +41,7 @@ export type SocializePerson = {
   avatarUrl: string | null;
   activity: SocializeActivity;
   note: string | null;
-  proximityTier: Extract<ProximityLevel, "very_close" | "nearby" | "around">;
+  proximityTier: Extract<ProximityLevel, "close" | "near" | "far">;
   waveState: SocializeWaveState;
 };
 
@@ -208,7 +208,7 @@ export async function deactivateSocialize(userId: string): Promise<SocializeActi
   }
 }
 
-const PROXIMITY_RANK: Record<string, number> = { very_close: 0, nearby: 1, around: 2 };
+const PROXIMITY_RANK: Record<string, number> = { close: 0, near: 1, far: 2 };
 
 /**
  * Privacy-safe discovery of other people currently using Socialize. Reuses the
@@ -308,7 +308,7 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
     const people: SocializePerson[] = [];
     for (const candidate of safe) {
       const tier = candidate.proximity_level;
-      if (tier !== "very_close" && tier !== "nearby" && tier !== "around") continue;
+      if (tier !== "close" && tier !== "near" && tier !== "far") continue;
       if (!allowedTiers.includes(tier)) continue;
       const session = sessionByUserId.get(candidate.friend_id);
       if (!session) continue;

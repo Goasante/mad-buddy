@@ -43,9 +43,9 @@ function remainingLabel(expiresAt: string, nowMs: number): string {
 }
 
 type Tier = SocializePerson["proximityTier"];
-const TIER_ORDER: Record<Tier, number> = { very_close: 0, nearby: 1, around: 2 };
-const TIER_RING: Record<Tier, string> = { very_close: "ring-violet-500", nearby: "ring-primary", around: "ring-sky-500" };
-const TIER_PILL: Record<Tier, string> = { very_close: "bg-violet-500", nearby: "bg-primary", around: "bg-sky-500" };
+const TIER_ORDER: Record<Tier, number> = { close: 0, near: 1, far: 2 };
+const TIER_RING: Record<Tier, string> = { close: "ring-violet-500", near: "ring-primary", far: "ring-sky-500" };
+const TIER_PILL: Record<Tier, string> = { close: "bg-violet-500", near: "bg-primary", far: "bg-sky-500" };
 
 const DURATION_SHORT: Record<SocializeDuration, string> = { "30m": "30m", "1h": "1h", "3h": "3h" };
 const RANGE_OPTIONS: Array<{ value: SocializeAreaTier; label: string }> = [
@@ -80,7 +80,7 @@ type RadarLayout = {
 /**
  * Orbital, collision-safe placement. Nearby people are distributed AROUND my
  * centred profile on an elliptical field (so both width and height are used).
- * Ring = proximity tier (very_close inner → around outer); angle = a golden-
+ * Ring = proximity tier (close inner → far outer); angle = a golden-
  * spiral slot (upper-right start) nudged until it clears my avatar, the status
  * pill, every other avatar, and the screen edges. Anyone who can't fit cleanly
  * rolls into a "+N" on the outer ring — never stacked or shrunk.
@@ -91,13 +91,13 @@ function computeRadarLayout(people: SocializePerson[], w: number, h: number): Ra
   const rx = w / 2 - EDGE - PEOPLE_D / 2;
   const ry = Math.min(h / 2 - EDGE - PEOPLE_D / 2, rx * 1.55);
   const minAxis = Math.min(rx, ry);
-  const fallbackFrac: Record<Tier, number> = { very_close: 0.6, nearby: 0.8, around: 1 };
+  const fallbackFrac: Record<Tier, number> = { close: 0.6, near: 0.8, far: 1 };
   if (w < 80 || h < 80 || minAxis < CENTER_MIN + 10) {
     return { placed: [], overflow: people.length, cx, cy, rx, ry, ringFrac: fallbackFrac };
   }
 
   const fInner = Math.min(0.84, Math.max(0.5, (CENTER_MIN + 10) / minAxis));
-  const ringFrac: Record<Tier, number> = { very_close: fInner, nearby: (fInner + 1) / 2, around: 1 };
+  const ringFrac: Record<Tier, number> = { close: fInner, near: (fInner + 1) / 2, far: 1 };
 
   const inProtected = (x: number, y: number) => {
     if (Math.hypot(x - cx, y - cy) < CENTER_MIN) return true; // avatar + glow
@@ -359,7 +359,7 @@ export function SocializePage({
 
   const layout = useMemo(() => computeRadarLayout(isActive ? people : [], size.w, size.h), [isActive, people, size]);
   const measured = size.w > 80 && size.h > 80;
-  const ringTiers: Tier[] = ["around", "nearby", "very_close"];
+  const ringTiers: Tier[] = ["far", "near", "close"];
 
   return (
     <div className="mx-auto flex w-full max-w-[520px] flex-col pt-3">

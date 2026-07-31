@@ -116,7 +116,7 @@ const momentTrustPoints = [
 ];
 
 const muddiesMaySee = [
-  "Very close, Nearby, or Around",
+  "Close, Near, or Far",
   "Your chosen profile name and image",
   "Whether you have chosen to be visible"
 ];
@@ -146,7 +146,7 @@ const safetyControls = [
 const featureItems = [
   {
     title: "Privacy-safe proximity",
-    description: "See Very close, Nearby, or Around, never an exact distance.",
+    description: "See Close, Near, or Far, never an exact distance.",
     icon: Radio
   },
   {

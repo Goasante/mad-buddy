@@ -26,14 +26,14 @@ export function GlowRing({
   const normalizedStrength = Math.min(100, Math.max(0, glowStrength));
   const confidenceMultiplier = confidence === "low" ? 0.82 : confidence === "medium" ? 0.92 : 1;
   const strengthMultiplier = 0.88 + (normalizedStrength / 100) * 0.12;
-  const isMuted = proximityLevel === "far" || proximityLevel === "hidden";
+  const isMuted = proximityLevel === "hidden";
   const shouldPulse = !isMuted && !reducedMotion;
   const stateOpacity =
-    proximityLevel === "very_close"
+    proximityLevel === "close"
       ? 0.98
-      : proximityLevel === "nearby"
+      : proximityLevel === "near"
         ? 0.76
-        : proximityLevel === "around"
+        : proximityLevel === "far"
           ? 0.5
           : 0;
   const activeHaloOpacity = stateOpacity * confidenceMultiplier * strengthMultiplier;

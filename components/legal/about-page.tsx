@@ -26,7 +26,7 @@ const howItWorks = [
 
 const differentiators = [
   { title: "Approved friends only", description: "Nobody appears nearby unless you have both approved each other. No open discovery of strangers.", icon: ShieldCheck },
-  { title: "No maps, no exact spots", description: "You see “Very close”, “Nearby”, or “Around” — never coordinates, pins, or precise distance.", icon: MapPinOff },
+  { title: "No maps, no exact spots", description: "You see “Close”, “Near”, or “Far” — never coordinates, pins, or precise distance.", icon: MapPinOff },
   { title: "Visible when you choose", description: "Your glow is yours to control. Turn it off any time and simply disappear from nearby.", icon: EyeOff }
 ];
 

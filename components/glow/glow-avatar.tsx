@@ -20,7 +20,7 @@ export type GlowAvatarProps = {
 export function GlowAvatar({
   name,
   src,
-  proximityLevel = "far",
+  proximityLevel,
   glowStrength = 0,
   confidence = "low",
   size = "md",
@@ -28,15 +28,21 @@ export function GlowAvatar({
   className,
   glowColorId = null
 }: GlowAvatarProps) {
+  // Many non-proximity surfaces reuse GlowAvatar for consistent avatar
+  // rendering. No supplied level means "no proximity signal", not Far. Far is
+  // now a real 10–15km bucket with a subtle glow, while this neutral fallback
+  // keeps ordinary chat/group/plan avatars full-colour and glow-free.
+  const resolvedProximityLevel = proximityLevel ?? "hidden";
+
   return (
     <GlowRing
-      proximityLevel={proximityLevel}
+      proximityLevel={resolvedProximityLevel}
       confidence={confidence}
       glowStrength={glowStrength}
       reducedMotion={reducedMotion}
       glowColorId={glowColorId}
       className={cn(proximityLevel === "hidden" && "opacity-50 grayscale", className)}
-      aria-label={`${name}, ${proximityLabels[proximityLevel].toLowerCase()}`}
+      aria-label={proximityLevel ? `${name}, ${proximityLabels[proximityLevel].toLowerCase()}` : name}
     >
       <UserAvatar
         src={src}

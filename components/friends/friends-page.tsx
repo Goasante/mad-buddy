@@ -217,15 +217,16 @@ export function FriendsPageContent({
 
   // Active-first grouping for the Muddies list. "Active" reuses the same
   // privacy-filtered proximity signal already fetched above (no second query):
-  // a Muddy counts as active only when their live proximity is very close,
-  // nearby or around. Active Muddies are ordered by proximity priority then
-  // name; inactive Muddies fall back to alphabetical since no live sort exists.
+  // a Muddy counts as active only when their live proximity is close, near or
+  // far (within the 15km nearby range). Active Muddies are ordered by
+  // proximity priority then name; inactive Muddies fall back to alphabetical
+  // since no live sort exists.
   const { activeFriends, inactiveFriends } = useMemo(() => {
     const active: UserSummary[] = [];
     const inactive: UserSummary[] = [];
     for (const user of visibleFriendUsers) {
       const level = proximityByFriendId[user.id]?.proximityLevel;
-      if (level === "very_close" || level === "nearby" || level === "around") {
+      if (level === "close" || level === "near" || level === "far") {
         active.push(user);
       } else {
         inactive.push(user);
@@ -233,7 +234,7 @@ export function FriendsPageContent({
     }
     const proximityRank = (user: UserSummary) => {
       const level = proximityByFriendId[user.id]?.proximityLevel;
-      return level === "very_close" ? 0 : level === "nearby" ? 1 : 2;
+      return level === "close" ? 0 : level === "near" ? 1 : 2;
     };
     active.sort(
       (a, b) => proximityRank(a) - proximityRank(b) || a.displayName.localeCompare(b.displayName)
@@ -824,9 +825,9 @@ type UserRowProps = {
 /** Colour for the secondary proximity line — active states read as "alive",
  *  inactive/hidden stay muted. Never conveys distance, only the bucket. */
 const PROXIMITY_TEXT_CLASS: Partial<Record<ProximityLevel, string>> = {
-  very_close: "text-primary",
-  nearby: "text-violet-600 dark:text-violet-300",
-  around: "text-blue-600 dark:text-blue-300"
+  close: "text-primary",
+  near: "text-violet-600 dark:text-violet-300",
+  far: "text-blue-600 dark:text-blue-300"
 };
 
 /** Same palette, as a ring colour. On this page's compact rows the animated
@@ -834,13 +835,13 @@ const PROXIMITY_TEXT_CLASS: Partial<Record<ProximityLevel, string>> = {
  *  size, so avatars here use a plain solid outline in the proximity colour
  *  instead — same information, easier to read at a glance. */
 const PROXIMITY_RING_CLASS: Partial<Record<ProximityLevel, string>> = {
-  very_close: "ring-primary",
-  nearby: "ring-violet-500",
-  around: "ring-blue-500"
+  close: "ring-primary",
+  near: "ring-violet-500",
+  far: "ring-blue-500"
 };
 
 function isActiveLevel(level: ProximityLevel): boolean {
-  return level === "very_close" || level === "nearby" || level === "around";
+  return level === "close" || level === "near" || level === "far";
 }
 
 /** ring-2 + offset in the proximity colour when glowing; no ring otherwise. */
@@ -890,7 +891,9 @@ function MuddyRow({
   onCreateCircle
 }: UserRowProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const level = proximity?.proximityLevel ?? "far";
+  // Missing proximity is not the Far bucket. Far now means a real, in-range
+  // 10–15km signal; absent data must remain inactive/hidden.
+  const level = proximity?.proximityLevel ?? "hidden";
   const otherCircles = circles.filter((circle) => circle.id !== "close-friends");
   const statusClass = PROXIMITY_TEXT_CLASS[level] ?? "text-muted-foreground";
 
@@ -1008,7 +1011,7 @@ function ActiveNowStrip({
       <ul className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1 pt-1.5">
         {friends.map((friend) => {
           const proximity = proximityByFriendId[friend.id];
-          const level = proximity?.proximityLevel ?? "around";
+          const level = proximity?.proximityLevel ?? "hidden";
           return (
             <li key={friend.id} className="shrink-0">
               <button

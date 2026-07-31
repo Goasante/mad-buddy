@@ -115,7 +115,7 @@ export function MuddiesScreen() {
   const filteredMuddies = muddies.filter(matchesQuery);
   const isActive = (id: string) => {
     const level = proximity[id]?.proximity_level;
-    return level === "very_close" || level === "nearby" || level === "around";
+    return level === "close" || level === "near" || level === "far";
   };
   const activeNow = filteredMuddies.filter((m) => isActive(m.id));
   // "All Muddies" excludes those already surfaced under "Active now".
@@ -213,11 +213,11 @@ export function MuddiesScreen() {
               <ul className="space-y-3">
                 {activeNow.map((muddy) => {
                   const near = proximity[muddy.id];
-                  const label = near?.proximity_level === "very_close" ? "Very close" : near?.proximity_level === "nearby" ? "Nearby" : "Around";
+                  const label = near?.proximity_level === "close" ? "Close" : near?.proximity_level === "near" ? "Near" : "Far";
                   return (
                     <li key={muddy.id} className="rounded-2xl border border-primary/40 bg-primary/[0.04] p-4">
                       <button type="button" onClick={() => navigate(`/u/${muddy.id}`)} className="focus-ring flex w-full items-center gap-3 text-left">
-                        <GlowAvatar name={muddy.displayName} src={muddy.avatarUrl} proximityLevel={near?.proximity_level ?? "far"} glowStrength={near?.glow_strength ?? 0} confidence="medium" size="md" />
+                        <GlowAvatar name={muddy.displayName} src={muddy.avatarUrl} proximityLevel={near?.proximity_level ?? "hidden"} glowStrength={near?.glow_strength ?? 0} confidence="medium" size="md" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold">{muddy.displayName}</p>
                           <p className="truncate text-xs text-primary">{label}</p>
@@ -374,12 +374,12 @@ function MuddyRow({
   onOpen: () => void;
 }) {
   const label =
-    near && near.proximity_level !== "far" && near.proximity_level !== "hidden"
-      ? near.proximity_level === "very_close"
-        ? "Very close"
-        : near.proximity_level === "nearby"
-          ? "Nearby"
-          : "Around"
+    near && near.proximity_level !== "hidden"
+      ? near.proximity_level === "close"
+        ? "Close"
+        : near.proximity_level === "near"
+          ? "Near"
+          : "Far"
       : null;
   return (
     <li>
@@ -387,7 +387,7 @@ function MuddyRow({
         <GlowAvatar
           name={muddy.displayName}
           src={muddy.avatarUrl}
-          proximityLevel={near?.proximity_level ?? "far"}
+          proximityLevel={near?.proximity_level ?? "hidden"}
           glowStrength={near?.glow_strength ?? 0}
           confidence="medium"
           size="md"

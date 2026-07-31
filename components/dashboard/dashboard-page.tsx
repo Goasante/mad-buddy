@@ -121,11 +121,10 @@ type DashboardPageContentProps = {
 
 /** Strongest proximity bucket first, then the brightest glow within a bucket. */
 const PROXIMITY_ORDER: Record<ProximityLevel, number> = {
-  very_close: 0,
-  nearby: 1,
-  around: 2,
-  far: 3,
-  hidden: 4
+  close: 0,
+  near: 1,
+  far: 2,
+  hidden: 3
 };
 
 /** Home shows at most four positions; a fifth+ collapses into a "+N" tile. */
@@ -157,9 +156,9 @@ function statusDisplay(note?: string, availability?: AvailabilityType): string {
 
 /** Per-proximity accent for the label pill, matching the reference hues. */
 const PROXIMITY_LABEL_CLASS: Partial<Record<ProximityLevel, string>> = {
-  very_close: "bg-primary/12 text-primary",
-  nearby: "bg-violet-500/15 text-violet-600 dark:text-violet-300",
-  around: "bg-blue-500/15 text-blue-600 dark:text-blue-300"
+  close: "bg-primary/12 text-primary",
+  near: "bg-violet-500/15 text-violet-600 dark:text-violet-300",
+  far: "bg-blue-500/15 text-blue-600 dark:text-blue-300"
 };
 
 export function DashboardPageContent({
@@ -192,19 +191,20 @@ export function DashboardPageContent({
   const promptFeedbackTimerRef = useRef<number | null>(null);
 
   const visibleFriends = !ghostMode ? friends : [];
-  // The nearby endpoint also returns friends whose signal is stale ("hidden")
-  // or merely "far"; only these three levels are a real "nearby" glance. Sorted
-  // strongest-first so the four preview positions show the closest Muddies.
-  // Memoised on the stable inputs (friends, ghostMode) rather than the derived
-  // visibleFriends, so it doesn't recompute every render.
+  // The nearby endpoint also returns friends whose signal is stale ("hidden");
+  // only close/near/far are a real "nearby" glance (everyone beyond the 15km
+  // range is already excluded server-side). Sorted strongest-first so the
+  // four preview positions show the closest Muddies. Memoised on the stable
+  // inputs (friends, ghostMode) rather than the derived visibleFriends, so it
+  // doesn't recompute every render.
   const nearbyFriends = useMemo(
     () =>
       (ghostMode ? [] : friends)
         .filter(
           (friend) =>
-            friend.proximityLevel === "very_close" ||
-            friend.proximityLevel === "nearby" ||
-            friend.proximityLevel === "around"
+            friend.proximityLevel === "close" ||
+            friend.proximityLevel === "near" ||
+            friend.proximityLevel === "far"
         )
         .sort(
           (a, b) =>

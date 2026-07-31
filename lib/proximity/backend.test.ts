@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   NEARBY_STALE_AFTER_MS,
-  AROUND_MAX_METERS,
-  NEARBY_MAX_METERS,
-  VERY_CLOSE_MAX_METERS,
+  CLOSE_MAX_METERS,
+  NEAR_MAX_METERS,
+  FAR_MAX_METERS,
+  MAX_NEARBY_METERS,
   assertPrivacySafeResponse,
   bucketProximity,
   bucketProximityWithConfidence,
@@ -30,7 +31,7 @@ describe("assertPrivacySafeResponse", () => {
           {
             friend_id: "f",
             display_name: "Ama",
-            proximity_level: "nearby",
+            proximity_level: "near",
             glow_strength: 60,
             confidence: "high"
           }
@@ -70,7 +71,7 @@ describe("assertPrivacySafeResponse", () => {
           display_name: "Ama",
           username: "ama",
           avatar_url: null,
-          proximity_level: "nearby",
+          proximity_level: "near",
           glow_strength: 60,
           status_text: "Glowing nearby",
           last_active_estimate: "Active recently",
@@ -97,36 +98,63 @@ describe("assertPrivacySafeResponse", () => {
 
 describe("bucketProximity", () => {
   it.each([
-    [0, "very_close"],
-    [2_000, "very_close"],
-    [VERY_CLOSE_MAX_METERS, "very_close"],
-    [VERY_CLOSE_MAX_METERS + 1, "nearby"],
-    [NEARBY_MAX_METERS, "nearby"],
-    [NEARBY_MAX_METERS + 1, "around"],
-    [AROUND_MAX_METERS, "around"],
-    [AROUND_MAX_METERS + 1, "far"]
+    [0, "close"],
+    [4_990, "close"],
+    [CLOSE_MAX_METERS, "close"], // 5.00km -> Close
+    [CLOSE_MAX_METERS + 10, "near"], // 5.01km -> Near
+    [9_990, "near"],
+    [NEAR_MAX_METERS, "near"], // 10.00km -> Near
+    [NEAR_MAX_METERS + 10, "far"], // 10.01km -> Far
+    [14_990, "far"],
+    [FAR_MAX_METERS, "far"], // 15.00km -> Far
+    [FAR_MAX_METERS + 10, null], // 15.01km -> outside nearby range
+    [MAX_NEARBY_METERS + 10, null]
   ])("%d meters -> %s", (meters, level) => {
     expect(bucketProximity(meters)).toBe(level);
   });
 });
 
+// Exact boundary values from the product spec, expressed in km -> meters, so
+// the mapping to the canonical 5/10/15km bands is traceable one to one.
+describe("bucketProximity: canonical km boundaries", () => {
+  it.each([
+    [0, "close"],
+    [4.99, "close"],
+    [5.0, "close"],
+    [5.01, "near"],
+    [9.99, "near"],
+    [10.0, "near"],
+    [10.01, "far"],
+    [14.99, "far"],
+    [15.0, "far"],
+    [15.01, null]
+  ])("%skm -> %s", (km, level) => {
+    expect(bucketProximity(km * 1000)).toBe(level);
+  });
+});
+
 describe("bucketProximityWithConfidence", () => {
   it.each(["high", "medium", "low"] as const)(
-    "keeps two readings at the same place very close with %s confidence",
+    "keeps two readings at the same place close with %s confidence",
     (confidence) => {
-      expect(bucketProximityWithConfidence(0, confidence)).toBe("very_close");
+      expect(bucketProximityWithConfidence(0, confidence)).toBe("close");
     }
   );
 
   it("only moves a medium-confidence reading outward near a boundary", () => {
-    expect(bucketProximityWithConfidence(20_000, "medium")).toBe("very_close");
-    expect(bucketProximityWithConfidence(24_500, "medium")).toBe("nearby");
+    // medium margin is 200m: 4_700+200=4_900 stays Close, 4_900+200=5_100 tips to Near.
+    expect(bucketProximityWithConfidence(4_700, "medium")).toBe("close");
+    expect(bucketProximityWithConfidence(4_900, "medium")).toBe("near");
   });
 
-  it("uses a wider safety margin for a weak signal", () => {
-    expect(bucketProximityWithConfidence(5_000, "low")).toBe("very_close");
-    expect(bucketProximityWithConfidence(10_000, "low")).toBe("nearby");
-    expect(bucketProximityWithConfidence(40_000, "low")).toBe("around");
+  it("uses a wider safety margin for a weak signal, never promoting into a closer bucket", () => {
+    // low margin is 2_000m: verify it pushes readings outward at each boundary.
+    expect(bucketProximityWithConfidence(2_900, "low")).toBe("close"); // 4_900 -> Close
+    expect(bucketProximityWithConfidence(3_100, "low")).toBe("near"); // 5_100 -> Near
+    expect(bucketProximityWithConfidence(7_900, "low")).toBe("near"); // 9_900 -> Near
+    expect(bucketProximityWithConfidence(8_100, "low")).toBe("far"); // 10_100 -> Far
+    expect(bucketProximityWithConfidence(12_900, "low")).toBe("far"); // 14_900 -> Far
+    expect(bucketProximityWithConfidence(13_100, "low")).toBe(null); // 15_100 -> outside range
   });
 });
 
@@ -219,7 +247,7 @@ describe("buildSafeNearbyFriends", () => {
     });
 
     expect(result).toHaveLength(1);
-    expect(result[0].proximity_level).toBe("very_close");
+    expect(result[0].proximity_level).toBe("close");
     expect(() => assertPrivacySafeResponse({ friends: result })).not.toThrow();
   });
 
@@ -283,7 +311,7 @@ describe("buildSafeNearbyFriends", () => {
       profileByUserId: new Map([["fuzzy", profile("fuzzy")]])
     });
 
-    expect(result[0].proximity_level).toBe("very_close");
+    expect(result[0].proximity_level).toBe("close");
     expect(result[0].confidence).toBe("low");
   });
 
@@ -333,14 +361,49 @@ describe("buildSafeNearbyFriends", () => {
     expect(result[0].muddy_status_note).toBeNull();
   });
 
-  it("far friends get zero glow strength", () => {
+  it("far friends (10-15km) get a subtle but non-zero glow", () => {
+    // ~0.1 degree of latitude is ~11.1km, inside the Far band (>10-15km).
     const result = build({
       friendIds: ["far"],
-      locationByUserId: new Map([["far", location("far", { latitude: 6.7 })]]),
+      locationByUserId: new Map([["far", location("far", { latitude: 5.6037 + 0.1 })]]),
       profileByUserId: new Map([["far", profile("far")]])
     });
 
     expect(result[0].proximity_level).toBe("far");
-    expect(result[0].glow_strength).toBe(0);
+    expect(result[0].glow_strength).toBeGreaterThan(0);
+  });
+
+  it("excludes friends beyond the 15km nearby range entirely, not just muted", () => {
+    // ~1 degree of latitude is ~111km, far outside MAX_NEARBY_METERS.
+    const result = build({
+      friendIds: ["outside-range"],
+      locationByUserId: new Map([["outside-range", location("outside-range", { latitude: 6.7 })]]),
+      profileByUserId: new Map([["outside-range", profile("outside-range")]])
+    });
+
+    expect(result).toHaveLength(0);
+  });
+
+  it("premium glow color entitlement does not affect the proximity bucket", () => {
+    const withoutPremium = build({
+      friendIds: ["a"],
+      locationByUserId: new Map([["a", location("a")]]),
+      profileByUserId: new Map([["a", profile("a")]]),
+      premiumUserIds: new Set()
+    });
+    const withPremium = build({
+      friendIds: ["a"],
+      locationByUserId: new Map([["a", location("a")]]),
+      profileByUserId: new Map([["a", profile("a")]]),
+      premiumUserIds: new Set(["a"])
+    });
+
+    expect(withoutPremium[0].proximity_level).toBe(withPremium[0].proximity_level);
+    // glow_strength includes +/-5 random jitter, so compare the base range
+    // rather than exact equality between two independent calls.
+    expect(withoutPremium[0].glow_strength).toBeGreaterThanOrEqual(85);
+    expect(withPremium[0].glow_strength).toBeGreaterThanOrEqual(85);
+    expect(withPremium[0].is_premium_theme_unlocked).toBe(true);
+    expect(withoutPremium[0].is_premium_theme_unlocked).toBe(false);
   });
 });

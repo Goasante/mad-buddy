@@ -205,7 +205,6 @@ export async function buildMomentFeed(
           .filter(
             (friend) =>
               friend.proximity_level !== "hidden" &&
-              friend.proximity_level !== "far" &&
               friend.freshness_state !== "stale"
           )
           .map((friend) => friend.friend_id)

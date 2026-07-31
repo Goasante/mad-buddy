@@ -34,7 +34,7 @@ export function VisibilityPreviewCard({
         <GlowAvatar
           name={displayName || "New Buddy"}
           src={null}
-          proximityLevel={isGhost ? "hidden" : "nearby"}
+          proximityLevel={isGhost ? "hidden" : "near"}
           glowStrength={isGhost ? 0 : 72}
           confidence={isGhost ? "low" : "high"}
           size="lg"

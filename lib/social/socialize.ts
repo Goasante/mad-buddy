@@ -50,9 +50,9 @@ export const SOCIALIZE_AREA_LABELS: Record<SocializeAreaTier, string> = Object.f
 // proximity tiers it admits. Distance stays server-side; the client only ever
 // sends the tier and only ever receives these labels.
 export const AREA_TIER_PROXIMITY: Record<SocializeAreaTier, ReadonlyArray<ProximityLevel>> = {
-  close_by: ["very_close"],
-  nearby: ["very_close", "nearby"],
-  wider_area: ["very_close", "nearby", "around"]
+  close_by: ["close"],
+  nearby: ["close", "near"],
+  wider_area: ["close", "near", "far"]
 };
 
 export function isSocializeActivity(value: unknown): value is SocializeActivity {

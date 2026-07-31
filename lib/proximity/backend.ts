@@ -15,7 +15,7 @@ export const safeNearbyFriendSchema = z.object({
   display_name: z.string(),
   username: z.string(),
   avatar_url: z.string().nullable(),
-  proximity_level: z.enum(["very_close", "nearby", "around", "far", "hidden"]),
+  proximity_level: z.enum(["close", "near", "far", "hidden"]),
   glow_strength: z.number().int().min(0).max(100),
   status_text: z.string(),
   last_active_estimate: z.string(),
@@ -84,57 +84,65 @@ export function haversineMeters(a: Pick<LocationUpdateRequest, "latitude" | "lon
   return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(centralAngle), Math.sqrt(1 - centralAngle));
 }
 
-// Broad area bands. These are intentionally computed only on the server and
-// never returned as distances. The client receives the derived label only.
-export const VERY_CLOSE_MAX_METERS = 25_000;
-export const NEARBY_MAX_METERS = 50_000;
-export const AROUND_MAX_METERS = 100_000;
+// Canonical nearby-discovery bands (audit: tightened from the old 25/50/100km
+// scale). These are intentionally computed only on the server and never
+// returned as distances/meters/km — the client receives the derived label
+// only. Anyone beyond MAX_NEARBY_METERS is outside the approved nearby range
+// entirely: bucketProximity returns null for them and buildSafeNearbyFriends
+// excludes them from the response (see below), not just mutes their glow.
+export const CLOSE_MAX_METERS = 5_000;
+export const NEAR_MAX_METERS = 10_000;
+export const FAR_MAX_METERS = 15_000;
+export const MAX_NEARBY_METERS = FAR_MAX_METERS;
 
-export function bucketProximity(distanceMeters: number): ProximityLevel {
-  if (distanceMeters <= VERY_CLOSE_MAX_METERS) {
-    return "very_close";
+export function bucketProximity(distanceMeters: number): "close" | "near" | "far" | null {
+  if (distanceMeters <= CLOSE_MAX_METERS) {
+    return "close";
   }
 
-  if (distanceMeters <= NEARBY_MAX_METERS) {
-    return "nearby";
+  if (distanceMeters <= NEAR_MAX_METERS) {
+    return "near";
   }
 
-  if (distanceMeters <= AROUND_MAX_METERS) {
-    return "around";
+  if (distanceMeters <= FAR_MAX_METERS) {
+    return "far";
   }
 
-  return "far";
+  return null;
 }
 
+// Rescaled in lockstep with the bands above: a low-confidence margin must
+// stay a small fraction of the (now much tighter) range, or every weak-signal
+// reading would resolve outward past "far" and vanish from nearby entirely.
 const confidenceUncertaintyMeters: Record<ConfidenceLevel, number> = {
   high: 0,
-  medium: 1_000,
-  low: 20_000
+  medium: 200,
+  low: 2_000
 };
 
 /**
  * Applies uncertainty at a band boundary instead of blindly downgrading the
- * whole band. Two readings at the same place remain Very close even when the
+ * whole band. Two readings at the same place remain Close even when the
  * device reports a soft signal, while a reading close to a boundary resolves
- * outward rather than making an overconfident claim.
+ * outward rather than making an overconfident claim. Never promotes a user
+ * into a closer bucket than the measured distance supports.
  */
 export function bucketProximityWithConfidence(
   distanceMeters: number,
   confidence: ConfidenceLevel
-): ProximityLevel {
+): "close" | "near" | "far" | null {
   return bucketProximity(distanceMeters + confidenceUncertaintyMeters[confidence]);
 }
 
 export function glowStrengthForLevel(level: ProximityLevel) {
   const baseByLevel: Record<ProximityLevel, number> = {
-    very_close: 90,
-    nearby: 64,
-    around: 34,
-    far: 0,
+    close: 90,
+    near: 64,
+    far: 34,
     hidden: 0
   };
 
-  if (level === "far" || level === "hidden") {
+  if (level === "hidden") {
     return 0;
   }
 
@@ -147,10 +155,6 @@ export function statusTextFor(level: ProximityLevel, confidence: ConfidenceLevel
     return "Hidden right now";
   }
 
-  if (level === "far") {
-    return "Not glowing right now";
-  }
-
   if (confidence === "low") {
     return "Location signal is weak";
   }
@@ -159,8 +163,8 @@ export function statusTextFor(level: ProximityLevel, confidence: ConfidenceLevel
     return "Glow confidence is medium";
   }
 
-  if (level === "very_close") {
-    return "Very close and glowing clearly";
+  if (level === "close") {
+    return "Close and glowing clearly";
   }
 
   return "Glowing nearby";
@@ -204,7 +208,8 @@ export const NEARBY_STALE_AFTER_MS = 30 * 60 * 1000;
  * route handler verbatim so it can be unit tested (audit I-09). Enforces:
  * blocked users (either direction) never appear; Ghost Mode users never
  * appear; users without a location or profile never appear; stale signals
- * degrade to "hidden" with zero glow; coordinates never leave this function.
+ * degrade to "hidden" with zero glow; friends beyond MAX_NEARBY_METERS
+ * (15km) never appear at all; coordinates never leave this function.
  */
 export type MuddyStatusSummary = {
   availability_type: string;
@@ -238,7 +243,7 @@ export function buildSafeNearbyFriends(input: {
     };
   };
 
-  return input.friendIds.flatMap((friendId) => {
+  return input.friendIds.flatMap((friendId): SafeNearbyFriend[] => {
     if (input.blockedIds.has(friendId)) {
       return [];
     }
@@ -275,6 +280,14 @@ export function buildSafeNearbyFriends(input: {
     const pairConfidence = weakerConfidence(input.viewer.confidence, location.confidence);
     const measuredDistance = haversineMeters(input.viewer, location);
     const proximityLevel = bucketProximityWithConfidence(measuredDistance, pairConfidence);
+
+    // Beyond the approved nearby range entirely: excluded from the response,
+    // not just muted, so a friend outside 15km never appears in Nearby
+    // Muddies / proximity discovery at all.
+    if (proximityLevel === null) {
+      return [];
+    }
+
     const glowStrength = glowStrengthForLevel(proximityLevel);
 
     return [

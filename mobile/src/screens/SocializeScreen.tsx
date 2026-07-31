@@ -20,14 +20,14 @@ type Person = {
   username: string;
   activity: string;
   note: string | null;
-  proximityTier: "very_close" | "nearby" | "around";
+  proximityTier: "close" | "near" | "far";
   waveState: "none" | "sent" | "received" | "accepted";
 };
 
 const tierLabels: Record<Person["proximityTier"], string> = {
-  very_close: "Very close",
-  nearby: "Nearby",
-  around: "Around"
+  close: "Close",
+  near: "Near",
+  far: "Far"
 };
 
 export function SocializeScreen() {
