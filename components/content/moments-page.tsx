@@ -75,7 +75,8 @@ export function MomentsPage({
   canPublishOpenMoments = false,
   viewerName = "You",
   viewerAvatarUrl = null,
-  closeFriendsAvailable = false
+  closeFriendsAvailable = false,
+  birthdayTemplateAvailable = false
 }: {
   initialMoments?: VisibleMoment[];
   initialOpenMoments?: VisibleMoment[];
@@ -86,6 +87,7 @@ export function MomentsPage({
   viewerName?: string;
   viewerAvatarUrl?: string | null;
   closeFriendsAvailable?: boolean;
+  birthdayTemplateAvailable?: boolean;
 }) {
   const router = useRouter();
   const nowMs = useMomentClock();
@@ -512,6 +514,7 @@ export function MomentsPage({
         spotlightEnabled={openMomentsEnabled}
         canPublishSpotlight={canPublishOpenMoments}
         closeFriendsAvailable={closeFriendsAvailable}
+        birthdayTemplateAvailable={birthdayTemplateAvailable}
         onOpenChange={setComposerOpen}
         onPublished={(message) => {
           setFeedback(message);

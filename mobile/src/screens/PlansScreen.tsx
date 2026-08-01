@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { Spinner } from "../components/Spinner";
 import { Modal } from "../components/Modal";
@@ -20,13 +22,14 @@ type Plan = {
   startAt: string | null;
   placeText: string | null;
   organiserName: string;
+  organiserPlan: SubscriptionPlan;
   isHost: boolean;
   myRsvp: string;
   goingCount: number;
   attendeeCount: number;
 };
 
-type Invitee = { id: string; name: string; username: string };
+type Invitee = { id: string; name: string; username: string; plan: SubscriptionPlan };
 
 type Bucket = "upcoming" | "invites" | "hosting" | "past";
 const bucketTabs: { id: Bucket; label: string }[] = [
@@ -163,7 +166,7 @@ export function PlansScreen() {
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">{dateLabel(plan)}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Organised by {plan.organiserName} · {plan.attendeeCount} {plan.attendeeCount === 1 ? "Muddy" : "Muddies"}
+                      Organised by {plan.organiserName} <PremiumPlanBadge plan={plan.organiserPlan} compact /> · {plan.attendeeCount} {plan.attendeeCount === 1 ? "Muddy" : "Muddies"}
                       {plan.goingCount > 0 ? ` · ${plan.goingCount} going` : ""}
                     </p>
                   </div>
@@ -394,7 +397,10 @@ function InviteSelect({
                       {checked ? "✓" : ""}
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">{invitee.name}</span>
+                      <span className="flex items-center gap-1.5 text-sm font-medium">
+                        <span className="truncate">{invitee.name}</span>
+                        <PremiumPlanBadge plan={invitee.plan} compact />
+                      </span>
                       <span className="block truncate text-xs text-muted-foreground">@{invitee.username}</span>
                     </span>
                   </button>

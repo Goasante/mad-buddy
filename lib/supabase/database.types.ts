@@ -2538,6 +2538,46 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["profile_field_privacy"]["Insert"]>;
         Relationships: [];
       };
+      profile_birth_details: {
+        Row: {
+          user_id: string;
+          date_of_birth: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          date_of_birth: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["profile_birth_details"]["Insert"]>;
+        Relationships: [];
+      };
+      birthday_notification_deliveries: {
+        Row: {
+          id: string;
+          birthday_user_id: string;
+          recipient_id: string;
+          birthday_day: string;
+          status: "pending" | "processing" | "delivered" | "suppressed";
+          created_at: string;
+          claimed_at: string | null;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          birthday_user_id: string;
+          recipient_id: string;
+          birthday_day: string;
+          status?: "pending" | "processing" | "delivered" | "suppressed";
+          created_at?: string;
+          claimed_at?: string | null;
+          completed_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["birthday_notification_deliveries"]["Insert"]>;
+        Relationships: [];
+      };
       user_interests: {
         Row: { id: string; user_id: string; interest: string; created_at: string };
         Insert: { id?: string; user_id: string; interest: string; created_at?: string };
@@ -2836,6 +2876,36 @@ export type Database = {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["user_achievements"]["Insert"]>;
+        Relationships: [];
+      };
+      buddy_score_ledger: {
+        Row: {
+          id: string;
+          user_id: string;
+          event_type: "email_verified" | "profile_completed" | "account_quarter" | "friendship_accepted" | "plan_completed" | "safe_arrival_completed" | "achievement_earned" | "admin_correction" | "moderation_penalty";
+          points_delta: number;
+          source_reference: string;
+          rule_version: number;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          event_type: "email_verified" | "profile_completed" | "account_quarter" | "friendship_accepted" | "plan_completed" | "safe_arrival_completed" | "achievement_earned" | "admin_correction" | "moderation_penalty";
+          points_delta: number;
+          source_reference: string;
+          rule_version: number;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      earned_premium_rewards: {
+        Row: { id: string; user_id: string; reward_plan: "buddy_plus" | "buddy_pro"; source_score_snapshot: number; grant_key: string; granted_at: string; expires_at: string; grace_ends_at: string | null; ending_notified_at: string | null; rule_version: number; status: "active" | "grace" | "expired" | "revoked"; revoked_at: string | null; revoke_reason: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; reward_plan: "buddy_plus" | "buddy_pro"; source_score_snapshot: number; grant_key: string; granted_at?: string; expires_at: string; grace_ends_at?: string | null; ending_notified_at?: string | null; rule_version: number; status: "active" | "grace" | "expired" | "revoked"; revoked_at?: string | null; revoke_reason?: string | null; created_at?: string; updated_at?: string };
+        Update: Partial<Database["public"]["Tables"]["earned_premium_rewards"]["Insert"]>;
         Relationships: [];
       };
       engagement_preferences: {
@@ -3814,6 +3884,10 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      buddy_score_total: {
+        Args: { target_user_id: string };
+        Returns: Array<{ score_total: number }>;
+      };
       get_revenue_subscription_snapshot: {
         Args: { p_now?: string };
         Returns: Array<{
@@ -3958,6 +4032,10 @@ export type Database = {
       claim_premium_trial_notifications: {
         Args: { p_limit?: number };
         Returns: Database["public"]["Tables"]["premium_trial_notifications"]["Row"][];
+      };
+      birthday_users_for_day: {
+        Args: { p_month: number; p_day: number; p_include_feb_29?: boolean };
+        Returns: Array<{ user_id: string }>;
       };
       accept_friend_request: {
         Args: { p_request_id: string };
@@ -4345,7 +4423,10 @@ export type ProfileFieldName =
   | "graduation_year"
   | "general_area"
   | "interests"
-  | "pronouns";
+  | "pronouns"
+  | "birthday"
+  | "age"
+  | "zodiac";
 
 export type ProfileFieldVisibility = "only_me" | "approved_muddies" | "close_friends" | "shared_communities";
 

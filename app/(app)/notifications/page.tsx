@@ -3,8 +3,15 @@ import { toNotificationResponse } from "@/lib/notifications/server";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { birthdayTitle } from "@/lib/profile/birthday-experience";
 
-export default async function NotificationsPage() {
+export default async function NotificationsPage({
+  searchParams
+}: {
+  searchParams?: Promise<{ birthdayPreview?: string }>;
+}) {
+  const params = await searchParams;
+  const birthdayPreview = process.env.NODE_ENV !== "production" && params?.birthdayPreview === "1";
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
   const [access, notificationsResult] = user
     ? await Promise.all([
@@ -18,10 +25,24 @@ export default async function NotificationsPage() {
       ])
     : [null, null];
 
+  const initialNotifications: Array<ReturnType<typeof toNotificationResponse> & { previewOnly?: boolean }> =
+    (notificationsResult?.data ?? []).map(toNotificationResponse);
+  if (birthdayPreview && user) {
+    initialNotifications.unshift({
+      id: "birthday-preview",
+      type: `birthday:${user.id}`,
+      title: birthdayTitle(user.user_metadata?.full_name ?? "Kofi"),
+      message: "Send a birthday wish. Preview only.",
+      is_read: false,
+      created_at: new Date().toISOString(),
+      previewOnly: true
+    });
+  }
+
   return (
     <NotificationsPageContent
       canSendCustomMessages={access?.hasPremium ?? false}
-      initialNotifications={(notificationsResult?.data ?? []).map(toNotificationResponse)}
+      initialNotifications={initialNotifications}
     />
   );
 }

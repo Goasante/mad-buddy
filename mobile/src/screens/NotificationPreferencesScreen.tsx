@@ -19,7 +19,8 @@ const categoryMeta: Array<{ id: NotificationCategory; label: string; description
   { id: "pings", label: "Meeting Pings", description: "When someone wants to meet." },
   { id: "proximity", label: "Nearby Muddies", description: "When friends become nearby." },
   { id: "plans", label: "Plans", description: "Invites, changes, and reminders." },
-  { id: "status", label: "Status updates", description: "When friends set a status." }
+  { id: "status", label: "Status updates", description: "When friends set a status." },
+  { id: "birthdays", label: "Birthdays", description: "Birthday reminders from approved Muddies." }
 ];
 
 const settingOptions: Array<{ id: CategorySetting; label: string }> = [
@@ -115,6 +116,25 @@ export function NotificationPreferencesScreen() {
             </div>
           </div>
         ))}
+      </section>
+
+      <section className="mt-4 rounded-xl border border-border/70 bg-card/50 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">Share birthday reminders</span>
+            <span className="block text-xs text-muted-foreground">Let approved Muddies know when your birthday begins.</span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={prefs.birthdayAnnouncementsEnabled}
+            aria-label="Share birthday reminders"
+            onClick={() => setPrefs((current) => ({ ...current, birthdayAnnouncementsEnabled: !current.birthdayAnnouncementsEnabled }))}
+            className={cn("relative h-7 w-12 shrink-0 rounded-full transition-colors", prefs.birthdayAnnouncementsEnabled ? "bg-primary" : "bg-secondary")}
+          >
+            <span className={cn("absolute top-1 h-5 w-5 rounded-full bg-white transition-transform", prefs.birthdayAnnouncementsEnabled ? "translate-x-6" : "translate-x-1")} />
+          </button>
+        </div>
       </section>
 
       <section className="mt-4 rounded-xl border border-border/70 bg-card/50 p-4">

@@ -7,10 +7,18 @@ import { isOpenMomentsEnabled } from "@/lib/features/feature-flags";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { getCurrentUser } from "@/lib/supabase/auth";
+import { dateKeyInTimeZone, isBirthdayOnDate } from "@/lib/profile/birth-date";
+import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 
 export const dynamic = "force-dynamic";
 
-export default async function MomentsRoute() {
+export default async function MomentsRoute({
+  searchParams
+}: {
+  searchParams?: Promise<{ birthdayPreview?: string }>;
+}) {
+  const previewParams = await searchParams;
+  const birthdayPreview = process.env.NODE_ENV !== "production" && previewParams?.birthdayPreview === "1";
   const user = await getCurrentUser();
 
   const env = getSupabaseServerEnv();
@@ -19,13 +27,14 @@ export default async function MomentsRoute() {
   }
 
   const admin = createSupabaseAdminClient();
-  const [moments, muddies, spotlightEnabled, entitlements, profile, closeFriends] = await Promise.all([
+  const [moments, muddies, spotlightEnabled, entitlements, profile, closeFriends, birthDetails] = await Promise.all([
     buildMomentFeed(admin, user.id),
     loadMuddies(admin, user.id),
     isOpenMomentsEnabled(admin),
     resolveUserEntitlements(admin, user.id),
     admin.from("profiles").select("full_name, avatar_url").eq("user_id", user.id).maybeSingle(),
-    admin.from("close_friend_relationships").select("id", { count: "exact", head: true }).eq("owner_id", user.id)
+    admin.from("close_friend_relationships").select("id", { count: "exact", head: true }).eq("owner_id", user.id),
+    admin.from("profile_birth_details").select("date_of_birth").eq("user_id", user.id).maybeSingle()
   ]);
   const spotlight = spotlightEnabled ? await buildSpotlightFeed(admin, user.id) : [];
 
@@ -44,6 +53,13 @@ export default async function MomentsRoute() {
       // Close Friends is only offered when the viewer actually has some, so the
       // audience list never shows an option that would reach nobody.
       closeFriendsAvailable={(closeFriends.count ?? 0) > 0}
+      birthdayTemplateAvailable={birthdayPreview || Boolean(
+        birthDetails.data?.date_of_birth &&
+          isBirthdayOnDate(
+            birthDetails.data.date_of_birth,
+            dateKeyInTimeZone(new Date(), DEFAULT_RECIPIENT_TIMEZONE)
+          )
+      )}
     />
   );
 }

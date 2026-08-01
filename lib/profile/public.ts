@@ -4,6 +4,7 @@ import { z } from "zod";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
+import { getVisibleProfileFields, resolveViewerRelationship } from "@/lib/profile/service";
 
 /**
  * A viewer-safe public profile card (name, username, avatar, bio, mood) plus
@@ -22,6 +23,9 @@ export type PublicProfile = {
   moodStatus: string | null;
   isMuddy: boolean;
   isSelf: boolean;
+  age: number | null;
+  zodiacSign: string | null;
+  birthdayToday: boolean;
 };
 
 const uuidSchema = z.string().uuid();
@@ -46,6 +50,8 @@ export async function getPublicProfile(viewerId: string, targetId: string): Prom
 
   const isSelf = viewerId === targetId;
   const isMuddy = isSelf ? false : await areApprovedMuddies(admin, viewerId, targetId);
+  const relationship = await resolveViewerRelationship(admin, viewerId, targetId);
+  const fields = await getVisibleProfileFields(admin, targetId, relationship);
 
   return {
     id: profile.user_id,
@@ -53,9 +59,12 @@ export async function getPublicProfile(viewerId: string, targetId: string): Prom
     username: profile.username,
     avatarUrl: profile.avatar_url,
     // Bio/mood are shown to self and to Muddies; strangers get the basics only.
-    bio: isSelf || isMuddy ? profile.bio : null,
+    bio: fields.bio,
     moodStatus: isSelf || isMuddy ? profile.mood_status : null,
     isMuddy,
-    isSelf
+    isSelf,
+    age: fields.age,
+    zodiacSign: fields.zodiacSign,
+    birthdayToday: fields.birthdayToday
   };
 }

@@ -42,6 +42,7 @@ const DESTINATION_BY_BASE: Record<string, Route> = {
   group: "/groups" as Route,
   // Personal milestones
   achievement: "/badges" as Route,
+  birthday: "/notifications" as Route,
   // Account
   subscription_update: "/billing" as Route
 };

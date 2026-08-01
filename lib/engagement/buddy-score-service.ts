@@ -1,0 +1,121 @@
+import "server-only";
+
+import { BUDDY_SCORE_RULES, BUDDY_SCORE_RULE_VERSION, buddyScoreProgress, scoreEventDefinition, type BuddyScoreEventType, type BuddyScoreLevel } from "@/lib/engagement/buddy-score";
+import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
+
+type Admin = ReturnType<typeof createSupabaseAdminClient>;
+type Candidate = { event_type: Exclude<BuddyScoreEventType, "admin_correction" | "moderation_penalty">; points_delta: number; source_reference: string; metadata: { category: string } };
+
+export type BuddyScoreActivity = {
+  id: string;
+  eventType: BuddyScoreEventType;
+  label: string;
+  category: string;
+  points: number;
+  createdAt: string;
+};
+
+export type BuddyScoreData = {
+  total: number;
+  level: BuddyScoreLevel;
+  nextLevel: BuddyScoreLevel | null;
+  pointsToNext: number;
+  progressPercent: number;
+  categories: Array<{ label: string; points: number }>;
+  recentActivity: BuddyScoreActivity[];
+  earnedReward: { plan: "buddy_plus" | "buddy_pro"; status: "active" | "grace"; expiresAt: string; graceEndsAt: string | null } | null;
+};
+
+function candidate(eventType: Candidate["event_type"], sourceReference: string): Candidate {
+  const rule = BUDDY_SCORE_RULES[eventType];
+  return { event_type: eventType, points_delta: rule.points, source_reference: sourceReference, metadata: { category: rule.category } };
+}
+
+/** Reconciles trusted canonical records into the append-only ledger. */
+export async function reconcileBuddyScore(admin: Admin, userId: string, now = new Date()) {
+  const [profile, authUser, friendships, plans, safeArrivals, achievements] = await Promise.all([
+    admin.from("profiles").select("full_name, username, bio, avatar_url, created_at").eq("user_id", userId).maybeSingle(),
+    admin.auth.admin.getUserById(userId),
+    admin.from("friendships").select("id").or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
+    admin.from("plans").select("id").eq("creator_id", userId).eq("status", "completed"),
+    admin.from("safe_arrival_sessions").select("id").eq("traveller_id", userId).eq("status", "completed"),
+    admin.from("user_achievements").select("id").eq("user_id", userId).eq("hidden", false)
+  ]);
+  const candidates: Candidate[] = [];
+  if (authUser.data.user?.email_confirmed_at) candidates.push(candidate("email_verified", "account:email"));
+  const p = profile.data;
+  if (p?.full_name && p.username && p.bio && p.avatar_url) candidates.push(candidate("profile_completed", "profile:complete"));
+  if (p?.created_at) {
+    const quarters = Math.min(8, Math.max(0, Math.floor((now.getTime() - Date.parse(p.created_at)) / (90 * 86_400_000))));
+    for (let index = 1; index <= quarters; index += 1) candidates.push(candidate("account_quarter", `account:quarter:${index}`));
+  }
+  for (const row of friendships.data ?? []) candidates.push(candidate("friendship_accepted", `friendship:${row.id}`));
+  for (const row of plans.data ?? []) candidates.push(candidate("plan_completed", `plan:${row.id}`));
+  for (const row of safeArrivals.data ?? []) candidates.push(candidate("safe_arrival_completed", `safe-arrival:${row.id}`));
+  for (const row of achievements.data ?? []) candidates.push(candidate("achievement_earned", `achievement:${row.id}`));
+  if (candidates.length === 0) return;
+  await admin.from("buddy_score_ledger").upsert(
+    candidates.map((item) => ({ user_id: userId, ...item, rule_version: BUDDY_SCORE_RULE_VERSION })),
+    { onConflict: "user_id,event_type,source_reference", ignoreDuplicates: true }
+  );
+}
+
+export async function loadBuddyScore(admin: Admin, userId: string): Promise<BuddyScoreData> {
+  await reconcileBuddyScore(admin, userId);
+  const [{ data }, { data: reward }] = await Promise.all([
+    admin.from("buddy_score_ledger").select("id,event_type,points_delta,metadata,created_at").eq("user_id", userId).order("created_at", { ascending: false }),
+    admin.from("earned_premium_rewards").select("reward_plan,status,expires_at,grace_ends_at").eq("user_id", userId).in("status", ["active", "grace"]).order("granted_at", { ascending: false }).limit(1).maybeSingle()
+  ]);
+  const rows = data ?? [];
+  const total = Math.max(0, rows.reduce((sum, row) => sum + row.points_delta, 0));
+  const progress = buddyScoreProgress(total);
+  const categoryMap = new Map<string, number>();
+  const activities = rows.map((row) => {
+    const definition = scoreEventDefinition(row.event_type as BuddyScoreEventType);
+    categoryMap.set(definition.category, (categoryMap.get(definition.category) ?? 0) + row.points_delta);
+    return { id: row.id, eventType: row.event_type as BuddyScoreEventType, label: definition.label, category: definition.category, points: row.points_delta, createdAt: row.created_at };
+  });
+  return {
+    total,
+    level: progress.current,
+    nextLevel: progress.next,
+    pointsToNext: progress.pointsToNext,
+    progressPercent: progress.percent,
+    categories: [...categoryMap].map(([label, points]) => ({ label, points })).sort((a, b) => b.points - a.points),
+    recentActivity: activities.slice(0, 12),
+    earnedReward: reward ? { plan: reward.reward_plan, status: reward.status as "active" | "grace", expiresAt: reward.expires_at, graceEndsAt: reward.grace_ends_at } : null
+  };
+}
+
+export async function reconcileBuddyScoreTotal(admin: Admin, userId: string) {
+  const [{ data: rows }, { data: rpcRows }] = await Promise.all([
+    admin.from("buddy_score_ledger").select("points_delta").eq("user_id", userId),
+    admin.rpc("buddy_score_total", { target_user_id: userId })
+  ]);
+  const ledgerTotal = (rows ?? []).reduce((sum, row) => sum + row.points_delta, 0);
+  const rpcTotal = Number(Array.isArray(rpcRows) ? rpcRows[0]?.score_total ?? 0 : 0);
+  return { reconciled: ledgerTotal === rpcTotal, ledgerTotal, rpcTotal };
+}
+
+const CONFIRMED_MODERATION_PENALTIES: Record<string, number> = {
+  warn_user: -25,
+  rate_limit_user: -50,
+  suspend_feature: -60,
+  temporary_suspension: -100,
+  permanent_suspension: -250
+};
+
+/** Reports never score. Only a completed moderation decision may call this. */
+export async function recordConfirmedModerationPenalty(admin: Admin, input: { userId: string; reportId: string; actionType: string }) {
+  const points = CONFIRMED_MODERATION_PENALTIES[input.actionType];
+  if (!points) return { recorded: false, reason: "not_penalized" as const };
+  const { error } = await admin.from("buddy_score_ledger").upsert({
+    user_id: input.userId,
+    event_type: "moderation_penalty",
+    points_delta: points,
+    source_reference: `moderation:${input.reportId}:${input.actionType}`,
+    rule_version: BUDDY_SCORE_RULE_VERSION,
+    metadata: { category: "Trust and safety", reason_code: input.actionType }
+  }, { onConflict: "user_id,event_type,source_reference", ignoreDuplicates: true });
+  return { recorded: !error, reason: error ? "write_failed" as const : "confirmed_outcome" as const };
+}

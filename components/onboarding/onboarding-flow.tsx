@@ -36,18 +36,21 @@ export function OnboardingFlow({
   initialName = "",
   initialUsername = "",
   initialBio = "",
-  initialMood = null
+  initialMood = null,
+  initialDateOfBirth = ""
 }: {
   initialName?: string;
   initialUsername?: string;
   initialBio?: string;
   initialMood?: MoodStatus | null;
+  initialDateOfBirth?: string;
 }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [displayName, setDisplayName] = useState(initialName);
   const [username, setUsername] = useState(normalizeUsername(initialUsername));
   const [bio, setBio] = useState(initialBio);
   const [moodStatus, setMoodStatus] = useState<MoodStatus | null>(initialMood);
+  const [dateOfBirth, setDateOfBirth] = useState(initialDateOfBirth);
   const [feedback, setFeedback] = useState("");
   const [usernameCheck, setUsernameCheck] = useState<UsernameCheckState | null>(null);
   const [usernameCheckAttempt, setUsernameCheckAttempt] = useState(0);
@@ -123,6 +126,7 @@ export function OnboardingFlow({
           username,
           bio: skippedOptional ? "" : bio.trim(),
           moodStatus: skippedOptional ? "" : moodStatus ?? "",
+          dateOfBirth: skippedOptional ? "" : dateOfBirth,
           notifications: "smart"
         },
         skippedOptional
@@ -256,6 +260,19 @@ export function OnboardingFlow({
                   rows={3}
                   placeholder="A little about you"
                   onChange={(event) => setBio(event.target.value)}
+                />
+              </FormField>
+
+              <FormField
+                htmlFor="dateOfBirth"
+                label="Date of birth"
+                hint="Optional. Private until you choose what approved Muddies can see."
+              >
+                <Input
+                  id="dateOfBirth"
+                  type="date"
+                  value={dateOfBirth}
+                  onChange={(event) => setDateOfBirth(event.target.value)}
                 />
               </FormField>
 

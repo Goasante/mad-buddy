@@ -18,6 +18,9 @@ import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permi
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import type { MomentAudienceType, ReactionType } from "@/lib/supabase/database.types";
+import { recordProductEvent } from "@/lib/analytics/track";
+import { dateKeyInTimeZone, isBirthdayOnDate } from "@/lib/profile/birth-date";
+import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 
 /**
  * Mobile Moments: text posting (with audience + expiry) and reactions, matching
@@ -42,6 +45,7 @@ export const createTextMomentSchema = z.object({
   audienceType: z.enum(["close_friends", "selected_circles", "nearby_muddies", "public"]),
   targetIds: z.array(z.string().uuid()).max(50).optional(),
   publicAudienceConfirmed: z.boolean().optional(),
+  birthdayTemplate: z.boolean().optional(),
   // ISO expiry from the chosen preset (1h/3h/6h/24h). Defaults to 24h.
   expiresAt: z.string().datetime({ offset: true }).optional()
 });
@@ -153,6 +157,29 @@ export async function createTextMoment(userId: string, input: unknown): Promise<
     .select("id")
     .single();
   if (error || !moment) return { ok: false, message: "Couldn't share that Moment. Try again." };
+
+  if (parsed.data.birthdayTemplate) {
+    const { data: birthDetails } = await admin
+      .from("profile_birth_details")
+      .select("date_of_birth")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (
+      birthDetails?.date_of_birth &&
+      isBirthdayOnDate(
+        birthDetails.date_of_birth,
+        dateKeyInTimeZone(new Date(), DEFAULT_RECIPIENT_TIMEZONE)
+      )
+    ) {
+      await recordProductEvent(admin, {
+        eventName: "birthday_moment_started",
+        actorId: userId,
+        resourceType: "moment",
+        resourceId: moment.id,
+        featureKey: "birthdays"
+      });
+    }
+  }
 
   // Circle audience: record the targeted circle(s), but only ones this user
   // actually owns (never trust a client-supplied id) — mirrors createMomentAction.

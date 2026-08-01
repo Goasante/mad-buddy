@@ -217,6 +217,12 @@ export type BillingState = {
   trialPlan?: Exclude<SubscriptionPlan, "free"> | null;
   trialStartedAtMs?: number | null;
   trialEndsAtMs?: number | null;
+  /** Earned access is independent of subscriptions and trials. */
+  earnedRewardId?: string | null;
+  earnedPlan?: Exclude<SubscriptionPlan, "free"> | null;
+  earnedStartsAtMs?: number | null;
+  earnedEndsAtMs?: number | null;
+  earnedGraceEndsAtMs?: number | null;
 };
 
 /**
@@ -244,10 +250,15 @@ export function effectivePlan(state: BillingState, nowMs: number): SubscriptionP
     state.trialEndsAtMs !== undefined &&
     state.trialStartedAtMs <= nowMs &&
     state.trialEndsAtMs > nowMs;
-  return trialIsActive ? (state.trialPlan ?? "free") : "free";
+  if (trialIsActive) return state.trialPlan ?? "free";
+  const earnedIsActive =
+    Boolean(state.earnedRewardId && state.earnedPlan) &&
+    (state.earnedStartsAtMs ?? Number.POSITIVE_INFINITY) <= nowMs &&
+    ((state.earnedEndsAtMs ?? 0) > nowMs || (state.earnedGraceEndsAtMs ?? 0) > nowMs);
+  return earnedIsActive ? (state.earnedPlan ?? "free") : "free";
 }
 
-export function billingAccessSource(state: BillingState, nowMs: number): "subscription" | "trial" | "free" {
+export function billingAccessSource(state: BillingState, nowMs: number): "subscription" | "trial" | "earned" | "free" {
   const plan = effectivePlan(state, nowMs);
   if (plan === "free") return "free";
   const trialActive =
@@ -266,12 +277,18 @@ export function billingAccessSource(state: BillingState, nowMs: number): "subscr
         trialId: null,
         trialPlan: null,
         trialStartedAtMs: null,
-        trialEndsAtMs: null
+        trialEndsAtMs: null,
+        earnedRewardId: null,
+        earnedPlan: null,
+        earnedStartsAtMs: null,
+        earnedEndsAtMs: null,
+        earnedGraceEndsAtMs: null
       },
       nowMs
     ) !== "free";
   if (paidActive) return "subscription";
-  return trialActive ? "trial" : "free";
+  if (trialActive) return "trial";
+  return state.earnedRewardId && state.earnedPlan === plan ? "earned" : "free";
 }
 
 export type EntitlementOverride = {

@@ -10,6 +10,7 @@ import {
   MapPinOff,
   ShieldCheck,
   Sparkles,
+  Trophy,
   UserRound,
   type LucideIcon
 } from "lucide-react";
@@ -78,6 +79,7 @@ export function SettingsScreen() {
       <SectionTitle>Account</SectionTitle>
       <Card>
         <Row icon={UserRound} title="Profile" description="Manage how approved friends see you." onClick={() => navigate("/profile")} />
+        <Row icon={Trophy} title="Buddy Score" description="View your private trust progress." onClick={() => navigate("/buddy-score")} />
       </Card>
 
       <SectionTitle>Privacy &amp; safety</SectionTitle>

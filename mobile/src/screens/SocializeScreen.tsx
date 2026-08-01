@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Compass, Hand, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { Input } from "@/components/ui/input";
 import {
   SOCIALIZE_ACTIVITIES,
@@ -22,6 +24,7 @@ type Person = {
   note: string | null;
   proximityTier: "close" | "near" | "far";
   waveState: "none" | "sent" | "received" | "accepted";
+  plan: SubscriptionPlan;
 };
 
 const tierLabels: Record<Person["proximityTier"], string> = {
@@ -154,7 +157,10 @@ export function SocializeScreen() {
                 {person.displayName.slice(0, 1).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{person.displayName}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="truncate text-sm font-semibold">{person.displayName}</p>
+                  <PremiumPlanBadge plan={person.plan} compact />
+                </div>
                 <p className="truncate text-xs text-muted-foreground">
                   {SOCIALIZE_ACTIVITY_LABELS[person.activity as keyof typeof SOCIALIZE_ACTIVITY_LABELS] ?? person.activity}
                   {" · "}

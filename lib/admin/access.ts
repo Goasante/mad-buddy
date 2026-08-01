@@ -26,6 +26,7 @@ const legacyPermissions: Record<AdminAccessRole, readonly AdminPermission[]> = {
     "admin.entitlements.view",
     "admin.entitlements.manage",
     "admin.analytics.view",
+    "admin.buddy_score.manage",
     "admin.revenue.view",
     "admin.feature_flags.manage",
     // Publishing a tour is a global consumer-facing change, comparable in

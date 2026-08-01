@@ -19,6 +19,7 @@ import {
   reportStatusLabel,
   type ReportKind
 } from "@/lib/admin/moderation";
+import { recordConfirmedModerationPenalty } from "@/lib/engagement/buddy-score-service";
 
 export type ModerationActionState = { ok: boolean; message: string };
 
@@ -44,6 +45,7 @@ async function loadReport(admin: Admin, kind: ReportKind, reportId: string) {
       ? { id: data.id, reportedUserId: data.reported_user_id, status: data.status, contentType: data.content_type }
       : null;
   }
+
   const { data } = await admin
     .from("reports")
     .select("id, reporter_id, reported_user_id, status")
@@ -224,6 +226,10 @@ export async function applyModerationActionAction(input: unknown): Promise<Moder
       action_type: actionType,
       reason: reason || null
     });
+  }
+
+  if (report.reportedUserId && actionType !== "no_action" && actionType !== "escalate") {
+    await recordConfirmedModerationPenalty(admin, { userId: report.reportedUserId, reportId, actionType });
   }
 
   // Resulting report status: no_action dismisses, escalate keeps it in review,

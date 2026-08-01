@@ -12,7 +12,8 @@ const PRIVATE_COPY: Record<string, string> = {
   hangout: "You have a new Hangout update.",
   meeting_ping: "You have a new Meet Ping.",
   meetup_request: "A Muddy wants to connect.",
-  moment: "A Muddy shared a new Moment."
+  moment: "A Muddy shared a new Moment.",
+  birthday: "An approved Muddy is celebrating a birthday today."
 };
 
 /**

@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { upgradePromptFor } from "@/lib/billing/entitlements";
+import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { deliverNotification } from "@/lib/notifications/server";
 import {
@@ -22,7 +23,7 @@ import { activeHangoutCount } from "@/lib/social/planning";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import type { HangoutActivityType, HangoutAudienceType, HangoutRequestStatus } from "@/lib/supabase/database.types";
+import type { HangoutActivityType, HangoutAudienceType, HangoutRequestStatus, SubscriptionPlan } from "@/lib/supabase/database.types";
 
 export type HangoutActionState = {
   ok: boolean;
@@ -335,6 +336,7 @@ export async function endHangoutAction(hangoutId: string): Promise<HangoutAction
 export type VisibleHangout = {
   id: string;
   ownerName: string;
+  ownerPlan: SubscriptionPlan;
   activityType: HangoutActivityType;
   message: string | null;
   broadAreaText: string | null;
@@ -381,11 +383,12 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
   }
   if (visible.length === 0) return [];
 
-  const [{ data: owners }, { data: myRequests }] = await Promise.all([
+  const ownerIds = [...new Set(visible.map((session) => session.owner_id))];
+  const [{ data: owners }, { data: myRequests }, plans] = await Promise.all([
     admin
       .from("profiles")
       .select("user_id, full_name")
-      .in("user_id", [...new Set(visible.map((session) => session.owner_id))]),
+      .in("user_id", ownerIds),
     admin
       .from("hangout_requests")
       .select("hangout_session_id, status")
@@ -393,7 +396,8 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
       .in(
         "hangout_session_id",
         visible.map((session) => session.id)
-      )
+      ),
+    loadEffectivePlansForUsers(admin, ownerIds)
   ]);
   const nameById = new Map((owners ?? []).map((row) => [row.user_id, row.full_name]));
   const requestBySession = new Map((myRequests ?? []).map((row) => [row.hangout_session_id, row.status]));
@@ -401,6 +405,7 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
   return visible.map((session) => ({
     id: session.id,
     ownerName: nameById.get(session.owner_id)?.trim() || "A Muddy",
+    ownerPlan: plans.get(session.owner_id) ?? "free",
     activityType: session.activity_type,
     message: session.message,
     broadAreaText: session.broad_area_text,

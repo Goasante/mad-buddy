@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { Spinner } from "../components/Spinner";
 import { api } from "../lib/api";
@@ -20,7 +22,8 @@ export function ChatScreen() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const passedTitle = (location.state as { title?: string } | null)?.title;
+  const routeState = location.state as { title?: string; plan?: SubscriptionPlan | null } | null;
+  const passedTitle = routeState?.title;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
@@ -76,6 +79,7 @@ export function ChatScreen() {
           <ChevronLeft className="h-5 w-5" aria-hidden="true" />
         </button>
         <h1 className="truncate text-base font-semibold">{title}</h1>
+        <PremiumPlanBadge plan={routeState?.plan} compact />
       </header>
 
       <main className="flex-1 space-y-2 overflow-y-auto px-3 py-4">

@@ -22,6 +22,7 @@ import {
   ToggleRight,
   ShieldAlert,
   ShieldCheck,
+  Trophy,
   UsersRound,
   Wrench
 } from "lucide-react";
@@ -42,6 +43,7 @@ type AdminHref =
   | "/admin/entitlements"
   | "/admin/analytics"
   | "/admin/revenue"
+  | "/admin/buddy-score"
   | "/admin/features"
   | "/admin/experiments"
   | "/admin/wallpapers"
@@ -78,6 +80,7 @@ const adminNavigationGroups: Array<{ label: string; items: AdminNavigationItem[]
       { href: "/admin/entitlements", label: "Entitlements", icon: SlidersHorizontal, permission: "admin.entitlements.view" },
       { href: "/admin/analytics", label: "Analytics", icon: ChartNoAxesCombined, permission: "admin.analytics.view" },
       { href: "/admin/revenue", label: "Revenue", icon: CircleDollarSign, permission: "admin.revenue.view" },
+      { href: "/admin/buddy-score", label: "Buddy Score", icon: Trophy, permission: "admin.buddy_score.manage" },
       { href: "/admin/features", label: "Feature controls", icon: ToggleRight, permission: "admin.feature_flags.manage" },
       { href: "/admin/experiments", label: "Experiments", icon: FlaskConical, permission: "admin.experiments.manage", ownerOnly: true },
       { href: "/admin/wallpapers", label: "Wallpapers", icon: ImageIcon, permission: "admin.wallpapers.manage", ownerOnly: true },

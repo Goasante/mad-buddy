@@ -6,13 +6,15 @@
  * one tested place.
  */
 
-export type NotificationCategory = "waves" | "pings" | "proximity" | "plans" | "status";
+export type NotificationCategory = "waves" | "pings" | "proximity" | "plans" | "status" | "birthdays";
 export type NotificationPriority = "critical" | "high" | "normal" | "low";
 export type CategorySetting = "all" | "close_friends" | "in_app_only" | "off";
 
 export type NotificationPreferences = {
   categories: Record<NotificationCategory, CategorySetting>;
   quietHoursEnabled: boolean;
+  /** Whether approved Muddies may be told that this user's birthday began. */
+  birthdayAnnouncementsEnabled: boolean;
   /** Local-time minute-of-day [0,1440) for quiet-hours start/end. */
   quietHoursStartMinute: number;
   quietHoursEndMinute: number;
@@ -25,9 +27,11 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
     pings: "all",
     proximity: "close_friends",
     plans: "all",
-    status: "close_friends"
+    status: "close_friends",
+    birthdays: "all"
   },
   quietHoursEnabled: true,
+  birthdayAnnouncementsEnabled: true,
   quietHoursStartMinute: 23 * 60,
   quietHoursEndMinute: 7 * 60
 };
@@ -36,7 +40,9 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
 export function normalizePreferences(raw: unknown): NotificationPreferences {
   const base = DEFAULT_NOTIFICATION_PREFERENCES;
   if (!raw || typeof raw !== "object") return base;
-  const value = raw as Partial<NotificationPreferences> & { categories?: Record<string, unknown> };
+  const outer = raw as Partial<NotificationPreferences> & { smart?: unknown };
+  const nested = outer.smart && typeof outer.smart === "object" ? outer.smart : raw;
+  const value = nested as Partial<NotificationPreferences> & { categories?: Record<string, unknown> };
   const categories = { ...base.categories };
   for (const key of Object.keys(categories) as NotificationCategory[]) {
     const setting = value.categories?.[key];
@@ -48,6 +54,10 @@ export function normalizePreferences(raw: unknown): NotificationPreferences {
     categories,
     quietHoursEnabled:
       typeof value.quietHoursEnabled === "boolean" ? value.quietHoursEnabled : base.quietHoursEnabled,
+    birthdayAnnouncementsEnabled:
+      typeof value.birthdayAnnouncementsEnabled === "boolean"
+        ? value.birthdayAnnouncementsEnabled
+        : base.birthdayAnnouncementsEnabled,
     quietHoursStartMinute: clampMinute(value.quietHoursStartMinute, base.quietHoursStartMinute),
     quietHoursEndMinute: clampMinute(value.quietHoursEndMinute, base.quietHoursEndMinute)
   };

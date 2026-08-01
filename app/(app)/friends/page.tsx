@@ -7,6 +7,7 @@ import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { actionableFriendRequests } from "@/lib/friends/relationship-state";
+import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,7 @@ async function loadFriendNetwork(): Promise<{
     .from("profiles")
     .select("user_id, full_name, username, avatar_url")
     .in("user_id", [...profileIds]);
+  const plans = await loadEffectivePlansForUsers(admin, [...profileIds]);
   const profilesById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
   // Fallback for users whose profiles row hasn't synced yet. The auth admin
   // API has no bulk lookup, so this is inherently per-id, bounded to keep a
@@ -122,7 +124,8 @@ async function loadFriendNetwork(): Promise<{
         avatarUrl: profile.avatar_url,
         mutualFriends: 0,
         status: isReceived ? "received" : "sent",
-        note: isReceived ? "Wants to connect with you" : "Waiting for a response"
+        note: isReceived ? "Wants to connect with you" : "Waiting for a response",
+        plan: plans.get(profileId) ?? "free"
       });
     }
   });
@@ -139,7 +142,8 @@ async function loadFriendNetwork(): Promise<{
         avatarUrl: profile.avatar_url,
         mutualFriends: 0,
         status: "friend",
-        note: "Approved Muddy"
+        note: "Approved Muddy",
+        plan: plans.get(profileId) ?? "free"
       });
     }
   });
@@ -155,7 +159,8 @@ async function loadFriendNetwork(): Promise<{
         avatarUrl: profile.avatar_url,
         mutualFriends: 0,
         status: "blocked",
-        note: "Blocked user"
+        note: "Blocked user",
+        plan: plans.get(profile.user_id) ?? "free"
       });
     }
   });

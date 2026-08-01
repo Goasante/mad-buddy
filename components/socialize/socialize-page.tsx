@@ -12,6 +12,7 @@ import {
   updateSocializeAction
 } from "@/app/(app)/socialize-actions";
 import type { SocializePerson, SocializeSession } from "@/lib/social/socialize-mobile";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import { Modal } from "@/components/ui/modal";
@@ -567,7 +568,10 @@ export function SocializePage({
                 className={cn("ring-2 ring-offset-2 ring-offset-background", TIER_RING[previewPerson.proximityTier])}
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{capitalize(previewPerson.displayName || previewPerson.username)}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="truncate text-sm font-semibold">{capitalize(previewPerson.displayName || previewPerson.username)}</p>
+                  <PremiumPlanBadge plan={previewPerson.plan} compact />
+                </div>
                 <p className="truncate text-xs text-muted-foreground">@{previewPerson.username}</p>
                 <span className={cn("mt-0.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white", TIER_PILL[previewPerson.proximityTier])}>
                   {proximityLabels[previewPerson.proximityTier]}

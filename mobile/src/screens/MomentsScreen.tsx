@@ -1,19 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
-import { Clock, Flag, Plus, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { CakeSlice, Clock, Flag, Plus, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { EXPIRY_PRESETS, audienceSummaryLabel, type ExpiryPresetId } from "@/lib/content/moments";
-import type { MomentAudienceType, ReactionType } from "@/lib/supabase/database.types";
+import type { MomentAudienceType, ReactionType, SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { Spinner } from "../components/Spinner";
 import { Modal } from "../components/Modal";
 import { api } from "../lib/api";
+import { birthdayMomentCaption } from "@/lib/profile/birthday-experience";
 
 type Moment = {
   id: string;
   authorName: string;
   authorAvatarUrl: string | null;
+  authorPlan: SubscriptionPlan;
   contentType: "text" | "photo";
   textContent: string | null;
   caption: string | null;
@@ -56,16 +59,19 @@ export function MomentsScreen() {
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [birthdayTemplateAvailable, setBirthdayTemplateAvailable] = useState(false);
 
   const load = useCallback(async () => {
-    const [feed, network] = await Promise.all([
+    const [feed, network, privateProfile] = await Promise.all([
       api.get<{ moments: Moment[] }>("/api/moments"),
-      api.get<{ circles: Circle[] }>("/api/friends")
+      api.get<{ circles: Circle[] }>("/api/friends"),
+      api.get<{ birth: { birthdayToday: boolean } }>("/api/profile")
     ]);
     setLoading(false);
     if (feed.ok) setMoments(feed.data.moments);
     else setFeedback(feed.error);
     if (network.ok) setCircles(network.data.circles ?? []);
+    if (privateProfile.ok) setBirthdayTemplateAvailable(privateProfile.data.birth.birthdayToday);
   }, []);
 
   useEffect(() => {
@@ -152,7 +158,10 @@ export function MomentsScreen() {
               <header className="flex items-center gap-3 px-4 py-3.5">
                 <UserAvatar name={moment.authorName} src={moment.authorAvatarUrl} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{moment.isAuthor ? "You" : moment.authorName}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="truncate text-sm font-semibold">{moment.isAuthor ? "You" : moment.authorName}</p>
+                    <PremiumPlanBadge plan={moment.authorPlan} compact />
+                  </div>
                   <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" aria-hidden="true" />
                     Disappears in {expiresInLabel(moment.expiresAt)}
@@ -219,6 +228,7 @@ export function MomentsScreen() {
       <CreateMomentModal
         open={createOpen}
         circles={circles}
+        birthdayTemplateAvailable={birthdayTemplateAvailable}
         onOpenChange={setCreateOpen}
         onCreated={(message) => {
           setFeedback(message);
@@ -233,11 +243,13 @@ export function MomentsScreen() {
 function CreateMomentModal({
   open,
   circles,
+  birthdayTemplateAvailable,
   onOpenChange,
   onCreated
 }: {
   open: boolean;
   circles: Circle[];
+  birthdayTemplateAvailable: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (message: string) => void;
 }) {
@@ -247,6 +259,7 @@ function CreateMomentModal({
   const [expiry, setExpiry] = useState<ExpiryPresetId>("6h");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [birthdayTemplateApplied, setBirthdayTemplateApplied] = useState(false);
 
   const preset = EXPIRY_PRESETS.find((option) => option.id === expiry);
   const audienceNames = audience === "selected_circles" ? circles.filter((c) => c.id === circleId).map((c) => c.name) : [];
@@ -258,6 +271,7 @@ function CreateMomentModal({
     setCircleId(null);
     setExpiry("6h");
     setError("");
+    setBirthdayTemplateApplied(false);
   }
 
   async function share() {
@@ -268,7 +282,8 @@ function CreateMomentModal({
       textContent: text.trim(),
       audienceType: audience,
       targetIds: audience === "selected_circles" && circleId ? [circleId] : undefined,
-      expiresAt: new Date(Date.now() + preset.ms).toISOString()
+      expiresAt: new Date(Date.now() + preset.ms).toISOString(),
+      birthdayTemplate: birthdayTemplateApplied
     });
     setBusy(false);
     if (result.ok) {
@@ -300,6 +315,23 @@ function CreateMomentModal({
       }
     >
       <div className="space-y-4">
+        {birthdayTemplateAvailable ? (
+          <button
+            type="button"
+            onClick={() => {
+              setText(birthdayMomentCaption());
+              setBirthdayTemplateApplied(true);
+            }}
+            aria-pressed={birthdayTemplateApplied}
+            className={cn(
+              "focus-ring flex min-h-11 w-full items-center gap-3 rounded-xl border px-3 text-left",
+              birthdayTemplateApplied ? "border-amber-400/60 bg-amber-400/10" : "border-border"
+            )}
+          >
+            <CakeSlice className="h-4 w-4 text-amber-500" aria-hidden="true" />
+            <span className="text-sm font-semibold">Use birthday template</span>
+          </button>
+        ) : null}
         <Textarea
           value={text}
           maxLength={500}

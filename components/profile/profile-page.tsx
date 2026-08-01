@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Camera, ChevronRight, Edit3, Ghost, MessageSquareText, Smile, Sparkles, Star, UsersRound } from "lucide-react";
+import { CakeSlice, CalendarDays, Camera, ChevronRight, Edit3, Ghost, MessageSquareText, ShieldCheck, Smile, Sparkles, Star, UsersRound } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updateProfileAction, uploadAvatarAction } from "@/app/(app)/actions";
 import { FormField } from "@/components/auth/form-field";
@@ -10,11 +10,22 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AppSelect, type AppSelectOption } from "@/components/ui/app-dropdown";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { validateImageSelection } from "@/lib/media/validation";
 import { cn } from "@/lib/utils";
-import type { VisibilityStatus } from "@/lib/supabase/database.types";
+import type { SubscriptionPlan, VisibilityStatus } from "@/lib/supabase/database.types";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import { deriveBirthProfile } from "@/lib/profile/birth-date";
+import { BirthdayAccent } from "@/components/profile/birthday-accent";
+
+type BirthVisibility = "only_me" | "approved_muddies";
+
+const BIRTH_VISIBILITY_OPTIONS: AppSelectOption<BirthVisibility>[] = [
+  { value: "only_me", label: "Only me" },
+  { value: "approved_muddies", label: "Muddies" }
+];
 
 type ProfilePageContentProps = {
   initialDisplayName: string;
@@ -25,6 +36,16 @@ type ProfilePageContentProps = {
   initialVisibilityStatus: VisibilityStatus;
   muddyCount?: number;
   badgeCount?: number;
+  buddyScore?: number;
+  buddyScoreLevel?: string;
+  initialPlan: SubscriptionPlan;
+  initialDateOfBirth: string;
+  initialBirthdayVisibility: BirthVisibility;
+  initialAgeVisibility: BirthVisibility;
+  initialZodiacVisibility: BirthVisibility;
+  serverBirthdayDayKey: string;
+  birthdayPreview?: boolean;
+  birthdayPrivacyDisabledPreview?: boolean;
 };
 
 const TOTAL_PROFILE_STEPS = 3;
@@ -34,6 +55,10 @@ type SavedProfile = {
   username: string;
   bio: string;
   moodStatus: string;
+  dateOfBirth: string;
+  birthdayVisibility: BirthVisibility;
+  ageVisibility: BirthVisibility;
+  zodiacVisibility: BirthVisibility;
 };
 
 export function ProfilePageContent({
@@ -44,14 +69,28 @@ export function ProfilePageContent({
   initialAvatarUrl,
   initialVisibilityStatus,
   muddyCount = 0,
-  badgeCount = 0
+  badgeCount = 0,
+  buddyScore = 0,
+  buddyScoreLevel = "New Buddy",
+  initialPlan,
+  initialDateOfBirth,
+  initialBirthdayVisibility,
+  initialAgeVisibility,
+  initialZodiacVisibility,
+  serverBirthdayDayKey,
+  birthdayPreview = false,
+  birthdayPrivacyDisabledPreview = false
 }: ProfilePageContentProps) {
   const router = useRouter();
   const initialProfile: SavedProfile = {
     displayName: initialDisplayName,
     username: initialUsername,
     bio: initialBio,
-    moodStatus: initialMoodStatus
+    moodStatus: initialMoodStatus,
+    dateOfBirth: initialDateOfBirth,
+    birthdayVisibility: initialBirthdayVisibility,
+    ageVisibility: initialAgeVisibility,
+    zodiacVisibility: initialZodiacVisibility
   };
   const [savedProfile, setSavedProfile] = useState(initialProfile);
   const [editing, setEditing] = useState(false);
@@ -59,6 +98,10 @@ export function ProfilePageContent({
   const [username, setUsername] = useState(initialUsername);
   const [bio, setBio] = useState(initialBio);
   const [moodStatus, setMoodStatus] = useState(initialMoodStatus);
+  const [dateOfBirth, setDateOfBirth] = useState(initialDateOfBirth);
+  const [birthdayVisibility, setBirthdayVisibility] = useState<BirthVisibility>(initialBirthdayVisibility);
+  const [ageVisibility, setAgeVisibility] = useState<BirthVisibility>(initialAgeVisibility);
+  const [zodiacVisibility, setZodiacVisibility] = useState<BirthVisibility>(initialZodiacVisibility);
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
@@ -96,6 +139,10 @@ export function ProfilePageContent({
     setUsername(savedProfile.username);
     setBio(savedProfile.bio);
     setMoodStatus(savedProfile.moodStatus);
+    setDateOfBirth(savedProfile.dateOfBirth);
+    setBirthdayVisibility(savedProfile.birthdayVisibility);
+    setAgeVisibility(savedProfile.ageVisibility);
+    setZodiacVisibility(savedProfile.zodiacVisibility);
     setFeedback("");
     setEditing(true);
   }
@@ -105,6 +152,10 @@ export function ProfilePageContent({
     setUsername(savedProfile.username);
     setBio(savedProfile.bio);
     setMoodStatus(savedProfile.moodStatus);
+    setDateOfBirth(savedProfile.dateOfBirth);
+    setBirthdayVisibility(savedProfile.birthdayVisibility);
+    setAgeVisibility(savedProfile.ageVisibility);
+    setZodiacVisibility(savedProfile.zodiacVisibility);
     setFeedback("");
     setEditing(false);
   }
@@ -114,7 +165,11 @@ export function ProfilePageContent({
       displayName: displayName.trim(),
       username: username.trim().toLowerCase(),
       bio: bio.trim(),
-      moodStatus: moodStatus.trim()
+      moodStatus: moodStatus.trim(),
+      dateOfBirth,
+      birthdayVisibility,
+      ageVisibility,
+      zodiacVisibility
     };
 
     if (nextProfile.displayName.length < 2) {
@@ -132,7 +187,11 @@ export function ProfilePageContent({
         fullName: nextProfile.displayName,
         username: nextProfile.username,
         bio: nextProfile.bio,
-        moodStatus: nextProfile.moodStatus
+        moodStatus: nextProfile.moodStatus,
+        dateOfBirth: nextProfile.dateOfBirth,
+        birthdayVisibility: nextProfile.birthdayVisibility,
+        ageVisibility: nextProfile.ageVisibility,
+        zodiacVisibility: nextProfile.zodiacVisibility
       });
       setFeedback(result.message);
 
@@ -142,6 +201,10 @@ export function ProfilePageContent({
         setUsername(nextProfile.username);
         setBio(nextProfile.bio);
         setMoodStatus(nextProfile.moodStatus);
+        setDateOfBirth(nextProfile.dateOfBirth);
+        setBirthdayVisibility(nextProfile.birthdayVisibility);
+        setAgeVisibility(nextProfile.ageVisibility);
+        setZodiacVisibility(nextProfile.zodiacVisibility);
         setEditing(false);
         router.refresh();
       }
@@ -197,6 +260,10 @@ export function ProfilePageContent({
   }
 
   const ghostOn = initialVisibilityStatus === "ghost";
+  const birthProfile = savedProfile.dateOfBirth
+    ? deriveBirthProfile(savedProfile.dateOfBirth, serverBirthdayDayKey)
+    : null;
+  const birthdayToday = !birthdayPrivacyDisabledPreview && (birthdayPreview || Boolean(birthProfile?.birthdayToday));
   const missingSteps =
     (avatarUrl ? 0 : 1) + (savedProfile.moodStatus.trim() ? 0 : 1) + (savedProfile.bio.trim() ? 0 : 1);
   const completedSteps = TOTAL_PROFILE_STEPS - missingSteps;
@@ -267,6 +334,43 @@ export function ProfilePageContent({
             <FormField htmlFor="bio" label="Bio" hint={`${bio.length}/160`}>
               <Textarea id="bio" value={bio} maxLength={160} placeholder="Share a little about yourself" onChange={(event) => setBio(event.target.value)} />
             </FormField>
+            <FormField
+              htmlFor="dateOfBirth"
+              label="Date of birth"
+              hint="Your full date and birth year stay private."
+            >
+              <Input
+                id="dateOfBirth"
+                type="date"
+                value={dateOfBirth}
+                onChange={(event) => setDateOfBirth(event.target.value)}
+              />
+            </FormField>
+            {dateOfBirth ? (
+              <div className="grid gap-3 rounded-xl border border-border/70 bg-secondary/25 p-4 sm:grid-cols-3">
+                <AppSelect
+                  label="Show birthday"
+                  size="compact"
+                  value={birthdayVisibility}
+                  options={BIRTH_VISIBILITY_OPTIONS}
+                  onChange={setBirthdayVisibility}
+                />
+                <AppSelect
+                  label="Show age"
+                  size="compact"
+                  value={ageVisibility}
+                  options={BIRTH_VISIBILITY_OPTIONS}
+                  onChange={setAgeVisibility}
+                />
+                <AppSelect
+                  label="Show zodiac"
+                  size="compact"
+                  value={zodiacVisibility}
+                  options={BIRTH_VISIBILITY_OPTIONS}
+                  onChange={setZodiacVisibility}
+                />
+              </div>
+            ) : null}
             <div className="flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
               <Button type="button" variant="outline" onClick={cancelEditing} disabled={isPending}>
                 Cancel
@@ -282,26 +386,28 @@ export function ProfilePageContent({
           {/* Identity — avatar with glow ring + camera, name, visibility, stats */}
           <section data-tour-id={TOUR_TARGET_IDS.PROFILE_PHOTO} className="flex flex-col items-center text-center">
             <div className="relative">
-              <span className="block rounded-full bg-gradient-to-br from-violet-500 via-fuchsia-500 to-primary p-1 shadow-[0_0_36px_hsl(var(--primary)/0.25)]">
-                <UserAvatar
-                  src={avatarSrc}
-                  name={savedProfile.displayName}
-                  size="profile"
-                  className="border-4 border-background shadow-[0_14px_36px_hsl(var(--shadow)/0.22)]"
-                  onImageError={() => {
-                    if (selectedAvatarFile) {
-                      setFeedback(
-                        selectedAvatarFile.type === "image/heic" || selectedAvatarFile.type === "image/heif"
-                          ? "This browser cannot preview the HEIC photo, but Mad Buddy can try to convert it when you save."
-                          : "This photo could not be previewed. Choose another image."
-                      );
-                      return;
-                    }
-                    setAvatarLoadFailed(true);
-                    setFeedback("Your profile photo could not be displayed. Choose another photo or try again.");
-                  }}
-                />
-              </span>
+              <BirthdayAccent active={birthdayToday}>
+                <span className="block rounded-full bg-gradient-to-br from-violet-500 via-fuchsia-500 to-primary p-1 shadow-[0_0_36px_hsl(var(--primary)/0.25)]">
+                  <UserAvatar
+                    src={avatarSrc}
+                    name={savedProfile.displayName}
+                    size="profile"
+                    className="border-4 border-background shadow-[0_14px_36px_hsl(var(--shadow)/0.22)]"
+                    onImageError={() => {
+                      if (selectedAvatarFile) {
+                        setFeedback(
+                          selectedAvatarFile.type === "image/heic" || selectedAvatarFile.type === "image/heif"
+                            ? "This browser cannot preview the HEIC photo, but Mad Buddy can try to convert it when you save."
+                            : "This photo could not be previewed. Choose another image."
+                        );
+                        return;
+                      }
+                      setAvatarLoadFailed(true);
+                      setFeedback("Your profile photo could not be displayed. Choose another photo or try again.");
+                    }}
+                  />
+                </span>
+              </BirthdayAccent>
               {!selectedAvatarFile ? (
                 <button
                   type="button"
@@ -317,7 +423,10 @@ export function ProfilePageContent({
             </div>
             {avatarField}
 
-            <h2 className="mt-4 text-2xl font-semibold tracking-tight">{savedProfile.displayName}</h2>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              <h2 className="text-2xl font-semibold tracking-tight">{savedProfile.displayName}</h2>
+              <PremiumPlanBadge plan={initialPlan} />
+            </div>
             <p className="mt-0.5 text-sm text-muted-foreground">@{savedProfile.username}</p>
 
             <Link
@@ -355,6 +464,8 @@ export function ProfilePageContent({
               <ProfileStat icon={UsersRound} iconClass="text-violet-500 dark:text-violet-300" value={muddyCount} label={muddyCount === 1 ? "Muddy" : "Muddies"} href="/friends" />
               <span className="w-px bg-border/70" aria-hidden="true" />
               <ProfileStat icon={Star} iconClass="text-primary" value={badgeCount} label={badgeCount === 1 ? "Badge" : "Badges"} href="/badges" />
+              <span className="w-px bg-border/70" aria-hidden="true" />
+              <ProfileStat icon={ShieldCheck} iconClass="text-orange-400" value={buddyScore} label={buddyScoreLevel} href="/buddy-score" />
             </div>
 
             {savedProfile.bio.trim() ? (
@@ -378,6 +489,22 @@ export function ProfilePageContent({
                 muted={!savedProfile.moodStatus}
                 onClick={beginEditing}
               />
+              {birthProfile ? (
+                <ProfileDetailRow
+                  icon={CalendarDays}
+                  label="Age and zodiac"
+                  value={`${birthProfile.age} · ${birthProfile.zodiacSign}`}
+                  onClick={beginEditing}
+                />
+              ) : null}
+              {birthdayToday ? (
+                <ProfileDetailRow
+                  icon={CakeSlice}
+                  label="Birthday"
+                  value="Birthday today"
+                  onClick={beginEditing}
+                />
+              ) : null}
               <ProfileDetailRow
                 icon={MessageSquareText}
                 label="Bio"
@@ -473,7 +600,7 @@ function ProfileStat({
   iconClass: string;
   value: number;
   label: string;
-  href: "/friends" | "/badges";
+  href: "/friends" | "/badges" | "/buddy-score";
 }) {
   return (
     <Link href={href} className="focus-ring safe-motion flex items-center gap-2 rounded-xl px-2 py-1 hover:bg-secondary/40" aria-label={`${value} ${label}`}>
@@ -496,7 +623,7 @@ function ProfileDetailRow({
   icon: typeof Smile;
   label: string;
   value: string;
-  muted: boolean;
+  muted?: boolean;
   onClick: () => void;
 }) {
   return (

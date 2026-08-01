@@ -7,9 +7,11 @@ import { sendWaveV2Action } from "@/app/(app)/social-actions";
 import { Button } from "@/components/ui/button";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { Modal } from "@/components/ui/modal";
 import { CONNECTION_PROMPTS } from "@/lib/meetups/connection-prompts";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 
 export type MuddyProfileSummary = {
   friendId?: string;
@@ -22,6 +24,7 @@ export type MuddyProfileSummary = {
   glowStrength?: number;
   confidence?: ConfidenceLevel;
   glowColorId?: string | null;
+  plan?: SubscriptionPlan;
 };
 
 export type MuddyProfileModalProps = {
@@ -78,6 +81,7 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
             </div>
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
+                <PremiumPlanBadge plan={muddy.plan} />
                 {muddy.proximityLevel ? <ProximityBadge proximityLevel={muddy.proximityLevel} /> : null}
                 {muddy.confidence ? (
                   <span className="text-xs capitalize text-muted-foreground">{muddy.confidence} confidence</span>

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { MuddyProfilePage } from "@/components/friends/muddy-profile-page";
 import { checkFeature } from "@/lib/billing/entitlements";
-import { resolveUserEntitlements } from "@/lib/billing/service";
+import { loadEffectivePlan, resolveUserEntitlements } from "@/lib/billing/service";
 import { getPublicTrustSummary } from "@/lib/discovery/service";
 import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { getVisibleProfileFields, resolveViewerRelationship } from "@/lib/profile/service";
@@ -36,6 +36,7 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
   // Per-field privacy (batch 9 §12): hidden fields never leave the server.
   const relationship = user ? await resolveViewerRelationship(admin, user.id, profile.user_id) : "stranger";
   const fields = user ? await getVisibleProfileFields(admin, profile.user_id, relationship) : null;
+  const profilePlan = await loadEffectivePlan(admin, profile.user_id);
 
   // Custom glow (custom_glow_styles entitlement): only offer the picker when
   // the viewer can actually use it and this is a real Muddy of theirs.
@@ -61,7 +62,8 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
         avatarUrl: profile.avatar_url,
         bio: fields?.bio ?? "",
         moodStatus: profile.mood_status ?? "",
-        mutualMuddies: trust?.mutualCount ?? 0
+        mutualMuddies: trust?.mutualCount ?? 0,
+        plan: profilePlan
       }}
       trust={trust}
       fields={fields}

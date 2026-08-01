@@ -13,6 +13,7 @@ import { recordMilestone } from "@/lib/onboarding/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { normalizeUsername, validateUsername } from "@/lib/profile/rules";
+import { validateDateOfBirth } from "@/lib/profile/birth-date";
 
 /**
  * Transport-agnostic onboarding services. Each takes an already-authenticated
@@ -41,6 +42,7 @@ const onboardingSchema = z.object({
     .regex(/^[a-z0-9_]+$/),
   bio: z.string().trim().max(160).optional(),
   moodStatus: z.string().trim().max(80).optional(),
+  dateOfBirth: z.string().trim().optional(),
   /**
    * Legacy field. The spec-correct PrivacySetupPanel now owns visibility via
    * savePrivacySetup (hidden by default), when omitted, this action leaves
@@ -72,6 +74,10 @@ export async function completeOnboarding(userId: string, input: unknown): Promis
   const username = normalizeUsername(parsed.data.username);
   const usernameError = validateUsername(username);
   if (usernameError) return { ok: false, message: usernameError, field: "username" };
+  if (parsed.data.dateOfBirth) {
+    const birthError = validateDateOfBirth(parsed.data.dateOfBirth);
+    if (birthError) return { ok: false, message: birthError };
+  }
 
   const admin = createSupabaseAdminClient();
 
@@ -134,6 +140,27 @@ export async function completeOnboarding(userId: string, input: unknown): Promis
 
   if (preferencesError) {
     return { ok: false, message: "Your preferences could not be saved." };
+  }
+
+  if (parsed.data.dateOfBirth) {
+    const [birthResult, privacyResult] = await Promise.all([
+      admin.from("profile_birth_details").upsert(
+        { user_id: userId, date_of_birth: parsed.data.dateOfBirth },
+        { onConflict: "user_id" }
+      ),
+      admin.from("profile_field_privacy").upsert(
+        ["birthday", "age", "zodiac"].map((fieldName) => ({
+          user_id: userId,
+          field_name: fieldName as "birthday" | "age" | "zodiac",
+          visibility: "only_me" as const,
+          updated_at: new Date().toISOString()
+        })),
+        { onConflict: "user_id,field_name" }
+      )
+    ]);
+    if (birthResult.error || privacyResult.error) {
+      return { ok: false, message: "Your date of birth could not be saved." };
+    }
   }
 
   const friendUsername = parsed.data.firstFriend;

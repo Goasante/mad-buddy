@@ -22,6 +22,7 @@ import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import type { EventGlowMuddyList } from "@/lib/events/types";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
@@ -489,6 +490,7 @@ function EventDetailsModal({
                 >
                   <GlowAvatar name={muddy.displayName} src={muddy.avatarUrl} size="sm" reducedMotion={reducedMotion} />
                   <span className="text-xs font-medium">{muddy.displayName}</span>
+                  <PremiumPlanBadge plan={muddy.plan} compact />
                 </div>
               ))}
               {glowList && glowList.muddies.length === 0 ? (

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import { senderVisibleState, validateMessageText, type UserFacingMessageState } from "@/lib/messaging/rules";
 import {
   canSendMessage,
@@ -13,7 +14,7 @@ import { deliverNotification } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import type { QuickActionType } from "@/lib/supabase/database.types";
+import type { QuickActionType, SubscriptionPlan } from "@/lib/supabase/database.types";
 
 /**
  * Transport-agnostic messaging read/send logic. Takes an already-authenticated
@@ -59,6 +60,7 @@ export type ConversationView = {
   muted: boolean;
   pinned: boolean;
   contextBadge: string | null;
+  otherPlan: SubscriptionPlan | null;
 };
 
 export type MessageableFriend = {
@@ -66,6 +68,7 @@ export type MessageableFriend = {
   displayName: string;
   username: string;
   avatarUrl: string | null;
+  plan: SubscriptionPlan;
 };
 
 const uuidSchema = z.string().uuid();
@@ -262,17 +265,21 @@ export async function listMessageableFriends(userId: string): Promise<Messageabl
     .filter((id) => !blockedIds.has(id));
   if (friendIds.length === 0) return [];
 
-  const { data: profiles } = await admin
-    .from("profiles")
-    .select("user_id, full_name, username, avatar_url")
-    .in("user_id", friendIds);
+  const [{ data: profiles }, plans] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("user_id, full_name, username, avatar_url")
+      .in("user_id", friendIds),
+    loadEffectivePlansForUsers(admin, friendIds)
+  ]);
 
   return (profiles ?? [])
     .map((profile) => ({
       friendId: profile.user_id,
       displayName: profile.full_name,
       username: profile.username,
-      avatarUrl: profile.avatar_url
+      avatarUrl: profile.avatar_url,
+      plan: plans.get(profile.user_id) ?? "free"
     }))
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
@@ -317,7 +324,7 @@ export async function listConversations(userId: string): Promise<ConversationVie
     .filter((conversation) => conversation.conversation_type !== "direct")
     .map((conversation) => conversation.id);
 
-  const [{ data: pins }, { data: otherProfiles }, { data: groupSettings }, { data: previews }] = await Promise.all([
+  const [{ data: pins }, { data: otherProfiles }, { data: groupSettings }, { data: previews }, plans] = await Promise.all([
     admin.from("conversation_pins").select("conversation_id").eq("user_id", userId).in("conversation_id", conversationIds),
     otherIds.length > 0
       ? admin.from("profiles").select("user_id, full_name, username, avatar_url").in("user_id", otherIds)
@@ -325,7 +332,8 @@ export async function listConversations(userId: string): Promise<ConversationVie
     groupConversationIds.length > 0
       ? admin.from("group_settings").select("conversation_id, name").in("conversation_id", groupConversationIds)
       : Promise.resolve({ data: [] }),
-    admin.rpc("conversation_previews", { p_user_id: userId, p_conversation_ids: conversationIds })
+    admin.rpc("conversation_previews", { p_user_id: userId, p_conversation_ids: conversationIds }),
+    loadEffectivePlansForUsers(admin, otherIds)
   ]);
 
   const pinnedIds = new Set((pins ?? []).map((row) => row.conversation_id));
@@ -373,7 +381,11 @@ export async function listConversations(userId: string): Promise<ConversationVie
             ? "Event"
             : conversation.context_type === "safe_arrival"
               ? "Safe Arrival"
-              : null
+              : null,
+      otherPlan:
+        conversation.conversation_type === "direct"
+          ? plans.get(otherIdByConversation.get(conversation.id) ?? "") ?? "free"
+          : null
     });
   }
 

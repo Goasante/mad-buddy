@@ -4,6 +4,8 @@ import { ChevronLeft, MessageCircle, UserPlus, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "../components/Spinner";
 import { api } from "../lib/api";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { BirthdayAccent } from "@/components/profile/birthday-accent";
 
 type PublicProfile = {
   id: string;
@@ -14,6 +16,9 @@ type PublicProfile = {
   moodStatus: string | null;
   isMuddy: boolean;
   isSelf: boolean;
+  age: number | null;
+  zodiacSign: string | null;
+  birthdayToday: boolean;
 };
 
 export function UserProfileScreen() {
@@ -71,9 +76,9 @@ export function UserProfileScreen() {
           </p>
         ) : (
           <div className="glass-panel rounded-2xl p-6 text-center">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-secondary text-2xl font-semibold">
-              {profile.displayName.slice(0, 1).toUpperCase()}
-            </div>
+            <BirthdayAccent active={profile.birthdayToday} className="mx-auto">
+              <UserAvatar src={profile.avatarUrl} name={profile.displayName} size="xl" />
+            </BirthdayAccent>
             <h2 className="mt-4 text-xl font-semibold">{profile.displayName}</h2>
             <p className="text-sm text-muted-foreground">@{profile.username}</p>
             {profile.isMuddy ? (
@@ -87,6 +92,13 @@ export function UserProfileScreen() {
               </span>
             ) : null}
             {profile.bio ? <p className="mt-4 text-sm leading-6">{profile.bio}</p> : null}
+            {profile.age !== null || profile.zodiacSign || profile.birthdayToday ? (
+              <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
+                {profile.age !== null ? <span className="rounded-full border border-border px-3 py-1">Age {profile.age}</span> : null}
+                {profile.zodiacSign ? <span className="rounded-full border border-border px-3 py-1">{profile.zodiacSign}</span> : null}
+                {profile.birthdayToday ? <span className="rounded-full border border-border px-3 py-1">Birthday today</span> : null}
+              </div>
+            ) : null}
 
             {!profile.isSelf ? (
               <div className="mt-6 flex gap-2">

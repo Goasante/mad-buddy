@@ -33,6 +33,7 @@ export function OnboardingScreen() {
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
   const [mood, setMood] = useState("open");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [audience, setAudience] = useState<GlowAudience>("hidden");
   const [firstFriend, setFirstFriend] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -81,6 +82,7 @@ export function OnboardingScreen() {
       username: username.trim().toLowerCase(),
       bio: bio.trim() || undefined,
       moodStatus: mood,
+      dateOfBirth: dateOfBirth || undefined,
       notifications: "smart",
       firstFriend: firstFriend.trim().toLowerCase() || undefined
     });
@@ -144,6 +146,14 @@ export function OnboardingScreen() {
                 </Field>
                 <Field label="Bio" id="bio">
                   <Textarea id="bio" placeholder="Say something friendly." value={bio} onChange={(e) => setBio(e.target.value)} />
+                </Field>
+                <Field label="Date of birth" id="dateOfBirth" hint="Optional and private by default">
+                  <Input
+                    id="dateOfBirth"
+                    type="date"
+                    value={dateOfBirth}
+                    onChange={(event) => setDateOfBirth(event.target.value)}
+                  />
                 </Field>
                 <div className="space-y-2.5">
                   <p className="text-sm font-medium">Mood status</p>

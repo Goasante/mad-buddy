@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Bell,
   CalendarCheck2,
+  CakeSlice,
   Check,
   CheckCheck,
   CheckCircle2,
@@ -31,6 +32,7 @@ import type { LucideIcon } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { respondToMeetupRequestAction } from "@/app/(app)/premium-actions";
+import { sendBirthdayWishAction } from "@/app/(app)/birthday-actions";
 import { Button } from "@/components/ui/button";
 import { AppMenu } from "@/components/ui/app-dropdown";
 import { Modal } from "@/components/ui/modal";
@@ -45,6 +47,7 @@ import {
 } from "@/lib/notifications/destination";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 import { cn } from "@/lib/utils";
+import { BIRTHDAY_WISHES } from "@/lib/profile/birthday-experience";
 
 type NotificationItem = {
   id: string;
@@ -56,6 +59,8 @@ type NotificationItem = {
   unread: boolean;
   icon: LucideIcon;
   meetupRequestId: string | null;
+  birthdayUserId: string | null;
+  previewOnly: boolean;
 };
 
 type ApiNotification = {
@@ -65,6 +70,7 @@ type ApiNotification = {
   message: string;
   is_read: boolean;
   created_at: string;
+  previewOnly?: boolean;
 };
 
 type NotificationsPageContentProps = {
@@ -98,6 +104,7 @@ function categoryForType(type: string): Exclude<PulseCategory, "all"> | "system"
     base === "meeting_ping" ||
     base === "hangout" ||
     base === "moment" ||
+    base === "birthday" ||
     base === "group" ||
     base === "message"
   ) {
@@ -158,6 +165,7 @@ export function NotificationsPageContent({
   useDismissOnBack(optionsOpen, () => setOptionsOpen(false));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<NotificationItem | null>(null);
+  const [selectedBirthday, setSelectedBirthday] = useState<NotificationItem | null>(null);
   const [category, setCategory] = useState<PulseCategory>("all");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -664,6 +672,8 @@ export function NotificationsPageContent({
                         onActivate={() =>
                           notification.meetupRequestId
                             ? openMeetupRequest(notification)
+                            : notification.birthdayUserId
+                              ? (setSelectedBirthday(notification), markNotificationRead(notification))
                             : markNotificationRead(notification)
                         }
                       />
@@ -709,6 +719,46 @@ export function NotificationsPageContent({
               });
             }}
           />
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={Boolean(selectedBirthday)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedBirthday(null);
+        }}
+        title="Wish Happy Birthday"
+        description="Choose a private message to send."
+        compact
+      >
+        {selectedBirthday?.birthdayUserId ? (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {BIRTHDAY_WISHES.map((wish) => (
+              <Button
+                key={wish}
+                type="button"
+                variant="outline"
+                className="h-auto min-h-10 justify-start whitespace-normal px-3 py-2 text-left"
+                disabled={isPending}
+                onClick={() => {
+                  const targetUserId = selectedBirthday.birthdayUserId;
+                  if (!targetUserId) return;
+                  if (selectedBirthday.previewOnly) {
+                    showToast("Preview only. No message was sent.");
+                    setSelectedBirthday(null);
+                    return;
+                  }
+                  startTransition(async () => {
+                    const result = await sendBirthdayWishAction({ targetUserId, wish });
+                    showToast(result.message, !result.ok);
+                    if (result.ok) setSelectedBirthday(null);
+                  });
+                }}
+              >
+                {wish}
+              </Button>
+            ))}
+          </div>
         ) : null}
       </Modal>
 
@@ -881,7 +931,7 @@ function NotificationCard({
   onDelete,
   onActivate
 }: NotificationCardProps) {
-  const actionable = Boolean(notification.meetupRequestId);
+  const actionable = Boolean(notification.meetupRequestId || notification.birthdayUserId);
   const iconClass = categoryIconClass(categoryForType(notification.type));
   // Three mutually exclusive shapes: an in-place reply (button), a deep link
   // (anchor), or a static informational row. meetup_request never has a
@@ -915,7 +965,11 @@ function NotificationCard({
         {notification.message ? (
           <p className="mt-0.5 truncate text-xs text-muted-foreground">{notification.message}</p>
         ) : null}
-        {actionable ? <p className="mt-1 text-xs font-medium text-primary">Reply</p> : null}
+        {actionable ? (
+          <p className="mt-1 text-xs font-medium text-primary">
+            {notification.birthdayUserId ? "Wish Happy Birthday" : "Reply"}
+          </p>
+        ) : null}
       </div>
       <span className="mt-0.5 shrink-0 text-[11px] text-muted-foreground">{notification.time}</span>
       {isLink && !selectionMode ? (
@@ -1019,6 +1073,9 @@ function toNotificationItem(notification: ApiNotification): NotificationItem {
   const meetupRequestId = notification.type.startsWith("meetup_request:")
     ? notification.type.slice("meetup_request:".length)
     : null;
+  const birthdayUserId = notification.type.startsWith("birthday:")
+    ? notification.type.slice("birthday:".length)
+    : null;
   return {
     id: notification.id,
     type: notification.type,
@@ -1028,7 +1085,9 @@ function toNotificationItem(notification: ApiNotification): NotificationItem {
     createdAt: notification.created_at,
     unread: !notification.is_read,
     icon: iconForType(notification.type),
-    meetupRequestId
+    meetupRequestId,
+    birthdayUserId,
+    previewOnly: notification.previewOnly === true
   };
 }
 
@@ -1080,7 +1139,8 @@ function iconForType(type: string): LucideIcon {
     wave: Hand,
     subscription_update: CircleDollarSign,
     system_alert: ShieldAlert,
-    staff_message: Megaphone
+    staff_message: Megaphone,
+    birthday: CakeSlice
   };
 
   return iconsByType[type.split(":")[0]] ?? Bell;

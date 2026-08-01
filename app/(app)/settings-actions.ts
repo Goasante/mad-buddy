@@ -286,6 +286,7 @@ export async function revokeOtherSessionsAction(): Promise<SettingsActionState> 
 const smartNotificationPreferencesSchema = z.object({
   categories: z.record(z.string(), z.enum(["all", "close_friends", "in_app_only", "off"])),
   quietHoursEnabled: z.boolean(),
+  birthdayAnnouncementsEnabled: z.boolean(),
   quietHoursStartMinute: z.number().int().min(0).max(1439),
   quietHoursEndMinute: z.number().int().min(0).max(1439)
 });

@@ -8,6 +8,31 @@ import { Spinner } from "../components/Spinner";
 import { useAuth } from "../auth/AuthProvider";
 import { supabase } from "../lib/supabase";
 import { api } from "../lib/api";
+import { AppSelect, type AppSelectOption } from "@/components/ui/app-dropdown";
+import { dateKeyInTimeZone, deriveBirthProfile } from "@/lib/profile/birth-date";
+import { BirthdayAccent } from "@/components/profile/birthday-accent";
+
+type BirthVisibility = "only_me" | "approved_muddies";
+type BirthSettings = {
+  dateOfBirth: string;
+  birthdayVisibility: BirthVisibility;
+  ageVisibility: BirthVisibility;
+  zodiacVisibility: BirthVisibility;
+  birthdayToday: boolean;
+};
+
+const DEFAULT_BIRTH_SETTINGS: BirthSettings = {
+  dateOfBirth: "",
+  birthdayVisibility: "only_me",
+  ageVisibility: "only_me",
+  zodiacVisibility: "only_me",
+  birthdayToday: false
+};
+
+const BIRTH_VISIBILITY_OPTIONS: AppSelectOption<BirthVisibility>[] = [
+  { value: "only_me", label: "Only me" },
+  { value: "approved_muddies", label: "Muddies" }
+];
 
 type Profile = {
   full_name: string | null;
@@ -30,16 +55,19 @@ export function ProfileScreen() {
   const [muddyCount, setMuddyCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [birthSettings, setBirthSettings] = useState<BirthSettings>(DEFAULT_BIRTH_SETTINGS);
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const [{ data }, muddies] = await Promise.all([
+    const [{ data }, muddies, privateProfile] = await Promise.all([
       supabase.from("profiles").select("full_name, username, bio, mood_status, avatar_url, visibility_status").eq("user_id", user.id).maybeSingle(),
-      api.get<{ muddies: unknown[] }>("/api/friends")
+      api.get<{ muddies: unknown[] }>("/api/friends"),
+      api.get<{ birth: BirthSettings }>("/api/profile")
     ]);
     setProfile((data as Profile) ?? null);
     if (muddies.ok) setMuddyCount(muddies.data.muddies.length);
+    if (privateProfile.ok) setBirthSettings(privateProfile.data.birth);
     setLoading(false);
   }, [user]);
 
@@ -60,7 +88,7 @@ export function ProfileScreen() {
   if (editing) {
     return (
       <Screen title="Edit profile">
-        <EditProfile profile={profile} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); void load(); }} />
+        <EditProfile profile={profile} birthSettings={birthSettings} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); void load(); }} />
       </Screen>
     );
   }
@@ -79,13 +107,15 @@ export function ProfileScreen() {
 
       {/* Profile card */}
       <div className="rounded-2xl border border-border bg-card/40 p-6 text-center">
-        <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-secondary text-3xl font-semibold">
-          {profile?.avatar_url ? (
-            <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
-          ) : (
-            (profile?.full_name ?? "?").slice(0, 1).toUpperCase()
-          )}
-        </div>
+        <BirthdayAccent active={birthSettings.birthdayToday} className="mx-auto">
+          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-secondary text-3xl font-semibold">
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              (profile?.full_name ?? "?").slice(0, 1).toUpperCase()
+            )}
+          </div>
+        </BirthdayAccent>
         <h2 className="mt-4 text-xl font-semibold">{profile?.full_name ?? "Your name"}</h2>
         <p className="text-sm text-muted-foreground">@{profile?.username ?? "username"}</p>
         <div className="mt-5 flex items-center justify-center gap-2 border-t border-border pt-4 text-sm text-muted-foreground">
@@ -104,6 +134,16 @@ export function ProfileScreen() {
           <Detail label="Mood" value={profile?.mood_status || "Add a mood"} muted={!profile?.mood_status} />
           <Detail label="Bio" value={profile?.bio || "Add a short bio"} muted={!profile?.bio} />
           <Detail label="Visibility" value={visibilityLabel[profile?.visibility_status ?? "visible"] ?? "Visible to approved friends"} />
+          {birthSettings.dateOfBirth ? (() => {
+            const birth = deriveBirthProfile(birthSettings.dateOfBirth, dateKeyInTimeZone(new Date()));
+            return (
+              <>
+                <Detail label="Age" value={String(birth.age)} />
+                <Detail label="Zodiac" value={birth.zodiacSign} />
+                {birthSettings.birthdayToday ? <Detail label="Birthday" value="Birthday today" /> : null}
+              </>
+            );
+          })() : null}
         </dl>
       </section>
     </Screen>
@@ -119,11 +159,15 @@ function Detail({ label, value, muted }: { label: string; value: string; muted?:
   );
 }
 
-function EditProfile({ profile, onCancel, onSaved }: { profile: Profile | null; onCancel: () => void; onSaved: () => void }) {
+function EditProfile({ profile, birthSettings, onCancel, onSaved }: { profile: Profile | null; birthSettings: BirthSettings; onCancel: () => void; onSaved: () => void }) {
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [username, setUsername] = useState(profile?.username ?? "");
   const [bio, setBio] = useState(profile?.bio ?? "");
   const [mood, setMood] = useState(profile?.mood_status ?? "");
+  const [dateOfBirth, setDateOfBirth] = useState(birthSettings.dateOfBirth);
+  const [birthdayVisibility, setBirthdayVisibility] = useState<BirthVisibility>(birthSettings.birthdayVisibility);
+  const [ageVisibility, setAgeVisibility] = useState<BirthVisibility>(birthSettings.ageVisibility);
+  const [zodiacVisibility, setZodiacVisibility] = useState<BirthVisibility>(birthSettings.zodiacVisibility);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -134,7 +178,11 @@ function EditProfile({ profile, onCancel, onSaved }: { profile: Profile | null; 
       fullName: fullName.trim(),
       username: username.trim().toLowerCase(),
       bio: bio.trim() || undefined,
-      moodStatus: mood.trim() || undefined
+      moodStatus: mood.trim() || undefined,
+      dateOfBirth,
+      birthdayVisibility,
+      ageVisibility,
+      zodiacVisibility
     });
     setBusy(false);
     if (result.ok) onSaved();
@@ -156,6 +204,16 @@ function EditProfile({ profile, onCancel, onSaved }: { profile: Profile | null; 
         <Field label="Mood" id="mood">
           <Input id="mood" placeholder="open, busy, chill…" value={mood} onChange={(e) => setMood(e.target.value)} />
         </Field>
+        <Field label="Date of birth" id="dateOfBirth" hint="Your full date stays private">
+          <Input id="dateOfBirth" type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
+        </Field>
+        {dateOfBirth ? (
+          <div className="grid gap-3 rounded-xl border border-border bg-secondary/20 p-3">
+            <AppSelect label="Show birthday" size="compact" value={birthdayVisibility} options={BIRTH_VISIBILITY_OPTIONS} onChange={setBirthdayVisibility} />
+            <AppSelect label="Show age" size="compact" value={ageVisibility} options={BIRTH_VISIBILITY_OPTIONS} onChange={setAgeVisibility} />
+            <AppSelect label="Show zodiac" size="compact" value={zodiacVisibility} options={BIRTH_VISIBILITY_OPTIONS} onChange={setZodiacVisibility} />
+          </div>
+        ) : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <div className="flex gap-2">
           <Button className="flex-1" onClick={save} disabled={busy}>

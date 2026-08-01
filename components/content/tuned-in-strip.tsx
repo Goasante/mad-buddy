@@ -7,6 +7,7 @@ import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import type { TuneInEntry, VisibleMoment } from "@/lib/content/service";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import type { MomentReactionId } from "@/lib/content/moments";
 import { cn } from "@/lib/utils";
 import { TuneInIcon } from "@/components/content/tune-in-icon";
@@ -281,7 +282,10 @@ export function TunedInViewer({
       <div className="flex shrink-0 items-center gap-2.5 px-3 py-2.5">
         <UserAvatar src={moment.authorAvatarUrl} name={moment.authorName} size="sm" decorative />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-white">{moment.authorName}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="truncate text-sm font-semibold text-white">{moment.authorName}</p>
+            <PremiumPlanBadge plan={moment.authorPlan} compact className="border-white/25 text-white" />
+          </div>
           <p className="text-[0.6875rem] text-white/60">{timeRemainingLabel(moment.expiresAt, nowMs)}</p>
         </div>
         <button

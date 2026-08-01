@@ -7,6 +7,7 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { getCurrentUser } from "@/lib/supabase/auth";
+import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 
 export const dynamic = "force-dynamic";
 
@@ -66,9 +67,13 @@ async function loadPlans(): Promise<{
   ]);
 
   // Names for everyone appearing as a participant.
-  const participantIds = [...new Set((participantRows ?? []).map((row) => row.user_id))];
+  const participantIds = [...new Set([
+    ...(participantRows ?? []).map((row) => row.user_id),
+    ...(planRows ?? []).map((row) => row.creator_id)
+  ])];
   const nameById = new Map<string, string>();
   const avatarById = new Map<string, string | null>();
+  const planById = await loadEffectivePlansForUsers(admin, participantIds);
   if (participantIds.length > 0) {
     const { data: profiles } = await admin
       .from("profiles")
@@ -80,14 +85,15 @@ async function loadPlans(): Promise<{
     }
   }
 
-  const participantsByPlan = new Map<string, Array<{ name: string; avatarUrl: string | null; rsvp: string; isMe: boolean }>>();
+  const participantsByPlan = new Map<string, Array<{ name: string; avatarUrl: string | null; rsvp: string; isMe: boolean; plan: "free" | "buddy_plus" | "buddy_pro" }>>();
   for (const row of participantRows ?? []) {
     if (!participantsByPlan.has(row.plan_id)) participantsByPlan.set(row.plan_id, []);
     participantsByPlan.get(row.plan_id)!.push({
       name: row.user_id === user.id ? "You" : nameById.get(row.user_id) ?? "A Muddy",
       avatarUrl: avatarById.get(row.user_id) ?? null,
       rsvp: row.rsvp_status,
-      isMe: row.user_id === user.id
+      isMe: row.user_id === user.id,
+      plan: planById.get(row.user_id) ?? "free"
     });
   }
 
@@ -143,6 +149,7 @@ async function loadPlans(): Promise<{
       startAt: plan.start_at,
       placeText: plan.custom_place_text,
       organiserName: plan.creator_id === user.id ? "You" : nameById.get(plan.creator_id) ?? "A Muddy",
+      organiserPlan: planById.get(plan.creator_id) ?? "free",
       isHost,
       myRsvp,
       attendees: participantsByPlan.get(plan.id) ?? [],
@@ -165,14 +172,18 @@ async function loadMuddies(
     friendship.user_one_id === userId ? friendship.user_two_id : friendship.user_one_id
   );
   if (friendIds.length === 0) return [];
-  const { data: profiles } = await admin
-    .from("profiles")
-    .select("user_id, full_name, username, avatar_url")
-    .in("user_id", friendIds);
+  const [{ data: profiles }, plans] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("user_id, full_name, username, avatar_url")
+      .in("user_id", friendIds),
+    loadEffectivePlansForUsers(admin, friendIds)
+  ]);
   return (profiles ?? []).map((profile) => ({
     id: profile.user_id,
     name: profile.full_name?.trim() || "A Muddy",
     username: profile.username,
-    avatarUrl: profile.avatar_url
+    avatarUrl: profile.avatar_url,
+    plan: plans.get(profile.user_id) ?? "free"
   }));
 }

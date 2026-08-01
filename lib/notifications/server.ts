@@ -43,6 +43,7 @@ export type CreateNotificationInput = {
     | `message:${string}`
     | `group:${string}`
     | `achievement:${string}`
+    | `birthday:${string}`
     | `staff_message:${string}`
     | `support_user_reply:${string}`;
   title: string;

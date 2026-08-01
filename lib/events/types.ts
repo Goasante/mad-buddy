@@ -5,12 +5,14 @@
  */
 
 export type { CheckInVisibility } from "@/lib/supabase/database.types";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 
 export type EventGlowMuddySummary = {
   userId: string;
   displayName: string;
   avatarUrl: string | null;
   status: string | null;
+  plan: SubscriptionPlan;
 };
 
 /** Response shape of the Event Glow list (spec §39). Never carries location. */

@@ -33,13 +33,15 @@ import { Button } from "@/components/ui/button";
 import { AppMultiSelect, AppSelect } from "@/components/ui/app-dropdown";
 import { FormField } from "@/components/auth/form-field";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 
-export type PlanInvitee = { id: string; name: string; username?: string | null; avatarUrl?: string | null };
+export type PlanInvitee = { id: string; name: string; username?: string | null; avatarUrl?: string | null; plan: SubscriptionPlan };
 
 export type PlanPollSummary = {
   id: string;
@@ -58,9 +60,10 @@ export type PlanSummary = {
   startAt: string | null;
   placeText: string | null;
   organiserName: string;
+  organiserPlan: SubscriptionPlan;
   isHost: boolean;
   myRsvp: string;
-  attendees: Array<{ name: string; avatarUrl: string | null; rsvp: string; isMe: boolean }>;
+  attendees: Array<{ name: string; avatarUrl: string | null; rsvp: string; isMe: boolean; plan: SubscriptionPlan }>;
   polls: PlanPollSummary[];
 };
 
@@ -492,6 +495,7 @@ function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
           </span>
           <span className="w-full truncate text-right text-[11px] leading-tight text-muted-foreground">
             {plan.isHost ? "By you" : plan.organiserName}
+            <PremiumPlanBadge plan={plan.organiserPlan} compact className="ml-1.5 align-middle" />
           </span>
         </span>
       </button>
@@ -775,6 +779,7 @@ function InviteMuddiesField({
                 {invitee.name.trim().charAt(0).toUpperCase() || "?"}
               </span>
               {invitee.name}
+              <PremiumPlanBadge plan={invitee.plan} compact />
               <button
                 type="button"
                 onClick={() => onToggle(invitee.id)}
@@ -838,6 +843,7 @@ function PlanDetailsModal({
                 <li key={attendee.name} className="flex items-center gap-3 rounded-lg border border-border/70 bg-background/60 px-3 py-2">
                   <GlowAvatar name={attendee.name} src={attendee.avatarUrl} size="sm" />
                   <span className="text-sm font-medium">{attendee.name}</span>
+                  <PremiumPlanBadge plan={attendee.plan} compact />
                   <RsvpBadge rsvp={attendee.rsvp} className="ml-auto" />
                 </li>
               ))}

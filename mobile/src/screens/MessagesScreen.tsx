@@ -4,6 +4,8 @@ import { PenSquare, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { formatRelativeTime } from "@/lib/utils";
 import { Screen } from "../components/AppShell";
 import { Spinner } from "../components/Spinner";
@@ -18,9 +20,10 @@ type Conversation = {
   lastMessageAt: string | null;
   unreadCount: number;
   contextBadge: string | null;
+  otherPlan: SubscriptionPlan | null;
 };
 
-type Friend = { friendId: string; displayName: string; username: string; avatarUrl: string | null };
+type Friend = { friendId: string; displayName: string; username: string; avatarUrl: string | null; plan: SubscriptionPlan };
 
 export function MessagesScreen() {
   const navigate = useNavigate();
@@ -92,7 +95,7 @@ export function MessagesScreen() {
             <li key={conversation.id}>
               <button
                 type="button"
-                onClick={() => navigate(`/messages/${conversation.id}`, { state: { title: conversation.title } })}
+                onClick={() => navigate(`/messages/${conversation.id}`, { state: { title: conversation.title, plan: conversation.otherPlan } })}
                 className={`focus-ring flex w-full items-center gap-3 bg-card/40 px-4 py-3 text-left active:bg-secondary ${
                   index > 0 ? "border-t border-border" : ""
                 }`}
@@ -103,6 +106,7 @@ export function MessagesScreen() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="truncate text-sm font-semibold">{conversation.title}</p>
+                    <PremiumPlanBadge plan={conversation.otherPlan} compact />
                     {conversation.contextBadge ? (
                       <span className="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
                         {conversation.contextBadge}
@@ -131,7 +135,7 @@ export function MessagesScreen() {
         </ul>
       )}
 
-      <NewMessageModal open={composing} onOpenChange={setComposing} onOpened={(id, title) => navigate(`/messages/${id}`, { state: { title } })} />
+      <NewMessageModal open={composing} onOpenChange={setComposing} onOpened={(id, title, plan) => navigate(`/messages/${id}`, { state: { title, plan } })} />
     </Screen>
   );
 }
@@ -143,7 +147,7 @@ function NewMessageModal({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onOpened: (id: string, title: string) => void;
+  onOpened: (id: string, title: string, plan: SubscriptionPlan) => void;
 }) {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -168,7 +172,7 @@ function NewMessageModal({
     const result = await api.post<{ ok: boolean; conversationId?: string; message: string }>("/api/messages/open", {
       recipientId: friend.friendId
     });
-    if (result.ok && result.data.conversationId) onOpened(result.data.conversationId, friend.displayName);
+    if (result.ok && result.data.conversationId) onOpened(result.data.conversationId, friend.displayName, friend.plan);
     else setError(result.ok ? result.data.message : result.error);
   }
 
@@ -209,7 +213,10 @@ function NewMessageModal({
               >
                 <GlowAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{friend.displayName}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="truncate text-sm font-semibold">{friend.displayName}</p>
+                    <PremiumPlanBadge plan={friend.plan} compact />
+                  </div>
                   <p className="truncate text-xs text-muted-foreground">@{friend.username}</p>
                 </div>
               </button>

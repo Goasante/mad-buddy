@@ -1,11 +1,12 @@
 import "server-only";
 
 import { rankSpotlightMoments, resolveMomentVisibility } from "@/lib/content/moments";
+import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import { isOpenMomentsEnabled } from "@/lib/features/feature-flags";
 import { loadNearbyForUser } from "@/lib/proximity/nearby-service";
 import { isCloseFriend, viewerCircleIds } from "@/lib/social/permissions";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import type { MediaVariantType, ReportableContentType } from "@/lib/supabase/database.types";
+import type { MediaVariantType, ReportableContentType, SubscriptionPlan } from "@/lib/supabase/database.types";
 
 /**
  * Content server service (feature architecture batch 6). Resolves Moment
@@ -64,6 +65,7 @@ export type VisibleMoment = {
   authorId: string;
   authorName: string;
   authorAvatarUrl: string | null;
+  authorPlan: SubscriptionPlan;
   contentType: "text" | "photo" | "video";
   textContent: string | null;
   caption: string | null;
@@ -157,13 +159,14 @@ export async function buildMomentFeed(
   const momentIds = candidates.map((moment) => moment.id);
   const otherAuthorIds = [...new Set(candidates.map((m) => m.author_id))];
 
-  const [{ data: targets }, { data: profiles }, { data: myReactions }, { data: allReactions }] = await Promise.all([
+  const [{ data: targets }, { data: profiles }, { data: myReactions }, { data: allReactions }, plans] = await Promise.all([
     admin.from("moment_audience_targets").select("moment_id, target_type, target_id").in("moment_id", momentIds),
     admin.from("profiles").select("user_id, full_name, avatar_url, visibility_status").in("user_id", otherAuthorIds),
     admin.from("moment_reactions").select("moment_id, reaction_type").eq("user_id", viewerId).in("moment_id", momentIds),
     // Aggregate reaction totals per Moment — types and counts only, never who
     // reacted. reaction_type is needed for the compact per-emoji breakdown.
-    admin.from("moment_reactions").select("moment_id, reaction_type").in("moment_id", momentIds)
+    admin.from("moment_reactions").select("moment_id, reaction_type").in("moment_id", momentIds),
+    loadEffectivePlansForUsers(admin, otherAuthorIds)
   ]);
 
   const profileById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
@@ -281,6 +284,7 @@ export async function buildMomentFeed(
       authorId: moment.author_id,
       authorName: isAuthor ? "You" : profile?.full_name?.trim() || "A Muddy",
       authorAvatarUrl: profile?.avatar_url ?? null,
+      authorPlan: plans.get(moment.author_id) ?? "free",
       contentType: moment.content_type,
       textContent: moment.text_content,
       caption: moment.caption,
@@ -374,7 +378,7 @@ export async function buildSpotlightFeed(
   const momentIds = candidates.map((moment) => moment.id);
   const authorIds = [...new Set(candidates.map((moment) => moment.author_id))];
 
-  const [{ data: profiles }, { data: myReactions }, { data: allReactions }, { data: engagement }, { data: creatorCounts }] =
+  const [{ data: profiles }, { data: myReactions }, { data: allReactions }, { data: engagement }, { data: creatorCounts }, plans] =
     await Promise.all([
       admin.from("profiles").select("user_id, full_name, avatar_url, visibility_status").in("user_id", authorIds),
       admin.from("moment_reactions").select("moment_id, reaction_type").eq("user_id", viewerId).in("moment_id", momentIds),
@@ -383,7 +387,8 @@ export async function buildSpotlightFeed(
       // caller cannot read individually, which is what keeps tune-in identities
       // unreachable while the totals stay visible.
       admin.rpc("moment_engagement", { moment_ids: momentIds }),
-      admin.rpc("tune_in_counts", { creator_ids: authorIds })
+      admin.rpc("tune_in_counts", { creator_ids: authorIds }),
+      loadEffectivePlansForUsers(admin, authorIds)
     ]);
 
   const profileById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
@@ -457,6 +462,7 @@ export async function buildSpotlightFeed(
       authorId: moment.author_id,
       authorName: isAuthor ? "You" : profile?.full_name?.trim() || "A Muddy",
       authorAvatarUrl: profile?.avatar_url ?? null,
+      authorPlan: plans.get(moment.author_id) ?? "free",
       contentType: moment.content_type,
       textContent: moment.text_content,
       caption: moment.caption,

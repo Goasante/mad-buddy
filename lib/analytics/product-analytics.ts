@@ -78,6 +78,14 @@ export const PRODUCT_EVENT_NAMES = [
   ,"tune_in_added"
   ,"tune_in_removed"
   ,"tune_in_from_moment"
+  ,"birthday_notification_sent"
+  ,"birthday_wish_sent"
+  ,"birthday_moment_started"
+  ,"earned_plus_unlocked"
+  ,"earned_pro_unlocked"
+  ,"earned_reward_renewed"
+  ,"earned_reward_expired"
+  ,"earned_reward_revoked"
 ] as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT_NAMES)[number];

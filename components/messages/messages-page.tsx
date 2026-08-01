@@ -18,6 +18,7 @@ import {
   setConversationPinnedAction
 } from "@/app/(app)/messaging-actions";
 import type { ChatMessageView, ConversationView, MessageableFriend } from "@/lib/messaging/mobile";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -675,6 +676,7 @@ export function MessagesPageContent({
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-1.5">
                             <span className="truncate text-sm font-semibold">{conversation.title}</span>
+                            <PremiumPlanBadge plan={conversation.otherPlan} compact />
                             {conversation.pinned ? (
                               <Star className="h-3 w-3 shrink-0 fill-primary text-primary" aria-label="Pinned" />
                             ) : null}
@@ -749,6 +751,7 @@ export function MessagesPageContent({
                   </button>
                   <GlowAvatar name={selected.title} src={selected.avatarUrl} size="sm" />
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold">{selected.title}</span>
+                  <PremiumPlanBadge plan={selected.otherPlan} compact />
                   <Popover.Root open={infoOpen} onOpenChange={setInfoOpen}>
                     <Popover.Trigger asChild>
                       <button
@@ -1106,7 +1109,10 @@ function NewMessageModal({
                 >
                   <GlowAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">{friend.displayName}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="block truncate text-sm font-semibold">{friend.displayName}</span>
+                      <PremiumPlanBadge plan={friend.plan} compact />
+                    </span>
                     <span className="block truncate text-xs text-muted-foreground">@{friend.username}</span>
                   </span>
                 </button>

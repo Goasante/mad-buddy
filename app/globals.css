@@ -1519,3 +1519,63 @@ select {
     transition: none;
   }
 }
+@keyframes premium-pro-shimmer {
+  0%, 72%, 100% { box-shadow: 0 0 0 0 hsl(28 95% 58% / 0); }
+  84% { box-shadow: 0 0 10px 1px hsl(28 95% 58% / 0.28); }
+}
+
+.premium-plan-badge--pro {
+  animation: premium-pro-shimmer 4.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .premium-plan-badge--pro { animation: none; }
+}
+/* Birthday celebration stays outside the canonical proximity/premium avatar
+   glow. Motion is deliberately subtle and fully disabled for reduced motion. */
+.birthday-accent__ring {
+  position: absolute;
+  inset: -7px;
+  z-index: 0;
+  border: 2px solid color-mix(in srgb, #fbbf24 72%, transparent);
+  border-radius: 9999px;
+  box-shadow: 0 0 12px color-mix(in srgb, #fb7185 32%, transparent), 0 0 20px color-mix(in srgb, #fbbf24 22%, transparent);
+  pointer-events: none;
+  animation: birthday-breathe 2.8s ease-in-out infinite;
+}
+
+.birthday-accent > :not(.birthday-accent__ring):not(.birthday-accent__confetti) {
+  position: relative;
+  z-index: 1;
+}
+
+.birthday-accent__confetti {
+  position: absolute;
+  z-index: 2;
+  width: 5px;
+  height: 8px;
+  border-radius: 9999px;
+  pointer-events: none;
+  animation: birthday-float 2.6s ease-in-out infinite;
+}
+
+.birthday-accent__confetti--one { left: -8px; top: 8px; background: #38bdf8; transform: rotate(-24deg); }
+.birthday-accent__confetti--two { bottom: 4px; right: -9px; background: #f472b6; animation-delay: 500ms; transform: rotate(22deg); }
+
+@keyframes birthday-breathe {
+  0%, 100% { opacity: 0.72; transform: scale(0.99); }
+  50% { opacity: 1; transform: scale(1.025); }
+}
+
+@keyframes birthday-float {
+  0%, 100% { opacity: 0.6; translate: 0 1px; }
+  50% { opacity: 1; translate: 0 -2px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .birthday-accent__ring,
+  .birthday-accent__confetti {
+    animation: none !important;
+    transition: none !important;
+  }
+}

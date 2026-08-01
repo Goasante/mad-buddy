@@ -35,6 +35,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 import { countActiveRequests } from "@/lib/social/hangout-requests";
@@ -606,9 +607,11 @@ export function HangoutModePage({
                   {hangout.ownerName.trim().charAt(0).toUpperCase() || "?"}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    {hangout.ownerName} is open to{" "}
+                  <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+                    <span className="truncate">{hangout.ownerName} is open to{" "}
                     {HANGOUT_ACTIVITY_LABELS[hangout.activityType]?.toLowerCase() ?? "hang out"}
+                    </span>
+                    <PremiumPlanBadge plan={hangout.ownerPlan} compact />
                   </p>
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">
                     {hangout.message ? `“${hangout.message}” · ` : ""}

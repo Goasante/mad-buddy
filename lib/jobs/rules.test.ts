@@ -113,6 +113,7 @@ describe("schedule (spec §31)", () => {
       "trials.lifecycle",
       "recap.generate_monthly",
       "streaks.close_expired_periods"
+      ,"birthdays.notify"
     ]) {
       expect(types, jobType).toContain(jobType);
     }

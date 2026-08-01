@@ -15,6 +15,7 @@ import {
   type MomentReactionId
 } from "@/lib/content/moments";
 import type { VisibleMoment } from "@/lib/content/service";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { cn } from "@/lib/utils";
 
 /**
@@ -440,6 +441,7 @@ export function MomentHeader({
     <span className="min-w-0">
       <span className="flex items-center gap-1.5">
         <span className="min-w-0 truncate text-sm font-semibold">{moment.authorName}</span>
+        <PremiumPlanBadge plan={moment.authorPlan} compact />
         {onAir ? <OnAirBadge /> : null}
       </span>
       <span className="flex items-center gap-1 text-[0.6875rem] text-muted-foreground">

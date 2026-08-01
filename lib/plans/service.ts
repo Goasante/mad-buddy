@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { guardAction } from "@/lib/admin/enforcement";
 import { upgradePromptFor } from "@/lib/billing/entitlements";
+import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { deliverNotification } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
@@ -21,7 +22,7 @@ import {
 } from "@/lib/social/planning";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import type { PlanType } from "@/lib/supabase/database.types";
+import type { PlanType, SubscriptionPlan } from "@/lib/supabase/database.types";
 
 /**
  * Transport-agnostic Plans service. Takes an already-authenticated `userId`;
@@ -44,13 +45,14 @@ export type PlanListItem = {
   startAt: string | null;
   placeText: string | null;
   organiserName: string;
+  organiserPlan: SubscriptionPlan;
   isHost: boolean;
   myRsvp: string;
   goingCount: number;
   attendeeCount: number;
 };
 
-export type PlanInviteeItem = { id: string; name: string; username: string };
+export type PlanInviteeItem = { id: string; name: string; username: string; plan: SubscriptionPlan };
 
 const uuidSchema = z.string().uuid();
 
@@ -110,20 +112,16 @@ export async function listPlansForUser(
   const friendIds = (friendships ?? []).map((friendship) =>
     friendship.user_one_id === userId ? friendship.user_two_id : friendship.user_one_id
   );
-  const invitees: PlanInviteeItem[] = friendIds.length
-    ? (
-        (
-          await admin
-            .from("profiles")
-            .select("user_id, full_name, username")
-            .in("user_id", friendIds)
-        ).data ?? []
-      ).map((profile) => ({
+  const inviteeProfiles = friendIds.length
+    ? (await admin.from("profiles").select("user_id, full_name, username").in("user_id", friendIds)).data ?? []
+    : [];
+  const inviteePlans = await loadEffectivePlansForUsers(admin, friendIds);
+  const invitees: PlanInviteeItem[] = inviteeProfiles.map((profile) => ({
         id: profile.user_id,
         name: profile.full_name?.trim() || "A Muddy",
-        username: profile.username
-      }))
-    : [];
+        username: profile.username,
+        plan: inviteePlans.get(profile.user_id) ?? "free"
+      }));
 
   const planIds = [
     ...new Set([
@@ -146,6 +144,7 @@ export async function listPlansForUser(
   ]);
 
   const organiserIds = [...new Set((planRows ?? []).map((plan) => plan.creator_id))];
+  const organiserPlans = await loadEffectivePlansForUsers(admin, organiserIds);
   const nameById = new Map<string, string>();
   if (organiserIds.length > 0) {
     const { data: profiles } = await admin
@@ -178,6 +177,7 @@ export async function listPlansForUser(
       startAt: plan.start_at,
       placeText: plan.custom_place_text,
       organiserName: plan.creator_id === userId ? "You" : nameById.get(plan.creator_id) ?? "A Muddy",
+      organiserPlan: organiserPlans.get(plan.creator_id) ?? "free",
       isHost,
       myRsvp: isHost ? "going" : myRow?.rsvp_status ?? "invited",
       goingCount: counts.going,

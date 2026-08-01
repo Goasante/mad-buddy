@@ -71,6 +71,9 @@ describe("profile field privacy (spec §5, §6)", () => {
       expect(["only_me", "approved_muddies", "close_friends", "shared_communities"]).toContain(visibility);
     }
     expect(DEFAULT_FIELD_PRIVACY.bio).toBe("approved_muddies");
+    expect(DEFAULT_FIELD_PRIVACY.birthday).toBe("only_me");
+    expect(DEFAULT_FIELD_PRIVACY.age).toBe("only_me");
+    expect(DEFAULT_FIELD_PRIVACY.zodiac).toBe("only_me");
   });
 
   it("always shows the owner their own field", () => {

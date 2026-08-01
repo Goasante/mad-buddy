@@ -55,6 +55,8 @@ import type {
   ReactionType,
   ReportableContentType
 } from "@/lib/supabase/database.types";
+import { dateKeyInTimeZone, isBirthdayOnDate } from "@/lib/profile/birth-date";
+import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 
 /**
  * Deliberately NOT exported. A `"use server"` module must never export a type:
@@ -317,6 +319,7 @@ const createMomentSchema = z.object({
   ]),
   targetIds: z.array(uuidSchema).max(50).optional(),
   publicAudienceConfirmed: z.boolean().optional(),
+  birthdayTemplate: z.boolean().optional(),
   expiresAt: z.string().datetime({ offset: true })
 });
 
@@ -462,6 +465,22 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
     .single();
   if (error || !moment) return { ok: false, message: "Couldn't share that Moment. Try again." };
 
+  let verifiedBirthdayTemplate = false;
+  if (parsed.data.birthdayTemplate) {
+    const { data: birthDetails } = await admin
+      .from("profile_birth_details")
+      .select("date_of_birth")
+      .eq("user_id", userId)
+      .maybeSingle();
+    verifiedBirthdayTemplate = Boolean(
+      birthDetails?.date_of_birth &&
+        isBirthdayOnDate(
+          birthDetails.date_of_birth,
+          dateKeyInTimeZone(new Date(), DEFAULT_RECIPIENT_TIMEZONE)
+        )
+    );
+  }
+
   // Audience targets: only the user's own circles / real Muddies qualify.
   const targetIds = [...new Set(parsed.data.targetIds ?? [])];
   if (targetIds.length > 0) {
@@ -514,6 +533,15 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
     resourceId: moment.id,
     featureKey: "moments"
   });
+  if (verifiedBirthdayTemplate) {
+    await recordProductEvent(admin, {
+      eventName: "birthday_moment_started",
+      actorId: userId,
+      resourceType: "moment",
+      resourceId: moment.id,
+      featureKey: "birthdays"
+    });
+  }
   if (isSpotlight) {
     await recordProductEvent(admin, {
       eventName: "spotlight_published",

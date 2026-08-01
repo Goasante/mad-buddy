@@ -1,13 +1,14 @@
 import "server-only";
 
 import { z } from "zod";
+import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { deliverNotification } from "@/lib/notifications/server";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
-import type { Database } from "@/lib/supabase/database.types";
+import type { Database, SubscriptionPlan } from "@/lib/supabase/database.types";
 import { isSocializeEnabled } from "@/lib/features/feature-flags";
 
 /**
@@ -34,6 +35,7 @@ export type SearchUserResult = {
   mutualFriends: number;
   status: "available";
   note: string;
+  plan: SubscriptionPlan;
 };
 
 export type SearchUsersResult = ServiceResult & { users: SearchUserResult[] };
@@ -45,6 +47,7 @@ export type IncomingRequest = {
   username: string;
   avatarUrl: string | null;
   createdAt: string;
+  plan: SubscriptionPlan;
 };
 
 const uuidSchema = z.string().uuid();
@@ -76,6 +79,7 @@ export type MuddyListItem = {
   displayName: string;
   username: string;
   avatarUrl: string | null;
+  plan: SubscriptionPlan;
 };
 
 /** The user's approved Muddies (friends), alphabetical. Read-only; the mobile
@@ -94,11 +98,14 @@ export async function listMuddies(userId: string): Promise<ServiceResult & { mud
   const friendIds = (friendships ?? []).map((row) => (row.user_one_id === userId ? row.user_two_id : row.user_one_id));
   if (friendIds.length === 0) return { ok: true, message: "ok", muddies: [] };
 
-  const { data: profiles } = await admin
-    .from("profiles")
-    .select("user_id, full_name, username, avatar_url")
-    .in("user_id", friendIds)
-    .is("deleted_at", null);
+  const [{ data: profiles }, plans] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("user_id, full_name, username, avatar_url")
+      .in("user_id", friendIds)
+      .is("deleted_at", null),
+    loadEffectivePlansForUsers(admin, friendIds)
+  ]);
 
   return {
     ok: true,
@@ -108,7 +115,8 @@ export async function listMuddies(userId: string): Promise<ServiceResult & { mud
         id: profile.user_id,
         displayName: profile.full_name,
         username: profile.username,
-        avatarUrl: profile.avatar_url
+        avatarUrl: profile.avatar_url,
+        plan: plans.get(profile.user_id) ?? "free"
       }))
       .sort((a, b) => a.displayName.localeCompare(b.displayName))
   };
@@ -240,6 +248,7 @@ export async function searchUsers(userId: string, query: string): Promise<Search
   }
 
   const otherProfiles = data.filter((profile) => profile.user_id !== userId);
+  const plans = await loadEffectivePlansForUsers(admin, otherProfiles.map((profile) => profile.user_id));
 
   if (otherProfiles.length === 0 && data.some((profile) => profile.user_id === userId)) {
     return { ok: false, message: "This is your account. Search for another username.", users: [] };
@@ -263,7 +272,8 @@ export async function searchUsers(userId: string, query: string): Promise<Search
       avatarUrl: profile.avatar_url,
       mutualFriends: 0,
       status: "available",
-      note: "Search result"
+      note: "Search result",
+      plan: plans.get(profile.user_id) ?? "free"
     }))
   };
 }
@@ -305,6 +315,7 @@ export async function listIncomingRequests(
       ).data ?? []
     : [];
   const byId = new Map(profiles.map((profile) => [profile.user_id, profile]));
+  const plans = await loadEffectivePlansForUsers(admin, senderIds);
 
   return {
     ok: true,
@@ -317,7 +328,8 @@ export async function listIncomingRequests(
         displayName: profile?.full_name ?? "Someone",
         username: profile?.username ?? "",
         avatarUrl: profile?.avatar_url ?? null,
-        createdAt: row.created_at
+        createdAt: row.created_at,
+        plan: plans.get(row.sender_id) ?? "free"
       };
     })
   };

@@ -29,6 +29,8 @@ export type JobType =
   | "trials.lifecycle"
   | "recap.generate_monthly"
   | "streaks.close_expired_periods"
+  | "birthdays.notify"
+  | "rewards.earned_premium"
   // Expiry sweeps (spec §31).
   | "expiry.plans"
   | "expiry.statuses"
@@ -165,6 +167,8 @@ export const SCHEDULE: readonly ScheduleSpec[] = [
   { jobType: "trials.lifecycle", everyMinutes: 60, priority: 3 },
   { jobType: "streaks.close_expired_periods", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "recap.generate_monthly", everyMinutes: 60 * 24, priority: 7 },
+  { jobType: "birthdays.notify", everyMinutes: 60, priority: 5 },
+  { jobType: "rewards.earned_premium", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "expiry.plans", everyMinutes: 60, priority: 5 },
   { jobType: "expiry.statuses", everyMinutes: 15, priority: 5 },
   { jobType: "expiry.visibility_sessions", everyMinutes: 15, priority: 2 },

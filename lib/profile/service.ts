@@ -11,6 +11,8 @@ import {
 import type { ViewerRelationship } from "@/lib/profile/rules";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
+import { dateKeyInTimeZone, deriveBirthProfile, validateDateOfBirth } from "@/lib/profile/birth-date";
+import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -22,6 +24,9 @@ export type VisibleProfileFields = {
   generalArea: string | null;
   pronouns: string | null;
   interests: string[] | null;
+  age: number | null;
+  zodiacSign: string | null;
+  birthdayToday: boolean;
 };
 
 export async function loadFieldPrivacy(admin: Admin, userId: string): Promise<Record<ProfileField, FieldVisibility>> {
@@ -88,17 +93,25 @@ export async function getVisibleProfileFields(
   targetId: string,
   relationship: ViewerRelationship
 ): Promise<VisibleProfileFields> {
-  const [{ data: profile }, { data: interests }, privacy] = await Promise.all([
+  const [{ data: profile }, { data: interests }, { data: birthDetails }, privacy] = await Promise.all([
     admin
       .from("profiles")
       .select("bio, institution, programme, graduation_year, general_area, pronouns")
       .eq("user_id", targetId)
       .maybeSingle(),
     admin.from("user_interests").select("interest").eq("user_id", targetId),
+    admin.from("profile_birth_details").select("date_of_birth").eq("user_id", targetId).maybeSingle(),
     loadFieldPrivacy(admin, targetId)
   ]);
 
   const can = (field: ProfileField) => resolveFieldVisibility({ visibility: privacy[field], relationship });
+
+  const derived = birthDetails?.date_of_birth
+    ? deriveBirthProfile(
+        birthDetails.date_of_birth,
+        dateKeyInTimeZone(new Date(), DEFAULT_RECIPIENT_TIMEZONE)
+      )
+    : null;
 
   return {
     bio: can("bio") ? (profile?.bio ?? null) : null,
@@ -107,7 +120,10 @@ export async function getVisibleProfileFields(
     graduationYear: can("graduation_year") ? (profile?.graduation_year ?? null) : null,
     generalArea: can("general_area") ? (profile?.general_area ?? null) : null,
     pronouns: can("pronouns") ? (profile?.pronouns ?? null) : null,
-    interests: can("interests") ? (interests ?? []).map((row) => row.interest) : null
+    interests: can("interests") ? (interests ?? []).map((row) => row.interest) : null,
+    age: can("age") ? (derived?.age ?? null) : null,
+    zodiacSign: can("zodiac") ? (derived?.zodiacSign ?? null) : null,
+    birthdayToday: can("birthday") ? (derived?.birthdayToday ?? false) : false
   };
 }
 
@@ -127,7 +143,11 @@ export const profileSchema = z.object({
     .max(24)
     .regex(/^[a-z0-9_]+$/),
   bio: z.string().trim().max(160).optional(),
-  moodStatus: z.string().trim().max(80).optional()
+  moodStatus: z.string().trim().max(80).optional(),
+  dateOfBirth: z.string().trim().optional(),
+  birthdayVisibility: z.enum(["only_me", "approved_muddies"]).optional(),
+  ageVisibility: z.enum(["only_me", "approved_muddies"]).optional(),
+  zodiacVisibility: z.enum(["only_me", "approved_muddies"]).optional()
 });
 
 /**
@@ -144,6 +164,10 @@ export async function updateProfile(
   const parsed = profileSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, message: "Check your profile fields and try again." };
+  }
+  if (parsed.data.dateOfBirth) {
+    const birthError = validateDateOfBirth(parsed.data.dateOfBirth);
+    if (birthError) return { ok: false, message: birthError };
   }
 
   const { data: savedProfile, error } = await rlsClient
@@ -171,6 +195,32 @@ export async function updateProfile(
 
   if (!savedProfile) {
     return { ok: false, message: "Couldn't update your profile. Try again." };
+  }
+
+  if (parsed.data.dateOfBirth !== undefined) {
+    const dateOfBirth = parsed.data.dateOfBirth.trim();
+    if (dateOfBirth) {
+      const { error: birthSaveError } = await rlsClient
+        .from("profile_birth_details")
+        .upsert({ user_id: userId, date_of_birth: dateOfBirth }, { onConflict: "user_id" });
+      if (birthSaveError) return { ok: false, message: "Couldn't save your date of birth. Try again." };
+    } else {
+      const { error: birthDeleteError } = await rlsClient
+        .from("profile_birth_details")
+        .delete()
+        .eq("user_id", userId);
+      if (birthDeleteError) return { ok: false, message: "Couldn't remove your date of birth. Try again." };
+    }
+
+    const visibilityRows = [
+      { field_name: "birthday" as const, visibility: parsed.data.birthdayVisibility ?? "only_me" as const },
+      { field_name: "age" as const, visibility: parsed.data.ageVisibility ?? "only_me" as const },
+      { field_name: "zodiac" as const, visibility: parsed.data.zodiacVisibility ?? "only_me" as const }
+    ].map((row) => ({ ...row, user_id: userId, updated_at: new Date().toISOString() }));
+    const { error: privacyError } = await rlsClient
+      .from("profile_field_privacy")
+      .upsert(visibilityRows, { onConflict: "user_id,field_name" });
+    if (privacyError) return { ok: false, message: "Couldn't save your birthday privacy choices. Try again." };
   }
 
   return { ok: true, message: "Profile updated." };

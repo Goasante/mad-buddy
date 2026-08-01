@@ -48,6 +48,8 @@ import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/li
 import { cn } from "@/lib/utils";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 
 type FriendTab = "all" | "circles" | "close" | "requests" | "blocked";
 
@@ -60,6 +62,7 @@ export type UserSummary = {
   mutualFriends: number;
   status: "friend" | "available" | "received" | "sent" | "blocked";
   note: string;
+  plan: SubscriptionPlan;
 };
 
 type ProximityInfo = {
@@ -742,7 +745,8 @@ export function FriendsPageContent({
                 proximityLevel: proximityByFriendId[profileUser.id]?.proximityLevel,
                 glowStrength: proximityByFriendId[profileUser.id]?.glowStrength,
                 confidence: proximityByFriendId[profileUser.id]?.confidence,
-                glowColorId: glowColorByFriendId[profileUser.id] ?? null
+                glowColorId: glowColorByFriendId[profileUser.id] ?? null,
+                plan: profileUser.plan
               }
             : null
         }
@@ -917,7 +921,10 @@ function MuddyRow({
       </button>
 
       <button type="button" onClick={onViewProfile} className="focus-ring min-w-0 flex-1 rounded text-left">
-        <span className="block truncate font-medium leading-tight">{user.displayName}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="block truncate font-medium leading-tight">{user.displayName}</span>
+          <PremiumPlanBadge plan={user.plan} compact />
+        </span>
         <span className="mt-0.5 flex items-center gap-1.5 text-xs leading-tight">
           <span className={cn("truncate", statusClass)}>{proximityLabels[level]}</span>
           {isCloseFriend ? (
@@ -1060,7 +1067,10 @@ function RequestRow({
     <li className="flex items-center gap-3 py-3">
       <InitialsAvatar name={user.displayName} src={user.avatarUrl} size="sm" />
       <div className="min-w-0 flex-1">
-        <p className="truncate font-medium leading-tight">{user.displayName}</p>
+        <p className="flex items-center gap-1.5 font-medium leading-tight">
+          <span className="truncate">{user.displayName}</span>
+          <PremiumPlanBadge plan={user.plan} compact />
+        </p>
         <p className="truncate text-xs text-muted-foreground">
           @{user.username}
           {user.mutualFriends > 0 ? ` · ${user.mutualFriends} mutual` : ""}
@@ -1150,7 +1160,10 @@ function AddMuddyModal({
               <div key={user.id} className="flex items-center gap-3 rounded-lg border border-border/70 p-3">
                 <InitialsAvatar name={user.displayName} src={user.avatarUrl} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{user.displayName}</p>
+                  <p className="flex items-center gap-1.5 text-sm font-semibold">
+                    <span className="truncate">{user.displayName}</span>
+                    <PremiumPlanBadge plan={user.plan} compact />
+                  </p>
                   <p className="truncate text-xs text-muted-foreground">@{user.username}</p>
                 </div>
                 <Button type="button" size="sm" onClick={() => onRequest(user)}>

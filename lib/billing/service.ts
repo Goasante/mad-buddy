@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  effectivePlan,
   resolveEntitlements,
   serializeLimit,
   type BillingState,
@@ -8,6 +9,7 @@ import {
   type EntitlementOverride,
   type NumericEntitlementKey
 } from "@/lib/billing/entitlements";
+import { resolveEffectivePlanMap } from "@/lib/billing/effective-plans";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SubscriptionPlan, SubscriptionStatus } from "@/lib/supabase/database.types";
 import { loadActiveTrialAccess } from "@/lib/trials/service";
@@ -22,14 +24,17 @@ import { loadActiveTrialAccess } from "@/lib/trials/service";
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
 export async function loadBillingState(admin: Admin, userId: string): Promise<BillingState> {
-  const [{ data }, trial] = await Promise.all([
+  const nowIso = new Date().toISOString();
+  const [{ data }, trial, rewardResult] = await Promise.all([
     admin
       .from("subscriptions")
       .select("plan, status, current_period_end, grace_ends_at")
       .eq("user_id", userId)
       .maybeSingle(),
-    loadActiveTrialAccess(admin, userId)
+    loadActiveTrialAccess(admin, userId),
+    admin.from("earned_premium_rewards").select("id,reward_plan,granted_at,expires_at,grace_ends_at").eq("user_id", userId).in("status", ["active", "grace"]).lte("granted_at", nowIso).or(`expires_at.gt.${nowIso},grace_ends_at.gt.${nowIso}`).order("granted_at", { ascending: false }).limit(1).maybeSingle()
   ]);
+  const reward = rewardResult.data;
 
   if (!data) {
     return {
@@ -40,7 +45,12 @@ export async function loadBillingState(admin: Admin, userId: string): Promise<Bi
       trialId: trial?.id ?? null,
       trialPlan: trial?.plan ?? null,
       trialStartedAtMs: trial?.startedAtMs ?? null,
-      trialEndsAtMs: trial?.endsAtMs ?? null
+      trialEndsAtMs: trial?.endsAtMs ?? null,
+      earnedRewardId: reward?.id ?? null,
+      earnedPlan: reward?.reward_plan ?? null,
+      earnedStartsAtMs: reward?.granted_at ? Date.parse(reward.granted_at) : null,
+      earnedEndsAtMs: reward?.expires_at ? Date.parse(reward.expires_at) : null,
+      earnedGraceEndsAtMs: reward?.grace_ends_at ? Date.parse(reward.grace_ends_at) : null
     };
   }
 
@@ -52,8 +62,62 @@ export async function loadBillingState(admin: Admin, userId: string): Promise<Bi
     trialId: trial?.id ?? null,
     trialPlan: trial?.plan ?? null,
     trialStartedAtMs: trial?.startedAtMs ?? null,
-    trialEndsAtMs: trial?.endsAtMs ?? null
+    trialEndsAtMs: trial?.endsAtMs ?? null,
+    earnedRewardId: reward?.id ?? null,
+    earnedPlan: reward?.reward_plan ?? null,
+    earnedStartsAtMs: reward?.granted_at ? Date.parse(reward.granted_at) : null,
+    earnedEndsAtMs: reward?.expires_at ? Date.parse(reward.expires_at) : null,
+    earnedGraceEndsAtMs: reward?.grace_ends_at ? Date.parse(reward.grace_ends_at) : null
   };
+}
+
+/**
+ * Batched effective-plan lookup for identity surfaces. This avoids N+1
+ * billing queries while retaining the exact paid, grace, expiry, and trial
+ * semantics used by entitlement enforcement.
+ */
+export async function loadEffectivePlansForUsers(
+  admin: Admin,
+  userIds: readonly string[],
+  nowMs = Date.now()
+): Promise<Map<string, SubscriptionPlan>> {
+  const uniqueIds = [...new Set(userIds)].filter(Boolean);
+  if (uniqueIds.length === 0) return new Map();
+
+  const nowIso = new Date(nowMs).toISOString();
+  const [subscriptionsResult, trialsResult, rewardsResult] = await Promise.all([
+    admin
+      .from("subscriptions")
+      .select("user_id, plan, status, current_period_end, grace_ends_at")
+      .in("user_id", uniqueIds),
+    admin
+      .from("premium_trials")
+      .select("id, user_id, plan, trial_started_at, trial_ends_at")
+      .in("user_id", uniqueIds)
+      .eq("status", "active")
+      .lte("trial_started_at", nowIso)
+      .gt("trial_ends_at", nowIso)
+      .order("trial_started_at", { ascending: false }),
+    admin.from("earned_premium_rewards").select("id,user_id,reward_plan,granted_at,expires_at,grace_ends_at").in("user_id", uniqueIds).in("status", ["active", "grace"]).lte("granted_at", nowIso).or(`expires_at.gt.${nowIso},grace_ends_at.gt.${nowIso}`).order("granted_at", { ascending: false })
+  ]);
+
+  if (subscriptionsResult.error) {
+    return new Map(uniqueIds.map((userId) => [userId, "free" as const]));
+  }
+
+  return resolveEffectivePlanMap(
+    uniqueIds,
+    subscriptionsResult.data ?? [],
+    trialsResult.error ? [] : (trialsResult.data ?? []),
+    nowMs,
+    rewardsResult.error ? [] : (rewardsResult.data ?? [])
+  );
+}
+
+/** Effective plan for one identity surface, resolved only on the server. */
+export async function loadEffectivePlan(admin: Admin, userId: string, nowMs = Date.now()): Promise<SubscriptionPlan> {
+  const state = await loadBillingState(admin, userId);
+  return effectivePlan(state, nowMs);
 }
 
 async function loadOverrides(admin: Admin, userId: string): Promise<EntitlementOverride[]> {

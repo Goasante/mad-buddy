@@ -10,12 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { GLOW_COLORS } from "@/lib/glow/custom-colors";
 import { CONNECTION_PROMPTS } from "@/lib/meetups/connection-prompts";
 import type { PublicTrustSummary } from "@/lib/discovery/trust";
 import type { VisibleProfileFields } from "@/lib/profile/service";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
+import { BirthdayAccent } from "@/components/profile/birthday-accent";
 
 export type MuddyProfileData = {
   friendId: string;
@@ -28,6 +31,7 @@ export type MuddyProfileData = {
   proximityLevel?: ProximityLevel;
   glowStrength?: number;
   confidence?: ConfidenceLevel;
+  plan: SubscriptionPlan;
 };
 
 export function MuddyProfilePage({
@@ -100,19 +104,22 @@ export function MuddyProfilePage({
         <div className="px-5 pb-5 sm:px-6">
           <div className="-mt-12 flex flex-col items-start gap-4 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-end gap-3">
-              <GlowAvatar
-                name={muddy.displayName}
-                src={muddy.avatarUrl}
-                proximityLevel={muddy.proximityLevel}
-                glowStrength={muddy.glowStrength}
-                confidence={muddy.confidence}
-                glowColorId={glowColorId}
-                size="xl"
-                className="border-4 border-card"
-              />
+              <BirthdayAccent active={Boolean(fields?.birthdayToday)}>
+                <GlowAvatar
+                  name={muddy.displayName}
+                  src={muddy.avatarUrl}
+                  proximityLevel={muddy.proximityLevel}
+                  glowStrength={muddy.glowStrength}
+                  confidence={muddy.confidence}
+                  glowColorId={glowColorId}
+                  size="xl"
+                  className="border-4 border-card"
+                />
+              </BirthdayAccent>
               <div className="pb-1">
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{muddy.displayName}</h1>
+                  <PremiumPlanBadge plan={muddy.plan} />
                 </div>
                 <p className="text-sm text-muted-foreground">@{muddy.username}</p>
                 {muddy.proximityLevel ? <div className="mt-1"><ProximityBadge proximityLevel={muddy.proximityLevel} /></div> : null}
@@ -257,7 +264,7 @@ export function MuddyProfilePage({
             <p className="mt-2 text-sm">{muddy.mutualMuddies} mutual Muddies</p>
           </div>
           {fields &&
-          (fields.pronouns || fields.institution || fields.programme || fields.graduationYear || fields.generalArea) ? (
+          (fields.pronouns || fields.institution || fields.programme || fields.graduationYear || fields.generalArea || fields.age !== null || fields.zodiacSign || fields.birthdayToday) ? (
             <div className="rounded-xl border border-border/70 bg-card/50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Details</p>
               <dl className="mt-2 space-y-1 text-sm">
@@ -266,6 +273,9 @@ export function MuddyProfilePage({
                 {fields.programme ? <DetailRow label="Programme" value={fields.programme} /> : null}
                 {fields.graduationYear ? <DetailRow label="Class of" value={String(fields.graduationYear)} /> : null}
                 {fields.generalArea ? <DetailRow label="Around" value={fields.generalArea} /> : null}
+                {fields.age !== null ? <DetailRow label="Age" value={String(fields.age)} /> : null}
+                {fields.zodiacSign ? <DetailRow label="Zodiac" value={fields.zodiacSign} /> : null}
+                {fields.birthdayToday ? <DetailRow label="Birthday" value="Birthday today" /> : null}
               </dl>
             </div>
           ) : null}

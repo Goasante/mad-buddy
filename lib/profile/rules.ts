@@ -119,7 +119,10 @@ export type ProfileField =
   | "graduation_year"
   | "general_area"
   | "interests"
-  | "pronouns";
+  | "pronouns"
+  | "birthday"
+  | "age"
+  | "zodiac";
 
 export type FieldVisibility = "only_me" | "approved_muddies" | "close_friends" | "shared_communities";
 
@@ -131,7 +134,10 @@ export const DEFAULT_FIELD_PRIVACY: Record<ProfileField, FieldVisibility> = {
   graduation_year: "approved_muddies",
   general_area: "approved_muddies",
   interests: "approved_muddies",
-  pronouns: "approved_muddies"
+  pronouns: "approved_muddies",
+  birthday: "only_me",
+  age: "only_me",
+  zodiac: "only_me"
 };
 
 export type ViewerRelationship = "self" | "close_friend" | "approved_muddy" | "shared_community" | "stranger";

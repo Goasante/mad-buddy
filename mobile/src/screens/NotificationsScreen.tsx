@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bell,
   CalendarCheck2,
+  CakeSlice,
   Check,
   CheckCheck,
   ChevronDown,
@@ -19,6 +20,8 @@ import { useOverlayDismiss } from "../lib/overlay";
 import { useAuth } from "../auth/AuthProvider";
 import { supabase } from "../lib/supabase";
 import { api } from "../lib/api";
+import { Modal } from "../components/Modal";
+import { BIRTHDAY_WISHES } from "@/lib/profile/birthday-experience";
 
 type NotifPrefs = { nearbyAlerts: boolean; quietNearby: boolean; planAlerts: boolean };
 
@@ -44,6 +47,7 @@ function iconFor(type: string) {
   if (base.includes("nearby") || base.includes("proximity")) return MapPinOff;
   if (base.startsWith("message")) return MessageSquare;
   if (base.startsWith("plan") || base.includes("rsvp")) return CalendarCheck2;
+  if (base === "birthday") return CakeSlice;
   return Bell;
 }
 
@@ -68,6 +72,7 @@ export function NotificationsScreen() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [actionsOpen, setActionsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [birthdayTarget, setBirthdayTarget] = useState<string | null>(null);
   const [prefs, setPrefs] = useState<NotifPrefs>({ nearbyAlerts: true, quietNearby: false, planAlerts: true });
   useOverlayDismiss(filterOpen, () => setFilterOpen(false));
   useOverlayDismiss(actionsOpen, () => setActionsOpen(false));
@@ -143,6 +148,14 @@ export function NotificationsScreen() {
   async function markAllRead() {
     setItems((current) => current.map((item) => ({ ...item, is_read: true })));
     await api.post("/api/notifications", { markAllRead: true });
+  }
+
+  async function openNotification(item: Notification) {
+    if (!item.is_read) {
+      setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, is_read: true } : entry));
+      await api.post("/api/notifications", { ids: [item.id], isRead: true });
+    }
+    if (item.type.startsWith("birthday:")) setBirthdayTarget(item.type.slice("birthday:".length));
   }
 
   function toggleSelected(id: string) {
@@ -351,7 +364,7 @@ export function NotificationsScreen() {
                     <li key={item.id} className={cn("bg-card/40", index > 0 && "border-t border-border")}>
                       <button
                         type="button"
-                        onClick={() => (selectMode ? toggleSelected(item.id) : undefined)}
+                        onClick={() => (selectMode ? toggleSelected(item.id) : void openNotification(item))}
                         className={cn("flex w-full items-start gap-3 p-3 text-left", selectMode && "active:bg-secondary")}
                       >
                         {selectMode ? (
@@ -375,6 +388,9 @@ export function NotificationsScreen() {
                             {!item.is_read ? <span className="h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden="true" /> : null}
                           </div>
                           <p className="truncate text-xs text-muted-foreground">{item.message}</p>
+                          {item.type.startsWith("birthday:") ? (
+                            <p className="mt-1 text-xs font-semibold text-primary">Wish Happy Birthday</p>
+                          ) : null}
                         </div>
                         <span className="shrink-0 text-[11px] text-muted-foreground">{formatRelativeTime(item.created_at)}</span>
                       </button>
@@ -398,6 +414,35 @@ export function NotificationsScreen() {
           ))}
         </div>
       )}
+
+      <Modal
+        open={Boolean(birthdayTarget)}
+        onOpenChange={(open) => { if (!open) setBirthdayTarget(null); }}
+        title="Wish Happy Birthday"
+        description="Choose a private message to send."
+      >
+        <div className="grid gap-2">
+          {BIRTHDAY_WISHES.map((wish) => (
+            <Button
+              key={wish}
+              type="button"
+              variant="outline"
+              className="h-auto min-h-11 justify-start whitespace-normal py-2 text-left"
+              onClick={async () => {
+                if (!birthdayTarget) return;
+                const result = await api.post<{ ok: boolean; message: string }>("/api/birthdays/wish", {
+                  targetUserId: birthdayTarget,
+                  wish
+                });
+                setFeedback(result.ok ? result.data.message : result.error);
+                if (result.ok) setBirthdayTarget(null);
+              }}
+            >
+              {wish}
+            </Button>
+          ))}
+        </div>
+      </Modal>
     </div>
   );
 }

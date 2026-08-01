@@ -1,10 +1,23 @@
 import { ProfilePageContent } from "@/components/profile/profile-page";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { loadEffectivePlan } from "@/lib/billing/service";
+import { loadFieldPrivacy } from "@/lib/profile/service";
+import { dateKeyInTimeZone } from "@/lib/profile/birth-date";
+import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
+import { loadBuddyScore } from "@/lib/engagement/buddy-score-service";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProfilePage() {
+export default async function ProfilePage({
+  searchParams
+}: {
+  searchParams?: Promise<{ birthdayPreview?: string; birthdayPrivacyDisabled?: string }>;
+}) {
+  const previewParams = await searchParams;
+  const birthdayPreview = process.env.NODE_ENV !== "production" && previewParams?.birthdayPreview === "1";
+  const birthdayPrivacyDisabled =
+    process.env.NODE_ENV !== "production" && previewParams?.birthdayPrivacyDisabled === "1";
   const supabase = await createSupabaseServerClient();
   const {
     data: { user }
@@ -19,7 +32,7 @@ export default async function ProfilePage() {
     : { data: null };
 
   const admin = createSupabaseAdminClient();
-  const [muddyCount, badgeCount] = user
+  const [muddyCount, badgeCount, effectivePlan, birthDetails, fieldPrivacy, buddyScore] = user
     ? await Promise.all([
         admin
           .from("friendships")
@@ -30,9 +43,18 @@ export default async function ProfilePage() {
           .from("user_achievements")
           .select("id", { count: "exact", head: true })
           .eq("user_id", user.id)
-          .then((result) => result.count ?? 0)
+          .then((result) => result.count ?? 0),
+        loadEffectivePlan(admin, user.id),
+        admin
+          .from("profile_birth_details")
+          .select("date_of_birth")
+          .eq("user_id", user.id)
+          .maybeSingle()
+          .then((result) => result.data),
+        loadFieldPrivacy(admin, user.id),
+        loadBuddyScore(admin, user.id)
       ])
-    : [0, 0];
+    : [0, 0, "free" as const, null, null, null];
 
   return (
     <ProfilePageContent
@@ -44,6 +66,16 @@ export default async function ProfilePage() {
       initialVisibilityStatus={profile?.visibility_status ?? "visible"}
       muddyCount={muddyCount}
       badgeCount={badgeCount}
+      buddyScore={buddyScore?.total ?? 0}
+      buddyScoreLevel={buddyScore?.level.label ?? "New Buddy"}
+      initialPlan={effectivePlan}
+      initialDateOfBirth={birthDetails?.date_of_birth ?? ""}
+      initialBirthdayVisibility={fieldPrivacy?.birthday === "approved_muddies" ? "approved_muddies" : "only_me"}
+      initialAgeVisibility={fieldPrivacy?.age === "approved_muddies" ? "approved_muddies" : "only_me"}
+      initialZodiacVisibility={fieldPrivacy?.zodiac === "approved_muddies" ? "approved_muddies" : "only_me"}
+      serverBirthdayDayKey={dateKeyInTimeZone(new Date(), DEFAULT_RECIPIENT_TIMEZONE)}
+      birthdayPreview={birthdayPreview && !birthdayPrivacyDisabled}
+      birthdayPrivacyDisabledPreview={birthdayPrivacyDisabled}
     />
   );
 }

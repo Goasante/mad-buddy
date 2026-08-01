@@ -1,9 +1,10 @@
 import "server-only";
 
 import { resolveEventGlow } from "@/lib/events/rules";
+import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import type { EventCircleRole } from "@/lib/supabase/database.types";
+import type { EventCircleRole, SubscriptionPlan } from "@/lib/supabase/database.types";
 
 /**
  * Events server service (spec §61: canCheckIn / buildEventGlowList /
@@ -23,6 +24,7 @@ export type EventGlowMuddy = {
   displayName: string;
   avatarUrl: string | null;
   status: string | null;
+  plan: SubscriptionPlan;
 };
 
 /**
@@ -74,13 +76,14 @@ export async function buildEventGlowList(
   if (candidates.length === 0) return { count: 0, muddies: [] };
 
   const candidateIds = candidates.map((row) => row.user_id);
-  const [{ data: profiles }, { data: statuses }] = await Promise.all([
+  const [{ data: profiles }, { data: statuses }, plans] = await Promise.all([
     admin.from("profiles").select("user_id, full_name, avatar_url, visibility_status").in("user_id", candidateIds),
     admin
       .from("user_statuses")
       .select("user_id, availability_type, expires_at")
       .in("user_id", candidateIds)
-      .gt("expires_at", new Date(nowMs).toISOString())
+      .gt("expires_at", new Date(nowMs).toISOString()),
+    loadEffectivePlansForUsers(admin, candidateIds, nowMs)
   ]);
 
   const profileById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
@@ -112,7 +115,8 @@ export async function buildEventGlowList(
       userId: candidate.user_id,
       displayName: profile.full_name?.trim() || "A Muddy",
       avatarUrl: profile.avatar_url,
-      status: statusById.get(candidate.user_id)?.availability_type ?? null
+      status: statusById.get(candidate.user_id)?.availability_type ?? null,
+      plan: plans.get(candidate.user_id) ?? "free"
     });
   }
 

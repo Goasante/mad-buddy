@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Check, Crown, Globe2, ImagePlus, LockKeyhole, Users, X } from "lucide-react";
+import { ArrowLeft, CakeSlice, Check, Crown, Globe2, ImagePlus, LockKeyhole, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { createMomentAction, uploadMomentMediaAction } from "@/app/(app)/moments-actions";
@@ -21,6 +21,7 @@ import type { MomentAudienceType } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { spotlightUpgradeCopy } from "@/lib/billing/upgrade-copy";
 import { TuneInIcon } from "@/components/content/tune-in-icon";
+import { birthdayMomentCaption } from "@/lib/profile/birthday-experience";
 
 export type MomentMuddyOption = { id: string; name: string; avatarUrl: string | null };
 
@@ -42,6 +43,7 @@ export function MomentComposer({
   spotlightEnabled,
   canPublishSpotlight,
   closeFriendsAvailable,
+  birthdayTemplateAvailable,
   onOpenChange,
   onPublished
 }: {
@@ -51,6 +53,7 @@ export function MomentComposer({
   /** Resolved SERVER-side from the canonical entitlement. Presentation only. */
   canPublishSpotlight: boolean;
   closeFriendsAvailable: boolean;
+  birthdayTemplateAvailable: boolean;
   onOpenChange: (open: boolean) => void;
   onPublished: (message: string) => void;
 }) {
@@ -62,6 +65,7 @@ export function MomentComposer({
   const [selectedMuddies, setSelectedMuddies] = useState<string[]>([]);
   const [expiry, setExpiry] = useState<ExpiryPresetId>("6h");
   const [spotlightConfirmed, setSpotlightConfirmed] = useState(false);
+  const [birthdayTemplateApplied, setBirthdayTemplateApplied] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [error, setError] = useState("");
   const [isUploading, startUpload] = useTransition();
@@ -82,6 +86,7 @@ export function MomentComposer({
     setSelectedMuddies([]);
     setExpiry("6h");
     setSpotlightConfirmed(false);
+    setBirthdayTemplateApplied(false);
     setShowUpgrade(false);
     setError("");
   }
@@ -166,7 +171,8 @@ export function MomentComposer({
         audienceType: audience,
         targetIds: audience === "selected_muddies" ? selectedMuddies : undefined,
         publicAudienceConfirmed: isSpotlight ? spotlightConfirmed : undefined,
-        expiresAt: new Date(Date.now() + (preset?.ms ?? 0)).toISOString()
+        expiresAt: new Date(Date.now() + (preset?.ms ?? 0)).toISOString(),
+        birthdayTemplate: birthdayTemplateApplied
       });
       if (!result.ok) {
         setError(result.message);
@@ -298,6 +304,25 @@ export function MomentComposer({
 
         {step === "details" ? (
           <>
+            {birthdayTemplateAvailable ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setCaption(birthdayMomentCaption());
+                  setBirthdayTemplateApplied(true);
+                }}
+                aria-pressed={birthdayTemplateApplied}
+                className={cn(
+                  "focus-ring safe-motion flex min-h-11 w-full items-center gap-3 rounded-xl border px-3 text-left",
+                  birthdayTemplateApplied
+                    ? "border-amber-400/60 bg-amber-400/10"
+                    : "border-border bg-card/60 hover:bg-secondary"
+                )}
+              >
+                <CakeSlice className="h-4 w-4 text-amber-500" aria-hidden="true" />
+                <span className="text-sm font-semibold">Use birthday template</span>
+              </button>
+            ) : null}
             <div>
               <label htmlFor="moment-caption" className="mb-1.5 block text-sm font-semibold">
                 Caption <span className="font-normal text-muted-foreground">(optional)</span>

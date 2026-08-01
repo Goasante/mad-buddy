@@ -49,6 +49,17 @@ describe("normalizePreferences", () => {
     expect(merged.categories.waves).toBe("off");
     expect(merged.quietHoursEnabled).toBe(false);
   });
+
+  it("reads the canonical nested smart blob and birthday controls", () => {
+    const merged = normalizePreferences({
+      smart: {
+        categories: { birthdays: "off" },
+        birthdayAnnouncementsEnabled: false
+      }
+    });
+    expect(merged.categories.birthdays).toBe("off");
+    expect(merged.birthdayAnnouncementsEnabled).toBe(false);
+  });
 });
 
 describe("isWithinQuietHours (spec §20, §26)", () => {

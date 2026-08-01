@@ -17,6 +17,7 @@ export default async function OnboardingPage() {
   let initialUsername = "";
   let initialBio = "";
   let initialMood: MoodStatus | null = null;
+  let initialDateOfBirth = "";
 
   const env = getSupabaseServerEnv();
   if (env.url) {
@@ -44,6 +45,12 @@ export default async function OnboardingPage() {
       initialMood = ["open", "busy", "exploring", "quiet"].includes(profile?.mood_status ?? "")
         ? (profile?.mood_status as MoodStatus)
         : null;
+      const { data: birthDetails } = await supabase
+        .from("profile_birth_details")
+        .select("date_of_birth")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      initialDateOfBirth = birthDetails?.date_of_birth ?? "";
     }
   }
 
@@ -53,6 +60,7 @@ export default async function OnboardingPage() {
       initialUsername={initialUsername}
       initialBio={initialBio}
       initialMood={initialMood}
+      initialDateOfBirth={initialDateOfBirth}
     />
   );
 }

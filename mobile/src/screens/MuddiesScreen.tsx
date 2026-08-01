@@ -4,15 +4,17 @@ import { Search, Plus, Check, X, UserPlus, Hand, MessageCircle, MoreHorizontal }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import type { ProximityLevel } from "@/lib/proximity";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { Spinner } from "../components/Spinner";
 import { api } from "../lib/api";
 
-type Muddy = { id: string; displayName: string; username: string; avatarUrl: string | null };
+type Muddy = { id: string; displayName: string; username: string; avatarUrl: string | null; plan?: SubscriptionPlan };
 type NearbyItem = { friend_id: string; proximity_level: ProximityLevel; glow_strength: number };
-type SearchUser = { id: string; displayName: string; username: string; avatarUrl: string | null };
-type Request = { id: string; senderId: string; displayName: string; username: string; avatarUrl: string | null };
+type SearchUser = { id: string; displayName: string; username: string; avatarUrl: string | null; plan: SubscriptionPlan };
+type Request = { id: string; senderId: string; displayName: string; username: string; avatarUrl: string | null; plan: SubscriptionPlan };
 type Circle = { id: string; name: string; icon: string | null; memberIds: string[] };
 
 type Tab = "all" | "circles" | "close" | "requests" | "blocked";
@@ -150,7 +152,10 @@ export function MuddiesScreen() {
                   <button type="button" onClick={() => navigate(`/u/${user.id}`)} className="focus-ring flex min-w-0 flex-1 items-center gap-3 text-left">
                     <Avatar name={user.displayName} src={user.avatarUrl} />
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{user.displayName}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="truncate text-sm font-semibold">{user.displayName}</p>
+                        <PremiumPlanBadge plan={user.plan} compact />
+                      </div>
                       <p className="truncate text-xs text-muted-foreground">@{user.username}</p>
                     </div>
                   </button>
@@ -219,7 +224,10 @@ export function MuddiesScreen() {
                       <button type="button" onClick={() => navigate(`/u/${muddy.id}`)} className="focus-ring flex w-full items-center gap-3 text-left">
                         <GlowAvatar name={muddy.displayName} src={muddy.avatarUrl} proximityLevel={near?.proximity_level ?? "hidden"} glowStrength={near?.glow_strength ?? 0} confidence="medium" size="md" />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold">{muddy.displayName}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="truncate text-sm font-semibold">{muddy.displayName}</p>
+                            <PremiumPlanBadge plan={muddy.plan} compact />
+                          </div>
                           <p className="truncate text-xs text-primary">{label}</p>
                           <p className="truncate text-xs text-muted-foreground">Approved Muddy</p>
                         </div>
@@ -343,7 +351,10 @@ export function MuddiesScreen() {
                 <button type="button" onClick={() => navigate(`/u/${request.senderId}`)} className="focus-ring flex min-w-0 flex-1 items-center gap-3 text-left">
                   <Avatar name={request.displayName} src={request.avatarUrl} />
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{request.displayName}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-sm font-semibold">{request.displayName}</p>
+                      <PremiumPlanBadge plan={request.plan} compact />
+                    </div>
                     <p className="truncate text-xs text-muted-foreground">@{request.username}</p>
                   </div>
                 </button>
@@ -394,7 +405,8 @@ function MuddyRow({
         />
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
-            {muddy.displayName}
+            <span className="truncate">{muddy.displayName}</span>
+            <PremiumPlanBadge plan={muddy.plan} compact />
             {isClose ? <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">Close</span> : null}
           </p>
           <p className="truncate text-xs text-muted-foreground">@{muddy.username}</p>

@@ -9,6 +9,7 @@ import {
 } from "@/lib/safety/safe-arrival";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { JobType } from "@/lib/jobs/rules";
+import { deliverBirthdayNotifications } from "@/lib/profile/birthday-service";
 
 /**
  * Job handlers (feature architecture batch 14). Each returns a count of work
@@ -660,6 +661,11 @@ export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
   "trials.lifecycle": handlePremiumTrialLifecycle,
   "streaks.close_expired_periods": handleCloseExpiredStreaks,
   "recap.generate_monthly": handleGenerateMonthlyRecaps,
+  "birthdays.notify": async (admin) => deliverBirthdayNotifications(admin),
+  "rewards.earned_premium": async (admin) => {
+    const { processEarnedRewards } = await import("@/lib/rewards/earned-premium-service");
+    return processEarnedRewards(admin);
+  },
   "expiry.plans": handleCompletePastPlans,
   "expiry.statuses": handleExpireStatuses,
   "expiry.visibility_sessions": handleExpireVisibilitySessions,

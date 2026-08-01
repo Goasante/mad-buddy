@@ -24,6 +24,7 @@ import { GroupsScreen } from "./screens/GroupsScreen";
 import { UserProfileScreen } from "./screens/UserProfileScreen";
 import { SafetyScreen } from "./screens/SafetyScreen";
 import { SubscriptionScreen } from "./screens/SubscriptionScreen";
+import { BuddyScoreScreen } from "./screens/BuddyScoreScreen";
 import { useAndroidBack } from "./hooks/useAndroidBack";
 import type { ReactNode } from "react";
 
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="/groups" element={<GroupsScreen />} />
         <Route path="/safety" element={<SafetyScreen />} />
         <Route path="/subscription" element={<SubscriptionScreen />} />
+        <Route path="/buddy-score" element={<BuddyScoreScreen />} />
         <Route path="/settings" element={<SettingsScreen />} />
         <Route path="/help" element={<HelpScreen />} />
         <Route path="/settings/notifications" element={<NotificationPreferencesScreen />} />

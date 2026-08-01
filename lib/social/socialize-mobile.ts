@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import { buildSafeNearbyFriends, type NearbyLocationRow, type NearbyProfileRow } from "@/lib/proximity/backend";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import {
@@ -14,6 +15,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { isSocializeEnabled } from "@/lib/features/feature-flags";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 
 /**
  * Transport-agnostic Socialize logic. Takes an already-authenticated `userId`;
@@ -43,6 +45,7 @@ export type SocializePerson = {
   note: string | null;
   proximityTier: Extract<ProximityLevel, "close" | "near" | "far">;
   waveState: SocializeWaveState;
+  plan: SubscriptionPlan;
 };
 
 export type SocializeActionResult = { ok: boolean; message: string; session?: SocializeSession };
@@ -304,6 +307,7 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
     const receivedFrom = new Set(
       (requests ?? []).filter((request) => request.receiver_id === userId).map((request) => request.sender_id)
     );
+    const plans = await loadEffectivePlansForUsers(admin, safe.map((candidate) => candidate.friend_id));
 
     const people: SocializePerson[] = [];
     for (const candidate of safe) {
@@ -319,6 +323,7 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
         avatarUrl: candidate.avatar_url,
         activity: session.activity as SocializeActivity,
         note: session.note,
+        plan: plans.get(candidate.friend_id) ?? "free",
         proximityTier: tier,
         waveState: sentTo.has(candidate.friend_id)
           ? "sent"
