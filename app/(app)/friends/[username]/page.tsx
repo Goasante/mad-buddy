@@ -1,13 +1,14 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { MuddyProfilePage } from "@/components/friends/muddy-profile-page";
 import { checkFeature } from "@/lib/billing/entitlements";
 import { loadEffectivePlan, resolveUserEntitlements } from "@/lib/billing/service";
 import { getPublicTrustSummary } from "@/lib/discovery/service";
 import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { getVisibleProfileFields, resolveViewerRelationship } from "@/lib/profile/service";
-import { areApprovedMuddies } from "@/lib/social/permissions";
+import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { loadProfileIdentitySummary } from "@/lib/profile/identity-service";
 
 export default async function MuddyProfileRoute({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
@@ -28,6 +29,14 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
     data: { user }
   } = await supabase.auth.getUser();
 
+  if (user?.id === profile.user_id) {
+    redirect("/profile");
+  }
+
+  if (user && (await isBlockedEitherDirection(admin, user.id, profile.user_id))) {
+    notFound();
+  }
+
   const trust =
     user && user.id !== profile.user_id
       ? await getPublicTrustSummary(admin, user.id, profile.user_id)
@@ -35,8 +44,11 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
 
   // Per-field privacy (batch 9 §12): hidden fields never leave the server.
   const relationship = user ? await resolveViewerRelationship(admin, user.id, profile.user_id) : "stranger";
-  const fields = user ? await getVisibleProfileFields(admin, profile.user_id, relationship) : null;
-  const profilePlan = await loadEffectivePlan(admin, profile.user_id);
+  const [fields, profilePlan, identitySummary] = await Promise.all([
+    user ? getVisibleProfileFields(admin, profile.user_id, relationship) : Promise.resolve(null),
+    loadEffectivePlan(admin, profile.user_id),
+    loadProfileIdentitySummary(admin, profile.user_id, relationship)
+  ]);
 
   // Custom glow (custom_glow_styles entitlement): only offer the picker when
   // the viewer can actually use it and this is a real Muddy of theirs.
@@ -61,12 +73,13 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
         username: profile.username,
         avatarUrl: profile.avatar_url,
         bio: fields?.bio ?? "",
-        moodStatus: profile.mood_status ?? "",
+        moodStatus: areFriends ? (profile.mood_status ?? "") : "",
         mutualMuddies: trust?.mutualCount ?? 0,
         plan: profilePlan
       }}
       trust={trust}
       fields={fields}
+      identitySummary={identitySummary}
       canCustomizeGlow={canCustomizeGlow}
       isMuddy={areFriends}
       initialGlowColorId={glowColors[profile.user_id] ?? null}

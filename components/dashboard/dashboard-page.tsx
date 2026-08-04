@@ -56,6 +56,8 @@ import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/li
 import type { ActivityType, AvailabilityType, SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import { JourneyProgress } from "@/components/journey/journey-progress";
+import type { JourneyData } from "@/lib/journey/journey";
 
 type DashboardFriend = {
   friendId: string;
@@ -117,6 +119,7 @@ type DashboardPageContentProps = {
     invitations: SafeArrivalJourney[];
   } | null;
   hiddenQuickActionHrefs?: string[];
+  journey?: JourneyData | null;
 };
 
 /** Strongest proximity bucket first, then the brightest glow within a bucket. */
@@ -174,7 +177,8 @@ export function DashboardPageContent({
   glowColorByFriendId = {},
   profileReminder = null,
   safeArrival = null,
-  hiddenQuickActionHrefs = []
+  hiddenQuickActionHrefs = [],
+  journey = null
 }: DashboardPageContentProps) {
   const reducedMotion = useReducedMotion();
   const [ghostMode, setGhostMode] = useState(initialVisibilityStatus === "ghost");
@@ -512,6 +516,10 @@ export function DashboardPageContent({
       {/* Compact profile-completion banner (real state, dismissible). */}
       {profileReminder ? (
         <ProfileCompletionReminder userId={profileReminder.userId} missingItems={profileReminder.missingItems} />
+      ) : null}
+
+      {journey && !(profileReminder && journey.currentStep?.id === "complete_profile") ? (
+        <JourneyProgress journey={journey} variant="home" />
       ) : null}
 
       {/* Safe Arrival on Home: my live journey, journeys I've accepted, and any
@@ -1122,8 +1130,8 @@ function SubscriptionStatusPortal({ plan, hasPremium }: { plan: SubscriptionPlan
   return createPortal(
     <Link
       href="/billing"
-      aria-label="Billing"
-      title="Billing"
+      aria-label="Membership"
+      title="Membership"
       data-subscription-status={label}
       className="focus-ring grid h-11 w-11 place-items-center rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground dark:hover:bg-white/[0.05]"
     >

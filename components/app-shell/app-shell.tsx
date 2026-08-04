@@ -93,7 +93,7 @@ const navigationItems: Array<{
   { href: "/discover", label: "Socialize", icon: Compass, featureIcon: "socialize" },
   { href: "/profile", label: "Profile", icon: UserRound },
   { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/billing", label: "Plan and billing", icon: CircleDollarSign }
+  { href: "/billing", label: "Membership", icon: CircleDollarSign }
 ];
 
 const PRIMARY_HREFS = ["/dashboard", "/friends", "/notifications", "/messages"] as const;
@@ -595,7 +595,7 @@ function AccountMenu({
           />
           <AccountMenuItem
             href="/billing"
-            label="Plan and billing"
+            label="Membership"
             icon={CircleDollarSign}
             isActive={pathname === "/billing"}
           />
@@ -809,7 +809,7 @@ function MobileAccountMenu({
           />
           <AccountMenuItem
             href="/billing"
-            label="Plan and billing"
+            label="Membership"
             icon={CircleDollarSign}
             isActive={pathname === "/billing"}
           />

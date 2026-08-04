@@ -14,6 +14,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { normalizeUsername, validateUsername } from "@/lib/profile/rules";
 import { validateDateOfBirth } from "@/lib/profile/birth-date";
+import { recordProductEvent } from "@/lib/analytics/track";
 
 /**
  * Transport-agnostic onboarding services. Each takes an already-authenticated
@@ -161,6 +162,13 @@ export async function completeOnboarding(userId: string, input: unknown): Promis
     if (birthResult.error || privacyResult.error) {
       return { ok: false, message: "Your date of birth could not be saved." };
     }
+    await recordProductEvent(admin, {
+      eventName: "birth_date_added",
+      actorId: userId,
+      resourceType: "profile_birth_details",
+      resourceId: userId,
+      featureKey: "profile"
+    });
   }
 
   const friendUsername = parsed.data.firstFriend;

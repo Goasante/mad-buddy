@@ -7,6 +7,8 @@ import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import type { CheckInVisibility } from "@/lib/events/types";
+import { loadEffectivePlansForUsers } from "@/lib/billing/service";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 
 /**
  * Transport-agnostic Events read/create (mobile v1: list + create). Check-in,
@@ -23,6 +25,7 @@ export type EventView = {
   endsAt: string;
   status: string;
   hostName: string;
+  hostPlan: SubscriptionPlan;
   isHost: boolean;
   myCheckInId: string | null;
   myGlowEnabled: boolean;
@@ -62,7 +65,8 @@ export async function listEvents(userId: string): Promise<EventView[]> {
   const visible = events.filter((event) => event.visibility !== "invite" || event.host_id === userId);
   if (visible.length === 0) return [];
 
-  const [{ data: checkIns }, { data: hosts }] = await Promise.all([
+  const hostIds = [...new Set(visible.map((event) => event.host_id))];
+  const [{ data: checkIns }, { data: hosts }, hostPlans] = await Promise.all([
     admin
       .from("check_ins")
       .select("id, context_id, event_glow_enabled")
@@ -76,7 +80,8 @@ export async function listEvents(userId: string): Promise<EventView[]> {
     admin
       .from("profiles")
       .select("user_id, full_name")
-      .in("user_id", [...new Set(visible.map((event) => event.host_id))])
+      .in("user_id", hostIds),
+    loadEffectivePlansForUsers(admin, hostIds)
   ]);
 
   const checkInByEvent = new Map((checkIns ?? []).map((row) => [row.context_id, row]));
@@ -93,6 +98,7 @@ export async function listEvents(userId: string): Promise<EventView[]> {
       endsAt: event.ends_at,
       status: event.status,
       hostName: event.host_id === userId ? "You" : hostNames.get(event.host_id)?.trim() || "A Muddy",
+      hostPlan: hostPlans.get(event.host_id) ?? "free",
       isHost: event.host_id === userId,
       myCheckInId: checkIn?.id ?? null,
       myGlowEnabled: checkIn?.event_glow_enabled ?? false

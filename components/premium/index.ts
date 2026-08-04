@@ -4,7 +4,7 @@ export * from "@/components/premium/checkout-button";
 export * from "@/components/premium/locked-feature-card";
 export * from "@/components/premium/plan-comparison-table";
 export * from "@/components/premium/plans";
-export * from "@/components/premium/premium-badge";
+export * from "@/components/premium/premium-plan-badge";
 export * from "@/components/premium/pricing-card";
 export * from "@/components/premium/pricing-page";
 export * from "@/components/premium/subscription-result-page";

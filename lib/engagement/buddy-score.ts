@@ -40,6 +40,12 @@ export function buddyScoreProgress(score: number) {
   };
 }
 
+/** Canonical score aggregation. Ledger history may be negative, but a user's
+ * displayed reputation score never falls below zero. */
+export function calculateBuddyScoreTotal(events: ReadonlyArray<{ points_delta: number }>) {
+  return Math.max(0, events.reduce((total, event) => total + Math.trunc(event.points_delta), 0));
+}
+
 export function scoreEventDefinition(eventType: BuddyScoreEventType) {
   if (eventType === "admin_correction") return { category: "Corrections", label: "Score correction" };
   if (eventType === "moderation_penalty") return { category: "Trust and safety", label: "Confirmed moderation outcome" };

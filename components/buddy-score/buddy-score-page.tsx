@@ -1,55 +1,86 @@
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowUpRight, Award, Clock3, ShieldCheck, Sparkles } from "lucide-react";
+import type { ReactNode } from "react";
+import { ArrowUpRight, Award, CheckCircle2, CircleDashed, Clock3, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
-import type { BuddyScoreData } from "@/lib/engagement/buddy-score-service";
+import { JourneyProgress } from "@/components/journey/journey-progress";
+import type { MyProgressData } from "@/lib/progress/my-progress";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
-export function BuddyScorePage({ score }: { score: BuddyScoreData }) {
+export function BuddyScorePage({ progress }: { progress: MyProgressData }) {
+  const { score, membership, profileCompletion, achievements, milestones, timeline, journey } = progress;
   return (
-    <div className="mx-auto max-w-[960px] space-y-7 pt-6">
-      <header data-tour-id={TOUR_TARGET_IDS.BUDDY_SCORE_OVERVIEW}>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-400">Private trust summary</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Buddy Score</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Built from genuine, sustained participation. Your score is private and cannot be purchased.</p>
+    <div className="mx-auto w-full max-w-[1040px] space-y-8 pb-8 pt-6">
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Private to you</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight">My Progress</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">A calm view of the trust, connections, and meaningful participation you are building over time.</p>
       </header>
 
-      <section className="grid gap-5 rounded-3xl border border-border/70 bg-card/55 p-5 sm:grid-cols-[220px_minmax(0,1fr)] sm:p-7" aria-label={`Buddy Score ${score.total}, ${score.level.label}`}>
-        <div className="flex min-h-44 flex-col justify-center rounded-2xl bg-background/55 p-5">
-          <ShieldCheck className="h-6 w-6 text-orange-400" aria-hidden="true" />
-          <p className="mt-5 text-5xl font-semibold tabular-nums">{score.total}</p>
-          <p className="mt-1 text-sm font-semibold text-orange-300">{score.level.label}</p>
-          <p className="mt-2 text-xs text-muted-foreground">Visible only to you</p>
-        </div>
-        <div className="flex flex-col justify-center">
-          {score.nextLevel ? (
-            <>
-              <div className="flex items-end justify-between gap-3"><div><p className="text-sm font-semibold">Progress to {score.nextLevel.label}</p><p className="mt-1 text-xs text-muted-foreground">{score.pointsToNext} points to go</p></div><span className="text-sm font-semibold tabular-nums">{score.progressPercent}%</span></div>
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={score.progressPercent}><div className="h-full rounded-full bg-orange-500 transition-[width] duration-500 ease-in-out" style={{ width: `${score.progressPercent}%` }} /></div>
-            </>
-          ) : <div><Sparkles className="h-7 w-7 text-orange-400" aria-hidden="true" /><p className="mt-3 text-lg font-semibold">Legend status earned</p><p className="mt-1 text-sm text-muted-foreground">This level reflects rare, long-term trusted participation.</p></div>}
-          <p className="mt-6 text-sm leading-6 text-muted-foreground">Points come from verified account milestones, approved connections, completed plans, Safe Arrival completions, and earned achievements. Reports alone never reduce your score.</p>
+      <section aria-labelledby="progress-identity-title">
+        <SectionHeading id="progress-identity-title" title="Identity" description="The essentials that shape your Mad Buddy identity." />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <IdentityCard label="Membership" value={membership.planLabel} icon={Sparkles} accessory={<PremiumPlanBadge plan={membership.plan} compact />} />
+          <IdentityCard label="Reputation" value={score.level.label} icon={ShieldCheck} />
+          <IdentityCard label="Buddy Score" value={String(score.total)} icon={Award} hint="Visible only to you" />
+          <IdentityCard label="Profile completion" value={`${profileCompletion.percent}%`} icon={UserRound} hint={`${profileCompletion.completed} of ${profileCompletion.total} essentials`} />
         </div>
       </section>
 
-      {score.earnedReward ? <section className="rounded-2xl border border-orange-500/30 bg-orange-500/[0.06] p-5"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-400">Earned premium</p><div className="mt-2 flex flex-wrap items-end justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold">{score.earnedReward.plan === "buddy_pro" ? "Buddy Pro" : "Buddy Plus"} access</h2><PremiumPlanBadge plan={score.earnedReward.plan} compact /></div><p className="mt-1 text-sm text-muted-foreground">{score.earnedReward.status === "grace" ? "Grace period active" : "Unlocked through trusted participation"}</p></div><p className="text-xs text-muted-foreground">Ends {new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(score.earnedReward.graceEndsAt ?? score.earnedReward.expiresAt))}</p></div></section> : null}
+      <section data-tour-id={TOUR_TARGET_IDS.BUDDY_SCORE_OVERVIEW} aria-labelledby="progress-score-title">
+        <SectionHeading id="progress-score-title" title="Buddy Score" description="Built from verified milestones and genuine participation, never screen time or purchases." />
+        <Card className="mt-4 grid gap-6 p-5 sm:p-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <div className="rounded-2xl bg-secondary/25 p-5">
+            <ShieldCheck className="h-6 w-6 text-primary" aria-hidden="true" />
+            <p className="mt-5 text-5xl font-semibold tabular-nums">{score.total}</p>
+            <p className="mt-1 font-semibold text-primary">{score.level.label}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Your exact score is private.</p>
+          </div>
+          <div className="flex min-w-0 flex-col justify-center">
+            {score.nextLevel ? (
+              <>
+                <div className="flex items-end justify-between gap-4"><div><p className="font-semibold">Progress to {score.nextLevel.label}</p><p className="mt-1 text-sm text-muted-foreground">{score.pointsToNext} points to go</p></div><span className="text-sm font-semibold tabular-nums">{score.progressPercent}%</span></div>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-label={`Progress to ${score.nextLevel.label}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={score.progressPercent}><span className="block h-full rounded-full bg-primary transition-[width] duration-500 ease-in-out motion-reduce:transition-none" style={{ width: `${score.progressPercent}%` }} /></div>
+              </>
+            ) : <div><Sparkles className="h-6 w-6 text-primary" aria-hidden="true" /><p className="mt-3 font-semibold">Legend status earned</p><p className="mt-1 text-sm text-muted-foreground">A rare level reflecting long-term trusted participation.</p></div>}
+            <div className="mt-6 border-t border-border/60 pt-4">
+              <p className="text-sm font-semibold">Recent score activity</p>
+              {score.recentActivity.length ? <div className="mt-2 divide-y divide-border/50">{score.recentActivity.slice(0, 3).map((item) => <div key={item.id} className="flex items-center justify-between gap-4 py-2.5"><div className="min-w-0"><p className="truncate text-sm font-medium">{item.label}</p><p className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</p></div><PointDelta points={item.points} /></div>)}</div> : <p className="mt-2 text-sm text-muted-foreground">Your first trusted activity will appear here.</p>}
+            </div>
+          </div>
+        </Card>
+      </section>
 
-      <div className="grid items-start gap-5 md:grid-cols-2">
-        <section data-tour-id={TOUR_TARGET_IDS.BUDDY_SCORE_BREAKDOWN} className="rounded-2xl border border-border/70 bg-card/45 p-5" aria-labelledby="score-categories-title">
-          <h2 id="score-categories-title" className="flex items-center gap-2 text-base font-semibold"><Award className="h-5 w-5 text-orange-400" aria-hidden="true" />Earning categories</h2>
-          {score.categories.length ? <div className="mt-4 divide-y divide-border/60">{score.categories.map((item) => <div key={item.label} className="flex items-center justify-between gap-4 py-3 text-sm"><span className="text-muted-foreground">{item.label}</span><span className="font-semibold tabular-nums">{item.points > 0 ? "+" : ""}{item.points}</span></div>)}</div> : <EmptyCopy title="Your score starts here" description="Complete your profile and build genuine connections to begin earning points." />}
-        </section>
-        <section className="rounded-2xl border border-border/70 bg-card/45 p-5" aria-labelledby="score-history-title">
-          <h2 id="score-history-title" className="flex items-center gap-2 text-base font-semibold"><Clock3 className="h-5 w-5 text-orange-400" aria-hidden="true" />Recent score activity</h2>
-          {score.recentActivity.length ? <div className="mt-4 divide-y divide-border/60">{score.recentActivity.slice(0, 6).map((item) => <div key={item.id} className="flex items-center justify-between gap-4 py-3"><div><p className="text-sm font-medium">{item.label}</p><p className="mt-0.5 text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(item.createdAt))}</p></div><span className={item.points >= 0 ? "text-sm font-semibold text-emerald-400" : "text-sm font-semibold text-red-400"}>{item.points > 0 ? "+" : ""}{item.points}</span></div>)}</div> : <EmptyCopy title="No score activity yet" description="Legitimate score events will appear here." />}
-        </section>
-      </div>
+      <section aria-labelledby="progress-achievements-title">
+        <div className="flex items-end justify-between gap-4"><SectionHeading id="progress-achievements-title" title="Achievements" description={`${achievements.unlockedCount} unlocked through real activity.`} /><Link href="/badges" className="focus-ring inline-flex items-center gap-1 rounded text-sm font-semibold text-primary">View all <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Link></div>
+        {achievements.featured.length ? <><div className="mt-4 grid gap-3 sm:grid-cols-3">{achievements.featured.map((achievement) => <Card key={achievement.code} className="p-4"><div className="flex items-center gap-3">{achievement.iconPath ? <Image src={achievement.iconPath} alt="" width={48} height={48} className="h-12 w-12 object-contain" /> : <Award className="h-8 w-8 text-primary" aria-hidden="true" />}<div className="min-w-0"><p className="truncate font-semibold">{achievement.name}</p><p className="mt-1 text-xs text-muted-foreground">Earned {formatDate(achievement.earnedAt)}</p></div></div><p className="mt-3 text-sm leading-6 text-muted-foreground">{achievement.description}</p></Card>)}</div><div className="mt-4 flex flex-wrap items-center gap-2"><span className="mr-1 text-xs font-semibold text-muted-foreground">Recently earned</span>{achievements.recent.map((achievement) => <Link key={achievement.code} href={`/badges?achievement=${achievement.code}`} className="focus-ring rounded-full border border-border/70 px-3 py-1.5 text-xs font-medium">{achievement.name}</Link>)}</div></> : <Card className="mt-4 p-5"><p className="font-semibold">No achievements yet</p><p className="mt-1 text-sm text-muted-foreground">Achievements appear after meaningful milestones. There is no rush.</p></Card>}
+      </section>
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/40 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold">Designed to reward trust, not popularity</p><p className="mt-1 text-sm text-muted-foreground">Private messages, exact location, contacts, and raw screen time are never scored.</p></div><Button asChild variant="outline" size="sm"><Link href="/badges">Achievements <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Link></Button></div>
+      <section aria-labelledby="progress-journey-title"><SectionHeading id="progress-journey-title" title="Journey Progress" description="Your completed steps and the next meaningful action." /><div className="mt-4"><JourneyProgress journey={journey} /></div></section>
+
+      <section aria-labelledby="progress-membership-title"><SectionHeading id="progress-membership-title" title="Membership Progress" description="Your current access and progress-earned rewards." /><Card className="mt-4 p-5"><div className="flex items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">Current membership</p><p className="mt-1 text-lg font-semibold">{membership.planLabel}</p></div><PremiumPlanBadge plan={membership.plan} /></div>{score.earnedReward ? <div className="mt-4 border-t border-border/60 pt-4"><p className="text-sm font-semibold">Earned {score.earnedReward.plan === "buddy_pro" ? "Buddy Pro" : "Buddy Plus"} access</p><p className="mt-1 text-xs text-muted-foreground">{score.earnedReward.status === "grace" ? "Grace period active" : `Active until ${formatDate(score.earnedReward.expiresAt)}`}</p></div> : <p className="mt-4 border-t border-border/60 pt-4 text-sm leading-6 text-muted-foreground">Trusted participation is reviewed automatically for earned rewards. Internal eligibility calculations stay private.</p>}</Card></section>
+
+      <section aria-labelledby="progress-milestones-title">
+        <SectionHeading id="progress-milestones-title" title="Milestones" description="Meaningful first steps you have completed." />
+        {milestones.length ? <Card className="mt-4 divide-y divide-border/60 p-0">{milestones.map((milestone) => <div key={milestone.key} className="flex items-center gap-3 px-4 py-3.5"><CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" /><span className="min-w-0 flex-1 text-sm font-medium">{milestone.label}</span><time className="text-xs text-muted-foreground" dateTime={milestone.reachedAt}>{formatDate(milestone.reachedAt)}</time></div>)}</Card> : <Card className="mt-4 flex items-center gap-3 p-5"><CircleDashed className="h-5 w-5 text-muted-foreground" aria-hidden="true" /><p className="text-sm text-muted-foreground">Completed milestones will appear here.</p></Card>}
+      </section>
+
+      <section data-tour-id={TOUR_TARGET_IDS.BUDDY_SCORE_BREAKDOWN} aria-labelledby="progress-activity-title">
+        <SectionHeading id="progress-activity-title" title="Recent Activity" description="A private timeline of score events and achievements." />
+        {timeline.length ? <Card className="mt-4 divide-y divide-border/60 p-0">{timeline.map((item) => <div key={item.id} className="flex items-center gap-3 px-4 py-3.5"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-secondary/35">{item.kind === "achievement" ? <Award className="h-4 w-4 text-primary" aria-hidden="true" /> : <Clock3 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{item.label}</p><p className="text-xs text-muted-foreground">{item.detail} · {formatDate(item.occurredAt)}</p></div>{item.points !== null ? <PointDelta points={item.points} /> : null}</div>)}</Card> : <Card className="mt-4 p-5"><p className="font-semibold">No recent activity</p><p className="mt-1 text-sm text-muted-foreground">Your verified progress will appear here as it happens.</p></Card>}
+      </section>
+
+      <div className="flex justify-end"><Button asChild variant="outline"><Link href="/profile">View profile <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Link></Button></div>
     </div>
   );
 }
 
-function EmptyCopy({ title, description }: { title: string; description: string }) {
-  return <div className="mt-4 rounded-xl bg-background/45 p-4"><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p></div>;
-}
+function SectionHeading({ id, title, description }: { id: string; title: string; description: string }) { return <div><h2 id={id} className="text-xl font-semibold tracking-tight">{title}</h2><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>; }
+
+function IdentityCard({ label, value, icon: Icon, hint, accessory }: { label: string; value: string; icon: typeof Award; hint?: string; accessory?: ReactNode }) { return <Card className="min-h-32 p-4"><div className="flex items-start justify-between gap-2"><Icon className="h-5 w-5 text-primary" aria-hidden="true" />{accessory}</div><p className="mt-5 text-xs text-muted-foreground">{label}</p><p className="mt-1 font-semibold">{value}</p>{hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}</Card>; }
+
+function PointDelta({ points }: { points: number }) { return <span className={points >= 0 ? "text-sm font-semibold text-emerald-500" : "text-sm font-semibold text-red-500"}>{points > 0 ? "+" : ""}{points}</span>; }
+
+function formatDate(value: string) { return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(value)); }

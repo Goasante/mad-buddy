@@ -25,6 +25,7 @@ import type { EventGlowMuddyList } from "@/lib/events/types";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 
 type EventTab = "upcoming" | "live" | "mine";
 
@@ -48,7 +49,13 @@ function isLive(event: EventView, nowMs: number): boolean {
   return Date.parse(event.startsAt) <= nowMs && nowMs < Date.parse(event.endsAt);
 }
 
-export function EventsPageContent({ initialEvents = [] }: { initialEvents?: EventView[] }) {
+export function EventsPageContent({
+  initialEvents = [],
+  currentUserPlan = "free"
+}: {
+  initialEvents?: EventView[];
+  currentUserPlan?: SubscriptionPlan;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedEvent = initialEvents.find((event) => event.id === searchParams.get("event")) ?? null;
@@ -184,6 +191,7 @@ export function EventsPageContent({ initialEvents = [] }: { initialEvents?: Even
               endsAt: endsAt.toISOString(),
               status: "scheduled",
               hostName: "You",
+              hostPlan: currentUserPlan,
               isHost: true,
               myCheckInId: null,
               myGlowEnabled: false
@@ -322,7 +330,8 @@ function EventCard({
       </div>
       <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
         <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        Hosted by {event.hostName}
+        <span className="truncate">Hosted by {event.hostName}</span>
+        <PremiumPlanBadge plan={event.hostPlan} compact />
       </p>
       <div data-tour-id={TOUR_TARGET_IDS.EVENTS_ACTIONS} className="mt-4 flex gap-2">
         <Button type="button" variant="outline" className="flex-1" onClick={onView}>

@@ -23,6 +23,11 @@ import { loadActiveTrialAccess } from "@/lib/trials/service";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
+/** Request-time server clock for entitlement and membership presentation. */
+export function billingServerNowMs(): number {
+  return Date.now();
+}
+
 export async function loadBillingState(admin: Admin, userId: string): Promise<BillingState> {
   const nowIso = new Date().toISOString();
   const [{ data }, trial, rewardResult] = await Promise.all([

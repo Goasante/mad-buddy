@@ -22,8 +22,10 @@ export function ChatScreen() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const routeState = location.state as { title?: string; plan?: SubscriptionPlan | null } | null;
+  const routeState = location.state as { title?: string } | null;
   const passedTitle = routeState?.title;
+  const [serverTitle, setServerTitle] = useState<string | null>(null);
+  const [conversationPlan, setConversationPlan] = useState<SubscriptionPlan | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
@@ -32,7 +34,7 @@ export function ChatScreen() {
 
   // Prefer the title handed in by the caller (group name / DM name); fall back
   // to the first other participant's name.
-  const title = passedTitle ?? messages.find((message) => !message.isMine)?.senderName ?? "Chat";
+  const title = serverTitle ?? passedTitle ?? messages.find((message) => !message.isMine)?.senderName ?? "Chat";
 
   const load = useCallback(async () => {
     const result = await api.get<{ messages: ChatMessage[] }>(`/api/messages/conversations/${id}`);
@@ -41,6 +43,17 @@ export function ChatScreen() {
   }, [id]);
 
   useEffect(() => {
+    void api
+      .get<{ conversations: Array<{ id: string; title: string; otherPlan: SubscriptionPlan | null }> }>(
+        "/api/messages/conversations"
+      )
+      .then((result) => {
+        if (!result.ok) return;
+        const conversation = result.data.conversations.find((item) => item.id === id);
+        if (!conversation) return;
+        setServerTitle(conversation.title);
+        setConversationPlan(conversation.otherPlan);
+      });
     void load();
     void api.post(`/api/messages/conversations/${id}/read`);
     // Light polling for new messages while the thread is open.
@@ -79,7 +92,7 @@ export function ChatScreen() {
           <ChevronLeft className="h-5 w-5" aria-hidden="true" />
         </button>
         <h1 className="truncate text-base font-semibold">{title}</h1>
-        <PremiumPlanBadge plan={routeState?.plan} compact />
+        <PremiumPlanBadge plan={conversationPlan} compact />
       </header>
 
       <main className="flex-1 space-y-2 overflow-y-auto px-3 py-4">

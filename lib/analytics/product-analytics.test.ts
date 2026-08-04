@@ -34,7 +34,12 @@ describe("product analytics", () => {
       "socialize_connection",
       "invite_signup",
       "subscription_started",
-      "subscription_cancelled"
+      "subscription_cancelled",
+      "birth_date_added",
+      "birth_date_updated",
+      "birthday_visibility_changed",
+      "age_visibility_changed",
+      "zodiac_visibility_changed"
     ]));
   });
 

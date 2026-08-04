@@ -20,12 +20,13 @@ export function PremiumPlanBadge({
   return (
     <span
       className={cn(
-        "premium-plan-badge inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-1.5 text-[10px] font-bold leading-none tracking-wide",
+        "premium-plan-badge inline-flex h-5 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-1.5 text-[10px] font-bold leading-none tracking-wide",
         identity.tier === "pro"
           ? "premium-plan-badge--pro border-orange-400/45 bg-orange-400/10 text-orange-700 dark:text-orange-200"
-          : "border-indigo-400/40 bg-indigo-400/10 text-indigo-700 dark:text-indigo-200",
+          : "premium-plan-badge--plus border-indigo-400/40 bg-indigo-400/10 text-indigo-700 dark:text-indigo-200",
         className
       )}
+      data-membership-tier={identity.tier}
       title={`${identity.label} member`}
       aria-label={`${identity.label} member`}
     >
@@ -34,4 +35,3 @@ export function PremiumPlanBadge({
     </span>
   );
 }
-

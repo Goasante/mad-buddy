@@ -5,7 +5,8 @@ import { loadEffectivePlan } from "@/lib/billing/service";
 import { loadFieldPrivacy } from "@/lib/profile/service";
 import { dateKeyInTimeZone } from "@/lib/profile/birth-date";
 import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
-import { loadBuddyScore } from "@/lib/engagement/buddy-score-service";
+import { loadProfileIdentitySummary } from "@/lib/profile/identity-service";
+import { loadJourney } from "@/lib/journey/journey-service";
 
 export const dynamic = "force-dynamic";
 
@@ -32,18 +33,8 @@ export default async function ProfilePage({
     : { data: null };
 
   const admin = createSupabaseAdminClient();
-  const [muddyCount, badgeCount, effectivePlan, birthDetails, fieldPrivacy, buddyScore] = user
+  const [effectivePlan, birthDetails, fieldPrivacy, identitySummary, journey] = user
     ? await Promise.all([
-        admin
-          .from("friendships")
-          .select("user_one_id", { count: "exact", head: true })
-          .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
-          .then((result) => result.count ?? 0),
-        admin
-          .from("user_achievements")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", user.id)
-          .then((result) => result.count ?? 0),
         loadEffectivePlan(admin, user.id),
         admin
           .from("profile_birth_details")
@@ -52,9 +43,10 @@ export default async function ProfilePage({
           .maybeSingle()
           .then((result) => result.data),
         loadFieldPrivacy(admin, user.id),
-        loadBuddyScore(admin, user.id)
+        loadProfileIdentitySummary(admin, user.id, "self"),
+        loadJourney(admin, user.id)
       ])
-    : [0, 0, "free" as const, null, null, null];
+    : ["free" as const, null, null, null, null];
 
   return (
     <ProfilePageContent
@@ -64,10 +56,8 @@ export default async function ProfilePage({
       initialMoodStatus={profile?.mood_status ?? ""}
       initialAvatarUrl={profile?.avatar_url ?? null}
       initialVisibilityStatus={profile?.visibility_status ?? "visible"}
-      muddyCount={muddyCount}
-      badgeCount={badgeCount}
-      buddyScore={buddyScore?.total ?? 0}
-      buddyScoreLevel={buddyScore?.level.label ?? "New Buddy"}
+      identitySummary={identitySummary}
+      journey={journey}
       initialPlan={effectivePlan}
       initialDateOfBirth={birthDetails?.date_of_birth ?? ""}
       initialBirthdayVisibility={fieldPrivacy?.birthday === "approved_muddies" ? "approved_muddies" : "only_me"}

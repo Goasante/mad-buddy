@@ -1,24 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { BadgeCheck, Check, ChevronLeft, Hand, MessagesSquare, Sparkles } from "lucide-react";
+import Image from "next/image";
+import { Award, BadgeCheck, Ban, CalendarPlus, Check, ChevronLeft, Flag, Hand, MessageCircle, Sparkles, UserPlus } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
-import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
+import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
+import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
 import { clearFriendGlowColorAction, setFriendGlowColorAction } from "@/app/(app)/glow-color-actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Modal } from "@/components/ui/modal";
+import { Textarea } from "@/components/ui/textarea";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { GLOW_COLORS } from "@/lib/glow/custom-colors";
-import { CONNECTION_PROMPTS } from "@/lib/meetups/connection-prompts";
 import type { PublicTrustSummary } from "@/lib/discovery/trust";
 import type { VisibleProfileFields } from "@/lib/profile/service";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { BirthdayAccent } from "@/components/profile/birthday-accent";
+import type { ProfileIdentitySummary } from "@/lib/profile/identity";
 
 export type MuddyProfileData = {
   friendId: string;
@@ -38,6 +43,7 @@ export function MuddyProfilePage({
   muddy,
   trust = null,
   fields = null,
+  identitySummary = null,
   canCustomizeGlow = false,
   isMuddy = false,
   initialGlowColorId = null
@@ -45,17 +51,21 @@ export function MuddyProfilePage({
   muddy: MuddyProfileData;
   trust?: PublicTrustSummary | null;
   fields?: VisibleProfileFields | null;
+  identitySummary?: ProfileIdentitySummary | null;
   /** Viewer has the custom_glow_styles entitlement AND is a Muddy of this person. */
   canCustomizeGlow?: boolean;
   /** Viewer is an approved Muddy (drives the free-tier upsell visibility). */
   isMuddy?: boolean;
   initialGlowColorId?: string | null;
 }) {
-  const [pingOpen, setPingOpen] = useState(false);
+  const router = useRouter();
   const [waveSent, setWaveSent] = useState(false);
   const [waveFeedback, setWaveFeedback] = useState("");
   const [isWavePending, startWaveTransition] = useTransition();
-  const [isPingPending, startPingTransition] = useTransition();
+  const [isActionPending, startActionTransition] = useTransition();
+  const [requestSent, setRequestSent] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportDescription, setReportDescription] = useState("");
   const [glowColorId, setGlowColorId] = useState<string | null>(initialGlowColorId);
   const [glowFeedback, setGlowFeedback] = useState("");
   const [isGlowPending, startGlowTransition] = useTransition();
@@ -84,11 +94,38 @@ export function MuddyProfilePage({
     });
   }
 
-  function sendPing(message: string) {
-    startPingTransition(async () => {
-      const result = await createMeetupRequestAction({ receiverId: muddy.friendId, message });
+  function messageMuddy() {
+    startActionTransition(async () => {
+      const result = await openDirectConversationAction(muddy.friendId);
+      if (result.ok && result.conversationId) router.push(`/messages?conversation=${result.conversationId}`);
+      else setWaveFeedback(result.message);
+    });
+  }
+
+  function addMuddy() {
+    startActionTransition(async () => {
+      const result = await sendFriendRequestAction(muddy.friendId);
       setWaveFeedback(result.message);
-      if (result.ok) setPingOpen(false);
+      if (result.ok) setRequestSent(true);
+    });
+  }
+
+  function blockPerson() {
+    startActionTransition(async () => {
+      const result = await blockUserAction(muddy.friendId);
+      if (result.ok) router.push("/friends");
+      else setWaveFeedback(result.message);
+    });
+  }
+
+  function submitReport() {
+    startActionTransition(async () => {
+      const result = await reportUserAction({ targetUserId: muddy.friendId, reason: "user_report", description: reportDescription.trim() || undefined });
+      setWaveFeedback(result.message);
+      if (result.ok) {
+        setReportOpen(false);
+        setReportDescription("");
+      }
     });
   }
 
@@ -147,40 +184,86 @@ export function MuddyProfilePage({
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant={waveSent ? "outline" : "primary"}
-              disabled={waveSent || isWavePending}
-              onClick={sendWave}
-            >
-              <Hand className="h-4 w-4" aria-hidden="true" />
-              {isWavePending ? "Waving..." : waveSent ? "Wave sent" : "Wave"}
-            </Button>
-            <Button type="button" variant="outline" onClick={() => setPingOpen((current) => !current)}>
-              <MessagesSquare className="h-4 w-4" aria-hidden="true" />
-              Ping
-            </Button>
+            {isMuddy ? (
+              <>
+                <Button
+                  type="button"
+                  variant={waveSent ? "outline" : "primary"}
+                  disabled={waveSent || isWavePending}
+                  onClick={sendWave}
+                >
+                  <Hand className="h-4 w-4" aria-hidden="true" />
+                  {isWavePending ? "Waving..." : waveSent ? "Wave sent" : "Wave"}
+                </Button>
+                <Button type="button" variant="outline" disabled={isActionPending} onClick={messageMuddy}>
+                  <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                  Message
+                </Button>
+                <Button type="button" variant="outline" asChild>
+                  <Link href="/plans?create=1">
+                    <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+                    Create Plan
+                  </Link>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button type="button" variant="primary" disabled={requestSent || isActionPending} onClick={addMuddy}>
+                  <UserPlus className="h-4 w-4" aria-hidden="true" />
+                  {requestSent ? "Request sent" : "Add Muddy"}
+                </Button>
+                <Button type="button" variant="outline" disabled={isActionPending} onClick={blockPerson}>
+                  <Ban className="h-4 w-4" aria-hidden="true" />
+                  Block
+                </Button>
+                <Button type="button" variant="outline" disabled={isActionPending} onClick={() => setReportOpen(true)}>
+                  <Flag className="h-4 w-4" aria-hidden="true" />
+                  Report
+                </Button>
+              </>
+            )}
           </div>
           {waveFeedback ? (
             <p className="mt-2 text-sm text-muted-foreground" role="status">
               {waveFeedback}
             </p>
           ) : null}
-
-          {pingOpen ? (
-            <div className="mt-4 rounded-xl border border-border/70 bg-card/50 p-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Send a ping</p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {CONNECTION_PROMPTS.map((prompt) => (
-                  <Button key={prompt.label} type="button" variant="outline" size="sm" className="justify-start" disabled={isPingPending} onClick={() => sendPing(prompt.message)}>
-                    {prompt.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
       </Card>
+
+      {identitySummary?.buddyScore || identitySummary?.achievements ? (
+        <Card className="p-5 sm:p-6">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Progress</p>
+              {identitySummary.buddyScore ? (
+                <div className="mt-2 flex items-center gap-2">
+                  <BadgeCheck className="h-5 w-5 text-primary" aria-hidden="true" />
+                  <p className="font-semibold">{identitySummary.buddyScore.levelLabel}</p>
+                </div>
+              ) : null}
+            </div>
+            {identitySummary.achievements ? <p className="text-xs text-muted-foreground">{identitySummary.achievements.unlockedCount} unlocked</p> : null}
+          </div>
+          {identitySummary.achievements ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {identitySummary.achievements.featured.map((achievement) => (
+                <span key={achievement.code} className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/40 px-3 py-1.5 text-sm">
+                  {achievement.iconPath ? (
+                    <Image src={achievement.iconPath} alt="" width={20} height={20} className="h-5 w-5 object-contain" />
+                  ) : (
+                    <Award className="h-4 w-4 text-primary" aria-hidden="true" />
+                  )}
+                  {achievement.name}
+                </span>
+              ))}
+              {identitySummary.achievements.unlockedCount === 0 ? (
+                <p className="text-sm text-muted-foreground">No achievements shared yet.</p>
+              ) : null}
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
 
       {canCustomizeGlow ? (
         <Card className="p-5 sm:p-6">
@@ -264,7 +347,7 @@ export function MuddyProfilePage({
             <p className="mt-2 text-sm">{muddy.mutualMuddies} mutual Muddies</p>
           </div>
           {fields &&
-          (fields.pronouns || fields.institution || fields.programme || fields.graduationYear || fields.generalArea || fields.age !== null || fields.zodiacSign || fields.birthdayToday) ? (
+          (fields.pronouns || fields.institution || fields.programme || fields.graduationYear || fields.generalArea || fields.age !== null || fields.zodiacSign || fields.birthdayToday || fields.birthdayCountdownDays !== null) ? (
             <div className="rounded-xl border border-border/70 bg-card/50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Details</p>
               <dl className="mt-2 space-y-1 text-sm">
@@ -276,6 +359,13 @@ export function MuddyProfilePage({
                 {fields.age !== null ? <DetailRow label="Age" value={String(fields.age)} /> : null}
                 {fields.zodiacSign ? <DetailRow label="Zodiac" value={fields.zodiacSign} /> : null}
                 {fields.birthdayToday ? <DetailRow label="Birthday" value="Birthday today" /> : null}
+                {fields.birthdayTomorrow ? <DetailRow label="Birthday" value="Tomorrow" /> : null}
+                {!fields.birthdayToday && !fields.birthdayTomorrow && fields.birthdayCountdownDays !== null ? (
+                  <DetailRow
+                    label="Birthday"
+                    value={fields.birthdayCountdownDays === 1 ? "Tomorrow" : `In ${fields.birthdayCountdownDays} days`}
+                  />
+                ) : null}
               </dl>
             </div>
           ) : null}
@@ -298,6 +388,29 @@ export function MuddyProfilePage({
         </div>
         ) : null}
       </div>
+
+      <Modal
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        title={`Report ${muddy.displayName}`}
+        description="Tell us what happened. Reports are reviewed privately."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setReportOpen(false)} disabled={isActionPending}>Cancel</Button>
+            <Button type="button" variant="primary" onClick={submitReport} disabled={isActionPending}>
+              {isActionPending ? "Sending..." : "Send report"}
+            </Button>
+          </>
+        }
+      >
+        <Textarea
+          value={reportDescription}
+          onChange={(event) => setReportDescription(event.target.value)}
+          placeholder="Add details (optional)"
+          maxLength={500}
+          aria-label="Report details"
+        />
+      </Modal>
     </div>
   );
 }

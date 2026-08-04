@@ -8,6 +8,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isSocializeEnabled } from "@/lib/features/feature-flags";
+import { loadJourney } from "@/lib/journey/journey-service";
 
 function isStatusActiveAtRequestTime(expiresAt: string) {
   return Date.parse(expiresAt) > Date.now();
@@ -17,7 +18,8 @@ export default async function DashboardPage() {
   // Shares the per-request cached getUser() with the layout; the client is for
   // this page's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
-  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled] = user
+  const admin = createSupabaseAdminClient();
+  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, journey] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -32,11 +34,12 @@ export default async function DashboardPage() {
           .select("avatar_url, bio, mood_status")
           .eq("user_id", user.id)
           .maybeSingle(),
-        loadSafeArrivalJourneys(createSupabaseAdminClient(), user.id),
-        loadFriendGlowColors(createSupabaseAdminClient(), user.id),
-        isSocializeEnabled(createSupabaseAdminClient())
+        loadSafeArrivalJourneys(admin, user.id),
+        loadFriendGlowColors(admin, user.id),
+        isSocializeEnabled(admin),
+        loadJourney(admin, user.id)
       ])
-    : [null, null, null, { plans: [], hasMore: false }, null, null, {}, false];
+    : [null, null, null, { plans: [], hasMore: false }, null, null, {}, false, null];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -79,6 +82,7 @@ export default async function DashboardPage() {
           : null
       }
       hiddenQuickActionHrefs={socializeEnabled ? [] : ["/discover"]}
+      journey={journey}
     />
   );
 }

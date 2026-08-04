@@ -18,6 +18,16 @@ describe("premium identity badges", () => {
     expect(PremiumPlanBadge({ plan: "buddy_pro" })).not.toBeNull();
   });
 
+  it("renders stable tier markers and compact labels from the canonical component", () => {
+    const plus = PremiumPlanBadge({ plan: "buddy_plus", compact: true });
+    const pro = PremiumPlanBadge({ plan: "buddy_pro", compact: true });
+
+    expect(plus?.props["data-membership-tier"]).toBe("plus");
+    expect(pro?.props["data-membership-tier"]).toBe("pro");
+    expect(plus?.props.children[1].props.children).toBe("Plus");
+    expect(pro?.props.children[1].props.children).toBe("Pro");
+  });
+
   it("uses a paid plan ahead of a simultaneous trial", () => {
     const plans = resolveEffectivePlanMap(
       ["user-1"],

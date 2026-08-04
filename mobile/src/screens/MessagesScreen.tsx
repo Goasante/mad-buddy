@@ -95,7 +95,7 @@ export function MessagesScreen() {
             <li key={conversation.id}>
               <button
                 type="button"
-                onClick={() => navigate(`/messages/${conversation.id}`, { state: { title: conversation.title, plan: conversation.otherPlan } })}
+                onClick={() => navigate(`/messages/${conversation.id}`, { state: { title: conversation.title } })}
                 className={`focus-ring flex w-full items-center gap-3 bg-card/40 px-4 py-3 text-left active:bg-secondary ${
                   index > 0 ? "border-t border-border" : ""
                 }`}
@@ -135,7 +135,7 @@ export function MessagesScreen() {
         </ul>
       )}
 
-      <NewMessageModal open={composing} onOpenChange={setComposing} onOpened={(id, title, plan) => navigate(`/messages/${id}`, { state: { title, plan } })} />
+      <NewMessageModal open={composing} onOpenChange={setComposing} onOpened={(id, title) => navigate(`/messages/${id}`, { state: { title } })} />
     </Screen>
   );
 }
@@ -147,7 +147,7 @@ function NewMessageModal({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onOpened: (id: string, title: string, plan: SubscriptionPlan) => void;
+  onOpened: (id: string, title: string) => void;
 }) {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -172,7 +172,7 @@ function NewMessageModal({
     const result = await api.post<{ ok: boolean; conversationId?: string; message: string }>("/api/messages/open", {
       recipientId: friend.friendId
     });
-    if (result.ok && result.data.conversationId) onOpened(result.data.conversationId, friend.displayName, friend.plan);
+    if (result.ok && result.data.conversationId) onOpened(result.data.conversationId, friend.displayName);
     else setError(result.ok ? result.data.message : result.error);
   }
 

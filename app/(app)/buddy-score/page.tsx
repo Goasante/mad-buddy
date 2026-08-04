@@ -16,11 +16,11 @@ export default async function BuddyScoreRoute({ searchParams }: { searchParams?:
     pointsToNext: 0,
     progressPercent: 100,
     categories: [{ label: "Connections", points: 420 }, { label: "Plans", points: 320 }, { label: "Safety", points: 210 }, { label: "Account trust", points: 175 }],
-    recentActivity: loaded.recentActivity,
+    recentActivity: loaded.score.recentActivity,
     earnedReward: null
-  } : preview === "new" ? { ...loaded, total: 0, level: { key: "new", label: "New Buddy", minimum: 0 } as const, nextLevel: { key: "trusted", label: "Trusted Buddy", minimum: 200 } as const, pointsToNext: 200, progressPercent: 0, categories: [], recentActivity: [], earnedReward: null }
-    : preview === "near" ? { ...loaded, total: 620, level: { key: "elite", label: "Elite Buddy", minimum: 500 } as const, nextLevel: { key: "legend", label: "Legend Buddy", minimum: 1000 } as const, pointsToNext: 380, progressPercent: 24, earnedReward: null }
-      : preview === "plus" || preview === "pro" || preview === "grace" ? { ...loaded, earnedReward: { plan: preview === "pro" ? "buddy_pro" as const : "buddy_plus" as const, status: preview === "grace" ? "grace" as const : "active" as const, expiresAt: PREVIEW_REWARD_END, graceEndsAt: preview === "grace" ? PREVIEW_GRACE_END : null } }
-        : loaded;
-  return <BuddyScorePage score={score} />;
+  } : preview === "new" ? { ...loaded.score, total: 0, level: { key: "new", label: "New Buddy", minimum: 0 } as const, nextLevel: { key: "trusted", label: "Trusted Buddy", minimum: 200 } as const, pointsToNext: 200, progressPercent: 0, categories: [], recentActivity: [], earnedReward: null }
+    : preview === "near" ? { ...loaded.score, total: 620, level: { key: "elite", label: "Elite Buddy", minimum: 500 } as const, nextLevel: { key: "legend", label: "Legend Buddy", minimum: 1000 } as const, pointsToNext: 380, progressPercent: 24, earnedReward: null }
+      : preview === "plus" || preview === "pro" || preview === "grace" ? { ...loaded.score, earnedReward: { plan: preview === "pro" ? "buddy_pro" as const : "buddy_plus" as const, status: preview === "grace" ? "grace" as const : "active" as const, expiresAt: PREVIEW_REWARD_END, graceEndsAt: preview === "grace" ? PREVIEW_GRACE_END : null } }
+        : loaded.score;
+  return <BuddyScorePage progress={{ ...loaded, score }} />;
 }

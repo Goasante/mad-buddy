@@ -1,6 +1,6 @@
 import "server-only";
 
-import { BUDDY_SCORE_RULES, BUDDY_SCORE_RULE_VERSION, buddyScoreProgress, scoreEventDefinition, type BuddyScoreEventType, type BuddyScoreLevel } from "@/lib/engagement/buddy-score";
+import { BUDDY_SCORE_RULES, BUDDY_SCORE_RULE_VERSION, buddyScoreProgress, calculateBuddyScoreTotal, scoreEventDefinition, type BuddyScoreEventType, type BuddyScoreLevel } from "@/lib/engagement/buddy-score";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -33,13 +33,14 @@ function candidate(eventType: Candidate["event_type"], sourceReference: string):
 
 /** Reconciles trusted canonical records into the append-only ledger. */
 export async function reconcileBuddyScore(admin: Admin, userId: string, now = new Date()) {
-  const [profile, authUser, friendships, plans, safeArrivals, achievements] = await Promise.all([
+  const [profile, authUser, friendships, createdPlans, planParticipations, safeArrivals, achievements] = await Promise.all([
     admin.from("profiles").select("full_name, username, bio, avatar_url, created_at").eq("user_id", userId).maybeSingle(),
     admin.auth.admin.getUserById(userId),
     admin.from("friendships").select("id").or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
     admin.from("plans").select("id").eq("creator_id", userId).eq("status", "completed"),
+    admin.from("plan_participants").select("plan_id").eq("user_id", userId).eq("rsvp_status", "going"),
     admin.from("safe_arrival_sessions").select("id").eq("traveller_id", userId).eq("status", "completed"),
-    admin.from("user_achievements").select("id").eq("user_id", userId).eq("hidden", false)
+    admin.from("user_achievements").select("id").eq("user_id", userId)
   ]);
   const candidates: Candidate[] = [];
   if (authUser.data.user?.email_confirmed_at) candidates.push(candidate("email_verified", "account:email"));
@@ -50,7 +51,15 @@ export async function reconcileBuddyScore(admin: Admin, userId: string, now = ne
     for (let index = 1; index <= quarters; index += 1) candidates.push(candidate("account_quarter", `account:quarter:${index}`));
   }
   for (const row of friendships.data ?? []) candidates.push(candidate("friendship_accepted", `friendship:${row.id}`));
-  for (const row of plans.data ?? []) candidates.push(candidate("plan_completed", `plan:${row.id}`));
+  const participatedPlanIds = [...new Set((planParticipations.data ?? []).map((row) => row.plan_id))];
+  const completedParticipations = participatedPlanIds.length
+    ? await admin.from("plans").select("id").in("id", participatedPlanIds).eq("status", "completed")
+    : { data: [] };
+  const completedPlanIds = new Set([
+    ...(createdPlans.data ?? []).map((row) => row.id),
+    ...(completedParticipations.data ?? []).map((row) => row.id)
+  ]);
+  for (const planId of completedPlanIds) candidates.push(candidate("plan_completed", `plan:${planId}`));
   for (const row of safeArrivals.data ?? []) candidates.push(candidate("safe_arrival_completed", `safe-arrival:${row.id}`));
   for (const row of achievements.data ?? []) candidates.push(candidate("achievement_earned", `achievement:${row.id}`));
   if (candidates.length === 0) return;
@@ -67,7 +76,7 @@ export async function loadBuddyScore(admin: Admin, userId: string): Promise<Budd
     admin.from("earned_premium_rewards").select("reward_plan,status,expires_at,grace_ends_at").eq("user_id", userId).in("status", ["active", "grace"]).order("granted_at", { ascending: false }).limit(1).maybeSingle()
   ]);
   const rows = data ?? [];
-  const total = Math.max(0, rows.reduce((sum, row) => sum + row.points_delta, 0));
+  const total = calculateBuddyScoreTotal(rows);
   const progress = buddyScoreProgress(total);
   const categoryMap = new Map<string, number>();
   const activities = rows.map((row) => {

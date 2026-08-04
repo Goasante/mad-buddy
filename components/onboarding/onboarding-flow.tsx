@@ -266,7 +266,7 @@ export function OnboardingFlow({
               <FormField
                 htmlFor="dateOfBirth"
                 label="Date of birth"
-                hint="Optional. Private until you choose what approved Muddies can see."
+                hint="Optional and private by default."
               >
                 <Input
                   id="dateOfBirth"
@@ -274,6 +274,9 @@ export function OnboardingFlow({
                   value={dateOfBirth}
                   onChange={(event) => setDateOfBirth(event.target.value)}
                 />
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  Used for birthday celebrations, age display, and zodiac. You control what approved Muddies can see.
+                </p>
               </FormField>
 
               <div className="space-y-2.5">

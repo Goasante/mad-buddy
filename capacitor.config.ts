@@ -16,6 +16,19 @@ const config: CapacitorConfig = {
   },
   server: {
     androidScheme: "https"
+  },
+  plugins: {
+    SplashScreen: {
+      // Held manually rather than auto-hidden: main.tsx calls hide() once the
+      // React shell has mounted, so the native splash image (generated from
+      // public/brand/launch-hero.png via scripts/generate-splash-assets.mjs)
+      // never drops to a blank/white frame before the webview paints.
+      launchAutoHide: false,
+      backgroundColor: "#070918",
+      androidScaleType: "CENTER_CROP",
+      splashFullScreen: true,
+      splashImmersive: true
+    }
   }
 };
 

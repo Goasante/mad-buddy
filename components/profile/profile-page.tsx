@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { CakeSlice, CalendarDays, Camera, ChevronRight, Edit3, Ghost, MessageSquareText, ShieldCheck, Smile, Sparkles, Star, UsersRound } from "lucide-react";
+import { Award, CakeSlice, CalendarCheck2, CalendarDays, Camera, ChevronRight, Edit3, Ghost, Images, MessageSquareText, ShieldCheck, Smile, Sparkles, UsersRound } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updateProfileAction, uploadAvatarAction } from "@/app/(app)/actions";
 import { FormField } from "@/components/auth/form-field";
@@ -19,6 +20,9 @@ import type { SubscriptionPlan, VisibilityStatus } from "@/lib/supabase/database
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { deriveBirthProfile } from "@/lib/profile/birth-date";
 import { BirthdayAccent } from "@/components/profile/birthday-accent";
+import { profileCompletion, type ProfileIdentitySummary } from "@/lib/profile/identity";
+import { JourneyProgress } from "@/components/journey/journey-progress";
+import type { JourneyData } from "@/lib/journey/journey";
 
 type BirthVisibility = "only_me" | "approved_muddies";
 
@@ -34,10 +38,8 @@ type ProfilePageContentProps = {
   initialMoodStatus: string;
   initialAvatarUrl: string | null;
   initialVisibilityStatus: VisibilityStatus;
-  muddyCount?: number;
-  badgeCount?: number;
-  buddyScore?: number;
-  buddyScoreLevel?: string;
+  identitySummary: ProfileIdentitySummary | null;
+  journey: JourneyData | null;
   initialPlan: SubscriptionPlan;
   initialDateOfBirth: string;
   initialBirthdayVisibility: BirthVisibility;
@@ -68,10 +70,8 @@ export function ProfilePageContent({
   initialMoodStatus,
   initialAvatarUrl,
   initialVisibilityStatus,
-  muddyCount = 0,
-  badgeCount = 0,
-  buddyScore = 0,
-  buddyScoreLevel = "New Buddy",
+  identitySummary,
+  journey,
   initialPlan,
   initialDateOfBirth,
   initialBirthdayVisibility,
@@ -182,6 +182,16 @@ export function ProfilePageContent({
       return;
     }
 
+    if (
+      savedProfile.dateOfBirth &&
+      nextProfile.dateOfBirth !== savedProfile.dateOfBirth &&
+      !window.confirm(
+        "Change your date of birth? This can affect your age, zodiac, birthday status, and reward eligibility."
+      )
+    ) {
+      return;
+    }
+
     startTransition(async () => {
       const result = await updateProfileAction({
         fullName: nextProfile.displayName,
@@ -264,10 +274,10 @@ export function ProfilePageContent({
     ? deriveBirthProfile(savedProfile.dateOfBirth, serverBirthdayDayKey)
     : null;
   const birthdayToday = !birthdayPrivacyDisabledPreview && (birthdayPreview || Boolean(birthProfile?.birthdayToday));
-  const missingSteps =
-    (avatarUrl ? 0 : 1) + (savedProfile.moodStatus.trim() ? 0 : 1) + (savedProfile.bio.trim() ? 0 : 1);
-  const completedSteps = TOTAL_PROFILE_STEPS - missingSteps;
-  const completionPercent = Math.round((completedSteps / TOTAL_PROFILE_STEPS) * 100);
+  const completion = profileCompletion({ avatarUrl, bio: savedProfile.bio, moodStatus: savedProfile.moodStatus });
+  const completedSteps = completion.completed;
+  const missingSteps = completion.total - completion.completed;
+  const completionPercent = completion.percent;
   const missingLabel = [
     !savedProfile.moodStatus.trim() ? "a mood" : null,
     !savedProfile.bio.trim() ? "bio" : null,
@@ -287,7 +297,7 @@ export function ProfilePageContent({
   );
 
   return (
-    <div data-tour-id={TOUR_TARGET_IDS.PROFILE_OVERVIEW} className="mx-auto w-full max-w-[520px] space-y-6 pb-4 pt-5">
+    <div data-tour-id={TOUR_TARGET_IDS.PROFILE_OVERVIEW} className="mx-auto w-full max-w-[1040px] space-y-6 pb-6 pt-5">
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Profile</h1>
@@ -343,8 +353,12 @@ export function ProfilePageContent({
                 id="dateOfBirth"
                 type="date"
                 value={dateOfBirth}
+                max={serverBirthdayDayKey}
                 onChange={(event) => setDateOfBirth(event.target.value)}
               />
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                Age, zodiac, and birthday status are calculated automatically. You choose what Muddies can see.
+              </p>
             </FormField>
             {dateOfBirth ? (
               <div className="grid gap-3 rounded-xl border border-border/70 bg-secondary/25 p-4 sm:grid-cols-3">
@@ -384,7 +398,8 @@ export function ProfilePageContent({
       ) : (
         <>
           {/* Identity — avatar with glow ring + camera, name, visibility, stats */}
-          <section data-tour-id={TOUR_TARGET_IDS.PROFILE_PHOTO} className="flex flex-col items-center text-center">
+          <Card data-tour-id={TOUR_TARGET_IDS.PROFILE_PHOTO} className="flex flex-col items-center p-5 text-center sm:p-6">
+            <p className="self-start text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Identity</p>
             <div className="relative">
               <BirthdayAccent active={birthdayToday}>
                 <span className="block rounded-full bg-gradient-to-br from-violet-500 via-fuchsia-500 to-primary p-1 shadow-[0_0_36px_hsl(var(--primary)/0.25)]">
@@ -459,22 +474,76 @@ export function ProfilePageContent({
               </div>
             ) : null}
 
-            {/* Stats */}
-            <div className="mt-5 flex items-stretch gap-6">
-              <ProfileStat icon={UsersRound} iconClass="text-violet-500 dark:text-violet-300" value={muddyCount} label={muddyCount === 1 ? "Muddy" : "Muddies"} href="/friends" />
-              <span className="w-px bg-border/70" aria-hidden="true" />
-              <ProfileStat icon={Star} iconClass="text-primary" value={badgeCount} label={badgeCount === 1 ? "Badge" : "Badges"} href="/badges" />
-              <span className="w-px bg-border/70" aria-hidden="true" />
-              <ProfileStat icon={ShieldCheck} iconClass="text-orange-400" value={buddyScore} label={buddyScoreLevel} href="/buddy-score" />
-            </div>
-
             {savedProfile.bio.trim() ? (
               <p className="mt-4 inline-flex max-w-full items-center gap-1.5 text-sm italic text-muted-foreground">
                 <span className="truncate">“{savedProfile.bio.trim()}”</span>
                 <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
               </p>
             ) : null}
-          </section>
+            <div className="mt-5 flex flex-wrap justify-center gap-2 border-t border-border/60 pt-4">
+              <Button type="button" variant="outline" size="sm" onClick={beginEditing}><Edit3 className="h-4 w-4" aria-hidden="true" />Edit profile</Button>
+              <Button type="button" variant="outline" size="sm" asChild><Link href="/billing">Membership</Link></Button>
+              <Button type="button" variant="outline" size="sm" asChild><Link href="/buddy-score">My Progress</Link></Button>
+            </div>
+          </Card>
+
+          {journey ? <JourneyProgress journey={journey} variant="profile" /> : null}
+
+          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+            <Card className="p-5 sm:p-6">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Progress</p>
+                  <h3 className="mt-1 text-lg font-semibold">{identitySummary?.buddyScore?.levelLabel ?? "New Buddy"}</h3>
+                </div>
+                {identitySummary?.buddyScore?.total !== null && identitySummary?.buddyScore ? <span className="text-2xl font-semibold tabular-nums">{identitySummary.buddyScore.total}</span> : null}
+              </div>
+              {identitySummary?.buddyScore?.progressPercent !== null && identitySummary?.buddyScore ? (
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-secondary" aria-label={`${identitySummary.buddyScore.progressPercent}% Buddy Score progress`} role="progressbar" aria-valuenow={identitySummary.buddyScore.progressPercent} aria-valuemin={0} aria-valuemax={100}>
+                  <span className="block h-full rounded-full bg-primary" style={{ width: `${identitySummary.buddyScore.progressPercent}%` }} />
+                </div>
+              ) : null}
+              {identitySummary?.buddyScore?.recentActivity?.length ? (
+                <div className="mt-5 border-t border-border/60 pt-4">
+                  <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">Recent score activity</p><Link href="/buddy-score" className="focus-ring rounded text-xs font-semibold text-primary">View progress</Link></div>
+                  <div className="mt-2 divide-y divide-border/50">
+                    {identitySummary.buddyScore.recentActivity.map((activity) => (
+                      <div key={activity.id} className="flex items-center justify-between gap-3 py-2 text-xs">
+                        <div className="min-w-0"><p className="truncate font-medium">{activity.label}</p><p className="text-muted-foreground">{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(activity.createdAt))}</p></div>
+                        <span className={activity.points >= 0 ? "font-semibold text-emerald-400" : "font-semibold text-red-400"}>{activity.points > 0 ? "+" : ""}{activity.points}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <div className="mt-5 border-t border-border/60 pt-4">
+                <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">Achievements</p><Link href="/badges" className="focus-ring rounded text-xs font-semibold text-primary">View all</Link></div>
+                {identitySummary?.achievements?.featured.length ? (
+                  <div className="mt-3 flex gap-3">
+                    {identitySummary.achievements.featured.map((achievement) => (
+                      <Link key={achievement.code} href={`/badges?achievement=${achievement.code}`} className="focus-ring min-w-0 flex-1 rounded-xl bg-secondary/35 p-2 text-center" title={achievement.name}>
+                        {achievement.iconPath ? <Image src={achievement.iconPath} alt="" width={36} height={36} className="mx-auto h-9 w-9 object-contain" /> : <Award className="mx-auto h-8 w-8 text-primary" aria-hidden="true" />}
+                        <span className="mt-1 block truncate text-[11px] font-medium">{achievement.name}</span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : <p className="mt-3 text-sm text-muted-foreground">No achievements unlocked yet.</p>}
+                <p className="mt-3 text-xs text-muted-foreground">{identitySummary?.achievements?.unlockedCount ?? 0} unlocked</p>
+              </div>
+            </Card>
+
+            {identitySummary?.activity ? (
+              <section aria-labelledby="profile-activity-heading">
+                <h3 id="profile-activity-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Activity</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <ActivityStat icon={UsersRound} value={identitySummary.activity.muddyCount} label="Muddies" href="/friends" />
+                  <ActivityStat icon={Images} value={identitySummary.activity.momentCount} label="Moments" href="/moments" />
+                  <ActivityStat icon={CalendarCheck2} value={identitySummary.activity.completedPlanCount} label="Plans completed" href="/plans" />
+                  <ActivityStat icon={ShieldCheck} value={identitySummary.activity.completedSafeArrivalCount} label="Safe Arrivals" href="/safe-arrival" />
+                </div>
+              </section>
+            ) : null}
+          </div>
 
           {/* About */}
           <section data-tour-id={TOUR_TARGET_IDS.PROFILE_ABOUT} aria-labelledby="profile-about-heading">
@@ -502,6 +571,20 @@ export function ProfilePageContent({
                   icon={CakeSlice}
                   label="Birthday"
                   value="Birthday today"
+                  onClick={beginEditing}
+                />
+              ) : birthProfile?.birthdayTomorrow ? (
+                <ProfileDetailRow
+                  icon={CakeSlice}
+                  label="Birthday"
+                  value="Birthday tomorrow"
+                  onClick={beginEditing}
+                />
+              ) : birthProfile ? (
+                <ProfileDetailRow
+                  icon={CakeSlice}
+                  label="Birthday"
+                  value={`${birthProfile.birthdayCountdownDays} ${birthProfile.birthdayCountdownDays === 1 ? "day" : "days"} away`}
                   onClick={beginEditing}
                 />
               ) : null}
@@ -589,25 +672,23 @@ function visibilityLabel(status: VisibilityStatus) {
   return labels[status];
 }
 
-function ProfileStat({
+function ActivityStat({
   icon: Icon,
-  iconClass,
   value,
   label,
   href
 }: {
   icon: typeof UsersRound;
-  iconClass: string;
   value: number;
   label: string;
-  href: "/friends" | "/badges" | "/buddy-score";
+  href: "/friends" | "/moments" | "/plans" | "/safe-arrival";
 }) {
   return (
-    <Link href={href} className="focus-ring safe-motion flex items-center gap-2 rounded-xl px-2 py-1 hover:bg-secondary/40" aria-label={`${value} ${label}`}>
-      <Icon className={cn("h-5 w-5", iconClass)} aria-hidden="true" />
-      <span className="text-left">
-        <span className="block text-lg font-semibold leading-none tabular-nums">{value}</span>
-        <span className="mt-0.5 block text-xs text-muted-foreground">{label}</span>
+    <Link href={href} className="focus-ring safe-motion flex min-h-24 flex-col justify-between rounded-2xl border border-border/70 bg-card/50 p-4 hover:bg-secondary/35" aria-label={`${value} ${label}`}>
+      <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
+      <span>
+        <span className="block text-xl font-semibold leading-none tabular-nums">{value}</span>
+        <span className="mt-1 block text-xs text-muted-foreground">{label}</span>
       </span>
     </Link>
   );

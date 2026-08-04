@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, MessageCircle, UserPlus, Check } from "lucide-react";
+import { Award, BadgeCheck, ChevronLeft, MessageCircle, UserPlus, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "../components/Spinner";
 import { api } from "../lib/api";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { BirthdayAccent } from "@/components/profile/birthday-accent";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
+import type { ProfileIdentitySummary } from "@/lib/profile/identity";
 
 type PublicProfile = {
   id: string;
@@ -19,6 +22,10 @@ type PublicProfile = {
   age: number | null;
   zodiacSign: string | null;
   birthdayToday: boolean;
+  birthdayTomorrow: boolean;
+  birthdayCountdownDays: number | null;
+  plan: SubscriptionPlan;
+  identity: ProfileIdentitySummary;
 };
 
 export function UserProfileScreen() {
@@ -79,7 +86,10 @@ export function UserProfileScreen() {
             <BirthdayAccent active={profile.birthdayToday} className="mx-auto">
               <UserAvatar src={profile.avatarUrl} name={profile.displayName} size="xl" />
             </BirthdayAccent>
-            <h2 className="mt-4 text-xl font-semibold">{profile.displayName}</h2>
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <h2 className="text-xl font-semibold">{profile.displayName}</h2>
+              <PremiumPlanBadge plan={profile.plan} />
+            </div>
             <p className="text-sm text-muted-foreground">@{profile.username}</p>
             {profile.isMuddy ? (
               <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary">
@@ -92,11 +102,41 @@ export function UserProfileScreen() {
               </span>
             ) : null}
             {profile.bio ? <p className="mt-4 text-sm leading-6">{profile.bio}</p> : null}
-            {profile.age !== null || profile.zodiacSign || profile.birthdayToday ? (
+            {profile.age !== null || profile.zodiacSign || profile.birthdayToday || profile.birthdayCountdownDays !== null ? (
               <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
                 {profile.age !== null ? <span className="rounded-full border border-border px-3 py-1">Age {profile.age}</span> : null}
                 {profile.zodiacSign ? <span className="rounded-full border border-border px-3 py-1">{profile.zodiacSign}</span> : null}
                 {profile.birthdayToday ? <span className="rounded-full border border-border px-3 py-1">Birthday today</span> : null}
+                {profile.birthdayTomorrow ? <span className="rounded-full border border-border px-3 py-1">Birthday tomorrow</span> : null}
+                {!profile.birthdayToday && !profile.birthdayTomorrow && profile.birthdayCountdownDays !== null ? (
+                  <span className="rounded-full border border-border px-3 py-1">
+                    {profile.birthdayCountdownDays === 1 ? "Birthday tomorrow" : `Birthday in ${profile.birthdayCountdownDays} days`}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+
+            {profile.identity.buddyScore || profile.identity.achievements ? (
+              <div className="mt-5 border-t border-border pt-4 text-left">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Progress</p>
+                {profile.identity.buddyScore ? (
+                  <p className="mt-2 inline-flex items-center gap-2 font-semibold">
+                    <BadgeCheck className="h-4 w-4 text-primary" aria-hidden="true" />
+                    {profile.identity.buddyScore.levelLabel}
+                  </p>
+                ) : null}
+                {profile.identity.achievements ? (
+                  <>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {profile.identity.achievements.featured.map((achievement) => (
+                        <span key={achievement.code} className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs">
+                          <Award className="h-3.5 w-3.5 text-primary" aria-hidden="true" />{achievement.name}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">{profile.identity.achievements.unlockedCount} unlocked</p>
+                  </>
+                ) : null}
               </div>
             ) : null}
 

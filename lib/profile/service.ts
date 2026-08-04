@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -9,10 +10,11 @@ import {
   type ProfileField
 } from "@/lib/profile/rules";
 import type { ViewerRelationship } from "@/lib/profile/rules";
-import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
-import { dateKeyInTimeZone, deriveBirthProfile, validateDateOfBirth } from "@/lib/profile/birth-date";
+import { dateKeyInTimeZone, deriveBirthProfile, projectDerivedBirthProfile, validateDateOfBirth } from "@/lib/profile/birth-date";
 import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
+import { recordProductEvent } from "@/lib/analytics/track";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -27,6 +29,9 @@ export type VisibleProfileFields = {
   age: number | null;
   zodiacSign: string | null;
   birthdayToday: boolean;
+  birthdayTomorrow: boolean;
+  birthdayCountdownDays: number | null;
+  nextBirthdayDate: string | null;
 };
 
 export async function loadFieldPrivacy(admin: Admin, userId: string): Promise<Record<ProfileField, FieldVisibility>> {
@@ -112,6 +117,11 @@ export async function getVisibleProfileFields(
         dateKeyInTimeZone(new Date(), DEFAULT_RECIPIENT_TIMEZONE)
       )
     : null;
+  const projectedBirth = projectDerivedBirthProfile(derived, {
+    birthday: can("birthday"),
+    age: can("age"),
+    zodiac: can("zodiac")
+  });
 
   return {
     bio: can("bio") ? (profile?.bio ?? null) : null,
@@ -121,9 +131,7 @@ export async function getVisibleProfileFields(
     generalArea: can("general_area") ? (profile?.general_area ?? null) : null,
     pronouns: can("pronouns") ? (profile?.pronouns ?? null) : null,
     interests: can("interests") ? (interests ?? []).map((row) => row.interest) : null,
-    age: can("age") ? (derived?.age ?? null) : null,
-    zodiacSign: can("zodiac") ? (derived?.zodiacSign ?? null) : null,
-    birthdayToday: can("birthday") ? (derived?.birthdayToday ?? false) : false
+    ...projectedBirth
   };
 }
 
@@ -169,6 +177,22 @@ export async function updateProfile(
     const birthError = validateDateOfBirth(parsed.data.dateOfBirth);
     if (birthError) return { ok: false, message: birthError };
   }
+
+  const birthSettingsWereSubmitted = parsed.data.dateOfBirth !== undefined;
+  const [previousBirthResult, previousPrivacyResult] = birthSettingsWereSubmitted
+    ? await Promise.all([
+        rlsClient.from("profile_birth_details").select("date_of_birth").eq("user_id", userId).maybeSingle(),
+        rlsClient
+          .from("profile_field_privacy")
+          .select("field_name, visibility")
+          .eq("user_id", userId)
+          .in("field_name", ["birthday", "age", "zodiac"])
+      ])
+    : [{ data: null }, { data: [] }];
+  const previousDateOfBirth = previousBirthResult.data?.date_of_birth ?? "";
+  const previousVisibility = new Map(
+    (previousPrivacyResult.data ?? []).map((row) => [row.field_name, row.visibility])
+  );
 
   const { data: savedProfile, error } = await rlsClient
     .from("profiles")
@@ -221,6 +245,45 @@ export async function updateProfile(
       .from("profile_field_privacy")
       .upsert(visibilityRows, { onConflict: "user_id,field_name" });
     if (privacyError) return { ok: false, message: "Couldn't save your birthday privacy choices. Try again." };
+
+    const analytics: Array<{
+      eventName:
+        | "birth_date_added"
+        | "birth_date_updated"
+        | "birthday_visibility_changed"
+        | "age_visibility_changed"
+        | "zodiac_visibility_changed";
+      resourceId: string;
+    }> = [];
+    if (!previousDateOfBirth && dateOfBirth) {
+      analytics.push({ eventName: "birth_date_added", resourceId: userId });
+    } else if (previousDateOfBirth && dateOfBirth && previousDateOfBirth !== dateOfBirth) {
+      analytics.push({ eventName: "birth_date_updated", resourceId: randomUUID() });
+    }
+    const visibilityEvents = [
+      ["birthday", parsed.data.birthdayVisibility, "birthday_visibility_changed"],
+      ["age", parsed.data.ageVisibility, "age_visibility_changed"],
+      ["zodiac", parsed.data.zodiacVisibility, "zodiac_visibility_changed"]
+    ] as const;
+    for (const [field, nextVisibility, eventName] of visibilityEvents) {
+      if (nextVisibility && (previousVisibility.get(field) ?? "only_me") !== nextVisibility) {
+        analytics.push({ eventName, resourceId: randomUUID() });
+      }
+    }
+    if (analytics.length) {
+      const admin = createSupabaseAdminClient();
+      await Promise.all(
+        analytics.map((event) =>
+          recordProductEvent(admin, {
+            eventName: event.eventName,
+            actorId: userId,
+            resourceType: "profile_birth_settings",
+            resourceId: event.resourceId,
+            featureKey: "profile"
+          })
+        )
+      );
+    }
   }
 
   return { ok: true, message: "Profile updated." };

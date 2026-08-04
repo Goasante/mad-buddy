@@ -274,11 +274,11 @@ export function SettingsPageContent({
           />
         </SettingsSection>
 
-        <SettingsSection title="Billing">
+        <SettingsSection title="Membership">
           <SettingsLinkRow
             icon={CreditCard}
-            title="Plan and billing"
-            description="View your plan, invoices, and subscription options."
+            title="Membership"
+            description="View your access, usage, renewal, and membership options."
             href="/billing"
           />
         </SettingsSection>

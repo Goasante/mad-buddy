@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "../lib/supabase";
 import { assertEnv } from "../lib/env";
-import { SignInCard } from "../components/SignInCard";
+import { LoginHero } from "../components/LoginHero";
 
 export function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -29,7 +29,14 @@ export function LoginScreen() {
   }
 
   return (
-    <SignInCard title="Welcome Muddy">
+    <LoginHero
+      title="Welcome Back"
+      tagline={
+        <>
+          Login to continue your <span className="font-semibold text-primary">journey</span>
+        </>
+      }
+    >
       <form className="space-y-4" onSubmit={onSubmit}>
         {/* OAuth first: the fastest, most-used path leads. */}
         <Button
@@ -131,6 +138,6 @@ export function LoginScreen() {
           </Link>
         </p>
       </form>
-    </SignInCard>
+    </LoginHero>
   );
 }

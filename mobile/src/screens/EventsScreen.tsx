@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { Screen } from "../components/AppShell";
 import { Spinner } from "../components/Spinner";
 import { api } from "../lib/api";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 
 type Event = {
   id: string;
@@ -17,6 +19,7 @@ type Event = {
   endsAt: string;
   status: string;
   hostName: string;
+  hostPlan: SubscriptionPlan;
   isHost: boolean;
   myCheckInId: string | null;
 };
@@ -125,9 +128,10 @@ export function EventsScreen() {
                   </span>
                 ) : null}
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {new Date(event.startsAt).toLocaleString()} · {event.hostName}
-              </p>
+              <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="truncate">{new Date(event.startsAt).toLocaleString()} · {event.hostName}</span>
+                <PremiumPlanBadge plan={event.hostPlan} compact />
+              </div>
               {event.venueLabel ? (
                 <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
                   <MapPin className="h-3.5 w-3.5" aria-hidden="true" />

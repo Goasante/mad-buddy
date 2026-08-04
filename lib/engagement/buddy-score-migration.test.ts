@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const migration = readFileSync("supabase/migrations/20260801170000_buddy_score_ledger.sql", "utf8");
 const service = readFileSync("lib/engagement/buddy-score-service.ts", "utf8");
 const adminAction = readFileSync("app/(admin)/admin/buddy-score/actions.ts", "utf8");
+const adminPage = readFileSync("app/(admin)/admin/buddy-score/page.tsx", "utf8");
 
 describe("Buddy Score ledger security", () => {
   it("is append-only and rejects duplicate sources", () => {
@@ -31,5 +32,23 @@ describe("Buddy Score ledger security", () => {
   it("supports reconciliation against the trusted database total", () => {
     expect(service).toContain('buddy_score_total');
     expect(service).toContain('ledgerTotal === rpcTotal');
+  });
+
+  it("rewards completed Plan participation without duplicating a creator event", () => {
+    expect(service).toContain('from("plan_participants")');
+    expect(service).toContain('rsvp_status", "going"');
+    expect(service).toContain("new Set(");
+    expect(service).toContain('source_reference: sourceReference');
+  });
+
+  it("keeps achievement presentation privacy separate from immutable earned score", () => {
+    expect(service).toContain('from("user_achievements").select("id").eq("user_id", userId)');
+    expect(service).not.toContain('from("user_achievements").select("id").eq("user_id", userId).eq("hidden", false)');
+  });
+
+  it("shows source references and rule versions in the authorized admin ledger", () => {
+    expect(adminPage).toContain("source_reference");
+    expect(adminPage).toContain("row.source_reference");
+    expect(adminPage).toContain("row.rule_version");
   });
 });

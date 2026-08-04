@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   calculateAge,
   dateKeyInTimeZone,
+  daysUntilBirthday,
   deriveBirthProfile,
   isBirthdayOnDate,
+  nextBirthdayDate,
+  projectDerivedBirthProfile,
   validateDateOfBirth,
   zodiacForDateOfBirth
 } from "@/lib/profile/birth-date";
+import { resolveFieldVisibility } from "@/lib/profile/rules";
 
 describe("date of birth validation", () => {
   it("accepts real dates and rejects malformed, impossible, future, and unrealistic dates", () => {
@@ -33,7 +37,27 @@ describe("date of birth validation", () => {
     expect(deriveBirthProfile("2000-08-01", "2026-08-01")).toEqual({
       age: 26,
       zodiacSign: "Leo",
-      birthdayToday: true
+      birthdayToday: true,
+      birthdayTomorrow: false,
+      birthdayCountdownDays: 0,
+      nextBirthdayDate: "2026-08-01"
+    });
+  });
+
+  it("calculates a safe birthday countdown without returning the birth year", () => {
+    expect(daysUntilBirthday("1992-08-10", "2026-08-01")).toBe(9);
+    expect(daysUntilBirthday("1992-01-10", "2026-08-01")).toBe(162);
+    expect(daysUntilBirthday("2000-02-29", "2026-02-28")).toBe(0);
+    expect(nextBirthdayDate("1992-01-10", "2026-08-01")).toBe("2027-01-10");
+    expect(nextBirthdayDate("2000-02-29", "2025-01-01")).toBe("2025-02-28");
+  });
+
+  it("derives birthday tomorrow from the canonical countdown", () => {
+    expect(deriveBirthProfile("1992-08-02", "2026-08-01")).toMatchObject({
+      birthdayToday: false,
+      birthdayTomorrow: true,
+      birthdayCountdownDays: 1,
+      nextBirthdayDate: "2026-08-02"
     });
   });
 
@@ -41,7 +65,63 @@ describe("date of birth validation", () => {
     const now = new Date("2026-08-01T01:00:00.000Z");
     expect(dateKeyInTimeZone(now, "Pacific/Kiritimati")).toBe("2026-08-01");
     expect(dateKeyInTimeZone(now, "America/Los_Angeles")).toBe("2026-07-31");
+    expect(deriveBirthProfile("2000-08-01", dateKeyInTimeZone(now, "Pacific/Kiritimati")).birthdayToday).toBe(true);
+    expect(deriveBirthProfile("2000-08-01", dateKeyInTimeZone(now, "America/Los_Angeles")).birthdayTomorrow).toBe(true);
   }, 15_000);
+
+  it("projects only authorised derived values and never the raw birth date", () => {
+    const derived = deriveBirthProfile("2000-08-02", "2026-08-01");
+    const hidden = projectDerivedBirthProfile(derived, { birthday: false, age: false, zodiac: false });
+    expect(hidden).toEqual({
+      age: null,
+      zodiacSign: null,
+      birthdayToday: false,
+      birthdayTomorrow: false,
+      birthdayCountdownDays: null,
+      nextBirthdayDate: null
+    });
+    expect(hidden).not.toHaveProperty("dateOfBirth");
+
+    expect(projectDerivedBirthProfile(derived, { birthday: true, age: false, zodiac: true })).toEqual({
+      age: null,
+      zodiacSign: "Leo",
+      birthdayToday: false,
+      birthdayTomorrow: true,
+      birthdayCountdownDays: 1,
+      nextBirthdayDate: "2026-08-02"
+    });
+  });
+
+  it("shows owner fields while applying each Muddy privacy choice independently", () => {
+    const derived = deriveBirthProfile("2000-08-02", "2026-08-01");
+    const ownerCanSee = (visibility: "only_me" | "approved_muddies") =>
+      resolveFieldVisibility({ visibility, relationship: "self" });
+    const muddyCanSee = (visibility: "only_me" | "approved_muddies") =>
+      resolveFieldVisibility({ visibility, relationship: "approved_muddy" });
+
+    expect(
+      projectDerivedBirthProfile(derived, {
+        birthday: ownerCanSee("only_me"),
+        age: ownerCanSee("only_me"),
+        zodiac: ownerCanSee("only_me")
+      })
+    ).toMatchObject({ age: 25, zodiacSign: "Leo", birthdayTomorrow: true });
+
+    expect(
+      projectDerivedBirthProfile(derived, {
+        birthday: muddyCanSee("approved_muddies"),
+        age: muddyCanSee("only_me"),
+        zodiac: muddyCanSee("only_me")
+      })
+    ).toEqual({
+      age: null,
+      zodiacSign: null,
+      birthdayToday: false,
+      birthdayTomorrow: true,
+      birthdayCountdownDays: 1,
+      nextBirthdayDate: "2026-08-02"
+    });
+  });
 });
 
 describe("zodiac boundaries", () => {

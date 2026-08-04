@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BUDDY_SCORE_LEVELS, BUDDY_SCORE_RULES, buddyScoreProgress, modelBuddyScorePace, resolveBuddyScoreLevel } from "@/lib/engagement/buddy-score";
+import { BUDDY_SCORE_LEVELS, BUDDY_SCORE_RULES, buddyScoreProgress, calculateBuddyScoreTotal, modelBuddyScorePace, resolveBuddyScoreLevel } from "@/lib/engagement/buddy-score";
 
 describe("Buddy Score v1 rules", () => {
   it.each([
@@ -22,5 +22,17 @@ describe("Buddy Score v1 rules", () => {
     expect(BUDDY_SCORE_LEVELS.map((level) => level.minimum)).toEqual([0, 200, 500, 1000]);
     expect(modelBuddyScorePace().elite).toContain("months");
     expect(modelBuddyScorePace().legend).toContain("rare");
+  });
+
+  it("calculates trusted ledger totals and floors confirmed penalties at zero", () => {
+    expect(calculateBuddyScoreTotal([{ points_delta: 50 }, { points_delta: 40 }, { points_delta: -25 }])).toBe(65);
+    expect(calculateBuddyScoreTotal([{ points_delta: 20 }, { points_delta: -100 }])).toBe(0);
+  });
+
+  it("does not award premium purchases, popularity, or repetitive app activity", () => {
+    const rules = Object.keys(BUDDY_SCORE_RULES);
+    for (const disallowed of ["premium_purchased", "reaction_received", "screen_opened", "refresh", "scroll"]) {
+      expect(rules).not.toContain(disallowed);
+    }
   });
 });

@@ -1520,8 +1520,22 @@ select {
   }
 }
 @keyframes premium-pro-shimmer {
-  0%, 72%, 100% { box-shadow: 0 0 0 0 hsl(28 95% 58% / 0); }
-  84% { box-shadow: 0 0 10px 1px hsl(28 95% 58% / 0.28); }
+  0%, 72%, 100% {
+    box-shadow: 0 0 0 0 hsl(28 95% 58% / 0);
+    border-color: hsl(28 88% 58% / 0.45);
+  }
+  84% {
+    box-shadow: 0 0 9px 1px hsl(28 95% 58% / 0.24);
+    border-color: hsl(35 96% 68% / 0.68);
+  }
+}
+
+.premium-plan-badge {
+  contain: layout paint;
+}
+
+.premium-plan-badge--plus {
+  box-shadow: inset 0 0 0 1px hsl(238 85% 70% / 0.04);
 }
 
 .premium-plan-badge--pro {

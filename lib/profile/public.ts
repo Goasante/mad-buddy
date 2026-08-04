@@ -5,6 +5,10 @@ import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permi
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { getVisibleProfileFields, resolveViewerRelationship } from "@/lib/profile/service";
+import { loadEffectivePlan } from "@/lib/billing/service";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
+import { loadProfileIdentitySummary } from "@/lib/profile/identity-service";
+import type { ProfileIdentitySummary } from "@/lib/profile/identity";
 
 /**
  * A viewer-safe public profile card (name, username, avatar, bio, mood) plus
@@ -26,6 +30,11 @@ export type PublicProfile = {
   age: number | null;
   zodiacSign: string | null;
   birthdayToday: boolean;
+  birthdayTomorrow: boolean;
+  birthdayCountdownDays: number | null;
+  nextBirthdayDate: string | null;
+  plan: SubscriptionPlan;
+  identity: ProfileIdentitySummary;
 };
 
 const uuidSchema = z.string().uuid();
@@ -49,9 +58,15 @@ export async function getPublicProfile(viewerId: string, targetId: string): Prom
   if (!profile || profile.deleted_at) return null;
 
   const isSelf = viewerId === targetId;
-  const isMuddy = isSelf ? false : await areApprovedMuddies(admin, viewerId, targetId);
-  const relationship = await resolveViewerRelationship(admin, viewerId, targetId);
-  const fields = await getVisibleProfileFields(admin, targetId, relationship);
+  const [isMuddy, relationship, plan] = await Promise.all([
+    isSelf ? Promise.resolve(false) : areApprovedMuddies(admin, viewerId, targetId),
+    resolveViewerRelationship(admin, viewerId, targetId),
+    loadEffectivePlan(admin, targetId)
+  ]);
+  const [fields, identity] = await Promise.all([
+    getVisibleProfileFields(admin, targetId, relationship),
+    loadProfileIdentitySummary(admin, targetId, relationship)
+  ]);
 
   return {
     id: profile.user_id,
@@ -65,6 +80,11 @@ export async function getPublicProfile(viewerId: string, targetId: string): Prom
     isSelf,
     age: fields.age,
     zodiacSign: fields.zodiacSign,
-    birthdayToday: fields.birthdayToday
+    birthdayToday: fields.birthdayToday,
+    birthdayTomorrow: fields.birthdayTomorrow,
+    birthdayCountdownDays: fields.birthdayCountdownDays,
+    nextBirthdayDate: fields.nextBirthdayDate,
+    plan,
+    identity
   };
 }

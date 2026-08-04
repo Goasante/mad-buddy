@@ -154,6 +154,9 @@ export function OnboardingScreen() {
                     value={dateOfBirth}
                     onChange={(event) => setDateOfBirth(event.target.value)}
                   />
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                    Used for birthday celebrations, age display, and zodiac. You control what Muddies can see.
+                  </p>
                 </Field>
                 <div className="space-y-2.5">
                   <p className="text-sm font-medium">Mood status</p>
