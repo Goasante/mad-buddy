@@ -5,21 +5,20 @@ import type { Route } from "next";
 import {
   AlertTriangle,
   Bell,
+  CalendarPlus,
   CheckCircle2,
   ChevronRight,
   CalendarDays,
   CircleDollarSign,
   Compass,
-  Eye,
-  EyeOff,
   Ghost,
+  GraduationCap,
   Hand,
   LayoutGrid,
   MapPin,
   MessageSquareText,
   Moon,
   PartyPopper,
-  RefreshCcw,
   ShieldCheck,
   Sparkles,
   UserPlus,
@@ -32,6 +31,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { createPortal } from "react-dom";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { updateVisibilityStatusAction } from "@/app/(app)/settings-actions";
+import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
+import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
+import { HomeSettingsSheet } from "@/components/dashboard/home-settings-sheet";
+import { QuickControlsSheet } from "@/components/dashboard/quick-controls-sheet";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { PendingInvitePrompt } from "@/components/discovery/pending-invite-prompt";
@@ -43,7 +46,6 @@ import {
 } from "@/components/safety/safe-arrival-home-cards";
 import type { SafeArrivalJourney } from "@/lib/safety/safe-arrival-service";
 import { StatusComposer } from "@/components/social/status-composer";
-import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import { Modal } from "@/components/ui/modal";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
@@ -69,6 +71,7 @@ type DashboardFriend = {
   statusText: string;
   lastActiveEstimate: string;
   isPremiumThemeUnlocked: boolean;
+  membershipTier: PublicMembershipTier;
   confidence: ConfidenceLevel;
   muddyStatusLabel: string | null;
   availability: string | null;
@@ -86,6 +89,7 @@ type NearbyFriendApiItem = {
   last_active_estimate: string;
   freshness_state: FreshnessState;
   is_premium_theme_unlocked: boolean;
+  membership_tier: PublicMembershipTier;
   confidence: ConfidenceLevel;
   muddy_availability: string | null;
   muddy_activity: string | null;
@@ -120,6 +124,23 @@ type DashboardPageContentProps = {
   } | null;
   hiddenQuickActionHrefs?: string[];
   journey?: JourneyData | null;
+  /**
+   * Canonical first-time signal, computed server-side from real Journey
+   * progress (see app/(app)/dashboard/page.tsx) — never inferred client-side.
+   * Swaps the Quick Actions set and the Nearby empty-state copy/CTA to the
+   * activation-focused variant; everything else on Home behaves identically.
+   */
+  isFirstTimeUser?: boolean;
+  currentUsername?: string | null;
+  currentAvatarUrl?: string | null;
+  /** Display label only ("Trusted Buddy"), for the account sheet's header. */
+  buddyScoreLevelLabel?: string | null;
+  /**
+   * Pending INCOMING Muddy requests, from countIncomingRequests. Drives the
+   * Add Muddy badge only — never notifications, outgoing requests,
+   * suggestions or unread messages, each of which is counted elsewhere.
+   */
+  incomingRequestCount?: number;
 };
 
 /** Strongest proximity bucket first, then the brightest glow within a bucket. */
@@ -178,7 +199,12 @@ export function DashboardPageContent({
   profileReminder = null,
   safeArrival = null,
   hiddenQuickActionHrefs = [],
-  journey = null
+  journey = null,
+  isFirstTimeUser = false,
+  currentUsername = null,
+  currentAvatarUrl = null,
+  buddyScoreLevelLabel = null,
+  incomingRequestCount = 0
 }: DashboardPageContentProps) {
   const reducedMotion = useReducedMotion();
   const [ghostMode, setGhostMode] = useState(initialVisibilityStatus === "ghost");
@@ -189,6 +215,8 @@ export function DashboardPageContent({
     null
   );
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+  const [settingsSheetOpen, setSettingsSheetOpen] = useState(false);
+  const [quickControlsOpen, setQuickControlsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const locationUpdateInFlightRef = useRef(false);
   const nearbyRefreshRef = useRef<Promise<void> | null>(null);
@@ -403,170 +431,119 @@ export function DashboardPageContent({
     [secondaryActions, promotedCount]
   );
 
+  const hasSafeArrival =
+    safeArrival !== null &&
+    (safeArrival.travelling.length > 0 || safeArrival.checkingOn.length > 0 || safeArrival.invitations.length > 0);
+
   return (
-    // A focused, centred column — Home answers "who's nearby?" at a glance, so
-    // it stays narrow on every width rather than spreading into a dashboard.
-    <div className="mx-auto w-full max-w-[560px] space-y-4 pt-4">
-      <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
-      <PendingInvitePrompt />
+    <>
+      {/* A faint Home-only wash, sitting above the shared shell wallpaper and
+          below everything else here (fixed + -z-10, so it needs no
+          positioning ancestor). Mobile-only, matching the compact header —
+          desktop already has the shell's own ambient wallpaper layer.
+          Day and Night both get the same treatment via CSS variables, so
+          neither theme reads as the "unfinished" one. */}
+      <div className="home-ambient-bg fixed inset-x-0 top-0 -z-10 h-[26rem] md:hidden" aria-hidden="true" />
 
-      {/* Greeting */}
-      <div className="min-w-0">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-[1.75rem]" suppressHydrationWarning>
-          {getGreeting()}
-          {displayName ? `, ${capitalize(displayName)}` : ""}
-        </h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">See which approved Muddies are nearby.</p>
-      </div>
-
-      {/* Visibility + status: one compact card, two labelled sections split by
-          a divider, with the pause/refresh controls on the right. */}
-      <div data-tour-id={TOUR_TARGET_IDS.HOME_VISIBILITY} className="rounded-2xl border border-border/70 bg-card/50 dark:bg-white/[0.035]">
-        <div className="flex items-center">
-          {/* Visibility */}
-          <div className="flex min-w-0 flex-1 items-center gap-2.5 p-3.5">
-            <span
-              className={cn("h-2.5 w-2.5 shrink-0 rounded-full", ghostMode ? "bg-muted-foreground" : "bg-emerald-500")}
-              aria-hidden="true"
-            />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold">{ghostMode ? "Paused" : "Visible"}</p>
-              {/* Explanatory copy is secondary — concise, and hidden on the
-                  narrowest phones (where the state word + dot already read
-                  clearly) so it never clips beside the status section. */}
-              <p className="hidden truncate text-xs text-muted-foreground min-[400px]:block">
-                {ghostMode ? "You’re hidden" : "Muddies see you"}
-              </p>
-            </div>
-          </div>
-
-          <div className="h-9 w-px shrink-0 bg-border/70" aria-hidden="true" />
-
-          {/* Status — the whole section opens the composer. */}
-          <StatusComposer
-            hasActiveStatus={hasActiveStatus}
-            initialAvailability={initialStatusAvailability}
-            initialActivity={initialStatusActivity}
-            initialNote={initialStatusNote}
-            onSaved={({ message, expiresAt }) => {
-              if (expiresAt) {
-                const time = new Date(expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-                showPromptFeedback(`Visible to your Muddies until ${time}.`, false, "Status updated");
-              } else {
-                showPromptFeedback(message);
-              }
-            }}
-            trigger={
-              <button
-                type="button"
-                data-tour-id={TOUR_TARGET_IDS.HOME_STATUS}
-                title={hasActiveStatus ? "Edit your status" : "Add a status"}
-                className="focus-ring safe-motion flex min-w-0 flex-1 items-center gap-2.5 p-3.5 text-left hover:bg-secondary/40"
-              >
-                <MessageSquareText className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold">
-                    {hasActiveStatus ? statusDisplay(initialStatusNote, initialStatusAvailability) : "Set a status"}
-                  </span>
-                  <span className="hidden truncate text-xs text-muted-foreground min-[400px]:block">
-                    {hasActiveStatus ? "Tap to edit" : "Tap to add"}
-                  </span>
-                </span>
-              </button>
-            }
-          />
-
-          {/* Controls */}
-          <div className="flex shrink-0 items-center gap-1 pr-2.5">
-            <Button
-              type="button"
-              variant={ghostMode ? "primary" : "outline"}
-              size="icon"
-              onClick={toggleVisibility}
-              disabled={isPending}
-              aria-label={ghostMode ? "Resume visibility" : "Pause visibility"}
-              title={ghostMode ? "Resume visibility" : "Pause visibility"}
-            >
-              {ghostMode ? <Eye className="h-4 w-4" aria-hidden="true" /> : <EyeOff className="h-4 w-4" aria-hidden="true" />}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={updatePrivateLocation}
-              disabled={isPending}
-              aria-label="Check again"
-              title="Check again"
-            >
-              <RefreshCcw
-                className={cn("h-4 w-4", isCheckingNearby && "animate-spin motion-reduce:animate-none")}
-                aria-hidden="true"
-              />
-            </Button>
-          </div>
-        </div>
-
-        {statusMessage || isCheckingNearby ? (
-          <p className="border-t border-border/60 px-3.5 py-2 text-xs text-muted-foreground" role="status">
-            {isCheckingNearby ? "Checking nearby Muddies…" : statusMessage}
-          </p>
-        ) : null}
-      </div>
-
-      {/* Compact profile-completion banner (real state, dismissible). */}
-      {profileReminder ? (
-        <ProfileCompletionReminder userId={profileReminder.userId} missingItems={profileReminder.missingItems} />
-      ) : null}
-
-      {journey && !(profileReminder && journey.currentStep?.id === "complete_profile") ? (
-        <JourneyProgress journey={journey} variant="home" />
-      ) : null}
-
-      {/* Safe Arrival on Home: my live journey, journeys I've accepted, and any
-          invitation still awaiting my answer. Absent entirely when there is
-          nothing live, so Home never carries an empty placeholder. */}
-      {safeArrival && (safeArrival.travelling.length > 0 || safeArrival.checkingOn.length > 0 || safeArrival.invitations.length > 0) ? (
-        <section aria-labelledby="home-safe-arrival-heading" className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <h2 id="home-safe-arrival-heading" className="text-sm font-semibold">
-              Safe Arrival
-            </h2>
-            <Link href="/safe-arrival" prefetch={false} className="text-xs font-medium text-primary hover:underline">
-              Open
-            </Link>
-          </div>
-          {safeArrival.invitations.map((journey) => (
-            <ContactInvitationHomeCard key={journey.id} journey={journey} />
-          ))}
-          {safeArrival.travelling.map((journey) => (
-            <TravellerJourneyHomeCard key={journey.id} journey={journey} />
-          ))}
-          {safeArrival.checkingOn.map((journey) => (
-            <ContactJourneyHomeCard key={journey.id} journey={journey} />
-          ))}
-        </section>
-      ) : null}
-
-      {/* HERO: Nearby Muddies */}
-      <NearbyHero
-        friends={nearbyFriends}
-        total={nearbyTotal}
-        ghostMode={ghostMode}
-        glowColorByFriendId={glowColorByFriendId}
-        reducedMotion={reducedMotion}
-        onSelect={setSelectedFriendId}
+      {/* The shared mobile header (components/app-shell/mobile-page-header).
+          Home supplies the title, the two sheet openers and the pending
+          incoming-request count; everything about layout, sizing, icons and
+          press feedback lives in that one component so every primary screen
+          renders an identical header. */}
+      <MobilePageHeader
+        title="Home"
+        onOpenMenu={() => setSettingsSheetOpen(true)}
+        onOpenQuickControls={() => setQuickControlsOpen(true)}
+        incomingRequestCount={incomingRequestCount}
+        // The visibility control moved into Quick Controls, and a shipped
+        // walkthrough step still points at this id, so it stays attached to
+        // wherever that control actually lives.
+        quickControlsTourId={TOUR_TARGET_IDS.HOME_VISIBILITY}
       />
 
-      {/* Quick actions: three primary + More */}
-      <QuickActionsHome primary={primaryActions} secondary={moreActions} />
+      {/* A focused, centred column — Home answers "who's nearby?" at a glance, so
+          it stays narrow on every width rather than spreading into a dashboard. */}
+      <div className="mx-auto w-full max-w-[560px] space-y-5 pt-4">
+        <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
+        <PendingInvitePrompt />
 
-      {/* Compact upcoming plan — only when one genuinely exists. */}
-      {plan ? <UpcomingPlanRow plan={plan} /> : null}
+        {/* Greeting — the page's title. A fixed "Welcome" rather than a
+            time-of-day + name line; the subtitle below is state-derived,
+            never a fixed line, so it always answers "what should I do, and
+            why" — that's where the personality/personalisation lives now. */}
+        <div className="min-w-0">
+          <h1 className="truncate text-2xl font-bold leading-tight tracking-tight">Welcome</h1>
+          {/* Deliberately a step smaller than the body scale so the greeting
+              itself stays clearly dominant. */}
+          <p className="mt-1 text-[0.8125rem] leading-[1.45] text-muted-foreground">{journeySubtitle(journey)}</p>
+        </div>
 
-      {/* Fills leftover space above the bottom nav with extra shortcuts; they
-          retract into "More" as soon as real content needs the room. */}
-      <HomeGapFillerActions pool={secondaryActions} onPromotedChange={setPromotedCount} />
+        {/* HERO: Continue Your Journey — the main visual focal point, always
+            shown when a current step exists. profileReminder (below, near the
+            visibility card) is a smaller secondary nudge, not a replacement —
+            the two used to be mutually exclusive when "complete profile" was
+            the current step, which suppressed Home's hero for every brand-new
+            account. */}
+        {journey ? <JourneyProgress journey={journey} variant="home" /> : null}
 
+        {/* HERO: Nearby Muddies */}
+        <NearbyHero
+          friends={nearbyFriends}
+          total={nearbyTotal}
+          ghostMode={ghostMode}
+          isFirstTimeUser={isFirstTimeUser}
+          glowColorByFriendId={glowColorByFriendId}
+          reducedMotion={reducedMotion}
+          onSelect={setSelectedFriendId}
+        />
+
+        {/* Quick actions: first-time activation set, or the returning-user set. */}
+        {isFirstTimeUser ? (
+          <FirstTimeQuickActions />
+        ) : (
+          <QuickActionsHome primary={primaryActions} secondary={moreActions} />
+        )}
+
+        {/* Compact profile-completion banner (real state, dismissible). */}
+        {profileReminder ? (
+          <ProfileCompletionReminder userId={profileReminder.userId} missingItems={profileReminder.missingItems} />
+        ) : null}
+
+        {/* Safe Arrival on Home: my live journey, journeys I've accepted, and any
+            invitation still awaiting my answer. Absent entirely when there is
+            nothing live, so Home never carries an empty placeholder. */}
+        {hasSafeArrival ? (
+          <section aria-labelledby="home-safe-arrival-heading" className="space-y-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 id="home-safe-arrival-heading" className="text-sm font-semibold">
+                Safe Arrival
+              </h2>
+              <Link href="/safe-arrival" prefetch={false} className="text-xs font-medium text-primary hover:underline">
+                Open
+              </Link>
+            </div>
+            {safeArrival!.invitations.map((journey) => (
+              <ContactInvitationHomeCard key={journey.id} journey={journey} />
+            ))}
+            {safeArrival!.travelling.map((journey) => (
+              <TravellerJourneyHomeCard key={journey.id} journey={journey} />
+            ))}
+            {safeArrival!.checkingOn.map((journey) => (
+              <ContactJourneyHomeCard key={journey.id} journey={journey} />
+            ))}
+          </section>
+        ) : null}
+
+        {/* Compact upcoming plan — only when one genuinely exists. */}
+        {plan ? <UpcomingPlanRow plan={plan} /> : null}
+
+        {/* Fills leftover space above the bottom nav with extra shortcuts; they
+            retract into "More" as soon as real content needs the room. Only for
+            the returning-user quick-actions set — the first-time set is fixed. */}
+        {!isFirstTimeUser ? (
+          <HomeGapFillerActions pool={secondaryActions} onPromotedChange={setPromotedCount} />
+        ) : null}
+      </div>
 
       {promptFeedback ? (
         <div
@@ -576,7 +553,7 @@ export function DashboardPageContent({
           onMouseLeave={scheduleToastDismiss}
           onFocus={pauseToastDismiss}
           onBlur={scheduleToastDismiss}
-          className="toast-in fixed bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-2rem)] max-w-[320px] -translate-x-1/2 md:bottom-6"
+          className="toast-in fixed bottom-[calc(96px+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-2rem)] max-w-[320px] -translate-x-1/2 md:bottom-6"
         >
           <div className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-[#1b1b1d] px-4 py-3 text-white shadow-lg">
             <span className={cn("mt-0.5 shrink-0", promptFeedback.error ? "text-red-400" : "text-emerald-400")}>
@@ -629,7 +606,75 @@ export function DashboardPageContent({
           if (selectedFriendId) sendConnectionPrompt(selectedFriendId, message);
         }}
       />
-    </div>
+
+      {/* Quick Controls. The four controls that used to sit permanently on
+          Home (visibility, status, ghost state, refresh nearby) live here
+          now. State and server actions stay in this component — the sheet is
+          presentation, so there is still one implementation of each. */}
+      <QuickControlsSheet
+        open={quickControlsOpen}
+        onOpenChange={setQuickControlsOpen}
+        ghostMode={ghostMode}
+        isPending={isPending}
+        isCheckingNearby={isCheckingNearby}
+        statusMessage={statusMessage}
+        statusSummary={statusDisplay(initialStatusNote, initialStatusAvailability)}
+        hasActiveStatus={hasActiveStatus}
+        onToggleVisibility={toggleVisibility}
+        onRefreshNearby={updatePrivateLocation}
+        statusTrigger={
+          <StatusComposer
+            hasActiveStatus={hasActiveStatus}
+            initialAvailability={initialStatusAvailability}
+            initialActivity={initialStatusActivity}
+            initialNote={initialStatusNote}
+            onSaved={({ message, expiresAt }) => {
+              setQuickControlsOpen(false);
+              if (expiresAt) {
+                const time = new Date(expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+                showPromptFeedback(`Visible to your Muddies until ${time}.`, false, "Status updated");
+              } else {
+                showPromptFeedback(message);
+              }
+            }}
+            trigger={
+              <button
+                type="button"
+                data-tour-id={TOUR_TARGET_IDS.HOME_STATUS}
+                className="focus-ring safe-motion flex min-h-[60px] w-full items-center gap-3.5 px-4 py-3 text-left transition-colors hover:bg-secondary/40"
+              >
+                <MessageSquareText className="h-5 w-5 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[0.9375rem] font-medium">Current Status</span>
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                    {hasActiveStatus ? statusDisplay(initialStatusNote, initialStatusAvailability) : "Set a status"}
+                  </span>
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </button>
+            }
+          />
+        }
+      />
+
+      <HomeSettingsSheet
+        open={settingsSheetOpen}
+        onOpenChange={setSettingsSheetOpen}
+        displayName={displayName}
+        currentUsername={currentUsername}
+        currentAvatarUrl={currentAvatarUrl}
+        subscriptionPlan={subscriptionPlan}
+        buddyScoreLevelLabel={buddyScoreLevelLabel}
+        // Same three-item model the profile reminder uses (photo, bio, mood):
+        // profileReminder is null once nothing is missing, so no reminder
+        // means a complete profile.
+        profileCompletionPercent={
+          profileReminder
+            ? Math.round(((3 - profileReminder.missingItems.length) / 3) * 100)
+            : 100
+        }
+      />
+    </>
   );
 }
 
@@ -641,6 +686,7 @@ function NearbyHero({
   friends,
   total,
   ghostMode,
+  isFirstTimeUser,
   glowColorByFriendId,
   reducedMotion,
   onSelect
@@ -648,6 +694,7 @@ function NearbyHero({
   friends: DashboardFriend[];
   total: number;
   ghostMode: boolean;
+  isFirstTimeUser: boolean;
   glowColorByFriendId: Record<string, string>;
   reducedMotion: boolean;
   onSelect: (friendId: string) => void;
@@ -661,9 +708,9 @@ function NearbyHero({
     // data-tour-id is the guided tour's stable targeting contract; the tour
     // spotlights this real section rather than showing a screenshot of it.
     <section aria-labelledby="home-nearby-heading" data-tour-id={TOUR_TARGET_IDS.HOME_NEARBY}>
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between">
         <h2 id="home-nearby-heading" className="text-base font-semibold tracking-tight">
-          Nearby Muddies
+          Nearby right now
         </h2>
         {total > 0 ? (
           <Link
@@ -671,7 +718,7 @@ function NearbyHero({
             className="inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline"
             aria-label={`${total} nearby, view all Muddies`}
           >
-            {total} nearby
+            View all
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         ) : null}
@@ -679,11 +726,12 @@ function NearbyHero({
 
       {total > 0 ? (
         // One fixed row of up to four positions — never wraps, never grows with
-        // the nearby count. A moderate avatar size keeps two nearby Muddies
-        // from eating the viewport while still reading as the hero; the top/side
+        // the nearby count. Larger avatars read as the hero; the top/side
         // padding keeps the animated halo from being clipped at the row's edge.
+        // A glass-panel wrapper matches the Journey hero and empty-state card
+        // below so Nearby reads as one connected surface, not a bare row.
         <div
-          className="-mx-1 flex items-start justify-between gap-1 px-1 pt-3 sm:gap-3"
+          className="glass-panel -mx-1 flex items-start justify-between gap-1 rounded-[1.5rem] px-4 py-5 sm:gap-3"
           aria-label="Nearby Muddies"
         >
           {shown.map((friend) => {
@@ -693,7 +741,7 @@ function NearbyHero({
                 key={friend.friendId}
                 type="button"
                 onClick={() => onSelect(friend.friendId)}
-                className="focus-ring safe-motion flex min-w-0 basis-0 grow flex-col items-center gap-1.5 text-center"
+                className="focus-ring safe-motion flex min-w-0 basis-0 grow flex-col items-center gap-2 text-center"
                 aria-label={`${capitalize(name)}, ${proximityLabels[friend.proximityLevel]}`}
               >
                 <span className="relative">
@@ -704,18 +752,22 @@ function NearbyHero({
                     glowStrength={friend.glowStrength}
                     confidence={friend.confidence}
                     glowColorId={glowColorByFriendId[friend.friendId] ?? null}
-                    size="md"
+                    // Identity, independent of the proximity props above:
+                    // GlowRing owns the distance aura, UserAvatar owns the
+                    // membership band. Neither reads the other's inputs.
+                    membershipTier={friend.membershipTier}
+                    size="lg"
                     reducedMotion={reducedMotion}
                   />
                   {/* Presence: a nearby Muddy with a live, just-updated signal. */}
                   {friend.freshnessState === "live" ? (
                     <span
-                      className="absolute bottom-0 right-0 z-[2] h-3 w-3 rounded-full border-2 border-background bg-emerald-500"
+                      className="absolute bottom-0.5 right-0.5 z-[2] h-3.5 w-3.5 rounded-full border-2 border-background bg-emerald-500"
                       aria-hidden="true"
                     />
                   ) : null}
                 </span>
-                <span className="mt-0.5 w-full truncate text-xs font-medium">{capitalize(name)}</span>
+                <span className="w-full truncate text-xs font-medium">{capitalize(name)}</span>
                 <span
                   className={cn(
                     "inline-flex max-w-full items-center truncate rounded-full px-2 py-0.5 text-[10px] font-semibold",
@@ -731,49 +783,87 @@ function NearbyHero({
           {overflow ? (
             <Link
               href="/friends"
-              className="focus-ring safe-motion flex min-w-0 basis-0 grow flex-col items-center gap-1.5 text-center"
+              className="focus-ring safe-motion flex min-w-0 basis-0 grow flex-col items-center gap-2 text-center"
               aria-label={`View all ${total} nearby Muddies`}
             >
-              <span className="grid h-14 w-14 place-items-center rounded-full border-2 border-dashed border-border bg-secondary/40 leading-none">
+              <span className="grid h-16 w-16 place-items-center rounded-full border-2 border-dashed border-border bg-secondary/40 leading-none">
                 <span className="text-sm font-bold">+{remaining}</span>
                 <span className="mt-0.5 text-[8px] font-medium text-muted-foreground">Muddies</span>
               </span>
-              <span className="mt-0.5 w-full truncate text-xs font-medium text-transparent">.</span>
+              <span className="w-full truncate text-xs font-medium text-transparent">.</span>
               <span className="text-[10px] font-semibold text-primary">View all</span>
             </Link>
           ) : null}
         </div>
       ) : (
-        // Intentional, borderless empty state — a soft proximity visual, not a
-        // giant card. Kept compact so Home stays composed with nothing nearby.
-        <div className="flex flex-col items-center py-5 text-center">
-          <span className="relative grid h-[68px] w-[68px] place-items-center" aria-hidden="true">
-            {/* Concentric proximity rings — the same idea as the glow, resting. */}
+        // Polished empty-state card — a friendly illustration, copy, and a
+        // single primary action. No coloured panel, no reused profile avatar.
+        <div className="glass-panel flex flex-col items-center rounded-[1.5rem] px-6 py-8 text-center">
+          <span className="relative grid h-20 w-20 place-items-center" aria-hidden="true">
+            {/* Concentric proximity rings — the same idea as the glow, resting —
+                the illustration for "nobody nearby yet", not a person. */}
             <span className="absolute inset-0 rounded-full border border-border/60" />
-            <span className="absolute inset-[10px] rounded-full border border-border/45" />
+            <span className="absolute inset-[13px] rounded-full border border-border/45" />
             <span className="grid h-10 w-10 place-items-center rounded-full bg-secondary/70 text-muted-foreground">
               {ghostMode ? <Ghost className="h-5 w-5" aria-hidden="true" /> : <Users className="h-5 w-5" aria-hidden="true" />}
             </span>
           </span>
-          <p className="mt-3 text-sm font-semibold">
-            {ghostMode ? "Visibility is paused" : "No Muddies nearby"}
+          <p className="mt-4 text-[0.95rem] font-semibold">
+            {ghostMode ? "Visibility is paused" : isFirstTimeUser ? "No Muddies nearby yet" : "No Muddies nearby"}
           </p>
-          <p className="mt-1 max-w-[16rem] text-xs leading-5 text-muted-foreground">
+          <p className="mt-1.5 max-w-[19rem] text-sm leading-6 text-muted-foreground">
             {ghostMode
               ? "Turn visibility back on to appear nearby."
-              : "Approved Muddies glow here when they’re around."}
+              : "Invite trusted friends to start building your circle."}
           </p>
           {!ghostMode ? (
             <Link
               href="/friends?tab=add"
-              className="focus-ring safe-motion mt-3 inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10"
+              className="focus-ring safe-motion mt-4 inline-flex h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-[0_4px_14px_hsl(var(--shadow)/0.16)] transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
             >
-              <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
-              Add Muddies
+              <UserPlus className="h-4 w-4" aria-hidden="true" />
+              {isFirstTimeUser ? "Add your first Muddy" : "Invite your first Muddy"}
             </Link>
           ) : null}
         </div>
       )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// First-time quick actions — activation-focused, fixed set of four.
+// ---------------------------------------------------------------------------
+
+type FirstTimeAction = { href: Route; label: string; icon: LucideIcon };
+
+const FIRST_TIME_ACTIONS: FirstTimeAction[] = [
+  { href: "/friends?tab=add", label: "Add Muddy", icon: UserPlus },
+  { href: "/plans?create=1", label: "Create Plan", icon: CalendarPlus },
+  { href: "/moments", label: "Share Moment", icon: Sparkles },
+  { href: "/help", label: "Learn Mad Buddy", icon: GraduationCap }
+];
+
+function FirstTimeQuickActions() {
+  return (
+    <section aria-labelledby="home-actions-heading" data-tour-id={TOUR_TARGET_IDS.HOME_QUICK_ACTIONS}>
+      <h2 id="home-actions-heading" className="mb-3 text-sm font-semibold">
+        Quick actions
+      </h2>
+      <div className="grid grid-cols-4 gap-2.5">
+        {FIRST_TIME_ACTIONS.map((action) => (
+          <Link
+            key={action.href}
+            href={action.href}
+            aria-label={action.label}
+            title={action.label}
+            className="focus-ring safe-motion glass-panel flex min-h-[92px] w-full flex-col items-center justify-center gap-2 rounded-[1.25rem] px-1 py-3 text-center transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
+          >
+            <action.icon className="h-7 w-7 shrink-0 text-foreground/70" strokeWidth={1.5} aria-hidden="true" />
+            <span className="line-clamp-2 w-full text-xs font-medium leading-tight">{action.label}</span>
+          </Link>
+        ))}
+      </div>
     </section>
   );
 }
@@ -835,12 +925,12 @@ function QuickActionsHome({
 
   return (
     <section aria-labelledby="home-actions-heading" data-tour-id={TOUR_TARGET_IDS.HOME_QUICK_ACTIONS}>
-      <h2 id="home-actions-heading" className="mb-2 text-sm font-semibold">
+      <h2 id="home-actions-heading" className="mb-3 text-sm font-semibold">
         Quick actions
       </h2>
-      {/* Icon-first launcher row — no card containers or borders; the glyphs
-          carry their own accent and the whole cell is the tap target. */}
-      <div className={cn("grid gap-1", secondary.length > 0 ? "grid-cols-4" : "grid-cols-3")}>
+      {/* Premium rounded cards — a soft glass surface per tile rather than a
+          bare icon-on-background cell, with a larger glyph as the focal point. */}
+      <div className={cn("grid gap-2.5", secondary.length > 0 ? "grid-cols-4" : "grid-cols-3")}>
         {primary.map((action) => (
           <QuickActionTile key={action.href} action={action} />
         ))}
@@ -848,11 +938,11 @@ function QuickActionsHome({
           <button
             type="button"
             onClick={() => setMoreOpen(true)}
-            className="focus-ring safe-motion flex min-h-[68px] flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-center hover:bg-secondary/30 active:scale-[0.96] motion-reduce:active:scale-100"
+            className="focus-ring safe-motion glass-panel flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-[1.25rem] px-1 py-3 text-center transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
             aria-label="More quick actions"
           >
-            <LayoutGrid className="h-7 w-7 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
-            <span className="line-clamp-2 w-full text-[11px] font-medium leading-tight">More</span>
+            <LayoutGrid className="h-8 w-8 shrink-0 text-muted-foreground" strokeWidth={1.5} aria-hidden="true" />
+            <span className="line-clamp-2 w-full text-xs font-medium leading-tight">More</span>
           </button>
         ) : null}
       </div>
@@ -864,18 +954,18 @@ function QuickActionsHome({
         description="Jump to another Mad Buddy feature."
         variant="sheet"
       >
-        {/* Same icon-first language as the launcher row above. */}
-        <div className="grid grid-cols-3 gap-1 pt-1 sm:grid-cols-4">
+        {/* Same premium card language as the launcher row above. */}
+        <div className="grid grid-cols-3 gap-2.5 pt-1 sm:grid-cols-4">
           {secondary.map((action) => (
             <Link
               key={action.href}
               href={action.href}
               onClick={() => setMoreOpen(false)}
               aria-label={action.description}
-              className="focus-ring safe-motion flex min-h-[76px] flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-center hover:bg-secondary/30 active:scale-[0.97] motion-reduce:active:scale-100"
+              className="focus-ring safe-motion glass-panel flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-[1.25rem] px-1 py-3 text-center transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
             >
-              <FeatureIcon feature={action.featureIcon} size={28} decorative className={action.accent} />
-              <span className="line-clamp-2 w-full text-[11px] font-medium leading-tight">{action.label}</span>
+              <FeatureIcon feature={action.featureIcon} size={30} decorative className={action.accent} />
+              <span className="line-clamp-2 w-full text-xs font-medium leading-tight">{action.label}</span>
             </Link>
           ))}
         </div>
@@ -890,12 +980,12 @@ function QuickActionTile({ action }: { action: QuickAction }) {
       href={action.href}
       aria-label={action.description}
       title={action.description}
-      className="focus-ring safe-motion flex min-h-[68px] w-full flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-center hover:bg-secondary/30 active:scale-[0.96] motion-reduce:active:scale-100"
+      className="focus-ring safe-motion glass-panel flex min-h-[92px] w-full flex-col items-center justify-center gap-2 rounded-[1.25rem] px-1 py-3 text-center transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
     >
-      <FeatureIcon feature={action.featureIcon} size={30} decorative className={action.accent} />
+      <FeatureIcon feature={action.featureIcon} size={32} decorative className={action.accent} />
       {/* Two-line label wraps ("Safe Arrival") rather than truncating; never
           forces horizontal scroll because it only ever wraps within the cell. */}
-      <span className="line-clamp-2 w-full text-[11px] font-medium leading-tight">{action.label}</span>
+      <span className="line-clamp-2 w-full text-xs font-medium leading-tight">{action.label}</span>
     </Link>
   );
 }
@@ -904,10 +994,10 @@ function QuickActionTile({ action }: { action: QuickAction }) {
 // Bottom gap filler — turns leftover space into useful shortcuts.
 // ---------------------------------------------------------------------------
 
-/** One tile row (min-h 68px) plus the grid gap. */
-const FILLER_ROW_HEIGHT = 72;
+/** One tile row (min-h 92px) plus the grid gap. */
+const FILLER_ROW_HEIGHT = 102;
 /** Section heading + its margin. */
-const FILLER_HEADING = 26;
+const FILLER_HEADING = 30;
 /** Never push past two extra rows — this fills space, it doesn't become a hub. */
 const FILLER_MAX_ROWS = 2;
 const FILLER_PER_ROW = 4;
@@ -982,10 +1072,10 @@ function HomeGapFillerActions({
     <div ref={containerRef}>
       {shown.length > 0 ? (
         <section aria-labelledby="home-more-actions-heading">
-          <h2 id="home-more-actions-heading" className="mb-2 text-sm font-semibold text-muted-foreground">
+          <h2 id="home-more-actions-heading" className="mb-3 text-sm font-semibold text-muted-foreground">
             More to explore
           </h2>
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-4 gap-2.5">
             {shown.map((action) => (
               <QuickActionTile key={action.href} action={action} />
             ))}
@@ -1025,7 +1115,7 @@ function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
 
   return (
     <section aria-labelledby="home-plan-heading" data-tour-id={TOUR_TARGET_IDS.HOME_UPCOMING_PLAN}>
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between">
         <h2 id="home-plan-heading" className="text-sm font-semibold">
           Upcoming
         </h2>
@@ -1038,7 +1128,7 @@ function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
       <Link
         href="/plans"
         aria-label={`${capitalize(plan.title)}, ${when}, ${rsvpLabel(plan.myRsvp)}`}
-        className="focus-ring safe-motion flex items-center gap-3 rounded-2xl border border-border/70 bg-card/50 p-3 hover:border-border hover:bg-secondary/40"
+        className="focus-ring safe-motion glass-panel flex items-center gap-3 rounded-[1.5rem] px-5 py-4 transition-colors hover:bg-secondary/20"
       >
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
           <CalendarDays className="h-[18px] w-[18px]" aria-hidden="true" />
@@ -1088,11 +1178,42 @@ function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getGreeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
+/**
+ * Contextual greeting subtitle, derived entirely from real Journey state —
+ * never a fixed string. Rules, in priority order: journey finished; the
+ * current step is specifically profile completion (the most common early
+ * blocker, worth naming directly); close to the Trusted Buddy milestone;
+ * otherwise a generic step-count nudge. journey === null (never loaded, or
+ * signed out) falls back to the one static line, same as before.
+ */
+const SMALL_NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five"];
+
+function stepWord(count: number): string {
+  return SMALL_NUMBER_WORDS[count] ?? String(count);
+}
+
+function journeySubtitle(journey: JourneyData | null): string {
+  if (!journey) return "Welcome to Mad Buddy.";
+  if (!journey.currentStep) return "You've completed your Mad Buddy journey.";
+
+  const remaining = journey.totalCount - journey.completedCount;
+  const trustedBuddyIndex = journey.steps.findIndex((step) => step.id === "reach_trusted_buddy");
+  const currentIndex = journey.steps.findIndex((step) => step.id === journey.currentStep!.id);
+  const stepsFromTrustedBuddy = trustedBuddyIndex - currentIndex;
+
+  if (journey.currentStep.id === "complete_profile") {
+    return "Complete your profile to start building your trusted circle.";
+  }
+  if (journey.completedCount === 0) {
+    return "Your journey has started — one step from your trusted circle.";
+  }
+  if (stepsFromTrustedBuddy === 1) {
+    return "You're one step away from Trusted Buddy.";
+  }
+  if (stepsFromTrustedBuddy > 1 && stepsFromTrustedBuddy <= 3) {
+    return `You're ${stepWord(stepsFromTrustedBuddy)} steps from Trusted Buddy.`;
+  }
+  return `${stepWord(remaining)} step${remaining === 1 ? "" : "s"} left to build your trusted circle.`;
 }
 
 function toDashboardFriend(friend: NearbyFriendApiItem): DashboardFriend {
@@ -1106,6 +1227,8 @@ function toDashboardFriend(friend: NearbyFriendApiItem): DashboardFriend {
     statusText: friend.status_text,
     lastActiveEstimate: friend.last_active_estimate,
     isPremiumThemeUnlocked: friend.is_premium_theme_unlocked,
+    // Server-resolved; never derived from the boolean above.
+    membershipTier: friend.membership_tier ?? "free",
     confidence: friend.confidence,
     muddyStatusLabel: formatMuddyStatusLabel({
       availability: friend.muddy_availability,

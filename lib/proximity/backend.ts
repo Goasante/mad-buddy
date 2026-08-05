@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { getFreshnessState } from "@/lib/proximity/freshness";
+import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 
 export const locationUpdateRequestSchema = z.object({
@@ -23,6 +24,14 @@ export const safeNearbyFriendSchema = z.object({
   // never an exact timestamp or device/permission state.
   freshness_state: z.enum(["live", "recent", "older", "stale"]),
   is_premium_theme_unlocked: z.boolean(),
+  // Effective public membership tier, for the identity ring on the avatar.
+  // Deliberately three opaque values: paid, trial, earned and admin-granted
+  // access all collapse to the same tier, so a viewer cannot tell HOW a
+  // Muddy has Plus or Pro, and no provider, status, expiry or reward detail
+  // can ride along. Kept alongside is_premium_theme_unlocked rather than
+  // replacing it: that boolean gates the custom-glow entitlement, which is a
+  // different question from "what tier is this person".
+  membership_tier: z.enum(["free", "plus", "pro"]),
   confidence: z.enum(["high", "medium", "low"]),
   // Muddy Status (feature spec batch 1), availability/activity context,
   // never location data. All nullable: absent when no active status.
@@ -223,12 +232,21 @@ export function buildSafeNearbyFriends(input: {
   friendIds: string[];
   blockedIds: ReadonlySet<string>;
   premiumUserIds: ReadonlySet<string>;
+  /**
+   * Effective public tier per friend, resolved server-side by the canonical
+   * plan loader. Absent means "free" — never inferred from premiumUserIds,
+   * which is a boolean and cannot distinguish plus from pro.
+   */
+  membershipTierByUserId?: ReadonlyMap<string, PublicMembershipTier>;
   locationByUserId: ReadonlyMap<string, NearbyLocationRow>;
   profileByUserId: ReadonlyMap<string, NearbyProfileRow>;
   statusByUserId?: ReadonlyMap<string, MuddyStatusSummary>;
   now?: number;
 }): SafeNearbyFriend[] {
   const now = input.now ?? Date.now();
+  // Absent tier means free. Never derived from premiumUserIds.
+  const tierFor = (friendId: string): PublicMembershipTier =>
+    input.membershipTierByUserId?.get(friendId) ?? "free";
   const statusFor = (friendId: string) => {
     const status = input.statusByUserId?.get(friendId);
     // Expired statuses never surface (spec: expired statuses must not
@@ -271,6 +289,7 @@ export function buildSafeNearbyFriends(input: {
           last_active_estimate: "Last seen a while ago",
           freshness_state: "stale" as const,
           is_premium_theme_unlocked: input.premiumUserIds.has(friendId),
+          membership_tier: tierFor(friendId),
           confidence: "low" as const,
           ...statusFor(friendId)
         }
@@ -302,6 +321,7 @@ export function buildSafeNearbyFriends(input: {
         last_active_estimate: lastActiveEstimate(location.last_updated),
         freshness_state: getFreshnessState(updatedAt.getTime(), now),
         is_premium_theme_unlocked: input.premiumUserIds.has(friendId),
+          membership_tier: tierFor(friendId),
         confidence: pairConfidence,
         ...statusFor(friendId)
       }

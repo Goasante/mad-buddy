@@ -77,6 +77,7 @@ describe("assertPrivacySafeResponse", () => {
           last_active_estimate: "Active recently",
           freshness_state: "live",
           is_premium_theme_unlocked: false,
+          membership_tier: "free" as const,
           confidence: "high",
           muddy_availability: null,
           muddy_activity: null,

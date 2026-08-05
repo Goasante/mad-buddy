@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Award, CakeSlice, CalendarCheck2, CalendarDays, Camera, ChevronRight, Edit3, Ghost, Images, MessageSquareText, ShieldCheck, Smile, Sparkles, UsersRound } from "lucide-react";
+import { Award, CakeSlice, CalendarCheck2, CalendarDays, Camera, ChevronRight, Edit3, Ghost, Images, Info, LifeBuoy, MessageSquareText, MonitorSmartphone, Palette, ShieldCheck, Smile, Sparkles, UserCog, UsersRound } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updateProfileAction, uploadAvatarAction } from "@/app/(app)/actions";
 import { FormField } from "@/components/auth/form-field";
@@ -14,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AppSelect, type AppSelectOption } from "@/components/ui/app-dropdown";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { validateImageSelection } from "@/lib/media/validation";
 import { cn } from "@/lib/utils";
 import type { SubscriptionPlan, VisibilityStatus } from "@/lib/supabase/database.types";
@@ -300,8 +302,12 @@ export function ProfilePageContent({
     <div data-tour-id={TOUR_TARGET_IDS.PROFILE_OVERVIEW} className="mx-auto w-full max-w-[1040px] space-y-6 pb-6 pt-5">
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Profile</h1>
-          <p className="mt-1 text-sm text-muted-foreground">How approved friends see you.</p>
+          {/* This route is the canonical "Me" hub — identity, progress,
+              membership, privacy, preferences and support in one place — so
+              the heading names the hub rather than just the public profile
+              card it contains. The bottom bar's Me tab lands here. */}
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Me</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Your profile, progress, and preferences.</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {!editing ? (
@@ -407,6 +413,10 @@ export function ProfilePageContent({
                     src={avatarSrc}
                     name={savedProfile.displayName}
                     size="profile"
+                    // initialPlan is the server-resolved effective plan
+                    // (loadEffectivePlan), so the ring already reflects paid,
+                    // trial, earned or granted access without saying which.
+                    membershipTier={publicMembershipTier(initialPlan)}
                     className="border-4 border-background shadow-[0_14px_36px_hsl(var(--shadow)/0.22)]"
                     onImageError={() => {
                       if (selectedAvatarFile) {
@@ -621,6 +631,36 @@ export function ProfilePageContent({
             </Link>
           </section>
 
+          {/* Preferences — the account-level settings pages. Rows only; each
+              destination owns its own state and server data, so nothing here
+              re-implements or re-fetches what those pages already do. */}
+          <section aria-labelledby="profile-preferences-heading">
+            <h3 id="profile-preferences-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Preferences
+            </h3>
+            <MeRowGroup
+              rows={[
+                { href: "/settings", label: "Account", description: "Name, email, and account controls.", icon: UserCog },
+                { href: "/settings/appearance", label: "Appearance", description: "Theme, accent, and wallpaper.", icon: Palette },
+                { href: "/settings/sessions", label: "Devices & sessions", description: "Where you're signed in.", icon: MonitorSmartphone }
+              ]}
+            />
+          </section>
+
+          {/* Support */}
+          <section aria-labelledby="profile-support-heading">
+            <h3 id="profile-support-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Support
+            </h3>
+            <MeRowGroup
+              rows={[
+                { href: "/help", label: "Help & Support", description: "Guides and getting help.", icon: LifeBuoy },
+                { href: "/settings/feedback", label: "Send Feedback", description: "Tell us what's working.", icon: MessageSquareText },
+                { href: "/about", label: "About Mad Buddy", description: "Version and legal.", icon: Info }
+              ]}
+            />
+          </section>
+
           {/* Complete your profile */}
           {missingSteps > 0 ? (
             <button
@@ -718,5 +758,37 @@ function ProfileDetailRow({
       </span>
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </button>
+  );
+}
+
+/**
+ * A grouped list of navigation rows for the Me sections (Preferences,
+ * Support). Rows link out to the pages that already own each concern —
+ * nothing here duplicates their data, state, or server calls.
+ */
+function MeRowGroup({
+  rows
+}: {
+  rows: Array<{ href: Route; label: string; description: string; icon: typeof Smile }>;
+}) {
+  return (
+    <Card className="divide-y divide-border/60 p-0">
+      {rows.map((row) => (
+        <Link
+          key={row.href}
+          href={row.href}
+          className="focus-ring safe-motion flex items-center gap-3.5 p-3.5 first:rounded-t-2xl last:rounded-b-2xl hover:bg-secondary/40"
+        >
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-secondary/70 text-muted-foreground">
+            <row.icon className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">{row.label}</span>
+            <span className="mt-0.5 block truncate text-xs text-muted-foreground">{row.description}</span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </Link>
+      ))}
+    </Card>
   );
 }

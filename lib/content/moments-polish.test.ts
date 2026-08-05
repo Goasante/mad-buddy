@@ -24,13 +24,6 @@ const stripComments = (text: string) =>
     .filter((line) => !line.trimStart().startsWith("//"))
     .join("\n");
 
-/**
- * XML/SVG comments removed. The asset legitimately documents in prose that it is
- * NOT a safety shield and that it must read at 16px, and matching that
- * explanation would force these rules to be weakened rather than the art fixed.
- */
-const stripXml = (text: string) => text.replace(/<!--[\s\S]*?-->/g, "");
-
 const declaration = (code: string, signature: string) => {
   const start = code.indexOf(signature);
   if (start === -1) return "";
@@ -420,31 +413,17 @@ describe("Tune In privacy is unchanged", () => {
 // ---------------------------------------------------------------------------
 
 describe("Hangout icon", () => {
-  it("points at the in-project link-up asset", () => {
-    expect(FEATURE_ICON_SOURCES.hangout.src).toBe("/icons/features/hangout-linkup.svg");
-  });
-
-  it("draws two people and a connection, with no shield or star", () => {
-    const svg = stripXml(read("public/icons/features/hangout-linkup.svg"));
-    // Two heads plus the link between them.
-    expect((svg.match(/<circle/g) ?? []).length).toBeGreaterThanOrEqual(2);
-    expect(svg).toContain("<rect");
-    const lower = svg.toLowerCase();
-    for (const wrong of ["shield", "star", "wave"]) {
-      expect(lower, wrong).not.toContain(wrong);
-    }
-  });
-
-  it("scales from 16px, so it uses a viewBox rather than fixed units", () => {
-    const svg = stripXml(read("public/icons/features/hangout-linkup.svg"));
-    expect(svg).toContain('viewBox="0 0 64 64"');
-    expect(svg).not.toContain("px");
-  });
-
   it("is reached through the shared icon component, from one mapping", () => {
-    // No component imports the asset path directly.
+    // No component hardcodes a glyph for Hangout; it goes through the key.
     const dashboard = read("components/dashboard/dashboard-page.tsx");
     expect(dashboard).not.toContain("hangout-linkup");
     expect(dashboard).toContain('featureIcon: "hangout"');
+  });
+
+  it("resolves to a Lucide component, not a raster asset", () => {
+    // The former /icons/features/*.png|svg assets are gone; the mapping now
+    // returns a component, so there is no file path to assert against.
+    expect(FEATURE_ICON_SOURCES.hangout.icon).toBeDefined();
+    expect(FEATURE_ICON_SOURCES.hangout.label).toBe("Hangout");
   });
 });

@@ -206,6 +206,147 @@
   50% { transform: scale(1.08); opacity: 0.5; }
 }
 
+/* Home's Journey hero: artwork fades/settles in on mount, a soft glow
+   breathes behind the target, and the CTA arrow nudges forward every few
+   seconds. All three no-op under prefers-reduced-motion via the block
+   below. Long, low-amplitude cycles on purpose — this should read as the
+   card being alive, not as something demanding attention. */
+@keyframes journey-hero-artwork-in {
+  from { opacity: 0; transform: scale(1.03); }
+  to { opacity: 1; transform: scale(1); }
+}
+.journey-hero-artwork {
+  animation: journey-hero-artwork-in 700ms ease-out both;
+}
+
+/* Home's account sheet gets a springier entrance than the shared sheet
+   easing — a slight overshoot as it settles, closer to a native iOS sheet.
+   Scoped to this one surface so every other sheet keeps its existing curve.
+   The shared reduced-motion block already disables .modal-sheet-panel
+   animation, and this selector is more specific, so it is disabled here too. */
+@keyframes account-sheet-spring {
+  0% { transform: translateY(100%); opacity: 0.5; }
+  70% { transform: translateY(-0.5rem); opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.account-sheet-panel[data-state="open"] {
+  animation: account-sheet-spring 360ms cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .account-sheet-panel[data-state="open"] {
+    animation: none;
+  }
+}
+@media (min-width: 640px) {
+  .account-sheet-panel[data-state="open"] {
+    animation: modal-drop-panel-in 190ms cubic-bezier(0.16, 1, 0.3, 1);
+    transform-origin: top center;
+  }
+}
+
+/* The Menu sheet slides rather than springs. Quick Controls is a transient
+   panel of toggles, so its slight overshoot reads as responsive; the Menu is
+   a navigation surface, and a settled, linear slide suits moving between
+   places. Both remain bottom sheets — only the curve differs. */
+@keyframes menu-sheet-slide {
+  from { transform: translateY(100%); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.menu-sheet-panel[data-state="open"] {
+  animation: menu-sheet-slide 280ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu-sheet-panel[data-state="open"] {
+    animation: none;
+  }
+}
+@media (min-width: 640px) {
+  .menu-sheet-panel[data-state="open"] {
+    animation: modal-drop-panel-in 190ms cubic-bezier(0.16, 1, 0.3, 1);
+    transform-origin: top center;
+  }
+}
+
+@keyframes journey-target-glow-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(0.94); }
+  50% { opacity: 0.9; transform: scale(1.06); }
+}
+.journey-target-glow {
+  animation: journey-target-glow-pulse 4.5s ease-in-out infinite;
+}
+
+/* Mostly at rest, with a short nudge once per cycle. */
+@keyframes journey-cta-arrow-nudge {
+  0%, 72%, 100% { transform: translateX(0); }
+  82% { transform: translateX(4px); }
+  92% { transform: translateX(0); }
+}
+.journey-cta-arrow {
+  animation: journey-cta-arrow-nudge 3.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey-hero-artwork,
+  .journey-target-glow,
+  .journey-cta-arrow {
+    animation: none;
+  }
+}
+
+/* Home's faint top-of-screen wash — Day and Night both get one, styled to
+ * match each theme's own palette rather than a single gradient dimmed down.
+ * Sits above the shell's ambient wallpaper layer, below all real content. */
+.home-ambient-bg {
+  background: radial-gradient(60% 55% at 50% 0%, hsl(var(--primary) / 0.06), transparent 70%),
+    linear-gradient(180deg, hsl(var(--secondary) / 0.5), transparent);
+}
+html.dark .home-ambient-bg {
+  background: radial-gradient(60% 55% at 50% 0%, hsl(var(--primary) / 0.1), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent);
+}
+
+/* Buddy Pro's header-avatar ring: a slowly rotating gold conic gradient. */
+/* Premium membership rings.
+ *
+ * Owned entirely by UserAvatar — screens pass a tier, never a colour. The
+ * ring is a thin band attached to identity, deliberately narrower and
+ * calmer than the proximity Glow (see .proximity-halo), so the two read as
+ * different signals when they appear on the same avatar: the ring says who
+ * someone is, the halo says how near they are.
+ *
+ * The ring is painted on the wrapper's own background and the avatar sits
+ * inside a padding box, so there is no negative-z pseudo-element that a
+ * stacking context could clip, and no layout shift — the wrapper reserves
+ * its own space. */
+.avatar-ring-plus {
+  background: linear-gradient(140deg, #818cf8, #6366f1 55%, #4f46e5);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.25), 0 0 8px rgba(99, 102, 241, 0.28);
+}
+
+@keyframes avatar-ring-pro-shimmer {
+  to { transform: rotate(360deg); }
+}
+.avatar-ring-pro {
+  position: relative;
+  background: conic-gradient(from 0deg, #fcd34d, #f59e0b, #fbbf24, #fde68a, #fcd34d);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.28), 0 0 10px rgba(245, 158, 11, 0.3);
+}
+/* The shimmer rotates the gradient itself rather than an extra layer, so
+ * nothing paints outside the ring band. */
+.avatar-ring-pro-animated::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(from 0deg, #fcd34d, #f59e0b, #fbbf24, #fde68a, #fcd34d);
+  animation: avatar-ring-pro-shimmer 6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .avatar-ring-pro-animated::after {
+    animation: none;
+  }
+}
+
 /* Arrival: a single expanding success ring, then settle. */
 .journey-mark-arrived::before {
   content: "";

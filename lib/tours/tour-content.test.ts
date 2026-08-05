@@ -151,9 +151,12 @@ describe("tour targets are real", () => {
   it("targets Moments through a data-tour-id the app actually renders", () => {
     expect(SQL).toContain("'nav-moments'");
     // nav-* ids are derived from the route in the shell, so /moments must be a
-    // registered nav destination for this target to exist.
+    // registered nav destination for this target to exist. Both the mobile
+    // bottom bar and the desktop sidebar derive the id the same way, from
+    // whichever record they iterate — assert the derivation exists rather
+    // than pinning one call site's variable name.
     const shell = read("components/app-shell/app-shell.tsx");
-    expect(shell).toContain("data-tour-id={`nav-${item.href.slice(1)}`}");
+    expect(shell).toMatch(/data-tour-id=\{`nav-\$\{\w+\.href\.slice\(1\)\}`\}/);
     expect(shell).toContain('href: "/moments"');
   });
 

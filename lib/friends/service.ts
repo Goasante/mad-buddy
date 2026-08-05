@@ -284,6 +284,34 @@ export async function searchUsers(userId: string, query: string): Promise<Search
  * direct client read unreliable — same reason searchUsers uses the admin
  * client). Read-only; shared by the mobile `/api/friends/requests` route.
  */
+/**
+ * Count of PENDING INCOMING Muddy requests, for the Home header badge.
+ *
+ * Same predicate as listIncomingRequests (receiver_id = me, status =
+ * pending) so the badge can never disagree with the Requests tab — but a
+ * head-only count, because the badge needs a number, not up to 100 rows plus
+ * their profiles and effective plans.
+ *
+ * Deliberately narrow: this counts requests SENT TO the user. It excludes
+ * outgoing requests, suggestions, general notifications and unread messages,
+ * each of which has its own surface and its own count.
+ *
+ * Returns 0 rather than throwing — a header badge must never be able to
+ * break the page it sits on.
+ */
+export async function countIncomingRequests(userId: string): Promise<number> {
+  if (browserEnvMessage() ?? serviceRoleEnvMessage()) return 0;
+
+  const admin = createSupabaseAdminClient();
+  const { count, error } = await admin
+    .from("friend_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("receiver_id", userId)
+    .eq("status", "pending");
+
+  return error ? 0 : count ?? 0;
+}
+
 export async function listIncomingRequests(
   userId: string
 ): Promise<ServiceResult & { requests: IncomingRequest[] }> {

@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { GLOW_COLORS } from "@/lib/glow/custom-colors";
 import type { PublicTrustSummary } from "@/lib/discovery/trust";
 import type { VisibleProfileFields } from "@/lib/profile/service";
@@ -145,6 +146,9 @@ export function MuddyProfilePage({
                 <GlowAvatar
                   name={muddy.displayName}
                   src={muddy.avatarUrl}
+                  // muddy.plan comes from the public profile projection, which
+                  // already resolves the effective plan server-side.
+                  membershipTier={publicMembershipTier(muddy.plan)}
                   proximityLevel={muddy.proximityLevel}
                   glowStrength={muddy.glowStrength}
                   confidence={muddy.confidence}

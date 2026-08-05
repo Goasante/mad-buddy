@@ -49,6 +49,7 @@ import { cn } from "@/lib/utils";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 
 type FriendTab = "all" | "circles" | "close" | "requests" | "blocked";
@@ -915,6 +916,7 @@ function MuddyRow({
           src={user.avatarUrl}
           size="sm"
           decorative
+          membershipTier={publicMembershipTier(user.plan)}
           className={proximityRingClassName(level)}
         />
         <PresenceDot level={level} />
@@ -1033,6 +1035,7 @@ function ActiveNowStrip({
                     src={friend.avatarUrl}
                     size="md"
                     decorative
+                    membershipTier={publicMembershipTier(friend.plan)}
                     className={proximityRingClassName(level)}
                   />
                   <span className="absolute bottom-0.5 right-0.5 z-[2] h-3 w-3 rounded-full border-2 border-background bg-emerald-500" aria-hidden="true" />

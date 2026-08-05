@@ -30,7 +30,16 @@ describe("Journey integrations", () => {
     const home = readFileSync("components/dashboard/dashboard-page.tsx", "utf8");
     expect(profile).toContain('variant="profile"');
     expect(home).toContain('variant="home"');
-    expect(readFileSync("components/journey/journey-progress.tsx", "utf8")).toContain("Continue Your Journey");
+    // The home variant renders the current step and its progress. This used to
+    // pin the "Continue Your Journey" eyebrow, but that label was removed — the
+    // card sits directly under Welcome, so it restated context the position
+    // already gave. Assert the variant exists and shows real step state rather
+    // than pinning copy, which changes for design reasons and is not the thing
+    // this test is protecting.
+    const journeyProgress = readFileSync("components/journey/journey-progress.tsx", "utf8");
+    expect(journeyProgress).toContain('variant === "home"');
+    expect(journeyProgress).toContain("currentStep.title");
+    expect(journeyProgress).toContain("% Complete");
   });
 
   it("replays only a server-validated published walkthrough", () => {

@@ -17,6 +17,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/auth/form-field";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
+import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
@@ -497,7 +498,13 @@ function EventDetailsModal({
                   key={muddy.userId}
                   className="flex items-center gap-2 rounded-full border border-border/70 bg-background/60 py-1 pl-1 pr-3"
                 >
-                  <GlowAvatar name={muddy.displayName} src={muddy.avatarUrl} size="sm" reducedMotion={reducedMotion} />
+                  <GlowAvatar
+                    name={muddy.displayName}
+                    src={muddy.avatarUrl}
+                    size="sm"
+                    reducedMotion={reducedMotion}
+                    membershipTier={publicMembershipTier(muddy.plan)}
+                  />
                   <span className="text-xs font-medium">{muddy.displayName}</span>
                   <PremiumPlanBadge plan={muddy.plan} compact />
                 </div>

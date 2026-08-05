@@ -6,6 +6,8 @@ import {
   type SafeNearbyFriend
 } from "@/lib/proximity/backend";
 import { guardFeature } from "@/lib/admin/enforcement";
+import { loadEffectivePlansForUsers } from "@/lib/billing/service";
+import { publicMembershipTier, type PublicMembershipTier } from "@/lib/billing/premium-identity";
 import { createNearbyNotificationsIfAllowed } from "@/lib/notifications/server";
 import { resolveFeatureDeniedIds } from "@/lib/social/permissions";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
@@ -216,6 +218,23 @@ export async function GET(request: Request) {
       .map((subscription) => subscription.user_id)
   );
 
+  // Effective public tier per friend, for the avatar identity ring.
+  //
+  // Resolved through the canonical loader, NOT from subscriptionsResult
+  // above: that raw query only sees paid subscription rows, so it would miss
+  // trial, earned and admin-granted access and would ignore expiry. It also
+  // cannot distinguish plus from pro. loadEffectivePlansForUsers applies the
+  // full paid -> trial -> earned precedence and expiry rules.
+  //
+  // Scoped to friendIds, which is already the authorised set — this cannot
+  // widen who appears in Nearby, only annotate whoever was going to appear.
+  const membershipTierByUserId = new Map<string, PublicMembershipTier>(
+    [...(await loadEffectivePlansForUsers(admin, friendIds))].map(([userId, plan]) => [
+      userId,
+      publicMembershipTier(plan)
+    ])
+  );
+
   const statusByUserId = new Map(
     (statusesResult.data ?? []).map((status) => [status.user_id, status])
   );
@@ -238,6 +257,7 @@ export async function GET(request: Request) {
     friendIds: visibleFriendIds,
     blockedIds,
     premiumUserIds,
+    membershipTierByUserId,
     locationByUserId,
     profileByUserId,
     statusByUserId

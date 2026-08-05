@@ -1,13 +1,16 @@
 "use client";
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   Bell,
   CalendarCheck2,
+  CalendarDays,
   CircleDollarSign,
+  CirclePlus,
   Compass,
   Gauge,
   Hand,
@@ -21,6 +24,7 @@ import {
   Plus,
   Settings,
   UserRound,
+  Users,
   Users2,
   UsersRound
 } from "lucide-react";
@@ -106,6 +110,7 @@ const SECONDARY_HREFS = ["/plans", "/moments", "/events", "/groups", "/discover"
  * it to decide whether to render at all — so the two can never drift apart.
  */
 const PAGES_WITH_OWN_HEADER = [
+  "/dashboard",
   "/notifications",
   "/profile",
   "/settings",
@@ -238,7 +243,7 @@ export function AppShell({
     // --app-header-height on <main> below) or, for pages with their own
     // in-page header, by <main>'s own env(safe-area-inset-top) padding — never
     // both, and never as a blanket guess applied regardless of route.
-    <div className="flex min-h-[100svh] min-h-[100dvh] flex-col bg-background pb-[calc(88px+env(safe-area-inset-bottom))] dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]">
+    <div className="flex min-h-[100svh] min-h-[100dvh] flex-col bg-background pb-[calc(96px+env(safe-area-inset-bottom))] dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]">
       <a
         href="#app-main-content"
         className="focus-ring sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:shadow-lg"
@@ -294,7 +299,7 @@ export function AppShell({
         </main>
         </div>
       </div>
-      <MobileNav navigationItems={visibleNavigationItems} unreadCount={unreadCount} />
+      <MobileNav />
     </div>
   );
 }
@@ -751,16 +756,21 @@ function AppHeader({
   );
 }
 
-function MobileAccountMenu({
+export function MobileAccountMenu({
   currentUsername,
   currentAvatarUrl,
   showAdminLink,
-  pathname
+  pathname,
+  trigger,
+  align = "end"
 }: {
   currentUsername: string | null;
   currentAvatarUrl: string | null;
   showAdminLink: boolean;
   pathname: string;
+  /** Overrides the default avatar-circle trigger (e.g. a hamburger icon). */
+  trigger?: ReactNode;
+  align?: "start" | "end";
 }) {
   const [open, setOpen] = useState(false);
   // NO useDismissOnBack here. This menu's items are <Link>s, and that hook's
@@ -776,21 +786,23 @@ function MobileAccountMenu({
   return (
     <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger asChild>
-        <button
-          type="button"
-          aria-label="Account"
-          title="Account"
-          className="focus-ring grid h-11 w-11 place-items-center rounded-full border border-border/70"
-        >
-          <span className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-secondary text-sm font-semibold text-foreground dark:bg-white/[0.06]">
-            <AccountAvatar src={currentAvatarUrl} initial={initial} />
-          </span>
-        </button>
+        {trigger ?? (
+          <button
+            type="button"
+            aria-label="Account"
+            title="Account"
+            className="focus-ring grid h-11 w-11 place-items-center rounded-full border border-border/70"
+          >
+            <span className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-secondary text-sm font-semibold text-foreground dark:bg-white/[0.06]">
+              <AccountAvatar src={currentAvatarUrl} initial={initial} />
+            </span>
+          </button>
+        )}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           side="bottom"
-          align="end"
+          align={align}
           sideOffset={8}
           collisionPadding={8}
           className={FLYOUT_CONTENT_CLASSNAME}
@@ -895,64 +907,149 @@ const createActions: Array<{
   }
 ];
 
-// Mobile-only labels for the five primary tabs. The desktop sidebar keeps the
-// navigationItems labels (Friends, Notifications) for its tooltips; the
-// product's mobile bottom bar uses the social-facing names.
-const MOBILE_NAV_LABELS: Record<string, string> = {
-  "/dashboard": "Home",
-  "/friends": "Muddies",
-  "/notifications": "Pulse",
-  "/messages": "Messages",
-  "/plans": "Plans"
-};
+/**
+ * The app's single mobile bottom bar. Five fixed slots, identical for every
+ * user — Home, Muddies, a raised Create button, Plans, Me:
+ *
+ *  - One nav, no variants. There used to be a separate "first-time" bar with
+ *    a different tab set, which meant the bar a user learned on day one was
+ *    not the bar they had on day thirty. Position is now stable for life.
+ *  - Create is promoted for everyone. It used to exist only in the first-time
+ *    bar, so established users — the ones actually creating plans and
+ *    moments — had no primary creation affordance at all.
+ *  - Pulse and Messages moved out. They are notification streams rather than
+ *    places you browse, and both stay one tap away in the Home header, which
+ *    also carries their unread badges.
+ *  - "Me" is the personal hub entry. It points at the existing /profile
+ *    route; no new or unsupported destination is introduced here.
+ *
+ * Lucide icons only, one size (26px) and one stroke weight, so the bar reads
+ * as a single system. The active tab gets a filled pill plus its label; the
+ * rest stay icon-only, which keeps the bar quiet and the current location
+ * unmistakable.
+ */
+const MOBILE_TABS: Array<{ href: Route; label: string; icon: LucideIcon }> = [
+  { href: "/dashboard", label: "Home", icon: Home },
+  { href: "/friends", label: "Muddies", icon: Users },
+  { href: "/plans", label: "Plans", icon: CalendarDays },
+  { href: "/profile", label: "Me", icon: UserRound }
+];
 
-function MobileNav({ navigationItems, unreadCount }: { navigationItems: NavigationItem[]; unreadCount: number }) {
+function MobileNav() {
   const pathname = usePathname();
-  const mobileItems = navigationItems
-    .filter((item) => item.href !== "/admin" && item.href !== "/billing")
-    .slice(0, 5);
+  const [createOpen, setCreateOpen] = useState(false);
+
+  // Create sits in the middle; the four destinations split around it.
+  const leftTabs = MOBILE_TABS.slice(0, 2);
+  const rightTabs = MOBILE_TABS.slice(2);
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl dark:border-white/10 dark:bg-[#111112]/95 md:hidden"
+      className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] md:hidden"
       aria-label="Mobile navigation"
     >
-      <ul className="mx-auto flex w-full max-w-[30rem] items-stretch justify-between px-1">
-        {mobileItems.map((item) => {
-          const isActive = isNavigationItemActive(item, pathname);
-          const label = MOBILE_NAV_LABELS[item.href] ?? item.label;
-          const ariaLabel =
-            item.href === "/notifications"
-              ? notificationAriaLabel(label, unreadCount)
-              : label;
+      <ul className="mx-auto flex w-full max-w-[26rem] items-stretch justify-between rounded-full border border-border/70 bg-background/95 px-1.5 shadow-[0_8px_28px_hsl(var(--shadow)/0.16)] backdrop-blur-xl dark:border-white/10 dark:bg-[#151517]/95">
+        {leftTabs.map((tab) => (
+          <MobileNavTab key={tab.href} tab={tab} pathname={pathname} />
+        ))}
 
-          return (
-            <li key={item.href} className="flex-1">
-              <Link
-                href={item.href}
-                prefetch={false}
-                // Stable targeting contract for guided tours. Derived from the
-                // route, so a tour step never depends on a fragile positional
-                // selector like :nth-child.
-                data-tour-id={`nav-${item.href.slice(1)}`}
-                aria-label={ariaLabel}
-                aria-current={isActive ? "page" : undefined}
-                className={cn(
-                  "safe-motion flex min-h-[56px] flex-col items-center justify-center gap-1 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                  isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                )}
+        <li className="flex-1 py-2">
+          <DropdownMenu.Root open={createOpen} onOpenChange={setCreateOpen}>
+            <DropdownMenu.Trigger asChild>
+              <button
+                type="button"
+                aria-label="Create"
+                title="Create"
+                data-tour-id="nav-create"
+                className="safe-motion flex min-h-[56px] w-full flex-col items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
-                <span className="relative">
-                  <NavItemIcon item={item} lucideClass="h-6 w-6" size={24} isActive={isActive} fillActive />
-                  {item.href === "/notifications" ? <UnreadBadge count={unreadCount} /> : null}
+                <span className="safe-motion grid h-12 w-12 -translate-y-2 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_24px_hsl(var(--primary)/0.4)] transition-transform duration-200 ease-out active:scale-90 motion-reduce:active:scale-100">
+                  <CirclePlus className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
                 </span>
-                <span className="text-[11px] font-medium leading-none">{label}</span>
-              </Link>
-            </li>
-          );
-        })}
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                side="top"
+                align="center"
+                sideOffset={16}
+                collisionPadding={8}
+                className={FLYOUT_CONTENT_CLASSNAME}
+              >
+                {createActions.map((action) => (
+                  <DropdownMenu.Item
+                    key={action.title}
+                    asChild
+                    className="focus-ring safe-motion flex w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2.5 text-left outline-none data-[highlighted]:bg-secondary"
+                  >
+                    <Link href={action.href} prefetch={false}>
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                        <FeatureIcon feature={action.featureIcon} size={20} decorative />
+                      </span>
+                      <span className="text-left">
+                        <span className="block text-sm font-semibold">{action.title}</span>
+                        <span className="block text-xs text-muted-foreground">{action.description}</span>
+                      </span>
+                    </Link>
+                  </DropdownMenu.Item>
+                ))}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+        </li>
+
+        {rightTabs.map((tab) => (
+          <MobileNavTab key={tab.href} tab={tab} pathname={pathname} />
+        ))}
       </ul>
     </nav>
+  );
+}
+
+function MobileNavTab({
+  tab,
+  pathname
+}: {
+  tab: { href: Route; label: string; icon: LucideIcon };
+  pathname: string;
+}) {
+  // Reuses the shared route-matching rule so a tab stays lit on nested
+  // routes (/friends/someone, /plans/123) exactly like the desktop sidebar.
+  const isActive = isNavigationItemActive({ href: tab.href, label: tab.label, icon: tab.icon } as NavigationItem, pathname);
+  const Icon = tab.icon;
+
+  return (
+    <li className="flex-1 py-2">
+      <Link
+        href={tab.href}
+        prefetch={false}
+        // Stable targeting contract for guided tours. Derived from the route,
+        // so a tour step never depends on a fragile positional selector.
+        data-tour-id={`nav-${tab.href.slice(1)}`}
+        aria-label={tab.label}
+        aria-current={isActive ? "page" : undefined}
+        className={cn(
+          "safe-motion flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+          "active:scale-95 motion-reduce:active:scale-100"
+        )}
+      >
+        <span
+          className={cn(
+            "grid h-10 w-10 place-items-center rounded-full transition-colors duration-200 ease-out motion-reduce:transition-none",
+            isActive ? "bg-primary/12 text-primary" : "text-muted-foreground"
+          )}
+        >
+          <Icon
+            className="h-[26px] w-[26px]"
+            strokeWidth={isActive ? 2.25 : 1.75}
+            aria-hidden="true"
+          />
+        </span>
+        {isActive ? (
+          <span className="text-[10px] font-medium leading-none tracking-wide text-primary">{tab.label}</span>
+        ) : null}
+      </Link>
+    </li>
   );
 }
 

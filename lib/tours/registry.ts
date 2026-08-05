@@ -151,7 +151,10 @@ const target = (id: TourTargetId, label: string, route: string, description: str
 
 export const TOUR_TARGETS: TourTargetOption[] = [
   target(TOUR_TARGET_IDS.HOME_NEARBY, "Nearby Muddies", "/dashboard", "Approved Muddies currently nearby."),
-  target(TOUR_TARGET_IDS.HOME_VISIBILITY, "Visibility controls", "/dashboard", "Current visibility and privacy actions."),
+  // Both now live inside the Quick Controls sheet. HOME_VISIBILITY sits on
+  // the sheet's trigger in the Home header (the control it names moved in
+  // there); HOME_STATUS sits on the Current Status row within the sheet.
+  target(TOUR_TARGET_IDS.HOME_VISIBILITY, "Quick controls", "/dashboard", "Visibility, status, nearby and appearance controls."),
   target(TOUR_TARGET_IDS.HOME_STATUS, "Status", "/dashboard", "Availability status shown to approved Muddies."),
   target(TOUR_TARGET_IDS.HOME_QUICK_ACTIONS, "Quick actions", "/dashboard", "The Home feature launcher."),
   target(TOUR_TARGET_IDS.HOME_UPCOMING_PLAN, "Upcoming plan", "/dashboard", "The next social plan, when present."),
@@ -245,11 +248,14 @@ export const TOUR_TARGETS: TourTargetOption[] = [
   target(TOUR_TARGET_IDS.BILLING_PLANS, "Subscription plans", "/billing", "Free, Buddy Plus, and Buddy Pro from canonical billing data."),
   target(TOUR_TARGET_IDS.BILLING_ACTIVITY, "Billing activity", "/billing", "Real subscription activity."),
 
+  // The mobile bottom bar's five slots. Pulse and Messages are no longer
+  // tabs — they moved to the Home header — so they are not listed here; a
+  // tour step cannot spotlight a tab that does not exist.
   { id: "nav-dashboard", label: "Home tab", route: "/dashboard", description: "App navigation: Home." },
   { id: "nav-friends", label: "Muddies tab", route: "/friends", description: "App navigation: Muddies." },
-  { id: "nav-notifications", label: "Pulse tab", route: "/notifications", description: "App navigation: Pulse." },
-  { id: "nav-messages", label: "Messages tab", route: "/messages", description: "App navigation: Messages." },
+  { id: "nav-create", label: "Create button", route: "/dashboard", description: "App navigation: the centre Create action." },
   { id: "nav-plans", label: "Plans tab", route: "/plans", description: "App navigation: Plans." },
+  { id: "nav-profile", label: "Me tab", route: "/profile", description: "App navigation: Me." },
   { id: "nav-hangout-mode", label: "Hangout tab", route: "/hangout-mode", description: "App navigation: Hangout Mode." },
   { id: "nav-discover", label: "Socialize tab", route: "/discover", description: "App navigation: Socialize." },
   { id: "nav-moments", label: "Moments tab", route: "/moments", description: "App navigation: Moments." }

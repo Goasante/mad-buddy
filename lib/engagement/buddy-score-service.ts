@@ -1,6 +1,6 @@
 import "server-only";
 
-import { BUDDY_SCORE_RULES, BUDDY_SCORE_RULE_VERSION, buddyScoreProgress, calculateBuddyScoreTotal, scoreEventDefinition, type BuddyScoreEventType, type BuddyScoreLevel } from "@/lib/engagement/buddy-score";
+import { BUDDY_SCORE_RULES, BUDDY_SCORE_RULE_VERSION, buddyScoreProgress, calculateBuddyScoreTotal, resolveBuddyScoreLevel, scoreEventDefinition, type BuddyScoreEventType, type BuddyScoreLevel } from "@/lib/engagement/buddy-score";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -94,6 +94,22 @@ export async function loadBuddyScore(admin: Admin, userId: string): Promise<Budd
     recentActivity: activities.slice(0, 12),
     earnedReward: reward ? { plan: reward.reward_plan, status: reward.status as "active" | "grace", expiresAt: reward.expires_at, graceEndsAt: reward.grace_ends_at } : null
   };
+}
+
+/**
+ * Read-only Buddy Score level, for surfaces that want to *display* the level
+ * without paying for a full loadBuddyScore().
+ *
+ * Deliberately does NOT call reconcileBuddyScore(): that runs seven queries
+ * and INSERTs ledger rows, which is far too much work — and a write — for a
+ * label. This reads the existing ledger and resolves the level from it, so a
+ * display surface can never mutate score state. The number is whatever the
+ * ledger already says; /buddy-score remains the canonical page that
+ * reconciles and shows the full breakdown.
+ */
+export async function loadBuddyScoreLevel(admin: Admin, userId: string): Promise<BuddyScoreLevel> {
+  const { data } = await admin.from("buddy_score_ledger").select("points_delta").eq("user_id", userId);
+  return resolveBuddyScoreLevel(calculateBuddyScoreTotal(data ?? []));
 }
 
 export async function reconcileBuddyScoreTotal(admin: Admin, userId: string) {

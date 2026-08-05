@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { legalContact } from "@/content/privacy-policy";
-import { FEATURE_ICON_CREDITS } from "@/lib/icons/feature-icons";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
@@ -344,31 +343,6 @@ export default function TermsPage() {
             </section>
           ))}
         </div>
-
-        <section className="mt-12 border-t border-border/70 pt-8">
-          <h2 className="text-lg font-semibold">Icon credits</h2>
-          <p className="mt-2 text-sm leading-7 text-muted-foreground">
-            Some icons used within Mad Buddy are provided by Flaticon under their applicable licence:
-          </p>
-          <ul className="mt-3 space-y-1.5 text-sm text-muted-foreground">
-            {FEATURE_ICON_CREDITS.map((credit) => (
-              <li key={credit.label}>
-                {credit.label} icons created by {credit.author} –{" "}
-                <a
-                  href={credit.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-foreground underline decoration-border underline-offset-2 hover:text-accent"
-                >
-                  Flaticon
-                </a>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-sm leading-7 text-muted-foreground">
-            All icon rights remain with their respective creators and Flaticon in accordance with their licensing terms.
-          </p>
-        </section>
 
         <div className="mt-12 flex justify-center gap-4 border-t border-border/70 pt-6 text-sm">
           <Link href="/" className="font-semibold hover:text-accent">Home</Link>

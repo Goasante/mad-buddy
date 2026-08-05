@@ -1,12 +1,34 @@
+import {
+  Bell,
+  CalendarCheck2,
+  Compass,
+  Hand,
+  HandHeart,
+  Images,
+  Moon,
+  Send,
+  ShieldCheck,
+  UserPlus,
+  Users2,
+  type LucideIcon
+} from "lucide-react";
+
 /**
  * Central feature-icon mapping.
  *
- * One source of truth for the owner-selected Flaticon feature assets in
- * public/icons/features/, so components reference a feature by key instead of
- * importing raw asset paths. The files are local project assets — never
- * hotlinked or fetched from Flaticon. The base filenames on disk are used
- * verbatim (some are singular: event, group, invite, plan; safeArrival maps to
- * arrival). Attribution lives on the legal page (see FEATURE_ICON_CREDITS).
+ * One source of truth so components reference a feature by key instead of
+ * importing an icon per call site.
+ *
+ * These were previously third-party Flaticon raster assets rendered as
+ * CSS masks. They are now Lucide components, for three reasons:
+ *   1. As masked PNGs they could not share Lucide's stroke weight, so every
+ *      surface mixing the two systems read as two different icon sets.
+ *   2. They were rendered at seven different sizes across nine call sites.
+ *   3. Being raster, they blurred at sizes their source bitmap did not match.
+ *
+ * The key-based indirection is kept deliberately: call sites still say what a
+ * thing IS ("wave", "safeArrival") rather than which glyph to draw, so the
+ * visual language stays changeable from this one file.
  */
 
 export type FeatureIconKey =
@@ -23,26 +45,36 @@ export type FeatureIconKey =
   | "ping"
   | "wave";
 
-export type FeatureIconSource = { src: string; label: string };
+export type FeatureIconSource = { icon: LucideIcon; label: string };
 
-/** Maps each feature key to the exact local asset that exists on disk. */
+/**
+ * Chosen for meaning, not resemblance to the old asset:
+ *  - moments      Images        — a temporary shared picture
+ *  - safeArrival  ShieldCheck   — arrived safely, confirmed
+ *  - hangout      HandHeart     — an open, friendly offer to meet
+ *  - events       CalendarCheck2 — something scheduled
+ *  - groups       Users2        — more than one person
+ *  - socialize    Compass       — discovery, finding people
+ *  - invites      UserPlus      — bringing someone in
+ *  - reminders    Bell          — a nudge
+ *  - focus        Moon          — quiet hours / do not disturb
+ *  - plans        CalendarCheck2 — a committed plan
+ *  - ping         Send          — reaching out to one person
+ *  - wave         Hand          — the literal gesture
+ */
 export const FEATURE_ICON_SOURCES: Record<FeatureIconKey, FeatureIconSource> = {
-  moments: { src: "/icons/features/moments.png", label: "Moments" },
-  safeArrival: { src: "/icons/features/arrival.png", label: "Safe Arrival" },
-  // Two people linking up, replacing the previous glyph. Authored in-project as
-  // an SVG rather than pulled from another icon library; the mask rendering in
-  // FeatureIcon works identically for SVG and PNG, so nothing else changes and
-  // every Hangout surface picks it up from this one mapping.
-  hangout: { src: "/icons/features/hangout-linkup.svg", label: "Hangout" },
-  events: { src: "/icons/features/event.png", label: "Events" },
-  groups: { src: "/icons/features/group.png", label: "Groups" },
-  socialize: { src: "/icons/features/socialize.png", label: "Socialize" },
-  invites: { src: "/icons/features/invite.png", label: "Invites" },
-  reminders: { src: "/icons/features/reminders.png", label: "Reminders" },
-  focus: { src: "/icons/features/focus.png", label: "Focus" },
-  plans: { src: "/icons/features/plan.png", label: "Plans" },
-  ping: { src: "/icons/features/ping.png", label: "Ping" },
-  wave: { src: "/icons/features/wave.png", label: "Wave" }
+  moments: { icon: Images, label: "Moments" },
+  safeArrival: { icon: ShieldCheck, label: "Safe Arrival" },
+  hangout: { icon: HandHeart, label: "Hangout" },
+  events: { icon: CalendarCheck2, label: "Events" },
+  groups: { icon: Users2, label: "Groups" },
+  socialize: { icon: Compass, label: "Socialize" },
+  invites: { icon: UserPlus, label: "Invites" },
+  reminders: { icon: Bell, label: "Reminders" },
+  focus: { icon: Moon, label: "Focus" },
+  plans: { icon: CalendarCheck2, label: "Plans" },
+  ping: { icon: Send, label: "Ping" },
+  wave: { icon: Hand, label: "Wave" }
 };
 
 export const FEATURE_ICON_KEYS = Object.keys(FEATURE_ICON_SOURCES) as FeatureIconKey[];
@@ -50,21 +82,3 @@ export const FEATURE_ICON_KEYS = Object.keys(FEATURE_ICON_SOURCES) as FeatureIco
 export function featureIconSource(feature: FeatureIconKey): FeatureIconSource {
   return FEATURE_ICON_SOURCES[feature];
 }
-
-/** Required Flaticon attribution, rendered on the legal/credits surface. */
-export const FEATURE_ICON_CREDITS: { label: string; author: string; href: string }[] = [
-  { label: "Gallery", author: "Azland Studio", href: "https://www.flaticon.com/free-icons/gallery" },
-  { label: "Arrival Time", author: "I3oundless", href: "https://www.flaticon.com/free-icons/arrival-time" },
-  // Hangout is no longer a Flaticon asset — it is the in-project
-  // hangout-linkup.svg — so its third-party credit is removed rather than left
-  // attributing an author whose work is not being used.
-  { label: "Event", author: "Magnific", href: "https://www.flaticon.com/free-icons/event" },
-  { label: "Members", author: "KP Arts", href: "https://www.flaticon.com/free-icons/members" },
-  { label: "Social Media Management", author: "mia elysia", href: "https://www.flaticon.com/free-icons/social-media-management" },
-  { label: "Add User", author: "uicon", href: "https://www.flaticon.com/free-icons/add-user" },
-  { label: "Notification", author: "Aldo Cervantes", href: "https://www.flaticon.com/free-icons/notification" },
-  { label: "Eye", author: "kmg design", href: "https://www.flaticon.com/free-icons/eye" },
-  { label: "Business Plan", author: "ekays.dsgn", href: "https://www.flaticon.com/free-icons/business-plan" },
-  { label: "Send", author: "Tanah Basah", href: "https://www.flaticon.com/free-icons/send" },
-  { label: "Wave Hand", author: "ekays.dsgn", href: "https://www.flaticon.com/free-icons/wave-hand" }
-];

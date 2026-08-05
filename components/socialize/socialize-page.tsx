@@ -558,7 +558,7 @@ export function SocializePage({
       {previewPerson ? (
         <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label={`Connect with ${capitalize(previewPerson.displayName || previewPerson.username)}`}>
           <button type="button" aria-label="Close" className="absolute inset-0 bg-black/45" onClick={() => setPreviewPerson(null)} />
-          <div className="absolute bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 w-[calc(100%-1.5rem)] max-w-[400px] -translate-x-1/2 rounded-2xl border border-border/70 bg-card p-3 shadow-[0_18px_60px_hsl(var(--shadow)/0.3)] md:bottom-6">
+          <div className="absolute bottom-[calc(96px+env(safe-area-inset-bottom))] left-1/2 w-[calc(100%-1.5rem)] max-w-[400px] -translate-x-1/2 rounded-2xl border border-border/70 bg-card p-3 shadow-[0_18px_60px_hsl(var(--shadow)/0.3)] md:bottom-6">
             <div className="flex items-center gap-3">
               <UserAvatar
                 src={previewPerson.avatarUrl}
@@ -626,7 +626,7 @@ export function SocializePage({
         <div
           role="status"
           aria-live="polite"
-          className="toast-in fixed bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 z-[60] w-[calc(100%-2rem)] max-w-[320px] -translate-x-1/2 md:bottom-6"
+          className="toast-in fixed bottom-[calc(96px+env(safe-area-inset-bottom))] left-1/2 z-[60] w-[calc(100%-2rem)] max-w-[320px] -translate-x-1/2 md:bottom-6"
         >
           <div className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-[#1b1b1d] px-4 py-3 text-white shadow-lg">
             {toast.error ? (
