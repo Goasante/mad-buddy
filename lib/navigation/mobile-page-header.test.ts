@@ -58,22 +58,74 @@ describe("mobile page header controls", () => {
 describe("mobile page header Add Muddy badge", () => {
   it("shows the badge only when requests are pending", () => {
     expect(header).toContain("const hasRequests = incomingRequestCount > 0;");
-    expect(header).toContain("{hasRequests ? (");
+    expect(header).toContain("{hasRequests ? <HeaderBadge count={incomingRequestCount} /> : null}");
   });
 
   it("caps the displayed count at 9+", () => {
-    expect(header).toContain('incomingRequestCount > 9 ? "9+" : incomingRequestCount');
+    expect(header).toContain('count > 9 ? "9+" : count');
   });
 
   it("is documented as pending incoming requests, never a notification count", () => {
     expect(header).toContain("Never a notification count");
-    // The header takes a count as a prop; it cannot read a notifications store.
-    expect(header).not.toContain("unreadCount");
-    expect(header).not.toContain("notificationCount");
   });
 
   it("announces the pending count to screen readers", () => {
     expect(header).toContain("pending ${incomingRequestCount === 1 ? \"request\" : \"requests\"}");
+  });
+});
+
+describe("mobile page header notification badge", () => {
+  it("shows the Bell badge only when there are unread notifications", () => {
+    expect(header).toContain("const hasUnread = unreadNotificationCount > 0;");
+    expect(header).toContain("{hasUnread ? <HeaderBadge count={unreadNotificationCount} /> : null}");
+  });
+
+  it("takes the count as a prop rather than counting anything itself", () => {
+    expect(header).toContain("unreadNotificationCount?: number");
+    // No fetching, no store access — the header only renders what it is given.
+    expect(header).not.toContain("fetch(");
+    expect(header).not.toContain("useEffect(() => {\n    void");
+  });
+
+  it("keeps the two badge streams separate and never sums them", () => {
+    expect(header).toContain("never be merged or summed");
+    expect(header).not.toContain("incomingRequestCount + unreadNotificationCount");
+    expect(header).not.toContain("unreadNotificationCount + incomingRequestCount");
+  });
+
+  it("announces the unread count accessibly", () => {
+    expect(header).toContain(
+      "unread ${unreadNotificationCount === 1 ? \"notification\" : \"notifications\"}"
+    );
+  });
+
+  it("caps both badges through one shared component, so they cannot diverge", () => {
+    expect(header).toContain("function HeaderBadge(");
+    const usages = header.match(/<HeaderBadge count=/g) ?? [];
+    expect(usages.length).toBe(2);
+  });
+
+  it("keeps the badge inside the hit target so it cannot clip at 320px", () => {
+    expect(header).toContain("-right-0.5 -top-0.5");
+  });
+
+  it("reads the canonical shell count on Home rather than a second counter", () => {
+    const home = read("components/dashboard/dashboard-page.tsx");
+    expect(home).toContain("useUnreadNotifications()");
+    expect(home).toContain("unreadNotificationCount={unreadNotificationCount}");
+    // Home must not fetch the count itself.
+    expect(home).not.toContain("/api/notifications/unread-count");
+  });
+
+  it("resolves the count once in the shell and shares it by context", () => {
+    const shell = read("components/app-shell/app-shell.tsx");
+    expect(shell).toContain("useUnreadNotificationCount(initialUnreadCount)");
+    expect(shell).toContain("<UnreadNotificationProvider count={unreadCount}>");
+    // The fetch/poll/broadcast logic lives in exactly one place.
+    expect(shell).not.toContain("/api/notifications/unread-count");
+    expect(read("hooks/use-unread-notification-count.ts")).toContain(
+      "/api/notifications/unread-count"
+    );
   });
 });
 

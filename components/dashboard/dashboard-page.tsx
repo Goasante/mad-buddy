@@ -32,6 +32,8 @@ import { createPortal } from "react-dom";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { updateVisibilityStatusAction } from "@/app/(app)/settings-actions";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
+import { useUnreadNotifications } from "@/hooks/unread-notification-context";
+import { usePullRefreshListener } from "@/components/ui/pull-to-refresh";
 import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
 import { HomeSettingsSheet } from "@/components/dashboard/home-settings-sheet";
 import { QuickControlsSheet } from "@/components/dashboard/quick-controls-sheet";
@@ -58,8 +60,8 @@ import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/li
 import type { ActivityType, AvailabilityType, SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
-import { JourneyProgress } from "@/components/journey/journey-progress";
-import type { JourneyData } from "@/lib/journey/journey";
+import { SmartCardHero } from "@/components/journey/smart-card";
+import type { SmartCard } from "@/lib/smart-card/smart-card";
 
 type DashboardFriend = {
   friendId: string;
@@ -123,7 +125,12 @@ type DashboardPageContentProps = {
     invitations: SafeArrivalJourney[];
   } | null;
   hiddenQuickActionHrefs?: string[];
-  journey?: JourneyData | null;
+  /**
+   * The one card Home renders, already selected server-side by the Smart Card
+   * engine. Home does not choose between cards and does not know the priority
+   * rules — it renders whatever arrives.
+   */
+  smartCard?: SmartCard | null;
   /**
    * Canonical first-time signal, computed server-side from real Journey
    * progress (see app/(app)/dashboard/page.tsx) — never inferred client-side.
@@ -199,7 +206,7 @@ export function DashboardPageContent({
   profileReminder = null,
   safeArrival = null,
   hiddenQuickActionHrefs = [],
-  journey = null,
+  smartCard = null,
   isFirstTimeUser = false,
   currentUsername = null,
   currentAvatarUrl = null,
@@ -217,6 +224,9 @@ export function DashboardPageContent({
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [settingsSheetOpen, setSettingsSheetOpen] = useState(false);
   const [quickControlsOpen, setQuickControlsOpen] = useState(false);
+  // The shell's canonical unread count, read from context — not a second
+  // counter, not another poller, and not derived from anything on this page.
+  const unreadNotificationCount = useUnreadNotifications();
   const [isPending, startTransition] = useTransition();
   const locationUpdateInFlightRef = useRef(false);
   const nearbyRefreshRef = useRef<Promise<void> | null>(null);
@@ -303,6 +313,12 @@ export function DashboardPageContent({
     startTransition(async () => refresh);
     return refresh;
   }, []);
+
+  // Pull-to-refresh reuses THIS action — the same one Quick Controls'
+  // "Refresh Nearby" calls. The shell owns the gesture and the indicator and
+  // re-runs the server render; Home only says what client state to refetch,
+  // so there is exactly one refresh implementation and no double fetch.
+  usePullRefreshListener(loadNearbyFriends);
 
   const updatePrivateLocation = useCallback(() => {
     if (locationUpdateInFlightRef.current) return;
@@ -455,6 +471,9 @@ export function DashboardPageContent({
         onOpenMenu={() => setSettingsSheetOpen(true)}
         onOpenQuickControls={() => setQuickControlsOpen(true)}
         incomingRequestCount={incomingRequestCount}
+        // Two independent streams: unread notifications on the Bell, pending
+        // incoming Muddy requests on Add Muddy. Never summed.
+        unreadNotificationCount={unreadNotificationCount}
         // The visibility control moved into Quick Controls, and a shipped
         // walkthrough step still points at this id, so it stays attached to
         // wherever that control actually lives.
@@ -462,8 +481,10 @@ export function DashboardPageContent({
       />
 
       {/* A focused, centred column — Home answers "who's nearby?" at a glance, so
-          it stays narrow on every width rather than spreading into a dashboard. */}
-      <div className="mx-auto w-full max-w-[560px] space-y-5 pt-4">
+          it stays narrow on every width rather than spreading into a dashboard.
+          The header above already ends in its own pb-3, so this only adds the
+          small remainder rather than a second full gap. */}
+      <div className="mx-auto w-full max-w-[560px] space-y-5 pt-1">
         <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
         <PendingInvitePrompt />
 
@@ -475,16 +496,18 @@ export function DashboardPageContent({
           <h1 className="truncate text-2xl font-bold leading-tight tracking-tight">Welcome</h1>
           {/* Deliberately a step smaller than the body scale so the greeting
               itself stays clearly dominant. */}
-          <p className="mt-1 text-[0.8125rem] leading-[1.45] text-muted-foreground">{journeySubtitle(journey)}</p>
+          <p className="mt-1 text-[0.8125rem] leading-[1.45] text-muted-foreground">
+            {greetingSubtitle(displayName || null, new Date())}
+          </p>
         </div>
 
-        {/* HERO: Continue Your Journey — the main visual focal point, always
-            shown when a current step exists. profileReminder (below, near the
-            visibility card) is a smaller secondary nudge, not a replacement —
-            the two used to be mutually exclusive when "complete profile" was
-            the current step, which suppressed Home's hero for every brand-new
-            account. */}
-        {journey ? <JourneyProgress journey={journey} variant="home" /> : null}
+        {/* HERO: the Smart Card — Home's single canonical card and its main
+            visual focal point. There is always exactly one, never a carousel,
+            and it never disappears: the server picks the highest-priority
+            applicable card from the ordered provider list, and only the
+            content changes. profileReminder (below, near the visibility card)
+            is a smaller secondary nudge, not a replacement. */}
+        {smartCard ? <SmartCardHero card={smartCard} /> : null}
 
         {/* HERO: Nearby Muddies */}
         <NearbyHero
@@ -1179,41 +1202,23 @@ function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
 // ---------------------------------------------------------------------------
 
 /**
- * Contextual greeting subtitle, derived entirely from real Journey state —
- * never a fixed string. Rules, in priority order: journey finished; the
- * current step is specifically profile completion (the most common early
- * blocker, worth naming directly); close to the Trusted Buddy milestone;
- * otherwise a generic step-count nudge. journey === null (never loaded, or
- * signed out) falls back to the one static line, same as before.
+ * Greeting subtitle.
+ *
+ * This deliberately does NOT describe Journey progress any more. The Smart
+ * Card directly below is the canonical place where "what should I do next"
+ * is answered, and it says so in a full title, subtitle and CTA. When this
+ * line was also Journey-derived the two restated each other — the greeting
+ * said "one step from Trusted Buddy" immediately above a card whose title was
+ * that very step.
+ *
+ * So the greeting now carries orientation the card never does — who and when
+ * — and leaves the "what next" entirely to the card. The two complement
+ * rather than compete, whichever of the ten cards is showing.
  */
-const SMALL_NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five"];
-
-function stepWord(count: number): string {
-  return SMALL_NUMBER_WORDS[count] ?? String(count);
-}
-
-function journeySubtitle(journey: JourneyData | null): string {
-  if (!journey) return "Welcome to Mad Buddy.";
-  if (!journey.currentStep) return "You've completed your Mad Buddy journey.";
-
-  const remaining = journey.totalCount - journey.completedCount;
-  const trustedBuddyIndex = journey.steps.findIndex((step) => step.id === "reach_trusted_buddy");
-  const currentIndex = journey.steps.findIndex((step) => step.id === journey.currentStep!.id);
-  const stepsFromTrustedBuddy = trustedBuddyIndex - currentIndex;
-
-  if (journey.currentStep.id === "complete_profile") {
-    return "Complete your profile to start building your trusted circle.";
-  }
-  if (journey.completedCount === 0) {
-    return "Your journey has started — one step from your trusted circle.";
-  }
-  if (stepsFromTrustedBuddy === 1) {
-    return "You're one step away from Trusted Buddy.";
-  }
-  if (stepsFromTrustedBuddy > 1 && stepsFromTrustedBuddy <= 3) {
-    return `You're ${stepWord(stepsFromTrustedBuddy)} steps from Trusted Buddy.`;
-  }
-  return `${stepWord(remaining)} step${remaining === 1 ? "" : "s"} left to build your trusted circle.`;
+function greetingSubtitle(name: string | null, now: Date): string {
+  const hour = now.getHours();
+  const partOfDay = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  return name ? `${partOfDay}, ${name}.` : `${partOfDay}.`;
 }
 
 function toDashboardFriend(friend: NearbyFriendApiItem): DashboardFriend {

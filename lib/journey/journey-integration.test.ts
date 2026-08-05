@@ -25,21 +25,25 @@ describe("Journey integrations", () => {
     expect(page).not.toContain("Coming in the next milestone.");
   });
 
-  it("uses compact Journey summaries on Profile and Home", () => {
+  it("uses a compact Journey summary on Profile", () => {
     const profile = readFileSync("components/profile/profile-page.tsx", "utf8");
-    const home = readFileSync("components/dashboard/dashboard-page.tsx", "utf8");
     expect(profile).toContain('variant="profile"');
-    expect(home).toContain('variant="home"');
-    // The home variant renders the current step and its progress. This used to
-    // pin the "Continue Your Journey" eyebrow, but that label was removed — the
-    // card sits directly under Welcome, so it restated context the position
-    // already gave. Assert the variant exists and shows real step state rather
-    // than pinning copy, which changes for design reasons and is not the thing
-    // this test is protecting.
     const journeyProgress = readFileSync("components/journey/journey-progress.tsx", "utf8");
-    expect(journeyProgress).toContain('variant === "home"');
-    expect(journeyProgress).toContain("currentStep.title");
-    expect(journeyProgress).toContain("% Complete");
+    expect(journeyProgress).toContain('variant === "profile"');
+  });
+
+  it("surfaces the Journey on Home through the Smart Card engine", () => {
+    // Home no longer renders JourneyProgress directly. The Journey is now one
+    // of ten providers behind the single Smart Card, so this asserts the
+    // Journey still reaches Home — via the engine — rather than pinning a
+    // variant that the Smart Card replaced.
+    const home = readFileSync("components/dashboard/dashboard-page.tsx", "utf8");
+    expect(home).toContain("<SmartCardHero card={smartCard} />");
+
+    const providers = readFileSync("lib/smart-card/providers.ts", "utf8");
+    expect(providers).toContain("journey.currentStep.title");
+    expect(providers).toContain('id: "journey"');
+    expect(providers).toContain('id: "journey_complete"');
   });
 
   it("replays only a server-validated published walkthrough", () => {

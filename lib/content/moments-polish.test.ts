@@ -151,9 +151,13 @@ describe("pull-to-refresh is one reusable system", () => {
   });
 
   it("keeps content on screen while refreshing", () => {
-    // The indicator is absolutely positioned, so nothing below it shifts.
-    expect(ptr).toContain("absolute inset-x-0 top-0");
+    // The indicator is a FIXED overlay (previously absolute), so it occupies
+    // no document-flow height and nothing below it shifts. Children are
+    // rendered untransformed — a wrapper transform used to move the header
+    // with the pull and break sticky positioning inside it.
+    expect(ptr).toContain("pointer-events-none fixed inset-x-0");
     expect(ptr).toContain("{children}");
+    expect(ptr).not.toMatch(/transform: active \?/);
   });
 
   it("respects reduced motion", () => {

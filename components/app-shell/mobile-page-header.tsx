@@ -3,7 +3,26 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { Bell, Menu, MoreHorizontal, UserPlus } from "lucide-react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+
+/**
+ * True once the page has scrolled far enough that content is passing under
+ * the header. Drives the divider/shadow, which stays off at rest so the
+ * header reads as part of the page rather than a permanently stuck bar.
+ */
+function useHasScrolled(threshold = 4): boolean {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const read = () => setScrolled(window.scrollY > threshold);
+    read();
+    window.addEventListener("scroll", read, { passive: true });
+    return () => window.removeEventListener("scroll", read);
+  }, [threshold]);
+
+  return scrolled;
+}
 
 /**
  * The canonical mobile page header, shared by every primary screen.
@@ -30,6 +49,7 @@ export function MobilePageHeader({
   onOpenMenu,
   onOpenQuickControls,
   incomingRequestCount = 0,
+  unreadNotificationCount = 0,
   quickControlsTourId
 }: {
   title: string;
@@ -40,13 +60,48 @@ export function MobilePageHeader({
    * a different stream with their own surface. Zero hides the badge.
    */
   incomingRequestCount?: number;
+  /**
+   * Unread app notifications, from the canonical unread source the shell
+   * already polls. Deliberately SEPARATE from incomingRequestCount: the two
+   * badges count different things and must never be merged or summed.
+   */
+  unreadNotificationCount?: number;
   /** Optional guided-tour target for the Quick Controls trigger. */
   quickControlsTourId?: string;
 }) {
   const hasRequests = incomingRequestCount > 0;
+  const hasUnread = unreadNotificationCount > 0;
+  const scrolled = useHasScrolled();
 
   return (
-    <header className="sticky top-0 z-20 -mx-4 mb-1 grid grid-cols-[auto_1fr_auto] items-center gap-2 border-b border-border/60 bg-background/85 px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)] backdrop-blur-xl dark:bg-[#111112]/85 sm:-mx-6 sm:px-6 md:hidden">
+    <header
+      className={cn(
+        // FIXED to the viewport, not sticky inside the page.
+        //
+        // Sticky put the header inside the Home scroll container, which had
+        // two consequences: pull-to-refresh's transform on that container
+        // became a transformed ANCESTOR (which re-bases sticky onto itself
+        // rather than the viewport, so the header rode down with the pull and
+        // appeared to float), and any flow height added above it pushed the
+        // header down. Fixed positioning resolves against the viewport
+        // regardless of ancestor transforms, so neither can move it.
+        //
+        // The corresponding content offset is --mobile-header-height, applied
+        // once by AppShell — never as a spacer element.
+        "fixed inset-x-0 top-0 z-40 grid grid-cols-[auto_1fr_auto] items-center gap-2 px-4 pb-3 sm:px-6 md:hidden",
+        // The safe-area inset lives HERE and nowhere else in the chain, so the
+        // notch clearance is reserved exactly once.
+        "pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]",
+        // OPAQUE, not translucent. Content scrolls underneath a fixed header,
+        // so a see-through surface would show it passing behind the title.
+        "bg-background dark:bg-[#111112]",
+        // Divider only once content is actually passing underneath.
+        "border-b transition-colors duration-200 motion-reduce:transition-none",
+        scrolled
+          ? "border-border/60 shadow-[0_1px_12px_hsl(var(--shadow)/0.08)] dark:border-white/10"
+          : "border-transparent shadow-none"
+      )}
+    >
       <HeaderButton label="Menu" onClick={onOpenMenu}>
         <Menu className={ICON} strokeWidth={STROKE} aria-hidden="true" />
       </HeaderButton>
@@ -54,8 +109,20 @@ export function MobilePageHeader({
       <h1 className="text-center text-[1.125rem] font-semibold tracking-tight">{title}</h1>
 
       <div className="flex items-center gap-2.5">
-        <HeaderLink href="/notifications" label="Notifications">
+        {/* Bell badge = unread app notifications. The UserPlus badge below is
+            pending incoming Muddy requests. Two streams, two counts, never
+            combined. */}
+        <HeaderLink
+          href="/notifications"
+          label={
+            hasUnread
+              ? `Notifications, ${unreadNotificationCount} unread ${unreadNotificationCount === 1 ? "notification" : "notifications"}`
+              : "Notifications"
+          }
+          title="Notifications"
+        >
           <Bell className={ICON} strokeWidth={STROKE} aria-hidden="true" />
+          {hasUnread ? <HeaderBadge count={unreadNotificationCount} /> : null}
         </HeaderLink>
 
         {/* Add Muddy → the Requests tab, which already owns accept/decline
@@ -76,16 +143,7 @@ export function MobilePageHeader({
           {/* Slightly heavier stroke so the glyph holds its weight against a
               filled background at the same optical size as its neighbours. */}
           <UserPlus className="h-[21px] w-[21px]" strokeWidth={2} aria-hidden="true" />
-          {hasRequests ? (
-            // -top/-right keep the badge inside the header's padding box, so
-            // it cannot clip against the screen edge at 320px.
-            <span
-              className="absolute -right-0.5 -top-0.5 grid min-h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-background bg-red-500 px-1 text-[10px] font-bold leading-none text-white"
-              aria-hidden="true"
-            >
-              {incomingRequestCount > 9 ? "9+" : incomingRequestCount}
-            </span>
-          ) : null}
+          {hasRequests ? <HeaderBadge count={incomingRequestCount} /> : null}
         </Link>
 
         <HeaderButton label="Quick controls" onClick={onOpenQuickControls} tourId={quickControlsTourId}>
@@ -129,15 +187,47 @@ function HeaderButton({
   );
 }
 
-function HeaderLink({ href, label, children }: { href: Route; label: string; children: React.ReactNode }) {
+function HeaderLink({
+  href,
+  label,
+  title,
+  children
+}: {
+  href: Route;
+  label: string;
+  /** Tooltip text. Defaults to `label`, which the badge makes too verbose. */
+  title?: string;
+  children: React.ReactNode;
+}) {
   return (
     <Link
       href={href}
       aria-label={label}
-      title={label}
-      className={cn(HIT_TARGET, "text-foreground hover:bg-secondary dark:hover:bg-white/[0.06]")}
+      title={title ?? label}
+      className={cn(HIT_TARGET, "relative text-foreground hover:bg-secondary dark:hover:bg-white/[0.06]")}
     >
       {children}
     </Link>
+  );
+}
+
+/**
+ * The shared count badge for both header streams.
+ *
+ * `-right-0.5 -top-0.5` keeps it inside the 44px hit target's padding box, so
+ * it cannot clip against the header edge or the screen edge at 320px. Caps at
+ * 9+ because two glyphs is all that fits without deforming the circle.
+ *
+ * aria-hidden: the count is already in the parent control's aria-label, so
+ * exposing it here too would make a screen reader announce it twice.
+ */
+function HeaderBadge({ count }: { count: number }) {
+  return (
+    <span
+      className="absolute -right-0.5 -top-0.5 grid min-h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-background bg-red-500 px-1 text-[10px] font-bold leading-none text-white dark:border-[#111112]"
+      aria-hidden="true"
+    >
+      {count > 9 ? "9+" : count}
+    </span>
   );
 }

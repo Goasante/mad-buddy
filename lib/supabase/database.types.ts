@@ -2878,6 +2878,22 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["user_achievements"]["Insert"]>;
         Relationships: [];
       };
+      smart_card_acknowledgements: {
+        Row: {
+          id: string;
+          user_id: string;
+          card_id: string;
+          acknowledged_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          card_id: string;
+          acknowledged_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["smart_card_acknowledgements"]["Insert"]>;
+        Relationships: [];
+      };
       buddy_score_ledger: {
         Row: {
           id: string;

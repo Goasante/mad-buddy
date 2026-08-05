@@ -39,9 +39,10 @@ describe("app freeze recovery safeguards", () => {
   });
 
   it("prevents foreground refresh storms with single-flight guards", () => {
-    expect(source("components/app-shell/app-shell.tsx")).toContain(
-      "unreadRefreshRef.current"
-    );
+    // The unread-count guard moved out of the shell into the shared hook that
+    // now owns fetching (one implementation for the sidebar and the mobile
+    // header). Same single-flight behaviour, one level down.
+    expect(source("hooks/use-unread-notification-count.ts")).toContain("if (inFlight.current)");
     expect(source("components/pwa/service-worker-registration.tsx")).toContain(
       "updateCheckInFlight"
     );

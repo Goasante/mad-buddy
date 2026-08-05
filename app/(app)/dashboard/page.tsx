@@ -12,6 +12,10 @@ import { countIncomingRequests } from "@/lib/friends/service";
 import { loadBuddyScoreLevel } from "@/lib/engagement/buddy-score-service";
 import { loadJourney } from "@/lib/journey/journey-service";
 import { isFirstTimeJourneyState } from "@/lib/journey/journey";
+import { loadBuddyScore } from "@/lib/engagement/buddy-score-service";
+import { loadSmartCard } from "@/lib/smart-card/smart-card-service";
+import { deriveBirthProfile } from "@/lib/profile/birth-date";
+import { isWeekendPlanningWindow } from "@/lib/smart-card/smart-card";
 
 function isStatusActiveAtRequestTime(expiresAt: string) {
   return Date.parse(expiresAt) > Date.now();
@@ -22,7 +26,7 @@ export default async function DashboardPage() {
   // this page's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
   const admin = createSupabaseAdminClient();
-  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, journey, buddyScoreLevel, incomingRequestCount] = user
+  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, journey, buddyScoreLevel, incomingRequestCount, birthDetailsResult, buddyScore] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -44,9 +48,16 @@ export default async function DashboardPage() {
         // Read-only: reads the existing ledger, never reconciles or writes.
         loadBuddyScoreLevel(admin, user.id),
         // Pending INCOMING Muddy requests only — the Add Muddy badge.
-        countIncomingRequests(user.id)
+        countIncomingRequests(user.id),
+        // Own date of birth, for the Smart Card birthday state. Never another
+        // user's — this is the viewer's own row, read with the admin client
+        // exactly as the rest of this page's own-profile reads are.
+        admin.from("profile_birth_details").select("date_of_birth").eq("user_id", user.id).maybeSingle(),
+        // Full score (not just the level label) for the Buddy Progress card,
+        // which needs nextLevel/pointsToNext/progressPercent.
+        loadBuddyScore(admin, user.id)
       ])
-    : [null, null, null, { plans: [], hasMore: false }, null, null, {}, false, null, null, 0];
+    : [null, null, null, { plans: [], hasMore: false }, null, null, {}, false, null, null, 0, null, null];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -58,6 +69,46 @@ export default async function DashboardPage() {
         !profileDetails.mood_status?.trim() ? "mood" : null
       ].filter((item): item is string => Boolean(item))
     : [];
+
+  // The one Smart Card Home renders. Composed from data this page already
+  // loaded rather than re-querying it: the engine is a pure selection over
+  // that batch plus one small acknowledgement read.
+  const now = new Date();
+  const dateOfBirth = birthDetailsResult?.data?.date_of_birth ?? null;
+  const smartCard = user
+    ? await loadSmartCard(user.id, {
+        now,
+        journey,
+        safeArrival: safeArrival
+          ? {
+              travelling: safeArrival.travelling.length > 0,
+              // acceptedCount, not contacts.length: the visible contact list
+              // is privacy-filtered and can be shorter than the real number
+              // of people actually checking in.
+              watcherCount: safeArrival.travelling[0]?.acceptedCount ?? 0
+            }
+          : null,
+        birthday: dateOfBirth
+          ? deriveBirthProfile(dateOfBirth, now.toISOString().slice(0, 10))
+          : null,
+        // Plans already starting inside the weekend window, so the weekend
+        // card can say "your weekend is filling up" rather than guessing.
+        weekendPlanCount: isWeekendPlanningWindow(now)
+          ? (upcoming?.plans ?? []).filter((plan) => isWeekendPlanningWindow(new Date(plan.startAt))).length
+          : 0,
+        // Nearby is fetched client-side after mount, so the server cannot know
+        // the live count. The nearby card therefore only claims a Muddy is
+        // close when the server can prove it — which today it cannot, so it
+        // declines rather than showing a number that might be wrong.
+        nearbyCount: 0,
+        hasPremium: Boolean(access?.hasPremium),
+        buddyScore,
+        // No acknowledged-achievement projection exists yet; the provider
+        // declines rather than re-surfacing an old badge on every visit.
+        recentAchievement: null,
+        suggestionCount: 0
+      })
+    : null;
 
   return (
     <DashboardPageContent
@@ -89,7 +140,7 @@ export default async function DashboardPage() {
           : null
       }
       hiddenQuickActionHrefs={socializeEnabled ? [] : ["/discover"]}
-      journey={journey}
+      smartCard={smartCard}
       isFirstTimeUser={journey ? isFirstTimeJourneyState(journey) : false}
       currentUsername={profileDetails?.username ?? null}
       currentAvatarUrl={profileDetails?.avatar_url ?? null}

@@ -29,7 +29,7 @@ import {
   UsersRound
 } from "lucide-react";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
-import { Suspense, use, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, use, useEffect, useRef, useState } from "react";
 import { LocationSignalSync } from "@/components/app-shell/location-signal-sync";
 import { SessionBoundary } from "@/components/auth/session-boundary";
 import { useSecureLogout } from "@/components/auth/use-secure-logout";
@@ -42,7 +42,8 @@ import { cn } from "@/lib/utils";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import type { ResolvedWallpaper } from "@/lib/wallpapers/catalog";
 import { BrandMark } from "@/components/brand/brand-mark";
-import { fetchWithTimeout } from "@/lib/network/resilience";
+import { useUnreadNotificationCount } from "@/hooks/use-unread-notification-count";
+import { UnreadNotificationProvider } from "@/hooks/unread-notification-context";
 import { NavigationWatchdog } from "@/components/navigation/navigation-watchdog";
 
 // Order matters for MobileNav, which just takes the first five (minus
@@ -162,31 +163,11 @@ export function AppShell({
   wallpaperPromise = resolvedDefaultWallpaper
 }: AppShellProps) {
   const pathname = usePathname();
-  const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
+  // Canonical unread count, shared with the mobile header via the same hook —
+  // one fetch/poll/broadcast implementation, so the sidebar badge and the
+  // header Bell badge can never disagree.
+  const { unreadCount, refresh: refreshUnreadCount } = useUnreadNotificationCount(initialUnreadCount);
   const hasCompletedInitialRender = useRef(false);
-  const unreadRefreshRef = useRef<Promise<void> | null>(null);
-  const refreshUnreadCount = useCallback(async () => {
-    if (unreadRefreshRef.current) return unreadRefreshRef.current;
-
-    const refresh = (async () => {
-      try {
-        const response = await fetchWithTimeout("/api/notifications/unread-count", {
-          credentials: "include",
-          cache: "no-store"
-        }, 12_000, "refresh unread notifications");
-        if (!response.ok) return;
-        const data = (await response.json()) as { unreadCount: number };
-        setUnreadCount(data.unreadCount);
-      } catch {
-        // Keep the last known count when the notification service is unavailable.
-      } finally {
-        unreadRefreshRef.current = null;
-      }
-    })();
-
-    unreadRefreshRef.current = refresh;
-    return refresh;
-  }, []);
 
   useEffect(() => {
     if (!hasCompletedInitialRender.current) {
@@ -199,33 +180,6 @@ export function AppShell({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [pathname, refreshUnreadCount]);
-
-  useEffect(() => {
-    const handleFocus = () => refreshUnreadCount();
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") void refreshUnreadCount();
-    };
-    const handleUpdated = (event: Event) => {
-      const detail = (event as CustomEvent<{ unreadCount?: number }>).detail;
-      if (typeof detail?.unreadCount === "number") setUnreadCount(detail.unreadCount);
-      else refreshUnreadCount();
-    };
-    // 60s background cadence, paused while the tab is hidden, the focus and
-    // visibilitychange handlers above refresh immediately on return, so a
-    // slower idle poll costs no freshness the user can see (battery/audit).
-    const interval = window.setInterval(() => {
-      if (!document.hidden) void refreshUnreadCount();
-    }, 60_000);
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("mad-buddy:notifications-updated", handleUpdated);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("mad-buddy:notifications-updated", handleUpdated);
-    };
-  }, [refreshUnreadCount]);
 
   const enabledNavigationItems = navigationItems.filter((item) => !hiddenNavigationHrefs.includes(item.href));
   const visibleNavigationItems = showAdminLink
@@ -243,7 +197,11 @@ export function AppShell({
     // --app-header-height on <main> below) or, for pages with their own
     // in-page header, by <main>'s own env(safe-area-inset-top) padding — never
     // both, and never as a blanket guess applied regardless of route.
-    <div className="flex min-h-[100svh] min-h-[100dvh] flex-col bg-background pb-[calc(96px+env(safe-area-inset-bottom))] dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]">
+    // Bottom padding reserves the fixed nav's real footprint so the last
+    // section of any page stays fully reachable. --mobile-nav-height is the
+    // bar's own height (content only); the safe-area inset is added here
+    // because the bar pads itself by that same amount internally.
+    <div className="flex min-h-[100svh] min-h-[100dvh] flex-col bg-background pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px))] dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]">
       <a
         href="#app-main-content"
         className="focus-ring sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:shadow-lg"
@@ -282,19 +240,33 @@ export function AppShell({
           id="app-main-content"
           className={cn(
             "relative flex-1 px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:overflow-y-auto md:pt-0",
-            // The fixed AppHeader is out of normal flow, so <main> reserves its
-            // exact footprint here — the one place this offset is computed, so
-            // no page ever needs its own top-padding guess. Pages with their
-            // own in-page header (AppHeader renders nothing for them) still
-            // need the bare safe-area inset so their own title clears the notch.
-            hasGlobalHeader ? "pt-[var(--app-header-height)]" : "pt-[env(safe-area-inset-top,0px)]"
+            // Both mobile headers are FIXED (out of normal flow), so <main>
+            // reserves the matching footprint here — the one place either
+            // offset is computed, so no page needs its own top-padding guess
+            // and no spacer element is ever required.
+            //
+            //   - global AppHeader  -> --app-header-height
+            //   - MobilePageHeader  -> --mobile-header-height (md:pt-0, since
+            //     that header is mobile-only and desktop shows its own title)
+            //
+            // Each variable already includes the safe-area inset, and the
+            // header itself pads by that same inset internally — so the notch
+            // is cleared once by the header and reserved once here, never
+            // doubled into a visible gap.
+            hasGlobalHeader
+              ? "pt-[var(--app-header-height)]"
+              : "pt-[var(--mobile-header-height)] md:pt-0"
           )}
         >
           {/* One pull-to-refresh for the whole authenticated app, mounted here
               rather than repeated per page. It re-runs the server render and
               notifies any page that keeps canonical data in client state. */}
           <PullToRefresh>
-            <div className="mx-auto w-full max-w-[1200px]">{children}</div>
+            {/* Pages read the shell's already-resolved unread count from here
+                rather than starting their own poller. */}
+            <UnreadNotificationProvider count={unreadCount}>
+              <div className="mx-auto w-full max-w-[1200px]">{children}</div>
+            </UnreadNotificationProvider>
           </PullToRefresh>
         </main>
         </div>
@@ -944,11 +916,16 @@ function MobileNav() {
   const rightTabs = MOBILE_TABS.slice(2);
 
   return (
+    // Attached to the bottom of the app, not floating above it: full width,
+    // no outer horizontal padding, no bottom gap, and the safe-area inset
+    // applied as padding INSIDE the bar so its surface reaches the screen
+    // edge on a device with a home indicator rather than leaving a strip of
+    // page showing beneath it.
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] md:hidden"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-background/95 pb-[env(safe-area-inset-bottom,0px)] backdrop-blur-xl dark:border-white/10 dark:bg-[#151517]/95 md:hidden"
       aria-label="Mobile navigation"
     >
-      <ul className="mx-auto flex w-full max-w-[26rem] items-stretch justify-between rounded-full border border-border/70 bg-background/95 px-1.5 shadow-[0_8px_28px_hsl(var(--shadow)/0.16)] backdrop-blur-xl dark:border-white/10 dark:bg-[#151517]/95">
+      <ul className="mx-auto flex w-full max-w-[30rem] items-stretch justify-between px-1.5">
         {leftTabs.map((tab) => (
           <MobileNavTab key={tab.href} tab={tab} pathname={pathname} />
         ))}
@@ -963,7 +940,10 @@ function MobileNav() {
                 data-tour-id="nav-create"
                 className="safe-motion flex min-h-[56px] w-full flex-col items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
-                <span className="safe-motion grid h-12 w-12 -translate-y-2 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_24px_hsl(var(--primary)/0.4)] transition-transform duration-200 ease-out active:scale-90 motion-reduce:active:scale-100">
+                {/* No negative translate: in the attached bar that would push
+                    the button through the top border. It sits inline with the
+                    other tabs and is distinguished by fill, not by height. */}
+                <span className="safe-motion grid h-12 w-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_16px_hsl(var(--primary)/0.35)] transition-transform duration-200 ease-out active:scale-90 motion-reduce:active:scale-100">
                   <CirclePlus className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
                 </span>
               </button>

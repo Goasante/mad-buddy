@@ -64,7 +64,10 @@ describe("Add Muddy header control", () => {
 
   it("hides the badge at zero and caps the display at 9+", () => {
     expect(header).toContain("const hasRequests = incomingRequestCount > 0;");
-    expect(header).toContain('incomingRequestCount > 9 ? "9+" : incomingRequestCount');
+    // The cap now lives in the shared HeaderBadge, used by both the Add Muddy
+    // and Notifications badges so the two can never format differently.
+    expect(header).toContain('count > 9 ? "9+" : count');
+    expect(header).toContain("<HeaderBadge count={incomingRequestCount} />");
   });
 
   it("routes to the existing Muddies requests experience", () => {
