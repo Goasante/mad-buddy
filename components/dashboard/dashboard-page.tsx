@@ -482,9 +482,10 @@ export function DashboardPageContent({
 
       {/* A focused, centred column — Home answers "who's nearby?" at a glance, so
           it stays narrow on every width rather than spreading into a dashboard.
-          The header above already ends in its own pb-3, so this only adds the
-          small remainder rather than a second full gap. */}
-      <div className="mx-auto w-full max-w-[560px] space-y-5 pt-1">
+          The header is FIXED, so its own padding no longer contributes to the
+          gap below it — <main> reserves the height and this supplies the
+          breathing room between the header rule and the greeting. */}
+      <div className="mx-auto w-full max-w-[560px] space-y-5 pt-4">
         <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
         <PendingInvitePrompt />
 
