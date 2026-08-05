@@ -186,6 +186,123 @@ describe("mobile page header adoption", () => {
   });
 });
 
+describe("stage 1b rollout", () => {
+  /** [file, title, expected variant] */
+  const MIGRATED = [
+    ["components/messages/messages-page.tsx", "Messages", "root"],
+    ["components/content/moments-page.tsx", "Moments", "root"],
+    ["components/events/events-page.tsx", "Events", "root"],
+    ["components/groups/groups-page.tsx", "Groups", "root"],
+    ["components/settings/settings-page.tsx", "Settings", "root"],
+    ["components/notifications/notifications-page.tsx", "Pulse", "root"],
+    ["components/invites/invites-page.tsx", "Invites", "root"],
+    ["components/drops/drops-page.tsx", "Muddy Drops", "root"],
+    ["components/meeting-pings/meeting-pings-page.tsx", "Meeting Pings", "root"],
+    ["components/reminders/reminders-page.tsx", "Reminders", "root"],
+    ["components/premium/billing-page.tsx", "Membership", "back"],
+    ["components/buddy-score/buddy-score-page.tsx", "My Progress", "back"],
+    ["components/scan/scan-page.tsx", "Scan a code", "back"],
+    ["components/safety/safe-arrival-page.tsx", "Safe Arrival", "back"]
+  ] as const;
+
+  it("migrates every listed screen to the shared header", () => {
+    for (const [path, title] of MIGRATED) {
+      const source = read(path);
+      expect(source, `${path} should use the shared header`).toContain("<PageHeader");
+      expect(source, `${path} title`).toContain(`title="${title}"`);
+    }
+  });
+
+  it("uses the product-facing names, not route names", () => {
+    expect(read("components/notifications/notifications-page.tsx")).toContain('title="Pulse"');
+    expect(read("components/buddy-score/buddy-score-page.tsx")).toContain('title="My Progress"');
+    expect(read("components/drops/drops-page.tsx")).toContain('title="Muddy Drops"');
+  });
+
+  it("gives nested screens Back and root screens Menu", () => {
+    for (const [path, , variant] of MIGRATED) {
+      const source = read(path);
+      if (variant === "back") {
+        expect(source, `${path} should be a nested screen`).toMatch(/backHref="\/[a-z-]+"/);
+      } else {
+        expect(source, `${path} should be a root screen`).not.toContain("backHref");
+      }
+    }
+  });
+
+  it("hides the duplicate mobile title on every migrated screen", () => {
+    for (const [path] of MIGRATED) {
+      expect(read(path), `${path} should hide its mobile h1`).toMatch(/<h1[^>]*className="[^"]*hidden/);
+    }
+  });
+
+  it("stands the global AppHeader down for every migrated route", () => {
+    const shell = read("components/app-shell/app-shell.tsx");
+    const list = shell.slice(shell.indexOf("const PAGES_WITH_OWN_HEADER"), shell.indexOf("function hasOwnHeader"));
+    for (const route of [
+      "/messages", "/moments", "/events", "/groups", "/settings", "/notifications",
+      "/invites", "/drops", "/meeting-pings", "/reminders", "/billing",
+      "/buddy-score", "/scan", "/safe-arrival"
+    ]) {
+      expect(list, `${route} would otherwise render two headers`).toContain(`"${route}"`);
+    }
+  });
+
+  it("hides the Bell on Pulse, which IS the notifications stream", () => {
+    expect(read("components/notifications/notifications-page.tsx")).toContain("showNotifications={false}");
+  });
+
+  it("keeps the shared header out of an open conversation", () => {
+    // A Menu button has no place inside a conversation, and the conversation
+    // keeps its own contextual header (participant identity, mute, info).
+    const messages = read("components/messages/messages-page.tsx");
+    expect(messages).toContain('<div className={cn(selectedId && "hidden")}>');
+    expect(messages).toContain("Back to conversations");
+  });
+
+  it("removes the duplicate back control on Membership", () => {
+    // The in-page "Home" button survives on desktop only.
+    expect(read("components/premium/billing-page.tsx")).toContain('className="hidden md:inline-flex"');
+  });
+
+  it("routes every screen through one wrapper rather than a second header", () => {
+    const wrapper = read("components/app-shell/page-header.tsx");
+    expect(wrapper).toContain("<MobilePageHeader");
+    expect(wrapper).toContain("useAppMenu()");
+    expect(wrapper).toContain("useUnreadNotifications()");
+    // Quick Controls is Home's alone.
+    expect(wrapper).toContain("showQuickControls={false}");
+  });
+});
+
+describe("layout identity queries", () => {
+  const layout = read("app/(app)/layout.tsx");
+
+  it("runs the identity loads in the existing parallel batch", () => {
+    const start = layout.indexOf("const [adminContext");
+    const batch = layout.slice(start, layout.indexOf("]);", start));
+    expect(batch).toContain("await Promise.all([");
+    // Both new loads live inside that one batch, adding no serial latency.
+    expect(batch).toContain("loadBuddyScoreLevel");
+    expect(batch).toContain("bio, mood_status");
+  });
+
+  it("loads the Buddy Score level exactly once app-wide", () => {
+    const callSites = layout.match(/loadBuddyScoreLevel\(/g) ?? [];
+    expect(callSites.length).toBe(1);
+    expect(read("app/(app)/dashboard/page.tsx")).not.toContain("loadBuddyScoreLevel");
+  });
+
+  it("guards both loads on the server env, so a missing config cannot throw", () => {
+    expect(layout).toContain("user && env.url && env.serviceRoleKey");
+  });
+
+  it("degrades to a base level rather than failing the shell", () => {
+    // loadBuddyScoreLevel ignores the query error and falls back to `[]`.
+    expect(read("lib/engagement/buddy-score-service.ts")).toContain("calculateBuddyScoreTotal(data ?? [])");
+  });
+});
+
 describe("mobile page header variants", () => {
   it("supports menu, back and none in the leading slot", () => {
     expect(header).toContain('leadingAction?: "menu" | "back" | "none"');

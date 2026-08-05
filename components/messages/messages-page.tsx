@@ -32,6 +32,7 @@ import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabas
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import { PageHeader } from "@/components/app-shell/page-header";
 
 // "Groups" filters conversation_type === "group"; "Plans" filters
 // conversation_type === "plan" (the group chat attached to a specific Plan).
@@ -492,10 +493,21 @@ export function MessagesPageContent({
   const hasAnyConversations = uniqueConversations.length > 0;
 
   return (
-    <div data-tour-id={TOUR_TARGET_IDS.MESSAGES_INBOX} className="mx-auto w-full min-w-0 max-w-[1200px] pt-6">
-      <header className="mb-4 flex items-start justify-between gap-3">
+    <div data-tour-id={TOUR_TARGET_IDS.MESSAGES_INBOX} className="mx-auto w-full min-w-0 max-w-[1200px] md:pt-6">
+      {/* Inbox only. On mobile an open conversation replaces the list, and
+          that view keeps its own contextual header (participant avatar,
+          premium ring, name, plan badge, mute/info) — a Menu button has no
+          place inside a conversation, and the canonical header's controlled
+          API cannot carry participant identity. Desktop shows both panes at
+          once, so the shared header stays hidden there too. */}
+      <div className={cn(selectedId && "hidden")}>
+        <PageHeader title="Messages" />
+      </div>
+
+      <header className={cn("mb-4 flex items-start justify-between gap-3 pt-1 md:pt-0", selectedId && "hidden lg:flex")}>
         <div className="min-w-0">
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+          {/* Hidden on mobile: the shared header carries the title there. */}
+          <h1 className="hidden items-center gap-2 text-2xl font-semibold tracking-tight md:flex sm:text-3xl">
             <MessagesSquare className="h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
             Messages
           </h1>

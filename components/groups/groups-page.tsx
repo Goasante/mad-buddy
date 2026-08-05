@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { GroupInvitation, GroupSummary, GroupsPageData } from "@/lib/groups/types";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import { PageHeader } from "@/components/app-shell/page-header";
 
 type GroupTab = "mine" | "discover" | "requests";
 
@@ -69,10 +70,13 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] space-y-6 pt-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mx-auto max-w-[1200px] space-y-6 md:pt-6">
+      <PageHeader title="Groups" />
+
+      <header className="flex flex-col gap-4 pt-1 sm:flex-row sm:items-center sm:justify-between md:pt-0">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Groups</h1>
+          {/* Hidden on mobile: the shared header carries the title there. */}
+          <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Groups</h1>
           <p className="mt-2 text-sm text-muted-foreground">Private spaces for conversations and shared plans.</p>
         </div>
         <Button type="button" onClick={() => setCreateOpen(true)} data-tour-id={TOUR_TARGET_IDS.GROUPS_CREATE}>

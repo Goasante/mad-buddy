@@ -113,10 +113,10 @@ const SECONDARY_HREFS = ["/plans", "/moments", "/events", "/groups", "/discover"
  * to decide how much top offset <main> reserves — and AppHeader — which needs
  * it to decide whether to render at all — so the two can never drift apart.
  */
+// Routes that render the canonical MobilePageHeader themselves. The global
+// AppHeader must stand down for each, or the route would carry two headers.
 const PAGES_WITH_OWN_HEADER = [
   "/dashboard",
-  // Muddies now renders the canonical MobilePageHeader itself, so the global
-  // AppHeader must stand down here or the route would carry two headers.
   "/friends",
   "/notifications",
   "/profile",
@@ -127,7 +127,14 @@ const PAGES_WITH_OWN_HEADER = [
   "/groups",
   "/discover",
   "/meeting-pings",
-  "/moments"
+  "/moments",
+  "/billing",
+  "/buddy-score",
+  "/reminders",
+  "/invites",
+  "/drops",
+  "/scan",
+  "/safe-arrival"
 ] as const;
 
 function hasOwnHeader(pathname: string): boolean {

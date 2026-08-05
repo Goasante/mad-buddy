@@ -33,6 +33,7 @@ import {
   journeyTone
 } from "@/components/safety/journey-parts";
 import { SafeArrivalSetup, type SafeArrivalSetupInput } from "@/components/safety/safe-arrival-setup";
+import { PageHeader } from "@/components/app-shell/page-header";
 
 /**
  * Safe Arrival, both experiences.
@@ -242,8 +243,13 @@ function SafeArrivalHome({ onStart }: { onStart: () => void }) {
 
   return (
     <div data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_OVERVIEW} className="space-y-5">
+      {/* Reached from Home's Quick Controls rather than a bottom-nav tab, so
+          the nested Back variant. The centred subtitle below is kept. */}
+      <PageHeader title="Safe Arrival" backHref="/dashboard" />
+
       <header className="px-1 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Safe Arrival</h1>
+        {/* Hidden on mobile: the shared header carries the title there. */}
+        <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Safe Arrival</h1>
         <p className="mx-auto mt-1.5 max-w-[16rem] text-sm text-muted-foreground">
           Let trusted Muddies know you got there safely.
         </p>

@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { MomentImage } from "@/components/ui/moment-image";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/app-shell/page-header";
 
 export type DropContextOption = { id: string; label: string; contextType: "circle" | "plan" };
 
@@ -93,10 +94,13 @@ export function DropsPageContent({
   }
 
   return (
-    <div className="mx-auto max-w-[800px] space-y-6 pt-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mx-auto max-w-[800px] space-y-6 md:pt-6">
+      <PageHeader title="Muddy Drops" />
+
+      <header className="flex flex-col gap-4 pt-1 sm:flex-row sm:items-center sm:justify-between md:pt-0">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Muddy Drops</h1>
+          {/* Hidden on mobile: the shared header carries the title there. */}
+          <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Muddy Drops</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Leave something for a circle, plan, or event. Only people inside can unlock it.
           </p>

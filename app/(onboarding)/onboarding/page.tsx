@@ -7,6 +7,8 @@ import {
 } from "@/lib/profile/placeholder-identity";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { recoverOnboardingIfStranded } from "@/lib/onboarding/recovery-service";
 
 // Renders per-user billing/onboarding state; never statically prerender
 // (build environments have no Supabase secrets).
@@ -33,6 +35,20 @@ export default async function OnboardingPage() {
         .maybeSingle();
       if (profile?.is_onboarded) {
         redirect("/dashboard");
+      }
+
+      // Self-healing: an account whose completion write partially failed keeps
+      // a fully filled profile but is_onboarded = false, and would otherwise be
+      // sent back here on every visit with no way out. If the data shows the
+      // user already finished, finish provisioning and let them through.
+      // Conservative by design — a genuinely new account decides "none" and
+      // continues to normal onboarding below.
+      const serverEnv = getSupabaseServerEnv();
+      if (serverEnv.url && serverEnv.serviceRoleKey) {
+        const recovery = await recoverOnboardingIfStranded(createSupabaseAdminClient(), user.id);
+        if (recovery.action === "finish") {
+          redirect("/dashboard");
+        }
       }
       const profileName =
         profile?.full_name ??

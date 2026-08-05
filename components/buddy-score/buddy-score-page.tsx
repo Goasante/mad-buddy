@@ -8,14 +8,20 @@ import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { JourneyProgress } from "@/components/journey/journey-progress";
 import type { MyProgressData } from "@/lib/progress/my-progress";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import { PageHeader } from "@/components/app-shell/page-header";
 
 export function BuddyScorePage({ progress }: { progress: MyProgressData }) {
   const { score, membership, profileCompletion, achievements, milestones, timeline, journey } = progress;
   return (
-    <div className="mx-auto w-full max-w-[1040px] space-y-8 pb-8 pt-6">
-      <header>
+    <div className="mx-auto w-full max-w-[1040px] space-y-8 pb-8 md:pt-6">
+      {/* Reached from Me rather than a bottom-nav tab, so it uses the nested
+          Back variant. */}
+      <PageHeader title="My Progress" backHref="/profile" />
+
+      <header className="pt-1 md:pt-0">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Private to you</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">My Progress</h1>
+        {/* Hidden on mobile: the shared header carries the title there. */}
+        <h1 className="mt-2 hidden text-3xl font-semibold tracking-tight md:block">My Progress</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">A calm view of the trust, connections, and meaningful participation you are building over time.</p>
       </header>
 

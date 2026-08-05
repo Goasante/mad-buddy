@@ -17,22 +17,33 @@ const nearSection = home.slice(home.indexOf("function NearbyHero"), home.indexOf
 // ---------------------------------------------------------------------------
 
 describe("Near section header", () => {
+  // Step 8 consolidated the hand-written header into the shared
+  // PageSectionHeader, so the styling assertions follow it there. The section
+  // is still asserted to carry the right title and action.
+  const sectionHeader = read("components/app-shell/page-section-header.tsx");
+
   it("is titled Near", () => {
-    const heading = /<h2[^>]*id="home-nearby-heading"[\s\S]*?>([\s\S]*?)<\/h2>/.exec(nearSection);
-    expect(heading?.[1]?.trim()).toBe("Near");
+    expect(nearSection).toContain('title="Near"');
+    expect(nearSection).toContain('id="home-nearby-heading"');
+  });
+
+  it("uses the shared header rather than its own markup", () => {
+    expect(nearSection).toContain("<PageSectionHeader");
+    expect(nearSection).not.toContain("text-[1.75rem] font-bold");
   });
 
   it("uses the large display size for the title", () => {
-    expect(nearSection).toContain("text-[1.75rem] font-bold");
+    expect(sectionHeader).toContain("text-[1.75rem] font-bold");
   });
 
   it("offers See all in brand orange at the specified weight", () => {
-    expect(nearSection).toContain("See all");
-    expect(nearSection).toContain("text-base font-medium text-[var(--color-brand-orange)]");
+    expect(sectionHeader).toContain("text-base font-medium text-[var(--color-brand-orange)]");
+    expect(sectionHeader).toContain('actionLabel = "See all"');
   });
 
   it("hides See all when nobody is nearby", () => {
-    expect(nearSection).toContain("{total > 0 ? (");
+    // No href when the count is zero, so the header renders title-only.
+    expect(nearSection).toContain('href={total > 0 ? "/friends" : undefined}');
   });
 });
 

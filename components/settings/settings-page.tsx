@@ -40,6 +40,7 @@ import { LocationForGlowSetting } from "@/components/settings/location-for-glow-
 import type { VisibilityStatus } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import { PageHeader } from "@/components/app-shell/page-header";
 
 // Deferred: most visits to Settings never open this — no reason to ship its
 // JS on every Settings page load.
@@ -113,9 +114,13 @@ export function SettingsPageContent({
   }
 
   return (
-    <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_OVERVIEW} className="mr-auto max-w-[980px] space-y-6 pt-6">
-      <header className="border-b border-border/70 pb-4">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Settings</h1>
+    <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_OVERVIEW} className="mr-auto max-w-[980px] space-y-6 md:pt-6">
+      <PageHeader title="Settings" />
+
+      {/* The divider goes with the desktop title: on mobile the shared
+          header draws its own once content scrolls under it. */}
+      <header className="pt-1 md:border-b md:border-border/70 md:pb-4 md:pt-0">
+        <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Settings</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Manage your account and app preferences.
         </p>

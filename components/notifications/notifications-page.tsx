@@ -48,6 +48,7 @@ import {
 import { fetchWithTimeout } from "@/lib/network/resilience";
 import { cn } from "@/lib/utils";
 import { BIRTHDAY_WISHES } from "@/lib/profile/birthday-experience";
+import { PageHeader } from "@/components/app-shell/page-header";
 
 type NotificationItem = {
   id: string;
@@ -453,10 +454,15 @@ export function NotificationsPageContent({
   }
 
   return (
-    <div className="mx-auto max-w-[1050px] space-y-4 pt-6">
+    <div className="mx-auto max-w-[1050px] space-y-4 md:pt-6">
+      {/* This IS the notifications stream, so the header's own Bell would
+          point at the page you are already on. */}
+      <PageHeader title="Pulse" showNotifications={false} />
+
       <section data-tour-id={TOUR_TARGET_IDS.PULSE_OVERVIEW}>
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Pulse</h1>
+        <div className="flex items-center justify-between gap-4 pt-1 md:pt-0">
+          {/* Hidden on mobile: the shared header carries the title there. */}
+          <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Pulse</h1>
           <div className="flex items-center gap-2">
             <Popover.Root open={optionsOpen} onOpenChange={setOptionsOpen}>
               <Popover.Trigger asChild>

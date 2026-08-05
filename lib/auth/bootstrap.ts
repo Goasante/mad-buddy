@@ -77,12 +77,49 @@ const mobileSignupSchema = z
     password: z.string().min(8),
     acceptedPolicy: z.literal(true),
     policyVersion: z.literal(PRIVACY_POLICY_VERSION),
-    turnstileToken: z.string().max(2048).optional()
+    // nullable AND optional, for the same reason as the web schema: a client
+    // holding this as `string | null` sends null when no token was issued,
+    // which a plain .optional() rejects. verifyTurnstileToken enforces the
+    // challenge; the schema only accepts the shape the client sends.
+    turnstileToken: z.string().max(2048).nullable().optional()
   })
   .superRefine((data, context) => {
     const usernameError = validateUsername(data.username);
     if (usernameError) context.addIssue({ code: "custom", path: ["username"], message: usernameError });
   });
+
+/**
+ * Turns Zod issues from the native sign-up schema into one specific sentence.
+ *
+ * Mirrors the web mapping in app/(auth)/actions.ts. The username rule carries
+ * its own message from validateUsername (it explains exactly which character
+ * is wrong), so that one is passed through rather than replaced.
+ */
+function nativeSignupValidationMessage(error: z.ZodError): string {
+  const issue = error.issues[0];
+  const field = issue?.path[0];
+
+  switch (field) {
+    case "fullName":
+      return "Enter your name.";
+    case "username":
+      // validateUsername supplies a precise reason; a generic sentence here
+      // would be less helpful than what the rule already says.
+      return issue?.message || "Choose a username with letters, numbers or underscores.";
+    case "email":
+      return "Enter a valid email address.";
+    case "password":
+      return "Password must be at least 8 characters.";
+    case "acceptedPolicy":
+      return "Please accept the Terms and Privacy Policy.";
+    case "policyVersion":
+      return "Our Terms have been updated. Reload the app and try again.";
+    case "turnstileToken":
+      return "Your security check expired. Try again.";
+    default:
+      return "Please check the signup form and try again.";
+  }
+}
 
 export type MobileSignUpResult = {
   ok: boolean;
@@ -117,7 +154,7 @@ export async function registerUserWithEmailVerification(input: unknown): Promise
 
   const parsed = mobileSignupSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, message: "Please check the signup form and try again." };
+    return { ok: false, message: nativeSignupValidationMessage(parsed.error) };
   }
 
   const challenge = await verifyTurnstileToken(parsed.data.turnstileToken, "signup");

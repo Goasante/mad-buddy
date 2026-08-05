@@ -15,6 +15,7 @@ import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { connectionResponsesFor } from "@/lib/meetups/connection-prompts";
 import { formatRelativeTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/app-shell/page-header";
 
 type PingTab = "received" | "sent" | "history";
 
@@ -116,10 +117,13 @@ export function MeetingPingsPage({ initialPings }: { initialPings: MeetingPingLi
   }
 
   return (
-    <div className="mx-auto max-w-[1040px] space-y-6 pt-6">
-      <div className="flex items-start justify-between gap-4">
+    <div className="mx-auto max-w-[1040px] space-y-6 md:pt-6">
+      <PageHeader title="Meeting Pings" />
+
+      <div className="flex items-start justify-between gap-4 pt-1 md:pt-0">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Meeting Pings</h1>
+          {/* Hidden on mobile: the shared header carries the title there. */}
+          <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Meeting Pings</h1>
           <p className="mt-2 text-sm text-muted-foreground">Make plans with your Muddies.</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">

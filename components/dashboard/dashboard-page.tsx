@@ -33,6 +33,9 @@ import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { updateVisibilityStatusAction } from "@/app/(app)/settings-actions";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
 import { PlanCover } from "@/components/plans/plan-cover";
+import { MomentsPreview } from "@/components/content/moments-preview";
+import { PageSectionHeader } from "@/components/app-shell/page-section-header";
+import type { VisibleMoment } from "@/lib/content/service";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { usePullRefreshListener } from "@/components/ui/pull-to-refresh";
 import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
@@ -132,6 +135,11 @@ type DashboardPageContentProps = {
    * rules — it renders whatever arrives.
    */
   smartCard?: SmartCard | null;
+  /**
+   * A capped slice of the canonical Moments feed, already authorised by
+   * buildMomentFeed. Home previews it; /moments owns the real experience.
+   */
+  moments?: VisibleMoment[];
   /**
    * Canonical first-time signal, computed server-side from real Journey
    * progress (see app/(app)/dashboard/page.tsx) — never inferred client-side.
@@ -238,6 +246,7 @@ export function DashboardPageContent({
   safeArrival = null,
   hiddenQuickActionHrefs = [],
   smartCard = null,
+  moments = [],
   isFirstTimeUser = false,
   incomingRequestCount = 0
 }: DashboardPageContentProps) {
@@ -571,6 +580,11 @@ export function DashboardPageContent({
           <QuickActionsHome primary={primaryActions} secondary={moreActions} />
         )}
 
+        {/* Moments preview. Renders the branded onboarding when the viewer has
+            none, and the rail once any exist — so the onboarding is never
+            shown again after a first Moment. */}
+        <MomentsPreview moments={moments} />
+
         {/* Compact profile-completion banner (real state, dismissible). */}
         {profileReminder ? (
           <ProfileCompletionReminder userId={profileReminder.userId} missingItems={profileReminder.missingItems} />
@@ -758,25 +772,19 @@ function NearbyHero({
     <section aria-labelledby="home-nearby-heading" data-tour-id={TOUR_TARGET_IDS.HOME_NEARBY}>
       {/* Generous space above and below: this is the signature section, and
           the air around it is what stops it reading as a contact list. */}
-      <div className="mb-4 flex items-baseline justify-between gap-3">
-        <h2 id="home-nearby-heading" className="text-[1.75rem] font-bold leading-none tracking-tight">
-          Near
-        </h2>
-        {total > 0 ? (
-          <Link
-            href="/friends"
-            className="focus-ring shrink-0 rounded-md text-base font-medium text-[var(--color-brand-orange)] hover:underline"
-            aria-label={`See all ${total} nearby Muddies`}
-          >
-            See all
-          </Link>
-        ) : null}
-      </div>
+      <PageSectionHeader
+        id="home-nearby-heading"
+        title="Near"
+        href={total > 0 ? "/friends" : undefined}
+        actionAriaLabel={`See all ${total} nearby Muddies`}
+      />
 
       {!loaded && total === 0 ? (
         // Lightweight skeletons matching the real column footprint exactly, so
         // the row does not resize when data arrives. No large loading card.
-        <div className="near-strip -mx-4 flex items-start gap-5 overflow-hidden px-4 py-2 sm:-mx-6 sm:px-6" aria-hidden="true">
+        // gap-4 matches the real rail below: a different gap here would shift
+        // every avatar sideways the moment data arrives.
+        <div className="near-strip -mx-4 flex items-start gap-4 overflow-hidden px-4 py-2 sm:-mx-6 sm:px-6" aria-hidden="true">
           {[0, 1, 2, 3, 4].map((index) => (
             <div key={index} className="flex w-[4.75rem] shrink-0 flex-col items-center gap-2.5">
               <span className="h-16 w-16 animate-pulse rounded-full bg-secondary/70 motion-reduce:animate-none" />
@@ -943,11 +951,9 @@ const FIRST_TIME_ACTIONS: QuickAction[] = [
 function FirstTimeQuickActions() {
   return (
     <section aria-labelledby="home-actions-heading" data-tour-id={TOUR_TARGET_IDS.HOME_QUICK_ACTIONS}>
-      <div className="mb-4 flex items-baseline justify-between gap-3">
-        <h2 id="home-actions-heading" className="text-[1.75rem] font-bold leading-none tracking-tight">
-          Suggestions for you
-        </h2>
-      </div>
+      {/* No action: the first-time set is the whole set, so there is nothing
+          more to see. */}
+      <PageSectionHeader id="home-actions-heading" title="Suggestions for you" />
       <div className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6">
         {FIRST_TIME_ACTIONS.map((action) => (
           <SuggestionCard key={action.href} action={action} />
@@ -1091,22 +1097,14 @@ function QuickActionsHome({
 
   return (
     <section aria-labelledby="home-actions-heading" data-tour-id={TOUR_TARGET_IDS.HOME_QUICK_ACTIONS}>
-      {/* Canonical section header, matching Near and Upcoming Plans. */}
-      <div className="mb-4 flex items-baseline justify-between gap-3">
-        <h2 id="home-actions-heading" className="text-[1.75rem] font-bold leading-none tracking-tight">
-          Suggestions for you
-        </h2>
-        {secondary.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => setMoreOpen(true)}
-            className="focus-ring shrink-0 rounded-md text-base font-medium text-[var(--color-brand-orange)] hover:underline"
-            aria-label="See all suggestions"
-          >
-            See all
-          </button>
-        ) : null}
-      </div>
+      {/* Canonical section header. "See all" opens the More sheet rather than
+          navigating, which is why this passes onAction instead of href. */}
+      <PageSectionHeader
+        id="home-actions-heading"
+        title="Suggestions for you"
+        onAction={secondary.length > 0 ? () => setMoreOpen(true) : undefined}
+        actionAriaLabel="See all suggestions"
+      />
 
       {/* Horizontal rail. Cards are a fixed width so roughly three fit on a
           standard phone with the fourth peeking, which is what signals the
@@ -1335,19 +1333,12 @@ function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
 
   return (
     <section aria-labelledby="home-plan-heading" data-tour-id={TOUR_TARGET_IDS.HOME_UPCOMING_PLAN}>
-      {/* Same header pattern as Near. */}
-      <div className="mb-4 flex items-baseline justify-between gap-3">
-        <h2 id="home-plan-heading" className="text-[1.75rem] font-bold leading-none tracking-tight">
-          Upcoming Plans
-        </h2>
-        <Link
-          href="/plans"
-          className="focus-ring shrink-0 rounded-md text-base font-medium text-[var(--color-brand-orange)] hover:underline"
-          aria-label="See all plans"
-        >
-          See all
-        </Link>
-      </div>
+      <PageSectionHeader
+        id="home-plan-heading"
+        title="Upcoming Plans"
+        href="/plans"
+        actionAriaLabel="See all plans"
+      />
 
       {/* One tappable card. There is no /plans/[id] route in the app, so this
           opens the canonical Plans page — the same destination the previous
@@ -1431,7 +1422,11 @@ function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
                   +{extraAttendees}
                 </span>
               ) : null}
-              <span className="text-xs font-semibold tabular-nums text-muted-foreground min-[380px]:hidden">
+              {/* Below 340px even this count squeezes the text column hard
+                  enough to truncate the DATE, which is core information being
+                  lost to a secondary detail. The attendance pill still says
+                  what matters, and the full roster is one tap away. */}
+              <span className="hidden text-xs font-semibold tabular-nums text-muted-foreground min-[340px]:inline min-[380px]:hidden">
                 {plan.goingCount} going
               </span>
             </span>
@@ -1453,11 +1448,8 @@ function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
 function UpcomingPlanEmpty() {
   return (
     <section aria-labelledby="home-plan-heading">
-      <div className="mb-4 flex items-baseline justify-between gap-3">
-        <h2 id="home-plan-heading" className="text-[1.75rem] font-bold leading-none tracking-tight">
-          Upcoming Plans
-        </h2>
-      </div>
+      {/* No action: with nothing upcoming there is nothing to see all of. */}
+      <PageSectionHeader id="home-plan-heading" title="Upcoming Plans" />
       <div className="flex items-center gap-3.5 py-1">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border/60 text-muted-foreground">
           <CalendarDays className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />

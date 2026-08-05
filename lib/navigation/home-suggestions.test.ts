@@ -53,12 +53,18 @@ describe("Suggestions refactor", () => {
 
 describe("Suggestions header", () => {
   it("uses the canonical section-header pattern", () => {
-    expect(rail).toContain("text-[1.75rem] font-bold leading-none tracking-tight");
-    expect(rail).toContain("text-base font-medium text-[var(--color-brand-orange)]");
+    // Step 8 moved the markup into the shared component; the styling lives
+    // there now and this asserts the section actually uses it.
+    expect(rail).toContain("<PageSectionHeader");
+    expect(rail).toContain('title="Suggestions for you"');
+    const sectionHeader = read("components/app-shell/page-section-header.tsx");
+    expect(sectionHeader).toContain("text-[1.75rem] font-bold leading-none tracking-tight");
+    expect(sectionHeader).toContain("text-base font-medium text-[var(--color-brand-orange)]");
   });
 
   it("only offers See all when there is more to see", () => {
-    expect(rail).toContain("{secondary.length > 0 ? (");
+    // The action is omitted when nothing else is available.
+    expect(rail).toContain("onAction={secondary.length > 0 ? () => setMoreOpen(true) : undefined}");
   });
 });
 

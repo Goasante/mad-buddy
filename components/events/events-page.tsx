@@ -26,6 +26,7 @@ import type { EventGlowMuddyList } from "@/lib/events/types";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import { PageHeader } from "@/components/app-shell/page-header";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 
 type EventTab = "upcoming" | "live" | "mine";
@@ -205,10 +206,14 @@ export function EventsPageContent({
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] space-y-6 pt-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mx-auto max-w-[1200px] space-y-6 md:pt-6">
+      <PageHeader title="Events" />
+
+      <header className="flex flex-col gap-4 pt-1 sm:flex-row sm:items-center sm:justify-between md:pt-0">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Events</h1>
+          {/* Hidden on mobile: the shared header above carries the title
+              there. Desktop has no mobile header, so it keeps this. */}
+          <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Events</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Check in to see which Muddies are at the same event. Venue names only, never exact location.
           </p>

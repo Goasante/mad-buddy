@@ -31,8 +31,78 @@ const signupSchema = z.object({
   password: z.string().min(8),
   acceptedPolicy: z.literal(true),
   policyVersion: z.literal(PRIVACY_POLICY_VERSION),
-  turnstileToken: z.string().max(2048).optional()
+  // nullable AND optional: the form holds this as `string | null` and sends
+  // null whenever Turnstile has not issued a token — including when the site
+  // key is unset, which leaves the submit button enabled. A plain .optional()
+  // accepts undefined but REJECTS null, so a completely valid form failed
+  // schema validation and the user saw the generic fallback with no field
+  // marked. verifyTurnstileToken below is what actually enforces the
+  // challenge; the schema only needs to accept the shape the client sends.
+  turnstileToken: z.string().max(2048).nullable().optional()
 });
+
+/**
+ * Maps a Supabase sign-up failure to a sentence we own.
+ *
+ * The provider's own message is never returned: it can name internal
+ * constraints, and its wording changes between releases. Anything we do not
+ * recognise falls through to the generic sentence, which is the only case the
+ * fallback is meant for.
+ *
+ * Note: "email already registered" deliberately does NOT reach here — the
+ * caller treats it as a success so the form cannot be used to discover which
+ * addresses have accounts.
+ */
+function signupProviderMessage(error: { code?: string; message?: string } | null): string {
+  const code = error?.code ?? "";
+  const message = error?.message ?? "";
+
+  if (code === "weak_password" || /password/i.test(message)) {
+    return "Choose a stronger password with at least 8 characters.";
+  }
+  if (code === "email_address_invalid" || /invalid.*email|email.*invalid/i.test(message)) {
+    return "Enter a valid email address.";
+  }
+  if (code === "over_email_send_rate_limit" || code === "over_request_rate_limit") {
+    return "Too many attempts. Wait a minute and try again.";
+  }
+  if (code === "signup_disabled") {
+    return "New accounts are temporarily unavailable. Try again later.";
+  }
+  return "We couldn't create your account. Please try again.";
+}
+
+/**
+ * Turns Zod issues into one specific, user-facing sentence.
+ *
+ * The action previously discarded `parsed.error` entirely and returned a fixed
+ * string, so a wrong email, a short password and an unchecked policy box all
+ * produced the same unhelpful banner. Messages are written here rather than in
+ * the schema so the wording stays in one place and can never leak a raw Zod
+ * code or an internal field path to the user.
+ */
+function signupValidationMessage(error: z.ZodError): string {
+  // First issue wins: the form marks fields individually, so the banner only
+  // needs to name the most important problem.
+  const issue = error.issues[0];
+  const field = issue?.path[0];
+
+  switch (field) {
+    case "email":
+      return "Enter a valid email address.";
+    case "password":
+      return "Password must be at least 8 characters.";
+    case "acceptedPolicy":
+      return "Please accept the Terms and Privacy Policy.";
+    case "policyVersion":
+      // The policy changed while the form was open.
+      return "Our Terms have been updated. Reload the page and try again.";
+    case "turnstileToken":
+      return "Your security check expired. Reload the page and try again.";
+    default:
+      return "Please check the signup form and try again.";
+  }
+}
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -134,9 +204,11 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
       requestId,
       action: "auth.signup",
       statusCode: 400,
-      latencyMs: Date.now() - startedAt
+      latencyMs: Date.now() - startedAt,
+      // The field name only — never the submitted value.
+      errorType: `invalid_${String(parsed.error.issues[0]?.path[0] ?? "input")}`
     });
-    return { ok: false, message: "Please check the signup form and try again." };
+    return { ok: false, message: signupValidationMessage(parsed.error) };
   }
 
   const challenge = await verifyTurnstileToken(parsed.data.turnstileToken, "signup");
@@ -188,7 +260,9 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
       latencyMs: Date.now() - startedAt,
       errorType: createError?.name ?? "create_user_failed"
     });
-    return { ok: false, message: "Your account could not be created. Check the form and try again." };
+    // Map the provider's known failures to our own wording. The raw Supabase
+    // message is never surfaced — only a sentence we control.
+    return { ok: false, message: signupProviderMessage(createError) };
   }
 
   if (created.user.identities?.length === 0) {

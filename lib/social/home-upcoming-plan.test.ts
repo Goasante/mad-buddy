@@ -48,9 +48,13 @@ describe("Home plan selection", () => {
 
 describe("Upcoming Plans header", () => {
   it("uses the same pattern as Near", () => {
-    expect(section).toContain("Upcoming Plans");
-    expect(section).toContain("text-[1.75rem] font-bold leading-none tracking-tight");
-    expect(section).toContain("text-base font-medium text-[var(--color-brand-orange)]");
+    // Step 8 consolidated both into the shared PageSectionHeader, which is a
+    // stronger guarantee of "same pattern" than matching class strings.
+    expect(section).toContain("<PageSectionHeader");
+    expect(section).toContain('title="Upcoming Plans"');
+    const sectionHeader = read("components/app-shell/page-section-header.tsx");
+    expect(sectionHeader).toContain("text-[1.75rem] font-bold leading-none tracking-tight");
+    expect(sectionHeader).toContain("text-base font-medium text-[var(--color-brand-orange)]");
   });
 
   it("points See all at the canonical Plans page", () => {

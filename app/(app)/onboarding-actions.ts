@@ -16,7 +16,8 @@ import { savePrivacySetup } from "@/lib/onboarding/complete";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { Database, OnboardingStepName, PermissionResult } from "@/lib/supabase/database.types";
+import type { Database, PermissionResult } from "@/lib/supabase/database.types";
+import { FINALIZE_RECOVERABLE_MESSAGE, finalizeOnboarding } from "@/lib/onboarding/finalize";
 
 export type OnboardingActionState = { ok: boolean; message: string };
 
@@ -242,18 +243,13 @@ export async function completeOnboardingV2Action(): Promise<OnboardingActionStat
     return { ok: false, message: "Finish your profile and privacy setup first." };
   }
 
-  const nowIso = new Date().toISOString();
-  const [progressResult, profileResult] = await Promise.all([
-    admin
-      .from("onboarding_progress")
-      .update({ current_step: "completed" as OnboardingStepName, completed_at: nowIso, updated_at: nowIso })
-      .eq("user_id", userId),
-    // Keep the legacy convenience flag in sync.
-    admin.from("profiles").update({ is_onboarded: true }).eq("user_id", userId)
-  ]);
-
-  if (progressResult.error || profileResult.error) {
-    return { ok: false, message: "Couldn't finish setting up your account. Try again." };
+  // The same canonical primitive the web action and the native route use.
+  // This path previously wrote only progress + the is_onboarded flag, never
+  // the privacy version, so an account completed here looked different from
+  // one completed on the web.
+  const finalized = await finalizeOnboarding(admin, userId);
+  if (!finalized.ok) {
+    return { ok: false, message: FINALIZE_RECOVERABLE_MESSAGE };
   }
 
   return { ok: true, message: "You're all set." };

@@ -3,6 +3,7 @@ import { Bell, CalendarClock, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
+import { PageHeader } from "@/components/app-shell/page-header";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(value));
@@ -10,10 +11,13 @@ function formatDate(value: string) {
 
 export function RemindersPage({ plans, hasMore }: { plans: HomeUpcomingPlan[]; hasMore: boolean }) {
   return (
-    <div className="mx-auto max-w-[900px] space-y-6 pt-6">
-      <header className="flex items-start justify-between gap-4">
+    <div className="mx-auto max-w-[900px] space-y-6 md:pt-6">
+      <PageHeader title="Reminders" />
+
+      <header className="flex items-start justify-between gap-4 pt-1 md:pt-0">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Reminders</h1>
+          {/* Hidden on mobile: the shared header carries the title there. */}
+          <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Reminders</h1>
           <p className="mt-2 text-sm text-muted-foreground">Upcoming plans that need your attention.</p>
         </div>
         <Button asChild type="button" variant="outline" size="icon" aria-label="Notification settings" title="Notification settings">

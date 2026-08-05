@@ -1014,9 +1014,12 @@ html.dark {
   /* The mobile bottom bar's own height, EXCLUDING the safe-area inset (the bar
      pads itself by that internally). One source of truth consumed by both the
      bar and the shell's bottom padding, so the last section of a page is never
-     left underneath it. Derived from the tab hit target (56px) plus the ul's
-     vertical padding (2 x 8px). */
-  --mobile-nav-height: 4.5rem;
+     left underneath it.
+     56px tab hit target + 2 x 8px ul padding + 1px top border = 73px, plus a
+     little breathing room so the last card never sits flush against the bar.
+     This was 4.5rem (72px), which was 1px short of the bar's measured height
+     and left the final section fractionally occluded. */
+  --mobile-nav-height: 5rem;
   /* The fixed MobilePageHeader's own row height, EXCLUDING the safe-area inset.
      44px hit target + 12px top padding + 12px bottom padding. */
   --mobile-header-content-height: 4.25rem;

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import { cn } from "@/lib/utils";
 import type { GroupInvitation } from "@/lib/groups/types";
+import { PageHeader } from "@/components/app-shell/page-header";
 
 function monogram(name: string) {
   const trimmed = name.trim();
@@ -51,9 +52,12 @@ export function InvitesPageContent({
   }
 
   return (
-    <div className="mx-auto max-w-[720px] space-y-5 pt-5 sm:pt-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Invites</h1>
+    <div className="mx-auto max-w-[720px] space-y-5 md:pt-5 md:sm:pt-6">
+      <PageHeader title="Invites" />
+
+      <header className="pt-1 md:pt-0">
+        {/* Hidden on mobile: the shared header carries the title there. */}
+        <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Invites</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {hasPending ? "You have people waiting to connect." : "Nothing waiting for you right now."}
         </p>

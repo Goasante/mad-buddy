@@ -29,6 +29,7 @@ import type { SubscriptionPlan, SubscriptionStatus } from "@/lib/supabase/databa
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/app-shell/page-header";
 
 const planRank: Record<SubscriptionPlan, number> = {
   free: 0,
@@ -85,16 +86,24 @@ export async function BillingPageContent() {
     !["non_renewing", "cancelled", "expired"].includes(state.status);
 
   return (
-    <div className="mr-auto w-full max-w-[1200px] space-y-6 pt-3 sm:pt-4">
-      <header className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mr-auto w-full max-w-[1200px] space-y-6 md:pt-3 md:sm:pt-4">
+      {/* Reached from Me / the menu rather than a bottom-nav tab, so it uses
+          the nested Back variant. PageHeader is a client component, so this
+          server component can render it without becoming one. */}
+      <PageHeader title="Membership" backHref="/profile" />
+
+      <header className="flex flex-col gap-4 pt-1 md:border-b md:border-border md:pb-5 md:pt-0 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Your access</p>
-          <h1 className="mt-1 text-[clamp(1.7rem,3vw,2.4rem)] font-semibold tracking-tight">Membership</h1>
+          {/* Hidden on mobile: the shared header carries the title there. */}
+          <h1 className="mt-1 hidden text-[clamp(1.7rem,3vw,2.4rem)] font-semibold tracking-tight md:block">Membership</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             See what you have, what you use, and when your access changes.
           </p>
         </div>
-        <Button type="button" variant="outline" size="sm" asChild>
+        {/* Desktop only: on mobile the shared header's Back already provides
+            the way out, and two back affordances would compete. */}
+        <Button type="button" variant="outline" size="sm" asChild className="hidden md:inline-flex">
           <Link href="/dashboard">
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             Home

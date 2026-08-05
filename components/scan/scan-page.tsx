@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { FormField } from "@/components/auth/form-field";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/app-shell/page-header";
 
 type BarcodeDetectorLike = {
   detect: (source: CanvasImageSource) => Promise<Array<{ rawValue: string }>>;
@@ -127,9 +128,14 @@ export function ScanPageContent() {
   }, [submitCode]);
 
   return (
-    <div className="mx-auto max-w-[480px] space-y-5 pt-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Scan a code</h1>
+    <div className="mx-auto max-w-[480px] space-y-5 md:pt-6">
+      {/* Nested: reached from Muddies / invite flows, so Back rather than
+          Menu, and no app-level shortcuts competing with the scanner. */}
+      <PageHeader title="Scan a code" backHref="/friends" />
+
+      <header className="pt-1 md:pt-0">
+        {/* Hidden on mobile: the shared header carries the title there. */}
+        <h1 className="hidden text-2xl font-semibold tracking-tight md:block">Scan a code</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Scan a Muddy&apos;s personal QR to send a request, or an event QR to check in or join its circle.
         </p>

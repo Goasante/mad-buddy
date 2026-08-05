@@ -49,6 +49,7 @@ import {
   useTunedInLane
 } from "@/components/content/tuned-in-strip";
 import { usePullRefreshListener } from "@/components/ui/pull-to-refresh";
+import { PageHeader } from "@/components/app-shell/page-header";
 
 /** Retained for the route's existing prop contract. */
 export type MomentAudienceOption = { id: string; name: string };
@@ -313,9 +314,12 @@ export function MomentsPage({
   }
 
   return (
-    <div className="mx-auto w-full max-w-[560px] space-y-4 pb-4 pt-4">
-      <header className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Moments</h1>
+    <div className="mx-auto w-full max-w-[560px] space-y-4 pb-4 md:pt-4">
+      <PageHeader title="Moments" />
+
+      <header className="flex items-center justify-between gap-3 pt-1 md:pt-0">
+        {/* Hidden on mobile: the shared header carries the title there. */}
+        <h1 className="hidden text-2xl font-semibold tracking-tight md:block">Moments</h1>
         <div className="flex items-center gap-1.5">
           {openMomentsEnabled ? (
             <button

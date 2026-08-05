@@ -3,7 +3,7 @@
 import { after } from "next/server";
 import { grantAchievement } from "@/lib/engagement/achievements";
 import { completeOnboarding } from "@/lib/onboarding/complete";
-import { CURRENT_POLICY_VERSION, SAFE_DEFAULT_PRIVACY_SETUP } from "@/lib/onboarding/rules";
+import { FINALIZE_RECOVERABLE_MESSAGE, finalizeOnboarding } from "@/lib/onboarding/finalize";
 import { recordMilestone } from "@/lib/onboarding/service";
 import { normalizeUsername, validateUsername } from "@/lib/profile/rules";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -96,45 +96,16 @@ export async function finishOnboardingAction(
   if (!profileResult.ok) return profileResult;
 
   const admin = createSupabaseAdminClient();
-  const nowIso = new Date().toISOString();
-  const [progressResult, onboardedResult, privacyVersionResult] = await Promise.all([
-    admin.from("onboarding_progress").upsert(
-      {
-        user_id: user.id,
-        current_step: "completed",
-        profile_completed_at: nowIso,
-        privacy_reviewed_at: nowIso,
-        visibility_configured_at: nowIso,
-        completed_at: nowIso,
-        skipped_optional: skippedOptional,
-        updated_at: nowIso
-      },
-      { onConflict: "user_id" }
-    ),
-    admin
-      .from("profiles")
-      .update({
-        is_onboarded: true,
-        visibility_status: SAFE_DEFAULT_PRIVACY_SETUP.glowAudience === "hidden" ? "ghost" : "visible"
-      })
-      .eq("user_id", user.id),
-    admin.from("privacy_setup_versions").upsert(
-      {
-        user_id: user.id,
-        policy_version: CURRENT_POLICY_VERSION,
-        setup_completed_at: nowIso,
-        last_reviewed_at: nowIso,
-        updated_at: nowIso
-      },
-      { onConflict: "user_id" }
-    )
-  ]);
 
-  if (progressResult.error || onboardedResult.error || privacyVersionResult.error) {
-    // Completion is retry-safe. If one of the parallel writes failed, do not
-    // leave the profile marked as onboarded while its privacy setup is partial.
-    await admin.from("profiles").update({ is_onboarded: false }).eq("user_id", user.id);
-    return { ok: false, message: "Your profile was saved, but setup could not finish. Try again." };
+  // One canonical provisioning step, shared with the native route, the V2
+  // action and the recovery path — so no entry point can write a different
+  // subset of the completion rows.
+  const finalized = await finalizeOnboarding(admin, user.id, { skippedOptional });
+  if (!finalized.ok) {
+    // Deliberately NOT rolling is_onboarded back: that rollback is what left
+    // real accounts stranded with a complete profile and no way forward. The
+    // saved profile stands and the next visit resumes automatically.
+    return { ok: false, message: FINALIZE_RECOVERABLE_MESSAGE };
   }
 
   // Milestones and achievements are useful, but they must never hold the user
