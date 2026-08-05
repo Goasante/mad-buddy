@@ -5,7 +5,7 @@ import { UserRound } from "lucide-react";
 import { membershipTierLabel, type PublicMembershipTier } from "@/lib/billing/premium-identity";
 import { cn } from "@/lib/utils";
 
-export type UserAvatarSize = "xs" | "sm" | "md" | "lg" | "xl" | "profile";
+export type UserAvatarSize = "xs" | "sm" | "md" | "near" | "lg" | "xl" | "profile";
 
 /**
  * Ring band thickness per size. Larger avatars can carry a slightly heavier
@@ -16,6 +16,9 @@ const RING_PADDING: Record<UserAvatarSize, string> = {
   xs: "p-[1.5px]",
   sm: "p-[2px]",
   md: "p-[2.5px]",
+  // Thin and elegant, per the canonical ring treatment — deliberately not
+  // scaled up with the larger avatar.
+  near: "p-[2.5px]",
   lg: "p-[3px]",
   xl: "p-[3px]",
   profile: "p-[4px]"
@@ -110,6 +113,10 @@ const sizeClasses: Record<UserAvatarSize, string> = {
   xs: "h-6 w-6 text-[9px]",
   sm: "h-10 w-10 text-xs",
   md: "h-14 w-14 text-sm",
+  // Home's "Near" row. Sits between md (56px) and lg (76px): large enough to
+  // keep the face the strongest element, small enough that five fit across a
+  // 390px row with real breathing room between them.
+  near: "h-16 w-16 text-base",
   lg: "h-[4.75rem] w-[4.75rem] text-lg",
   xl: "h-24 w-24 text-xl",
   profile: "h-36 w-36 text-3xl"

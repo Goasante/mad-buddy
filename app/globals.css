@@ -805,6 +805,44 @@ html.dark .home-ambient-bg {
   --halo-spread: 2px;
 }
 
+/* Home "Near" section: the most restrained glow in the app.
+ *
+ * Same mechanism as .glow-strip above — scoped, unlayered overrides of the
+ * proximity-halo-* custom properties, so the canonical glow classes and the
+ * backend proximity/strength inputs are untouched. Only the presentation of
+ * the aura changes, and only inside this section.
+ *
+ * The avatar is the focus here, so the aura is quieter than anywhere else and,
+ * critically, its spread is small enough that neighbouring avatars in the
+ * horizontal row can never visually collide. The proximity hierarchy is
+ * inverted from the default in one specific way, per the design: closer means
+ * BRIGHTER but TIGHTER, further means FAINTER but WIDER — so distance reads as
+ * diffuseness rather than as raw size. */
+.near-strip .proximity-halo-very-close {
+  --halo-blur: 7px;
+  --halo-spread: 1px;
+  --halo-scale: 1.015;
+}
+
+.near-strip .proximity-halo-nearby {
+  --halo-blur: 9px;
+  --halo-spread: 1.5px;
+  --halo-scale: 1.015;
+}
+
+.near-strip .proximity-halo-around {
+  --halo-blur: 11px;
+  --halo-spread: 2px;
+  --halo-scale: 1.015;
+}
+
+/* NOTE: the aura's OPACITY is damped in GlowRing (its `intensity` prop), not
+ * here. GlowRing sets --halo-*-opacity as INLINE custom properties, and inline
+ * values beat stylesheet rules — a `.near-strip .proximity-halo { --halo-…}`
+ * override is silently ignored. Only the blur/spread/scale above work from
+ * CSS, because those are declared by the proximity-halo-* classes rather than
+ * inline. */
+
 /* Keep profile-preview halos within the compact drop panel so their soft
  * edges never meet a scroll boundary and turn into a sharp rectangle. */
 .muddy-profile-preview .proximity-halo-very-close {

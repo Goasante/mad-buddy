@@ -10,11 +10,11 @@ import {
   ChevronRight,
   CalendarDays,
   CircleDollarSign,
+  Clock,
   Compass,
   Ghost,
   GraduationCap,
   Hand,
-  LayoutGrid,
   MapPin,
   MessageSquareText,
   Moon,
@@ -158,8 +158,13 @@ const PROXIMITY_ORDER: Record<ProximityLevel, number> = {
   hidden: 3
 };
 
-/** Home shows at most four positions; a fifth+ collapses into a "+N" tile. */
-const NEARBY_MAX_POSITIONS = 4;
+/**
+ * Positions rendered in the Near row before the rest collapse into a "+N"
+ * tile. The row scrolls horizontally, so this is no longer bounded by what
+ * fits on screen (~5 at 390px) — it caps how much Home renders and keeps
+ * "See all" meaningful for a large circle.
+ */
+const NEARBY_MAX_POSITIONS = 8;
 
 function capitalize(name: string) {
   return name ? name.charAt(0).toUpperCase() + name.slice(1) : name;
@@ -186,11 +191,36 @@ function statusDisplay(note?: string, availability?: AvailabilityType): string {
 }
 
 /** Per-proximity accent for the label pill, matching the reference hues. */
-const PROXIMITY_LABEL_CLASS: Partial<Record<ProximityLevel, string>> = {
-  close: "bg-primary/12 text-primary",
-  near: "bg-violet-500/15 text-violet-600 dark:text-violet-300",
-  far: "bg-blue-500/15 text-blue-600 dark:text-blue-300"
+/**
+ * Dot colours for the Near section's distance label. Theme tokens and Tailwind
+ * palette steps that already have dark-mode variants — no hardcoded hex.
+ */
+const PROXIMITY_DOT_CLASS: Partial<Record<ProximityLevel, string>> = {
+  close: "bg-emerald-500",
+  near: "bg-[var(--color-brand-orange)]",
+  far: "bg-violet-500"
 };
+
+/**
+ * Presentation-only multiplier on the Near section's proximity aura.
+ *
+ * The glow should communicate distance quietly rather than dominate the row,
+ * and a tighter aura is also what keeps neighbouring avatars from visually
+ * colliding. Applied in GlowRing (not CSS) because the opacity values are set
+ * as inline custom properties, which a stylesheet rule cannot override.
+ */
+const NEAR_GLOW_INTENSITY = 0.72;
+
+/**
+ * One optical size and colour for the plan card's three leading icons, so the
+ * what/when/where rail reads as a single system.
+ */
+const PLAN_ICON = "h-4 w-4 shrink-0 text-muted-foreground";
+
+/** First name only, for the Near row's one-line labels. */
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? name;
+}
 
 export function DashboardPageContent({
   subscriptionPlan = "free",
@@ -228,6 +258,9 @@ export function DashboardPageContent({
   // counter, not another poller, and not derived from anything on this page.
   const unreadNotificationCount = useUnreadNotifications();
   const [isPending, startTransition] = useTransition();
+  // Nearby is fetched client-side after mount, so there is a real window with
+  // no data yet. Distinguishes "still loading" from "genuinely nobody nearby".
+  const [nearbyLoaded, setNearbyLoaded] = useState(false);
   const locationUpdateInFlightRef = useRef(false);
   const nearbyRefreshRef = useRef<Promise<void> | null>(null);
   const promptFeedbackTimerRef = useRef<number | null>(null);
@@ -306,6 +339,10 @@ export function DashboardPageContent({
         setStatusMessage("Could not reach the nearby friends service.");
       } finally {
         nearbyRefreshRef.current = null;
+        // First load has settled (either way) — the skeleton gives way to
+        // real data or to the empty state. Never shown again on refresh, so
+        // a pull-to-refresh cannot blank the row the user is looking at.
+        setNearbyLoaded(true);
       }
     })();
 
@@ -515,11 +552,16 @@ export function DashboardPageContent({
           friends={nearbyFriends}
           total={nearbyTotal}
           ghostMode={ghostMode}
-          isFirstTimeUser={isFirstTimeUser}
           glowColorByFriendId={glowColorByFriendId}
           reducedMotion={reducedMotion}
+          loaded={nearbyLoaded}
           onSelect={setSelectedFriendId}
         />
+
+        {/* Upcoming Plans sits directly under Near: both answer "what is
+            happening with my people", so they belong together, above the
+            generic action shortcuts. */}
+        {plan ? <UpcomingPlanRow plan={plan} /> : <UpcomingPlanEmpty />}
 
         {/* Quick actions: first-time activation set, or the returning-user set. */}
         {isFirstTimeUser ? (
@@ -557,9 +599,6 @@ export function DashboardPageContent({
             ))}
           </section>
         ) : null}
-
-        {/* Compact upcoming plan — only when one genuinely exists. */}
-        {plan ? <UpcomingPlanRow plan={plan} /> : null}
 
         {/* Fills leftover space above the bottom nav with extra shortcuts; they
             retract into "More" as soon as real content needs the room. Only for
@@ -710,17 +749,18 @@ function NearbyHero({
   friends,
   total,
   ghostMode,
-  isFirstTimeUser,
   glowColorByFriendId,
   reducedMotion,
+  loaded = true,
   onSelect
 }: {
   friends: DashboardFriend[];
   total: number;
   ghostMode: boolean;
-  isFirstTimeUser: boolean;
   glowColorByFriendId: Record<string, string>;
   reducedMotion: boolean;
+  /** False until the first nearby fetch settles; drives the skeleton. */
+  loaded?: boolean;
   onSelect: (friendId: string) => void;
 }) {
   // Over the cap, keep the three strongest and give the 4th slot to "+N".
@@ -732,30 +772,46 @@ function NearbyHero({
     // data-tour-id is the guided tour's stable targeting contract; the tour
     // spotlights this real section rather than showing a screenshot of it.
     <section aria-labelledby="home-nearby-heading" data-tour-id={TOUR_TARGET_IDS.HOME_NEARBY}>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 id="home-nearby-heading" className="text-base font-semibold tracking-tight">
-          Nearby right now
+      {/* Generous space above and below: this is the signature section, and
+          the air around it is what stops it reading as a contact list. */}
+      <div className="mb-4 flex items-baseline justify-between gap-3">
+        <h2 id="home-nearby-heading" className="text-[1.75rem] font-bold leading-none tracking-tight">
+          Near
         </h2>
         {total > 0 ? (
           <Link
             href="/friends"
-            className="inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline"
-            aria-label={`${total} nearby, view all Muddies`}
+            className="focus-ring shrink-0 rounded-md text-base font-medium text-[var(--color-brand-orange)] hover:underline"
+            aria-label={`See all ${total} nearby Muddies`}
           >
-            View all
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            See all
           </Link>
         ) : null}
       </div>
 
-      {total > 0 ? (
-        // One fixed row of up to four positions — never wraps, never grows with
-        // the nearby count. Larger avatars read as the hero; the top/side
-        // padding keeps the animated halo from being clipped at the row's edge.
-        // A glass-panel wrapper matches the Journey hero and empty-state card
-        // below so Nearby reads as one connected surface, not a bare row.
+      {!loaded && total === 0 ? (
+        // Lightweight skeletons matching the real column footprint exactly, so
+        // the row does not resize when data arrives. No large loading card.
+        <div className="near-strip -mx-4 flex items-start gap-5 overflow-hidden px-4 py-2 sm:-mx-6 sm:px-6" aria-hidden="true">
+          {[0, 1, 2, 3, 4].map((index) => (
+            <div key={index} className="flex w-[4.75rem] shrink-0 flex-col items-center gap-2.5">
+              <span className="h-16 w-16 animate-pulse rounded-full bg-secondary/70 motion-reduce:animate-none" />
+              <span className="h-3 w-12 animate-pulse rounded bg-secondary/70 motion-reduce:animate-none" />
+              <span className="h-2.5 w-9 animate-pulse rounded bg-secondary/50 motion-reduce:animate-none" />
+            </div>
+          ))}
+        </div>
+      ) : total > 0 ? (
+        // A bare horizontal rail, not a panel — the avatars themselves are the
+        // surface. Scrolls naturally with no snapping and no indicators.
+        //
+        // The negative margin + matching padding let the row bleed to the
+        // screen edges (so the last avatar scrolls fully into view) while the
+        // first avatar still aligns with the page's content column. The
+        // vertical padding gives the glow room so it is never clipped by the
+        // scroll container.
         <div
-          className="glass-panel -mx-1 flex items-start justify-between gap-1 rounded-[1.5rem] px-4 py-5 sm:gap-3"
+          className="near-strip -mx-4 flex items-start gap-4 overflow-x-auto px-4 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6"
           aria-label="Nearby Muddies"
         >
           {shown.map((friend) => {
@@ -765,10 +821,17 @@ function NearbyHero({
                 key={friend.friendId}
                 type="button"
                 onClick={() => onSelect(friend.friendId)}
-                className="focus-ring safe-motion flex min-w-0 basis-0 grow flex-col items-center gap-2 text-center"
-                aria-label={`${capitalize(name)}, ${proximityLabels[friend.proximityLevel]}`}
+                // Fixed width so every column is identical and the distance
+                // labels line up across the row regardless of name length.
+                // shrink-0 is what keeps the row from wrapping or squashing.
+                className="focus-ring safe-motion group flex w-[4.75rem] shrink-0 flex-col items-center gap-2.5 text-center transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
+                aria-label={`${capitalize(firstName(name))}, ${proximityLabels[friend.proximityLevel]}`}
               >
-                <span className="relative">
+                {/* Fixed-height avatar slot. The halo's padding varies with
+                    proximity, so without a fixed box each column would be a
+                    slightly different height and the names and distance labels
+                    would sit at different baselines across the row. */}
+                <span className="relative grid h-[4.5rem] w-full place-items-center">
                   <GlowAvatar
                     name={name}
                     src={friend.avatarUrl}
@@ -780,25 +843,42 @@ function NearbyHero({
                     // GlowRing owns the distance aura, UserAvatar owns the
                     // membership band. Neither reads the other's inputs.
                     membershipTier={friend.membershipTier}
-                    size="lg"
+                    size="near"
                     reducedMotion={reducedMotion}
+                    // Presentation only: a calmer aura on Home. Proximity,
+                    // strength and confidence are untouched, so the
+                    // close/near/far ordering is preserved.
+                    intensity={NEAR_GLOW_INTENSITY}
                   />
-                  {/* Presence: a nearby Muddy with a live, just-updated signal. */}
+                  {/* Presence: a nearby Muddy with a live, just-updated signal.
+                      Anchored to the centred 64px avatar box rather than the
+                      fixed-height slot, so it sits on the avatar's edge at
+                      every proximity level. */}
                   {friend.freshnessState === "live" ? (
                     <span
-                      className="absolute bottom-0.5 right-0.5 z-[2] h-3.5 w-3.5 rounded-full border-2 border-background bg-emerald-500"
+                      className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2"
                       aria-hidden="true"
-                    />
+                    >
+                      <span className="absolute bottom-0 right-0 z-[2] h-3 w-3 rounded-full border-2 border-background bg-emerald-500" />
+                    </span>
                   ) : null}
                 </span>
-                <span className="w-full truncate text-xs font-medium">{capitalize(name)}</span>
-                <span
-                  className={cn(
-                    "inline-flex max-w-full items-center truncate rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                    PROXIMITY_LABEL_CLASS[friend.proximityLevel] ?? "bg-primary/12 text-primary"
-                  )}
-                >
-                  {proximityLabels[friend.proximityLevel]}
+                {/* First name only, one line — a surname would force either a
+                    second line or an ellipsis on almost every entry. */}
+                <span className="w-full truncate text-sm font-semibold leading-none">
+                  {capitalize(firstName(name))}
+                </span>
+                {/* The glow already carries proximity; this quietly confirms
+                    it. A dot plus muted text, never a coloured pill. */}
+                <span className="inline-flex max-w-full items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <span
+                    className={cn(
+                      "h-1.5 w-1.5 shrink-0 rounded-full",
+                      PROXIMITY_DOT_CLASS[friend.proximityLevel] ?? "bg-muted-foreground"
+                    )}
+                    aria-hidden="true"
+                  />
+                  <span className="truncate">{proximityLabels[friend.proximityLevel]}</span>
                 </span>
               </button>
             );
@@ -807,48 +887,53 @@ function NearbyHero({
           {overflow ? (
             <Link
               href="/friends"
-              className="focus-ring safe-motion flex min-w-0 basis-0 grow flex-col items-center gap-2 text-center"
-              aria-label={`View all ${total} nearby Muddies`}
+              className="focus-ring safe-motion flex w-[4.75rem] shrink-0 flex-col items-center gap-2.5 text-center transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
+              aria-label={`See all ${total} nearby Muddies`}
             >
-              <span className="grid h-16 w-16 place-items-center rounded-full border-2 border-dashed border-border bg-secondary/40 leading-none">
-                <span className="text-sm font-bold">+{remaining}</span>
-                <span className="mt-0.5 text-[8px] font-medium text-muted-foreground">Muddies</span>
+              {/* Matches the avatar's footprint exactly so the row's baseline
+                  and label alignment hold. */}
+              <span className="grid h-16 w-16 place-items-center rounded-full border border-dashed border-border bg-secondary/40 text-sm font-semibold">
+                +{remaining}
               </span>
-              <span className="w-full truncate text-xs font-medium text-transparent">.</span>
-              <span className="text-[10px] font-semibold text-primary">View all</span>
+              <span className="w-full truncate text-sm font-semibold leading-none text-muted-foreground">
+                More
+              </span>
+              <span className="text-xs font-medium text-[var(--color-brand-orange)]">See all</span>
             </Link>
           ) : null}
         </div>
       ) : (
-        // Polished empty-state card — a friendly illustration, copy, and a
-        // single primary action. No coloured panel, no reused profile avatar.
-        <div className="glass-panel flex flex-col items-center rounded-[1.5rem] px-6 py-8 text-center">
-          <span className="relative grid h-20 w-20 place-items-center" aria-hidden="true">
-            {/* Concentric proximity rings — the same idea as the glow, resting —
-                the illustration for "nobody nearby yet", not a person. */}
+        // Lightweight empty state — no card, no large placeholder. Reuses the
+        // existing concentric-rings mark (the resting form of the glow) at a
+        // small size, so the section stays quiet when nobody is around rather
+        // than drawing attention to its own emptiness.
+        <div className="flex items-center gap-3.5 py-1">
+          <span className="relative grid h-11 w-11 shrink-0 place-items-center" aria-hidden="true">
             <span className="absolute inset-0 rounded-full border border-border/60" />
-            <span className="absolute inset-[13px] rounded-full border border-border/45" />
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-secondary/70 text-muted-foreground">
-              {ghostMode ? <Ghost className="h-5 w-5" aria-hidden="true" /> : <Users className="h-5 w-5" aria-hidden="true" />}
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-secondary/70 text-muted-foreground">
+              {ghostMode ? <Ghost className="h-4 w-4" aria-hidden="true" /> : <Users className="h-4 w-4" aria-hidden="true" />}
             </span>
           </span>
-          <p className="mt-4 text-[0.95rem] font-semibold">
-            {ghostMode ? "Visibility is paused" : isFirstTimeUser ? "No Muddies nearby yet" : "No Muddies nearby"}
-          </p>
-          <p className="mt-1.5 max-w-[19rem] text-sm leading-6 text-muted-foreground">
-            {ghostMode
-              ? "Turn visibility back on to appear nearby."
-              : "Invite trusted friends to start building your circle."}
-          </p>
-          {!ghostMode ? (
-            <Link
-              href="/friends?tab=add"
-              className="focus-ring safe-motion mt-4 inline-flex h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-[0_4px_14px_hsl(var(--shadow)/0.16)] transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
-            >
-              <UserPlus className="h-4 w-4" aria-hidden="true" />
-              {isFirstTimeUser ? "Add your first Muddy" : "Invite your first Muddy"}
-            </Link>
-          ) : null}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">
+              {ghostMode ? "Visibility is paused" : "No trusted Muddies nearby."}
+            </p>
+            <p className="mt-0.5 text-[0.8125rem] leading-5 text-muted-foreground">
+              {ghostMode ? (
+                "Turn visibility back on to appear nearby."
+              ) : (
+                <>
+                  <Link
+                    href="/friends?tab=add"
+                    className="focus-ring rounded font-medium text-[var(--color-brand-orange)] hover:underline"
+                  >
+                    Invite friends
+                  </Link>{" "}
+                  or turn on your Glow.
+                </>
+              )}
+            </p>
+          </div>
         </div>
       )}
     </section>
@@ -859,33 +944,29 @@ function NearbyHero({
 // First-time quick actions — activation-focused, fixed set of four.
 // ---------------------------------------------------------------------------
 
-type FirstTimeAction = { href: Route; label: string; icon: LucideIcon };
-
-const FIRST_TIME_ACTIONS: FirstTimeAction[] = [
-  { href: "/friends?tab=add", label: "Add Muddy", icon: UserPlus },
-  { href: "/plans?create=1", label: "Create Plan", icon: CalendarPlus },
-  { href: "/moments", label: "Share Moment", icon: Sparkles },
-  { href: "/help", label: "Learn Mad Buddy", icon: GraduationCap }
+/**
+ * The activation-focused suggestion set for brand-new accounts. Same card
+ * language as the returning-user rail, so the two never look like different
+ * systems — only the recommendations differ.
+ */
+const FIRST_TIME_ACTIONS: QuickAction[] = [
+  { href: "/friends?tab=add", label: "Add a Muddy", description: "Find people you already know.", suggestion: "Start building your circle.", tone: "lavender", icon: UserPlus, featureIcon: "invites", accent: "text-violet-500 dark:text-violet-400" },
+  { href: "/plans?create=1", label: "Create a Plan", description: "Create a plan and bring people together.", suggestion: "Bring people together.", tone: "green", icon: CalendarPlus, featureIcon: "plans", accent: "text-emerald-500 dark:text-emerald-400" },
+  { href: "/moments", label: "Share a Moment", description: "Share a moment before it disappears.", suggestion: "Share something before it’s gone.", tone: "blush", icon: Sparkles, featureIcon: "moments", accent: "text-primary" },
+  { href: "/help", label: "Learn Mad Buddy", description: "See how Mad Buddy works.", suggestion: "See how everything works.", tone: "blue", icon: GraduationCap, featureIcon: "focus", accent: "text-sky-500 dark:text-sky-400" }
 ];
 
 function FirstTimeQuickActions() {
   return (
     <section aria-labelledby="home-actions-heading" data-tour-id={TOUR_TARGET_IDS.HOME_QUICK_ACTIONS}>
-      <h2 id="home-actions-heading" className="mb-3 text-sm font-semibold">
-        Quick actions
-      </h2>
-      <div className="grid grid-cols-4 gap-2.5">
+      <div className="mb-4 flex items-baseline justify-between gap-3">
+        <h2 id="home-actions-heading" className="text-[1.75rem] font-bold leading-none tracking-tight">
+          Suggestions for you
+        </h2>
+      </div>
+      <div className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6">
         {FIRST_TIME_ACTIONS.map((action) => (
-          <Link
-            key={action.href}
-            href={action.href}
-            aria-label={action.label}
-            title={action.label}
-            className="focus-ring safe-motion glass-panel flex min-h-[92px] w-full flex-col items-center justify-center gap-2 rounded-[1.25rem] px-1 py-3 text-center transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
-          >
-            <action.icon className="h-7 w-7 shrink-0 text-foreground/70" strokeWidth={1.5} aria-hidden="true" />
-            <span className="line-clamp-2 w-full text-xs font-medium leading-tight">{action.label}</span>
-          </Link>
+          <SuggestionCard key={action.href} action={action} />
         ))}
       </div>
     </section>
@@ -904,40 +985,113 @@ type QuickAction = {
   featureIcon: FeatureIconKey;
   /** Per-feature accent (the FeatureIcon glyph is a currentColor mask). */
   accent: string;
+  /** Suggestion-card palette key. See SUGGESTION_TONE. */
+  tone: SuggestionTone;
+  /** Short recommendation copy for the suggestion card. */
+  suggestion: string;
 };
 
-const quickActions: QuickAction[] = [
-  { href: "/hangout-mode", label: "Hangout", description: "Let your Muddies know you’re open to meeting.", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
-  { href: "/discover", label: "Socialize", description: "Find people who are open to socializing.", icon: Compass, featureIcon: "socialize", accent: "text-violet-500 dark:text-violet-400" },
-  { href: "/safe-arrival", label: "Safe Arrival", description: "Let trusted Muddies know when you arrive safely.", icon: ShieldCheck, featureIcon: "safeArrival", accent: "text-sky-500 dark:text-sky-400" },
-  { href: "/moments", label: "Moments", description: "Share a moment before it disappears.", icon: Sparkles, featureIcon: "moments", accent: "text-primary" },
-  { href: "/events", label: "Events", description: "See what’s coming up.", icon: PartyPopper, featureIcon: "events", accent: "text-violet-500 dark:text-violet-400" },
-  { href: "/groups", label: "Groups", description: "Open your groups and invitations.", icon: Users2, featureIcon: "groups", accent: "text-sky-500 dark:text-sky-400" },
-  { href: "/invites", label: "Invites", description: "Review and send invitations.", icon: UserPlus, featureIcon: "invites", accent: "text-emerald-500 dark:text-emerald-400" },
-  { href: "/reminders", label: "Reminders", description: "Reminders for plans and connections.", icon: Bell, featureIcon: "reminders", accent: "text-amber-500 dark:text-amber-400" },
-  { href: "/settings/engagement", label: "Focus", description: "Manage Focus Mode and notification limits.", icon: Moon, featureIcon: "focus", accent: "text-pink-500 dark:text-pink-400" }
-];
+/**
+ * The suggestion card palettes.
+ *
+ * Deliberately soft: a low-alpha wash rather than a saturated fill, so the
+ * rail reads as calm at a glance and every tone works on both themes without
+ * a second set of values. Dark mode leans on the same alpha over a dark
+ * surface, which desaturates naturally instead of glowing.
+ */
+type SuggestionTone = "orange" | "lavender" | "green" | "blue" | "blush";
 
-const PRIMARY_ACTION_HREFS = ["/hangout-mode", "/discover", "/safe-arrival"];
+const SUGGESTION_TONE: Record<SuggestionTone, { surface: string; icon: string }> = {
+  orange: {
+    surface: "bg-orange-500/[0.09] dark:bg-orange-400/[0.12]",
+    icon: "bg-orange-500/15 text-orange-600 dark:bg-orange-400/20 dark:text-orange-300"
+  },
+  lavender: {
+    surface: "bg-violet-500/[0.09] dark:bg-violet-400/[0.12]",
+    icon: "bg-violet-500/15 text-violet-600 dark:bg-violet-400/20 dark:text-violet-300"
+  },
+  green: {
+    surface: "bg-emerald-500/[0.09] dark:bg-emerald-400/[0.12]",
+    icon: "bg-emerald-500/15 text-emerald-600 dark:bg-emerald-400/20 dark:text-emerald-300"
+  },
+  blue: {
+    surface: "bg-sky-500/[0.09] dark:bg-sky-400/[0.12]",
+    icon: "bg-sky-500/15 text-sky-600 dark:bg-sky-400/20 dark:text-sky-300"
+  },
+  blush: {
+    surface: "bg-pink-500/[0.09] dark:bg-pink-400/[0.12]",
+    icon: "bg-pink-500/15 text-pink-600 dark:bg-pink-400/20 dark:text-pink-300"
+  }
+};
 
 /**
- * Splits the flag-filtered actions into the three primary tiles and the rest
- * ("More"). Shared by the launcher row and the bottom gap-filler so a promoted
- * action is never shown twice.
+ * The canonical Home action set — now also the suggestion source.
+ *
+ * `label`/`description` still drive the "More to explore" tiles and the More
+ * sheet; `suggestion` is the shorter, recommendation-shaped copy the cards
+ * use ("Find spontaneous meetups." rather than a feature description).
+ *
+ * Every entry points at a route that already exists, and the list is still
+ * filtered by the same Owner feature flags — no new recommendation logic.
+ */
+const quickActions: QuickAction[] = [
+  { href: "/hangout-mode", label: "Join a Hangout", description: "Let your Muddies know you’re open to meeting.", suggestion: "Find spontaneous meetups.", tone: "orange", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
+  { href: "/invites", label: "Invite Friends", description: "Review and send invitations.", suggestion: "Grow your trusted circle.", tone: "lavender", icon: UserPlus, featureIcon: "invites", accent: "text-emerald-500 dark:text-emerald-400" },
+  { href: "/plans?create=1", label: "Complete a Plan", description: "Create a plan and bring people together.", suggestion: "Bring people together.", tone: "green", icon: CalendarDays, featureIcon: "plans", accent: "text-emerald-500 dark:text-emerald-400" },
+  { href: "/events", label: "Discover Events", description: "See what’s coming up.", suggestion: "See what’s happening nearby.", tone: "blue", icon: PartyPopper, featureIcon: "events", accent: "text-violet-500 dark:text-violet-400" },
+  { href: "/discover", label: "Socialize", description: "Find people who are open to socializing.", suggestion: "Meet people open to socializing.", tone: "lavender", icon: Compass, featureIcon: "socialize", accent: "text-violet-500 dark:text-violet-400" },
+  { href: "/safe-arrival", label: "Safe Arrival", description: "Let trusted Muddies know when you arrive safely.", suggestion: "Let your circle know you got there.", tone: "blue", icon: ShieldCheck, featureIcon: "safeArrival", accent: "text-sky-500 dark:text-sky-400" },
+  { href: "/moments", label: "Moments", description: "Share a moment before it disappears.", suggestion: "Share something before it’s gone.", tone: "blush", icon: Sparkles, featureIcon: "moments", accent: "text-primary" },
+  { href: "/groups", label: "Groups", description: "Open your groups and invitations.", suggestion: "Catch up with your groups.", tone: "green", icon: Users2, featureIcon: "groups", accent: "text-sky-500 dark:text-sky-400" },
+  { href: "/reminders", label: "Reminders", description: "Reminders for plans and connections.", suggestion: "Stay on top of what’s next.", tone: "orange", icon: Bell, featureIcon: "reminders", accent: "text-amber-500 dark:text-amber-400" },
+  { href: "/settings/engagement", label: "Focus", description: "Manage Focus Mode and notification limits.", suggestion: "Quieten things down for a while.", tone: "blush", icon: Moon, featureIcon: "focus", accent: "text-pink-500 dark:text-pink-400" }
+];
+
+/**
+ * The suggestions surfaced on the Home rail, in order. The rest stay
+ * available through "More to explore" lower down.
+ */
+const PRIMARY_ACTION_HREFS = ["/hangout-mode", "/invites", "/plans?create=1", "/events"];
+
+/** How many suggestions the Home rail renders before the rest fall through. */
+const SUGGESTION_COUNT = 4;
+
+/**
+ * Splits the flag-filtered actions into the rail's suggestions and the rest.
+ * Shared by the rail and the bottom gap-filler so a promoted action is never
+ * shown twice.
+ *
+ * This is availability filtering, not ranking: the order comes from the list
+ * above, and a server-driven recommendation could replace `primary` wholesale
+ * without the card component changing.
  */
 function splitQuickActions(hiddenHrefs: string[]): { primary: QuickAction[]; secondary: QuickAction[] } {
   const available = quickActions.filter((action) => !hiddenHrefs.includes(action.href));
-  // Keep three primary tiles. If one (e.g. Socialize) is disabled by Owner
-  // controls, backfill from the remaining actions so there is never an empty
-  // gap where a feature used to be.
+  // If one (e.g. Socialize) is disabled by Owner controls, backfill from the
+  // remaining actions so there is never an empty gap where a feature used to be.
   const primary: QuickAction[] = available.filter((action) => PRIMARY_ACTION_HREFS.includes(action.href));
   const rest = available.filter((action) => !PRIMARY_ACTION_HREFS.includes(action.href));
-  while (primary.length < 3 && rest.length > 0) {
+  while (primary.length < SUGGESTION_COUNT && rest.length > 0) {
     primary.push(rest.shift()!);
   }
   return { primary, secondary: rest };
 }
 
+/**
+ * Home's "Suggestions for you" rail.
+ *
+ * Replaces the old Quick Actions grid. These read as recommendations rather
+ * than navigation: a soft pastel surface per card, a short suggestion
+ * sentence, and no dense icon grid.
+ *
+ * `primary` is simply rendered in the order given — this component holds no
+ * ranking of its own, so a future server-driven recommendation set can be
+ * dropped in without touching it. The section hides entirely when empty.
+ *
+ * The tour target stays attached here: a shipped walkthrough migration
+ * references `home-quick-actions`, so the id must keep resolving to a real,
+ * visible element even though the section is no longer called Quick actions.
+ */
 function QuickActionsHome({
   primary,
   secondary
@@ -947,34 +1101,42 @@ function QuickActionsHome({
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
 
+  // No suggestions available (every feature flagged off) — hide the section
+  // rather than render an empty placeholder.
+  if (primary.length === 0) return null;
+
   return (
     <section aria-labelledby="home-actions-heading" data-tour-id={TOUR_TARGET_IDS.HOME_QUICK_ACTIONS}>
-      <h2 id="home-actions-heading" className="mb-3 text-sm font-semibold">
-        Quick actions
-      </h2>
-      {/* Premium rounded cards — a soft glass surface per tile rather than a
-          bare icon-on-background cell, with a larger glyph as the focal point. */}
-      <div className={cn("grid gap-2.5", secondary.length > 0 ? "grid-cols-4" : "grid-cols-3")}>
-        {primary.map((action) => (
-          <QuickActionTile key={action.href} action={action} />
-        ))}
+      {/* Canonical section header, matching Near and Upcoming Plans. */}
+      <div className="mb-4 flex items-baseline justify-between gap-3">
+        <h2 id="home-actions-heading" className="text-[1.75rem] font-bold leading-none tracking-tight">
+          Suggestions for you
+        </h2>
         {secondary.length > 0 ? (
           <button
             type="button"
             onClick={() => setMoreOpen(true)}
-            className="focus-ring safe-motion glass-panel flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-[1.25rem] px-1 py-3 text-center transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
-            aria-label="More quick actions"
+            className="focus-ring shrink-0 rounded-md text-base font-medium text-[var(--color-brand-orange)] hover:underline"
+            aria-label="See all suggestions"
           >
-            <LayoutGrid className="h-8 w-8 shrink-0 text-muted-foreground" strokeWidth={1.5} aria-hidden="true" />
-            <span className="line-clamp-2 w-full text-xs font-medium leading-tight">More</span>
+            See all
           </button>
         ) : null}
+      </div>
+
+      {/* Horizontal rail. Cards are a fixed width so roughly three fit on a
+          standard phone with the fourth peeking, which is what signals the
+          row scrolls — no indicators needed. */}
+      <div className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6">
+        {primary.map((action) => (
+          <SuggestionCard key={action.href} action={action} />
+        ))}
       </div>
 
       <Modal
         open={moreOpen}
         onOpenChange={setMoreOpen}
-        title="More actions"
+        title="More suggestions"
         description="Jump to another Mad Buddy feature."
         variant="sheet"
       >
@@ -995,6 +1157,39 @@ function QuickActionsHome({
         </div>
       </Modal>
     </section>
+  );
+}
+
+/**
+ * One suggestion. A calm pastel surface, a small rounded icon chip, a title
+ * and one short sentence — closer to a widget than a shortcut button.
+ */
+function SuggestionCard({ action }: { action: QuickAction }) {
+  const tone = SUGGESTION_TONE[action.tone];
+  const Icon = action.icon;
+
+  return (
+    <Link
+      href={action.href}
+      // One label carrying both the action and why it is being suggested.
+      aria-label={`${action.label}. ${action.suggestion}`}
+      className={cn(
+        // ~7.75rem keeps three cards fully visible at 390px with the fourth
+        // peeking, which is what signals the rail scrolls.
+        "focus-ring safe-motion relative flex w-[7.75rem] shrink-0 flex-col overflow-hidden rounded-[1.25rem] border border-black/[0.04] p-3 shadow-[0_1px_3px_hsl(var(--shadow)/0.05)] transition-[transform,box-shadow] active:scale-[0.98] active:shadow-[0_4px_14px_hsl(var(--shadow)/0.12)] motion-reduce:transition-none motion-reduce:active:scale-100 dark:border-white/[0.06]",
+        tone.surface
+      )}
+    >
+      <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-[0.625rem]", tone.icon)}>
+        <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden="true" />
+      </span>
+      <span className="mt-2.5 line-clamp-2 text-[0.8125rem] font-semibold leading-tight">
+        {action.label}
+      </span>
+      <span className="mt-1 line-clamp-2 text-[0.75rem] leading-[1.35] text-muted-foreground">
+        {action.suggestion}
+      </span>
+    </Link>
   );
 }
 
@@ -1128,72 +1323,166 @@ function rsvpLabel(rsvp: string): string {
   }
 }
 
+/**
+ * Home's single upcoming-Plan preview.
+ *
+ * The Plan shown is `upcomingPlans[0]` — the soonest by `start_at`, ordered
+ * server-side by loadUpcomingPlans. No ranking is computed here.
+ *
+ * Everything rendered comes from the existing authorised projection: the venue
+ * is the plan's own `custom_place_text` (never a coordinate or a private
+ * address), and the attendee faces are the same "going" profiles the Plans
+ * page uses.
+ */
 function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
-  const when = new Date(plan.startAt).toLocaleString([], {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  });
+  const startAt = new Date(plan.startAt);
+  // Split date and time so they can carry different weight — the date is what
+  // people scan for, the time qualifies it.
+  const day = startAt.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  const time = startAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  // "Hosting" when the projection already says this viewer created the plan.
+  // Not inferred: loadUpcomingPlans sets organiserName to the literal "You"
+  // for the creator. It has to be checked here because the same projection
+  // collapses a host's own attendance into myRsvp: "going", so the RSVP alone
+  // cannot tell a host from an attendee.
+  const attendance = plan.organiserName === "You" ? "Hosting" : rsvpLabel(plan.myRsvp);
+  // goingCount is the canonical number; the faces are a capped sample of it.
+  const extraAttendees = Math.max(0, plan.goingCount - plan.attendees.slice(0, 3).length);
 
   return (
     <section aria-labelledby="home-plan-heading" data-tour-id={TOUR_TARGET_IDS.HOME_UPCOMING_PLAN}>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 id="home-plan-heading" className="text-sm font-semibold">
-          Upcoming
+      {/* Same header pattern as Near. */}
+      <div className="mb-4 flex items-baseline justify-between gap-3">
+        <h2 id="home-plan-heading" className="text-[1.75rem] font-bold leading-none tracking-tight">
+          Upcoming Plans
         </h2>
-        <Link href="/plans" className="text-xs font-medium text-primary hover:underline">
-          All plans
+        <Link
+          href="/plans"
+          className="focus-ring shrink-0 rounded-md text-base font-medium text-[var(--color-brand-orange)] hover:underline"
+          aria-label="See all plans"
+        >
+          See all
         </Link>
       </div>
-      {/* A compact preview, not a full plan card — the whole row is tappable and
-          the complete detail lives on /plans. */}
+
+      {/* One tappable card. There is no /plans/[id] route in the app, so this
+          opens the canonical Plans page — the same destination the previous
+          preview used. No new navigation is introduced here. */}
       <Link
         href="/plans"
-        aria-label={`${capitalize(plan.title)}, ${when}, ${rsvpLabel(plan.myRsvp)}`}
-        className="focus-ring safe-motion glass-panel flex items-center gap-3 rounded-[1.5rem] px-5 py-4 transition-colors hover:bg-secondary/20"
+        aria-label={`${capitalize(plan.title)}, ${day} at ${time}${
+          plan.placeText ? `, ${capitalize(plan.placeText)}` : ""
+        }, ${attendance}`}
+        className="focus-ring safe-motion flex items-center gap-3 rounded-[1.375rem] border border-border/70 bg-card px-4 py-4 shadow-[0_1px_3px_hsl(var(--shadow)/0.06)] transition-transform active:scale-[0.99] motion-reduce:active:scale-100 dark:bg-[#1a1a1d]"
       >
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-          <CalendarDays className="h-[18px] w-[18px]" aria-hidden="true" />
+        {/* Three metadata rows, each led by its own icon: what, when, where.
+            The icons form a consistent left rail so the three lines scan as a
+            set rather than as a paragraph. */}
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <p className="flex items-center gap-2">
+            <CalendarDays className={PLAN_ICON} strokeWidth={1.75} aria-hidden="true" />
+            {/* The title is the strongest text in the card. */}
+            <span className="truncate text-[0.9375rem] font-semibold leading-tight">
+              {capitalize(plan.title)}
+            </span>
+          </p>
+          {/* Date/time and venue are secondary and scannable. Each line
+              truncates as a unit so a long venue can never wrap the card. */}
+          <p className="flex items-center gap-2 text-[0.8125rem] leading-tight text-muted-foreground">
+            <Clock className={PLAN_ICON} strokeWidth={1.75} aria-hidden="true" />
+            <span className="truncate" suppressHydrationWarning>
+              {day} • {time}
+            </span>
+          </p>
+          {plan.placeText ? (
+            <p className="flex items-center gap-2 text-[0.8125rem] leading-tight text-muted-foreground">
+              <MapPin className={PLAN_ICON} strokeWidth={1.75} aria-hidden="true" />
+              <span className="truncate">{capitalize(plan.placeText)}</span>
+            </p>
+          ) : null}
+        </div>
+
+        {/* Faces and count sit on one line, vertically centred against the
+            three metadata rows; the attendance state tucks underneath so it
+            never competes with them for horizontal space. */}
+        <div className="flex shrink-0 flex-col items-end gap-1.5 self-center">
+          {plan.attendees.length > 0 ? (
+            // Faces are the first thing to go on a narrow screen: they are
+            // decorative, while the title, time and venue are not. Below
+            // 380px only the count remains, which keeps the text column wide
+            // enough that the time is never truncated.
+            <span className="flex items-center" aria-hidden="true">
+              <span className="hidden -space-x-2 min-[380px]:flex">
+                {plan.attendees.slice(0, 3).map((attendee, index) => (
+                  <span
+                    key={`${attendee.name}-${index}`}
+                    // Plain avatars: the attendee projection carries no
+                    // membership tier, and a tier must never be inferred.
+                    className="grid h-7 w-7 place-items-center overflow-hidden rounded-full border-2 border-card bg-secondary text-[10px] font-semibold uppercase text-muted-foreground dark:border-[#1a1a1d]"
+                  >
+                    {attendee.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={attendee.avatarUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      initialOf(attendee.name)
+                    )}
+                  </span>
+                ))}
+              </span>
+              {/* Two forms of the same count. Wide: the faces plus whoever
+                  they don't cover ("+12"). Narrow: the faces are hidden, so
+                  the total going count stands alone ("12 going") and no
+                  information is lost. */}
+              {extraAttendees > 0 ? (
+                <span className="ml-1.5 hidden text-xs font-semibold tabular-nums text-muted-foreground min-[380px]:inline">
+                  +{extraAttendees}
+                </span>
+              ) : null}
+              <span className="text-xs font-semibold tabular-nums text-muted-foreground min-[380px]:hidden">
+                {plan.goingCount} going
+              </span>
+            </span>
+          ) : null}
+          <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[0.6875rem] font-semibold text-primary">
+            {attendance}
+          </span>
+        </div>
+      </Link>
+    </section>
+  );
+}
+
+/**
+ * Shown in place of the card when there is nothing coming up. Deliberately a
+ * light invitation rather than an empty card, matching the Near section's
+ * treatment.
+ */
+function UpcomingPlanEmpty() {
+  return (
+    <section aria-labelledby="home-plan-heading">
+      <div className="mb-4 flex items-baseline justify-between gap-3">
+        <h2 id="home-plan-heading" className="text-[1.75rem] font-bold leading-none tracking-tight">
+          Upcoming Plans
+        </h2>
+      </div>
+      <div className="flex items-center gap-3.5 py-1">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border/60 text-muted-foreground">
+          <CalendarDays className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{capitalize(plan.title)}</p>
-          {/* Date + place on one truncating line — the whole line ellipsises as
-              a unit, so it can't overflow or wrap on the narrowest phones. */}
-          <p className="mt-0.5 truncate text-xs text-muted-foreground" suppressHydrationWarning>
-            {when}
-            {plan.placeText ? (
-              <>
-                {" · "}
-                <MapPin className="mr-0.5 inline-block h-3 w-3 -translate-y-px" aria-hidden="true" />
-                {capitalize(plan.placeText)}
-              </>
-            ) : null}
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">No upcoming Plans.</p>
+          <p className="mt-0.5 text-[0.8125rem] leading-5 text-muted-foreground">
+            {/* The canonical creation route, same as every other Create entry. */}
+            <Link
+              href="/plans?create=1"
+              className="focus-ring rounded font-medium text-[var(--color-brand-orange)] hover:underline"
+            >
+              Create a Plan
+            </Link>{" "}
+            with your Muddies.
           </p>
         </div>
-        {plan.attendees.length > 0 ? (
-          <span className="hidden shrink-0 -space-x-1.5 min-[400px]:flex" aria-hidden="true">
-            {plan.attendees.slice(0, 3).map((attendee, index) => (
-              <span
-                key={`${attendee.name}-${index}`}
-                className="grid h-6 w-6 place-items-center overflow-hidden rounded-full border-2 border-background bg-secondary text-[9px] font-semibold uppercase text-muted-foreground"
-              >
-                {attendee.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={attendee.avatarUrl} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  initialOf(attendee.name)
-                )}
-              </span>
-            ))}
-          </span>
-        ) : null}
-        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/12 px-2 py-0.5 text-xs font-semibold text-primary">
-          {rsvpLabel(plan.myRsvp)}
-          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-        </span>
-      </Link>
+      </div>
     </section>
   );
 }

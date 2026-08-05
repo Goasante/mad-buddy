@@ -11,7 +11,7 @@ export type GlowAvatarProps = {
   proximityLevel?: ProximityLevel;
   glowStrength?: number;
   confidence?: ConfidenceLevel;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "sm" | "md" | "near" | "lg" | "xl";
   reducedMotion?: boolean;
   className?: string;
   /** Optional custom-glow palette id (custom_glow_styles entitlement). */
@@ -26,6 +26,8 @@ export type GlowAvatarProps = {
    * can never imply membership.
    */
   membershipTier?: PublicMembershipTier;
+  /** Presentation-only aura multiplier, passed through to GlowRing. */
+  intensity?: number;
 };
 
 export function GlowAvatar({
@@ -38,7 +40,8 @@ export function GlowAvatar({
   reducedMotion = false,
   className,
   glowColorId = null,
-  membershipTier = "free"
+  membershipTier = "free",
+  intensity = 1
 }: GlowAvatarProps) {
   // Many non-proximity surfaces reuse GlowAvatar for consistent avatar
   // rendering. No supplied level means "no proximity signal", not Far. Far is
@@ -53,6 +56,7 @@ export function GlowAvatar({
       glowStrength={glowStrength}
       reducedMotion={reducedMotion}
       glowColorId={glowColorId}
+      intensity={intensity}
       className={cn(proximityLevel === "hidden" && "opacity-50 grayscale", className)}
       aria-label={proximityLevel ? `${name}, ${proximityLabels[proximityLevel].toLowerCase()}` : name}
     >

@@ -11,6 +11,16 @@ export type GlowRingProps = HTMLAttributes<HTMLDivElement> & {
   reducedMotion?: boolean;
   /** Optional custom-glow palette id (custom_glow_styles entitlement). */
   glowColorId?: string | null;
+  /**
+   * Presentation-only multiplier on the aura's opacity (1 = unchanged).
+   *
+   * Lets a surface render a calmer glow without touching proximity, strength
+   * or confidence — the distance ordering computed below is multiplied
+   * uniformly, so close > near > far still holds at any intensity. Needed as a
+   * prop rather than a CSS override because the opacity values are set inline
+   * here, and inline custom properties beat stylesheet rules.
+   */
+  intensity?: number;
 };
 
 export function GlowRing({
@@ -19,6 +29,7 @@ export function GlowRing({
   glowStrength = 0,
   reducedMotion = false,
   glowColorId = null,
+  intensity = 1,
   className,
   children,
   ...props
@@ -36,7 +47,10 @@ export function GlowRing({
         : proximityLevel === "far"
           ? 0.5
           : 0;
-  const activeHaloOpacity = stateOpacity * confidenceMultiplier * strengthMultiplier;
+  // Presentation multiplier applied last, so it scales the fully-resolved
+  // proximity intensity rather than any single input.
+  const activeHaloOpacity =
+    stateOpacity * confidenceMultiplier * strengthMultiplier * Math.max(0, intensity);
   // The breathing animation cycles opacity between these rest/active values
   // every 2.2-3.4s. At the old 0.52/0.3 multipliers, the outer aura (the part
   // that actually reads as a soft glow beyond the solid ring) dropped to
