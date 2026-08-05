@@ -35,6 +35,9 @@ import {
   removeCloseFriendAction
 } from "@/app/(app)/circles-actions";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
+import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
+import { useAppMenu } from "@/hooks/app-menu-context";
+import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { AppMenu } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
@@ -132,6 +135,9 @@ export function FriendsPageContent({
   const [activeCircleId, setActiveCircleId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [feedback, setFeedback] = useState("");
+  // Shared shell chrome: one menu sheet, one unread count.
+  const openAppMenu = useAppMenu();
+  const unreadNotificationCount = useUnreadNotifications();
   const [addOpen, setAddOpen] = useState(() => searchParams.get("tab") === "add");
   const [addQuery, setAddQuery] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
@@ -418,8 +424,20 @@ export function FriendsPageContent({
   );
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-[1200px] space-y-4 overflow-x-clip pt-5">
-      <header className="flex min-w-0 items-center justify-between gap-3">
+    <div className="mx-auto w-full min-w-0 max-w-[1200px] space-y-4 overflow-x-clip">
+      {/* Canonical mobile header. Muddies is a bottom-nav root, so it keeps
+          Notifications and Add Muddy; Quick Controls stays on Home, whose
+          sheet (visibility, ghost mode, refresh Nearby) has no equivalent
+          here. The subtitle and Add button below are untouched. */}
+      <MobilePageHeader
+        title="Muddies"
+        onOpenMenu={openAppMenu}
+        showQuickControls={false}
+        incomingRequestCount={receivedRequestCount}
+        unreadNotificationCount={unreadNotificationCount}
+      />
+
+      <header className="flex min-w-0 items-center justify-between gap-3 pt-1 md:pt-5">
         <p className="min-w-0 truncate text-sm text-muted-foreground">Your Muddies, all in one place.</p>
         <Button data-tour-id={TOUR_TARGET_IDS.MUDDIES_ADD} type="button" size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAddOpen(true)}>
           <Plus className="h-4 w-4" aria-hidden="true" />

@@ -44,6 +44,9 @@ import type { ResolvedWallpaper } from "@/lib/wallpapers/catalog";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { useUnreadNotificationCount } from "@/hooks/use-unread-notification-count";
 import { UnreadNotificationProvider } from "@/hooks/unread-notification-context";
+import { AppMenuProvider } from "@/hooks/app-menu-context";
+import { HomeSettingsSheet } from "@/components/dashboard/home-settings-sheet";
+import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { NavigationWatchdog } from "@/components/navigation/navigation-watchdog";
 
 // Order matters for MobileNav, which just takes the first five (minus
@@ -112,6 +115,9 @@ const SECONDARY_HREFS = ["/plans", "/moments", "/events", "/groups", "/discover"
  */
 const PAGES_WITH_OWN_HEADER = [
   "/dashboard",
+  // Muddies now renders the canonical MobilePageHeader itself, so the global
+  // AppHeader must stand down here or the route would carry two headers.
+  "/friends",
   "/notifications",
   "/profile",
   "/settings",
@@ -138,6 +144,16 @@ export type AppShellProps = {
   currentUserId?: string | null;
   hiddenNavigationHrefs?: string[];
   /**
+   * Identity for the app-wide menu sheet, resolved once by the layout.
+   *
+   * The sheet is mounted here rather than per screen, so any page's header
+   * can open it through AppMenuProvider without receiving these props itself.
+   */
+  currentDisplayName?: string;
+  subscriptionPlan?: SubscriptionPlan | null;
+  buddyScoreLevelLabel?: string | null;
+  profileCompletionPercent?: number;
+  /**
    * Server-resolved wallpaper (entitlement-checked, always safe), as a
    * PROMISE rather than an already-awaited value — the layout never awaits
    * this itself, so a slow resolve (including the live Storage signed-URL
@@ -160,8 +176,14 @@ export function AppShell({
   currentAvatarUrl = null,
   currentUserId = null,
   hiddenNavigationHrefs = [],
+  currentDisplayName = "",
+  subscriptionPlan = null,
+  buddyScoreLevelLabel = null,
+  profileCompletionPercent = 0,
   wallpaperPromise = resolvedDefaultWallpaper
 }: AppShellProps) {
+  // One menu sheet for the whole authenticated app.
+  const [appMenuOpen, setAppMenuOpen] = useState(false);
   const pathname = usePathname();
   // Canonical unread count, shared with the mobile header via the same hook —
   // one fetch/poll/broadcast implementation, so the sidebar badge and the
@@ -265,13 +287,30 @@ export function AppShell({
             {/* Pages read the shell's already-resolved unread count from here
                 rather than starting their own poller. */}
             <UnreadNotificationProvider count={unreadCount}>
-              <div className="mx-auto w-full max-w-[1200px]">{children}</div>
+              {/* Any screen's header Menu button opens the one sheet mounted
+                  below, so no page needs its own copy or its identity props. */}
+              <AppMenuProvider openMenu={() => setAppMenuOpen(true)}>
+                <div className="mx-auto w-full max-w-[1200px]">{children}</div>
+              </AppMenuProvider>
             </UnreadNotificationProvider>
           </PullToRefresh>
         </main>
         </div>
       </div>
       <MobileNav />
+
+      {/* The app-wide menu sheet. Mounted once here — every screen's header
+          Menu opens this same instance through AppMenuProvider. */}
+      <HomeSettingsSheet
+        open={appMenuOpen}
+        onOpenChange={setAppMenuOpen}
+        displayName={currentDisplayName}
+        currentUsername={currentUsername}
+        currentAvatarUrl={currentAvatarUrl}
+        subscriptionPlan={subscriptionPlan}
+        buddyScoreLevelLabel={buddyScoreLevelLabel}
+        profileCompletionPercent={profileCompletionPercent}
+      />
     </div>
   );
 }

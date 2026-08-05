@@ -2,6 +2,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
+import type { PlanCategory } from "@/lib/supabase/database.types";
 
 /**
  * The Home "Upcoming plans" read model. Mirrors the Plans page's membership
@@ -27,6 +28,11 @@ export type HomeUpcomingPlan = {
   goingCount: number;
   maybeCount: number;
   placeText: string | null;
+  // Cover inputs, passed straight to the canonical resolver
+  // (lib/plans/plan-covers). Both optional: a plan with neither still renders
+  // the branded fallback.
+  category: PlanCategory | null;
+  coverImageUrl: string | null;
   // A few real "going" attendees for the Home avatar stack (capped; not the
   // full roster). Empty when nobody has RSVP'd going yet.
   attendees: PlanAttendee[];
@@ -70,7 +76,7 @@ export async function loadUpcomingPlans(userId: string, limit = 3): Promise<Upco
   // Fetch one extra so "View all" can be decided without a second count query.
   const { data: planRows } = await admin
     .from("plans")
-    .select("id, creator_id, title, start_at, status, custom_place_text")
+    .select("id, creator_id, title, start_at, status, custom_place_text, category, cover_image_url")
     .in("id", planIds)
     .in("status", [...ACTIVE_STATUSES])
     .not("start_at", "is", null)
@@ -145,6 +151,8 @@ export async function loadUpcomingPlans(userId: string, limit = 3): Promise<Upco
       goingCount: goingCountByPlan.get(plan.id) ?? 0,
       maybeCount: maybeCountByPlan.get(plan.id) ?? 0,
       placeText: plan.custom_place_text,
+      category: plan.category ?? null,
+      coverImageUrl: plan.cover_image_url ?? null,
       attendees: (goingIdsByPlan.get(plan.id) ?? [])
         .map((id) => attendeeProfileById.get(id))
         .filter((profile): profile is { name: string; avatarUrl: string | null } => Boolean(profile))

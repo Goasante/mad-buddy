@@ -7,6 +7,8 @@ import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { deliverNotification } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import { PLAN_CATEGORIES } from "@/lib/plans/plan-covers";
+import type { PlanCategory } from "@/lib/supabase/database.types";
 import {
   isRsvpChoice,
   planTierLimitsFor,
@@ -67,6 +69,11 @@ const createPlanSchema = z.object({
   placeType: z.enum(["custom", "decide_in_chat", "poll"]).optional(),
   customPlaceText: z.string().max(120).optional(),
   reminderMinutes: z.number().int().min(0).max(1440).nullable().optional(),
+  // What the plan IS, which resolves its canonical cover. Optional: a plan
+  // without one renders the branded fallback rather than a guessed cover.
+  // Validated against the cover registry, so this enum and the
+  // plans_category_check constraint cannot drift apart.
+  category: z.enum(PLAN_CATEGORIES as [PlanCategory, ...PlanCategory[]]).nullable().optional(),
   participantIds: z.array(uuidSchema).max(500).optional()
 });
 
@@ -138,7 +145,9 @@ export async function listPlansForUser(
   const [{ data: planRows }, { data: participantRows }] = await Promise.all([
     admin
       .from("plans")
-      .select("id, creator_id, title, description, plan_type, status, start_at, custom_place_text")
+      .select(
+        "id, creator_id, title, description, plan_type, status, start_at, custom_place_text, category, cover_image_url"
+      )
       .in("id", planIds),
     admin.from("plan_participants").select("plan_id, user_id, role, rsvp_status").in("plan_id", planIds)
   ]);
@@ -176,6 +185,9 @@ export async function listPlansForUser(
       status: plan.status,
       startAt: plan.start_at,
       placeText: plan.custom_place_text,
+      // Cover inputs for the canonical resolver (lib/plans/plan-covers).
+      category: plan.category ?? null,
+      coverImageUrl: plan.cover_image_url ?? null,
       organiserName: plan.creator_id === userId ? "You" : nameById.get(plan.creator_id) ?? "A Muddy",
       organiserPlan: organiserPlans.get(plan.creator_id) ?? "free",
       isHost,
@@ -252,7 +264,8 @@ export async function createPlan(userId: string, input: unknown): Promise<Servic
       max_participants: limits.maxPlanParticipants === Infinity ? 500 : limits.maxPlanParticipants,
       place_type: parsed.data.placeType ?? "custom",
       custom_place_text: parsed.data.customPlaceText?.trim() || null,
-      reminder_minutes: parsed.data.reminderMinutes ?? null
+      reminder_minutes: parsed.data.reminderMinutes ?? null,
+      category: parsed.data.category ?? null
     })
     .select("id")
     .single();

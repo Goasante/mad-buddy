@@ -32,10 +32,11 @@ import { createPortal } from "react-dom";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { updateVisibilityStatusAction } from "@/app/(app)/settings-actions";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
+import { PlanCover } from "@/components/plans/plan-cover";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { usePullRefreshListener } from "@/components/ui/pull-to-refresh";
 import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
-import { HomeSettingsSheet } from "@/components/dashboard/home-settings-sheet";
+import { useAppMenu } from "@/hooks/app-menu-context";
 import { QuickControlsSheet } from "@/components/dashboard/quick-controls-sheet";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
@@ -138,10 +139,10 @@ type DashboardPageContentProps = {
    * activation-focused variant; everything else on Home behaves identically.
    */
   isFirstTimeUser?: boolean;
-  currentUsername?: string | null;
-  currentAvatarUrl?: string | null;
-  /** Display label only ("Trusted Buddy"), for the account sheet's header. */
-  buddyScoreLevelLabel?: string | null;
+  // currentUsername / currentAvatarUrl / buddyScoreLevelLabel used to be
+  // passed here for Home's own copy of the menu sheet. That sheet now lives
+  // in AppShell and gets its identity from the layout, so Home no longer
+  // needs them.
   /**
    * Pending INCOMING Muddy requests, from countIncomingRequests. Drives the
    * Add Muddy badge only — never notifications, outgoing requests,
@@ -238,9 +239,6 @@ export function DashboardPageContent({
   hiddenQuickActionHrefs = [],
   smartCard = null,
   isFirstTimeUser = false,
-  currentUsername = null,
-  currentAvatarUrl = null,
-  buddyScoreLevelLabel = null,
   incomingRequestCount = 0
 }: DashboardPageContentProps) {
   const reducedMotion = useReducedMotion();
@@ -252,8 +250,9 @@ export function DashboardPageContent({
     null
   );
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
-  const [settingsSheetOpen, setSettingsSheetOpen] = useState(false);
   const [quickControlsOpen, setQuickControlsOpen] = useState(false);
+  // The app-wide menu sheet lives in AppShell; Home just asks it to open.
+  const openAppMenu = useAppMenu();
   // The shell's canonical unread count, read from context — not a second
   // counter, not another poller, and not derived from anything on this page.
   const unreadNotificationCount = useUnreadNotifications();
@@ -505,7 +504,9 @@ export function DashboardPageContent({
           renders an identical header. */}
       <MobilePageHeader
         title="Home"
-        onOpenMenu={() => setSettingsSheetOpen(true)}
+        // The app-wide sheet, mounted once in AppShell — Home no longer keeps
+        // its own copy.
+        onOpenMenu={openAppMenu}
         onOpenQuickControls={() => setQuickControlsOpen(true)}
         incomingRequestCount={incomingRequestCount}
         // Two independent streams: unread notifications on the Bell, pending
@@ -720,23 +721,6 @@ export function DashboardPageContent({
         }
       />
 
-      <HomeSettingsSheet
-        open={settingsSheetOpen}
-        onOpenChange={setSettingsSheetOpen}
-        displayName={displayName}
-        currentUsername={currentUsername}
-        currentAvatarUrl={currentAvatarUrl}
-        subscriptionPlan={subscriptionPlan}
-        buddyScoreLevelLabel={buddyScoreLevelLabel}
-        // Same three-item model the profile reminder uses (photo, bio, mood):
-        // profileReminder is null once nothing is missing, so no reminder
-        // means a complete profile.
-        profileCompletionPercent={
-          profileReminder
-            ? Math.round(((3 - profileReminder.missingItems.length) / 3) * 100)
-            : 100
-        }
-      />
     </>
   );
 }
@@ -1375,16 +1359,25 @@ function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
         }, ${attendance}`}
         className="focus-ring safe-motion flex items-center gap-3 rounded-[1.375rem] border border-border/70 bg-card px-4 py-4 shadow-[0_1px_3px_hsl(var(--shadow)/0.06)] transition-transform active:scale-[0.99] motion-reduce:active:scale-100 dark:bg-[#1a1a1d]"
       >
+        {/* The plan's cover, resolved by the canonical system: a user upload
+            if there is one, otherwise the category illustration, otherwise
+            the branded fallback. This card never picks an image itself. */}
+        <PlanCover
+          category={plan.category}
+          coverImageUrl={plan.coverImageUrl}
+          rounded="rounded-[0.875rem]"
+          className="h-14 w-14 shrink-0"
+        />
+
         {/* Three metadata rows, each led by its own icon: what, when, where.
             The icons form a consistent left rail so the three lines scan as a
             set rather than as a paragraph. */}
         <div className="min-w-0 flex-1 space-y-1.5">
-          <p className="flex items-center gap-2">
-            <CalendarDays className={PLAN_ICON} strokeWidth={1.75} aria-hidden="true" />
-            {/* The title is the strongest text in the card. */}
-            <span className="truncate text-[0.9375rem] font-semibold leading-tight">
-              {capitalize(plan.title)}
-            </span>
+          {/* No leading icon on the title row: the cover to its left already
+              identifies the plan, so a calendar glyph here would be a second
+              marker for the same thing. */}
+          <p className="truncate text-[0.9375rem] font-semibold leading-tight">
+            {capitalize(plan.title)}
           </p>
           {/* Date/time and venue are secondary and scannable. Each line
               truncates as a unit so a long venue can never wrap the card. */}

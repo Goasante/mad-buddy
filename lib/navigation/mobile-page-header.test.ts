@@ -10,7 +10,10 @@ describe("mobile page header layout", () => {
     // auto / 1fr / auto means the title is centred against the header itself,
     // so it cannot shift when the right-hand cluster changes width.
     expect(header).toContain("grid-cols-[auto_1fr_auto]");
-    expect(header).toContain('className="text-center');
+    expect(header).toMatch(/<h1[^>]*text-center/);
+    // The leading slot is always occupied — an empty spacer when there is no
+    // action — so the centred title cannot drift.
+    expect(header).toContain('<span className="h-11 w-11" aria-hidden="true" />');
   });
 
   it("renders the title from a prop, so every screen supplies its own", () => {
@@ -29,24 +32,29 @@ describe("mobile page header layout", () => {
 
 describe("mobile page header controls", () => {
   it("gives every control the same 44px hit target", () => {
-    // One shared constant rather than four hand-written class strings.
+    // One shared constant rather than hand-written class strings.
     expect(header).toContain("const HIT_TARGET");
     expect(header).toContain("h-11 w-11");
-    // Menu, Notifications and Quick Controls all route through the shared
-    // helpers; Add Muddy composes the same constant.
-    expect(header).toContain("cn(\n            HIT_TARGET,");
+    // Add Muddy composes the same constant rather than restyling itself.
+    expect(header).toMatch(/cn\(\s*HIT_TARGET,/);
   });
 
   it("uses one optical size and one stroke weight for every icon", () => {
     expect(header).toContain('const ICON = "h-[22px] w-[22px]"');
     expect(header).toContain("const STROKE = 1.75");
-    // No icon may hardcode its own size alongside the shared constant.
+    // Every icon except Add Muddy's (which is optically matched at a heavier
+    // stroke against its filled background) uses the shared constant, and none
+    // hardcodes its own size alongside it: Menu, Back-as-link, Back-as-button,
+    // Bell and Quick Controls.
     const iconUsages = header.match(/className=\{ICON\}/g) ?? [];
-    expect(iconUsages.length).toBe(3);
+    expect(iconUsages.length).toBe(5);
   });
 
-  it("uses only the four specified Lucide icons", () => {
-    expect(header).toContain('import { Bell, Menu, MoreHorizontal, UserPlus } from "lucide-react"');
+  it("uses only the specified Lucide icons", () => {
+    // ChevronLeft is the Back affordance for the nested-screen variant.
+    expect(header).toContain(
+      'import { Bell, ChevronLeft, Menu, MoreHorizontal, UserPlus } from "lucide-react"'
+    );
   });
 
   it("gives each control a press animation that respects reduced motion", () => {
@@ -135,6 +143,107 @@ describe("mobile page header adoption", () => {
     expect(home).toContain("<MobilePageHeader");
     // The inline header is gone: no stray <header> remains in the page.
     expect(home).not.toContain("<header");
+  });
+
+  it("is used by every bottom-nav root", () => {
+    for (const [path, title] of [
+      ["components/dashboard/dashboard-page.tsx", "Home"],
+      ["components/friends/friends-page.tsx", "Muddies"],
+      ["components/plans/plans-page.tsx", "Plans"],
+      ["components/profile/profile-page.tsx", "Me"]
+    ] as const) {
+      const source = read(path);
+      expect(source, `${path} should use the shared header`).toContain("<MobilePageHeader");
+      expect(source, `${path} should carry its product-facing title`).toContain(`title="${title}"`);
+    }
+  });
+
+  it("keeps Quick Controls on Home alone", () => {
+    // Its sheet is Home-specific (visibility, ghost mode, refresh Nearby).
+    for (const path of [
+      "components/friends/friends-page.tsx",
+      "components/plans/plans-page.tsx",
+      "components/profile/profile-page.tsx"
+    ]) {
+      expect(read(path), `${path} must not show Quick Controls`).toContain("showQuickControls={false}");
+    }
+    expect(read("components/dashboard/dashboard-page.tsx")).not.toContain("showQuickControls={false}");
+  });
+
+  it("stands the global AppHeader down wherever a page renders its own", () => {
+    const shell = read("components/app-shell/app-shell.tsx");
+    const list = shell.slice(shell.indexOf("const PAGES_WITH_OWN_HEADER"), shell.indexOf("function hasOwnHeader"));
+    for (const route of ["/dashboard", "/friends", "/plans", "/profile"]) {
+      expect(list, `${route} would otherwise render two headers`).toContain(`"${route}"`);
+    }
+  });
+
+  it("hides the duplicate in-page title on mobile only", () => {
+    // Desktop has no mobile header, so it keeps its own h1.
+    for (const path of ["components/plans/plans-page.tsx", "components/profile/profile-page.tsx"]) {
+      expect(read(path)).toContain('className="hidden text-2xl font-semibold tracking-tight md:block');
+    }
+  });
+});
+
+describe("mobile page header variants", () => {
+  it("supports menu, back and none in the leading slot", () => {
+    expect(header).toContain('leadingAction?: "menu" | "back" | "none"');
+    expect(header).toContain('leadingAction === "back" && backHref');
+    expect(header).toContain('leadingAction === "back" && onBack');
+  });
+
+  it("prefers a real link for Back so it survives a cold load", () => {
+    expect(header).toContain("backHref?: Route");
+    expect(header).toContain('<HeaderLink href={backHref} label="Back">');
+  });
+
+  it("lets a screen turn off trailing actions that do not apply to it", () => {
+    for (const flag of ["showNotifications", "showAddMuddy", "showQuickControls"]) {
+      expect(header).toContain(`${flag}?: boolean`);
+      expect(header).toContain(`{${flag}`);
+    }
+  });
+
+  it("defaults the trailing actions on, so root screens need no configuration", () => {
+    expect(header).toContain("showNotifications = true");
+    expect(header).toContain("showAddMuddy = true");
+    expect(header).toContain("showQuickControls = true");
+  });
+
+  it("takes no arbitrary styling from screens", () => {
+    // A controlled API: no className/style escape hatch on the header itself.
+    expect(header).not.toMatch(/^\s*className\?: string;/m);
+    expect(header).not.toContain("style?: CSSProperties");
+  });
+});
+
+describe("app menu sheet", () => {
+  it("is mounted once in the shell rather than per screen", () => {
+    const shell = read("components/app-shell/app-shell.tsx");
+    expect(shell).toContain("<HomeSettingsSheet");
+    expect(shell).toContain("<AppMenuProvider openMenu={() => setAppMenuOpen(true)}>");
+    // Home no longer keeps its own copy.
+    expect(read("components/dashboard/dashboard-page.tsx")).not.toContain("<HomeSettingsSheet");
+  });
+
+  it("lets any screen open it without receiving identity props", () => {
+    for (const path of [
+      "components/dashboard/dashboard-page.tsx",
+      "components/friends/friends-page.tsx",
+      "components/plans/plans-page.tsx",
+      "components/profile/profile-page.tsx"
+    ]) {
+      expect(read(path), `${path} should open the shared menu`).toContain("useAppMenu()");
+    }
+  });
+
+  it("resolves its identity once in the layout", () => {
+    const layout = read("app/(app)/layout.tsx");
+    expect(layout).toContain("loadBuddyScoreLevel");
+    expect(layout).toContain("profileCompletionPercent(profileResult.data)");
+    // Home's duplicate level load is gone, so the ledger is read once.
+    expect(read("app/(app)/dashboard/page.tsx")).not.toContain("loadBuddyScoreLevel");
   });
 });
 

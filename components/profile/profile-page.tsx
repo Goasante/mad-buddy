@@ -20,6 +20,9 @@ import { validateImageSelection } from "@/lib/media/validation";
 import { cn } from "@/lib/utils";
 import type { SubscriptionPlan, VisibilityStatus } from "@/lib/supabase/database.types";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
+import { useAppMenu } from "@/hooks/app-menu-context";
+import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { deriveBirthProfile } from "@/lib/profile/birth-date";
 import { BirthdayAccent } from "@/components/profile/birthday-accent";
 import { profileCompletion, type ProfileIdentitySummary } from "@/lib/profile/identity";
@@ -95,6 +98,9 @@ export function ProfilePageContent({
     zodiacVisibility: initialZodiacVisibility
   };
   const [savedProfile, setSavedProfile] = useState(initialProfile);
+  // Shared shell chrome: one menu sheet, one unread count.
+  const openAppMenu = useAppMenu();
+  const unreadNotificationCount = useUnreadNotifications();
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [username, setUsername] = useState(initialUsername);
@@ -299,14 +305,25 @@ export function ProfilePageContent({
   );
 
   return (
-    <div data-tour-id={TOUR_TARGET_IDS.PROFILE_OVERVIEW} className="mx-auto w-full max-w-[1040px] space-y-6 pb-6 pt-5">
-      <header className="flex items-start justify-between gap-4">
+    <div data-tour-id={TOUR_TARGET_IDS.PROFILE_OVERVIEW} className="mx-auto w-full max-w-[1040px] space-y-6 pb-6 md:pt-5">
+      {/* Canonical mobile header (mobile only). Me is a bottom-nav root, so
+          it keeps Notifications and Add Muddy; Quick Controls is Home's. */}
+      <MobilePageHeader
+        title="Me"
+        onOpenMenu={openAppMenu}
+        showQuickControls={false}
+        unreadNotificationCount={unreadNotificationCount}
+      />
+
+      <header className="flex items-start justify-between gap-4 pt-1 md:pt-0">
         <div className="min-w-0">
           {/* This route is the canonical "Me" hub — identity, progress,
               membership, privacy, preferences and support in one place — so
               the heading names the hub rather than just the public profile
               card it contains. The bottom bar's Me tab lands here. */}
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Me</h1>
+          {/* Hidden on mobile: the shared header above carries the title
+              there. Desktop has no mobile header, so it keeps this. */}
+          <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Me</h1>
           <p className="mt-1 text-sm text-muted-foreground">Your profile, progress, and preferences.</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">

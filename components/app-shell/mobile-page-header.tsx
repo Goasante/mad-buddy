@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { Bell, Menu, MoreHorizontal, UserPlus } from "lucide-react";
+import { Bell, ChevronLeft, Menu, MoreHorizontal, UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -46,15 +46,43 @@ function useHasScrolled(threshold = 4): boolean {
  */
 export function MobilePageHeader({
   title,
+  leadingAction = "menu",
+  backHref,
+  onBack,
   onOpenMenu,
   onOpenQuickControls,
+  showNotifications = true,
+  showAddMuddy = true,
+  showQuickControls = true,
   incomingRequestCount = 0,
   unreadNotificationCount = 0,
   quickControlsTourId
 }: {
   title: string;
-  onOpenMenu: () => void;
-  onOpenQuickControls: () => void;
+  /**
+   * What sits in the leading slot.
+   *
+   *   menu — root screens: opens the account/menu sheet
+   *   back — nested/detail screens, where an obvious way back matters more
+   *          than access to the menu
+   *   none — screens with neither
+   */
+  leadingAction?: "menu" | "back" | "none";
+  /** Back destination. Preferred over onBack: a real link survives a cold load. */
+  backHref?: Route;
+  /** Back handler, for in-page views that have no route of their own. */
+  onBack?: () => void;
+  onOpenMenu?: () => void;
+  onOpenQuickControls?: () => void;
+  /**
+   * Trailing actions. Default on so root screens need no configuration, but
+   * secondary screens turn off what does not apply to them — Quick Controls
+   * in particular opens a Home-specific sheet (visibility, ghost mode,
+   * refresh Nearby) that other screens have no equivalent for.
+   */
+  showNotifications?: boolean;
+  showAddMuddy?: boolean;
+  showQuickControls?: boolean;
   /**
    * Pending INCOMING Muddy requests. Never a notification count — those are
    * a different stream with their own surface. Zero hides the badge.
@@ -102,53 +130,74 @@ export function MobilePageHeader({
           : "border-transparent shadow-none"
       )}
     >
-      <HeaderButton label="Menu" onClick={onOpenMenu}>
-        <Menu className={ICON} strokeWidth={STROKE} aria-hidden="true" />
-      </HeaderButton>
+      {/* Leading slot. Always occupied — an empty span when there is no
+          action — so the three-column grid keeps the title centred against
+          the header rather than letting it drift. */}
+      {leadingAction === "menu" && onOpenMenu ? (
+        <HeaderButton label="Menu" onClick={onOpenMenu}>
+          <Menu className={ICON} strokeWidth={STROKE} aria-hidden="true" />
+        </HeaderButton>
+      ) : leadingAction === "back" && backHref ? (
+        <HeaderLink href={backHref} label="Back">
+          <ChevronLeft className={ICON} strokeWidth={STROKE} aria-hidden="true" />
+        </HeaderLink>
+      ) : leadingAction === "back" && onBack ? (
+        <HeaderButton label="Back" onClick={onBack}>
+          <ChevronLeft className={ICON} strokeWidth={STROKE} aria-hidden="true" />
+        </HeaderButton>
+      ) : (
+        <span className="h-11 w-11" aria-hidden="true" />
+      )}
 
-      <h1 className="text-center text-[1.125rem] font-semibold tracking-tight">{title}</h1>
+      <h1 className="truncate text-center text-[1.125rem] font-semibold tracking-tight">{title}</h1>
 
       <div className="flex items-center gap-2.5">
         {/* Bell badge = unread app notifications. The UserPlus badge below is
             pending incoming Muddy requests. Two streams, two counts, never
             combined. */}
-        <HeaderLink
-          href="/notifications"
-          label={
-            hasUnread
-              ? `Notifications, ${unreadNotificationCount} unread ${unreadNotificationCount === 1 ? "notification" : "notifications"}`
-              : "Notifications"
-          }
-          title="Notifications"
-        >
-          <Bell className={ICON} strokeWidth={STROKE} aria-hidden="true" />
-          {hasUnread ? <HeaderBadge count={unreadNotificationCount} /> : null}
-        </HeaderLink>
+        {showNotifications ? (
+          <HeaderLink
+            href="/notifications"
+            label={
+              hasUnread
+                ? `Notifications, ${unreadNotificationCount} unread ${unreadNotificationCount === 1 ? "notification" : "notifications"}`
+                : "Notifications"
+            }
+            title="Notifications"
+          >
+            <Bell className={ICON} strokeWidth={STROKE} aria-hidden="true" />
+            {hasUnread ? <HeaderBadge count={unreadNotificationCount} /> : null}
+          </HeaderLink>
+        ) : null}
 
         {/* Add Muddy → the Requests tab, which already owns accept/decline
             plus the Add panel for search, send and invite. */}
-        <Link
-          href="/friends?tab=requests"
-          aria-label={
-            hasRequests
-              ? `Add Muddy, ${incomingRequestCount} pending ${incomingRequestCount === 1 ? "request" : "requests"}`
-              : "Add Muddy"
-          }
-          title="Add Muddy"
-          className={cn(
-            HIT_TARGET,
-            "relative bg-primary text-primary-foreground transition-transform hover:bg-primary/90 active:scale-95 motion-reduce:active:scale-100"
-          )}
-        >
-          {/* Slightly heavier stroke so the glyph holds its weight against a
-              filled background at the same optical size as its neighbours. */}
-          <UserPlus className="h-[21px] w-[21px]" strokeWidth={2} aria-hidden="true" />
-          {hasRequests ? <HeaderBadge count={incomingRequestCount} /> : null}
-        </Link>
+        {showAddMuddy ? (
+          <Link
+            href="/friends?tab=requests"
+            aria-label={
+              hasRequests
+                ? `Add Muddy, ${incomingRequestCount} pending ${incomingRequestCount === 1 ? "request" : "requests"}`
+                : "Add Muddy"
+            }
+            title="Add Muddy"
+            className={cn(
+              HIT_TARGET,
+              "relative bg-primary text-primary-foreground transition-transform hover:bg-primary/90 active:scale-95 motion-reduce:active:scale-100"
+            )}
+          >
+            {/* Slightly heavier stroke so the glyph holds its weight against a
+                filled background at the same optical size as its neighbours. */}
+            <UserPlus className="h-[21px] w-[21px]" strokeWidth={2} aria-hidden="true" />
+            {hasRequests ? <HeaderBadge count={incomingRequestCount} /> : null}
+          </Link>
+        ) : null}
 
-        <HeaderButton label="Quick controls" onClick={onOpenQuickControls} tourId={quickControlsTourId}>
-          <MoreHorizontal className={ICON} strokeWidth={STROKE} aria-hidden="true" />
-        </HeaderButton>
+        {showQuickControls && onOpenQuickControls ? (
+          <HeaderButton label="Quick controls" onClick={onOpenQuickControls} tourId={quickControlsTourId}>
+            <MoreHorizontal className={ICON} strokeWidth={STROKE} aria-hidden="true" />
+          </HeaderButton>
+        ) : null}
       </div>
     </header>
   );

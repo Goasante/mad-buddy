@@ -5,21 +5,12 @@ import {
   CalendarDays,
   ChevronRight,
   Clock,
-  Dumbbell,
-  Flame,
-  Gamepad2,
-  Heart,
   Lock,
   MapPin,
-  PartyPopper,
   Plus,
-  Sun,
-  Users,
-  Utensils,
   Vote,
   X
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { useId, useMemo, useState, useTransition } from "react";
 import {
   cancelPlanAction,
@@ -39,7 +30,12 @@ import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
-import type { SubscriptionPlan } from "@/lib/supabase/database.types";
+import type { PlanCategory, SubscriptionPlan } from "@/lib/supabase/database.types";
+import { PLAN_CATEGORIES, planCategoryLabel } from "@/lib/plans/plan-covers";
+import { PlanCover } from "@/components/plans/plan-cover";
+import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
+import { useAppMenu } from "@/hooks/app-menu-context";
+import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 
 export type PlanInvitee = { id: string; name: string; username?: string | null; avatarUrl?: string | null; plan: SubscriptionPlan };
 
@@ -59,6 +55,9 @@ export type PlanSummary = {
   status: string;
   startAt: string | null;
   placeText: string | null;
+  /** Cover inputs, resolved by lib/plans/plan-covers. */
+  category: PlanCategory | null;
+  coverImageUrl: string | null;
   organiserName: string;
   organiserPlan: SubscriptionPlan;
   isHost: boolean;
@@ -124,6 +123,9 @@ export function PlansPageContent({
   const [activeBucket, setActiveBucket] = useState<PlanBucket>(() =>
     requestedPlan ? bucketFor(requestedPlan) : "upcoming"
   );
+  // Shared shell chrome: one menu sheet, one unread count.
+  const openAppMenu = useAppMenu();
+  const unreadNotificationCount = useUnreadNotifications();
   const [createOpen, setCreateOpen] = useState(() => searchParams.get("create") === "1");
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(() => requestedPlan?.id ?? null);
   const [feedback, setFeedback] = useState("");
@@ -206,6 +208,7 @@ export function PlansPageContent({
     description: string;
     startAt: string | null;
     placeText: string;
+    category: PlanCategory | null;
     participantIds: string[];
   }) {
     startTransition(async () => {
@@ -216,6 +219,9 @@ export function PlansPageContent({
         startAt: input.startAt,
         placeType: "custom",
         customPlaceText: input.placeText || undefined,
+        // Optional and never inferred: no category means the branded
+        // fallback cover, not a guess from the title.
+        category: input.category,
         participantIds: input.participantIds
       });
       setFeedback(result.message);
@@ -230,10 +236,21 @@ export function PlansPageContent({
   const inviteCount = useMemo(() => plans.filter((plan) => bucketFor(plan) === "invites").length, [plans]);
 
   return (
-    <div className="mx-auto max-w-[640px] pt-5">
-      <header className="flex items-start justify-between gap-3">
+    <div className="mx-auto max-w-[640px] md:pt-5">
+      {/* Canonical mobile header (mobile only). Plans is a bottom-nav root,
+          so it keeps Notifications and Add Muddy; Quick Controls is Home's. */}
+      <MobilePageHeader
+        title="Plans"
+        onOpenMenu={openAppMenu}
+        showQuickControls={false}
+        unreadNotificationCount={unreadNotificationCount}
+      />
+
+      <header className="flex items-start justify-between gap-3 pt-1 md:pt-0">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Plans</h1>
+          {/* Hidden on mobile: the shared header above already carries the
+              title there. Desktop has no mobile header, so it keeps this. */}
+          <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Plans</h1>
           <p className="mt-1 text-sm text-muted-foreground">Plan something with your Muddies.</p>
         </div>
         <Button
@@ -356,23 +373,11 @@ const listEndCopy: Record<PlanBucket, { title: string; description: string }> = 
   past: { title: "You've reached the start", description: "Older plans stay here for reference." }
 };
 
-/** A small, decorative icon chosen from the plan title (a display choice over
- *  user text — not stored data). Falls back to a calendar. */
-const PLAN_ICON_RULES: Array<{ match: RegExp; icon: LucideIcon; className: string }> = [
-  { match: /fish/i, icon: Users, className: "bg-primary/10 text-primary" },
-  { match: /gym|work ?out|run|fitness|train/i, icon: Dumbbell, className: "bg-blue-500/12 text-blue-500 dark:text-blue-300" },
-  { match: /beach|swim|pool|sun/i, icon: Sun, className: "bg-amber-500/12 text-amber-500 dark:text-amber-300" },
-  { match: /bonfire|fire|camp/i, icon: Flame, className: "bg-violet-500/12 text-violet-500 dark:text-violet-300" },
-  { match: /date|dinner|romant|valentine/i, icon: Heart, className: "bg-pink-500/12 text-pink-500 dark:text-pink-300" },
-  { match: /lunch|brunch|food|eat|restaurant|meal/i, icon: Utensils, className: "bg-primary/10 text-primary" },
-  { match: /party|club|celebrat|birthday/i, icon: PartyPopper, className: "bg-violet-500/12 text-violet-500 dark:text-violet-300" },
-  { match: /game|match|football|soccer|ball|play/i, icon: Gamepad2, className: "bg-emerald-500/12 text-emerald-500 dark:text-emerald-300" }
-];
-
-function planIcon(title: string): { icon: LucideIcon; className: string } {
-  const rule = PLAN_ICON_RULES.find((entry) => entry.match.test(title));
-  return rule ?? { icon: CalendarDays, className: "bg-primary/10 text-primary" };
-}
+// The title-keyword icon rules that used to live here are gone. They guessed
+// a plan's subject from its title ("beach|swim|pool" -> a sun icon), which is
+// exactly the inference the canonical cover system forbids: a plan's cover now
+// comes from its stored category, or from the branded fallback when it has
+// none. See lib/plans/plan-covers.
 
 function rsvpPill(myRsvp: string, isHost: boolean): { label: string; className: string } | null {
   if (isHost) return { label: "Hosting", className: "border-primary/40 bg-primary/10 text-primary" };
@@ -424,7 +429,6 @@ function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
     : plan.planType === "poll"
       ? "Time being decided"
       : "Time TBD";
-  const { icon: Icon, className: iconClass } = planIcon(plan.title);
   const pill = rsvpPill(plan.myRsvp, plan.isHost);
 
   return (
@@ -436,9 +440,17 @@ function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
         aria-label={`${plan.title}, ${dateLabel(plan)}`}
       >
         <DateChip startAt={plan.startAt} />
-        <span className={cn("mt-0.5 grid h-11 w-11 shrink-0 place-items-center rounded-xl", iconClass)}>
-          <Icon className="h-5 w-5" aria-hidden="true" />
-        </span>
+        {/* The plan's cover, from the same canonical resolver Home uses. It
+            replaces the status-derived icon tile that used to sit here —
+            status is already carried by the pill on the right, so the tile
+            was a second marker for it, and this gives the card the plan's own
+            identity instead. */}
+        <PlanCover
+          category={plan.category}
+          coverImageUrl={plan.coverImageUrl}
+          rounded="rounded-xl"
+          className="mt-0.5 h-11 w-11"
+        />
 
         {/* overflow-hidden is the real fix: without it, the going/avatars row
             below can render wider than this column's computed flex width and
@@ -534,6 +546,7 @@ function CreatePlanModal({
     description: string;
     startAt: string | null;
     placeText: string;
+    category: PlanCategory | null;
     participantIds: string[];
   }) => void;
 }) {
@@ -542,6 +555,9 @@ function CreatePlanModal({
   const [time, setTime] = useState("");
   const [placeText, setPlaceText] = useState("");
   const [description, setDescription] = useState("");
+  // Optional. Null means "no category", which resolves to the branded
+  // fallback cover — never a guess.
+  const [category, setCategory] = useState<PlanCategory | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [nameTouched, setNameTouched] = useState(false);
   const formId = useId();
@@ -552,6 +568,7 @@ function CreatePlanModal({
     setTime("");
     setPlaceText("");
     setDescription("");
+    setCategory(null);
     setSelected([]);
     setNameTouched(false);
   }
@@ -610,6 +627,7 @@ function CreatePlanModal({
                 description: description.trim(),
                 startAt: combined ? new Date(combined).toISOString() : null,
                 placeText: placeText.trim(),
+                category,
                 participantIds: selected
               });
             }}
@@ -634,6 +652,39 @@ function CreatePlanModal({
             className={fieldClassName}
           />
         </FormField>
+
+        {/* Optional cover category. Same chip language as "When?" below.
+            Choosing one picks the plan's canonical cover; leaving it unset is
+            perfectly valid and yields the branded fallback. */}
+        <div>
+          <p className="mb-1.5 text-sm font-medium">
+            What kind of plan? <span className="font-normal text-muted-foreground">(optional)</span>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {PLAN_CATEGORIES.map((option) => {
+              const active = category === option;
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  // Tapping the active chip clears it, so a category can be
+                  // undone without resetting the whole form.
+                  onClick={() => setCategory(active ? null : option)}
+                  aria-pressed={active}
+                  className={cn(
+                    "focus-ring safe-motion flex items-center gap-1.5 rounded-full border py-1.5 pl-1.5 pr-3 text-sm font-medium",
+                    active
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:bg-secondary/50"
+                  )}
+                >
+                  <PlanCover category={option} rounded="rounded-full" className="h-5 w-5" />
+                  {planCategoryLabel(option)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         <div>
           <p className="mb-1.5 text-sm font-medium">When?</p>

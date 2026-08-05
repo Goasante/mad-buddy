@@ -1342,6 +1342,10 @@ export type Database = {
           updated_at: string;
           cancelled_at: string | null;
           completed_at: string | null;
+          /** What the plan IS. Distinct from plan_type (how it is scheduled). */
+          category: PlanCategory | null;
+          /** User-uploaded cover; outranks the canonical illustration. */
+          cover_image_url: string | null;
         };
         Insert: {
           id?: string;
@@ -1349,6 +1353,8 @@ export type Database = {
           title: string;
           description?: string | null;
           plan_type: PlanType;
+          category?: PlanCategory | null;
+          cover_image_url?: string | null;
           visibility_type?: PlanVisibilityType;
           status?: PlanStatus;
           start_at?: string | null;
@@ -4187,6 +4193,31 @@ export type VisibilityMode = "all_muddies" | "selected_circles" | "close_friends
 // --- Batch 3: Plans, RSVP, Polls, Hangout Mode ---
 
 export type PlanType = "quick" | "scheduled" | "poll";
+
+/**
+ * What a plan IS, used to resolve its canonical cover illustration.
+ *
+ * Deliberately separate from PlanType, which describes how the plan is
+ * SCHEDULED (quick / scheduled / poll) and says nothing about its subject.
+ * Mirrors the plans_category_check constraint; adding a value here means
+ * adding it there and registering an illustration in lib/plans/plan-covers.
+ */
+export type PlanCategory =
+  | "beach"
+  | "dinner"
+  | "coffee"
+  | "study"
+  | "movie"
+  | "football"
+  | "gaming"
+  | "concert"
+  | "birthday"
+  | "travel"
+  | "workout"
+  | "party"
+  | "picnic"
+  | "hiking"
+  | "road_trip";
 export type PlanVisibilityType = "invited" | "circle" | "close_friends";
 export type PlanStatus =
   | "draft"

@@ -56,7 +56,7 @@ async function loadPlans(): Promise<{
     admin
       .from("plans")
       .select(
-        "id, creator_id, title, description, plan_type, status, start_at, custom_place_text, place_type"
+        "id, creator_id, title, description, plan_type, status, start_at, custom_place_text, place_type, category, cover_image_url"
       )
       .in("id", planIds),
     admin
@@ -148,6 +148,9 @@ async function loadPlans(): Promise<{
       status: plan.status,
       startAt: plan.start_at,
       placeText: plan.custom_place_text,
+      // Cover inputs for the canonical resolver (lib/plans/plan-covers).
+      category: plan.category ?? null,
+      coverImageUrl: plan.cover_image_url ?? null,
       organiserName: plan.creator_id === user.id ? "You" : nameById.get(plan.creator_id) ?? "A Muddy",
       organiserPlan: planById.get(plan.creator_id) ?? "free",
       isHost,

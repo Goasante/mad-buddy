@@ -9,7 +9,6 @@ import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isSocializeEnabled } from "@/lib/features/feature-flags";
 import { countIncomingRequests } from "@/lib/friends/service";
-import { loadBuddyScoreLevel } from "@/lib/engagement/buddy-score-service";
 import { loadJourney } from "@/lib/journey/journey-service";
 import { isFirstTimeJourneyState } from "@/lib/journey/journey";
 import { loadBuddyScore } from "@/lib/engagement/buddy-score-service";
@@ -26,7 +25,7 @@ export default async function DashboardPage() {
   // this page's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
   const admin = createSupabaseAdminClient();
-  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, journey, buddyScoreLevel, incomingRequestCount, birthDetailsResult, buddyScore] = user
+  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -45,8 +44,11 @@ export default async function DashboardPage() {
         loadFriendGlowColors(admin, user.id),
         isSocializeEnabled(admin),
         loadJourney(admin, user.id),
-        // Read-only: reads the existing ledger, never reconciles or writes.
-        loadBuddyScoreLevel(admin, user.id),
+        // The Buddy Score LEVEL load that used to sit here is gone: the
+        // authed layout now resolves it once for the shared menu sheet, so
+        // loading it again here would query the same ledger twice per
+        // navigation. The full score below is a different read (it carries
+        // nextLevel/pointsToNext for the Smart Card) and stays.
         // Pending INCOMING Muddy requests only — the Add Muddy badge.
         countIncomingRequests(user.id),
         // Own date of birth, for the Smart Card birthday state. Never another
@@ -57,7 +59,7 @@ export default async function DashboardPage() {
         // which needs nextLevel/pointsToNext/progressPercent.
         loadBuddyScore(admin, user.id)
       ])
-    : [null, null, null, { plans: [], hasMore: false }, null, null, {}, false, null, null, 0, null, null];
+    : [null, null, null, { plans: [], hasMore: false }, null, null, {}, false, null, 0, null, null];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -142,9 +144,6 @@ export default async function DashboardPage() {
       hiddenQuickActionHrefs={socializeEnabled ? [] : ["/discover"]}
       smartCard={smartCard}
       isFirstTimeUser={journey ? isFirstTimeJourneyState(journey) : false}
-      currentUsername={profileDetails?.username ?? null}
-      currentAvatarUrl={profileDetails?.avatar_url ?? null}
-      buddyScoreLevelLabel={buddyScoreLevel?.label ?? null}
       incomingRequestCount={incomingRequestCount ?? 0}
     />
   );

@@ -17,6 +17,20 @@ import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { resolveWallpaperForRender } from "@/lib/wallpapers/service";
 import { defaultResolvedWallpaper, type ResolvedWallpaper } from "@/lib/wallpapers/catalog";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
+import { loadBuddyScoreLevel } from "@/lib/engagement/buddy-score-service";
+
+/**
+ * The same three-item completion model the Home profile reminder uses: photo,
+ * bio, mood. Resolved once here rather than per screen, so the shared menu
+ * sheet shows one consistent number app-wide.
+ */
+function profileCompletionPercent(
+  profile: { avatar_url?: string | null; bio?: string | null; mood_status?: string | null } | null | undefined
+): number {
+  if (!profile) return 0;
+  const done = [profile.avatar_url, profile.bio?.trim(), profile.mood_status?.trim()].filter(Boolean).length;
+  return Math.round((done / 3) * 100);
+}
 
 type ProtectedAppLayoutProps = {
   children: ReactNode;
@@ -49,7 +63,8 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   // the slowest one. This was blocking every page behind this layout, which
   // is why unrelated destinations (Profile, Settings, Billing, Help, Admin)
   // were all affected together.
-  const [adminContext, unreadResult, profileResult, socializeFlagResult, access] = await Promise.all([
+  const [adminContext, unreadResult, profileResult, socializeFlagResult, access, buddyScoreLevel] =
+    await Promise.all([
     getSafetyAdminContext(),
     user
       ? supabase
@@ -61,7 +76,10 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
     user
       ? supabase
           .from("profiles")
-          .select("username, avatar_url, visibility_status")
+          // avatar_url/bio/mood_status feed the menu sheet's read-only
+          // identity header (profile completion is the same three-item model
+          // the Home reminder uses).
+          .select("username, avatar_url, visibility_status, full_name, bio, mood_status")
           .eq("user_id", user.id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
@@ -72,7 +90,13 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
           .eq("key", SOCIALIZE_FLAG)
           .maybeSingle()
       : Promise.resolve({ data: null }),
-    user && env.url && env.serviceRoleKey ? getCurrentSubscriptionAccess(user.id) : Promise.resolve(null)
+    user && env.url && env.serviceRoleKey ? getCurrentSubscriptionAccess(user.id) : Promise.resolve(null),
+    // Buddy Score level for the shared menu sheet's identity header. Runs in
+    // the same parallel batch, so it adds no serial latency, and it is the
+    // read-only loader (never reconciles, never writes).
+    user && env.url && env.serviceRoleKey
+      ? loadBuddyScoreLevel(createSupabaseAdminClient(), user.id)
+      : Promise.resolve(null)
   ]);
 
   // Global pause. Staff are exempt so someone can still reach /admin to turn
@@ -106,6 +130,13 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
       locationSyncEnabled={profileResult.data?.visibility_status !== "ghost"}
       currentUsername={profileResult.data?.username ?? null}
       currentAvatarUrl={profileResult.data?.avatar_url ?? null}
+      // Identity for the shared menu sheet, resolved once here rather than
+      // per screen.
+      currentDisplayName={profileResult.data?.full_name?.split(" ")[0] || ""}
+      subscriptionPlan={access?.plan ?? null}
+      buddyScoreLevelLabel={buddyScoreLevel?.label ?? null}
+      // Same three-item completion model the Home reminder uses.
+      profileCompletionPercent={profileCompletionPercent(profileResult.data)}
       currentUserId={user?.id ?? null}
       hiddenNavigationHrefs={resolveGlobalFeatureFlag(socializeFlagResult.data) ? [] : ["/discover"]}
       wallpaperPromise={wallpaperPromise}
