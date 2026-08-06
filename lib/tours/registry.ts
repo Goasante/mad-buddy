@@ -248,12 +248,13 @@ export const TOUR_TARGETS: TourTargetOption[] = [
   target(TOUR_TARGET_IDS.BILLING_PLANS, "Subscription plans", "/billing", "Free, Buddy Plus, and Buddy Pro from canonical billing data."),
   target(TOUR_TARGET_IDS.BILLING_ACTIVITY, "Billing activity", "/billing", "Real subscription activity."),
 
-  // The mobile bottom bar's five slots. Pulse and Messages are no longer
-  // tabs — they moved to the Home header — so they are not listed here; a
-  // tour step cannot spotlight a tab that does not exist.
-  { id: "nav-dashboard", label: "Home tab", route: "/dashboard", description: "App navigation: Home." },
+  // The mobile bottom bar's five slots: Messages, Muddies, the Orb, Plans,
+  // Me. The Orb is the centre AND Home, so nav-dashboard now targets it; the
+  // old nav-create ("+") no longer exists, and a tour step cannot spotlight a
+  // control that is gone.
+  { id: "nav-messages", label: "Messages tab", route: "/messages", description: "App navigation: Messages." },
+  { id: "nav-dashboard", label: "Mad Buddy Orb (Home)", route: "/dashboard", description: "App navigation: the centre Orb, which is Home." },
   { id: "nav-friends", label: "Muddies tab", route: "/friends", description: "App navigation: Muddies." },
-  { id: "nav-create", label: "Create button", route: "/dashboard", description: "App navigation: the centre Create action." },
   { id: "nav-plans", label: "Plans tab", route: "/plans", description: "App navigation: Plans." },
   { id: "nav-profile", label: "Me tab", route: "/profile", description: "App navigation: Me." },
   { id: "nav-hangout-mode", label: "Hangout tab", route: "/hangout-mode", description: "App navigation: Hangout Mode." },

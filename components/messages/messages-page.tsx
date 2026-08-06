@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarCheck2, ChevronLeft, Info, MessagesSquare, PenSquare, Plus, Search, Send, Star, UsersRound, VolumeX, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -31,6 +33,7 @@ import { QUICK_ACTIONS, quickActionLabel, DELETED_MESSAGE_PLACEHOLDER } from "@/
 import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 import { cn, formatRelativeTime } from "@/lib/utils";
+import { useImmersiveWhile } from "@/components/app-shell/immersive-mode";
 import {
   conversationContext,
   dayLabel,
@@ -230,6 +233,11 @@ export function MessagesPageContent({
   }, [uniqueConversations]);
 
   const selected = uniqueConversations.find((conversation) => conversation.id === selectedId) ?? null;
+
+  // Conversation Mode: a conversation owns the whole screen, so the global
+  // bottom navigation steps aside while one is open. Mobile only in effect —
+  // the bar is md:hidden anyway — and cleared automatically on unmount.
+  useImmersiveWhile(Boolean(selectedId));
 
   // Why this conversation exists, derived from what the server already sent.
 
@@ -777,25 +785,14 @@ export function MessagesPageContent({
                   >
                     <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                   </button>
-                  <GlowAvatar name={selected.title} src={selected.avatarUrl} size="sm" membershipTier={publicMembershipTier(selected.otherPlan)} />
-                  <span className="flex min-w-0 flex-1 flex-col justify-center">
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate text-[0.9375rem] font-semibold leading-tight">{selected.title}</span>
-                      <PremiumPlanBadge plan={selected.otherPlan} compact />
-                    </span>
-                    {/* Why this conversation exists — a shared plan, an event —
-                        or the handle. Never a guessed distance or availability. */}
-                    {context.subtitle ? (
-                      <span
-                        className={cn(
-                          "truncate text-[0.6875rem] font-medium leading-tight",
-                          context.shared ? "text-[var(--color-brand-orange)]" : "text-muted-foreground"
-                        )}
-                      >
-                        {context.subtitle}
-                      </span>
-                    ) : null}
-                  </span>
+                  {/* The identity opens the profile. A group has no single
+                      person behind it, so it stays plain text rather than
+                      linking somewhere that does not exist. */}
+                  <ConversationIdentity
+                    conversation={selected}
+                    subtitle={context.subtitle}
+                    subtitleIsShared={context.shared}
+                  />
                   <Popover.Root open={infoOpen} onOpenChange={setInfoOpen}>
                     <Popover.Trigger asChild>
                       <button
@@ -1082,6 +1079,68 @@ export function MessagesPageContent({
         }}
       />
     </div>
+  );
+}
+
+/**
+ * The person (or group) this conversation is with.
+ *
+ * Links to the existing /friends/[username] profile when there is one — the
+ * same route the Muddies list uses, not a new destination. Groups and any
+ * conversation without a resolved username render the identical markup
+ * without a link, so the header never points at a profile that is not there.
+ */
+function ConversationIdentity({
+  conversation,
+  subtitle,
+  subtitleIsShared
+}: {
+  conversation: ConversationView;
+  subtitle: string | null;
+  subtitleIsShared: boolean;
+}) {
+  const body = (
+    <>
+      <GlowAvatar
+        name={conversation.title}
+        src={conversation.avatarUrl}
+        size="sm"
+        membershipTier={publicMembershipTier(conversation.otherPlan)}
+      />
+      <span className="flex min-w-0 flex-1 flex-col justify-center">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-[0.9375rem] font-semibold leading-tight">{conversation.title}</span>
+          <PremiumPlanBadge plan={conversation.otherPlan} compact />
+        </span>
+        {/* Why this conversation exists — a shared plan, an event — or the
+            handle. Never a guessed distance or availability. */}
+        {subtitle ? (
+          <span
+            className={cn(
+              "truncate text-[0.6875rem] font-medium leading-tight",
+              subtitleIsShared ? "text-[var(--color-brand-orange)]" : "text-muted-foreground"
+            )}
+          >
+            {subtitle}
+          </span>
+        ) : null}
+      </span>
+    </>
+  );
+
+  if (!conversation.otherUsername) {
+    return <span className="flex min-w-0 flex-1 items-center gap-2.5">{body}</span>;
+  }
+
+  return (
+    <Link
+      href={`/friends/${conversation.otherUsername}` as Route}
+      prefetch={false}
+      aria-label={`View ${conversation.title}'s profile`}
+      className="focus-ring safe-motion -mx-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl px-1 py-1 transition-colors hover:bg-secondary/50 active:bg-secondary/70"
+    >
+      {body}
+    </Link>
   );
 }
 

@@ -14,7 +14,12 @@ import type { ConversationView } from "@/lib/messaging/mobile";
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const page = read("components/messages/messages-page.tsx");
 const css = read("app/globals.css");
-const canvasCss = css.slice(css.indexOf("/* Conversation canvas"));
+const canvasCss = css.slice(
+  css.indexOf("/* Conversation canvas"),
+  // Bounded: the Mad Buddy Orb's rules follow this block, and its colours and
+  // transforms are not this section's to police.
+  css.indexOf("/* Mad Buddy Orb")
+);
 
 const NOW = Date.UTC(2026, 7, 6, 12, 0, 0);
 const MIN = 60_000;
@@ -266,5 +271,105 @@ describe("branded canvas", () => {
   it("respects reduced motion", () => {
     const reduced = canvasCss.slice(canvasCss.indexOf("prefers-reduced-motion"));
     expect(reduced).toContain("animation: none");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Conversation Mode: the bottom navigation steps aside
+// ---------------------------------------------------------------------------
+
+describe("Conversation Mode", () => {
+  const shell = read("components/app-shell/app-shell.tsx");
+  const immersive = read("components/app-shell/immersive-mode.tsx");
+
+  it("turns on exactly while a conversation is open", () => {
+    expect(page).toContain("useImmersiveWhile(Boolean(selectedId))");
+  });
+
+  it("clears itself on unmount, so Back always restores the bar", () => {
+    // A screen must not be able to strand the user without navigation by
+    // forgetting to switch the flag off.
+    expect(immersive).toContain("return () => setImmersive(false);");
+  });
+
+  it("hides the bottom navigation rather than merely fading it", () => {
+    const nav = shell.slice(shell.indexOf("function MobileNav("), shell.indexOf("function MobileNavTab"));
+    expect(nav).toContain("translate-y-full opacity-0");
+    expect(nav).toContain("pointer-events-none");
+    // Off-screen chrome must leave the tab order and the accessibility tree.
+    expect(nav).toContain("aria-hidden={immersive || undefined}");
+    expect(nav).toContain("inert={immersive || undefined}");
+  });
+
+  it("reclaims the navigation height instead of leaving a dead strip", () => {
+    // Asserted as single tokens: the source wraps these across lines, and the
+    // file's line endings are not this test's business.
+    expect(shell).toContain('? "pb-0"');
+    expect(shell).toContain('"pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px))]"');
+  });
+
+  it("slides rather than jumping, and respects reduced motion", () => {
+    const nav = shell.slice(shell.indexOf("function MobileNav("), shell.indexOf("function MobileNavTab"));
+    expect(nav).toContain("transition-[transform,opacity] duration-300 ease-out");
+    expect(nav).toContain("motion-reduce:transition-none");
+  });
+
+  it("uses one shared flag rather than a second navigation system", () => {
+    // Whether a conversation is open lives in the page's own state, not the
+    // URL, so the shell cannot derive it from the pathname.
+    expect(immersive).toContain("createContext");
+    expect(stripComments(shell)).not.toContain('pathname === "/messages"');
+  });
+
+  it("is safe to read outside the provider", () => {
+    expect(immersive).toContain("?? { immersive: false, setImmersive: () => {} }");
+  });
+
+  it("anchors the composer to the safe area as the bottom-most element", () => {
+    const composer = page.slice(page.indexOf("MESSAGES_COMPOSER"));
+    expect(composer).toContain("pb-[max(0.75rem,env(safe-area-inset-bottom))]");
+    // The conversation fills the viewport, so nothing sits below the composer.
+    expect(page).toContain("h-[100dvh]");
+  });
+
+  it("leaves the inbox with its navigation", () => {
+    // Only the open-conversation case is immersive.
+    expect(page).not.toContain("useImmersiveWhile(true)");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The header opens the profile
+// ---------------------------------------------------------------------------
+
+describe("conversation identity links to the profile", () => {
+  const identity = page.slice(page.indexOf("function ConversationIdentity"), page.indexOf("function PinPickerModal"));
+
+  it("opens the existing profile route rather than a new destination", () => {
+    expect(identity).toContain("`/friends/${conversation.otherUsername}`");
+  });
+
+  it("makes the avatar and the name one target", () => {
+    // Both sit inside the same link, so tapping either opens the profile.
+    expect(identity).toContain("<GlowAvatar");
+    expect(identity).toContain("{conversation.title}");
+    expect(identity).toContain("<Link");
+  });
+
+  it("stays plain text when there is no profile to open", () => {
+    // A group has no single person behind it.
+    expect(identity).toContain("if (!conversation.otherUsername) {");
+    expect(identity).toContain("<span className=\"flex min-w-0 flex-1 items-center gap-2.5\">{body}</span>");
+  });
+
+  it("announces where it goes", () => {
+    expect(identity).toContain("aria-label={`View ${conversation.title}'s profile`}");
+  });
+
+  it("renders the same markup either way", () => {
+    // One `body`, used by both branches, so the linked and unlinked headers
+    // cannot drift apart.
+    expect(identity).toContain("const body = (");
+    expect((identity.match(/\{body\}/g) ?? []).length).toBe(2);
   });
 });

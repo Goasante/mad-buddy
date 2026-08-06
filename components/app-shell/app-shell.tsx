@@ -10,7 +10,6 @@ import {
   CalendarCheck2,
   CalendarDays,
   CircleDollarSign,
-  CirclePlus,
   Compass,
   Gauge,
   Hand,
@@ -21,6 +20,7 @@ import {
   MoreHorizontal,
   PartyPopper,
   Sparkles,
+  MessageCircle,
   Plus,
   Settings,
   UserRound,
@@ -39,6 +39,8 @@ import { FeatureIcon } from "@/components/ui/feature-icon";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { PullToRefresh } from "@/components/ui/pull-to-refresh";
 import { cn } from "@/lib/utils";
+import { MadBuddyOrb, ORB_HOME_HREF } from "@/components/app-shell/mad-buddy-orb";
+import { ImmersiveModeProvider, useImmersiveMode } from "@/components/app-shell/immersive-mode";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import type { ResolvedWallpaper } from "@/lib/wallpapers/catalog";
 import { BrandMark } from "@/components/brand/brand-mark";
@@ -174,7 +176,20 @@ export type AppShellProps = {
 
 const resolvedDefaultWallpaper = Promise.resolve<ResolvedWallpaper | null>(null);
 
-export function AppShell({
+/**
+ * Wraps the shell in ImmersiveModeProvider so the bottom navigation and the
+ * screens that hide it read the same flag. Kept as a thin wrapper rather than
+ * moving the provider higher, so the flag cannot outlive the shell.
+ */
+export function AppShell(props: AppShellProps) {
+  return (
+    <ImmersiveModeProvider>
+      <AppShellInner {...props} />
+    </ImmersiveModeProvider>
+  );
+}
+
+function AppShellInner({
   children,
   showAdminLink = false,
   initialUnreadCount = 0,
@@ -191,6 +206,7 @@ export function AppShell({
 }: AppShellProps) {
   // One menu sheet for the whole authenticated app.
   const [appMenuOpen, setAppMenuOpen] = useState(false);
+  const { immersive } = useImmersiveMode();
   const pathname = usePathname();
   // Canonical unread count, shared with the mobile header via the same hook —
   // one fetch/poll/broadcast implementation, so the sidebar badge and the
@@ -230,7 +246,17 @@ export function AppShell({
     // section of any page stays fully reachable. --mobile-nav-height is the
     // bar's own height (content only); the safe-area inset is added here
     // because the bar pads itself by that same amount internally.
-    <div className="flex min-h-[100svh] min-h-[100dvh] flex-col bg-background pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px))] dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]">
+    <div
+      className={cn(
+        "flex min-h-[100svh] min-h-[100dvh] flex-col bg-background dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]",
+        // Immersive (a conversation is open): the bar is gone, so the page
+        // must not keep reserving its height or a dead strip is left behind.
+        immersive
+          ? "pb-0"
+          : "pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px))]",
+        "md:pb-4"
+      )}
+    >
       <a
         href="#app-main-content"
         className="focus-ring sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:shadow-lg"
@@ -304,7 +330,7 @@ export function AppShell({
         </main>
         </div>
       </div>
-      <MobileNav />
+      <MobileNav immersive={immersive} />
 
       {/* The app-wide menu sheet. Mounted once here — every screen's header
           Menu opens this same instance through AppMenuProvider. */}
@@ -927,39 +953,44 @@ const createActions: Array<{
 
 /**
  * The app's single mobile bottom bar. Five fixed slots, identical for every
- * user — Home, Muddies, a raised Create button, Plans, Me:
+ * user — Messages, Muddies, the Mad Buddy Orb, Plans, Me:
  *
  *  - One nav, no variants. There used to be a separate "first-time" bar with
  *    a different tab set, which meant the bar a user learned on day one was
  *    not the bar they had on day thirty. Position is now stable for life.
- *  - Create is promoted for everyone. It used to exist only in the first-time
- *    bar, so established users — the ones actually creating plans and
- *    moments — had no primary creation affordance at all.
- *  - Pulse and Messages moved out. They are notification streams rather than
- *    places you browse, and both stay one tap away in the Home header, which
- *    also carries their unread badges.
+ *  - The centre is the Mad Buddy Orb, and the Orb IS Home. It replaced the
+ *    raised Create button: a "+" that opened a menu duplicated actions that
+ *    already have homes (a plan starts on /plans, a Moment on /moments, a
+ *    ping in a conversation), so the menu was a second route to places the
+ *    app already had. Home moved into it because Home is the centre of the
+ *    experience, not one tab among five.
+ *  - Messages takes the left-most slot. It is where a conversation actually
+ *    continues, and it is the destination people return to most.
  *  - "Me" is the personal hub entry. It points at the existing /profile
  *    route; no new or unsupported destination is introduced here.
  *
  * Lucide icons only, one size (26px) and one stroke weight, so the bar reads
  * as a single system. The active tab gets a filled pill plus its label; the
  * rest stay icon-only, which keeps the bar quiet and the current location
- * unmistakable.
+ * unmistakable. The Orb carries no glyph at all — see MadBuddyOrb.
  */
 const MOBILE_TABS: Array<{ href: Route; label: string; icon: LucideIcon }> = [
-  { href: "/dashboard", label: "Home", icon: Home },
+  { href: "/messages", label: "Messages", icon: MessageCircle },
   { href: "/friends", label: "Muddies", icon: Users },
   { href: "/plans", label: "Plans", icon: CalendarDays },
   { href: "/profile", label: "Me", icon: UserRound }
 ];
 
-function MobileNav() {
+function MobileNav({ immersive = false }: { immersive?: boolean }) {
   const pathname = usePathname();
-  const [createOpen, setCreateOpen] = useState(false);
 
-  // Create sits in the middle; the four destinations split around it.
+  // The Orb sits in the middle; the four destinations split around it.
   const leftTabs = MOBILE_TABS.slice(0, 2);
   const rightTabs = MOBILE_TABS.slice(2);
+  const homeActive = isNavigationItemActive(
+    { href: ORB_HOME_HREF, label: "Home", icon: Home } as NavigationItem,
+    pathname
+  );
 
   return (
     // Attached to the bottom of the app, not floating above it: full width,
@@ -968,7 +999,18 @@ function MobileNav() {
     // edge on a device with a home indicator rather than leaving a strip of
     // page showing beneath it.
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-background/95 pb-[env(safe-area-inset-bottom,0px)] backdrop-blur-xl dark:border-white/10 dark:bg-[#151517]/95 md:hidden"
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-background/95 pb-[env(safe-area-inset-bottom,0px)] backdrop-blur-xl dark:border-white/10 dark:bg-[#151517]/95 md:hidden",
+        // Immersive: slide down and fade rather than disappearing, so opening
+        // a conversation reads as the bar stepping aside. Hidden from
+        // assistive tech and taken out of the tab order at the same time —
+        // an off-screen bar must not be focusable.
+        "transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none",
+        immersive ? "pointer-events-none translate-y-full opacity-0" : "translate-y-0 opacity-100"
+      )}
+      // Genuinely gone while immersive, not merely invisible.
+      aria-hidden={immersive || undefined}
+      inert={immersive || undefined}
       aria-label="Mobile navigation"
     >
       <ul className="mx-auto flex w-full max-w-[30rem] items-stretch justify-between px-1.5">
@@ -977,51 +1019,7 @@ function MobileNav() {
         ))}
 
         <li className="flex-1 py-2">
-          <DropdownMenu.Root open={createOpen} onOpenChange={setCreateOpen}>
-            <DropdownMenu.Trigger asChild>
-              <button
-                type="button"
-                aria-label="Create"
-                title="Create"
-                data-tour-id="nav-create"
-                className="safe-motion flex min-h-[56px] w-full flex-col items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-              >
-                {/* No negative translate: in the attached bar that would push
-                    the button through the top border. It sits inline with the
-                    other tabs and is distinguished by fill, not by height. */}
-                <span className="safe-motion grid h-12 w-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_16px_hsl(var(--primary)/0.35)] transition-transform duration-200 ease-out active:scale-90 motion-reduce:active:scale-100">
-                  <CirclePlus className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
-                </span>
-              </button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content
-                side="top"
-                align="center"
-                sideOffset={16}
-                collisionPadding={8}
-                className={FLYOUT_CONTENT_CLASSNAME}
-              >
-                {createActions.map((action) => (
-                  <DropdownMenu.Item
-                    key={action.title}
-                    asChild
-                    className="focus-ring safe-motion flex w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2.5 text-left outline-none data-[highlighted]:bg-secondary"
-                  >
-                    <Link href={action.href} prefetch={false}>
-                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                        <FeatureIcon feature={action.featureIcon} size={20} decorative />
-                      </span>
-                      <span className="text-left">
-                        <span className="block text-sm font-semibold">{action.title}</span>
-                        <span className="block text-xs text-muted-foreground">{action.description}</span>
-                      </span>
-                    </Link>
-                  </DropdownMenu.Item>
-                ))}
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
+          <MadBuddyOrb isActive={homeActive} />
         </li>
 
         {rightTabs.map((tab) => (
