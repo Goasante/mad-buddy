@@ -174,7 +174,9 @@ describe("Suggestion card content", () => {
 
 describe("Suggestion rendering", () => {
   it("renders whatever it is given, holding no ranking of its own", () => {
-    expect(rail).toContain("{primary.map((action) => (");
+    // The index is the sweep position only — the ORDER is still whatever
+    // `primary` arrives as.
+    expect(rail).toContain("{primary.map((action, index) => (");
     expect(rail).not.toContain(".sort(");
     expect(rail).not.toContain("Math.random");
   });

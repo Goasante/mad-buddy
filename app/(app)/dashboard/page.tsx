@@ -15,7 +15,7 @@ import { loadBuddyScore } from "@/lib/engagement/buddy-score-service";
 import { loadSmartCard } from "@/lib/smart-card/smart-card-service";
 import { deriveBirthProfile } from "@/lib/profile/birth-date";
 import { isWeekendPlanningWindow } from "@/lib/smart-card/smart-card";
-import { buildMomentFeed } from "@/lib/content/service";
+import { buildMomentFeed, buildSpotlightFeed } from "@/lib/content/service";
 
 /**
  * How many Moments the Home rail renders. Enough to fill the viewport with
@@ -32,7 +32,7 @@ export default async function DashboardPage() {
   // this page's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
   const admin = createSupabaseAdminClient();
-  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments] = user
+  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -68,9 +68,12 @@ export default async function DashboardPage() {
         // The canonical Moments feed, same loader and same authorisation the
         // Moments page uses. Home renders a capped preview of it (see
         // HOME_MOMENTS_LIMIT below) rather than the whole feed.
-        buildMomentFeed(admin, user.id)
+        buildMomentFeed(admin, user.id),
+        // Air sessions, mixed into the same rail as Moments (no section
+        // labels on Home). Same canonical loader the Moments page uses.
+        buildSpotlightFeed(admin, user.id)
       ])
-    : [null, null, null, { plans: [], hasMore: false }, null, null, {}, false, null, 0, null, null, []];
+    : [null, null, null, { plans: [], hasMore: false }, null, null, {}, false, null, 0, null, null, [], []];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -156,6 +159,8 @@ export default async function DashboardPage() {
       smartCard={smartCard}
       // Preview only — the rail shows a handful, /moments owns the full feed.
       moments={(moments ?? []).slice(0, HOME_MOMENTS_LIMIT)}
+      // Mixed into the same rail, capped alongside Moments.
+      air={(air ?? []).slice(0, HOME_MOMENTS_LIMIT)}
       isFirstTimeUser={journey ? isFirstTimeJourneyState(journey) : false}
       incomingRequestCount={incomingRequestCount ?? 0}
     />

@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const home = read("components/dashboard/dashboard-page.tsx");
 const moments = read("components/content/moments-preview.tsx");
+// The card moved into the shared tile, reused by Home and the Moments page.
+const momentTile = read("components/content/moment-tile.tsx");
 const header = read("components/app-shell/page-section-header.tsx");
 const page = read("app/(app)/dashboard/page.tsx");
 
@@ -166,7 +168,7 @@ describe("empty states", () => {
   });
 
   it("shows the educational experience only when Moments is empty", () => {
-    expect(moments).toContain("if (moments.length === 0)");
+    expect(moments).toContain("if (!somethingExists)");
     expect(moments).toContain("Share Moments");
   });
 });
@@ -214,7 +216,7 @@ describe("accessibility", () => {
   it("announces full names even where the UI truncates", () => {
     // Near shows a first name; Moments shows a first name.
     expect(home).toContain("aria-label={`${capitalize(firstName(name))}");
-    expect(moments).toContain("aria-label={`Moment from ${fullName}");
+    expect(momentTile).toContain("${fullName}");
   });
 
   it("hides decoration from assistive technology", () => {

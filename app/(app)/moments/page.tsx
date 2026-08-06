@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { MomentsPage } from "@/components/content/moments-page";
 import type { MomentMuddyOption } from "@/components/content/moment-composer";
 import { checkFeature } from "@/lib/billing/entitlements";
@@ -23,7 +24,11 @@ export default async function MomentsRoute({
 
   const env = getSupabaseServerEnv();
   if (!user || !env.url || !env.serviceRoleKey) {
-    return <MomentsPage initialMoments={[]} initialOpenMoments={[]} muddies={[]} />;
+    return (
+      <Suspense fallback={null}>
+        <MomentsPage initialMoments={[]} initialOpenMoments={[]} muddies={[]} />
+      </Suspense>
+    );
   }
 
   const admin = createSupabaseAdminClient();
@@ -39,6 +44,7 @@ export default async function MomentsRoute({
   const spotlight = spotlightEnabled ? await buildSpotlightFeed(admin, user.id) : [];
 
   return (
+    <Suspense fallback={null}>
     <MomentsPage
       initialMoments={moments}
       initialOpenMoments={spotlight}
@@ -61,6 +67,7 @@ export default async function MomentsRoute({
           )
       )}
     />
+    </Suspense>
   );
 }
 

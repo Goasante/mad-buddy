@@ -1,7 +1,7 @@
 "use client";
 
 import * as Popover from "@radix-ui/react-popover";
-import { Clock, Eye, Plus } from "lucide-react";
+import { Clock, Eye, Maximize2, Plus } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 import { MomentImage } from "@/components/ui/moment-image";
 import { TuneInIcon } from "@/components/content/tune-in-icon";
@@ -353,12 +353,15 @@ export function MomentMedia({
   moment,
   onRetry,
   aspect = "square",
-  priority = false
+  priority = false,
+  onOpenFullScreen
 }: {
   moment: VisibleMoment;
   onRetry: () => void;
   aspect?: "square" | "portrait";
   priority?: boolean;
+  /** Tapping the media opens it full-screen. Omitted where that is not offered. */
+  onOpenFullScreen?: () => void;
 }) {
   // Legacy Moments may be text or video. This phase creates images only, but
   // anything already posted still has to render rather than vanish.
@@ -371,18 +374,33 @@ export function MomentMedia({
   }
 
   if (moment.contentType === "video") {
-    return moment.mediaUrl ? (
-      <video
-        src={moment.mediaUrl}
-        controls
-        playsInline
-        preload="metadata"
-        className={cn("w-full rounded-[1rem] bg-black object-cover", aspect === "square" ? "aspect-square" : "aspect-[4/5]")}
-      />
-    ) : null;
+    if (!moment.mediaUrl) return null;
+    return (
+      <div className="relative">
+        <video
+          src={moment.mediaUrl}
+          controls
+          playsInline
+          preload="metadata"
+          className={cn("w-full rounded-[1rem] bg-black object-cover", aspect === "square" ? "aspect-square" : "aspect-[4/5]")}
+        />
+        {/* A separate control rather than a wrapper: wrapping the <video> would
+            swallow play/pause and seeking. */}
+        {onOpenFullScreen ? (
+          <button
+            type="button"
+            onClick={onOpenFullScreen}
+            aria-label="View video full screen"
+            className="focus-ring absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur-sm"
+          >
+            <Maximize2 className="h-4 w-4" aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+    );
   }
 
-  return (
+  const image = (
     <MomentImage
       src={moment.mediaUrl}
       alt={moment.caption?.trim() || `Moment from ${moment.authorName}`}
@@ -394,6 +412,19 @@ export function MomentMedia({
       fallbackClassName={cn("rounded-[1rem]", aspect === "square" ? "aspect-square" : "aspect-[4/5]")}
       priority={priority}
     />
+  );
+
+  if (!onOpenFullScreen) return image;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpenFullScreen}
+      aria-label={`View ${moment.caption?.trim() || `Moment from ${moment.authorName}`} full screen`}
+      className="focus-ring block w-full rounded-[1rem]"
+    >
+      {image}
+    </button>
   );
 }
 

@@ -27,6 +27,7 @@ import {
   X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
@@ -40,6 +41,7 @@ import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { usePullRefreshListener } from "@/components/ui/pull-to-refresh";
 import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
 import { useAppMenu } from "@/hooks/app-menu-context";
+import { useInteractionPause, useSequenceHighlight } from "@/hooks/use-sequence-highlight";
 import { QuickControlsSheet } from "@/components/dashboard/quick-controls-sheet";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
@@ -140,6 +142,8 @@ type DashboardPageContentProps = {
    * buildMomentFeed. Home previews it; /moments owns the real experience.
    */
   moments?: VisibleMoment[];
+  /** Live Air sessions, mixed into the same rail as Moments. */
+  air?: VisibleMoment[];
   /**
    * Canonical first-time signal, computed server-side from real Journey
    * progress (see app/(app)/dashboard/page.tsx) — never inferred client-side.
@@ -247,6 +251,7 @@ export function DashboardPageContent({
   hiddenQuickActionHrefs = [],
   smartCard = null,
   moments = [],
+  air = [],
   isFirstTimeUser = false,
   incomingRequestCount = 0
 }: DashboardPageContentProps) {
@@ -583,7 +588,7 @@ export function DashboardPageContent({
         {/* Moments preview. Renders the branded onboarding when the viewer has
             none, and the rail once any exist — so the onboarding is never
             shown again after a first Moment. */}
-        <MomentsPreview moments={moments} />
+        <MomentsPreview moments={moments} air={air} />
 
         {/* Compact profile-completion banner (real state, dismissible). */}
         {profileReminder ? (
@@ -991,26 +996,41 @@ type QuickAction = {
  */
 type SuggestionTone = "orange" | "lavender" | "green" | "blue" | "blush";
 
-const SUGGESTION_TONE: Record<SuggestionTone, { surface: string; icon: string }> = {
+const SUGGESTION_TONE: Record<
+  SuggestionTone,
+  { surface: string; icon: string; edge: { a: string; b: string } }
+> = {
   orange: {
     surface: "bg-orange-500/[0.09] dark:bg-orange-400/[0.12]",
-    icon: "bg-orange-500/15 text-orange-600 dark:bg-orange-400/20 dark:text-orange-300"
+    icon: "bg-orange-500/15 text-orange-600 dark:bg-orange-400/20 dark:text-orange-300",
+    // orange-500 -> coral. Each card sweeps in its OWN family, never a shared
+    // rainbow, so the border reads as part of the card rather than an effect
+    // applied on top of it.
+    edge: { a: "249 115 22", b: "251 113 133" }
   },
   lavender: {
     surface: "bg-violet-500/[0.09] dark:bg-violet-400/[0.12]",
-    icon: "bg-violet-500/15 text-violet-600 dark:bg-violet-400/20 dark:text-violet-300"
+    icon: "bg-violet-500/15 text-violet-600 dark:bg-violet-400/20 dark:text-violet-300",
+    // violet-500 -> indigo-500
+    edge: { a: "139 92 246", b: "99 102 241" }
   },
   green: {
     surface: "bg-emerald-500/[0.09] dark:bg-emerald-400/[0.12]",
-    icon: "bg-emerald-500/15 text-emerald-600 dark:bg-emerald-400/20 dark:text-emerald-300"
+    icon: "bg-emerald-500/15 text-emerald-600 dark:bg-emerald-400/20 dark:text-emerald-300",
+    // emerald-500 -> mint
+    edge: { a: "16 185 129", b: "52 211 153" }
   },
   blue: {
     surface: "bg-sky-500/[0.09] dark:bg-sky-400/[0.12]",
-    icon: "bg-sky-500/15 text-sky-600 dark:bg-sky-400/20 dark:text-sky-300"
+    icon: "bg-sky-500/15 text-sky-600 dark:bg-sky-400/20 dark:text-sky-300",
+    // sky-500 -> cyan-400
+    edge: { a: "14 165 233", b: "34 211 238" }
   },
   blush: {
     surface: "bg-pink-500/[0.09] dark:bg-pink-400/[0.12]",
-    icon: "bg-pink-500/15 text-pink-600 dark:bg-pink-400/20 dark:text-pink-300"
+    icon: "bg-pink-500/15 text-pink-600 dark:bg-pink-400/20 dark:text-pink-300",
+    // pink-500 -> rose-400
+    edge: { a: "236 72 153", b: "251 113 133" }
   }
 };
 
@@ -1090,6 +1110,12 @@ function QuickActionsHome({
   secondary: QuickAction[];
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const railRef = useRef<HTMLDivElement>(null);
+  // One shared controller for the whole rail, not a timer per card. Pauses
+  // while the rail is being touched or scrolled, while the More sheet is
+  // open, and while the tab is hidden.
+  const railBusy = useInteractionPause(railRef);
+  const sweepingIndex = useSequenceHighlight(primary.length, { paused: railBusy || moreOpen });
 
   // No suggestions available (every feature flagged off) — hide the section
   // rather than render an empty placeholder.
@@ -1109,9 +1135,14 @@ function QuickActionsHome({
       {/* Horizontal rail. Cards are a fixed width so roughly three fit on a
           standard phone with the fourth peeking, which is what signals the
           row scrolls — no indicators needed. */}
-      <div className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6">
-        {primary.map((action) => (
-          <SuggestionCard key={action.href} action={action} />
+      <div
+        ref={railRef}
+        className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6"
+      >
+        {primary.map((action, index) => (
+          // Exactly one card sweeps at a time, chosen by rendered index — the
+          // suggestion order is never touched.
+          <SuggestionCard key={action.href} action={action} sweeping={index === sweepingIndex} />
         ))}
       </div>
 
@@ -1146,19 +1177,28 @@ function QuickActionsHome({
  * One suggestion. A calm pastel surface, a small rounded icon chip, a title
  * and one short sentence — closer to a widget than a shortcut button.
  */
-function SuggestionCard({ action }: { action: QuickAction }) {
+function SuggestionCard({ action, sweeping = false }: { action: QuickAction; sweeping?: boolean }) {
   const tone = SUGGESTION_TONE[action.tone];
   const Icon = action.icon;
 
   return (
     <Link
       href={action.href}
-      // One label carrying both the action and why it is being suggested.
+      // One label carrying both the action and why it is being suggested. The
+      // border is decorative and carries no meaning, so it adds nothing here.
       aria-label={`${action.label}. ${action.suggestion}`}
+      // Per-card edge colours for the rotating border (see .suggestion-card in
+      // globals.css). Custom properties only — no inline animation.
+      style={{ "--sug-a": tone.edge.a, "--sug-b": tone.edge.b } as CSSProperties}
       className={cn(
         // ~7.75rem keeps three cards fully visible at 390px with the fourth
         // peeking, which is what signals the rail scrolls.
-        "focus-ring safe-motion relative flex w-[7.75rem] shrink-0 flex-col overflow-hidden rounded-[1.25rem] border border-black/[0.04] p-3 shadow-[0_1px_3px_hsl(var(--shadow)/0.05)] transition-[transform,box-shadow] active:scale-[0.98] active:shadow-[0_4px_14px_hsl(var(--shadow)/0.12)] motion-reduce:transition-none motion-reduce:active:scale-100 dark:border-white/[0.06]",
+        //
+        // NOT overflow-hidden: the animated rim sits at inset -1px behind the
+        // card, and clipping would cut it off. The content has no overflow of
+        // its own — both text blocks are line-clamped.
+        "focus-ring safe-motion suggestion-card relative flex w-[7.75rem] shrink-0 flex-col rounded-[1.25rem] border border-black/[0.04] p-3 shadow-[0_1px_3px_hsl(var(--shadow)/0.05)] transition-[transform,box-shadow] active:scale-[0.98] active:shadow-[0_4px_14px_hsl(var(--shadow)/0.12)] motion-reduce:transition-none motion-reduce:active:scale-100 dark:border-white/[0.06]",
+        sweeping && "is-sweeping",
         tone.surface
       )}
     >

@@ -84,8 +84,21 @@ export type VisibleMoment = {
   /** Author-only: what audience this went to (spec §9). */
   audienceLabel: string | null;
   /**
-   * Author-only reach. Null for everyone else: a Spotlight viewer must not be
-   * able to read how many people saw someone else's Moment, and never who.
+   * How the VIEWER knows this creator. Derived from the friendship and
+   * close-friend data the feed already reads, so it costs no extra query and
+   * can never describe a relationship the viewer is not part of.
+   *
+   * "self" for your own Moments. Null when there is no relationship to state
+   * (a public Spotlight creator you have no connection to).
+   */
+  viewerRelationship: "self" | "close_friend" | "muddy" | null;
+  /**
+   * Reach. Visible to every authorised viewer, not just the author — a
+   * product decision taken deliberately (approved 2026-08-06) so cards can
+   * show engagement.
+   *
+   * This is an AGGREGATE ONLY and must stay one: it says how many people saw
+   * a Moment, never which people. Identity is still never exposed.
    */
   viewCount: number | null;
   /**
@@ -233,6 +246,20 @@ export async function buildMomentFeed(
     if (needsCircles) myCirclesOf.set(authorId, await viewerCircleIds(admin, authorId, viewerId));
   }
 
+  // The relationship label needs a close-friend answer for EVERY surviving
+  // author, not only those who posted a close-friends Moment (the loop above
+  // resolves it lazily for audience checks). Fill the gaps once here so the
+  // projection can state the relationship without re-querying per card.
+  const relationshipAuthorIds = otherAuthorIds.filter(
+    (authorId) => authorId !== viewerId && !closeFriendOf.has(authorId)
+  );
+  for (const authorId of relationshipAuthorIds) {
+    closeFriendOf.set(authorId, await isCloseFriend(admin, authorId, viewerId));
+  }
+
+  /** This viewer's own Muddies, for the "muddy" relationship tier. */
+  const friendIdSet = new Set(friendIds);
+
   const visible: VisibleMoment[] = [];
   for (const moment of candidates) {
     const isAuthor = moment.author_id === viewerId;
@@ -296,9 +323,18 @@ export async function buildMomentFeed(
       reactionBreakdown: breakdownByMoment.get(moment.id) ?? {},
       isAuthor,
       audienceLabel: isAuthor ? moment.audience_type : null,
-      // Reach is the author's own figure. A Muddy viewing a private Moment
-      // learns nothing about how many others saw it.
-      viewCount: isAuthor ? (viewCountByMoment.get(moment.id) ?? 0) : null,
+      // Derived from data already in scope: closeFriendOf is resolved above
+      // for audience checks, and friendIds is this viewer's own friend list.
+      viewerRelationship: isAuthor
+        ? "self"
+        : closeFriendOf.get(moment.author_id)
+          ? "close_friend"
+          : friendIdSet.has(moment.author_id)
+            ? "muddy"
+            : null,
+      // Aggregate reach, visible to every authorised viewer. Still a count
+      // only — never who viewed it.
+      viewCount: viewCountByMoment.get(moment.id) ?? 0,
       // Tune In is a Spotlight concept; a private Moment attributes none.
       tunedInFromThis: null,
       creatorTunedIn: false,
@@ -329,6 +365,55 @@ export async function buildMomentFeed(
  * two feeds over the same rows would be two places for an authorization rule to
  * drift out of sync.
  */
+/**
+ * Whether any Air session is live for this viewer, without building the feed.
+ *
+ * Home only needs to know IF Air has content — it renders Air nowhere, since
+ * Air stays in its own tab. buildSpotlightFeed costs five queries and returns
+ * full projections, which is far more than an emptiness test needs, so this
+ * mirrors its authorisation (public + active + unexpired, minus blocked
+ * authors and hidden content) with a single bounded read.
+ *
+ * Deliberately conservative: any error or a disabled flag reports "no Air",
+ * which at worst shows the educational cards a moment longer. It never
+ * reveals a Moment the viewer is not allowed to see, because it returns a
+ * boolean rather than any content.
+ */
+export async function hasActiveAirSession(
+  admin: Admin,
+  viewerId: string,
+  nowMs = Date.now()
+): Promise<boolean> {
+  if (!(await isOpenMomentsEnabled(admin))) return false;
+
+  const nowIso = new Date(nowMs).toISOString();
+  const [{ data: blocks }, { data: hidden }, { data: moments }] = await Promise.all([
+    admin
+      .from("blocked_users")
+      .select("blocker_id, blocked_id")
+      .or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`),
+    admin.from("hidden_content").select("content_id").eq("user_id", viewerId).eq("content_type", "moment"),
+    admin
+      .from("moments")
+      .select("id, author_id")
+      .eq("audience_type", "public")
+      .eq("status", "active")
+      .gt("expires_at", nowIso)
+      // Enough to survive a handful of blocked/hidden rows without pulling
+      // the whole feed.
+      .limit(40)
+  ]);
+
+  if (!moments?.length) return false;
+
+  const blockedIds = new Set(
+    (blocks ?? []).map((block) => (block.blocker_id === viewerId ? block.blocked_id : block.blocker_id))
+  );
+  const hiddenIds = new Set((hidden ?? []).map((row) => row.content_id));
+
+  return moments.some((moment) => !blockedIds.has(moment.author_id) && !hiddenIds.has(moment.id));
+}
+
 export async function buildSpotlightFeed(
   admin: Admin,
   viewerId: string,
@@ -474,10 +559,18 @@ export async function buildSpotlightFeed(
       reactionBreakdown: breakdownByMoment.get(moment.id) ?? {},
       isAuthor,
       audienceLabel: isAuthor ? "public" : null,
-      // Reach and attributed tune-ins are the author's own analytics. Other
-      // viewers get null, so a Spotlight card cannot become a scoreboard of
-      // someone else's numbers.
-      viewCount: isAuthor ? (stats?.views ?? 0) : null,
+      // Air is public, so the only relationship worth stating is one the
+      // viewer actually has with the creator.
+      viewerRelationship: isAuthor
+        ? "self"
+        : muddyIds.has(moment.author_id)
+          ? "muddy"
+          : null,
+      // Aggregate reach, shown on every card (approved 2026-08-06). Still a
+      // count only.
+      viewCount: stats?.views ?? 0,
+      // Attributed tune-ins stay author-only: unlike a view count, this is
+      // the creator's own growth analytics rather than a public signal.
       tunedInFromThis: isAuthor ? (stats?.tunedIn ?? 0) : null,
       creatorTunedIn: tunedInIds.has(moment.author_id),
       creatorTunedInCount: tuneInCountByCreator.get(moment.author_id) ?? 0

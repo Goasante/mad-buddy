@@ -10,6 +10,7 @@ import {
   loadMyTuneIns,
   queueMediaDeletion,
   recordMomentView,
+  signMediaForAsset,
   type VisibleMoment
 } from "@/lib/content/service";
 import { recordProductEvent } from "@/lib/analytics/track";
@@ -990,4 +991,41 @@ export async function getCreatorSpotlightMomentsAction(creatorId: string) {
   const userId = await getAuthedUserId();
   if (!userId) return [];
   return loadCreatorSpotlightMoments(createSupabaseAdminClient(), userId, creatorId);
+}
+
+/**
+ * Signs the FULL-SIZE asset for one Moment, for the full-screen media layer.
+ *
+ * The feed ships the 1080px `feed` variant, which is right for a card and soft
+ * when blown up to a full screen. Rather than shipping the large asset to every
+ * card, this mints it on demand for the single Moment the viewer actually
+ * opened.
+ *
+ * Authorisation is the SAME canViewMoment gate the rest of the surface uses —
+ * this is deliberately not a way to sign media by id. A caller who cannot view
+ * the Moment gets null, identical to a Moment that does not exist, so the
+ * result never distinguishes "forbidden" from "missing".
+ */
+export async function getMomentFullMediaUrlAction(momentId: string): Promise<string | null> {
+  if (missingEnvState()) return null;
+  if (!uuidSchema.safeParse(momentId).success) return null;
+
+  const userId = await getAuthedUserId();
+  if (!userId) return null;
+
+  const admin = createSupabaseAdminClient();
+  if (!(await canViewMoment(admin, userId, momentId))) return null;
+
+  const { data: moment } = await admin
+    .from("moments")
+    .select("media_id, expires_at")
+    .eq("id", momentId)
+    .maybeSingle();
+  if (!moment?.media_id) return null;
+  // An expired Moment is not served, even to someone who could see it before.
+  if (Date.parse(moment.expires_at) <= Date.now()) return null;
+
+  // "full" falls back to the stored original key when no such variant row
+  // exists, so this works for older uploads too.
+  return signMediaForAsset(admin, moment.media_id, "full");
 }

@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { Camera, Radio, ShieldCheck, Sparkles } from "lucide-react";
 import type { VisibleMoment } from "@/lib/content/service";
-import { MomentImage } from "@/components/ui/moment-image";
 import { PageSectionHeader } from "@/components/app-shell/page-section-header";
-import { cn, formatRelativeTime } from "@/lib/utils";
+import { MomentTile } from "@/components/content/moment-tile";
+import { cn } from "@/lib/utils";
 
 /**
  * Home's Moments preview.
@@ -16,8 +16,35 @@ import { cn, formatRelativeTime } from "@/lib/utils";
  * does NOT reimplement the feed, reactions, Air, expiry or permissions, and
  * it never fetches on its own; Home passes the already-authorised moments in.
  */
-export function MomentsPreview({ moments }: { moments: VisibleMoment[] }) {
-  if (moments.length === 0) {
+export function MomentsPreview({
+  moments,
+  air = [],
+  hasAirSession = false
+}: {
+  moments: VisibleMoment[];
+  /**
+   * Live Air sessions, mixed into the same rail as Moments rather than given
+   * their own section. Home shows "the latest authorised content"; the split
+   * into Personal / Air belongs to the Moments page.
+   */
+  air?: VisibleMoment[];
+  /**
+   * Whether any Air session exists at all. Kept separate from `air` because a
+   * caller may know Air is live without loading it (Home used to), and its
+   * presence alone means Moments is not genuinely empty.
+   */
+  hasAirSession?: boolean;
+}) {
+  // One chronological rail: Moments and Air interleaved by recency, with no
+  // section labels. An Air session is just the newest thing a Muddy is doing.
+  const items = mixByRecency(moments, air);
+  const somethingExists = items.length > 0 || hasAirSession;
+
+  // The educational cards are for the true empty state only: no Moment of the
+  // viewer's own, none from any authorised Muddy, and no live Air session.
+  // buildMomentFeed already covers the first two (it includes the viewer's own
+  // Moments, flagged isAuthor), so an empty feed plus no Air is the full test.
+  if (!somethingExists) {
     return (
       <section aria-labelledby="home-moments-heading">
         <PageSectionHeader id="home-moments-heading" title="Moments" />
@@ -25,6 +52,11 @@ export function MomentsPreview({ moments }: { moments: VisibleMoment[] }) {
       </section>
     );
   }
+
+  // Nothing to show in the rail: render nothing at all rather than a header
+  // over an explanation. Home stays quiet; the Moments page is where the state
+  // gets described.
+  if (items.length === 0) return null;
 
   return (
     <section aria-labelledby="home-moments-heading">
@@ -34,70 +66,46 @@ export function MomentsPreview({ moments }: { moments: VisibleMoment[] }) {
           edge, scrolls naturally, no snapping, no indicators, next card
           peeking to signal there is more. */}
       <div className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6">
-        {moments.map((moment, index) => (
-          <MomentPreviewCard key={moment.id} moment={moment} priority={index === 0} />
+        {items.map((item, index) => (
+          <MomentTile
+            key={`${item.air ? "air" : "moment"}-${item.moment.id}`}
+            moment={item.moment}
+            air={item.air}
+            priority={index === 0}
+          />
         ))}
       </div>
     </section>
   );
 }
 
+type RailItem = { moment: VisibleMoment; air: boolean };
+
 /**
- * One Moment. The image is the hero: no badges, no borders, no chrome — just
- * a dark bottom gradient so the creator name and age stay readable over any
- * photo.
+ * Interleaves Moments and Air by recency into one rail.
+ *
+ * Home shows "the latest authorised content" with no section labels, so an
+ * Air session simply sits wherever its age puts it — the natural
+ * Moment / Moment / AIR / Moment mix the design calls for.
+ *
+ * The viewer's own Moment is lifted to the front. Both feeds already arrive
+ * newest-first from the server, so nothing else is re-ranked, and a Moment
+ * appearing in both feeds is rendered once (Air wins, since that is the live
+ * surface).
  */
-function MomentPreviewCard({ moment, priority }: { moment: VisibleMoment; priority: boolean }) {
-  const fullName = moment.authorName.trim() || "A Muddy";
-  // First name only, as in the Near rail: at this card width a full name
-  // ellipsises on most people, and the screen-reader label below keeps the
-  // complete name available.
-  const name = fullName.split(/\s+/)[0] ?? fullName;
-  const age = formatRelativeTime(moment.createdAt);
+function mixByRecency(moments: VisibleMoment[], air: VisibleMoment[]): RailItem[] {
+  const airIds = new Set(air.map((moment) => moment.id));
+  const items: RailItem[] = [
+    ...air.map((moment) => ({ moment, air: true })),
+    // De-duplicated: the same Moment must never occupy two cards.
+    ...moments.filter((moment) => !airIds.has(moment.id)).map((moment) => ({ moment, air: false }))
+  ];
 
-  return (
-    <Link
-      href="/moments"
-      // There is no per-Moment deep link in the app; /moments is the canonical
-      // viewer, and inventing a route here would be a second Moments system.
-      aria-label={`Moment from ${fullName}, ${age}`}
-      className="focus-ring safe-motion relative block aspect-[3/4] w-[7.75rem] shrink-0 overflow-hidden rounded-[1.25rem] bg-secondary shadow-[0_1px_3px_hsl(var(--shadow)/0.08)] transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
-    >
-      {moment.contentType === "text" ? (
-        // A text Moment has no media; show its words rather than an empty box.
-        // Bottom padding keeps the text clear of the name/age block below it,
-        // and the clamp is tighter than a full card because that block eats
-        // roughly a quarter of the height.
-        <span className="absolute inset-0 grid place-items-center bg-gradient-to-br from-primary/25 to-primary/5 px-3 pb-11 pt-3">
-          <span className="line-clamp-3 text-center text-[0.8125rem] font-medium leading-snug">
-            {moment.textContent}
-          </span>
-        </span>
-      ) : (
-        // Reuses the canonical image component: lazy by default, one retry on a
-        // stale signed URL, graceful fallback. Only the first card is eager.
-        <MomentImage
-          src={moment.mediaUrl}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-          fallbackClassName="absolute inset-0"
-          priority={priority}
-        />
-      )}
-
-      {/* Readability scrim. Sized to the text block so it darkens the caption
-          area without dimming the photo itself. */}
-      <span
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/75 via-black/35 to-transparent"
-        aria-hidden="true"
-      />
-
-      <span className="absolute inset-x-0 bottom-0 p-2.5" aria-hidden="true">
-        <span className="block truncate text-[0.8125rem] font-semibold leading-tight text-white">{name}</span>
-        <span className="mt-0.5 block text-[0.6875rem] leading-tight text-white/75">{age}</span>
-      </span>
-    </Link>
-  );
+  return items.sort((a, b) => {
+    // Your own Moment leads, whatever its age.
+    if (a.moment.isAuthor !== b.moment.isAuthor) return a.moment.isAuthor ? -1 : 1;
+    return Date.parse(b.moment.createdAt) - Date.parse(a.moment.createdAt);
+  });
 }
 
 /**

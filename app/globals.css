@@ -784,6 +784,121 @@ html.dark .home-ambient-bg {
   }
 }
 
+/* -------------------------------------------------------------------------
+ * Suggestions: sequential rotating-gradient border.
+ *
+ * One card at a time carries a slow conic sweep around its edge. The card
+ * surface sits ABOVE the animated layer, so the content never moves, never
+ * flashes, and never changes size — only the rim behind it turns.
+ *
+ * The angle is animated through a registered custom property. Without
+ * @property a conic-gradient angle is not an animatable type, so the sweep
+ * simply does not run and the static rim below is what shows: the fallback is
+ * the base state, not a special case, which is why nothing can break.
+ *
+ * Colours come from --sug-a / --sug-b, set per card from its existing pastel
+ * tone, so each card sweeps in its own family rather than a shared rainbow.
+ * ---------------------------------------------------------------------- */
+@property --sug-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.suggestion-card {
+  position: relative;
+  isolation: isolate;
+}
+
+/* The rim. Inset by -1px so it reads as a border rather than a halo, and
+   blurred a touch so the sweep stays soft instead of drawing a hard line. */
+.suggestion-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  /* Static state: a faint, even rim in the card's own tone. This is also the
+     @property fallback and the reduced-motion state. */
+  background: linear-gradient(140deg, rgb(var(--sug-a) / 0.5), rgb(var(--sug-b) / 0.35));
+  opacity: 0.55;
+  filter: blur(0.5px);
+  transition: opacity 600ms ease;
+  pointer-events: none;
+  /* Rim only: the mask removes the interior, so the layer can never tint the
+     card surface — it only ever draws its edge. */
+  padding: 1.5px;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+/* Active card: swap the wash for a rotating conic sweep. Only the element
+   carrying .is-sweeping animates, so exactly one card moves at a time. */
+.suggestion-card.is-sweeping::before {
+  background: conic-gradient(
+    from var(--sug-angle),
+    rgb(var(--sug-a) / 0) 0deg,
+    rgb(var(--sug-a) / 0.7) 70deg,
+    rgb(var(--sug-b) / 0.95) 140deg,
+    rgb(var(--sug-a) / 0.7) 210deg,
+    rgb(var(--sug-a) / 0) 300deg
+  );
+  opacity: 0.85;
+  animation: suggestion-sweep 2.75s linear;
+  /* Punch the middle out so ONLY a 1.5px rim survives. Without this the
+     conic gradient fills the whole layer and washes across the card, which
+     is a tint rather than a border. */
+  padding: 1.5px;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+/* Night mode: lower opacity and less spread, so the rim never glows. */
+:root[data-theme="dark"] .suggestion-card::before,
+.dark .suggestion-card::before {
+  opacity: 0.38;
+  filter: blur(0.5px);
+}
+
+:root[data-theme="dark"] .suggestion-card.is-sweeping::before,
+.dark .suggestion-card.is-sweeping::before {
+  opacity: 0.62;
+}
+
+@keyframes suggestion-sweep {
+  from {
+    --sug-angle: 0deg;
+  }
+  to {
+    --sug-angle: 360deg;
+  }
+}
+
+/* Reduced motion: the static rim only. No sweep, no transition — the border
+   still exists, so nothing is communicated by movement alone. */
+@media (prefers-reduced-motion: reduce) {
+  .suggestion-card::before,
+  .suggestion-card.is-sweeping::before {
+    animation: none;
+    transition: none;
+    /* The rim mask from the base rule still applies, so this stays a border. */
+    background: linear-gradient(140deg, rgb(var(--sug-a) / 0.5), rgb(var(--sug-b) / 0.35));
+    opacity: 0.55;
+  }
+}
+
 /* Mobile Nearby-Muddies strip: a contained, subtler glow (~35-40% smaller
  * blur/spread than the default halo) so it never bleeds past the item bounds
  * or clips at the horizontal scroller's edges. Scoped to .glow-strip and left
@@ -1788,5 +1903,84 @@ select {
   .birthday-accent__confetti {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* Conversation canvas
+   ------------------------------------------------------------------
+   The conversation owns the screen, so it supplies its own ground rather
+   than sitting on a card. Two very low-opacity brand washes anchored to
+   opposite corners give the surface depth without pattern or noise —
+   enough that the screen reads as Mad Buddy, quiet enough that message
+   text never competes with it. */
+.conversation-canvas {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(
+      110% 60% at 8% 0%,
+      color-mix(in srgb, var(--color-brand-orange) 7%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      90% 50% at 100% 100%,
+      color-mix(in srgb, var(--color-brand-orange) 4%, transparent),
+      transparent 58%
+    );
+  background-attachment: local;
+}
+
+/* Night: the same two washes, weaker. A dark screen shows a tint far more
+   readily, so matching the light-mode opacity would read as a colour cast. */
+:root[data-theme="dark"] .conversation-canvas,
+:root[data-theme="dark"] .conversation-canvas:is(*) {
+  background-image:
+    radial-gradient(
+      110% 60% at 8% 0%,
+      color-mix(in srgb, var(--color-brand-orange) 9%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      90% 50% at 100% 100%,
+      color-mix(in srgb, var(--color-brand-orange) 5%, transparent),
+      transparent 55%
+    );
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .conversation-canvas {
+    background-image:
+      radial-gradient(
+        110% 60% at 8% 0%,
+        color-mix(in srgb, var(--color-brand-orange) 9%, transparent),
+        transparent 60%
+      ),
+      radial-gradient(
+        90% 50% at 100% 100%,
+        color-mix(in srgb, var(--color-brand-orange) 5%, transparent),
+        transparent 55%
+      );
+  }
+}
+
+/* A message settling into place. Deliberately small: a short rise and fade,
+   no bounce, no scale — the thread should feel calm, not springy. */
+@keyframes conversation-message-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.conversation-canvas .group {
+  animation: conversation-message-in 220ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-canvas .group {
+    animation: none;
   }
 }

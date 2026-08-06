@@ -3,13 +3,15 @@
 import { Flag, MoreHorizontal, Plus, Trash2, Users, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { Route } from "next";
 import {
   deleteMomentAction,
   getMomentFeedAction,
   getMomentsCreatorHubAction,
   getCreatorSpotlightMomentsAction,
   getMyTuneInsAction,
+  getMomentFullMediaUrlAction,
   getOpenMomentFeedAction,
   reactToMomentAction,
   recordMomentViewAction,
@@ -29,6 +31,25 @@ import type { MomentsCreatorHub, TuneInEntry, VisibleMoment } from "@/lib/conten
 import type { MomentReactionId } from "@/lib/content/moments";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import {
+  buildMomentSections,
+  isMomentsTrulyEmpty,
+  momentsTabItems,
+  resolveMomentTab,
+  MOMENT_TABS,
+  type MomentSections,
+  type MomentTab
+} from "@/lib/content/moments-tabs";
+import { MomentTile } from "@/components/content/moment-tile";
+import { MomentMediaViewer } from "@/components/content/moment-media-viewer";
+import {
+  MOMENT_PARAM,
+  momentAnchorId,
+  resolveMomentTarget,
+  rotateSequenceToTarget,
+  urlWithoutMomentParam,
+  type MomentTargetResolution
+} from "@/lib/content/moment-target";
 import {
   AuthorInsights,
   MomentHeader,
@@ -50,6 +71,7 @@ import {
 } from "@/components/content/tuned-in-strip";
 import { usePullRefreshListener } from "@/components/ui/pull-to-refresh";
 import { PageHeader } from "@/components/app-shell/page-header";
+import { PageSectionHeader } from "@/components/app-shell/page-section-header";
 
 /** Retained for the route's existing prop contract. */
 export type MomentAudienceOption = { id: string; name: string };
@@ -94,7 +116,11 @@ export function MomentsPage({
   const nowMs = useMomentClock();
   const [moments, setMoments] = useState(initialMoments);
   const [spotlight, setSpotlight] = useState(initialOpenMoments);
-  const [tab, setTab] = useState<"moments" | "spotlight">("moments");
+  // The URL IS the tab state, derived not mirrored: /moments?tab=air is
+  // linkable, survives a reload, and Back works without a sync effect.
+  // `spotlight` is the legacy spelling and maps to Air.
+  const searchParams = useSearchParams();
+  const tab = resolveMomentTab(searchParams.get("tab"));
   const [composerOpen, setComposerOpen] = useState(false);
   const [reportFor, setReportFor] = useState<VisibleMoment | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -107,8 +133,22 @@ export function MomentsPage({
   // State, not a ref: the avatar ring reads this during render to show the
   // "something new" ring, so it has to participate in rendering.
   const [seenIds, setSeenIds] = useState<ReadonlySet<string>>(() => new Set());
+  // Full-screen media: which Moment is open, and where its video had got to so
+  // it can resume instead of restarting.
+  const [fullScreenFor, setFullScreenFor] = useState<VisibleMoment | null>(null);
+  // The larger asset, fetched only when full-screen actually opens. Cards keep
+  // shipping the 1080px feed variant, so opening one Moment never costs the
+  // whole page a full-resolution download.
+  const [fullResUrl, setFullResUrl] = useState<string | null>(null);
+  const videoPositions = useRef<Map<string, number>>(new Map());
+  // Lets the viewer dismiss the unavailable notice. The MESSAGE itself is
+  // derived below, never stored.
+  const [noticeDismissed, setNoticeDismissed] = useState(false);
 
-  const feed = tab === "spotlight" ? spotlight : moments;
+  // Which feed each tab reads. All renders its own sections below.
+  const feed = tab === "air" ? spotlight : momentsTabItems(moments, spotlight);
+  const sections = buildMomentSections(moments, spotlight, { nowMs });
+  const trulyEmpty = isMomentsTrulyEmpty(moments, spotlight);
 
   // This page holds its feeds in client state, so a server re-render alone will
   // not update them. The shell owns the gesture; this just says what to reload.
@@ -127,6 +167,50 @@ export function MomentsPage({
     () => (authorFilter ? liveFeed.filter((moment) => moment.authorId === authorFilter) : liveFeed),
     [liveFeed, authorFilter]
   );
+
+  // ---------------------------------------------------------------------------
+  // Exact-Moment targeting (?moment=<id>)
+  // ---------------------------------------------------------------------------
+  //
+  // The target is resolved against the feed this tab ALREADY renders, so an id
+  // the viewer is not authorised for simply does not match. Expired, deleted,
+  // blocked, wrong-tab and never-existed all land on the same neutral notice.
+  const momentParam = searchParams.get(MOMENT_PARAM);
+
+  // Resolved during RENDER, not in an effect: this is a pure function of the
+  // URL and the already-authorised feed, so there is no state to synchronise
+  // and no cascading re-render. The effect below only does the genuinely
+  // external work — scrolling and rewriting the URL.
+  const feedLoaded = liveFeed.length > 0 || moments.length > 0 || spotlight.length > 0;
+  const target = useMemo<MomentTargetResolution>(
+    () => (feedLoaded ? resolveMomentTarget(momentParam, liveFeed, { nowMs }) : { status: "none" }),
+    [feedLoaded, momentParam, liveFeed, nowMs]
+  );
+  const targetNotice = target.status === "unavailable" && !noticeDismissed ? target.message : "";
+
+  // Consume each target once: without this the effect would re-scroll on every
+  // unrelated re-render (a reaction, a refresh) and fight the user's scrolling.
+  const consumedTargetRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!momentParam || !feedLoaded || consumedTargetRef.current === momentParam) return;
+    consumedTargetRef.current = momentParam;
+
+    if (target.status === "found") {
+      // Scroll to the card in place. The feed keeps its order — the target is
+      // brought into view, never moved to the front.
+      const node = document.getElementById(momentAnchorId(target.moment.id));
+      node?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "center"
+      });
+      node?.focus?.({ preventScroll: true });
+    }
+
+    // Drop the param either way: replace, not push, so Back still goes to the
+    // screen the viewer came from rather than re-triggering the jump.
+    router.replace(urlWithoutMomentParam(tab) as Route, { scroll: false });
+  }, [momentParam, feedLoaded, target, router, tab]);
 
   // The avatar row is derived from the ALREADY-AUTHORIZED feed, so it can never
   // surface a Muddy whose Moment the feed excluded.
@@ -153,6 +237,24 @@ export function MomentsPage({
       return a.name.localeCompare(b.name);
     });
   }, [liveFeed, seenIds]);
+
+  /**
+   * Opens the full-screen layer and, in the background, upgrades the media to
+   * the full-size asset. The layer shows the already-loaded feed image
+   * immediately, so it never waits on the network.
+   */
+  function openFullScreen(moment: VisibleMoment) {
+    setFullScreenFor(moment);
+    setFullResUrl(null);
+    if (moment.contentType === "text") return;
+    void getMomentFullMediaUrlAction(moment.id).then((url) => {
+      // Guard against a late response arriving after the viewer moved on.
+      setFullScreenFor((current) => {
+        if (current?.id === moment.id && url) setFullResUrl(url);
+        return current;
+      });
+    });
+  }
 
   function refreshFeeds() {
     startTransition(async () => {
@@ -291,7 +393,7 @@ export function MomentsPage({
   // Loaded when Spotlight is opened, so the strip reflects unviewed content
   // without any polling.
   useEffect(() => {
-    if (tab === "spotlight") loadTuneIns();
+    if (tab === "air") loadTuneIns();
   }, [tab, loadTuneIns]);
 
   const fetchCreatorMoments = useCallback(
@@ -307,10 +409,12 @@ export function MomentsPage({
     else openHub(entry.creatorId);
   }
 
-  function selectTab(next: "moments" | "spotlight") {
-    setTab(next);
+  function selectTab(next: MomentTab) {
     setAuthorFilter(null);
-    if (next === "spotlight") void recordSpotlightViewedAction();
+    // replace, not push: switching tabs should not stack history entries
+    // between the user and the page they arrived from.
+    router.replace(`/moments?tab=${next}` as Route, { scroll: false });
+    if (next === "air") void recordSpotlightViewedAction();
   }
 
   return (
@@ -354,30 +458,55 @@ export function MomentsPage({
           data-tour-id={TOUR_TARGET_IDS.MOMENTS_TABS}
           className="flex gap-1.5 rounded-full bg-secondary/50 p-1"
         >
-          {(["moments", "spotlight"] as const).map((option) => (
+          {MOMENT_TABS.map((option) => (
             <button
               key={option}
               type="button"
               role="tab"
               aria-selected={tab === option}
-              data-tour-id={option === "spotlight" ? TOUR_TARGET_IDS.MOMENTS_AIR_TAB : undefined}
-              data-tour-active={option === "spotlight" && tab === option ? "true" : undefined}
+              data-tour-id={option === "air" ? TOUR_TARGET_IDS.MOMENTS_AIR_TAB : undefined}
+              data-tour-active={option === "air" && tab === option ? "true" : undefined}
               onClick={() => selectTab(option)}
               className={cn(
-                "focus-ring safe-motion min-h-9 flex-1 rounded-full text-sm font-semibold",
+                "focus-ring safe-motion min-h-9 flex-1 rounded-full text-sm font-semibold capitalize",
                 tab === option
-                  ? option === "spotlight"
+                  ? option === "air"
                     ? "bg-orange-500 text-white"
                     : "bg-card text-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-secondary"
               )}
             >
-              {/* "spotlight" stays the internal tab key; "Air" is the
-                  user-facing rename. */}
-              {option === "spotlight" ? "Air" : "Moments"}
+              {option}
+              {/* A quiet dot when Air has something live, so the tab says so
+                  without the page having to shout it elsewhere. */}
+              {option === "air" && spotlight.length > 0 && tab !== "air" ? (
+                <span
+                  className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-orange-500 align-middle"
+                  aria-hidden="true"
+                />
+              ) : null}
             </button>
           ))}
         </div>
+      ) : null}
+
+      {targetNotice ? (
+        // role="status" so a screen reader is told the target could not be
+        // shown, without stealing focus from the page.
+        <p
+          role="status"
+          className="flex items-center justify-between gap-3 rounded-[1rem] bg-secondary px-3 py-2.5 text-sm text-muted-foreground"
+        >
+          {targetNotice}
+          <button
+            type="button"
+            onClick={() => setNoticeDismissed(true)}
+            aria-label="Dismiss"
+            className="focus-ring -mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-full hover:bg-background/60"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </p>
       ) : null}
 
       {feedback ? (
@@ -389,7 +518,17 @@ export function MomentsPage({
         </p>
       ) : null}
 
-      {tab === "moments" ? (
+      {tab === "all" ? (
+        <AllTab
+          sections={sections}
+          trulyEmpty={trulyEmpty}
+          nowMs={nowMs}
+          viewerName={viewerName}
+          viewerAvatarUrl={viewerAvatarUrl}
+          onCompose={() => setComposerOpen(true)}
+          onSeeAll={selectTab}
+        />
+      ) : tab === "moments" ? (
         <>
           <div data-tour-id={TOUR_TARGET_IDS.MOMENTS_YOURS}>
             <MomentsRing
@@ -414,20 +553,28 @@ export function MomentsPage({
 
           <div data-tour-id={TOUR_TARGET_IDS.MOMENTS_FEED}>
           {shown.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-10 text-center">
-              <UserAvatar src={viewerAvatarUrl} name={viewerName} size="lg" decorative />
-              <div>
-                <p className="text-base font-semibold">Nothing new from your Muddies</p>
-                <p className="mt-1 text-sm text-muted-foreground">Share a Moment or check back later.</p>
+            trulyEmpty ? (
+              // Full onboarding only when the viewer has nothing at all.
+              <div className="flex flex-col items-center gap-3 py-10 text-center">
+                <UserAvatar src={viewerAvatarUrl} name={viewerName} size="lg" decorative />
+                <div>
+                  <p className="text-base font-semibold">Nothing new from your Muddies</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Share a Moment or check back later.</p>
+                </div>
+                <Button type="button" onClick={() => setComposerOpen(true)}>
+                  Share a Moment
+                </Button>
               </div>
-              <Button type="button" onClick={() => setComposerOpen(true)}>
-                Share a Moment
-              </Button>
-            </div>
+            ) : (
+              // Air has something, so this tab stays quiet rather than
+              // repeating the whole onboarding pitch.
+              <p className="py-10 text-center text-sm text-muted-foreground">No Moments yet.</p>
+            )
           ) : (
             <ul className="space-y-4">
               {shown.map((moment, index) => (
-                <li key={moment.id}>
+                // The anchor the ?moment= target scrolls to and focuses.
+                <li key={moment.id} id={momentAnchorId(moment.id)} tabIndex={-1}>
                   <PrivateMomentCard
                     moment={moment}
                     nowMs={nowMs}
@@ -439,6 +586,7 @@ export function MomentsPage({
                     onReact={(reaction) => react(moment, reaction)}
                     onRemoveReaction={() => unreact(moment)}
                     onRetryMedia={refreshFeeds}
+                    onOpenFullScreen={() => openFullScreen(moment)}
                     onReport={() => {
                       setMenuFor(null);
                       setReportFor(moment);
@@ -467,16 +615,11 @@ export function MomentsPage({
           />
           <div data-tour-id={TOUR_TARGET_IDS.MOMENTS_FEED}>
           {shown.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-10 text-center">
-          <p className="text-base font-semibold">Air is quiet right now</p>
-          <p className="max-w-xs text-sm text-muted-foreground">
-            Public Moments from across Mad Buddy show up here. Check back soon.
-          </p>
-        </div>
+        <p className="py-10 text-center text-sm text-muted-foreground">No one is on Air right now.</p>
       ) : (
         <ul className="space-y-5">
           {shown.map((moment, index) => (
-            <li key={moment.id}>
+            <li key={moment.id} id={momentAnchorId(moment.id)} tabIndex={-1}>
               <SpotlightCard
                 moment={moment}
                 nowMs={nowMs}
@@ -488,6 +631,7 @@ export function MomentsPage({
                 onReact={(reaction) => react(moment, reaction)}
                 onRemoveReaction={() => unreact(moment)}
                 onRetryMedia={refreshFeeds}
+                onOpenFullScreen={() => openFullScreen(moment)}
                 onOpenCreator={openHub}
                 onTuneIn={handleTuneIn}
                 onTuneOut={handleTuneOut}
@@ -511,6 +655,39 @@ export function MomentsPage({
           </div>
         </>
       )}
+
+      {/* One full-screen layer for whichever Moment was tapped. Not a feed:
+          it shows that Moment's media and nothing else. */}
+      {fullScreenFor ? (
+        <MomentMediaViewer
+          moment={fullScreenFor}
+          // Rotated so the tapped Moment leads and the rest continue in the
+          // feed's own order. `shown` itself is never reordered — the page
+          // behind stays in canonical order.
+          sequence={rotateSequenceToTarget(shown, fullScreenFor.id)}
+          onActiveChange={(active) => {
+            // replace, not push: stepping through the sequence must not add a
+            // history entry per swipe, or Back would unwind step by step
+            // instead of leaving the layer.
+            window.history.replaceState(
+              window.history.state,
+              "",
+              `/moments?tab=${tab}&${MOMENT_PARAM}=${active.id}`
+            );
+          }}
+          open
+          fullResUrl={fullResUrl}
+          onClose={() => {
+            setFullScreenFor(null);
+            setFullResUrl(null);
+            // Drop the Moment id but keep the tab, so closing returns to the
+            // same tab and the same scroll position without a navigation.
+            window.history.replaceState(window.history.state, "", urlWithoutMomentParam(tab));
+          }}
+          initialVideoTime={videoPositions.current.get(fullScreenFor.id) ?? 0}
+          onVideoTimeChange={(seconds) => videoPositions.current.set(fullScreenFor.id, seconds)}
+        />
+      ) : null}
 
       <MomentComposer
         open={composerOpen}
@@ -612,9 +789,119 @@ type CardProps = {
   onReact: (reaction: MomentReactionId) => void;
   onRemoveReaction: () => void;
   onRetryMedia: () => void;
+  /** Opens this Moment's media full-screen. */
+  onOpenFullScreen: () => void;
   onReport: () => void;
   onDelete: () => void;
 };
+
+/**
+ * The All tab: one scrollable overview of everything the viewer can see.
+ *
+ * Sections render in the approved order — Personal, Air, More — and are
+ * de-duplicated upstream by buildMomentSections, so scrolling can never show
+ * the same Moment twice. Each section is omitted entirely when empty rather
+ * than rendering a header over nothing.
+ */
+function AllTab({
+  sections,
+  trulyEmpty,
+  nowMs,
+  viewerName,
+  viewerAvatarUrl,
+  onCompose,
+  onSeeAll
+}: {
+  sections: MomentSections;
+  trulyEmpty: boolean;
+  nowMs: number;
+  viewerName: string;
+  viewerAvatarUrl: string | null;
+  onCompose: () => void;
+  onSeeAll: (tab: MomentTab) => void;
+}) {
+  if (trulyEmpty) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-10 text-center">
+        <UserAvatar src={viewerAvatarUrl} name={viewerName} size="lg" decorative />
+        <div>
+          <p className="text-base font-semibold">Nothing here yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">Share a Moment to get started.</p>
+        </div>
+        <Button type="button" onClick={onCompose}>
+          Share a Moment
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6" data-tour-id={TOUR_TARGET_IDS.MOMENTS_FEED}>
+      <MomentRail
+        id="all-personal"
+        title="Personal Moments"
+        moments={sections.personal}
+        onSeeAll={() => onSeeAll("moments")}
+        nowMs={nowMs}
+      />
+      <MomentRail
+        id="all-air"
+        title="Air"
+        air
+        moments={sections.air}
+        onSeeAll={() => onSeeAll("air")}
+        nowMs={nowMs}
+      />
+      <MomentRail
+        id="all-more"
+        title="More Moments"
+        moments={sections.more}
+        onSeeAll={() => onSeeAll("moments")}
+        nowMs={nowMs}
+      />
+    </div>
+  );
+}
+
+/** One horizontal section of tiles. Renders nothing when it has no content. */
+function MomentRail({
+  id,
+  title,
+  moments,
+  air = false,
+  nowMs,
+  onSeeAll
+}: {
+  id: string;
+  title: string;
+  moments: VisibleMoment[];
+  air?: boolean;
+  nowMs: number;
+  onSeeAll: () => void;
+}) {
+  // Presentation-only expiry, mirroring the feed above: the server already
+  // refuses an expired Moment, this just stops showing a stale one.
+  const live = moments.filter((moment) => Date.parse(moment.expiresAt) > nowMs);
+  if (live.length === 0) return null;
+
+  return (
+    <section aria-labelledby={id}>
+      <PageSectionHeader id={id} title={title} onAction={onSeeAll} />
+      {/* Same rail geometry as Home, Near and Suggestions. */}
+      <ul className="-mx-4 mt-3 flex gap-2.5 overflow-x-auto px-4 [&::-webkit-scrollbar]:hidden">
+        {live.map((moment, index) => (
+          <li key={moment.id}>
+            <MomentTile
+              moment={moment}
+              air={air}
+              priority={index === 0}
+            />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 function PrivateMomentCard(props: CardProps) {
   const ref = useSeenOnce(props.moment.id, props.moment.isAuthor, props.onSeen);
@@ -624,7 +911,12 @@ function PrivateMomentCard(props: CardProps) {
         <MomentMenu {...props} />
       </MomentHeader>
 
-      <MomentMedia moment={props.moment} onRetry={props.onRetryMedia} priority={props.priority} />
+      <MomentMedia
+        moment={props.moment}
+        onRetry={props.onRetryMedia}
+        priority={props.priority}
+        onOpenFullScreen={props.onOpenFullScreen}
+      />
 
       {props.moment.caption ? <p className="text-sm leading-6">{props.moment.caption}</p> : null}
 
@@ -680,7 +972,13 @@ function SpotlightCard(
         </div>
       </MomentHeader>
 
-      <MomentMedia moment={props.moment} onRetry={props.onRetryMedia} aspect="portrait" priority={props.priority} />
+      <MomentMedia
+        moment={props.moment}
+        onRetry={props.onRetryMedia}
+        aspect="portrait"
+        priority={props.priority}
+        onOpenFullScreen={props.onOpenFullScreen}
+      />
 
       {props.moment.caption ? <p className="text-sm leading-6">{props.moment.caption}</p> : null}
 

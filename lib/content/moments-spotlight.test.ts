@@ -431,13 +431,30 @@ describe("view and reach privacy", () => {
     expect(view).toContain("canViewMoment(admin, userId, momentId)");
   });
 
-  it("gives reach and attributed tune-ins to the author only", () => {
+  it("shows reach to every authorised viewer, as an aggregate", () => {
+    // Changed deliberately (approved 2026-08-06): view counts appear on every
+    // card, not only the author's. This is a product decision, and the count
+    // remains an AGGREGATE — the tests below still forbid exposing WHO viewed.
     const feed = declaration(SERVICE, "export async function buildSpotlightFeed");
-    expect(feed).toContain("viewCount: isAuthor ? (stats?.views ?? 0) : null");
+    expect(feed).toContain("viewCount: stats?.views ?? 0");
+    expect(feed).not.toContain("viewCount: isAuthor");
+  });
+
+  it("keeps attributed tune-ins author-only", () => {
+    // Unlike a view count, this is the creator's own growth analytics rather
+    // than a public engagement signal, so it did NOT change.
+    const feed = declaration(SERVICE, "export async function buildSpotlightFeed");
     expect(feed).toContain("tunedInFromThis: isAuthor ? (stats?.tunedIn ?? 0) : null");
-    // The UI has nothing to draw when those are null.
     const insights = declaration(read("components/content/moment-parts.tsx"), "export function AuthorInsights");
-    expect(insights).toContain("if (!moment.isAuthor || moment.viewCount === null) return null;");
+    expect(insights).toContain("moment.isAuthor");
+  });
+
+  it("states a relationship only where the viewer actually has one", () => {
+    const feed = declaration(SERVICE, "export async function buildSpotlightFeed");
+    // Derived from the viewer's own friend set; never a relationship they are
+    // not part of, and null when there is none to state.
+    expect(feed).toContain("muddyIds.has(moment.author_id)");
+    expect(feed).toContain('viewerRelationship: isAuthor');
   });
 
   it("exposes no viewer list to anyone", () => {

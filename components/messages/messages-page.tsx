@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarCheck2, ChevronLeft, Info, MessagesSquare, PenSquare, Plus, Search, Send, Star, UsersRound, VolumeX, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   deleteMessageAction,
   editMessageAction,
@@ -31,6 +31,12 @@ import { QUICK_ACTIONS, quickActionLabel, DELETED_MESSAGE_PLACEHOLDER } from "@/
 import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 import { cn, formatRelativeTime } from "@/lib/utils";
+import {
+  conversationContext,
+  dayLabel,
+  startsNewDay,
+  startsNewRun
+} from "@/lib/messaging/conversation-presence";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { PageHeader } from "@/components/app-shell/page-header";
 
@@ -224,6 +230,10 @@ export function MessagesPageContent({
   }, [uniqueConversations]);
 
   const selected = uniqueConversations.find((conversation) => conversation.id === selectedId) ?? null;
+
+  // Why this conversation exists, derived from what the server already sent.
+
+  const context = selected ? conversationContext(selected) : { subtitle: null, shared: false };
 
   const dismissConversation = useCallback(() => {
     openedRequestedConversation.current = true;
@@ -734,7 +744,12 @@ export function MessagesPageContent({
 
           <div
             className={cn(
-              "flex h-[calc(100dvh-13rem)] max-h-[720px] min-h-[420px] min-w-0 flex-col rounded-2xl border border-border/70 bg-card/40",
+              // Mobile: the conversation IS the screen — full height, no card,
+              // no border, nothing containing it. Desktop keeps the panel so
+              // the two-pane layout still reads as one surface.
+              "flex min-w-0 flex-col",
+              "conversation-canvas fixed inset-0 z-30 h-[100dvh] lg:static lg:z-auto",
+              "lg:h-[calc(100dvh-13rem)] lg:max-h-[720px] lg:min-h-[420px] lg:rounded-2xl lg:border lg:border-border/70 lg:bg-card/40",
               !selectedId && "hidden lg:flex"
             )}
           >
@@ -751,7 +766,7 @@ export function MessagesPageContent({
               <div className="flex min-h-0 flex-1 flex-col">
                 <div
                   data-tour-id={TOUR_TARGET_IDS.MESSAGES_CHAT_HEADER}
-                  className="flex min-h-[68px] items-center gap-2 border-b border-border/70 px-3"
+                  className="flex min-h-[64px] shrink-0 items-center gap-2.5 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] lg:pt-0"
                 >
                   <button
                     type="button"
@@ -763,8 +778,24 @@ export function MessagesPageContent({
                     <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                   </button>
                   <GlowAvatar name={selected.title} src={selected.avatarUrl} size="sm" membershipTier={publicMembershipTier(selected.otherPlan)} />
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{selected.title}</span>
-                  <PremiumPlanBadge plan={selected.otherPlan} compact />
+                  <span className="flex min-w-0 flex-1 flex-col justify-center">
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate text-[0.9375rem] font-semibold leading-tight">{selected.title}</span>
+                      <PremiumPlanBadge plan={selected.otherPlan} compact />
+                    </span>
+                    {/* Why this conversation exists — a shared plan, an event —
+                        or the handle. Never a guessed distance or availability. */}
+                    {context.subtitle ? (
+                      <span
+                        className={cn(
+                          "truncate text-[0.6875rem] font-medium leading-tight",
+                          context.shared ? "text-[var(--color-brand-orange)]" : "text-muted-foreground"
+                        )}
+                      >
+                        {context.subtitle}
+                      </span>
+                    ) : null}
+                  </span>
                   <Popover.Root open={infoOpen} onOpenChange={setInfoOpen}>
                     <Popover.Trigger asChild>
                       <button
@@ -802,30 +833,60 @@ export function MessagesPageContent({
                   </button>
                 </div>
 
-                <div className="flex-1 space-y-2 overflow-y-auto p-3">
+                <div className="flex-1 space-y-0.5 overflow-y-auto px-4 py-3">
                   {loadingMessages ? (
-                    <p className="text-center text-xs text-muted-foreground">Loading…</p>
+                    <p className="py-6 text-center text-xs text-muted-foreground">Loading…</p>
                   ) : messages.length === 0 ? (
-                    <div className="flex h-full flex-col items-center justify-center text-center">
-                      <p className="text-sm font-semibold">Start the conversation</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Send a message to {selected.title}.</p>
+                    // Whitespace instead of a box: the avatar and one line, with
+                    // the screen left mostly empty on purpose.
+                    <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+                      <GlowAvatar
+                        name={selected.title}
+                        src={selected.avatarUrl}
+                        size="lg"
+                        membershipTier={publicMembershipTier(selected.otherPlan)}
+                      />
+                      <p className="mt-4 text-[0.9375rem] font-semibold">{selected.title}</p>
+                      <p className="mt-1 max-w-[22rem] text-sm leading-relaxed text-muted-foreground">
+                        {context.shared && context.subtitle
+                          ? `${context.subtitle}. Say hello.`
+                          : "Say hello and start the conversation."}
+                      </p>
                     </div>
                   ) : (
-                    messages.map((message) =>
-                      message.messageType === "system" ? (
-                        <p key={message.id} className="py-1 text-center text-xs text-muted-foreground">
+                    messages.map((message, messageIndex) => (
+                      <Fragment key={message.id}>
+                        {/* Day divider: quiet, uppercase, no rule — the same
+                            calm register as the system lines. */}
+                        {startsNewDay(message.createdAt, messages[messageIndex - 1]?.createdAt) ? (
+                          <p className="py-3 text-center text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground/60">
+                            {dayLabel(message.createdAt)}
+                          </p>
+                        ) : null}
+                        {message.messageType === "system" ? (
+                        <p className="py-2 text-center text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
                           {message.text}
                         </p>
                       ) : (
                         <div
-                          key={message.id}
-                          className={cn("group flex", message.isMine ? "justify-end" : "justify-start")}
+                          className={cn(
+                            "group flex",
+                            message.isMine ? "justify-end" : "justify-start",
+                            // Air between speakers, tight within one run.
+                            startsNewRun(message, messages[messageIndex - 1]) ? "mt-3 first:mt-0" : "mt-0.5"
+                          )}
                         >
-                          <div className={cn("max-w-[75%]", message.isMine && "flex flex-col items-end")}>
+                          <div className={cn("max-w-[78%]", message.isMine && "flex flex-col items-end")}>
                             <div
                               className={cn(
-                                "rounded-2xl px-3 py-2",
-                                message.isMine ? "bg-primary text-white" : "bg-secondary"
+                                "px-3.5 py-2 text-[0.9375rem] leading-snug",
+                                // Soft, generous corners; the trailing corner
+                                // tightens on the last of a run so a run reads
+                                // as one shape rather than separate pills.
+                                "rounded-[1.25rem]",
+                                message.isMine
+                                  ? "bg-primary text-white shadow-[0_1px_2px_hsl(var(--shadow)/0.10)]"
+                                  : "bg-secondary/70 text-foreground"
                               )}
                             >
                               {editingId === message.id ? (
@@ -852,7 +913,7 @@ export function MessagesPageContent({
                                   </Button>
                                 </form>
                               ) : (
-                                <p className={cn("text-sm", message.deleted && "italic opacity-70")}>
+                                <p className={cn("whitespace-pre-wrap", message.deleted && "italic opacity-70")}>
                                   {message.deleted
                                     ? DELETED_MESSAGE_PLACEHOLDER
                                     : message.quickActionType
@@ -860,16 +921,21 @@ export function MessagesPageContent({
                                       : message.text}
                                 </p>
                               )}
-                              <p
-                                className={cn(
-                                  "mt-0.5 text-[10px]",
-                                  message.isMine ? "text-white/70" : "text-muted-foreground"
-                                )}
-                              >
-                                {formatRelativeTime(message.createdAt)}
-                                {message.editedAt ? " · edited" : ""}
-                                {message.isMine ? ` · ${stateLabel(message.state)}` : ""}
-                              </p>
+                              {/* One timestamp per run, on its last message:
+                                  repeating it on every line is what made the
+                                  thread feel like a table of records. */}
+                              {startsNewRun(messages[messageIndex + 1] ?? { isMine: !message.isMine, createdAt: message.createdAt }, message) ? (
+                                <p
+                                  className={cn(
+                                    "mt-1 text-[0.625rem] font-medium",
+                                    message.isMine ? "text-white/65" : "text-muted-foreground/80"
+                                  )}
+                                >
+                                  {formatRelativeTime(message.createdAt)}
+                                  {message.editedAt ? " · edited" : ""}
+                                  {message.isMine ? ` · ${stateLabel(message.state)}` : ""}
+                                </p>
+                              ) : null}
                             </div>
 
                             {message.myReaction ? (
@@ -938,15 +1004,16 @@ export function MessagesPageContent({
                             ) : null}
                           </div>
                         </div>
-                      )
-                    )
+                        )}
+                      </Fragment>
+                    ))
                   )}
                 </div>
 
                 {/* Quick coordination actions (spec §39), no location attached. */}
                 <div
                   data-tour-id={TOUR_TARGET_IDS.MESSAGES_QUICK_REPLIES}
-                  className="flex flex-wrap gap-1.5 border-t border-border/70 px-3 pt-2"
+                  className="flex shrink-0 flex-wrap gap-1.5 px-4 pb-1 pt-2"
                 >
                   {QUICK_ACTIONS.slice(0, 3).map((action) => (
                     <button
@@ -954,7 +1021,7 @@ export function MessagesPageContent({
                       type="button"
                       onClick={() => send("", action.id)}
                       disabled={isPending}
-                      className="focus-ring safe-motion rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-secondary"
+                      className="focus-ring safe-motion rounded-full bg-secondary/60 px-3 py-1.5 text-[0.75rem] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:scale-[0.97] motion-reduce:active:scale-100"
                     >
                       {action.label}
                     </button>
@@ -963,24 +1030,40 @@ export function MessagesPageContent({
 
                 <form
                   data-tour-id={TOUR_TARGET_IDS.MESSAGES_COMPOSER}
-                  className="flex items-center gap-2 p-3"
+                  className="flex shrink-0 items-end gap-2 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 lg:pb-3"
                   onSubmit={(event) => {
                     event.preventDefault();
                     send(draft);
                   }}
                 >
-                  <Input
-                    value={draft}
-                    maxLength={2000}
-                    onChange={(event) => setDraft(event.target.value)}
-                    placeholder={`Message ${selected.title}`}
-                    aria-label={`Message ${selected.title}`}
-                    className="flex-1"
-                  />
-                  <Button type="submit" size="sm" disabled={!draft.trim() || isPending}>
-                    <Send className="h-4 w-4" aria-hidden="true" />
-                    Send
-                  </Button>
+                  {/* One soft pill holding the field and its send action, so the
+                      composer reads as a single calm control rather than a
+                      bordered strip with a button bolted on. */}
+                  <div className="flex min-h-[2.75rem] flex-1 items-center gap-1.5 rounded-full bg-secondary/70 pl-4 pr-1.5 transition-colors focus-within:bg-secondary">
+                    <input
+                      value={draft}
+                      maxLength={2000}
+                      onChange={(event) => setDraft(event.target.value)}
+                      placeholder={`Message ${selected.title}`}
+                      aria-label={`Message ${selected.title}`}
+                      className="min-w-0 flex-1 bg-transparent py-2 text-[0.9375rem] outline-none placeholder:text-muted-foreground/70"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!draft.trim() || isPending}
+                      aria-label="Send message"
+                      className={cn(
+                        "focus-ring safe-motion grid h-9 w-9 shrink-0 place-items-center rounded-full transition-all duration-200 motion-reduce:transition-none",
+                        // The send action only becomes solid once there is
+                        // something to send — the composer stays quiet at rest.
+                        draft.trim() && !isPending
+                          ? "scale-100 bg-primary text-white opacity-100"
+                          : "scale-90 bg-transparent text-muted-foreground/50 opacity-60"
+                      )}
+                    >
+                      <Send className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
                 </form>
               </div>
             )}
