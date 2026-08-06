@@ -3756,6 +3756,32 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["experiment_exposures"]["Insert"]>;
         Relationships: [];
       };
+      scheduler_incidents: {
+        Row: {
+          id: string;
+          scheduler: string;
+          opened_at: string;
+          resolved_at: string | null;
+          consecutive_failures: number;
+          missing_ticks: boolean;
+          alerted_at: string | null;
+          recovery_notified_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          scheduler?: string;
+          opened_at?: string;
+          resolved_at?: string | null;
+          consecutive_failures?: number;
+          missing_ticks?: boolean;
+          alerted_at?: string | null;
+          recovery_notified_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["scheduler_incidents"]["Insert"]>;
+        Relationships: [];
+      };
       jobs: {
         Row: {
           id: string;
@@ -4076,6 +4102,10 @@ export type Database = {
           remaining: number;
           reset_at: string;
         }>;
+      };
+      admin_cron_tick_runs: {
+        Args: { p_limit?: number };
+        Returns: Array<{ started_at: string; status: string; return_message: string | null }>;
       };
       claim_jobs: {
         Args: { p_worker: string; p_limit: number; p_stale_seconds?: number };

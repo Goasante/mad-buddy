@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { runTick } from "@/lib/jobs/worker";
 import { buildTickSummary, resolveSchedulerSource, workerIdFor } from "@/lib/jobs/scheduler-source";
+import { checkSchedulerHealthAndAlert } from "@/lib/jobs/scheduler-alerts";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -74,6 +75,17 @@ export async function GET(request: Request) {
     const source = resolveSchedulerSource(new URL(request.url).searchParams.get("source"));
     const tickId = randomUUID().slice(0, 8);
     const result = await runTick(admin, workerIdFor(source, tickId));
+
+    // Check the scheduler's own health after the work is done, so a slow or
+    // failing health check can never delay or fail the jobs themselves.
+    // Deliberately not awaited into the response path beyond this: an alerting
+    // problem must not turn a healthy tick into a failed one.
+    try {
+      await checkSchedulerHealthAndAlert(admin);
+    } catch {
+      // Never let alerting break the tick. A missed health check is far less
+      // serious than a missed job.
+    }
 
     const summary = buildTickSummary({
       source,

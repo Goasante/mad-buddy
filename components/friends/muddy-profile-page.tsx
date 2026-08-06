@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { conversationHref } from "@/lib/messaging/open-conversation";
 import Image from "next/image";
 import { Award, BadgeCheck, Ban, CalendarPlus, Check, ChevronLeft, Flag, Hand, MessageCircle, Sparkles, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -95,11 +96,31 @@ export function MuddyProfilePage({
     });
   }
 
+  /**
+   * Open (or create) the direct conversation and go straight to it.
+   *
+   * Identity is the stable friendId, never the username: the username is a
+   * display handle and can change, while the server resolves one canonical
+   * direct conversation from the user pair.
+   *
+   * On success this pushes the exact conversation. It never calls
+   * router.back() — landing on the previous screen after successfully
+   * creating a conversation is indistinguishable from failure.
+   */
   function messageMuddy() {
+    // Guard the double tap: two in-flight opens would race to create the same
+    // conversation. The server de-duplicates on direct_key regardless, but
+    // there is no reason to send the second request.
+    if (isActionPending) return;
     startActionTransition(async () => {
       const result = await openDirectConversationAction(muddy.friendId);
-      if (result.ok && result.conversationId) router.push(`/messages?conversation=${result.conversationId}`);
-      else setWaveFeedback(result.message);
+      if (result.ok && result.conversationId) {
+        router.push(conversationHref(result.conversationId));
+        return;
+      }
+      // A safe, already-generalised message from the server. Never a raw
+      // database error, and never a reason that would reveal a block.
+      setWaveFeedback(result.message);
     });
   }
 

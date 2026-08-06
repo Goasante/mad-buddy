@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { ArrowRight, Hand, MessageCircle, MessagesSquare } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
+import { conversationHref } from "@/lib/messaging/open-conversation";
 import { Button } from "@/components/ui/button";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
@@ -38,6 +41,36 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
   const [waveSent, setWaveSent] = useState(false);
   const [waveFeedback, setWaveFeedback] = useState("");
   const [isWavePending, startWaveTransition] = useTransition();
+  const [isMessagePending, startMessageTransition] = useTransition();
+  const router = useRouter();
+
+  /**
+   * Open (or create) the direct conversation and go straight to it.
+   *
+   * This used to be a bare <Link href="/messages">, which navigated to the
+   * inbox and left the user to find the person again — the Message button
+   * never resolved a conversation at all.
+   *
+   * Identity is the stable friendId, never the username. The server resolves
+   * one canonical direct conversation from the user pair, re-checks
+   * eligibility, and returns its id.
+   */
+  function openConversation() {
+    const friendId = muddy?.friendId;
+    if (!friendId || isMessagePending) return;
+    startMessageTransition(async () => {
+      const result = await openDirectConversationAction(friendId);
+      if (result.ok && result.conversationId) {
+        // The exact conversation, never a bare push to the inbox.
+        onOpenChange(false);
+        router.push(conversationHref(result.conversationId));
+        return;
+      }
+      // Already-generalised server copy: never a raw database error, and
+      // never a reason that would reveal a block.
+      setWaveFeedback(result.message);
+    });
+  }
 
   function sendWave() {
     const friendId = muddy?.friendId;
@@ -122,11 +155,19 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
               <MessageCircle className="h-4 w-4" aria-hidden="true" />
               Ping
             </Button>
-            <Button type="button" variant="outline" size="sm" className="min-w-0 px-2 text-xs shadow-none sm:text-sm" asChild>
-              <Link href="/messages">
-                <MessagesSquare className="h-4 w-4" aria-hidden="true" />
-                Message
-              </Link>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-w-0 px-2 text-xs shadow-none sm:text-sm"
+              // Guard the double tap: two in-flight opens would race to create
+              // the same conversation. The server de-duplicates on direct_key
+              // regardless, but there is no reason to send the second request.
+              disabled={!muddy?.friendId || isMessagePending}
+              onClick={openConversation}
+            >
+              <MessagesSquare className="h-4 w-4" aria-hidden="true" />
+              {isMessagePending ? "Opening…" : "Message"}
             </Button>
           </div>
 

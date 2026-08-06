@@ -16,7 +16,7 @@ import {
   X
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import {
   acceptFriendRequestAction,
   blockUserAction,
@@ -27,6 +27,7 @@ import {
   unblockUserAction,
   updateFriendRequestStatusAction
 } from "@/app/(app)/actions";
+import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
 import {
   addCircleMembersAction,
@@ -39,6 +40,7 @@ import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
 import { useAppMenu } from "@/hooks/app-menu-context";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { AppMenu } from "@/components/ui/app-dropdown";
+import { conversationHref } from "@/lib/messaging/open-conversation";
 import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -148,6 +150,35 @@ export function FriendsPageContent({
   const [newCircleName, setNewCircleName] = useState("");
   const [circleTargetUser, setCircleTargetUser] = useState<UserSummary | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  /**
+   * Open (or create) the direct conversation with this Muddy and go straight
+   * to it.
+   *
+   * This used to push a bare "/messages", which landed on the inbox and left
+   * the user to find the person again. Identity is the stable user id, never
+   * the username; the server resolves one canonical direct conversation for
+   * the pair and re-checks eligibility.
+   */
+  const openConversationWith = useCallback(
+    (friendId: string) => {
+      // Guard the double tap: the server de-duplicates on direct_key anyway,
+      // but there is no reason to send a second request.
+      if (isPending) return;
+      startTransition(async () => {
+        const result = await openDirectConversationAction(friendId);
+        if (result.ok && result.conversationId) {
+          router.push(conversationHref(result.conversationId));
+          return;
+        }
+        // Already-generalised server copy, never a raw error and never a
+        // reason that would reveal a block.
+        setFeedback(result.message);
+      });
+    },
+    [isPending, router]
+  );
+
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setUsers(initialUsers));
@@ -395,7 +426,7 @@ export function FriendsPageContent({
           setFeedback(result.message);
         });
       }}
-      onMessage={() => router.push("/messages")}
+      onMessage={() => openConversationWith(user.id)}
       onRemove={() =>
         runFriendAction(
           () => removeFriendAction(user.id),

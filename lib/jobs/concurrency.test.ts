@@ -353,8 +353,10 @@ describe("tick endpoint", () => {
 });
 
 describe("GitHub backstop", () => {
-  it("runs every 30 minutes, not every 5", () => {
-    expect(workflow).toContain('- cron: "*/30 * * * *"');
+  it("runs on the backstop cadence, not the primary's", () => {
+    // Tightened to */10 after the pg_cron incident; cadence itself is
+    // asserted in scheduler-health.test.ts.
+    expect(workflow).toContain('- cron: "*/10 * * * *"');
     expect(workflow).not.toContain('- cron: "*/5 * * * *"');
   });
 

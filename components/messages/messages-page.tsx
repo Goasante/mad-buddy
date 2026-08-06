@@ -81,6 +81,20 @@ function stateLabel(state: string): string {
   }
 }
 
+/** Conversation ids are UUIDs; anything else is not worth opening. */
+const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Shape check only, never an authorisation check.
+ *
+ * It exists to discard obvious junk (a username, a truncated link) before a
+ * request. Whether the viewer may actually open the conversation is decided
+ * server-side by getMessagesAction, which fails closed.
+ */
+function isLikelyConversationId(value: string | null): value is string {
+  return Boolean(value) && CONVERSATION_ID.test(value as string);
+}
+
 function messageFailure(error: unknown) {
   return isRequestTimeoutError(error)
     ? "Messages took too long to respond. Try again."
@@ -97,10 +111,15 @@ export function MessagesPageContent({
   const requestedConversationId = searchParams.get("conversation");
   const [conversations, setConversations] = useState(initialConversations);
   const [activeTab, setActiveTab] = useState<TabId>("all");
+  /* ?conversation= is a SERVER-VALIDATED id: openDirectConversationAction
+   * resolved or created it and re-checked eligibility. It is deliberately NOT
+   * required to appear in initialConversations — a conversation created
+   * moments ago does not exist in the list the server rendered before it, and
+   * requiring membership silently dropped the user on the inbox instead of the
+   * conversation they asked for. loadConversation re-authorises server-side
+   * regardless, so an id the viewer may not open still fails closed. */
   const [selectedId, setSelectedId] = useState<string | null>(() =>
-    initialConversations.some((conversation) => conversation.id === requestedConversationId)
-      ? requestedConversationId
-      : null
+    isLikelyConversationId(requestedConversationId) ? requestedConversationId : null
   );
   const openedRequestedConversation = useRef(false);
   const [query, setQuery] = useState("");
@@ -247,6 +266,8 @@ export function MessagesPageContent({
     openedRequestedConversation.current = true;
     setSelectedId(null);
     setMessages([]);
+    // Clearing the param is what makes Back/close return to the inbox rather
+    // than immediately reopening the conversation on the next render.
     if (requestedConversationId) router.replace("/messages", { scroll: false });
   }, [requestedConversationId, router]);
 
@@ -284,18 +305,14 @@ export function MessagesPageContent({
   }, [dismissConversation]);
 
   useEffect(() => {
-    if (
-      openedRequestedConversation.current ||
-      !requestedConversationId ||
-      !uniqueConversations.some((conversation) => conversation.id === requestedConversationId)
-    ) {
+    if (openedRequestedConversation.current || !isLikelyConversationId(requestedConversationId)) {
       return;
     }
     openedRequestedConversation.current = true;
     setSelectedId(requestedConversationId);
     setMessages([]);
     void loadConversation(requestedConversationId);
-  }, [loadConversation, requestedConversationId, uniqueConversations]);
+  }, [loadConversation, requestedConversationId]);
 
   // Realtime (spec §64): subscribe to the open thread's messages instead of
   // only reloading after our own sends. Authorization is server-side, RLS on

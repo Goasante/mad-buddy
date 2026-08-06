@@ -8,12 +8,18 @@ name: Cron tick (backstop)
 # safe_arrival.unconfirmed_alert is a SAFETY job specified at every 5 minutes.
 #
 # This workflow exists only so a Supabase-side outage does not stop job
-# processing entirely. It runs every 30 minutes because GitHub throttles
-# scheduled workflows heavily — measured on this repository, a "*/5" schedule
+# processing entirely.
+#
+# Cadence history: "*/5" was misleading — measured on this repository it
 # actually delivered roughly 12 runs a day with gaps of 57-201 minutes, and
-# some runs were cancelled by GitHub before any step started. Declaring a
-# cadence GitHub cannot meet made the schedule misleading; 30 minutes is
-# closer to what it can actually honour.
+# some runs were cancelled by GitHub before any step started. It was relaxed
+# to "*/30", then tightened to "*/10" after an incident where a bad migration
+# broke pg_cron for ~10 minutes and a 30-minute backstop covered none of it.
+#
+# GitHub will still not honour 10 minutes reliably — it throttles scheduled
+# workflows regardless of what is declared. The point is to shorten the worst
+# case when the PRIMARY scheduler is down, not to pretend this is a 10-minute
+# scheduler.
 #
 # Both schedulers hit the SAME endpoint and the same idempotent runner:
 #  - periodic enqueues collapse on a period-bucket idempotency key,
@@ -28,7 +34,7 @@ name: Cron tick (backstop)
 # edit rather than a silent outage.
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/10 * * * *"
   workflow_dispatch: {}
 
 # A slow tick should never overlap itself into a pile-up.
