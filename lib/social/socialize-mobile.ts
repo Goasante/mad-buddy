@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import { buildSafeNearbyFriends, type NearbyLocationRow, type NearbyProfileRow } from "@/lib/proximity/backend";
+import { presenceStateFor, type PresenceState } from "@/lib/presence/freshness";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import {
   AREA_TIER_PROXIMITY,
@@ -44,6 +45,18 @@ export type SocializePerson = {
   activity: SocializeActivity;
   note: string | null;
   proximityTier: Extract<ProximityLevel, "close" | "near" | "far">;
+  /**
+   * How recently this person's device reported in — SERVER-derived, and a
+   * classification rather than a timestamp, so no exact last-seen time or
+   * update cadence leaves the server.
+   */
+  presenceState: PresenceState;
+  /**
+   * When their location was last recorded. Internal to authorised Socialize
+   * data and used only to re-evaluate presence as time passes on the client;
+   * never rendered.
+   */
+  lastPresenceUpdate: string | null;
   waveState: SocializeWaveState;
   plan: SubscriptionPlan;
 };
@@ -316,8 +329,18 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
       if (!allowedTiers.includes(tier)) continue;
       const session = sessionByUserId.get(candidate.friend_id);
       if (!session) continue;
+      // Someone whose device stopped reporting is not shown as nearby, even
+      // though their Socialize session has not expired. Session expiry says
+      // what they intended; presence says what we actually know.
+      const locationRow = locationByUserId.get(candidate.friend_id);
+      const lastPresenceUpdate = locationRow?.last_updated ?? null;
+      const presenceState = presenceStateFor(lastPresenceUpdate, Date.parse(nowIso));
+      if (presenceState === "expired") continue;
+
       people.push({
         userId: candidate.friend_id,
+        presenceState,
+        lastPresenceUpdate,
         displayName: candidate.display_name,
         username: candidate.username,
         avatarUrl: candidate.avatar_url,

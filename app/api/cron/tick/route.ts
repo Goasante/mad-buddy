@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { runTick } from "@/lib/jobs/worker";
+import { buildTickSummary, resolveSchedulerSource, workerIdFor } from "@/lib/jobs/scheduler-source";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -65,7 +66,28 @@ export async function GET(request: Request) {
 
   try {
     const admin = createSupabaseAdminClient();
-    const result = await runTick(admin, `vercel-cron-${randomUUID().slice(0, 8)}`);
+
+    // Which scheduler fired this tick. Observability only — the work below is
+    // identical whatever the answer, and an unrecognised value still runs
+    // (refusing to process due jobs over a bad label would turn a cosmetic
+    // problem into a missed safety alert).
+    const source = resolveSchedulerSource(new URL(request.url).searchParams.get("source"));
+    const tickId = randomUUID().slice(0, 8);
+    const result = await runTick(admin, workerIdFor(source, tickId));
+
+    const summary = buildTickSummary({
+      source,
+      tickId,
+      startedAtMs: startedAt,
+      completedAtMs: Date.now(),
+      // enqueueDueSchedules reports what it added; the claim is what this tick
+      // actually took on.
+      considered: result.enqueued,
+      claimed: result.processed,
+      completed: result.succeeded,
+      retried: result.failed - result.deadLettered,
+      failed: result.deadLettered
+    });
 
     logBackendEvent("info", {
       requestId,
@@ -73,7 +95,8 @@ export async function GET(request: Request) {
       statusCode: 200,
       latencyMs: Date.now() - startedAt
     });
-    return NextResponse.json({ data: result, meta: { requestId }, error: null });
+    // Counts and timings only: no payloads, no user content, no secrets.
+    return NextResponse.json({ data: { ...result, tick: summary }, meta: { requestId }, error: null });
   } catch (caught) {
     logBackendEvent("error", {
       requestId,

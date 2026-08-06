@@ -39,6 +39,7 @@ import { PageSectionHeader } from "@/components/app-shell/page-section-header";
 import type { VisibleMoment } from "@/lib/content/service";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { usePullRefreshListener } from "@/components/ui/pull-to-refresh";
+import { appCache, cacheKeys } from "@/lib/cache/entity-cache";
 import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
 import { useAppMenu } from "@/hooks/app-menu-context";
 import { useInteractionPause, useSequenceHighlight } from "@/hooks/use-sequence-highlight";
@@ -275,7 +276,6 @@ export function DashboardPageContent({
   // no data yet. Distinguishes "still loading" from "genuinely nobody nearby".
   const [nearbyLoaded, setNearbyLoaded] = useState(false);
   const locationUpdateInFlightRef = useRef(false);
-  const nearbyRefreshRef = useRef<Promise<void> | null>(null);
   const promptFeedbackTimerRef = useRef<number | null>(null);
 
   const visibleFriends = !ghostMode ? friends : [];
@@ -325,11 +325,27 @@ export function DashboardPageContent({
     setPromptFeedback(null);
   }, []);
 
+  /**
+   * Near — the ONE Home section that loads on the client.
+   *
+   * Everything else on Home (Smart Card, Plans, Suggestions, Moments preview)
+   * is awaited in the server component and arrives as props, so there is no
+   * client fetch to put a cache in front of. This is the section that has one.
+   *
+   * Routed through the canonical EntityCache, which replaces the hand-rolled
+   * in-flight ref this used to keep: deduplication, stale-while-revalidate and
+   * authorisation-scoped invalidation now come from one shared implementation
+   * rather than being reimplemented here.
+   *
+   * The cache is an optimisation, never truth: a cached rail renders straight
+   * away, the request still goes out, and the server's answer replaces it.
+   */
   const loadNearbyFriends = useCallback(() => {
-    if (nearbyRefreshRef.current) return nearbyRefreshRef.current;
+    const key = cacheKeys.homeNearby();
 
-    const refresh = (async () => {
-      try {
+    const request = appCache.read<NearbyFriendApiItem[]>(
+      key,
+      async () => {
         const response = await fetchWithTimeout(
           "/api/friends/nearby",
           { method: "GET", credentials: "include" },
@@ -341,27 +357,38 @@ export function DashboardPageContent({
           const error = (await response.json().catch(() => ({ error: "Could not refresh nearby friends." }))) as {
             error?: string;
           };
-          setStatusMessage(error.error ?? "Could not refresh nearby friends.");
-          return;
+          throw new Error(error.error ?? "Could not refresh nearby friends.");
         }
 
         const data = (await response.json()) as { friends: NearbyFriendApiItem[] };
-        setFriends(data.friends.map(toDashboardFriend));
+        return data.friends;
+      },
+      // Short windows: a nearby rail that is minutes old should not be
+      // presented as current.
+      { staleAfterMs: 30_000, expiresAfterMs: 3 * 60_000 }
+    );
+
+    const settled = request
+      .then((friends: NearbyFriendApiItem[]) => {
+        setFriends(friends.map(toDashboardFriend));
         setStatusMessage("");
-      } catch {
-        setStatusMessage("Could not reach the nearby friends service.");
-      } finally {
-        nearbyRefreshRef.current = null;
+      })
+      .catch((error: unknown) => {
+        // A failed refresh leaves whatever is already rendered in place —
+        // Home is never blanked by a network problem. No raw error surfaces.
+        setStatusMessage(
+          error instanceof Error && error.message ? error.message : "Could not reach the nearby friends service."
+        );
+      })
+      .finally(() => {
         // First load has settled (either way) — the skeleton gives way to
         // real data or to the empty state. Never shown again on refresh, so
         // a pull-to-refresh cannot blank the row the user is looking at.
         setNearbyLoaded(true);
-      }
-    })();
+      });
 
-    nearbyRefreshRef.current = refresh;
-    startTransition(async () => refresh);
-    return refresh;
+    startTransition(async () => settled);
+    return settled;
   }, []);
 
   // Pull-to-refresh reuses THIS action — the same one Quick Controls'

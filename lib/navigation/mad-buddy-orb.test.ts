@@ -10,7 +10,12 @@ const registry = read("lib/tours/registry.ts");
 const css = read("app/globals.css");
 
 /** The orb's own CSS block, isolated from the rest of the stylesheet. */
-const orbCss = css.slice(css.indexOf("/* Mad Buddy Orb"));
+const orbCss = css.slice(
+  css.indexOf("/* Mad Buddy Orb"),
+  // Bounded: later blocks (the Socialize status control and radar field) have
+  // their own palettes and motion, which are not the Orb's to police.
+  css.indexOf("/* Socialize status control")
+);
 const orbRules = stripComments(orbCss);
 
 /** The mobile bar only, so desktop chrome cannot satisfy an assertion. */

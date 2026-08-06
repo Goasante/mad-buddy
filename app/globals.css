@@ -2155,3 +2155,302 @@ select {
     transform: none;
   }
 }
+
+/* Socialize status control
+   ------------------------------------------------------------------
+   One subtle pulse after the SERVER confirms a state change — never a loop,
+   and never fired optimistically, so the pulse always means the change
+   really landed. */
+@keyframes socialize-status-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, rgb(16 185 129) 30%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+}
+
+.socialize-status-pulse {
+  animation: socialize-status-pulse 600ms ease-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .socialize-status-pulse {
+    animation: none;
+  }
+}
+
+/* Socialize radar field
+   ------------------------------------------------------------------
+   Rebuilt for the approved design: a calm immersive surface, four soft orbit
+   rings, a warm centre anchor and attached labels. All motion is CSS, so
+   there is no timer per node and the browser throttles it when backgrounded. */
+
+/* The surface. One restrained radial wash — no particles, no bloom. */
+.socialize-field {
+  background:
+    radial-gradient(
+      68% 52% at 50% 46%,
+      color-mix(in srgb, #7c3aed 13%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      120% 80% at 50% 50%,
+      color-mix(in srgb, #0d0d12 55%, transparent),
+      transparent 78%
+    );
+  pointer-events: none;
+}
+
+/* Orbit rings: a slow, shallow breath. Staggered per ring by an inline delay
+   so the field reads as one surface expanding, not four separate pulses. */
+@keyframes socialize-orbit-breathe {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.75;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.018);
+    opacity: 1;
+  }
+}
+
+.socialize-orbit-ring {
+  animation: socialize-orbit-breathe 6.5s ease-in-out infinite;
+}
+
+/* The centre: my avatar, with a warm ring that reads as presence rather than
+   decoration. Static — the anchor should not move. */
+.socialize-centre {
+  position: relative;
+  /* Own stacking context, so the ::before falloff sits behind the avatar but
+     still in front of the radar field rather than escaping to the page. */
+  isolation: isolate;
+  border-radius: 999px;
+  padding: 4px;
+  background: conic-gradient(
+    from 210deg,
+    #34d399,
+    #a3e635 22%,
+    #fbbf24 46%,
+    #fb923c 64%,
+    #7c3aed 86%,
+    #34d399
+  );
+  /* Layered lighting rather than one flat blob: a tight inner halo, a wider
+     soft falloff, and a faint ambient bloom. Static — no animated glow. */
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #fb923c 18%, transparent),
+    0 0 14px color-mix(in srgb, #fbbf24 26%, transparent),
+    0 0 38px color-mix(in srgb, #fb923c 16%, transparent),
+    0 0 76px color-mix(in srgb, #7c3aed 12%, transparent);
+}
+
+/* The outer radial falloff, drawn behind the avatar so the light reads as
+   coming FROM it rather than sitting on top. */
+.socialize-centre::before {
+  content: "";
+  position: absolute;
+  inset: -38%;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, #fb923c 15%, transparent) 0%,
+    color-mix(in srgb, #7c3aed 8%, transparent) 42%,
+    transparent 68%
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Off: the same anchor, drained of warmth, so the state reads at a glance. */
+.socialize-centre:not(.is-active) {
+  background: conic-gradient(from 210deg, #3f3f52, #52526a 50%, #3f3f52);
+  box-shadow: none;
+}
+
+.socialize-centre:not(.is-active)::before {
+  /* Off: the anchor keeps its shape but gives off no light. */
+  background: none;
+}
+
+/* Nodes fade in when they appear, and move by transition when their orbit
+   band changes — so a proximity change slides, and nobody teleports. */
+@keyframes socialize-node-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.socialize-node {
+  animation: socialize-node-in 260ms cubic-bezier(0.2, 0, 0, 1) both;
+  transition:
+    left 520ms cubic-bezier(0.2, 0, 0, 1),
+    top 520ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Selection emphasis: the node lifts slightly and its ring brightens. The
+   field does NOT re-layout — only this one node changes. */
+.socialize-node.is-selected {
+  z-index: 20;
+}
+
+.socialize-node.is-selected img,
+.socialize-node.is-selected span[class*="rounded-full"] {
+  box-shadow: 0 0 0 3px color-mix(in srgb, #a78bfa 75%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .socialize-orbit-ring,
+  .socialize-node {
+    animation: none;
+  }
+
+  /* Position still updates — it simply arrives immediately rather than
+     sliding, so a proximity change is never lost, only un-animated. */
+  .socialize-node {
+    transition: none;
+  }
+}
+
+/* Socialize selected-person card
+   ------------------------------------------------------------------
+   A compact bottom sheet that keeps the radar visible above it. */
+@keyframes socialize-card-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 16px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.socialize-card {
+  /* Soft, no overshoot: the sheet settles rather than bouncing. */
+  animation: socialize-card-in 240ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+@keyframes socialize-card-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.socialize-card-backdrop {
+  animation: socialize-card-backdrop-in 200ms ease-out both;
+}
+
+/* Switching person crossfades the CONTENT only — the sheet itself stays put,
+   so selecting another node never reads as a close-and-reopen. */
+@keyframes socialize-card-content-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.socialize-card-content {
+  animation: socialize-card-content-in 180ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .socialize-card,
+  .socialize-card-backdrop,
+  .socialize-card-content {
+    animation: none;
+  }
+}
+
+/* Socialize ambient depth
+   ------------------------------------------------------------------
+   Two very faint specks drifting across the field, so it reads as atmosphere
+   rather than an empty box. Deliberately at the threshold of perception: if
+   you notice them moving, they are too strong. */
+.socialize-depth {
+  background-image:
+    radial-gradient(1.5px 1.5px at 22% 28%, rgba(255, 255, 255, 0.16), transparent 60%),
+    radial-gradient(1.5px 1.5px at 74% 62%, rgba(196, 181, 253, 0.14), transparent 60%),
+    radial-gradient(1px 1px at 58% 18%, rgba(255, 255, 255, 0.10), transparent 60%),
+    radial-gradient(1px 1px at 34% 78%, rgba(196, 181, 253, 0.10), transparent 60%);
+  pointer-events: none;
+  animation: socialize-depth-drift 42s ease-in-out infinite alternate;
+}
+
+@keyframes socialize-depth-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.8;
+  }
+  to {
+    /* A few pixels over ~40 seconds: movement you sense rather than watch. */
+    transform: translate3d(6px, -8px, 0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .socialize-depth {
+    animation: none;
+  }
+}
+
+/* Socialize People Nearby rows
+   ------------------------------------------------------------------
+   A restrained fade for arriving rows. No continuous animation, and nothing
+   animates a premium ring. */
+@keyframes socialize-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.socialize-row {
+  animation: socialize-row-in 200ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .socialize-row {
+    animation: none;
+  }
+}
+
+/* Socialize state messages
+   ------------------------------------------------------------------
+   A restrained crossfade as the radar moves between states, so an empty →
+   error → populated transition never flashes. */
+@keyframes socialize-state-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.socialize-state {
+  animation: socialize-state-in 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .socialize-state {
+    animation: none;
+  }
+}

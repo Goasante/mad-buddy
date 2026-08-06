@@ -41,6 +41,7 @@ import { PullToRefresh } from "@/components/ui/pull-to-refresh";
 import { cn } from "@/lib/utils";
 import { MadBuddyOrb, ORB_HOME_HREF } from "@/components/app-shell/mad-buddy-orb";
 import { ImmersiveModeProvider, useImmersiveMode } from "@/components/app-shell/immersive-mode";
+import { bindCachesToSession } from "@/lib/cache/session-binding";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import type { ResolvedWallpaper } from "@/lib/wallpapers/catalog";
 import { BrandMark } from "@/components/brand/brand-mark";
@@ -139,8 +140,24 @@ const PAGES_WITH_OWN_HEADER = [
   "/safe-arrival"
 ] as const;
 
+/**
+ * Immersive routes draw their own header INLINE (not fixed), directly over a
+ * full-bleed background.
+ *
+ * They still stand the global AppHeader down — they are in the list above —
+ * but <main> must NOT reserve --mobile-header-height for them: there is no
+ * fixed header to reserve space for, so the reservation would render as an
+ * empty band above the page's own title. These pages clear the safe area
+ * themselves, exactly once.
+ */
+const IMMERSIVE_HEADER_PAGES = ["/discover"] as const;
+
 function hasOwnHeader(pathname: string): boolean {
   return PAGES_WITH_OWN_HEADER.some((href) => pathname === href || pathname.startsWith(`${href}/`));
+}
+
+function hasImmersiveHeader(pathname: string): boolean {
+  return IMMERSIVE_HEADER_PAGES.some((href) => pathname === href || pathname.startsWith(`${href}/`));
 }
 
 export type AppShellProps = {
@@ -207,7 +224,13 @@ function AppShellInner({
   // One menu sheet for the whole authenticated app.
   const [appMenuOpen, setAppMenuOpen] = useState(false);
   const { immersive } = useImmersiveMode();
+
+  // Clear the client caches whenever the session ends — in this tab or any
+  // other. Mounted once here rather than per screen, so no surface can be left
+  // rendering a previous account's metadata.
+  useEffect(() => bindCachesToSession(), []);
   const pathname = usePathname();
+  const immersiveHeader = hasImmersiveHeader(pathname);
   // Canonical unread count, shared with the mobile header via the same hook —
   // one fetch/poll/broadcast implementation, so the sidebar badge and the
   // header Bell badge can never disagree.
@@ -310,7 +333,12 @@ function AppShellInner({
             // doubled into a visible gap.
             hasGlobalHeader
               ? "pt-[var(--app-header-height)]"
-              : "pt-[var(--mobile-header-height)] md:pt-0"
+              : immersiveHeader
+                // The page's own inline header clears the notch itself, so
+                // reserving a fixed header's footprint here would be a second,
+                // visible gap above the title.
+                ? "pt-0"
+                : "pt-[var(--mobile-header-height)] md:pt-0"
           )}
         >
           {/* One pull-to-refresh for the whole authenticated app, mounted here

@@ -1,11 +1,24 @@
-name: Cron tick
+name: Cron tick (backstop)
 
-# Vercel Hobby only allows once-daily cron, but several jobs behind
-# /api/cron/tick need much tighter cadence (safe_arrival.unconfirmed_alert
-# runs every 5 minutes; several expiry jobs every 15-30). This workflow is the
-# ONLY scheduler for them — vercel.json declares no crons at all. The endpoint
-# buckets by job type and is idempotent, so calling it more often than a given
-# job needs is harmless.
+# RECOVERY BACKSTOP — NOT the primary scheduler.
+#
+# The primary scheduler is pg_cron inside Supabase (see the migration
+# supabase/migrations/20260723180000_pg_cron_tick.sql), which fires
+# /api/cron/tick every 5 minutes on a real schedule. That cadence matters:
+# safe_arrival.unconfirmed_alert is a SAFETY job specified at every 5 minutes.
+#
+# This workflow exists only so a Supabase-side outage does not stop job
+# processing entirely. It runs every 30 minutes because GitHub throttles
+# scheduled workflows heavily — measured on this repository, a "*/5" schedule
+# actually delivered roughly 12 runs a day with gaps of 57-201 minutes, and
+# some runs were cancelled by GitHub before any step started. Declaring a
+# cadence GitHub cannot meet made the schedule misleading; 30 minutes is
+# closer to what it can actually honour.
+#
+# Both schedulers hit the SAME endpoint and the same idempotent runner:
+#  - periodic enqueues collapse on a period-bucket idempotency key,
+#  - claim_jobs uses FOR UPDATE SKIP LOCKED,
+# so an overlapping Supabase and GitHub tick cannot run one job twice.
 #
 # The URL must be the canonical custom domain. mad-buddy.vercel.app 307s to
 # mad-buddy.com, and curl drops the Authorization header when a redirect
@@ -15,7 +28,7 @@ name: Cron tick
 # edit rather than a silent outage.
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch: {}
 
 # A slow tick should never overlap itself into a pile-up.
@@ -30,6 +43,9 @@ jobs:
       - name: Call cron tick endpoint
         env:
           TICK_URL: ${{ vars.CRON_TICK_URL || 'https://mad-buddy.com/api/cron/tick' }}
+          # Identifies this scheduler in the tick summary. Observability only:
+          # the endpoint runs identical work whatever the source says.
+          TICK_SOURCE: github_backstop
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -uo pipefail
@@ -44,11 +60,13 @@ jobs:
             status=$(curl -sS -o /tmp/tick-body.txt -w "%{http_code}" \
               --max-time 90 \
               -H "Authorization: Bearer ${CRON_SECRET}" \
-              "${TICK_URL}" || echo "000")
+              "${TICK_URL}?source=${TICK_SOURCE}" || echo "000")
             echo "attempt ${attempt}: status=${status}"
 
             if [ "${status}" -ge 200 ] && [ "${status}" -lt 300 ]; then
+              # Counts only — the endpoint returns no payloads or user content.
               echo "tick ok"
+              python3 -c "import json,sys;t=json.load(open('/tmp/tick-body.txt')).get('data',{}).get('tick',{});print('  source=%s considered=%s claimed=%s completed=%s retried=%s failed=%s duration=%sms'%(t.get('source'),t.get('jobsConsidered'),t.get('jobsClaimed'),t.get('jobsCompleted'),t.get('jobsRetried'),t.get('jobsFailed'),t.get('durationMs')))" 2>/dev/null || true
               exit 0
             fi
 
