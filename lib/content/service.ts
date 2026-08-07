@@ -132,7 +132,8 @@ export async function buildMomentFeed(
     admin
       .from("friendships")
       .select("user_one_id, user_two_id")
-      .or(`user_one_id.eq.${viewerId},user_two_id.eq.${viewerId}`),
+      // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
+      .or(`user_one_id.eq.${viewerId},user_two_id.eq.${viewerId}`).is("ended_at", null),
     admin
       .from("blocked_users")
       .select("blocker_id, blocked_id")
@@ -442,7 +443,8 @@ export async function buildSpotlightFeed(
       admin
         .from("friendships")
         .select("user_one_id, user_two_id")
-        .or(`user_one_id.eq.${viewerId},user_two_id.eq.${viewerId}`),
+        // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
+        .or(`user_one_id.eq.${viewerId},user_two_id.eq.${viewerId}`).is("ended_at", null),
       admin.from("tune_ins").select("creator_id").eq("viewer_id", viewerId)
     ]);
 
@@ -774,6 +776,9 @@ export async function loadMomentsCreatorHub(
       .or(
         `and(user_one_id.eq.${viewerId},user_two_id.eq.${creatorId}),and(user_one_id.eq.${creatorId},user_two_id.eq.${viewerId})`
       )
+      // Active friendships only: ended_at IS NULL is the canonical definition
+      // of "currently Muddies".
+      .is("ended_at", null)
       .limit(1),
     admin
       .from("moments")

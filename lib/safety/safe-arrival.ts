@@ -76,10 +76,12 @@ export function validateGracePeriod(minutes: number): string | null {
 export function validateContactCount(count: number, plan: SubscriptionPlan): string | null {
   const limits = safeArrivalLimitsFor(plan);
   if (count < 1) return "Choose at least one Muddy to check in on your journey.";
+  // Phase 0: safety is never monetized, so maxContacts is UNLIMITED on every
+  // tier and this branch is unreachable today. It is kept so that a future
+  // SYSTEM limit (a real operational ceiling) still produces a sensible
+  // message — but that message describes a limit, never a plan.
   if (count > limits.maxContacts) {
-    return plan === "free"
-      ? `Your plan lets ${limits.maxContacts} Muddies check in on a journey. Upgrade to choose more.`
-      : `You can choose up to ${limits.maxContacts} Muddies.`;
+    return `You can choose up to ${limits.maxContacts} Muddies.`;
   }
   return null;
 }

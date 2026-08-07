@@ -1033,7 +1033,7 @@ const SUGGESTION_TONE: Record<
     // orange-500 -> coral. Each card sweeps in its OWN family, never a shared
     // rainbow, so the border reads as part of the card rather than an effect
     // applied on top of it.
-    edge: { a: "249 115 22", b: "251 113 133" }
+    edge: { a: "232 140 43", b: "251 113 133" }
   },
   lavender: {
     surface: "bg-violet-500/[0.09] dark:bg-violet-400/[0.12]",
@@ -1076,7 +1076,7 @@ const quickActions: QuickAction[] = [
   { href: "/invites", label: "Invite Friends", description: "Review and send invitations.", suggestion: "Grow your trusted circle.", tone: "lavender", icon: UserPlus, featureIcon: "invites", accent: "text-emerald-500 dark:text-emerald-400" },
   { href: "/plans?create=1", label: "Complete a Plan", description: "Create a plan and bring people together.", suggestion: "Bring people together.", tone: "green", icon: CalendarDays, featureIcon: "plans", accent: "text-emerald-500 dark:text-emerald-400" },
   { href: "/events", label: "Discover Events", description: "See what’s coming up.", suggestion: "See what’s happening nearby.", tone: "blue", icon: PartyPopper, featureIcon: "events", accent: "text-violet-500 dark:text-violet-400" },
-  { href: "/discover", label: "Socialize", description: "Find people who are open to socializing.", suggestion: "Meet people open to socializing.", tone: "lavender", icon: Compass, featureIcon: "socialize", accent: "text-violet-500 dark:text-violet-400" },
+  { href: "/discover", label: "Linkr", description: "Find people who are open to connecting.", suggestion: "Meet people open to connecting.", tone: "lavender", icon: Compass, featureIcon: "socialize", accent: "text-violet-500 dark:text-violet-400" },
   { href: "/safe-arrival", label: "Safe Arrival", description: "Let trusted Muddies know when you arrive safely.", suggestion: "Let your circle know you got there.", tone: "blue", icon: ShieldCheck, featureIcon: "safeArrival", accent: "text-sky-500 dark:text-sky-400" },
   { href: "/moments", label: "Moments", description: "Share a moment before it disappears.", suggestion: "Share something before it’s gone.", tone: "blush", icon: Sparkles, featureIcon: "moments", accent: "text-primary" },
   { href: "/groups", label: "Groups", description: "Open your groups and invitations.", suggestion: "Catch up with your groups.", tone: "green", icon: Users2, featureIcon: "groups", accent: "text-sky-500 dark:text-sky-400" },

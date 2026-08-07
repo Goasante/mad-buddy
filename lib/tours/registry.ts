@@ -15,7 +15,7 @@ export const TOUR_ROUTES: TourRouteOption[] = [
   { path: "/messages", label: "Messages" },
   { path: "/plans", label: "Plans" },
   { path: "/hangout-mode", label: "Hangout Mode" },
-  { path: "/discover", label: "Socialize" },
+  { path: "/discover", label: "Linkr" },
   { path: "/safe-arrival", label: "Safe Arrival" },
   { path: "/moments", label: "Moments and Air" },
   { path: "/events", label: "Events" },
@@ -65,7 +65,9 @@ export const TOUR_TARGET_IDS = {
   HANGOUT_DISCOVERY: "hangout-discovery",
 
   SOCIALIZE_ACTIVATION: "socialize-activation",
-  SOCIALIZE_RADAR: "socialize-radar",
+  // Socialize 2.0 replaced the radar with a discovery feed; the tour still
+  // points at the same place on the screen, so the id is renamed with it.
+  SOCIALIZE_FEED: "socialize-feed",
   SOCIALIZE_CONTROLS: "socialize-controls",
 
   SAFE_ARRIVAL_OVERVIEW: "safe-arrival-overview",
@@ -186,7 +188,7 @@ export const TOUR_TARGETS: TourTargetOption[] = [
   target(TOUR_TARGET_IDS.HANGOUT_DISCOVERY, "Active Hangouts", "/hangout-mode", "Hangouts available to the viewer."),
 
   target(TOUR_TARGET_IDS.SOCIALIZE_ACTIVATION, "Socialize activation", "/discover", "Turns Socialize on or opens its controls."),
-  target(TOUR_TARGET_IDS.SOCIALIZE_RADAR, "Socialize radar", "/discover", "Nearby opted-in people without exact locations."),
+  target(TOUR_TARGET_IDS.SOCIALIZE_FEED, "Socialize feed", "/discover", "Nearby opted-in people, with approximate distance only."),
   target(TOUR_TARGET_IDS.SOCIALIZE_CONTROLS, "Socialize controls", "/discover", "Area, duration, and visibility controls."),
 
   target(TOUR_TARGET_IDS.SAFE_ARRIVAL_OVERVIEW, "Safe Arrival", "/safe-arrival", "The Safe Arrival landing or current journey."),
@@ -287,7 +289,7 @@ export const FEATURE_GUIDES: FeatureGuideDefinition[] = [
   { slug: "glow-visibility-guide", label: "Glow and visibility", group: "getting-started", entryRoute: "/settings/glow-visibility" },
   { slug: "messages-guide", label: "Messages", group: "connect", entryRoute: "/messages" },
   { slug: "hangout-guide", label: "Hangout", group: "connect", entryRoute: "/hangout-mode" },
-  { slug: "socialize-guide", label: "Socialize", group: "connect", entryRoute: "/discover" },
+  { slug: "socialize-guide", label: "Linkr", group: "connect", entryRoute: "/discover" },
   { slug: "groups-guide", label: "Groups", group: "connect", entryRoute: "/groups" },
   { slug: "moments-guide", label: "Moments", group: "share", entryRoute: "/moments" },
   { slug: "air-guide", label: "Air", group: "share", entryRoute: "/moments", activeTargetId: TOUR_TARGET_IDS.MOMENTS_AIR_TAB },

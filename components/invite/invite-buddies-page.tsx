@@ -11,6 +11,7 @@ import {
   type PersonalQr
 } from "@/app/(app)/invite-actions";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/app-shell/page-header";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -86,9 +87,11 @@ export function InviteBuddiesPage({ initialQr = null }: { initialQr?: PersonalQr
 
   return (
     <div className="mx-auto max-w-[640px] space-y-6 pt-6">
+      <PageHeader title="Invite a Muddy" backHref="/friends" />
+
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Invite a Muddy</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <h1 className="hidden text-2xl font-semibold tracking-tight sm:text-3xl md:block">Invite a Muddy</h1>
+        <p className="text-sm text-muted-foreground md:mt-2">
           Invite someone you already know. They&apos;ll still choose to accept.
         </p>
       </header>

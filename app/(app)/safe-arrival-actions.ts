@@ -2,7 +2,6 @@
 
 import { z } from "zod";
 import { recordProductEvent } from "@/lib/analytics/track";
-import { upgradePromptFor } from "@/lib/billing/entitlements";
 import { deliverNotification } from "@/lib/notifications/server";
 import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
@@ -181,7 +180,9 @@ export async function createSafeArrivalAction(input: unknown): Promise<SafeArriv
   // that is presentation: this is the check that actually holds.
   const countError = validateContactCount(parsed.data.contactIds.length, access.plan);
   if (countError) {
-    return { ok: false, message: upgradePromptFor("max_safe_arrival_contacts", access.plan) ?? countError };
+    // No upgrade prompt: Safe Arrival capacity is not a paid feature. Any
+    // message here describes a system limit, never a plan.
+    return { ok: false, message: countError };
   }
 
   // Server decides eligibility. A contact who silently opted out of this

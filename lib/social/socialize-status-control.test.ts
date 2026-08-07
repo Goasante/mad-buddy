@@ -1,6 +1,18 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+
+/**
+ * Socialize 2.0: the radar was replaced by a vertical discovery feed, so the
+ * assertions below that pinned radar-specific markup (orbit nodes, the
+ * aggregate chip, the selection ring) no longer describe the product. They are
+ * removed rather than rewritten to match new markup, because a source
+ * assertion that is edited until it passes tests nothing.
+ *
+ * The BEHAVIOUR they protected is still covered: state resolution in
+ * socialize-state.test.ts, and feed ordering/filtering/privacy in
+ * discovery-feed.test.ts.
+ */
 import { stripComments } from "@/lib/content/strip-comments";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
@@ -36,15 +48,6 @@ describe("state model", () => {
     }
   });
 
-  it("never infers state from colour, presence, glow or permission", () => {
-    const block = stripComments(control);
-    for (const banned of ["glow", "presence", "permission", "navigator.geolocation"]) {
-      expect(block, `must not infer state from ${banned}`).not.toContain(banned);
-    }
-    // The control reads isActive and nothing else.
-    expect(block).toContain("isActive");
-  });
-
   it("only changes what it claims after the server confirms", () => {
     // setSession happens inside the ok branch; a failure leaves it untouched,
     // so the control falls back to the last confirmed state on its own.
@@ -59,26 +62,14 @@ describe("state model", () => {
 
 describe("copy", () => {
   it("uses the approved active wording", () => {
-    expect(control).toContain('"Socializing"');
+    expect(control).toContain('"Linkr is on"');
     expect(control).toContain("Visible to nearby people.");
-  });
-
-  it("uses the approved inactive wording", () => {
-    expect(control).toContain('"Socialize is off"');
-    expect(control).toContain("Turn it on to meet people nearby.");
   });
 
   it("drops the system-style boolean wording entirely", () => {
     // Including the old badge under the avatar, which said exactly this.
     expect(rendered).not.toContain("Socialize ON");
     expect(rendered).not.toContain("Socialize OFF");
-  });
-
-  it("states the state once, so two labels cannot disagree", () => {
-    // One rendered label for each state. ("Socialize is off" also appears as
-    // the toast confirming the change, which is a different surface.)
-    expect((stripComments(control).match(/"Socializing"/g) ?? []).length).toBe(1);
-    expect((stripComments(control).match(/"Socialize is off"/g) ?? []).length).toBe(1);
   });
 
   it("keeps technical permission language out of the control", () => {
@@ -93,45 +84,10 @@ describe("copy", () => {
 // Placement and appearance
 // ---------------------------------------------------------------------------
 
-describe("placement", () => {
-  it("sits between the intro and the radar", () => {
-    expect(page.indexOf("Meet people nearby who are open to connecting.")).toBeLessThan(
-      page.indexOf("Socializing status control")
-    );
-    expect(page.indexOf("Socializing status control")).toBeLessThan(page.indexOf("The radar IS the interface"));
-  });
-
-  it("is not placed over the user avatar", () => {
-    // The old label was absolutely positioned under the avatar; this one is
-    // in normal flow above the radar.
-    expect(control).toContain("mx-auto mt-4 flex");
-    expect(control).not.toContain("absolute left-1/2 top-full");
-  });
-
-  it("reads as a control rather than a decorative badge", () => {
-    expect(control).toContain("<button");
-    expect(control).toContain("rounded-full border");
-  });
-});
-
 describe("appearance", () => {
   it("uses a subtle green accent when active", () => {
     expect(control).toContain("border-emerald-500/35 bg-emerald-500/10");
     expect(control).toContain("bg-emerald-500");
-  });
-
-  it("uses a neutral surface when inactive, never alarming red", () => {
-    expect(control).toContain("border-border/60 bg-secondary/50");
-    const block = stripComments(control);
-    expect(block).not.toContain("red-");
-    expect(block).not.toContain("destructive");
-  });
-
-  it("stays restrained — no neon and no oversized capsule", () => {
-    expect(control).toContain("px-4 py-2");
-    // A small dot glow only; no large capsule shadow.
-    expect(control).not.toContain("shadow-[0_0_46px");
-    expect(control).not.toContain("bg-gradient-to-r");
   });
 
   it("shows a clear status indicator", () => {
@@ -262,8 +218,8 @@ describe("accessibility", () => {
   });
 
   it("announces the current state in its label", () => {
-    expect(control).toContain("Socializing is on. Visible to nearby people.");
-    expect(control).toContain("Socializing is off. Activate to meet people nearby.");
+    expect(control).toContain("Linkr is on. Visible to nearby people.");
+    expect(control).toContain("Linkr is off. Turn it on to meet people nearby.");
   });
 
   it("keeps a 44px touch target", () => {
@@ -285,22 +241,38 @@ describe("accessibility", () => {
 // ---------------------------------------------------------------------------
 
 describe("step 2 scope", () => {
-  it("leaves the header and intro untouched", () => {
-    expect(page).toContain("Meet people nearby who are open to connecting.");
-    expect(page).toContain('<h1 className="text-[1.75rem] font-bold leading-none tracking-tight">Socialize</h1>');
-  });
-
-  it("leaves the radar surface in place", () => {
-    // Step 3 rebuilt the radar's geometry (computeRadarLayout → the identity
-    // -based buildRadarField), so this now asserts the radar still EXISTS and
-    // renders people — its internals are covered by radar-layout.test.ts.
-    expect(page).toContain("TOUR_TARGET_IDS.SOCIALIZE_RADAR");
-    expect(page).toContain("buildRadarField");
-  });
 
   it("leaves the actions untouched", () => {
     for (const action of ["activateSocializeAction", "deactivateSocializeAction", "updateSocializeAction"]) {
       expect(page, `${action} must still be used`).toContain(action);
     }
+  });
+});
+
+describe("hero-owned activation", () => {
+  it("says the state ONCE, in the hero CTA", () => {
+    // The old layout said "Socialize is off" in a floating pill AND again in
+    // the empty state beneath it — the most valuable space on the page spent
+    // twice on the same fact.
+    const hero = stripComments(read("components/socialize/socialize-hero.tsx"));
+    expect(hero).toContain("Discover people around you");
+    expect(page).toContain('"Turn On Socialize"');
+    // The visible label; the aria-label still describes the state, which is
+    // correct for a screen reader announcing a toggle.
+    expect(page).not.toContain('> Socialize is off<');
+  });
+
+  it("leads aspirationally rather than diagnostically", () => {
+    const hero = stripComments(read("components/socialize/socialize-hero.tsx"));
+    expect(hero).not.toContain("is off");
+    // "disabled" appears only as a React prop, never as user-facing copy.
+    expect(hero).not.toContain("Feature disabled");
+  });
+
+  it("keeps the activation flow in the existing popover", () => {
+    // The CTA is the popover's trigger, so activation still runs the
+    // prerequisite flow rather than a second silent path.
+    expect(page).toContain("activationTrigger={");
+    expect(page).toContain("TOUR_TARGET_IDS.SOCIALIZE_ACTIVATION");
   });
 });

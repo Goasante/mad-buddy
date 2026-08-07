@@ -504,14 +504,12 @@ describe("Spotlight publishing is server-enforced", () => {
   });
 
   it("takes the entitled tiers from canonical product configuration", () => {
-    // Whatever the registry says is what applies; the test does not assert a
-    // hardcoded tier of its own beyond Free being excluded.
-    expect(PLAN_ENTITLEMENTS.free.public_moments).toBe(false);
+    // Phase 0: core Air publishing is free, so every tier is entitled. The
+    // server check still runs — it just no longer excludes anyone by plan.
     const entitled = (["free", "buddy_plus", "buddy_pro"] as const).filter(
       (plan) => PLAN_ENTITLEMENTS[plan].public_moments
     );
-    expect(entitled.length).toBeGreaterThan(0);
-    expect(entitled).not.toContain("free");
+    expect(entitled).toEqual(["free", "buddy_plus", "buddy_pro"]);
   });
 
   it("enforces publishing in the action, not only in the UI", () => {

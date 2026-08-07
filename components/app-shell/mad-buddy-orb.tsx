@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { Route } from "next";
+import { HomeMarkIcon } from "@/components/brand/brand-icons";
 import { cn } from "@/lib/utils";
 
 /**
@@ -69,7 +70,12 @@ export function MadBuddyOrb({
         // visual layers are never announced.
         aria-hidden="true"
       >
-        <span className="mb-orb-core" />
+        <span className="mb-orb-core">
+          {/* The mark sits ON the gradient, so it takes the orb's foreground
+              rather than currentColor — every glow layer around it is
+              untouched. */}
+          <HomeMarkIcon className="mb-orb-mark" />
+        </span>
       </span>
     </Link>
   );

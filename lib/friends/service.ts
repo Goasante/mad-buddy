@@ -438,7 +438,10 @@ export async function sendFriendRequest(
 
   const pair = orderedPair(userId, parsedTarget.data);
   const [{ data: existingFriendship }, { data: existingBlock }] = await Promise.all([
-    admin.from("friendships").select("id").match(pair).maybeSingle(),
+    // Active friendships only: ended_at IS NULL is the canonical definition
+    // of "currently Muddies". An ended friendship must not block a fresh
+    // request — that is how two people become Muddies again.
+    admin.from("friendships").select("id").match(pair).is("ended_at", null).maybeSingle(),
     admin
       .from("blocked_users")
       .select("id")
@@ -578,6 +581,30 @@ export async function acceptFriendRequest(
       grantFriendshipAchievements(admin, userId),
       grantFriendshipAchievements(admin, request.sender_id)
     ]);
+  }
+
+  // Life events, COMPENSATING. Emitted after the RPC has already committed the
+  // friendship, so a failure here can never undo it.
+  //
+  // The RPC reports which of the two things it did, because only the database
+  // can tell them apart without racing: it holds the row lock that decides
+  // whether this acceptance found an ended relationship or none at all.
+  //
+  // Reactivation deliberately emits ONLY `relationship.reactivated`. Emitting
+  // `relationship.created` again would be harmless at the dedupe key (the pair
+  // is created once), but it would also be a lie about what happened — the
+  // relationship was not created, it resumed.
+  {
+    const { emitLifeEvent } = await import("@/lib/life/emit");
+    void emitLifeEvent(admin, {
+      eventType: request.reactivated ? "relationship.reactivated" : "relationship.created",
+      actorId: userId,
+      subjectId: request.sender_id,
+      // A pair is created once, but may reactivate many times, so the natural
+      // key for reactivation carries the request that caused it. Without that
+      // every reactivation after the first would dedupe into the first one.
+      naturalKey: request.reactivated ? `reactivated:${parsedRequest.data}` : "created"
+    });
   }
 
   const { data: receiverProfile } = await admin

@@ -80,7 +80,8 @@ async function loadMuddies(
     admin
       .from("friendships")
       .select("user_one_id, user_two_id")
-      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`),
+      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)
+      .is("ended_at", null),
     admin
       .from("blocked_users")
       .select("blocker_id, blocked_id")

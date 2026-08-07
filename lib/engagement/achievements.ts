@@ -92,7 +92,8 @@ export async function grantFriendshipAchievements(admin: Admin, userId: string):
     const { count } = await admin
       .from("friendships")
       .select("id", { count: "exact", head: true })
-      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`);
+      // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
+      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null);
     await Promise.all([
       grantAchievement(admin, userId, "first_muddy"),
       grantCountAchievement(admin, userId, "friendly_five", count ?? 0)

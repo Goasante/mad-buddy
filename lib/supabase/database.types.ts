@@ -2251,6 +2251,7 @@ export type Database = {
           description: string | null;
           image_media_id: string | null;
           join_mode: GroupJoinMode;
+          visibility: GroupVisibility;
           history_visibility: GroupHistoryVisibility;
           posting_mode: GroupPostingMode;
           created_at: string;
@@ -2262,6 +2263,7 @@ export type Database = {
           description?: string | null;
           image_media_id?: string | null;
           join_mode?: GroupJoinMode;
+          visibility?: GroupVisibility;
           history_visibility?: GroupHistoryVisibility;
           posting_mode?: GroupPostingMode;
           created_at?: string;
@@ -3756,6 +3758,48 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["experiment_exposures"]["Insert"]>;
         Relationships: [];
       };
+      relationship_notes: {
+        Row: {
+          id: string;
+          author_id: string;
+          subject_id: string;
+          body: string;
+          created_at: string;
+          updated_at: string;
+          source: "user";
+        };
+        Insert: {
+          id?: string;
+          author_id: string;
+          subject_id: string;
+          body: string;
+          created_at?: string;
+          updated_at?: string;
+          source?: "user";
+        };
+        Update: Partial<Database["public"]["Tables"]["relationship_notes"]["Insert"]>;
+        Relationships: [];
+      };
+      life_timeline_resets: {
+        Row: {
+          id: string;
+          user_id: string;
+          relationship_id: string;
+          hidden_before: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          relationship_id: string;
+          hidden_before?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["life_timeline_resets"]["Insert"]>;
+        Relationships: [];
+      };
       scheduler_incidents: {
         Row: {
           id: string;
@@ -4085,9 +4129,19 @@ export type Database = {
         Args: { p_month: number; p_day: number; p_include_feb_29?: boolean };
         Returns: Array<{ user_id: string }>;
       };
+      // Stage 3B. Pending migration 20260807120000_group_role_architecture;
+      // typed now so the action compiles against the schema it will run on.
+      transfer_group_ownership: {
+        Args: { p_conversation_id: string; p_new_owner_id: string };
+        Returns: undefined;
+      };
       accept_friend_request: {
         Args: { p_request_id: string };
-        Returns: Array<{ sender_id: string; receiver_id: string }>;
+        // `reactivated` is optional because the Phase 3.2B migration that adds
+        // it is still pending: against today's database the column is absent,
+        // and a required field would be a type that lies about production.
+        // Callers must treat `undefined` as "not a reactivation".
+        Returns: Array<{ sender_id: string; receiver_id: string; reactivated?: boolean }>;
       };
       consume_rate_limit: {
         Args: {
@@ -4411,6 +4465,12 @@ export type ConversationRole = "owner" | "admin" | "moderator" | "member";
 export type ConversationMemberStatus = "invited" | "joined" | "left" | "removed" | "banned";
 
 export type GroupJoinMode = "invite" | "link" | "closed";
+/**
+ * Who can SEE a group exists. Deliberately separate from GroupJoinMode,
+ * which decides what happens when they try to join: a public group may still
+ * be invite-only. Pending migration 20260807180000.
+ */
+export type GroupVisibility = "private" | "public";
 export type GroupHistoryVisibility = "since_join" | "full" | "none";
 export type GroupPostingMode = "all_members" | "admins_only" | "moderated";
 
@@ -4425,7 +4485,14 @@ export type SystemEventType =
   | "poll_confirmed"
   | "participant_joined"
   | "participant_left"
-  | "conversation_created";
+  | "conversation_created"
+  // Stage 3E group lifecycle; pending migration 20260807140000.
+  | "member_promoted"
+  | "member_demoted"
+  | "ownership_transferred"
+  | "participant_removed"
+  | "group_renamed"
+  | "group_avatar_changed";
 export type QuickActionType =
   | "on_my_way"
   | "im_here"

@@ -1,6 +1,18 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+
+/**
+ * Socialize 2.0: the radar was replaced by a vertical discovery feed, so the
+ * assertions below that pinned radar-specific markup (orbit nodes, the
+ * aggregate chip, the selection ring) no longer describe the product. They are
+ * removed rather than rewritten to match new markup, because a source
+ * assertion that is edited until it passes tests nothing.
+ *
+ * The BEHAVIOUR they protected is still covered: state resolution in
+ * socialize-state.test.ts, and feed ordering/filtering/privacy in
+ * discovery-feed.test.ts.
+ */
 import { stripComments } from "@/lib/content/strip-comments";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
@@ -15,26 +27,6 @@ const row = sheet.slice(sheet.indexOf("function PersonRow"));
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
-
-describe("entry point", () => {
-  it("opens the list from the radar's aggregate chip", () => {
-    expect(page).toContain("onClick={() => setListOpen(true)}");
-    expect(page).toContain("<PeopleNearbySheet");
-  });
-
-  it("is the only way in — no competing list buttons", () => {
-    expect((page.match(/setListOpen\(true\)/g) ?? []).length).toBe(1);
-  });
-
-  it("offers the list whenever anyone is nearby, not only when the radar caps", () => {
-    // The chip no longer depends on field.overflow.
-    expect(page).toContain("{visiblePeople.length > 0 ? (");
-  });
-
-  it("announces what it opens", () => {
-    expect(page).toContain("nearby. Open the list.`}");
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Data and ordering
@@ -200,7 +192,7 @@ describe("privacy", () => {
 describe("states", () => {
   it("shows a light empty state, not an illustration card", () => {
     expect(sheet).toContain("No one is nearby right now.");
-    expect(sheet).toContain("Keep Socializing on and check again soon.");
+    expect(sheet).toContain("Keep Linkr on and check again soon.");
     expect(stripComments(sheet)).not.toContain("<Image");
   });
 

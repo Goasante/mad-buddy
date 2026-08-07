@@ -21,6 +21,7 @@ import { useTransition } from "react";
 import { replyToSupportThreadAction, submitSupportRequestAction, type SupportThread } from "@/app/(app)/help-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/app-shell/page-header";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/auth/form-field";
 import { cn } from "@/lib/utils";
@@ -58,9 +59,13 @@ export function HelpCenterPage({ initialThreads = [] }: { initialThreads?: Suppo
 
   return (
     <div className="mx-auto max-w-[900px] space-y-6 pt-5">
+      {/* Mobile gets the canonical fixed header; the long-form question below
+          stays as the desktop heading, where there is room for it. */}
+      <PageHeader title="Help & Support" backHref="/settings" />
+
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">How can we help you?</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Find answers and get the most out of Mad Buddy.</p>
+        <h1 className="hidden text-2xl font-semibold tracking-tight sm:text-3xl md:block">How can we help you?</h1>
+        <p className="text-sm text-muted-foreground md:mt-1">Find answers and get the most out of Mad Buddy.</p>
         <div className="relative mt-4">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Mad Buddy help..." className="pl-9" aria-label="Search Mad Buddy help" />

@@ -12,6 +12,8 @@ import {
   type SocializeActivity,
   type SocializeAreaTier
 } from "@/lib/social/socialize";
+import { approximateDistanceLabel } from "@/lib/proximity/approximate-distance";
+import { haversineMeters, weakerConfidence } from "@/lib/proximity/backend";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { isSocializeEnabled } from "@/lib/features/feature-flags";
@@ -59,6 +61,15 @@ export type SocializePerson = {
   lastPresenceUpdate: string | null;
   waveState: SocializeWaveState;
   plan: SubscriptionPlan;
+  /**
+   * A rounded, display-ready distance such as "≈ 3 km away", or null when it
+   * cannot be shown.
+   *
+   * Already a string, by design: no numeric distance ever reaches a client, so
+   * there is nothing for a caller to re-derive, compare precisely, or
+   * trilaterate with.
+   */
+  approxDistance: string | null;
 };
 
 export type SocializeActionResult = { ok: boolean; message: string; session?: SocializeSession };
@@ -218,7 +229,7 @@ export async function deactivateSocialize(userId: string): Promise<SocializeActi
       .update({ status: "ended", ended_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq("user_id", userId)
       .eq("status", "active");
-    return { ok: true, message: "Socialize is off" };
+    return { ok: true, message: "Linkr is off" };
   } catch {
     return { ok: false, message: "Couldn’t turn off Socialize. Try again." };
   }
@@ -273,7 +284,8 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
       admin
         .from("friendships")
         .select("user_one_id, user_two_id")
-        .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`),
+        // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
+        .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
       admin
         .from("user_locations")
         .select("user_id, latitude, longitude, confidence, last_updated")
@@ -337,10 +349,33 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
       const presenceState = presenceStateFor(lastPresenceUpdate, Date.parse(nowIso));
       if (presenceState === "expired") continue;
 
+      /**
+       * Approximate distance, bucketed HERE and emitted as a finished label.
+       *
+       * The metres exist only inside this loop: they are computed from the two
+       * coordinate rows already in scope, converted immediately, and never
+       * stored or returned. What crosses the wire is a string like
+       * "≈ 3 km away", which carries no more information than it displays.
+       *
+       * This is deliberately not added to `SafeNearbyFriend` — that shape
+       * feeds /api/friends/nearby, which has a guard rejecting any
+       * location-adjacent response key, and that guard stays exactly as it is.
+       */
+      const approxDistance = locationRow
+        ? approximateDistanceLabel(
+            haversineMeters(viewerLocation as { latitude: number; longitude: number }, locationRow),
+            weakerConfidence(
+              (viewerLocation as { confidence: ConfidenceLevel }).confidence,
+              locationRow.confidence
+            )
+          )
+        : null;
+
       people.push({
         userId: candidate.friend_id,
         presenceState,
         lastPresenceUpdate,
+        approxDistance,
         displayName: candidate.display_name,
         username: candidate.username,
         avatarUrl: candidate.avatar_url,

@@ -164,7 +164,8 @@ export async function calculateUsage(admin: Admin, userId: string): Promise<Usag
     admin
       .from("friendships")
       .select("id", { count: "exact", head: true })
-      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`),
+      // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
+      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
     admin
       .from("friend_circles")
       .select("id", { count: "exact", head: true })

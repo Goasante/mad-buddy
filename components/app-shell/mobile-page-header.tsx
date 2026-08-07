@@ -165,7 +165,11 @@ export function MobilePageHeader({
             }
             title="Notifications"
           >
-            <Bell className={ICON} strokeWidth={STROKE} aria-hidden="true" />
+            {/* Two-tone only when there is something to notice. An idle bell
+                that animates anyway becomes wallpaper. */}
+            <span className={hasUnread ? "bell-two-tone" : undefined}>
+              <Bell className={ICON} strokeWidth={STROKE} aria-hidden="true" />
+            </span>
             {hasUnread ? <HeaderBadge count={unreadNotificationCount} /> : null}
           </HeaderLink>
         ) : null}

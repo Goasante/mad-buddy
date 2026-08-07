@@ -7,8 +7,8 @@ import {
   capabilitiesAddedBy,
   capabilityLabel,
   cheapestPlanGranting,
+  HEADLINE_LIMITS,
   formatEntitlementAmount,
-  planPrice,
   spotlightUpgradeCopy
 } from "@/lib/billing/upgrade-copy";
 import { comparisonRows, pricingPlans } from "@/components/premium/plans";
@@ -172,33 +172,46 @@ describe("pull-to-refresh is one reusable system", () => {
 // Spotlight entitlement and upgrade copy
 // ---------------------------------------------------------------------------
 
-describe("Spotlight publishing stays Buddy Pro only", () => {
-  it("grants public_moments to Pro alone", () => {
-    expect(PLAN_ENTITLEMENTS.free.public_moments).toBe(false);
-    // Explicitly NOT granted to Plus — the configuration is deliberate.
-    expect(PLAN_ENTITLEMENTS.buddy_plus.public_moments).toBe(false);
+/**
+ * Phase 0: core Air publishing is free.
+ *
+ * A network effect only paying users can contribute to starves itself, so
+ * publishing moved to Free. Advanced Air (scheduled sessions, analytics,
+ * boost, creator tools) is not built and must NOT be advertised until it is
+ * implemented and entitlement-backed.
+ */
+describe("core Air publishing is free", () => {
+  it("grants publishing on every tier, starting with Free", () => {
+    expect(PLAN_ENTITLEMENTS.free.public_moments).toBe(true);
+    expect(PLAN_ENTITLEMENTS.buddy_plus.public_moments).toBe(true);
     expect(PLAN_ENTITLEMENTS.buddy_pro.public_moments).toBe(true);
-    expect(cheapestPlanGranting("public_moments")).toBe("buddy_pro");
+    // Free is the cheapest plan granting it, which is the point.
+    expect(cheapestPlanGranting("public_moments")).toBe("free");
   });
 
-  it("names the granting plan and its real price, from canonical data", () => {
+  it("offers no upgrade copy, because there is nothing to upgrade to", () => {
+    // The helper already models this: plan is null when the capability is
+    // granted to everyone.
     const copy = spotlightUpgradeCopy();
-    expect(copy.plan).toBe("buddy_pro");
-    expect(copy.cta).toContain("Buddy Pro");
-    expect(copy.priceNote).toContain(planDisplayPrices.pro);
-    expect(planPrice("buddy_pro")).toBe(planDisplayPrices.pro);
+    expect(copy.plan).toBeNull();
   });
 
-  it("only says 'from as low as' for the CHEAPEST granting plan", () => {
-    const copy = spotlightUpgradeCopy();
-    // cheapestPlanGranting returns exactly that, so the wording cannot imply a
-    // cheaper route or a discount that does not exist.
-    expect(copy.plan).toBe(cheapestPlanGranting("public_moments"));
-    expect(copy.priceNote).toContain("from as low as");
+  it("never advertises unbuilt advanced Air features", () => {
+    // Scheduled Air, analytics, boost and creator tools do not exist. Selling
+    // them would be selling nothing.
+    const plans = read("components/premium/plans.ts");
+    for (const unbuilt of ["Air Boost", "Scheduled Air", "Air analytics", "Audience insights"]) {
+      expect(plans, `must not advertise ${unbuilt}`).not.toContain(unbuilt);
+    }
   });
 
   it("lists only benefits the registry actually grants", () => {
     const copy = spotlightUpgradeCopy();
+    // Nothing to sell means nothing listed.
+    if (copy.plan === null) {
+      expect(copy.benefits).toEqual([]);
+      return;
+    }
     const granted = capabilitiesAddedBy("buddy_pro")
       .map(capabilityLabel)
       .filter((entry): entry is string => entry !== null);
@@ -224,29 +237,41 @@ describe("Spotlight publishing stays Buddy Pro only", () => {
 // ---------------------------------------------------------------------------
 
 describe("pricing page matches the entitlement registry", () => {
-  it("derives limits rather than restating them by hand", () => {
-    // The old copy claimed Free had 25 Muddies (registry: 30), Plus had
-    // unlimited (150), and Pro allowed 100 daily requests (50).
+  it("derives every advertised limit from the registry", () => {
+    // The original bug this guarded against: hand-written copy drifting from
+    // the real values. Still guarded — just over the limits that remain
+    // advertised, now that the resentment caps are gone.
     for (const plan of pricingPlans) {
       const key = plan.id === "free" ? "free" : plan.id === "plus" ? "buddy_plus" : "buddy_pro";
-      const expected = formatEntitlementAmount(PLAN_ENTITLEMENTS[key].max_muddies);
-      expect(plan.limits.join(" "), plan.id).toContain(expected);
+      for (const { key: limitKey } of HEADLINE_LIMITS) {
+        const expected = formatEntitlementAmount(PLAN_ENTITLEMENTS[key][limitKey]);
+        expect(plan.limits.join(" "), `${plan.id}/${limitKey}`).toContain(expected);
+      }
     }
   });
 
-  it("never advertises 'unlimited' for a plan that is actually capped", () => {
-    const plus = pricingPlans.find((plan) => plan.id === "plus");
-    expect(plus).toBeDefined();
-    const muddiesLine = plus?.limits.find((line) => line.startsWith("Muddies"));
-    expect(muddiesLine).toBe(`Muddies: ${formatEntitlementAmount(PLAN_ENTITLEMENTS.buddy_plus.max_muddies)}`);
-    expect(muddiesLine).not.toContain("Unlimited");
+  it("never advertises a limit that is identical on every tier", () => {
+    // Selling "Unlimited Muddies" as a Plus benefit when Free has it too
+    // would be false advertising. HEADLINE_LIMITS must only carry real
+    // differences.
+    for (const { key } of HEADLINE_LIMITS) {
+      const values = (["free", "buddy_plus", "buddy_pro"] as const).map(
+        (plan) => PLAN_ENTITLEMENTS[plan][key]
+      );
+      expect(new Set(values).size, `${key} is the same on every tier`).toBeGreaterThan(1);
+    }
   });
 
-  it("shows Air publishing on Buddy Pro", () => {
-    const pro = pricingPlans.find((plan) => plan.id === "pro");
-    expect(pro?.features.join(" ")).toContain("Publish images to Air");
+  it("shows Air publishing as available on every tier", () => {
+    // Phase 0 moved core Air publishing to Free, so the comparison row must
+    // say so rather than continuing to sell it as a Pro benefit.
     const spotlightRow = comparisonRows.find((row) => row.feature === "Publish to Air");
-    expect(spotlightRow).toMatchObject({ free: false, plus: false, pro: true });
+    if (spotlightRow) {
+      expect(spotlightRow).toMatchObject({ free: true, plus: true, pro: true });
+    }
+    // And it is no longer listed as something Pro adds.
+    const pro = pricingPlans.find((plan) => plan.id === "pro");
+    expect(pro?.features.join(" ")).not.toContain("Publish images to Air");
   });
 
   it("quotes prices only from the single display-price source", () => {

@@ -266,7 +266,8 @@ export async function pauseStreakAction(streakId: string, weeks: number): Promis
     .select("id")
     .eq("id", streak.friendship_id)
     .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)
-    .maybeSingle();
+    // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
+    .is("ended_at", null).maybeSingle();
   if (!friendship) return { ok: false, message: "Streak not found." };
 
   const pausedUntil = new Date(pauseUntilMs(weeks, Date.now())).toISOString();

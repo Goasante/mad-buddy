@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { UNLIMITED } from "@/lib/billing/entitlements";
 import {
   arrivedMessage,
   cancelledMessage,
@@ -23,13 +24,13 @@ const MIN = 60 * 1000;
 
 describe("tier limits (spec §17, §62)", () => {
   it("gives free users 2 trusted contacts, paid more", () => {
-    expect(safeArrivalLimitsFor("free").maxContacts).toBe(2);
-    expect(safeArrivalLimitsFor("buddy_plus").maxContacts).toBe(5);
+    expect(safeArrivalLimitsFor("free").maxContacts).toBe(UNLIMITED);
+    expect(safeArrivalLimitsFor("buddy_plus").maxContacts).toBe(UNLIMITED);
   });
 
   it("caps active sessions on every tier (anti-abuse)", () => {
-    expect(safeArrivalLimitsFor("free").maxActiveSessions).toBe(3);
-    expect(safeArrivalLimitsFor("buddy_pro").maxActiveSessions).toBe(3);
+    expect(safeArrivalLimitsFor("free").maxActiveSessions).toBe(UNLIMITED);
+    expect(safeArrivalLimitsFor("buddy_pro").maxActiveSessions).toBe(UNLIMITED);
   });
 });
 
@@ -53,8 +54,13 @@ describe("validation (spec §5, §14)", () => {
   });
 
   it("enforces contact count against the plan", () => {
+    // Still requires at least one contact — a journey nobody is watching is
+    // not a Safe Arrival.
     expect(validateContactCount(0, "free")).toMatch(/at least one/);
-    expect(validateContactCount(3, "free")).toMatch(/Upgrade/);
+    // Phase 0: no upper limit and no upgrade prompt on any tier. Someone who
+    // needs more emergency contacts is the person in more danger.
+    expect(validateContactCount(3, "free")).toBeNull();
+    expect(validateContactCount(20, "free")).toBeNull();
     expect(validateContactCount(3, "buddy_plus")).toBeNull();
   });
 

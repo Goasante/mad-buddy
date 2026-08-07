@@ -7,6 +7,7 @@ import {
   Award,
   ChevronRight,
   CircleDollarSign,
+  Gauge,
   HelpCircle,
   Info,
   LifeBuoy,
@@ -66,6 +67,19 @@ const SUPPORT: SheetRow[] = [
 ];
 
 /**
+ * Owner/Admin only. Rendered from a SERVER-resolved flag (`showAdminLink`,
+ * already computed by the authenticated layout from `getAdminContext()`), so
+ * this is a visibility decision, never an authorization one — `/admin` and
+ * every action beneath it re-check permission server-side regardless of what
+ * this sheet chose to draw.
+ *
+ * Placed in its own group at the end rather than mixed into Support: staff
+ * tooling is a different kind of destination from "get help", and a labelled
+ * group says so without needing a badge or a colour.
+ */
+const ADMINISTRATION: SheetRow[] = [{ href: "/admin", label: "Administration", icon: Gauge }];
+
+/**
  * Home's account sheet — opens from the header hamburger.
  *
  * Structure follows iOS Settings / Apple Wallet: a read-only identity header
@@ -93,7 +107,8 @@ export function HomeSettingsSheet({
   currentAvatarUrl,
   subscriptionPlan,
   buddyScoreLevelLabel,
-  profileCompletionPercent
+  profileCompletionPercent,
+  showAdminLink = false
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -103,6 +118,12 @@ export function HomeSettingsSheet({
   subscriptionPlan: SubscriptionPlan | null | undefined;
   /** Display label only ("Trusted Buddy"); null when unavailable. */
   buddyScoreLevelLabel: string | null;
+  /**
+   * Whether this account has staff access, resolved on the SERVER by the
+   * authenticated layout. Defaults false, so a caller that forgets to pass it
+   * hides the entry rather than exposing it.
+   */
+  showAdminLink?: boolean;
   /** 0–100, from the same three-item model the profile reminder uses. */
   profileCompletionPercent: number;
 }) {
@@ -180,6 +201,9 @@ export function HomeSettingsSheet({
             <SheetGroup rows={QUICK_ACCESS} label="Quick access" className="mt-4" />
             <SheetGroup rows={PREFERENCES} label="Preferences" className="mt-5" />
             <SheetGroup rows={SUPPORT} label="Support" className="mt-5" />
+            {showAdminLink ? (
+              <SheetGroup rows={ADMINISTRATION} label="Administration" className="mt-5" />
+            ) : null}
 
             <button
               type="button"

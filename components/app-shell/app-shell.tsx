@@ -8,7 +8,6 @@ import type { LucideIcon } from "lucide-react";
 import {
   Bell,
   CalendarCheck2,
-  CalendarDays,
   CircleDollarSign,
   Compass,
   Gauge,
@@ -45,6 +44,7 @@ import { bindCachesToSession } from "@/lib/cache/session-binding";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import type { ResolvedWallpaper } from "@/lib/wallpapers/catalog";
 import { BrandMark } from "@/components/brand/brand-mark";
+import { HangoutIcon, LinkrIcon } from "@/components/brand/brand-icons";
 import { useUnreadNotificationCount } from "@/hooks/use-unread-notification-count";
 import { UnreadNotificationProvider } from "@/hooks/unread-notification-context";
 import { AppMenuProvider } from "@/hooks/app-menu-context";
@@ -101,7 +101,7 @@ const navigationItems: Array<{
   { href: "/moments", label: "Moments", icon: Sparkles, featureIcon: "moments" },
   { href: "/events", label: "Events", icon: PartyPopper, featureIcon: "events" },
   { href: "/groups", label: "Groups", icon: Users2, featureIcon: "groups" },
-  { href: "/discover", label: "Socialize", icon: Compass, featureIcon: "socialize" },
+  { href: "/discover", label: "Linkr", icon: Compass, featureIcon: "socialize" },
   { href: "/profile", label: "Profile", icon: UserRound },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/billing", label: "Membership", icon: CircleDollarSign }
@@ -137,7 +137,15 @@ const PAGES_WITH_OWN_HEADER = [
   "/invites",
   "/drops",
   "/scan",
-  "/safe-arrival"
+  "/safe-arrival",
+  // Migrated to the canonical header in the Stage 2 header pass. Each of these
+  // renders <PageHeader> itself, so the global AppHeader must stand down or
+  // the screen would show two bars.
+  "/badges",
+  "/help",
+  "/invite",
+  "/safety-center",
+  "/hangout-mode"
 ] as const;
 
 /**
@@ -150,7 +158,12 @@ const PAGES_WITH_OWN_HEADER = [
  * empty band above the page's own title. These pages clear the safe area
  * themselves, exactly once.
  */
-const IMMERSIVE_HEADER_PAGES = ["/discover"] as const;
+// Socialize draws its header INLINE at the top of the discovery feed, not as
+// a fixed bar. It therefore belongs here rather than only in the list above:
+// reserving --mobile-header-height for a header that scrolls with the page
+// renders as an empty band under the notch. The page clears the safe area
+// itself, exactly once.
+const IMMERSIVE_HEADER_PAGES: readonly string[] = ["/discover"];
 
 function hasOwnHeader(pathname: string): boolean {
   return PAGES_WITH_OWN_HEADER.some((href) => pathname === href || pathname.startsWith(`${href}/`));
@@ -371,6 +384,9 @@ function AppShellInner({
         subscriptionPlan={subscriptionPlan}
         buddyScoreLevelLabel={buddyScoreLevelLabel}
         profileCompletionPercent={profileCompletionPercent}
+        // Same server-resolved flag the sidebar's Admin item already uses, so
+        // the two entry points can never disagree about who is staff.
+        showAdminLink={showAdminLink}
       />
     </div>
   );
@@ -1002,11 +1018,26 @@ const createActions: Array<{
  * rest stay icon-only, which keeps the bar quiet and the current location
  * unmistakable. The Orb carries no glyph at all — see MadBuddyOrb.
  */
-const MOBILE_TABS: Array<{ href: Route; label: string; icon: LucideIcon }> = [
+/**
+ * The four bottom-bar destinations, split two either side of the Orb.
+ *
+ * Plans and Profile were removed rather than demoted: Plans already has a
+ * section on Home, and Profile is reachable from the account sheet the header
+ * menu opens — so both were paying for a permanent tab they did not need.
+ * Linkr and Hangout have no other persistent entry point, which is what earns
+ * them the slot.
+ *
+ * Typed to accept a custom brand mark alongside a Lucide icon: both honour the
+ * same props contract, so the tab renderer needs no branch.
+ */
+/** A Lucide icon or a brand mark: both take className and render an svg. */
+type MobileTab = { href: Route; label: string; icon: LucideIcon | typeof LinkrIcon };
+
+const MOBILE_TABS: MobileTab[] = [
   { href: "/messages", label: "Messages", icon: MessageCircle },
   { href: "/friends", label: "Muddies", icon: Users },
-  { href: "/plans", label: "Plans", icon: CalendarDays },
-  { href: "/profile", label: "Me", icon: UserRound }
+  { href: "/discover", label: "Linkr", icon: LinkrIcon },
+  { href: "/hangout-mode", label: "Hangout", icon: HangoutIcon }
 ];
 
 function MobileNav({ immersive = false }: { immersive?: boolean }) {
@@ -1062,7 +1093,7 @@ function MobileNavTab({
   tab,
   pathname
 }: {
-  tab: { href: Route; label: string; icon: LucideIcon };
+  tab: MobileTab;
   pathname: string;
 }) {
   // Reuses the shared route-matching rule so a tab stays lit on nested

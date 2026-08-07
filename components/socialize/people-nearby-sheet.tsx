@@ -155,7 +155,7 @@ export function PeopleNearbySheet({
             <div className="py-8 text-center">
               <p className="text-[0.875rem] font-medium">No one is nearby right now.</p>
               <p className="mt-1 text-[0.8125rem] leading-relaxed text-muted-foreground">
-                Keep Socializing on and check again soon.
+                Keep Linkr on and check again soon.
               </p>
             </div>
           ) : (

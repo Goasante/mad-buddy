@@ -3,6 +3,8 @@ import {
   getCurrentSocializeAction
 } from "@/app/(app)/socialize-actions";
 import { SocializePage } from "@/components/socialize/socialize-page";
+import { loadGroupsPageDataAction } from "@/app/(app)/group-actions";
+import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
 import { isSocializeEnabled } from "@/lib/features/feature-flags";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/auth";
@@ -22,11 +24,19 @@ export default async function DiscoverPage() {
     getCurrentSocializeAction()
   ]);
   const people = session ? await discoverSocializePeopleAction() : [];
+  // Groups and plans for the discovery rails. Both reuse EXISTING
+  // projections, loaded in parallel with each other rather than in series.
+  const [groupsData, plansData] = await Promise.all([
+    loadGroupsPageDataAction(),
+    user ? loadUpcomingPlans(user.id, 3) : Promise.resolve({ plans: [], hasMore: false })
+  ]);
 
   return (
     <SocializePage
       initialSession={session}
       initialPeople={people}
+      initialGroups={groupsData.discoverableGroups}
+      initialPlans={plansData.plans}
       myAvatarUrl={profileResult.data?.avatar_url ?? null}
       myName={profileResult.data?.full_name?.trim() ?? ""}
     />

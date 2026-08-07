@@ -64,12 +64,49 @@ function contextSubtitle(badge: string): string {
 export const RUN_GAP_MS = 4 * 60 * 1000;
 
 export function startsNewRun(
-  message: { isMine: boolean; createdAt: string },
-  previous: { isMine: boolean; createdAt: string } | undefined
+  message: RunMessage,
+  previous: RunMessage | undefined
 ): boolean {
   if (!previous) return true;
   if (previous.isMine !== message.isMine) return true;
+  // SENDER CHANGE, for group conversations.
+  //
+  // `isMine` alone is enough in a direct conversation — there are only two
+  // people, so "not mine" identifies the other one. In a group it does not:
+  // Ama and Kofi are both "not mine", and without this every incoming message
+  // in the thread would merge into a single run under whoever spoke first.
+  //
+  // Compared only when BOTH messages carry a senderId, so direct callers that
+  // pass neither keep their exact previous behaviour.
+  if (message.senderId !== undefined && previous.senderId !== undefined) {
+    if (message.senderId !== previous.senderId) return true;
+  }
+  // A system/event message is nobody's, so it always breaks the run on both
+  // sides rather than being absorbed into a neighbouring person's block.
+  if (isSystemMessage(message) || isSystemMessage(previous)) return true;
+  // A date boundary implies a new run even inside the gap window — a run may
+  // never straddle the day divider drawn between its own messages.
+  if (startsNewDay(message.createdAt, previous.createdAt)) return true;
   return Date.parse(message.createdAt) - Date.parse(previous.createdAt) > RUN_GAP_MS;
+}
+
+/**
+ * What run-grouping needs to know about a message.
+ *
+ * `senderId` and `messageType` are optional so the direct-conversation callers
+ * that predate group support keep working unchanged.
+ */
+export type RunMessage = {
+  isMine: boolean;
+  createdAt: string;
+  /** Stable user id. Null for system messages; undefined when not supplied. */
+  senderId?: string | null;
+  messageType?: string;
+};
+
+/** System/event messages have no human author. */
+function isSystemMessage(message: RunMessage): boolean {
+  return message.senderId === null || message.messageType === "system";
 }
 
 /**

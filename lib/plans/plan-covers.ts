@@ -65,7 +65,7 @@ export type ResolvedPlanCover =
  */
 export const PLAN_COVERS: Record<PlanCategory, PlanCoverArt> = {
   beach: { from: "#0ea5e9", to: "#0369a1", motif: "waves" },
-  dinner: { from: "#f97316", to: "#c2410c", motif: "plate" },
+  dinner: { from: "#e88c2b", to: "#c2410c", motif: "plate" },
   coffee: { from: "#a16207", to: "#5c3a12", motif: "cup" },
   study: { from: "#6366f1", to: "#3730a3", motif: "book" },
   movie: { from: "#7c3aed", to: "#4c1d95", motif: "screen" },

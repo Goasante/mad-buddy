@@ -281,20 +281,43 @@ export async function publishSystemMessage(
   admin: Admin,
   conversationId: string,
   event: SystemEventType,
-  detail?: string
+  detail?: string,
+  /**
+   * Stable key for this exact fact, so a retried action cannot post the same
+   * system message twice.
+   *
+   * A system message has no sender, and the regular
+   * (sender_id, client_message_id) dedupe index cannot cover a null sender —
+   * nulls never conflict. The partial index added in
+   * 20260807140000_group_system_events covers system messages specifically.
+   *
+   * Optional, so every existing caller (plans, polls, participants) keeps its
+   * current behaviour unchanged.
+   */
+  dedupeKey?: string
 ) {
-  await admin.from("messages").insert({
+  const { error } = await admin.from("messages").insert({
     conversation_id: conversationId,
     sender_id: null,
     message_type: "system",
     system_event_type: event,
     text_content: systemMessageText(event, detail),
+    client_message_id: dedupeKey ?? null,
     status: "sent"
   });
+  // A duplicate is the expected outcome of a retry, not a fault: the fact is
+  // already recorded, so there is nothing to add and nothing to report.
+  if (error && !isDuplicateSystemEvent(error)) return;
   await admin
     .from("conversations")
     .update({ last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq("id", conversationId);
+}
+
+/** Postgres unique-violation, however the client surfaces it. */
+function isDuplicateSystemEvent(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === "23505" || Boolean(error.message?.includes("duplicate key"));
 }
 
 /**

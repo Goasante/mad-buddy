@@ -170,7 +170,8 @@ async function loadMuddies(
   const { data: friendships } = await admin
     .from("friendships")
     .select("user_one_id, user_two_id")
-    .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`);
+    .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)
+    .is("ended_at", null);
   const friendIds = (friendships ?? []).map((friendship) =>
     friendship.user_one_id === userId ? friendship.user_two_id : friendship.user_one_id
   );

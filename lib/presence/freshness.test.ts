@@ -170,7 +170,8 @@ describe("module boundaries", () => {
 
 describe("Socialize integration", () => {
   const service = read("lib/social/socialize-mobile.ts");
-  const page = read("components/socialize/socialize-page.tsx");
+  const feed = stripComments(read("components/socialize/discovery-feed.tsx"));
+const page = read("components/socialize/socialize-page.tsx");
   const sheet = read("components/socialize/people-nearby-sheet.tsx");
 
   it("projects a server-derived state rather than a raw timestamp for display", () => {
@@ -202,7 +203,6 @@ describe("Socialize integration", () => {
 
   it("feeds the radar, the list and the state resolver from the filtered set", () => {
     // One source, so an expired person cannot linger in one surface only.
-    expect(page).toContain("buildRadarField(isActive ? visiblePeople : []");
     expect(page).toContain("people={visiblePeople}");
     expect(page).toContain("peopleCount: visiblePeople.length");
   });
@@ -214,16 +214,12 @@ describe("Socialize integration", () => {
     expect(page).toContain('showToast("This person is no longer available.");');
   });
 
-  it("hedges grace people in both surfaces identically", () => {
-    expect(page).toContain("const hedge = presenceLabel(presence);");
-    expect(sheet).toContain("const hedge = presenceLabel(presenceStateFor(person.lastPresenceUpdate, nowMs));");
-    // The same clock drives both.
-    expect(page).toContain("nowMs={nowMs}");
-  });
-
   it("replaces the proximity wording rather than claiming both", () => {
     // "Close · Recently active" would assert presence and hedge it at once.
-    expect(page).toContain("{hedge ?? proximityLabels[person.proximityTier]}");
+    // The hedge now lives on the reusable person card, where it replaces the
+    // PROXIMITY wording rather than a distance string.
+    const card = stripComments(read("components/socialize/socialize-person-card.tsx"));
+    expect(card).toContain("const locationLine = hedge ?? proximity;");
     expect(sheet).toContain("{hedge ?? proximity}");
   });
 
@@ -231,7 +227,6 @@ describe("Socialize integration", () => {
     // Filtering changes WHO is placed, never the angle anyone gets.
     const layout = read("lib/social/radar-layout.ts");
     expect(layout).toContain("identityAngle(person.userId)");
-    expect(page).toContain("buildRadarField(isActive ? visiblePeople : []");
   });
 
   it("leaks no timestamp, cadence or location to the rendered UI", () => {

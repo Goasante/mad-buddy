@@ -33,6 +33,7 @@ export default async function HangoutModeRoute() {
         .from("friendships")
         .select("user_one_id", { count: "exact", head: true })
         .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
+        .is("ended_at", null)
         .then((result) => result.count ?? 0)
     ]);
     avatarUrl = profile?.avatar_url ?? null;

@@ -72,6 +72,8 @@ export function capabilitiesAddedBy(plan: SubscriptionPlan): BooleanEntitlementK
 
 /** Human labels for the boolean capabilities that are worth naming in copy. */
 const CAPABILITY_LABELS: Partial<Record<BooleanEntitlementKey, string>> = {
+  // Core Air publishing is free (Phase 0); this copy now only ever
+  // describes a configuration where an admin has restricted it.
   public_moments: "Publish images to Air",
   advanced_visibility_schedules: "Scheduled visibility and Ghost Mode",
   recurring_plans: "Recurring plans",
@@ -106,12 +108,13 @@ export function cheapestPaidPrice(): string {
 
 /** Numeric limits worth showing on a plan card, in the order they should appear. */
 export const HEADLINE_LIMITS: { key: NumericEntitlementKey; label: string }[] = [
-  { key: "max_muddies", label: "Muddies" },
-  { key: "max_close_friends", label: "Close Friends" },
+  // Phase 0 removed the caps that existed only to sell an upgrade — Muddies,
+  // Close Friends, Moments a day and Safe Arrival contacts are all unlimited
+  // on every tier now, so advertising them as plan differences would be
+  // false. What remains are genuine capacity differences.
   { key: "max_active_plans", label: "Active plans" },
-  { key: "max_daily_moments", label: "Moments a day" },
-  { key: "max_safe_arrival_contacts", label: "Safe Arrival contacts" },
-  { key: "max_personal_circles", label: "Personal circles" }
+  { key: "max_personal_circles", label: "Personal circles" },
+  { key: "max_private_groups", label: "Private groups" }
 ];
 
 export type SpotlightUpgradeCopy = {
@@ -135,7 +138,11 @@ export type SpotlightUpgradeCopy = {
  * cheaper route that does not exist.
  */
 export function spotlightUpgradeCopy(): SpotlightUpgradeCopy {
-  const plan = cheapestPlanGranting("public_moments");
+  const grantingPlan = cheapestPlanGranting("public_moments");
+  // "free" is not a plan anyone upgrades TO. When the capability is already
+  // included at no cost there is nothing to sell, so this collapses to the
+  // same "no upsell" branch as an unconfigured capability.
+  const plan = grantingPlan === "free" ? null : grantingPlan;
   if (!plan) {
     return {
       plan: null,

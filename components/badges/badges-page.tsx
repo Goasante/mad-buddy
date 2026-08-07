@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { pauseStreakAction, type EngagementOverview } from "@/app/(app)/engagement-actions";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/app-shell/page-header";
 import { achievementIconPath } from "@/lib/achievements/achievement-catalog";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
@@ -76,9 +77,14 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
 
   return (
     <div className="mx-auto max-w-[1000px] space-y-6 pt-6">
+      {/* Canonical fixed header on mobile; the in-content heading below is
+          desktop-only, so exactly one title is ever on screen. Back goes to
+          the account sheet's origin — Achievements is reached from there. */}
+      <PageHeader title="Achievements" backHref="/profile" />
+
       <div data-tour-id={TOUR_TARGET_IDS.BADGES_OVERVIEW}>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Achievements & Recaps</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <h1 className="hidden text-2xl font-semibold tracking-tight sm:text-3xl md:block">Achievements & Recaps</h1>
+        <p className="text-sm text-muted-foreground md:mt-2">
           Private to you. Nothing here is ranked, compared, or shown to anyone else.
         </p>
       </div>

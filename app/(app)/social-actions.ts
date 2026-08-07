@@ -63,6 +63,9 @@ async function verifyMuddyRelationship(
       .or(
         `and(user_one_id.eq.${userId},user_two_id.eq.${otherId}),and(user_one_id.eq.${otherId},user_two_id.eq.${userId})`
       )
+      // Active friendships only: ended_at IS NULL is the canonical definition
+      // of "currently Muddies".
+      .is("ended_at", null)
       .limit(1),
     admin
       .from("blocked_users")

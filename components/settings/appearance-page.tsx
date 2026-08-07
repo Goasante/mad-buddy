@@ -14,7 +14,7 @@ const themeOptions: Array<{ id: ThemePreference; label: string; icon: typeof Sun
 ];
 
 const accentOptions: Array<{ id: AccentColor; label: string; swatch: string }> = [
-  { id: "orange", label: "Orange", swatch: "#f97316" },
+  { id: "orange", label: "Orange", swatch: "#e88c2b" },
   { id: "blue", label: "Blue", swatch: "#3b82f6" },
   { id: "violet", label: "Violet", swatch: "#8b5cf6" },
   { id: "green", label: "Green", swatch: "#22c55e" },

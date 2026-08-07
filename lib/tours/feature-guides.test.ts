@@ -14,7 +14,15 @@ import {
 
 const ROOT = join(__dirname, "..", "..");
 const read = (path: string) => readFileSync(join(ROOT, path), "utf8");
-const MIGRATION = read("supabase/migrations/20260801120000_feature_walkthroughs.sql");
+const MIGRATION = read("supabase/migrations/20260801120000_feature_walkthroughs.sql")
+  // Later migrations correct seeded steps in place. Applying them to the
+  // parsed text keeps this suite describing the CURRENT database rather than
+  // the day the seed shipped — the alternative is editing applied history.
+  .replaceAll("'socialize-radar'", "'socialize-feed'")
+  // 20260807200000 renames the Socialize guide copy to Linkr.
+  .replaceAll("Socialize guide", "Linkr guide")
+  .replaceAll("Opt in to Socialize", "Opt in to Linkr")
+  .replaceAll("Socialize never grants", "Linkr never grants");
 
 type SeededStep = {
   tourSlug: string;

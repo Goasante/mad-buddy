@@ -127,7 +127,8 @@ export async function GET(request: Request) {
   const { data: friendships, error: friendshipsError } = await admin
     .from("friendships")
     .select("user_one_id, user_two_id")
-    .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`);
+    // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
+    .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`).is("ended_at", null);
 
   if (friendshipsError) {
     logBackendEvent("warn", {

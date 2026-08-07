@@ -38,7 +38,8 @@ export async function friendIdsOf(admin: Admin, userId: string): Promise<Set<str
   const { data } = await admin
     .from("friendships")
     .select("user_one_id, user_two_id")
-    .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`);
+    // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
+    .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null);
   return new Set(
     (data ?? []).map((row) => (row.user_one_id === userId ? row.user_two_id : row.user_one_id))
   );

@@ -69,12 +69,19 @@ function makeAdmin(input: { acks: Acks; friendships: [string, string][]; blocks?
           return builder;
         },
         or: () => builder,
+        // Active-friend reads filter on ended_at; these fixtures are all
+        // active friendships, so the filter is a no-op here.
+        is: () => builder,
         then(resolve: (result: { data: unknown }) => unknown) {
           if (table === "safe_arrival_sessions") return resolve({ data: [sessionRow] });
           if (table === "profiles") return resolve({ data: profiles });
           if (table === "friendships") {
             return resolve({
-              data: input.friendships.map(([one, two]) => ({ user_one_id: one, user_two_id: two }))
+              data: input.friendships.map(([one, two]) => ({
+                user_one_id: one,
+                user_two_id: two,
+                ended_at: null
+              }))
             });
           }
           if (table === "blocked_users") {

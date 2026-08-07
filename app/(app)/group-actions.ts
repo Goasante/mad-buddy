@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { guardAction } from "@/lib/admin/enforcement";
-import { assertWithinLimit } from "@/lib/billing/service";
+import { assertWithinLimit, loadEffectivePlansForUsers } from "@/lib/billing/service";
 import type {
   GroupDetailView,
   GroupInvitation,
@@ -13,13 +13,15 @@ import type {
   GroupSummary
 } from "@/lib/groups/types";
 import { loadCommunicationPreferences } from "@/lib/messaging/service";
+import { resolveRoleChange, type GroupRoleChange } from "@/lib/messaging/rules";
+import { errorType, logBackendEvent } from "@/lib/observability/logger";
 import { deliverNotification } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { areApprovedMuddies, isBlockedEitherDirection, isCloseFriend } from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { ConversationRole, GroupJoinMode } from "@/lib/supabase/database.types";
+import type { ConversationRole, GroupJoinMode, GroupVisibility, SubscriptionPlan } from "@/lib/supabase/database.types";
 
 type GroupActionState = {
   ok: boolean;
@@ -142,6 +144,11 @@ async function summariesFor(
         memberCount: memberCountById.get(id) ?? 0,
         role: roleById.get(id) ?? null,
         joinMode: setting.join_mode,
+        // Read defensively: the `visibility` column ships in a PENDING
+        // migration, and selecting a column that does not exist yet fails
+        // the WHOLE query — which silently emptied every group list.
+        // Absent means private, matching the migration's own default.
+        visibility: (setting as { visibility?: GroupVisibility }).visibility ?? "private",
         lastMessageAt: conversation.last_message_at,
         lastMessagePreview: lastMessage
           ? lastMessage.message_type === "voice_note"
@@ -173,7 +180,8 @@ export async function loadGroupsPageDataAction(): Promise<GroupsPageData> {
     admin
       .from("friendships")
       .select("user_one_id, user_two_id")
-      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`),
+      // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
+      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
     admin.from("group_settings").select("conversation_id").eq("join_mode", "link")
   ]);
 
@@ -203,16 +211,47 @@ export async function loadGroupsPageDataAction(): Promise<GroupsPageData> {
   );
   const knownMembership = new Map((memberships ?? []).map((row) => [row.conversation_id, row.status]));
   const linkIds = (linkSettingsResult.data ?? []).map((row) => row.conversation_id);
+
+  /**
+   * Discoverable groups, from two independent sources:
+   *
+   *  1. PUBLIC groups — anyone signed in may see these exist. This is what
+   *     makes discovery real: previously a user with no Muddies could never
+   *     find a community at all.
+   *  2. Link-joinable groups created by a Muddy — the original behaviour,
+   *     kept so nothing a user could already discover disappears.
+   *
+   * Both are filtered through the same membership check, so a group the
+   * viewer already belongs to never appears as something to join.
+   */
+  // Filters on a column from a PENDING migration, so it must fail soft: until
+  // that migration is applied the filter errors, and discovery falls back to
+  // the friend-link path rather than taking the whole page down with it.
+  const { data: publicSettings } = await admin
+    .from("group_settings")
+    .select("conversation_id")
+    .eq("visibility", "public")
+    .limit(60)
+    .then((result) => (result.error ? { data: [] } : result));
+
+  const candidateIds = [
+    ...new Set([...(publicSettings ?? []).map((row) => row.conversation_id), ...linkIds])
+  ];
+
   let discoverableGroups: GroupSummary[] = [];
-  if (linkIds.length > 0 && friendIds.size > 0) {
+  if (candidateIds.length > 0) {
     const { data: discoverableConversations } = await admin
       .from("conversations")
       .select("id, created_by")
-      .in("id", linkIds)
+      .in("id", candidateIds)
       .eq("conversation_type", "group")
       .eq("status", "active");
+
+    const publicIds = new Set((publicSettings ?? []).map((row) => row.conversation_id));
     const eligibleIds = (discoverableConversations ?? [])
-      .filter((row) => row.created_by && friendIds.has(row.created_by))
+      // A link-only group still requires the creator to be a Muddy; a public
+      // group does not, which is the whole point of the visibility axis.
+      .filter((row) => publicIds.has(row.id) || (row.created_by && friendIds.has(row.created_by)))
       .filter((row) => !knownMembership.has(row.id) || knownMembership.get(row.id) === "left")
       .map((row) => row.id);
     discoverableGroups = await summariesFor(admin, eligibleIds);
@@ -250,6 +289,12 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
       conversation_id: conversation.id,
       name: parsed.data.name,
       description: parsed.data.description || null,
+      // Two axes, set together at creation:
+      //   visibility — who can SEE the group exists
+      //   join_mode  — what happens when they try to join
+      // "Discoverable" now means genuinely public, not merely
+      // link-shareable to the creator's own Muddies.
+      visibility: parsed.data.discoverable ? "public" : "private",
       join_mode: parsed.data.discoverable ? "link" : "invite",
       history_visibility: "since_join",
       posting_mode: "all_members"
@@ -433,6 +478,7 @@ export async function leaveGroupAction(groupId: string): Promise<GroupActionStat
   const { error } = await admin.from("conversation_members").update({ status: "left", left_at: new Date().toISOString() })
     .eq("conversation_id", groupId).eq("user_id", userId);
   if (error) return { ok: false, message: "Couldn't leave that group." };
+  await publishGroupRoleEvent(admin, groupId, userId, "participant_left");
   revalidatePath("/groups");
   return { ok: true, message: "You left the group." };
 }
@@ -449,12 +495,18 @@ export async function loadGroupDetailAction(groupId: string): Promise<GroupDetai
   ]);
   if (!conversation || conversation.status !== "active" || !settings || myMembership?.status !== "joined") return null;
 
-  const { data: memberRows } = await admin.from("conversation_members").select("user_id, role")
+  const { data: memberRows } = await admin.from("conversation_members").select("user_id, role, status")
     .eq("conversation_id", groupId).eq("status", "joined").order("joined_at", { ascending: true });
   const memberIds = (memberRows ?? []).map((row) => row.user_id);
+  // Stage 3B member projection: ONE profile query plus one batched plan
+  // lookup for the whole list, never per member. Only fields a co-member is
+  // already entitled to see — no email, phone, location or hidden fields.
   const { data: profiles } = memberIds.length
     ? await admin.from("profiles").select("user_id, full_name, username, avatar_url").in("user_id", memberIds)
     : { data: [] };
+  const memberPlans = memberIds.length
+    ? await loadEffectivePlansForUsers(admin, memberIds)
+    : new Map<string, SubscriptionPlan>();
   const profileById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
   const members: GroupMemberView[] = (memberRows ?? []).map((row) => {
     const profile = profileById.get(row.user_id);
@@ -463,7 +515,9 @@ export async function loadGroupDetailAction(groupId: string): Promise<GroupDetai
       displayName: profile?.full_name?.trim() || "A Muddy",
       username: profile?.username || "muddy",
       avatarUrl: profile?.avatar_url ?? null,
-      role: row.role
+      role: row.role,
+      plan: memberPlans.get(row.user_id) ?? null,
+      status: row.status
     };
   });
 
@@ -471,7 +525,8 @@ export async function loadGroupDetailAction(groupId: string): Promise<GroupDetai
   let inviteCandidates: GroupInviteCandidate[] = [];
   if (canManageMembers) {
     const [{ data: friendships }, { data: blocks }] = await Promise.all([
-      admin.from("friendships").select("user_one_id, user_two_id").or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`),
+      // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
+      admin.from("friendships").select("user_one_id, user_two_id").or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
       admin.from("blocked_users").select("blocker_id, blocked_id").or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)
     ]);
     const blockedIds = new Set((blocks ?? []).flatMap((row) => [row.blocker_id, row.blocked_id]).filter((id) => id !== userId));
@@ -499,11 +554,261 @@ export async function loadGroupDetailAction(groupId: string): Promise<GroupDetai
     memberCount: members.length,
     role: myMembership.role,
     joinMode: settings.join_mode as GroupJoinMode,
+    visibility: (settings as { visibility?: GroupVisibility }).visibility ?? "private",
     lastMessageAt: conversation.last_message_at,
     lastMessagePreview: lastMessage?.message_type === "voice_note" ? "Voice note" : lastMessage?.text_content ?? null,
     postingMode: settings.posting_mode,
     canManageMembers,
+    viewerId: userId,
     members,
     inviteCandidates
   };
+}
+
+// ---------------------------------------------------------------------------
+// Role management (Stage 3B)
+// ---------------------------------------------------------------------------
+
+const roleChangeSchema = z.object({
+  groupId: z.string().uuid(),
+  userId: z.string().uuid()
+});
+
+/**
+ * One neutral failure message for every denied role change.
+ *
+ * Deliberately does not say WHICH invariant was hit. "You cannot demote the
+ * owner" and "you are not an admin" together map out a group's authority
+ * structure for someone probing it; the specific reason goes to the log, not
+ * to the caller.
+ */
+const ROLE_CHANGE_DENIED = "You can't make that change to this group.";
+
+/**
+ * Load both sides of a role change in one round trip.
+ *
+ * The pair is what the decision depends on, so fetching them separately would
+ * open a window where the actor is read as owner and the target as something
+ * they no longer are.
+ */
+async function loadRolePair(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  groupId: string,
+  actorId: string,
+  targetId: string
+) {
+  const { data } = await admin
+    .from("conversation_members")
+    .select("user_id, role, status")
+    .eq("conversation_id", groupId)
+    .in("user_id", [actorId, targetId]);
+  const actor = (data ?? []).find((row) => row.user_id === actorId) ?? null;
+  const target = (data ?? []).find((row) => row.user_id === targetId) ?? null;
+  return { actor, target };
+}
+
+/** Record a factual role change on the existing append-only event store. */
+async function recordRoleEvent(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  eventType: "admin.promoted" | "admin.demoted" | "ownership.transferred" | "member.removed",
+  groupId: string,
+  actorId: string,
+  targetId: string
+) {
+  // Compensating, like every other event here: the role change has already
+  // committed, so a failed audit write must never undo it.
+  const { error } = await admin.from("domain_events").insert({
+    event_type: eventType,
+    resource_type: "group",
+    resource_id: groupId,
+    actor_id: actorId,
+    // Ids only, never names and never a reason: who did what to whom, where.
+    payload: { targetUserId: targetId } as never,
+    occurred_at: new Date().toISOString()
+  });
+  if (error) {
+    logBackendEvent("warn", { route: "groups/role", errorType: errorType(error) });
+  }
+}
+
+/**
+ * Apply a role change once the pure rules have authorised it.
+ *
+ * The role/status guards in the WHERE clause are what make this safe under
+ * concurrency: if the target left, was removed, or had their role changed
+ * between the decision and the write, zero rows update and the caller is told
+ * nothing changed rather than a departed member being resurrected with a new
+ * role.
+ */
+async function applyRoleChange(change: GroupRoleChange, input: unknown): Promise<GroupActionState> {
+  const parsed = roleChangeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: ROLE_CHANGE_DENIED };
+  const actorId = await getAuthedUserId();
+  if (!actorId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  const { groupId, userId: targetId } = parsed.data;
+  const { actor, target } = await loadRolePair(admin, groupId, actorId, targetId);
+
+  const decision = resolveRoleChange(change, {
+    actorRole: actor?.role ?? null,
+    actorStatus: actor?.status ?? null,
+    targetRole: target?.role ?? null,
+    targetStatus: target?.status ?? null,
+    selfTargeted: actorId === targetId
+  });
+
+  if (!decision.allowed) {
+    logBackendEvent("info", { route: "groups/role", statusCode: 403 });
+    return { ok: false, message: ROLE_CHANGE_DENIED };
+  }
+  // Idempotent: the target already holds the requested role, so there is
+  // nothing to write and nothing to record.
+  if (decision.reason === "already_in_role") {
+    return { ok: true, message: "No change needed." };
+  }
+
+  const now = new Date().toISOString();
+  const patch =
+    change === "remove_member"
+      ? { status: "removed" as const, left_at: now, updated_at: now }
+      : { role: change === "promote_to_admin" ? ("admin" as const) : ("member" as const), updated_at: now };
+
+  const { data: updated, error } = await admin
+    .from("conversation_members")
+    .update(patch)
+    .eq("conversation_id", groupId)
+    .eq("user_id", targetId)
+    // Re-assert what the decision was made against, so a concurrent change
+    // loses rather than being silently overwritten.
+    .eq("status", "joined")
+    .eq("role", target?.role ?? "member")
+    .select("user_id");
+
+  if (error || !updated?.length) return { ok: false, message: ROLE_CHANGE_DENIED };
+
+  await recordRoleEvent(
+    admin,
+    change === "promote_to_admin"
+      ? "admin.promoted"
+      : change === "demote_to_member"
+        ? "admin.demoted"
+        : "member.removed",
+    groupId,
+    actorId,
+    targetId
+  );
+
+  // The in-thread projection of the same fact. Emitted only AFTER the write is
+  // confirmed above, so a failed role change can never leave a system message
+  // claiming it happened. Names the person it happened TO, never who did it.
+  const SYSTEM_EVENT_FOR_CHANGE = {
+    promote_to_admin: "member_promoted",
+    demote_to_member: "member_demoted",
+    remove_member: "participant_removed"
+  } as const;
+  await publishGroupRoleEvent(
+    admin,
+    groupId,
+    targetId,
+    SYSTEM_EVENT_FOR_CHANGE[change as keyof typeof SYSTEM_EVENT_FOR_CHANGE]
+  );
+
+  revalidatePath(`/groups/${groupId}`);
+  return { ok: true, message: "Group updated." };
+}
+
+/**
+ * Post the in-thread system message for a confirmed group role change.
+ *
+ * Reuses the canonical `publishSystemMessage` — this is a projection of a fact
+ * already recorded in `domain_events`, not a second event stream.
+ *
+ * The dedupe key is derived from the event itself (group, person, kind), so a
+ * retried action posts nothing new. It deliberately does NOT include a
+ * timestamp: two identical facts seconds apart are the same fact.
+ */
+async function publishGroupRoleEvent(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  groupId: string,
+  targetId: string,
+  event: "member_promoted" | "member_demoted" | "participant_removed" | "ownership_transferred" | "participant_left"
+) {
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("full_name")
+    .eq("user_id", targetId)
+    .maybeSingle();
+  const { publishSystemMessage } = await import("@/lib/messaging/service");
+  // Display name only — never a username, an id, or anything the group cannot
+  // already see in the member list.
+  await publishSystemMessage(
+    admin,
+    groupId,
+    event,
+    profile?.full_name?.trim() || "A Muddy",
+    `${event}:${targetId}`
+  );
+}
+
+export async function promoteGroupAdminAction(input: unknown): Promise<GroupActionState> {
+  return applyRoleChange("promote_to_admin", input);
+}
+
+export async function demoteGroupAdminAction(input: unknown): Promise<GroupActionState> {
+  return applyRoleChange("demote_to_member", input);
+}
+
+export async function removeGroupMemberAction(input: unknown): Promise<GroupActionState> {
+  return applyRoleChange("remove_member", input);
+}
+
+/**
+ * Hand ownership to another joined member.
+ *
+ * Runs through the `transfer_group_ownership` RPC rather than two updates from
+ * here: the outgoing and incoming owner rows must change together, and a
+ * partial failure would leave the group ownerless or with two owners. The RPC
+ * takes the row lock, so concurrent transfers serialise and the second finds
+ * the caller is no longer owner.
+ *
+ * Executed under the CALLER's RLS client, so `auth.uid()` inside the function
+ * is the real actor and cannot be spoofed through a parameter.
+ */
+export async function transferGroupOwnershipAction(input: unknown): Promise<GroupActionState> {
+  const parsed = roleChangeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: ROLE_CHANGE_DENIED };
+  const actorId = await getAuthedUserId();
+  if (!actorId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  const { groupId, userId: targetId } = parsed.data;
+  const { actor, target } = await loadRolePair(admin, groupId, actorId, targetId);
+
+  // Checked here so an unauthorised attempt is refused before it reaches the
+  // database. The RPC re-checks regardless — this is the fast path, not the
+  // guarantee.
+  const decision = resolveRoleChange("transfer_ownership", {
+    actorRole: actor?.role ?? null,
+    actorStatus: actor?.status ?? null,
+    targetRole: target?.role ?? null,
+    targetStatus: target?.status ?? null,
+    selfTargeted: actorId === targetId
+  });
+  if (!decision.allowed) {
+    logBackendEvent("info", { route: "groups/role", statusCode: 403 });
+    return { ok: false, message: ROLE_CHANGE_DENIED };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("transfer_group_ownership", {
+    p_conversation_id: groupId,
+    p_new_owner_id: targetId
+  });
+  if (error) return { ok: false, message: ROLE_CHANGE_DENIED };
+
+  await recordRoleEvent(admin, "ownership.transferred", groupId, actorId, targetId);
+  await publishGroupRoleEvent(admin, groupId, targetId, "ownership_transferred");
+  revalidatePath(`/groups/${groupId}`);
+  return { ok: true, message: "Ownership transferred." };
 }

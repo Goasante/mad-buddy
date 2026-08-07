@@ -16,6 +16,13 @@ import {
 import type { SocializePerson, SocializeSession } from "@/lib/social/socialize-mobile";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { PeopleNearbySheet } from "@/components/socialize/people-nearby-sheet";
+import { DiscoveryFeed } from "@/components/socialize/discovery-feed";
+import { SocializeHero } from "@/components/socialize/socialize-hero";
+import type { GroupSummary } from "@/lib/groups/types";
+import { joinDiscoverableGroupAction } from "@/app/(app)/group-actions";
+import { rsvpAction } from "@/app/(app)/plans-actions";
+import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
+import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import {
   announcesState,
   offersRetry,
@@ -40,6 +47,7 @@ import {
   type SocializeAreaTier,
   type SocializeDuration
 } from "@/lib/social/socialize";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
@@ -139,15 +147,23 @@ type Toast = { title?: string; message: string; error: boolean } | null;
 export function SocializePage({
   initialSession,
   initialPeople,
+  initialGroups = [],
+  initialPlans = [],
   myAvatarUrl = null,
   myName = ""
 }: {
   initialSession: SocializeSession | null;
   initialPeople: SocializePerson[];
+  /** Discoverable groups, from the existing groups projection. */
+  initialGroups?: GroupSummary[];
+  /** Upcoming plans, from the existing home projection. */
+  initialPlans?: HomeUpcomingPlan[];
   myAvatarUrl?: string | null;
   myName?: string;
 }) {
   const router = useRouter();
+  const reducedMotion = useReducedMotion();
+  const unreadNotificationCount = useUnreadNotifications();
   const [session, setSession] = useState(initialSession);
   const [people, setPeople] = useState(initialPeople);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -264,6 +280,12 @@ export function SocializePage({
     peopleCount: visiblePeople.length
   });
   const stateCopy = socializeStateCopy(displayState);
+  // Hero insights, derived from the SAME authorised array the feed renders.
+  // No extra query, and nothing counted the viewer cannot already see.
+  const heroActiveNow = visiblePeople.filter((row) => row.presenceState === "fresh").length;
+  const heroNewToday = visiblePeople.filter((row) => row.waveState === "none").length;
+  const feedRef = useRef<HTMLDivElement>(null);
+  const [exploreSignal, setExploreSignal] = useState(0);
 
   useEffect(() => {
     const el = radarRef.current;
@@ -420,7 +442,7 @@ export function SocializePage({
         setPanelOpen(false);
         setStatusOpen(false);
         pulseStatus();
-        showToast("Socialize is off");
+        showToast("Linkr is off");
       } else {
         showToast(result.message, true);
       }
@@ -619,323 +641,200 @@ export function SocializePage({
   );
 
   return (
-    // AppShell reserves no header height for this route (it is an immersive
-    // header page), so the safe area is cleared HERE and exactly once.
-    <div className="mx-auto flex w-full max-w-[520px] flex-col px-1 pt-[max(0.5rem,env(safe-area-inset-top))]">
+    // The header scrolls with the feed, so AppShell reserves no fixed-header
+    // height here (see IMMERSIVE_HEADER_PAGES). That makes THIS the one place
+    // the notch is cleared — a modest inset, not a full header's worth, so the
+    // title sits just below the status bar rather than half a screen down.
+    <div className="mx-auto flex w-full max-w-[900px] flex-col pt-[max(0.5rem,env(safe-area-inset-top))] md:pt-0">
       {/* No card, no divider, no blur: the header sits directly on the
           immersive surface the radar lives on. */}
-      <header className="relative flex min-h-[44px] items-center justify-center">
-        <button
-          type="button"
-          onClick={goBack}
-          aria-label="Back"
-          className="focus-ring safe-motion absolute left-0 grid h-11 w-11 place-items-center rounded-full text-muted-foreground transition-transform hover:bg-secondary/50 hover:text-foreground active:scale-90 motion-reduce:active:scale-100"
-        >
-          <ArrowLeft className="h-[22px] w-[22px]" aria-hidden="true" />
-        </button>
 
-        {/* Optically centred by the layout, not by matching the two controls:
-            both sides are absolutely positioned, so the title is centred on
-            the header itself and stays centred whatever they contain. */}
-        <h1 className="text-[1.75rem] font-bold leading-none tracking-tight">Socialize</h1>
 
-        <button
-          type="button"
-          onClick={() => router.push("/safety-center")}
-          aria-label="About Socialize"
-          className="focus-ring safe-motion absolute right-0 grid h-11 w-11 place-items-center rounded-full text-muted-foreground transition-transform hover:bg-secondary/50 hover:text-foreground active:scale-90 motion-reduce:active:scale-100"
-        >
-          <Info className="h-[22px] w-[22px]" aria-hidden="true" />
-        </button>
-      </header>
 
-      {/* Close enough to the title that the two read as one introduction. */}
-      <p className="mx-auto mt-3 max-w-[19rem] text-center text-[1.0625rem] leading-relaxed text-muted-foreground">
-        Meet people nearby who are open to connecting.
-      </p>
+      {/* THE DISCOVERY FEED.
+          Replaces the radar: one vertical scroll rather than an orbit. The
+          state resolver that used to caption the radar now drives the feed's
+          empty state, so the two still cannot disagree about why nothing is
+          showing. */}
+      <div ref={radarRef} className="mt-5 w-full pb-6">
+        <DiscoveryFeed
+          feedRef={feedRef}
+          hero={
+          /* Socializing status control — the entry point into the experience.
+              Reflects the SERVER-authoritative session (see `isActive`, derived
+              from the session and its expiry); it holds no boolean of its own, so
+              it cannot drift from what the server actually has.
 
-      {/* Socializing status control — the entry point into the experience.
-          Reflects the SERVER-authoritative session (see `isActive`, derived
-          from the session and its expiry); it holds no boolean of its own, so
-          it cannot drift from what the server actually has.
-
-          Tapping it opens the same popover the avatar does: for an inactive
-          user that popover is the existing prerequisite flow (how long, how
-          far) rather than a silent activation, and for an active user it is
-          the existing Change / Turn off panel. No second confirmation flow. */}
-      <Popover.Root open={statusOpen} onOpenChange={handleStatusOpenChange}>
-        <Popover.Trigger asChild>
-          <button
-            type="button"
-            // The activation target moved here when the avatar stopped being a
-            // control: this IS the entry point now, so the tour still resolves.
-            data-tour-id={TOUR_TARGET_IDS.SOCIALIZE_ACTIVATION}
-            disabled={isPending || activating}
-            aria-label={
-              isActive
-                ? "Socializing is on. Visible to nearby people. Opens Socialize options."
-                : "Socializing is off. Activate to meet people nearby."
-            }
-            className={cn(
-              "focus-ring safe-motion mx-auto mt-4 flex min-h-[44px] items-center gap-2.5 rounded-full border px-4 py-2 transition-colors",
-              "active:scale-[0.98] motion-reduce:active:scale-100 disabled:opacity-70",
-              isActive
-                ? "border-emerald-500/35 bg-emerald-500/10"
-                : "border-border/60 bg-secondary/50",
-              // One subtle pulse when the state has just changed. Not a loop.
-              statusPulse && "socialize-status-pulse"
-            )}
-          >
-            <span className="relative grid h-4 w-4 shrink-0 place-items-center" aria-hidden="true">
-              {busy ? (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
-              ) : isActive ? (
-                <span className="block h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgb(16_185_129/0.55)]" />
-              ) : (
-                <span className="block h-2.5 w-2.5 rounded-full bg-muted-foreground/45" />
-              )}
-            </span>
-            <span
-              className={cn(
-                "text-[0.9375rem] font-semibold leading-none",
-                isActive ? "text-emerald-700 dark:text-emerald-300" : "text-foreground"
-              )}
-            >
-              {busy ? (isActive ? "Updating…" : "Turning on…") : isActive ? "Socializing" : "Socialize is off"}
-            </span>
-          </button>
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content
-            data-tour-id={TOUR_TARGET_IDS.SOCIALIZE_CONTROLS}
-            side="bottom"
-            align="center"
-            sideOffset={10}
-            collisionPadding={16}
-            className="compact-drop-popover app-dropdown-content z-50 w-[min(240px,calc(100vw-2rem))] space-y-2 p-2.5"
-          >
-            {statusPanel}
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
-
-      {/* Supporting line, outside the control: it explains WHO can see you,
-          which is the question the control has to answer, and it reads more
-          clearly at full width than crammed inside a pill. */}
-      <p className="mx-auto mt-2 max-w-[19rem] text-center text-[0.8125rem] leading-snug text-muted-foreground">
-        {isActive ? (
-          <>
-            Visible to nearby people.{" "}
-            {/* Links to the existing safety explanation rather than
-                restating policy here. */}
-            <Link
-              href="/safety-center"
-              className="focus-ring rounded font-medium text-foreground underline-offset-2 hover:underline"
-            >
-              How this works
-            </Link>
-          </>
-        ) : (
-          "Turn it on to meet people nearby."
-        )}
-      </p>
-
-      {/* The radar IS the interface — it fills the space to the bottom nav. */}
-      <div
-        ref={radarRef}
-        data-tour-id={TOUR_TARGET_IDS.SOCIALIZE_RADAR}
-        className={cn("relative mt-5 w-full", activating && "socialize-radar-activating")}
-        style={{ height: "calc(100svh - 11.5rem - env(safe-area-inset-bottom))" } as CSSProperties}
-      >
-        {/* Immersive surface: one soft radial wash, no particles and no bloom. */}
-        <span aria-hidden="true" className="socialize-field absolute inset-0" />
-        {/* Ambient depth: two very faint specks drifting slowly, so the field
-            reads as atmosphere rather than an empty box. Decorative only. */}
-        <span aria-hidden="true" className="socialize-depth absolute inset-0" />
-
-        {measured ? (
-          <>
-            {/* Four concentric orbit rings. Decorative depth only — the bands
-                that carry meaning are the radii the nodes sit on. */}
-            {RING_FRACTIONS.map((fraction, index) => (
-              <span
-                key={fraction}
-                aria-hidden="true"
-                className={cn(
-                  "socialize-orbit-ring absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[50%] border",
-                  isActive ? "border-white/[0.11]" : "border-white/[0.08]"
-                )}
-                style={{
-                  width: 2 * fraction * rx,
-                  height: 2 * fraction * ry,
-                  // Staggered so the breath reads as one field expanding, not
-                  // four rings pulsing independently.
-                  animationDelay: `${index * 0.7}s`
-                }}
-              />
-            ))}
-
-            {/* ME — the anchor. Largest avatar, one restrained conic ring. */}
-            <div className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center">
-              <span
-                className={cn("socialize-centre grid place-items-center rounded-full", isActive && "is-active")}
-                style={{ width: geometry.centre, height: geometry.centre }}
-              >
-                <UserAvatar
-                  src={myAvatarUrl}
-                  name={myName || "You"}
-                  size="xl"
-                  decorative
-                  className="h-full w-full border-[5px] border-[#0d0d12]"
-                />
-              </span>
-              <span className="mt-4 text-[0.8125rem] font-semibold text-emerald-400">You</span>
-              <span className="mt-0.5 text-[0.6875rem] text-muted-foreground">
-                {isActive ? "Visible to nearby people" : "Not visible right now"}
-              </span>
-            </div>
-
-            {showsPeople(displayState) ? field.nodes.map(({ person, x, y, tier }) => {
-              const name = capitalize(person.displayName || person.username);
-              const selected = previewPerson?.userId === person.userId;
-              // Re-derived against the live clock, so a node hedges as soon as
-              // its person goes quiet — not only after the next refresh.
-              const presence = presenceStateFor(person.lastPresenceUpdate, nowMs);
-              const hedge = presenceLabel(presence);
-              return (
+              Tapping it opens the same popover the avatar does: for an inactive
+              user that popover is the existing prerequisite flow (how long, how
+              far) rather than a silent activation, and for an active user it is
+              the existing Change / Turn off panel. No second confirmation flow. */
+          <SocializeHero
+            active={isActive}
+            busy={busy}
+            total={visiblePeople.length}
+            activeNow={heroActiveNow}
+            newToday={heroNewToday}
+            onExplore={() => {
+              setExploreSignal((current) => current + 1);
+              feedRef.current?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+            }}
+            activationTrigger={
+          <Popover.Root open={statusOpen} onOpenChange={handleStatusOpenChange}>
+              <Popover.Trigger asChild>
                 <button
-                  key={person.userId}
                   type="button"
-                  onClick={(event) => {
-                    selectionOriginRef.current = event.currentTarget;
-                    setPreviewPerson(person);
-                  }}
-                  aria-label={`${name}, ${hedge ?? proximityLabels[person.proximityTier]}`}
-                  aria-pressed={selected}
+                  // The activation target moved here when the avatar stopped being a
+                  // control: this IS the entry point now, so the tour still resolves.
+                  data-tour-id={TOUR_TARGET_IDS.SOCIALIZE_ACTIVATION}
+                  disabled={isPending || activating}
+                  aria-label={
+                    isActive
+                      ? "Linkr is on. Visible to nearby people. Opens Linkr options."
+                      : "Linkr is off. Turn it on to meet people nearby."
+                  }
                   className={cn(
-                    "focus-ring safe-motion absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-2xl",
-                    // Position is a style, so a re-render moves a node by
-                    // transition rather than remounting it — nobody teleports.
-                    "socialize-node",
-                    hedge && "opacity-75",
-                    selected && "is-selected"
+                    // The hero's primary action. Styled as a real CTA rather than a
+                    // floating pill, because the toggle IS the call to action when
+                    // Socializing is off.
+                    "focus-ring safe-motion inline-flex min-h-[44px] items-center gap-2.5 rounded-full px-5 py-2 transition-colors",
+                    "active:scale-[0.98] motion-reduce:active:scale-100 disabled:opacity-70",
+                    isActive
+                      ? "border border-emerald-500/35 bg-emerald-500/10"
+                      : "bg-primary text-primary-foreground hover:bg-primary/90",
+                    // One subtle pulse when the state has just changed. Not a loop.
+                    statusPulse && "socialize-status-pulse"
                   )}
-                  style={{
-                    left: `calc(50% + ${x}px)`,
-                    top: `calc(50% + ${y}px)`,
-                    width: geometry.node * TIER_SCALE[tier]
-                  }}
                 >
-                  <span
-                    className="relative block"
-                    style={{ width: geometry.node * TIER_SCALE[tier], height: geometry.node * TIER_SCALE[tier] }}
-                  >
-                    <UserAvatar
-                      src={person.avatarUrl}
-                      name={name}
-                      size="md"
-                      decorative
-                      className={cn(
-                        "h-full w-full ring-2 transition-[box-shadow,transform] duration-200 motion-reduce:transition-none",
-                        // The premium ring is a plan property, independent of
-                        // proximity — a Close person is not "more premium".
-                        TIER_RING[tier],
-                        // Glow strengthens with closeness, so the hierarchy
-                        // reads without labels.
-                        TIER_GLOW[tier]
-                      )}
-                    />
-                    {/* Presence: they have an active Socialize session, which is
-                        the only reason they are on this radar at all. */}
-                    <span
-                      className="absolute bottom-0 right-0 h-[0.875rem] w-[0.875rem] rounded-full border-[3px] border-[#0d0d12] bg-emerald-500"
-                      aria-hidden="true"
-                    />
+                  <span className="relative grid h-4 w-4 shrink-0 place-items-center" aria-hidden="true">
+                    {busy ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
+                    ) : isActive ? (
+                      <span className="block h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgb(16_185_129/0.55)]" />
+                    ) : (
+                      <span className="block h-2.5 w-2.5 rounded-full bg-muted-foreground/45" />
+                    )}
                   </span>
-
-                  {/* Label sits directly under the avatar, attached rather than
-                      floating, and stays compact. */}
                   <span
                     className={cn(
-                      "mt-1.5 whitespace-nowrap rounded-full px-2 py-[3px] font-semibold backdrop-blur-sm",
-                      geometry.label,
-                      // A hedged node reads quieter than a confirmed one, so
-                      // certainty is visible at a glance.
-                      hedge ? "bg-black/50 text-white/70" : "bg-black/70 text-white"
+                      "text-[0.9375rem] font-semibold leading-none",
+                      isActive ? "text-emerald-700 dark:text-emerald-300" : "text-primary-foreground"
                     )}
                   >
-                    {hedge ?? proximityLabels[person.proximityTier]}
+                    {busy
+                      ? isActive
+                        ? "Updating…"
+                        : "Turning on…"
+                      : isActive
+                        ? "Linkr is on"
+                        : "Turn On Socialize"}
                   </span>
                 </button>
-              );
-            }) : null}
-
-            {/* The single aggregate entry point into the full list. Shown
-                whenever anyone is nearby — not only when the radar capped
-                someone — so there is one way in, not two competing ones. */}
-            {visiblePeople.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => setListOpen(true)}
-                aria-label={`${visiblePeople.length} ${visiblePeople.length === 1 ? "person" : "people"} nearby. Open the list.`}
-                className="focus-ring safe-motion absolute bottom-1 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-2 text-[0.8125rem] font-medium text-foreground backdrop-blur-sm active:scale-[0.98] motion-reduce:active:scale-100"
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content
+                  data-tour-id={TOUR_TARGET_IDS.SOCIALIZE_CONTROLS}
+                  side="bottom"
+                  align="center"
+                  sideOffset={10}
+                  collisionPadding={16}
+                  className="compact-drop-popover app-dropdown-content z-50 w-[min(240px,calc(100vw-2rem))] space-y-2 p-2.5"
+                >
+                  {statusPanel}
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
+            }
+            visibilityNote={
+              isActive ? (
+              <>
+                Visible to nearby people.{" "}
+                {/* Links to the existing safety explanation rather than
+                    restating policy here. */}
+                <Link
+                  href="/safety-center"
+                  className="focus-ring rounded font-medium text-foreground underline-offset-2 hover:underline"
+                >
+                  How this works
+                </Link>
+              </>
+            ) : (
+              "Turn it on to meet people nearby."
+              )
+            }
+          />
+          }
+          groups={initialGroups}
+          onJoinGroup={(group) => {
+            // The canonical join action, unchanged. The card only decides
+            // whether to OFFER it; the server still authorises.
+            if (isPending) return;
+            startTransition(async () => {
+              const result = await joinDiscoverableGroupAction(group.id);
+              showToast(result.message, !result.ok);
+              if (result.ok) router.refresh();
+            });
+          }}
+          plans={initialPlans}
+          onJoinPlan={(plan) => {
+            // The canonical RSVP action, unchanged. The card only decides
+            // what to OFFER; the server still authorises.
+            if (isPending) return;
+            startTransition(async () => {
+              const result = await rsvpAction(plan.id, "going");
+              showToast(result.message, !result.ok);
+              if (result.ok) router.refresh();
+            });
+          }}
+          unreadCount={unreadNotificationCount}
+          onMessage={(person) => setPreviewPerson(person)}
+          exploreSignal={exploreSignal}
+          people={isActive ? visiblePeople : []}
+          pending={isPending}
+          onWave={(person) => wave(person)}
+          onInvite={(person) => setPreviewPerson(person)}
+          emptyState={
+            stateCopy.message ? (
+              <div
+                role={announcesState(displayState) ? "status" : undefined}
+                aria-live={announcesState(displayState) ? "polite" : "off"}
+                className="mx-auto w-full max-w-[22rem] px-4 py-10 text-center"
               >
-                <Users className="h-4 w-4 text-violet-400" aria-hidden="true" />
-                {field.overflow > 0
-                  ? `${visiblePeople.length} people nearby`
-                  : `${visiblePeople.length} ${visiblePeople.length === 1 ? "person" : "people"} nearby`}
-                <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              </button>
-            ) : null}
-          </>
-        ) : null}
-
-        {/* The avatar is no longer a control: the brief puts no controls over
-            it, and the Socializing status control above the radar is the one
-            entry point into the experience. */}
-        {/* One state message for the whole radar, from the single resolver —
-            so the radar and the People Nearby list can never disagree. The
-            centre, rings and surface always remain beneath it. */}
-        {stateCopy.message ? (
-          <div
-            // Announced only for states worth interrupting for; a background
-            // refresh stays silent.
-            role={announcesState(displayState) ? "status" : undefined}
-            aria-live={announcesState(displayState) ? "polite" : "off"}
-            className="socialize-state absolute bottom-4 left-1/2 w-full max-w-[19rem] -translate-x-1/2 px-4 text-center"
-          >
-            <p className="text-[0.875rem] font-medium leading-snug">{stateCopy.message}</p>
-            {stateCopy.detail ? (
-              <p className="mt-1 text-[0.8125rem] leading-relaxed text-muted-foreground">{stateCopy.detail}</p>
-            ) : null}
-            {stateCopy.action ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-3 min-h-[44px]"
-                onClick={() => {
-                  if (displayState === "permission") {
-                    router.push("/settings/privacy");
-                    return;
-                  }
-                  if (displayState === "expired") {
-                    setJustExpired(false);
-                    setStatusOpen(true);
-                    return;
-                  }
-                  refresh();
-                }}
-              >
-                {offersRetry(displayState) ? (
-                  <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                <p className="text-[0.9375rem] font-medium leading-snug">{stateCopy.message}</p>
+                {stateCopy.detail ? (
+                  <p className="mt-1.5 text-[0.8125rem] leading-relaxed text-muted-foreground">
+                    {stateCopy.detail}
+                  </p>
                 ) : null}
-                {stateCopy.action}
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-
+                {stateCopy.action ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-4 min-h-[44px]"
+                    onClick={() => {
+                      if (displayState === "permission") {
+                        router.push("/settings/privacy");
+                        return;
+                      }
+                      if (displayState === "expired") {
+                        setJustExpired(false);
+                        setStatusOpen(true);
+                        return;
+                      }
+                      refresh();
+                    }}
+                  >
+                    {offersRetry(displayState) ? (
+                      <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                    ) : null}
+                    {stateCopy.action}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null
+          }
+        />
       </div>
 
       {/* Tap a nearby profile → compact floating card (radar dimmed behind). */}

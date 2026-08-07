@@ -75,23 +75,42 @@ export type Entitlements = Record<NumericEntitlementKey, number> & Record<Boolea
 // ---------------------------------------------------------------------------
 
 const FREE: Entitlements = {
-  max_muddies: 30,
+  // DEPRECATED as a paywall (Phase 0). A cap on how many friends you may
+  // have is the resentment pattern, not leverage. Kept in the shape for
+  // backwards compatibility and returned as UNLIMITED so every existing
+  // check fails open.
+  max_muddies: UNLIMITED,
   max_personal_circles: 3,
-  max_close_friends: 8,
+  // Close Friends is an AUDIENCE selector, not a capacity limit: a huge
+  // "close" list makes the audience meaningless rather than costing anything
+  // to run. No product, privacy, performance or safety reason survived the
+  // Phase 0 audit, so it is no longer monetized.
+  max_close_friends: UNLIMITED,
   max_active_plans: 5,
   max_plan_participants: 10,
   max_private_groups: 3,
   max_group_members: 15,
-  max_daily_moments: 5,
+  // DEPRECATED as a paywall (Phase 0). See max_muddies.
+  max_daily_moments: UNLIMITED,
   max_active_nearby_moments: 5,
   max_active_drops: 3,
-  max_safe_arrival_contacts: 2,
-  max_active_safe_arrivals: 3,
+  // SAFETY IS NEVER MONETIZED (Phase 0). Charging for a third emergency
+  // contact is indefensible: the person who needs more contacts is the person
+  // in more danger. Identical on every tier, and never behind a trial or a
+  // payment state.
+  max_safe_arrival_contacts: UNLIMITED,
+  max_active_safe_arrivals: UNLIMITED,
   max_active_hangouts: 3,
   max_hangout_capacity: 5,
   max_polls_per_plan: 1,
   max_voice_note_seconds: 60,
-  max_friend_requests_per_day: 20,
+  // DEAD KEY (Phase 0 audit). Real anti-spam enforcement is the rate limiter's
+  // "friends.request" rule (10/day, in lib/security/rate-limit.ts), which is
+  // uniform across tiers and returns neutral rate-limit copy. This entitlement
+  // is read only by REQUEST_LIMITS in lib/discovery/trust.ts, which nothing
+  // enforces. Kept in the shape for compatibility and made uniform so it can
+  // never be reintroduced as a paid difference.
+  max_friend_requests_per_day: 30,
   max_event_circle_members: 50,
   event_circle_archive_days: 7,
   plan_chat_archive_days: 7,
@@ -107,7 +126,11 @@ const FREE: Entitlements = {
   event_circle_creation: false,
   event_drops: false,
   photo_moments: true,
-  public_moments: false,
+  // Core Air publishing is part of the free product (Phase 0): a network
+  // effect that only paying users can contribute to starves itself. Advanced
+  // Air (scheduling, analytics, boost, creator tools) remains a future paid
+  // opportunity behind its own keys.
+  public_moments: true,
   qr_check_in: false,
   attendance_export: false,
   community_roles: false,
@@ -118,21 +141,16 @@ const FREE: Entitlements = {
 
 const BUDDY_PLUS: Entitlements = {
   ...FREE,
-  max_muddies: 150,
   max_personal_circles: UNLIMITED,
-  max_close_friends: 30,
   max_active_plans: UNLIMITED,
   max_plan_participants: 50,
   max_private_groups: 20,
   max_group_members: 50,
-  max_daily_moments: 20,
   max_active_nearby_moments: 20,
   max_active_drops: 20,
-  max_safe_arrival_contacts: 5,
   max_hangout_capacity: 50,
   max_polls_per_plan: UNLIMITED,
   max_voice_note_seconds: 300,
-  max_friend_requests_per_day: 50,
   max_event_circle_members: 250,
   event_circle_archive_days: 30,
   plan_chat_archive_days: 30,
@@ -149,18 +167,14 @@ const BUDDY_PLUS: Entitlements = {
 
 const BUDDY_PRO: Entitlements = {
   ...BUDDY_PLUS,
-  max_muddies: UNLIMITED,
-  max_close_friends: 100,
   // Safe Arrival watchers: Pro previously inherited Plus's 5, so the top tier
   // bought nothing here. Kept a finite number rather than UNLIMITED — every
   // watcher is a real person who gets a critical-priority notification on
   // start/extend/arrive/overdue, so an unbounded fan-out is a notification
   // problem, not a feature.
-  max_safe_arrival_contacts: 10,
   max_plan_participants: 500,
   max_private_groups: 100,
   max_group_members: 1000,
-  max_daily_moments: 100,
   max_active_nearby_moments: 50,
   max_active_drops: 100,
   max_event_circle_members: 5000,
@@ -168,7 +182,6 @@ const BUDDY_PRO: Entitlements = {
   plan_chat_archive_days: 90,
   storage_limit_bytes: 50 * 1024 * 1024 * 1024,
 
-  public_moments: true,
   qr_check_in: true,
   attendance_export: true,
   community_roles: true,
@@ -396,18 +409,16 @@ export function upgradePromptFor(key: NumericEntitlementKey, currentPlan: Subscr
       return "Free includes 5 active plans. Buddy Plus includes unlimited plans.";
     case "max_group_members":
       return "Free groups include up to 15 people. Buddy Plus includes up to 50.";
-    case "max_daily_moments":
-      return "Free includes 5 Moments a day. Buddy Plus includes 20.";
-    case "max_muddies":
-      return "Free includes 30 Muddies. Buddy Plus includes 150.";
+    // Phase 0 removed the Moments-per-day, Muddies and Safe Arrival caps, so
+    // the prompts describing them are gone too. A prompt that outlives its
+    // entitlement is worse than none: it quotes numbers that no longer exist
+    // and sells something the user already has.
     case "max_active_drops":
       return "Free includes 3 active Drops. Buddy Plus includes 20.";
     case "max_hangout_capacity":
       return "Free hangouts include up to 5 people. Buddy Plus includes up to 50.";
     case "max_polls_per_plan":
       return "Free includes one poll per plan. Buddy Plus includes unlimited polls.";
-    case "max_safe_arrival_contacts":
-      return "Free lets 2 Muddies watch over a journey. Buddy Plus lets 5, and Buddy Pro lets 10.";
     default:
       return null;
   }

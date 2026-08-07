@@ -56,7 +56,13 @@ export async function GET() {
     supabase.from("subscriptions").select("provider, plan, status, current_period_start, current_period_end, cancel_at_period_end, grace_ends_at, created_at, updated_at").eq("user_id", userId).maybeSingle(),
     supabase.from("user_preferences").select("user_id, notification_preferences, app_preferences, created_at, updated_at").eq("user_id", userId).maybeSingle(),
     supabase.from("user_locations").select("confidence, last_updated").eq("user_id", userId).maybeSingle(),
+    // LIFE-HISTORICAL: a data export is the user's own record, so it
+    // deliberately includes ended friendships as well as active ones. The
+    // rows carry ended_at, so the two are distinguishable rather than
+    // silently mixed — an export that hid history would be an incomplete
+    // answer to a data-rights request.
     supabase.from("friendships").select("*").eq("user_one_id", userId),
+    // LIFE-HISTORICAL: the other side of the same export.
     supabase.from("friendships").select("*").eq("user_two_id", userId),
     supabase.from("friend_requests").select("*").eq("sender_id", userId),
     supabase.from("friend_requests").select("*").eq("receiver_id", userId),

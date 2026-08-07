@@ -1,3 +1,4 @@
+import { UNLIMITED } from "@/lib/billing/entitlements";
 import { describe, expect, it } from "vitest";
 import {
   CIRCLE_NAME_MAX_LENGTH,
@@ -29,12 +30,12 @@ describe("tierLimitsFor", () => {
     const free = tierLimitsFor("free");
     expect(free.maxPersonalCircles).toBe(3);
     expect(free.maxCircleMembers).toBe(20);
-    expect(free.maxCloseFriends).toBe(8);
+    expect(free.maxCloseFriends).toBe(UNLIMITED);
   });
 
   it("unlocks unlimited circles for paid tiers", () => {
     expect(tierLimitsFor("buddy_plus").maxPersonalCircles).toBe(Infinity);
-    expect(tierLimitsFor("buddy_pro").maxCloseFriends).toBe(100);
+    expect(tierLimitsFor("buddy_pro").maxCloseFriends).toBe(UNLIMITED);
   });
 });
 

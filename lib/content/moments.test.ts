@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { UNLIMITED } from "@/lib/billing/entitlements";
 import {
   audienceSummaryLabel,
   contentTierLimitsFor,
@@ -18,14 +19,14 @@ const HOUR = 60 * 60 * 1000;
 describe("tier limits (spec §16, §32)", () => {
   it("gives free users the documented caps", () => {
     const free = contentTierLimitsFor("free");
-    expect(free.maxActiveMomentsPerDay).toBe(5);
+    expect(free.maxActiveMomentsPerDay).toBe(UNLIMITED);
     expect(free.maxActiveNearbyMoments).toBe(5);
     expect(free.maxActiveDrops).toBe(3);
     expect(free.allowEventDrops).toBe(false);
   });
 
   it("unlocks more for paid tiers", () => {
-    expect(contentTierLimitsFor("buddy_plus").maxActiveMomentsPerDay).toBe(20);
+    expect(contentTierLimitsFor("buddy_plus").maxActiveMomentsPerDay).toBe(UNLIMITED);
     expect(contentTierLimitsFor("buddy_plus").allowEventDrops).toBe(true);
   });
 });

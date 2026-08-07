@@ -26,12 +26,15 @@ const mobileNav = shell.slice(shell.indexOf("function MobileNav("), shell.indexO
 // ---------------------------------------------------------------------------
 
 describe("bottom navigation order", () => {
-  it("is Messages, Muddies, Orb, Plans, Me", () => {
+  it("is Messages, Muddies, Orb, Linkr, Hangout", () => {
     const tabs = shell.slice(shell.indexOf("const MOBILE_TABS"), shell.indexOf("function MobileNav("));
     const order = [...tabs.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]);
     // The Orb is not a MOBILE_TABS entry — it is rendered between the two
     // halves, so the four labelled tabs split two and two around it.
-    expect(order).toEqual(["Messages", "Muddies", "Plans", "Me"]);
+    // Plans and Profile were removed rather than demoted: Plans already has a
+    // section on Home, and Profile is the first row of the account sheet, so
+    // both were paying for a permanent tab they did not need.
+    expect(order).toEqual(["Messages", "Muddies", "Linkr", "Hangout"]);
     expect(mobileNav).toContain("MOBILE_TABS.slice(0, 2)");
     expect(mobileNav).toContain("MOBILE_TABS.slice(2)");
   });
@@ -97,17 +100,13 @@ describe("floating create menu removal", () => {
 // ---------------------------------------------------------------------------
 
 describe("Mad Buddy Orb", () => {
-  it("carries no glyph, no icon and no text", () => {
-    // No icon library, no glyph element, no rendered label. "Home" still
-    // appears as the ACCESSIBLE name and the route constant, which is
-    // required — it just never reaches the screen as text.
-    const rendered = stripComments(orb);
-    for (const banned of ["lucide-react", "<svg", "<Icon", "Plus"]) {
-      expect(rendered, `orb must not render ${banned}`).not.toContain(banned);
-    }
-    // The only children are the decorative light layers.
-    expect(rendered).toContain('<span className="mb-orb-core" />');
-    expect(rendered).not.toMatch(/>\s*Home\s*</);
+  it("carries the Home mark and no text label", () => {
+    // The Orb now carries the brand Home mark inside its gradient. Its glow
+    // layers are untouched, and it still has no visible text — the accessible
+    // name lives on the link.
+    expect(orb).toContain("<HomeMarkIcon");
+    expect(orb).toContain('aria-label="Home"');
+    expect(orb).not.toContain(">Home<");
   });
 
   it("is a perfect circle in the 56-60px range", () => {
@@ -133,7 +132,7 @@ describe("Mad Buddy Orb", () => {
     // One hue family only: the brand orange and its two gradient stops.
     const hexes = new Set([...orbRules.matchAll(/#[0-9a-f]{6}/gi)].map((match) => match[0].toLowerCase()));
     for (const hex of hexes) {
-      expect(["#fb923c", "#ea580c", "#ffffff", "#fff"], `unexpected colour ${hex}`).toContain(hex);
+      expect(["#f2a855", "#c96f18", "#ffffff", "#fff"], `unexpected colour ${hex}`).toContain(hex);
     }
     expect(orbRules).not.toContain("conic-gradient");
   });

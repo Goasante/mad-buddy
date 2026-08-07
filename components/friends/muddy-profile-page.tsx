@@ -11,6 +11,7 @@ import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
 import { clearFriendGlowColorAction, setFriendGlowColorAction } from "@/app/(app)/glow-color-actions";
 import { Button } from "@/components/ui/button";
+import { HeroCard, HeroIdentity } from "@/components/hero/hero-card";
 import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
@@ -158,103 +159,138 @@ export function MuddyProfilePage({
         Muddies
       </Link>
 
-      <Card className="overflow-hidden p-0">
-        <div className="h-28 bg-[linear-gradient(135deg,hsl(var(--primary)/0.55),hsl(24_90%_35%/0.85))] sm:h-36" />
-        <div className="px-5 pb-5 sm:px-6">
-          <div className="-mt-12 flex flex-col items-start gap-4 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex items-end gap-3">
+      {/* THE HERO.
+          Replaces the banner-plus-thumbnail card: the photograph is now the
+          screen, the name reads inside the blur over it, and one action
+          dominates instead of three buttons of equal weight. */}
+      <HeroCard
+        aspect="portrait"
+        className="mx-auto w-full max-w-[560px] shadow-[0_18px_48px_-24px_hsl(var(--shadow)/0.55)]"
+        media={
+          muddy.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- signed avatar URL, matches MomentImage's approach
+            <img src={muddy.avatarUrl} alt="" />
+          ) : (
+            <div className="grid h-full w-full place-items-center bg-[linear-gradient(135deg,hsl(var(--primary)/0.5),hsl(24_90%_35%/0.9))]">
               <BirthdayAccent active={Boolean(fields?.birthdayToday)}>
                 <GlowAvatar
                   name={muddy.displayName}
                   src={muddy.avatarUrl}
-                  // muddy.plan comes from the public profile projection, which
-                  // already resolves the effective plan server-side.
                   membershipTier={publicMembershipTier(muddy.plan)}
                   proximityLevel={muddy.proximityLevel}
                   glowStrength={muddy.glowStrength}
                   confidence={muddy.confidence}
                   glowColorId={glowColorId}
                   size="xl"
-                  className="border-4 border-card"
                 />
               </BirthdayAccent>
-              <div className="pb-1">
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{muddy.displayName}</h1>
-                  <PremiumPlanBadge plan={muddy.plan} />
-                </div>
-                <p className="text-sm text-muted-foreground">@{muddy.username}</p>
-                {muddy.proximityLevel ? <div className="mt-1"><ProximityBadge proximityLevel={muddy.proximityLevel} /></div> : null}
-                {trust ? (
-                  // Safe public trust signals only (batch 8 §57), never
-                  // internal risk data.
-                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    {trust.badgeLabel ? (
-                      <span className="inline-flex items-center gap-1 font-medium text-primary">
-                        <BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                        {trust.badgeLabel}
-                      </span>
-                    ) : null}
-                    {trust.mutualCount > 0 ? (
-                      <span>
-                        {trust.mutualCount} mutual {trust.mutualCount === 1 ? "Muddy" : "Muddies"}
-                      </span>
-                    ) : null}
-                    <span>{trust.accountAgeLabel}</span>
-                    {trust.sharedCommunity ? <span>{trust.sharedCommunity}</span> : null}
-                  </div>
-                ) : null}
-              </div>
             </div>
-          </div>
+          )
+        }
+        identity={
+          <HeroIdentity
+            title={<h1 className="truncate">{muddy.displayName}</h1>}
+            badge={<PremiumPlanBadge plan={muddy.plan} />}
+            meta={
+              <>
+                <span>@{muddy.username}</span>
+                {muddy.proximityLevel ? <ProximityBadge proximityLevel={muddy.proximityLevel} /> : null}
+                {/* Safe public trust signals only (batch 8 §57), never
+                    internal risk data. */}
+                {trust?.badgeLabel ? (
+                  <span className="inline-flex items-center gap-1 font-medium text-white">
+                    <BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                    {trust.badgeLabel}
+                  </span>
+                ) : null}
+                {trust && trust.mutualCount > 0 ? (
+                  <span>
+                    {trust.mutualCount} mutual {trust.mutualCount === 1 ? "Muddy" : "Muddies"}
+                  </span>
+                ) : null}
+                {trust ? <span>{trust.accountAgeLabel}</span> : null}
+                {trust?.sharedCommunity ? <span>{trust.sharedCommunity}</span> : null}
+              </>
+            }
+          />
+        }
+        action={
+          isMuddy ? (
+            <>
+              {/* ONE dominant action. Message is what a Muddy actually comes
+                  here to do; Wave and Plan stay available but quiet. */}
+              <Button type="button" variant="primary" className="flex-1" disabled={isActionPending} onClick={messageMuddy}>
+                <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                Message
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                aria-label={waveSent ? "Wave sent" : "Wave"}
+                title={waveSent ? "Wave sent" : "Wave"}
+                className="shrink-0 border-white/30 bg-white/10 text-white hover:bg-white/20"
+                disabled={waveSent || isWavePending}
+                onClick={sendWave}
+              >
+                <Hand className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                asChild
+                className="shrink-0 border-white/30 bg-white/10 text-white hover:bg-white/20"
+              >
+                <Link href="/plans?create=1" aria-label="Create a plan" title="Create a plan">
+                  <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              variant="primary"
+              className="flex-1"
+              disabled={requestSent || isActionPending}
+              onClick={addMuddy}
+            >
+              <UserPlus className="h-4 w-4" aria-hidden="true" />
+              {requestSent ? "Request sent" : "Become Muddies"}
+            </Button>
+          )
+        }
+      />
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            {isMuddy ? (
-              <>
-                <Button
-                  type="button"
-                  variant={waveSent ? "outline" : "primary"}
-                  disabled={waveSent || isWavePending}
-                  onClick={sendWave}
-                >
-                  <Hand className="h-4 w-4" aria-hidden="true" />
-                  {isWavePending ? "Waving..." : waveSent ? "Wave sent" : "Wave"}
-                </Button>
-                <Button type="button" variant="outline" disabled={isActionPending} onClick={messageMuddy}>
-                  <MessageCircle className="h-4 w-4" aria-hidden="true" />
-                  Message
-                </Button>
-                <Button type="button" variant="outline" asChild>
-                  <Link href="/plans?create=1">
-                    <CalendarPlus className="h-4 w-4" aria-hidden="true" />
-                    Create Plan
-                  </Link>
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button type="button" variant="primary" disabled={requestSent || isActionPending} onClick={addMuddy}>
-                  <UserPlus className="h-4 w-4" aria-hidden="true" />
-                  {requestSent ? "Request sent" : "Add Muddy"}
-                </Button>
-                <Button type="button" variant="outline" disabled={isActionPending} onClick={blockPerson}>
-                  <Ban className="h-4 w-4" aria-hidden="true" />
-                  Block
-                </Button>
-                <Button type="button" variant="outline" disabled={isActionPending} onClick={() => setReportOpen(true)}>
-                  <Flag className="h-4 w-4" aria-hidden="true" />
-                  Report
-                </Button>
-              </>
-            )}
-          </div>
-          {waveFeedback ? (
-            <p className="mt-2 text-sm text-muted-foreground" role="status">
-              {waveFeedback}
-            </p>
-          ) : null}
+      {waveFeedback ? (
+        <p className="text-center text-sm text-muted-foreground" role="status">
+          {waveFeedback}
+        </p>
+      ) : null}
+
+      {/* Block and Report leave the hero entirely. They are safety controls,
+          not things you do to someone you are meeting — putting them beside
+          "Become Muddies" gave them weight they should never carry. */}
+      {!isMuddy ? (
+        <div className="flex justify-center gap-4 text-sm">
+          <button
+            type="button"
+            className="focus-ring safe-motion rounded-full px-2 py-1 text-muted-foreground hover:text-foreground"
+            disabled={isActionPending}
+            onClick={blockPerson}
+          >
+            <Ban className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
+            Block
+          </button>
+          <button
+            type="button"
+            className="focus-ring safe-motion rounded-full px-2 py-1 text-muted-foreground hover:text-foreground"
+            disabled={isActionPending}
+            onClick={() => setReportOpen(true)}
+          >
+            <Flag className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
+            Report
+          </button>
         </div>
-      </Card>
+      ) : null}
 
       {identitySummary?.buddyScore || identitySummary?.achievements ? (
         <Card className="p-5 sm:p-6">

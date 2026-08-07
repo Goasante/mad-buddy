@@ -50,7 +50,8 @@ function orderedPair(userId: string, friendId: string) {
 }
 
 async function areFriends(admin: Admin, userId: string, friendId: string): Promise<boolean> {
-  const { data } = await admin.from("friendships").select("id").match(orderedPair(userId, friendId)).maybeSingle();
+  // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
+  const { data } = await admin.from("friendships").select("id").match(orderedPair(userId, friendId)).is("ended_at", null).maybeSingle();
   return Boolean(data);
 }
 

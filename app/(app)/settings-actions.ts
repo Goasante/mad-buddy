@@ -172,6 +172,12 @@ export async function deleteAccountAction(input: unknown): Promise<SettingsActio
     admin.from("user_locations").delete().eq("user_id", userId),
     admin.from("blocked_users").delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`),
     admin.from("friend_requests").delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`),
+    // LIFE-HARD-DELETE: account erasure.
+    // HARD delete, deliberately, and the only surviving one. Removing a Muddy
+    // soft-ends the row so the relationship can resume; deleting an ACCOUNT
+    // must actually erase the data. A soft ending here would retain one user's
+    // id inside another user's rows after that user asked to be forgotten,
+    // which is the opposite of what deletion means.
     admin.from("friendships").delete().or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`),
     admin.from("subscriptions").delete().eq("user_id", userId),
     admin.from("consent_logs").delete().eq("user_id", userId),

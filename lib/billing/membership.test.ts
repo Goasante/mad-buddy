@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PLAN_ENTITLEMENTS, type BillingState } from "@/lib/billing/entitlements";
+import { UNLIMITED, PLAN_ENTITLEMENTS, type BillingState } from "@/lib/billing/entitlements";
 import { membershipUsageItems, membershipUsagePercent, resolveMembershipIdentity } from "@/lib/billing/membership";
 
 const NOW = Date.parse("2026-08-01T12:00:00.000Z");
@@ -105,10 +105,12 @@ describe("membership usage", () => {
       PLAN_ENTITLEMENTS.free
     );
 
+    // Muddies and Close Friends are unlimited after Phase 0; the usage row
+    // still renders, it simply has no ceiling to count against.
     expect(items.map((item) => [item.label, item.current, item.limit])).toEqual([
-      ["Muddies", 4, 30],
+      ["Muddies", 4, UNLIMITED],
       ["Personal circles", 2, 3],
-      ["Close Friends", 1, 8],
+      ["Close Friends", 1, UNLIMITED],
       ["Active plans", 3, 5],
       ["Private groups", 1, 3]
     ]);

@@ -115,7 +115,8 @@ async function requireFriendship(userId: string, friendId: string) {
     .from("friendships")
     .select("id")
     .match(pair)
-    .maybeSingle();
+    // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
+    .is("ended_at", null).maybeSingle();
 
   if (error || !data) {
     throw new Error("Choose an accepted Muddy before using this premium feature.");

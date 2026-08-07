@@ -53,12 +53,17 @@ describe("basic safety is never an entitlement (spec §1)", () => {
   });
 
   it("keeps Free genuinely usable, not a demo account (spec §3)", () => {
+    // Phase 0 went further than "usable": the caps that existed only to sell
+    // an upgrade are gone. Free is the whole product now.
     const free = PLAN_ENTITLEMENTS.free;
-    expect(free.max_muddies).toBe(30);
-    expect(free.max_personal_circles).toBe(3);
-    expect(free.max_close_friends).toBe(8);
-    expect(free.max_active_plans).toBe(5);
+    expect(free.max_muddies).toBe(UNLIMITED);
+    expect(free.max_close_friends).toBe(UNLIMITED);
+    expect(free.max_daily_moments).toBe(UNLIMITED);
     expect(free.photo_moments).toBe(true);
+    expect(free.public_moments).toBe(true);
+    // Genuine capacity differences remain.
+    expect(free.max_personal_circles).toBe(3);
+    expect(free.max_active_plans).toBe(5);
   });
 });
 
@@ -83,9 +88,9 @@ describe("plan registry (spec §3, §4, §5)", () => {
     expect(PLAN_ENTITLEMENTS.buddy_plus.moderation_dashboard).toBe(false);
     expect(PLAN_ENTITLEMENTS.buddy_pro.moderation_dashboard).toBe(true);
     expect(PLAN_ENTITLEMENTS.buddy_pro.qr_check_in).toBe(true);
-    expect(PLAN_ENTITLEMENTS.free.public_moments).toBe(false);
-    expect(PLAN_ENTITLEMENTS.buddy_plus.public_moments).toBe(false);
-    expect(PLAN_ENTITLEMENTS.buddy_pro.public_moments).toBe(true);
+    // Phase 0: core Air publishing is free. A network effect only paying
+    // users can contribute to starves itself.
+    expect(PLAN_ENTITLEMENTS.free.public_moments).toBe(true);
   });
 });
 
@@ -238,9 +243,11 @@ describe("downgrade safety (spec §45, §48)", () => {
       targetPlan: "free",
       usage: { personal_circles: 8, close_friends: 22, private_groups: 1 }
     });
+    // Phase 0: close_friends is unlimited on every tier, so downgrading no
+    // longer forces anyone to shed friends. Only real capacity differences
+    // can put a user over a limit now.
     expect(items).toEqual([
-      { resource: "personal_circles", current: 8, newLimit: 3, keepCount: 3, excess: 5 },
-      { resource: "close_friends", current: 22, newLimit: 8, keepCount: 8, excess: 14 }
+      { resource: "personal_circles", current: 8, newLimit: 3, keepCount: 3, excess: 5 }
     ]);
   });
 

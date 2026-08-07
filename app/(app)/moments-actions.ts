@@ -40,7 +40,7 @@ import {
   videoUploadValidationMessage,
   type ImageKind
 } from "@/lib/media/validation";
-import { checkFeature, upgradePromptFor } from "@/lib/billing/entitlements";
+import { checkFeature } from "@/lib/billing/entitlements";
 import { resolveUserEntitlements } from "@/lib/billing/service";
 import { isOpenMomentsEnabled } from "@/lib/features/feature-flags";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
@@ -404,7 +404,7 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
     return {
       ok: false,
       message:
-        upgradePromptFor("max_daily_moments", access.plan) ?? "You've reached your Moment limit for today."
+        "You've reached your Moment limit for today."
     };
   }
 

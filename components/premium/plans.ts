@@ -102,7 +102,10 @@ const COMPARISON_CAPABILITIES: { key: BooleanEntitlementKey; feature: string }[]
   { key: "event_drops", feature: "Event Drops" },
   { key: "friendship_recaps", feature: "Friendship recaps" },
   { key: "qr_check_in", feature: "QR check-in" },
-  { key: "community_analytics", feature: "Community analytics" },
+  // REMOVED (Phase 0 audit): community_analytics and moderation_dashboard
+  // gate no shipped functionality. Advertising them would be selling a
+  // capability that does not exist. The keys remain in the catalogue for
+  // compatibility and can be re-advertised once something enforces them.
   { key: "priority_support", feature: "Priority support" }
 ];
 

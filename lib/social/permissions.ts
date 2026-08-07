@@ -20,7 +20,10 @@ export async function areApprovedMuddies(admin: Admin, userA: string, userB: str
     .or(
       `and(user_one_id.eq.${userA},user_two_id.eq.${userB}),and(user_one_id.eq.${userB},user_two_id.eq.${userA})`
     )
-    .limit(1);
+    .limit(1)
+    // Active friendships only: ended_at IS NULL is the canonical
+    // definition of "currently Muddies".
+    .is("ended_at", null);
   return Boolean(data?.length);
 }
 
@@ -49,12 +52,18 @@ export async function batchEligibleMuddyIds(
   const unique = [...new Set(candidateIds)].filter((id) => id && id !== ownerId);
   if (unique.length === 0) return new Set();
 
-  // Matches areApprovedMuddies/isBlockedEitherDirection's exact semantics
-  // (no ended_at filter) so this is a pure query-count reduction, not a
-  // behavior change, at every call site that previously called those two
-  // functions once per candidate.
+  // Matches areApprovedMuddies/isBlockedEitherDirection's exact semantics —
+  // including the ended_at filter — so this stays a pure query-count
+  // reduction rather than a behaviour change, at every call site that
+  // previously called those two functions once per candidate.
   const [{ data: friendships }, { data: blocks }] = await Promise.all([
-    admin.from("friendships").select("user_one_id, user_two_id").or(`user_one_id.eq.${ownerId},user_two_id.eq.${ownerId}`),
+    // Active friendships only: ended_at IS NULL is the canonical definition
+    // of "currently Muddies".
+    admin
+      .from("friendships")
+      .select("user_one_id, user_two_id")
+      .or(`user_one_id.eq.${ownerId},user_two_id.eq.${ownerId}`)
+      .is("ended_at", null),
     admin.from("blocked_users").select("blocker_id, blocked_id").or(`blocker_id.eq.${ownerId},blocked_id.eq.${ownerId}`)
   ]);
 

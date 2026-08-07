@@ -47,7 +47,8 @@ async function loadFriendNetwork(): Promise<{
     admin
       .from("friendships")
       .select("user_one_id, user_two_id")
-      .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`),
+      .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
+      .is("ended_at", null),
     admin.from("blocked_users").select("blocked_id").eq("blocker_id", user.id)
   ]);
 

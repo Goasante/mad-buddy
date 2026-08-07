@@ -16,7 +16,10 @@ import {
   X
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { useSwipeTabs } from "@/hooks/use-swipe-tabs";
+import { SWIPE_OPT_OUT_ATTRIBUTE } from "@/lib/navigation/swipe-tabs";
 import {
   acceptFriendRequestAction,
   blockUserAction,
@@ -122,11 +125,25 @@ export function FriendsPageContent({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<FriendTab>(() => {
-    const requestedTab = searchParams.get("tab");
-    const validTabs: FriendTab[] = ["all", "circles", "close", "requests", "blocked"];
-    return validTabs.includes(requestedTab as FriendTab) ? (requestedTab as FriendTab) : "all";
-  });
+  const reducedMotion = useReducedMotion();
+  const tabIds = useMemo(() => tabs.map((tab) => tab.id), []);
+  const tabRefs = useRef<Partial<Record<FriendTab, HTMLButtonElement | null>>>({});
+
+  /**
+   * The open tab is DERIVED from the URL, not mirrored into state.
+   *
+   * One source of truth means Back, Forward, a deep link and a tap can never
+   * disagree — and it removes the effect that would otherwise have to copy the
+   * query parameter into state on every history change, which is the
+   * cascading-render pattern `react-hooks/set-state-in-effect` exists to stop.
+   *
+   * An unrecognised `?tab=` falls back to "all" rather than rendering nothing.
+   */
+  const requestedTab = searchParams.get("tab");
+  const activeTab: FriendTab = tabIds.includes(requestedTab as FriendTab)
+    ? (requestedTab as FriendTab)
+    : "all";
+
   const [requestSubTab, setRequestSubTab] = useState<"received" | "sent">("received");
   const [users, setUsers] = useState<UserSummary[]>(initialUsers);
   const [proximityByFriendId, setProximityByFriendId] = useState<Record<string, ProximityInfo>>({});
@@ -150,6 +167,63 @@ export function FriendsPageContent({
   const [newCircleName, setNewCircleName] = useState("");
   const [circleTargetUser, setCircleTargetUser] = useState<UserSummary | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  /**
+   * The single place a tab changes, whether by tap, swipe or keyboard.
+   *
+   * Also writes `?tab=` so the tab survives a refresh, is shareable, and
+   * participates in browser Back — previously the query parameter was read
+   * once at mount and never updated, so a tapped tab was invisible to the URL
+   * and Back skipped straight off the page.
+   *
+   * `replace`, not `push`: a swipe is a cheap, repeatable gesture, and pushing
+   * would bury the previous page under a stack of tab states that Back has to
+   * walk out of one at a time.
+   */
+  const selectTab = useCallback(
+    (id: FriendTab) => {
+      if (id === activeTab) return;
+      // The URL is the state, so changing tab IS a navigation. `replace`, not
+      // `push`: a swipe is cheap and repeatable, and pushing would bury the
+      // previous page under one history entry per gesture.
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("tab", id);
+      router.replace(`/friends?${params.toString()}`, { scroll: false });
+      // Per-tab view state that must not leak across tabs.
+      setActiveCircleId(null);
+      setQuery("");
+      setFeedback("");
+      if (id === "requests") router.refresh();
+    },
+    [activeTab, router, searchParams]
+  );
+
+  const { offsetX, swiping, handlers: swipeHandlers } = useSwipeTabs({
+    tabIds,
+    activeId: activeTab,
+    onSelect: selectTab
+  });
+
+  /**
+   * Roving focus across the strip, per the WAI-ARIA tabs pattern: arrows move
+   * between tabs, Home/End jump to the ends. Swipe is an addition, never the
+   * only way through — a keyboard user must reach every tab without gestures.
+   */
+  const onTabKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      const index = tabIds.indexOf(activeTab);
+      let target: FriendTab | undefined;
+      if (event.key === "ArrowRight") target = tabIds[Math.min(index + 1, tabIds.length - 1)];
+      else if (event.key === "ArrowLeft") target = tabIds[Math.max(index - 1, 0)];
+      else if (event.key === "Home") target = tabIds[0];
+      else if (event.key === "End") target = tabIds[tabIds.length - 1];
+      if (!target) return;
+      event.preventDefault();
+      selectTab(target);
+      tabRefs.current[target]?.focus();
+    },
+    [activeTab, selectTab, tabIds]
+  );
 
   /**
    * Open (or create) the direct conversation with this Muddy and go straight
@@ -478,26 +552,38 @@ export function FriendsPageContent({
 
       {/* Scrollable tab bar. The extra end padding + no-scrollbar utility stop
           the last tab (Blocked) from clipping on narrow screens. */}
-      <nav data-tour-id={TOUR_TARGET_IDS.MUDDIES_TABS} className="no-scrollbar -mx-4 max-w-[calc(100%+2rem)] overflow-x-auto border-b border-border/70 px-4 sm:mx-0 sm:max-w-full sm:px-0" aria-label="Muddies tabs">
-        <div className="flex w-max gap-1 pr-4 sm:pr-0">
+      {/* Scrollable tab bar. The strip itself scrolls horizontally, so it is
+          marked as swipe-exempt: dragging the labels sideways to reach
+          "Blocked" must scroll the strip, not skip a tab under the finger. */}
+      <div
+        data-tour-id={TOUR_TARGET_IDS.MUDDIES_TABS}
+        {...{ [SWIPE_OPT_OUT_ATTRIBUTE]: "" }}
+        className="no-scrollbar -mx-4 max-w-[calc(100%+2rem)] overflow-x-auto border-b border-border/70 px-4 sm:mx-0 sm:max-w-full sm:px-0"
+      >
+        <div role="tablist" aria-label="Muddies tabs" aria-orientation="horizontal" className="flex w-max gap-1 pr-4 sm:pr-0">
           {tabs.map((tab) => (
             <button
               key={tab.id}
+              ref={(node) => {
+                tabRefs.current[tab.id] = node;
+              }}
               type="button"
-              aria-current={activeTab === tab.id ? "page" : undefined}
+              role="tab"
+              id={`muddies-tab-${tab.id}`}
+              aria-selected={activeTab === tab.id}
+              aria-controls={`muddies-panel-${tab.id}`}
+              // Roving tabindex: one stop for the whole strip, then arrows
+              // move within it. Five separate tab stops would make a keyboard
+              // user pass through every tab to reach the list below.
+              tabIndex={activeTab === tab.id ? 0 : -1}
+              onKeyDown={onTabKeyDown}
               className={cn(
                 "focus-ring safe-motion inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium",
                 activeTab === tab.id
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               )}
-              onClick={() => {
-                setActiveTab(tab.id);
-                setActiveCircleId(null);
-                setQuery("");
-                setFeedback("");
-                if (tab.id === "requests") router.refresh();
-              }}
+              onClick={() => selectTab(tab.id)}
             >
               {tab.label}
               {tab.id === "requests" && receivedRequestCount > 0 ? (
@@ -508,13 +594,36 @@ export function FriendsPageContent({
             </button>
           ))}
         </div>
-      </nav>
+      </div>
 
       {feedback ? (
         <p className="text-sm text-muted-foreground" role="status">{feedback}</p>
       ) : null}
 
 
+      {/* Swipeable panel region.
+          The gesture lives on this wrapper rather than on each panel, so all
+          five tabs share one handler and adding a tab needs no new wiring.
+          `touch-action: pan-y` tells the browser this element owns horizontal
+          movement while vertical scrolling stays native — without it Chrome
+          claims the gesture and the swipe never fires. */}
+      <div
+        role="tabpanel"
+        id={`muddies-panel-${activeTab}`}
+        aria-labelledby={`muddies-tab-${activeTab}`}
+        // Focusable so keyboard users can reach the panel content after
+        // arrowing to a tab, per the WAI-ARIA tabs pattern.
+        tabIndex={0}
+        className="focus-ring space-y-6 rounded-lg outline-none"
+        style={{
+          touchAction: "pan-y",
+          // Reduced motion still moves the panel — it must, or the gesture
+          // gives no feedback at all — but never animates the settle back.
+          transform: offsetX === 0 ? undefined : `translateX(${offsetX}px)`,
+          transition: swiping || reducedMotion ? undefined : "transform 200ms ease-out"
+        }}
+        {...swipeHandlers}
+      >
       {activeTab === "all" || activeTab === "close" || (activeTab === "circles" && activeCircleId) ? (
         <div data-tour-id={TOUR_TARGET_IDS.MUDDIES_LIST} className="space-y-4">
           <div className="flex items-center gap-2">
@@ -688,6 +797,7 @@ export function FriendsPageContent({
           />
         )
       ) : null}
+      </div>
 
       <AddMuddyModal
         open={addOpen}
@@ -1066,7 +1176,14 @@ function ActiveNowStrip({
           {friends.length} active
         </span>
       </div>
-      <ul className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1 pt-1.5">
+      {/* The avatar rail scrolls horizontally on its own, so it opts out of
+          tab swiping: dragging along the row must move the row. Declared
+          explicitly rather than relying on the computed-overflow fallback,
+          which cannot be asserted in a jsdom test. */}
+      <ul
+        {...{ [SWIPE_OPT_OUT_ATTRIBUTE]: "" }}
+        className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1 pt-1.5"
+      >
         {friends.map((friend) => {
           const proximity = proximityByFriendId[friend.id];
           const level = proximity?.proximityLevel ?? "hidden";

@@ -6,6 +6,7 @@ import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
 import { tierLimitsFor, validateCircleName } from "@/lib/social/visibility";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { emitLifeEvent } from "@/lib/life/emit";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { VisibilityFeatureType, VisibilityMode } from "@/lib/supabase/database.types";
@@ -295,7 +296,7 @@ export async function addCloseFriendAction(friendId: string): Promise<CircleActi
     return {
       ok: false,
       message:
-        upgradePromptFor("max_close_friends", access.plan) ?? "You've reached your Close Friends limit."
+        "You've reached your Close Friends limit."
     };
   }
 
@@ -306,6 +307,17 @@ export async function addCloseFriendAction(friendId: string): Promise<CircleActi
   if (error) return { ok: false, message: "Couldn't update Close Friends." };
   const { grantAchievement } = await import("@/lib/engagement/achievements");
   await grantAchievement(admin, userId, "close_friend");
+
+  // Life event, COMPENSATING and PRIVATE. Classified private in the event
+  // contract, so it appears only in the owner's timeline — the friend is
+  // never notified and must never learn of it.
+  void emitLifeEvent(admin, {
+    eventType: "relationship.close_friend_added",
+    actorId: userId,
+    subjectId: friendId,
+    naturalKey: `added:${userId}`
+  });
+
   return { ok: true, message: "Added to Close Friends. This stays private." };
 }
 
@@ -324,6 +336,14 @@ export async function removeCloseFriendAction(friendId: string): Promise<CircleA
     .eq("owner_id", userId)
     .eq("friend_id", friendId);
   if (error) return { ok: false, message: "Couldn't update Close Friends." };
+  // Life event, COMPENSATING and PRIVATE — same reasoning as the add.
+  void emitLifeEvent(admin, {
+    eventType: "relationship.close_friend_removed",
+    actorId: userId,
+    subjectId: friendId,
+    naturalKey: `removed:${userId}:${Date.now()}`
+  });
+
   return { ok: true, message: "Removed from Close Friends." };
 }
 

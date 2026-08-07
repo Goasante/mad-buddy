@@ -9,7 +9,7 @@ import {
 } from "@/lib/content/moments";
 import { detectLocationRisk, LOCATION_WARNING_MESSAGE } from "@/lib/content/safety";
 import { guardAction } from "@/lib/admin/enforcement";
-import { checkFeature, upgradePromptFor } from "@/lib/billing/entitlements";
+import { checkFeature } from "@/lib/billing/entitlements";
 import { resolveUserEntitlements } from "@/lib/billing/service";
 import { isOpenMomentsEnabled } from "@/lib/features/feature-flags";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
@@ -119,7 +119,7 @@ export async function createTextMoment(userId: string, input: unknown): Promise<
   if ((todayCount ?? 0) >= limits.maxActiveMomentsPerDay) {
     return {
       ok: false,
-      message: upgradePromptFor("max_daily_moments", access.plan) ?? "You've reached your Moment limit for today."
+      message: "You've reached your Moment limit for today."
     };
   }
 

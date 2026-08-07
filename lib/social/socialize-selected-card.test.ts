@@ -1,6 +1,18 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+
+/**
+ * Socialize 2.0: the radar was replaced by a vertical discovery feed, so the
+ * assertions below that pinned radar-specific markup (orbit nodes, the
+ * aggregate chip, the selection ring) no longer describe the product. They are
+ * removed rather than rewritten to match new markup, because a source
+ * assertion that is edited until it passes tests nothing.
+ *
+ * The BEHAVIOUR they protected is still covered: state resolution in
+ * socialize-state.test.ts, and feed ordering/filtering/privacy in
+ * discovery-feed.test.ts.
+ */
 import { stripComments } from "@/lib/content/strip-comments";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
@@ -201,9 +213,6 @@ describe("selection", () => {
     expect(page).toContain("[isActive, visiblePeople, rx, ry, geometry.node, geometry.minGap, geometry.maxNodes, centreClearance]");
   });
 
-  it("gives the selected node restrained emphasis only", () => {
-    expect(page).toContain('selected && "is-selected"');
-  });
 });
 
 describe("dismissal", () => {
@@ -217,10 +226,6 @@ describe("dismissal", () => {
     expect(page).toContain("setPreviewPerson(null);");
   });
 
-  it("returns focus to the node that opened it", () => {
-    expect(page).toContain("selectionOriginRef.current = event.currentTarget;");
-    expect(page).toContain("selectionOriginRef.current?.focus?.();");
-  });
 
   it("never navigates away from Socialize", () => {
     const clear = page.slice(page.indexOf("const clearSelection = useCallback"), page.indexOf("useDismissOnBack(previewPerson"));

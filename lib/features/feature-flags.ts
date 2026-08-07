@@ -8,6 +8,32 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
 export const OPEN_MOMENTS_FLAG = "open_moments" as const;
 export const SOCIALIZE_FLAG = "socialize" as const;
 
+/**
+ * Life (Phase 3). Flags control EXISTENCE; entitlements control ACCESS.
+ *
+ * Keeping them separate is what makes a feature killable after it has been
+ * sold: an entitlement says who may use a thing, a flag says whether the
+ * thing runs at all. Conflating them means a paying user's feature cannot be
+ * switched off without appearing to revoke what they bought.
+ *
+ * Every Life flag is OFF until approved, and none is entitlement-gated in
+ * this phase — the foundation ships dark.
+ */
+export const LIFE_TIMELINE_FLAG = "life_timeline" as const;
+export const LIFE_RELATIONSHIP_NOTES_FLAG = "life_relationship_notes" as const;
+export const LIFE_RECONNECT_FLAG = "life_reconnect" as const;
+export const LIFE_BIRTHDAYS_FLAG = "life_birthdays" as const;
+export const LIFE_MILESTONES_FLAG = "life_milestones" as const;
+
+/** Every Life flag, for tests and admin listing. */
+export const LIFE_FLAGS = [
+  LIFE_TIMELINE_FLAG,
+  LIFE_RELATIONSHIP_NOTES_FLAG,
+  LIFE_RECONNECT_FLAG,
+  LIFE_BIRTHDAYS_FLAG,
+  LIFE_MILESTONES_FLAG
+] as const;
+
 export const MANAGED_FEATURES = [
   {
     key: OPEN_MOMENTS_FLAG,
@@ -19,11 +45,51 @@ export const MANAGED_FEATURES = [
   },
   {
     key: SOCIALIZE_FLAG,
-    title: "Socialize",
+    title: "Linkr",
     category: "Social discovery",
     description: "Lets members opt in briefly to discover other nearby people who are also open to connecting.",
     enabledImpact: "Socialize appears in navigation and members can start or update an opt-in session.",
     disabledImpact: "Socialize is hidden and new sessions, updates, and discovery requests are blocked."
+  },
+  {
+    key: LIFE_TIMELINE_FLAG,
+    title: "Relationship timeline",
+    category: "Life",
+    description: "A private, per-person history of factual moments shared with a Muddy.",
+    enabledImpact: "Members can view their own timeline for a relationship. Each side sees only what they are authorised to.",
+    disabledImpact: "Timelines are hidden. The underlying factual events are still recorded and can be shown later."
+  },
+  {
+    key: LIFE_RELATIONSHIP_NOTES_FLAG,
+    title: "Relationship notes",
+    category: "Life",
+    description: "Private notes a member writes about a relationship. Never visible to the other person.",
+    enabledImpact: "Members can write, edit and delete their own notes.",
+    disabledImpact: "Notes are hidden and no new notes can be written. Existing notes are retained for their author."
+  },
+  {
+    key: LIFE_RECONNECT_FLAG,
+    title: "Reconnect suggestions",
+    category: "Life",
+    description: "Optional, warm suggestions to catch up with a Muddy after a long quiet period.",
+    enabledImpact: "Eligible suggestions appear. They are always dismissible and never mention how long it has been.",
+    disabledImpact: "No suggestions are produced or shown."
+  },
+  {
+    key: LIFE_BIRTHDAYS_FLAG,
+    title: "Birthday reminders",
+    category: "Life",
+    description: "Reminders for birthdays members have explicitly shared. Never inferred.",
+    enabledImpact: "Members receive reminders for birthdays they are authorised to see, honouring quiet hours.",
+    disabledImpact: "No birthday reminders are scheduled or delivered."
+  },
+  {
+    key: LIFE_MILESTONES_FLAG,
+    title: "Friendship milestones",
+    category: "Life",
+    description: "Factual milestones such as a first plan together or a friendship anniversary.",
+    enabledImpact: "Milestones appear in the timeline. They state facts and never imply relationship quality.",
+    disabledImpact: "Milestones are hidden. The underlying events remain and can be shown later."
   }
 ] as const;
 

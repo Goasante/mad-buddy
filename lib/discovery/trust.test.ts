@@ -5,6 +5,7 @@ import {
   buildPublicTrustSummary,
   canDiscoverUser,
   effectiveRequestLimit,
+  NEW_ACCOUNT_REQUEST_LIMIT,
   isNewAccount,
   normalizeDiscoverySettings,
   rankSearchCandidates,
@@ -134,11 +135,26 @@ describe("friend requests (spec §11, §16, §17)", () => {
     expect(resolveSendRequest(send({ sentToday: 20, dailyLimit: 20 })).reason).toBe("limit_reached");
   });
 
-  it("caps new accounts low even on a paid plan, anti-spam beats paid limits", () => {
+  it("caps new accounts low regardless of plan", () => {
+    // A new paid account is still a new account: paying does not buy a way
+    // past anti-spam.
     expect(isNewAccount(NOW - DAY, NOW)).toBe(true);
-    expect(effectiveRequestLimit({ plan: "buddy_plus", accountCreatedAtMs: NOW - DAY, nowMs: NOW })).toBe(5);
-    expect(effectiveRequestLimit({ plan: "buddy_plus", accountCreatedAtMs: NOW - 30 * DAY, nowMs: NOW })).toBe(50);
-    expect(effectiveRequestLimit({ plan: "free", accountCreatedAtMs: NOW - 30 * DAY, nowMs: NOW })).toBe(20);
+    for (const plan of ["free", "buddy_plus", "buddy_pro"] as const) {
+      expect(
+        effectiveRequestLimit({ plan, accountCreatedAtMs: NOW - DAY, nowMs: NOW }),
+        plan
+      ).toBe(NEW_ACCOUNT_REQUEST_LIMIT);
+    }
+  });
+
+  it("applies the SAME established-account ceiling to every plan", () => {
+    // Phase 0: this is abuse protection, not a product tier. The previous
+    // assertion compared per-plan values, which is exactly the paid-bypass
+    // this must not have.
+    const limits = (["free", "buddy_plus", "buddy_pro"] as const).map((plan) =>
+      effectiveRequestLimit({ plan, accountCreatedAtMs: NOW - 30 * DAY, nowMs: NOW })
+    );
+    expect(new Set(limits).size, "no plan may send more requests than another").toBe(1);
   });
 });
 

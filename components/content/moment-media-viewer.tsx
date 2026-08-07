@@ -4,9 +4,11 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { VisibleMoment } from "@/lib/content/service";
 import { MomentImage } from "@/components/ui/moment-image";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
-import { cn } from "@/lib/utils";
+import { cn, formatRelativeTime } from "@/lib/utils";
 
 /**
  * Full-screen media layer.
@@ -334,6 +336,61 @@ export function MomentMediaViewer({
           </button>
         )}
       </div>
+
+      {/* THE MOMENT'S IDENTITY LAYER.
+          Previously the viewer showed media and nothing else — no caption, no
+          author, no time — so a full-screen Moment was an anonymous picture.
+          The caption now reads as part of the media rather than as a row
+          beneath it, which is the whole idea of the Hero language.
+
+          Hidden while zoomed or dragging: both are moments when the viewer
+          wants the photograph and nothing on top of it. */}
+      {!zoomed && !isText ? (
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-10"
+          style={{
+            opacity: dragging ? 0 : 1,
+            transition: reducedMotion ? "none" : "opacity 180ms ease-out"
+          }}
+        >
+          {/* The same progressive ramp the Hero uses: stacked, upward-masked
+              bands so there is never a hard edge across the picture. */}
+          <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-40">
+            {[0.4, 0.7, 1].map((step, index) => (
+              <div
+                key={step}
+                className="absolute inset-x-0 bottom-0"
+                style={{
+                  height: `${step * 100}%`,
+                  backdropFilter: `blur(${(index + 1) * 6}px)`,
+                  WebkitBackdropFilter: `blur(${(index + 1) * 6}px)`,
+                  maskImage: "linear-gradient(to top, black 40%, transparent 100%)",
+                  WebkitMaskImage: "linear-gradient(to top, black 40%, transparent 100%)"
+                }}
+              />
+            ))}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/35 to-transparent" />
+          </div>
+
+          <div className="relative space-y-2 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-6 text-white">
+            {active.caption ? (
+              <p className="text-[0.9375rem] leading-snug text-white/95">{active.caption}</p>
+            ) : null}
+            <div className="flex items-center gap-2 text-[0.8125rem] text-white/75">
+              <UserAvatar
+                src={active.authorAvatarUrl}
+                name={active.authorName}
+                size="xs"
+                membershipTier={publicMembershipTier(active.authorPlan)}
+                decorative
+              />
+              <span className="truncate font-semibold text-white">{active.authorName}</span>
+              <span aria-hidden="true">·</span>
+              <time dateTime={active.createdAt}>{formatRelativeTime(active.createdAt)}</time>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

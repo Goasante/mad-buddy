@@ -1,10 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition, type CSSProperties } from "react";
 import {
   AlertTriangle,
-  ArrowLeft,
   BookOpen,
   CheckCircle2,
   ChevronRight,
@@ -33,6 +33,7 @@ import {
   type VisibleHangout
 } from "@/app/(app)/hangout-actions";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/app-shell/page-header";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
@@ -385,35 +386,32 @@ export function HangoutModePage({
 
   return (
     <div className="mx-auto max-w-[560px] space-y-6 pb-4 pt-5">
-      {isActive ? (
-        <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            aria-label="Back"
-            className="focus-ring safe-motion grid h-10 w-10 place-items-center rounded-full border border-border/70 text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          </button>
-          <h1 className="text-lg font-semibold">Hangout Mode</h1>
-          <button
-            type="button"
-            onClick={() => router.push("/safety-center")}
-            aria-label="How Hangout Mode keeps you safe"
-            className="focus-ring safe-motion grid h-10 w-10 place-items-center rounded-full border border-border/70 text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
-          >
-            <Info className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
-      ) : (
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Hangout Mode</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Let approved Muddies know you&apos;re open to do something. Your exact location is{" "}
-            <span className="font-medium text-primary">never</span> shared.
-          </p>
-        </div>
-      )}
+      {/* One canonical header for both states. The bespoke bar it replaces
+          drew its own Back and Info buttons at 40px with a border — visibly
+          different from every other screen's 44px borderless controls. */}
+      <PageHeader title="Hangout Mode" backHref="/dashboard" />
+
+      {/* The desktop heading and the safety note. The note stays on mobile
+          too when idle: it explains what turning this on actually shares,
+          which is the one thing a user needs before deciding. */}
+      <div className={isActive ? "hidden md:block" : undefined}>
+        <h1 className="hidden text-2xl font-semibold tracking-tight sm:text-3xl md:block">Hangout Mode</h1>
+        <p className="text-sm text-muted-foreground md:mt-1">
+          Let approved Muddies know you&apos;re open to do something. Your exact location is{" "}
+          <span className="font-medium text-primary">never</span> shared.
+        </p>
+      </div>
+
+      {/* Preserved from the bespoke bar: the route to what this shares. */}
+      <div className="flex justify-end md:hidden">
+        <Link
+          href="/safety-center"
+          className="focus-ring safe-motion inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <Info className="h-4 w-4" aria-hidden="true" />
+          How this keeps you safe
+        </Link>
+      </div>
 
       {/* Avatar hero — tap to set up / edit. */}
       <div className="flex flex-col items-center text-center">

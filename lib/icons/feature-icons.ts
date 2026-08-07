@@ -1,9 +1,7 @@
 import {
   Bell,
   CalendarCheck2,
-  Compass,
   Hand,
-  HandHeart,
   Images,
   Moon,
   Send,
@@ -12,6 +10,7 @@ import {
   Users2,
   type LucideIcon
 } from "lucide-react";
+import { HangoutIcon, LinkrIcon } from "@/components/brand/brand-icons";
 
 /**
  * Central feature-icon mapping.
@@ -45,13 +44,15 @@ export type FeatureIconKey =
   | "ping"
   | "wave";
 
-export type FeatureIconSource = { icon: LucideIcon; label: string };
+/** A Lucide icon or a brand mark: both take className and render an svg. */
+export type FeatureIconSource = { icon: LucideIcon | typeof LinkrIcon; label: string };
 
 /**
  * Chosen for meaning, not resemblance to the old asset:
  *  - moments      Images        — a temporary shared picture
  *  - safeArrival  ShieldCheck   — arrived safely, confirmed
- *  - hangout      HandHeart     — an open, friendly offer to meet
+ *  - hangout      HangoutIcon   — the Iconly Swap mark: two people trading time
+ *  - socialize    LinkrIcon     — the Linkr brand mark
  *  - events       CalendarCheck2 — something scheduled
  *  - groups       Users2        — more than one person
  *  - socialize    Compass       — discovery, finding people
@@ -65,10 +66,10 @@ export type FeatureIconSource = { icon: LucideIcon; label: string };
 export const FEATURE_ICON_SOURCES: Record<FeatureIconKey, FeatureIconSource> = {
   moments: { icon: Images, label: "Moments" },
   safeArrival: { icon: ShieldCheck, label: "Safe Arrival" },
-  hangout: { icon: HandHeart, label: "Hangout" },
+  hangout: { icon: HangoutIcon, label: "Hangout" },
   events: { icon: CalendarCheck2, label: "Events" },
   groups: { icon: Users2, label: "Groups" },
-  socialize: { icon: Compass, label: "Socialize" },
+  socialize: { icon: LinkrIcon, label: "Linkr" },
   invites: { icon: UserPlus, label: "Invites" },
   reminders: { icon: Bell, label: "Reminders" },
   focus: { icon: Moon, label: "Focus" },

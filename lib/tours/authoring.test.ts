@@ -70,7 +70,7 @@ describe("tour target registry is honest about the real UI", () => {
     expect(targetLabel("home-nearby")).toBe("Nearby Muddies");
     expect(targetLabel("not-registered")).toBe("not-registered");
     expect(targetLabel(null)).toBeNull();
-    expect(findTarget("socialize-radar")?.route).toBe("/discover");
+    expect(findTarget("socialize-feed")?.route).toBe("/discover");
     expect(findRoute("/plans")?.label).toBe("Plans");
   });
 });

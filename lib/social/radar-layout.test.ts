@@ -1,6 +1,17 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+
+/**
+ * NOTE (Socialize 2.0): the "radar presentation" and "visual polish" suites
+ * were removed with the radar itself — they asserted markup in
+ * socialize-page.tsx that the discovery feed replaced.
+ *
+ * The PURE geometry below is kept and still passing. `buildRadarField` is no
+ * longer mounted anywhere, but it is correct, identity-stable and tested, and
+ * deleting a working spatial-layout module is a decision worth making
+ * deliberately rather than as a side effect of a UI change.
+ */
 import {
   TIER_RADIUS,
   angularOffset,
@@ -318,84 +329,6 @@ describe("module boundaries", () => {
 // Presentation
 // ---------------------------------------------------------------------------
 
-describe("radar presentation", () => {
-  const page = read("components/socialize/socialize-page.tsx");
-  it("replaced the old index-based placement", () => {
-    // The previous engine derived angles from list order.
-    expect(page).not.toContain("computeRadarLayout");
-    expect(page).not.toContain("GOLDEN");
-    expect(page).toContain("buildRadarField");
-  });
-
-  it("draws four orbit rings", () => {
-    expect(page).toContain("const RING_FRACTIONS = [0.34, 0.55, 0.76, 0.97] as const;");
-    expect(page).toContain("RING_FRACTIONS.map(");
-  });
-
-  it("designs each breakpoint rather than scaling one layout", () => {
-    // Distinct centre size, node size, gap and cap per width.
-    expect(page).toContain("const RADAR_SIZES");
-    const sizes = page.slice(page.indexOf("const RADAR_SIZES"), page.indexOf("function radarSizeFor"));
-    expect((sizes.match(/maxWidth:/g) ?? []).length).toBe(4);
-    expect((sizes.match(/centre:/g) ?? []).length).toBe(4);
-  });
-
-  it("makes the central user the largest node", () => {
-    const sizes = page.slice(page.indexOf("const RADAR_SIZES"), page.indexOf("function radarSizeFor"));
-    const centres = [...sizes.matchAll(/centre: (\d+)/g)].map((m) => Number(m[1]));
-    const nodes = [...sizes.matchAll(/node: (\d+)/g)].map((m) => Number(m[1]));
-    centres.forEach((centre, index) => expect(centre).toBeGreaterThan(nodes[index]!));
-  });
-
-  it("labels the centre as the brief specifies", () => {
-    expect(page).toContain(">You<");
-    expect(page).toContain("Visible to nearby people");
-  });
-
-  it("places no control over the avatar", () => {
-    // The avatar popover trigger is gone; the status control is the entry point.
-    expect(page).not.toContain('aria-label={isActive ? "Socialize controls" : "Turn on Socialize"}');
-  });
-
-  it("attaches each label directly under its node", () => {
-    expect(page).toContain("mt-1.5 whitespace-nowrap rounded-full");
-  });
-
-  it("gives every node a presence indicator", () => {
-    expect(page).toContain("rounded-full border-[3px] border-[#0d0d12] bg-emerald-500");
-  });
-
-  it("keeps the premium ring independent of proximity", () => {
-    // The ring class comes from the plan-driven TIER_RING map, applied
-    // regardless of which band the node sits in.
-    expect(page).toContain("TIER_RING[tier]");
-    const node = page.slice(page.indexOf("field.nodes.map("), page.indexOf("The single aggregate entry point"));
-    expect(node).not.toContain("plan ===");
-  });
-
-  it("selects without re-laying out the field", () => {
-    // Selection only adds a class; positions come from the layout module and
-    // are untouched by previewPerson.
-    expect(page).toContain('selected && "is-selected"');
-    // The memo's dependency array is what decides whether selecting someone
-    // can move anybody: it lists people, size and geometry — and deliberately
-    // not previewPerson.
-    // The dependency array lists people, size and geometry — never the
-    // selection, so selecting cannot move anybody.
-    // Presence filtering (Step 6.1) means the memo reads visiblePeople. It
-    // still never depends on the selection.
-    expect(page).toContain("[isActive, visiblePeople, rx, ry, geometry.node, geometry.minGap, geometry.maxNodes, centreClearance]");
-  });
-
-  it("keeps the field, rings and centre in the empty state", () => {
-    // Step 6 replaced the ad-hoc message with the canonical state resolver.
-    // The field, rings and centre still render beneath it — only a quiet
-    // line is added, never a placeholder card.
-    const empty = page.slice(page.indexOf("{stateCopy.message ?"));
-    expect(empty.slice(0, 600)).toContain("socialize-state absolute");
-    expect(empty.slice(0, 600)).not.toContain("rounded-2xl border");
-  });
-});
 
 describe("radar motion", () => {
   const css = read("app/globals.css");
@@ -477,78 +410,6 @@ describe("centre clearance", () => {
   });
 });
 
-describe("visual polish", () => {
-  const page = read("components/socialize/socialize-page.tsx");
-  const css = read("app/globals.css");
-  const fieldCss = stripComments(css.slice(css.indexOf("/* Socialize radar field")));
-
-  it("reduced the centre by roughly 15-20%", () => {
-    const sizes = page.slice(page.indexOf("const RADAR_SIZES"), page.indexOf("const TIER_SCALE"));
-    const centres = [...sizes.matchAll(/centre: (\d+)/g)].map((m) => Number(m[1]));
-    // Previously 128 / 144 / 160 / 176.
-    const before = [128, 144, 160, 176];
-    centres.forEach((centre, index) => {
-      const ratio = centre / before[index]!;
-      expect(ratio).toBeGreaterThan(0.79);
-      expect(ratio).toBeLessThan(0.87);
-    });
-  });
-
-  it("keeps the centre larger than any node", () => {
-    const sizes = page.slice(page.indexOf("const RADAR_SIZES"), page.indexOf("const TIER_SCALE"));
-    const centres = [...sizes.matchAll(/centre: (\d+)/g)].map((m) => Number(m[1]));
-    const nodes = [...sizes.matchAll(/node: (\d+)/g)].map((m) => Number(m[1]));
-    centres.forEach((centre, index) => expect(centre).toBeGreaterThan(nodes[index]! * 1.1));
-  });
-
-  it("gives the You label more breathing room", () => {
-    expect(page).toContain('className="mt-4 text-[0.8125rem] font-semibold text-emerald-400">You<');
-  });
-
-  it("wires a centre clearance into the layout", () => {
-    expect(page).toContain("const centreClearance =");
-    expect(page).toContain("minRadius: centreClearance");
-  });
-
-  it("raised the orbit rings without making them bright", () => {
-    expect(page).toContain('isActive ? "border-white/[0.11]" : "border-white/[0.08]"');
-  });
-
-  it("layers the centre glow instead of one flat blob", () => {
-    const centre = fieldCss.slice(fieldCss.indexOf(".socialize-centre {"), fieldCss.indexOf(".socialize-centre:not"));
-    // Multiple shadow stops plus a radial falloff layer.
-    expect((centre.match(/0 0 /g) ?? []).length).toBeGreaterThanOrEqual(3);
-    expect(fieldCss).toContain(".socialize-centre::before");
-    expect(fieldCss).toContain("radial-gradient(");
-  });
-
-  it("never animates the glow", () => {
-    const centre = fieldCss.slice(fieldCss.indexOf(".socialize-centre {"), fieldCss.indexOf(".socialize-node"));
-    expect(centre).not.toContain("animation");
-  });
-
-  it("ranks proximity by size and glow", () => {
-    expect(page).toContain("const TIER_SCALE: Record<Tier, number> = { close: 1.1, near: 1, far: 0.9 };");
-    expect(page).toContain("TIER_GLOW[tier]");
-    const glow = page.slice(page.indexOf("const TIER_GLOW"), page.indexOf("type PlacedPerson") + 1 || page.indexOf("function radarSizeFor"));
-    // Close brightest, far faintest.
-    expect(glow).toContain("close: \"shadow-[0_0_18px");
-    expect(glow).toContain("far: \"shadow-[0_0_8px");
-  });
-
-  it("keeps proximity labels below the avatar, never over the photo", () => {
-    const node = page.slice(page.indexOf("field.nodes.map("), page.indexOf("The single aggregate entry point"));
-    // The label follows the avatar span in flow, with a top margin.
-    // The VISIBLE pill (not the aria-label, which mentions the tier earlier)
-    // follows the avatar in flow with a top margin — so it sits beneath the
-    // photo rather than over it.
-    expect(node.indexOf("<UserAvatar")).toBeLessThan(node.indexOf("mt-1.5 whitespace-nowrap"));
-    expect(node).toContain("mt-1.5 whitespace-nowrap rounded-full");
-    // The label is in normal flow; nothing positions it over the avatar.
-    const labelBlock = node.slice(node.indexOf("mt-1.5 whitespace-nowrap"));
-    expect(labelBlock).not.toContain("absolute");
-  });
-});
 
 describe("ambient depth", () => {
   const css = read("app/globals.css");

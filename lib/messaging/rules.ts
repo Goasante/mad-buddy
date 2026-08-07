@@ -156,6 +156,123 @@ export function canDeleteGroup(role: ConversationRole): boolean {
   return role === "owner";
 }
 
+/**
+ * Role-change decisions.
+ *
+ * The predicates above answer "may this role do X" — enough for a menu, not
+ * enough for a write. A role change is a decision about a PAIR (who is acting,
+ * on whom), and every dangerous case in a group lives in that pair: an admin
+ * demoting the owner, a member promoting themselves, the last owner walking
+ * away and orphaning the group.
+ *
+ * Pure and exhaustive on purpose. These are the rules the server actions and
+ * the database RPC both enforce; keeping them here means the two cannot
+ * disagree, and each rule can be tested without a database.
+ *
+ * Reasons are for the CALLER's logs and tests. The action maps them to one
+ * neutral user-facing message — telling someone precisely which invariant
+ * they hit is a map of the authority model.
+ */
+export type GroupRoleChange =
+  | "promote_to_admin"
+  | "demote_to_member"
+  | "transfer_ownership"
+  | "remove_member";
+
+export type RoleChangeInput = {
+  actorRole: ConversationRole | null;
+  actorStatus: ConversationMemberStatus | null;
+  targetRole: ConversationRole | null;
+  targetStatus: ConversationMemberStatus | null;
+  /** True when actor and target are the same person. */
+  selfTargeted: boolean;
+};
+
+export type RoleChangeResult = {
+  allowed: boolean;
+  reason:
+    | "allowed"
+    | "actor_not_member"
+    | "target_not_member"
+    | "not_authorized"
+    | "cannot_target_owner"
+    | "cannot_self_promote"
+    | "owner_must_transfer"
+    | "already_in_role";
+};
+
+const deny = (reason: RoleChangeResult["reason"]): RoleChangeResult => ({ allowed: false, reason });
+const ALLOW: RoleChangeResult = { allowed: true, reason: "allowed" };
+
+export function resolveRoleChange(change: GroupRoleChange, input: RoleChangeInput): RoleChangeResult {
+  // Both parties must be current, joined members. An invited-but-not-joined
+  // target has no role to change, and a departed actor has no authority.
+  if (input.actorStatus !== "joined" || !input.actorRole) return deny("actor_not_member");
+  if (input.targetStatus !== "joined" || !input.targetRole) return deny("target_not_member");
+
+  // THE OWNER IS UNTOUCHABLE by anyone else. Checked before the per-action
+  // rules so no branch can forget it: an admin must never be able to demote or
+  // remove the owner, which is how a group gets taken over.
+  if (input.targetRole === "owner" && change !== "transfer_ownership") {
+    return deny("cannot_target_owner");
+  }
+
+  switch (change) {
+    case "promote_to_admin": {
+      // Owner only. An admin promoting admins is how authority quietly
+      // multiplies beyond the one person accountable for the group.
+      if (!canAssignAdmins(input.actorRole)) return deny("not_authorized");
+      // Self-promotion is impossible by construction — only the owner may
+      // promote, and the owner is already above admin — but it is checked
+      // explicitly so the rule survives any future widening of the actor set.
+      if (input.selfTargeted) return deny("cannot_self_promote");
+      if (input.targetRole === "admin") return { allowed: true, reason: "already_in_role" };
+      return ALLOW;
+    }
+
+    case "demote_to_member": {
+      if (!canAssignAdmins(input.actorRole)) return deny("not_authorized");
+      if (input.targetRole === "member") return { allowed: true, reason: "already_in_role" };
+      return ALLOW;
+    }
+
+    case "transfer_ownership": {
+      // Only the owner may hand over ownership, and only to someone who is not
+      // already the owner. Nobody can take it.
+      if (input.actorRole !== "owner") return deny("not_authorized");
+      if (input.selfTargeted || input.targetRole === "owner") return deny("already_in_role");
+      return ALLOW;
+    }
+
+    case "remove_member": {
+      if (!canRemoveMembers(input.actorRole)) return deny("not_authorized");
+      // An admin may remove ordinary members, never another admin — that is
+      // the owner's call. (The owner case is already denied above.)
+      if (input.targetRole === "admin" && input.actorRole !== "owner") {
+        return deny("not_authorized");
+      }
+      // Removing yourself is leaving, which has its own action and its own
+      // owner-transfer rule.
+      if (input.selfTargeted) return deny("owner_must_transfer");
+      return ALLOW;
+    }
+  }
+}
+
+/**
+ * Whether this member may leave on their own.
+ *
+ * The owner may not: a group whose owner walks out is ownerless, and nothing
+ * in the schema would ever repair it. They must transfer first, or delete the
+ * group. This is the same rule the existing leave action already applies —
+ * lifted here so the RPC and the action share one definition.
+ */
+export function canLeaveGroup(role: ConversationRole | null, status: ConversationMemberStatus | null): RoleChangeResult {
+  if (status !== "joined" || !role) return deny("actor_not_member");
+  if (role === "owner") return deny("owner_must_transfer");
+  return ALLOW;
+}
+
 // ---------------------------------------------------------------------------
 // Tier limits (spec §28, §45, §70)
 // ---------------------------------------------------------------------------
@@ -384,7 +501,23 @@ export function systemMessageText(event: SystemEventType, detail?: string): stri
     case "participant_joined":
       return detail ? `${detail} joined.` : "A new participant joined.";
     case "participant_left":
-      return detail ? `${detail} left.` : "A participant left.";
+      return detail ? `${detail} left the group.` : "A participant left.";
+    // Group role lifecycle. Each states WHAT changed and WHO it happened to,
+    // never who authorised it: "Ama removed Kojo" invites a conversation about
+    // Ama's judgement, and the audit record in domain_events already answers
+    // "by whom" for anyone entitled to ask.
+    case "member_promoted":
+      return detail ? `${detail} became an admin.` : "A member became an admin.";
+    case "member_demoted":
+      return detail ? `${detail} is no longer an admin.` : "A member is no longer an admin.";
+    case "ownership_transferred":
+      return detail ? `Ownership transferred to ${detail}.` : "Ownership was transferred.";
+    case "participant_removed":
+      return detail ? `${detail} was removed.` : "A participant was removed.";
+    case "group_renamed":
+      return detail ? `Group renamed to ${detail}.` : "The group was renamed.";
+    case "group_avatar_changed":
+      return "The group photo was updated.";
     case "conversation_created":
     default:
       return "Conversation started.";

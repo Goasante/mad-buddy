@@ -976,37 +976,44 @@ html.dark .home-ambient-bg {
 }
 
 :root {
-  --color-brand-orange: #f97316;
-  --color-brand-amber: #fb923c;
-  --color-brand-ember: #ea580c;
+  /* Orange Grove — the new primary. Softer and warmer than the previous
+     #e88c2b, which read as a saturated safety orange rather than a brand. */
+  --color-brand-orange: #e88c2b;
+  --color-brand-amber: #f2a855;
+  --color-brand-ember: #c96f18;
+  /* Dark Maroon — the accent. Used for depth and grounding, never as a
+     second primary: two competing warm hues would flatten the hierarchy. */
+  --color-brand-maroon: #4e0401;
   --brand-gradient: linear-gradient(135deg, var(--color-brand-amber), var(--color-brand-ember));
-  --glow-gradient: radial-gradient(circle, rgb(249 115 22 / 0.34), transparent 70%);
-  --background: 250 45% 98%;
-  --foreground: 222 12% 12%;
+  --glow-gradient: radial-gradient(circle, rgb(232 140 43 / 0.3), transparent 70%);
+  /* Calming White (#FEFBF3): a warm paper ground rather than a cool blue-white. */
+  --background: 41 71% 98%;
+  /* Text leans off the maroon so ink and accent share a family. */
+  --foreground: 3 25% 12%;
   --card: 0 0% 100%;
-  --card-foreground: 222 12% 12%;
-  --primary: 25 95% 53%;
+  --card-foreground: 3 25% 12%;
+  --primary: 31 81% 54%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 235 45% 94%;
-  --secondary-foreground: 222 12% 12%;
-  --muted: 238 32% 91%;
-  --muted-foreground: 215 15% 45%;
-  --accent: 25 95% 53%;
+  --secondary: 36 45% 94%;
+  --secondary-foreground: 3 25% 12%;
+  --muted: 36 30% 92%;
+  --muted-foreground: 20 12% 42%;
+  --accent: 3 97% 16%;
   --accent-foreground: 0 0% 100%;
   --destructive: 0 84% 71%;
   --destructive-foreground: 0 0% 100%;
-  --border: 240 25% 86%;
-  --input: 240 30% 96%;
-  --ring: 25 95% 53%;
-  --shadow: 222 47% 11%;
+  --border: 33 28% 88%;
+  --input: 38 40% 96%;
+  --ring: 31 81% 54%;
+  --shadow: 3 60% 10%;
   --radius: 0.5rem;
   --layer-dropdown: 70;
   --layer-modal: 60;
   --layer-toast: 90;
-  --bg-primary: #fbfaff;
-  --bg-secondary: #fff4ec;
-  --warm-grad-1: #fff0e6;
-  --warm-grad-2: #ffe4d1;
+  --bg-primary: #fefbf3;
+  --bg-secondary: #fdf3e4;
+  --warm-grad-1: #fdf0dd;
+  --warm-grad-2: #f9e0c2;
   --blue-electric: #3b82f6;
   --green-neon: #58c88f;
   --lime-glow: #eaff6a;
@@ -1015,7 +1022,7 @@ html.dark .home-ambient-bg {
   --glass-border: rgba(120, 132, 180, 0.28);
   --glass-highlight: rgba(255, 255, 255, 0.86);
   --surface-soft: rgba(255, 255, 255, 0.58);
-  --surface-hover: rgba(249, 115, 22, 0.08);
+  --surface-hover: rgba(232, 140, 43, 0.08);
   --text-primary: #0f172a;
   --text-muted: #64748b;
   --danger: #ef4444;
@@ -1024,27 +1031,31 @@ html.dark .home-ambient-bg {
   --glow-blue: rgba(59, 130, 246, 0.2);
   --glow-green: rgba(88, 200, 143, 0.18);
   --glow-lime: rgba(218, 255, 74, 0.26);
-  --glow-orange: rgba(249, 115, 22, 0.24);
-  --body-radial: rgba(249, 115, 22, 0.1);
+  --glow-orange: rgba(232, 140, 43, 0.24);
+  --body-radial: rgba(232, 140, 43, 0.1);
 }
 
 html.dark {
-  --background: 225 28% 8%;
-  --foreground: 240 29% 96%;
-  --card: 225 22% 12%;
-  --card-foreground: 240 29% 96%;
-  --secondary: 224 28% 20%;
-  --secondary-foreground: 240 29% 96%;
-  --muted: 225 18% 17%;
-  --muted-foreground: 220 10% 66%;
-  --border: 225 16% 24%;
-  --input: 225 16% 24%;
-  --ring: 25 95% 53%;
-  --shadow: 222 72% 3%;
-  --bg-primary: #0b0f19;
-  --bg-secondary: #17110b;
-  --warm-grad-1: #331a08;
-  --warm-grad-2: #3d1f0a;
+  /* Warm dark surfaces, tinted toward the maroon accent rather than a cool
+     blue-black. Pure black is avoided entirely: it crushes the warm palette
+     and makes the orange read as neon against it. */
+  --background: 8 18% 8%;
+  --foreground: 38 30% 96%;
+  --card: 8 15% 12%;
+  --card-foreground: 38 30% 96%;
+  --secondary: 8 14% 20%;
+  --secondary-foreground: 38 30% 96%;
+  --muted: 8 12% 17%;
+  --muted-foreground: 26 10% 68%;
+  --border: 8 12% 24%;
+  --input: 8 12% 24%;
+  --ring: 31 81% 54%;
+  /* Shadows carry the maroon, so elevation reads warm rather than grey. */
+  --shadow: 3 70% 4%;
+  --bg-primary: #14100e;
+  --bg-secondary: #1c1411;
+  --warm-grad-1: #33190c;
+  --warm-grad-2: #40200e;
   --glass-bg: rgba(255, 255, 255, 0.045);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-highlight: rgba(255, 255, 255, 0.08);
@@ -1056,8 +1067,8 @@ html.dark {
   --glow-blue: rgba(59, 130, 246, 0.28);
   --glow-green: rgba(88, 200, 143, 0.26);
   --glow-lime: rgba(218, 255, 74, 0.34);
-  --glow-orange: rgba(249, 115, 22, 0.38);
-  --body-radial: rgba(249, 115, 22, 0.18);
+  --glow-orange: rgba(232, 140, 43, 0.38);
+  --body-radial: rgba(232, 140, 43, 0.18);
 }
 
 :root[data-accent="orange"] {
@@ -1367,7 +1378,7 @@ select {
 }
 
 ::selection {
-  background: rgba(249, 115, 22, 0.28);
+  background: rgba(232, 140, 43, 0.28);
   color: var(--text-primary);
 }
 
@@ -1431,7 +1442,7 @@ select {
 
   .proximity-halo-very-close {
     --halo-color: 251 146 60;
-    --halo-ring: linear-gradient(135deg, #fdba74 0%, #f97316 52%, #c2410c 100%);
+    --halo-ring: linear-gradient(135deg, #fdba74 0%, #e88c2b 52%, #c2410c 100%);
     --halo-blur: 26px;
     --halo-spread: 8px;
     --halo-scale: 1.055;
@@ -1439,8 +1450,8 @@ select {
   }
 
   .proximity-halo-nearby {
-    --halo-color: 249 115 22;
-    --halo-ring: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+    --halo-color: 232 140 43;
+    --halo-ring: linear-gradient(135deg, #f2a855 0%, #c96f18 100%);
     --halo-blur: 20px;
     --halo-spread: 6px;
     --halo-scale: 1.04;
@@ -1448,7 +1459,7 @@ select {
   }
 
   .proximity-halo-around {
-    --halo-color: 249 115 22;
+    --halo-color: 232 140 43;
     --halo-ring: linear-gradient(135deg, rgb(251 146 60 / 0.72) 0%, rgb(234 88 12 / 0.62) 100%);
     --halo-blur: 14px;
     --halo-spread: 3px;
@@ -1906,6 +1917,67 @@ select {
   }
 }
 
+/* -----------------------------------------------------------------------
+ * Notification bell — two-tone attention.
+ *
+ * TWO tones, not one: the bell swings while a warm halo blooms behind it, so
+ * the movement and the colour arrive together. A single-tone pulse reads as a
+ * loading state; the pair reads as "something arrived".
+ *
+ * Runs a FIXED number of times, never infinite — a permanently animating bell
+ * becomes wallpaper and stops meaning anything. Transform and opacity only,
+ * so it stays on the compositor.
+ * --------------------------------------------------------------------- */
+@keyframes bell-two-tone-swing {
+  0%, 100% { transform: rotate(0deg); }
+  15% { transform: rotate(-11deg); }
+  30% { transform: rotate(9deg); }
+  45% { transform: rotate(-6deg); }
+  60% { transform: rotate(4deg); }
+  75% { transform: rotate(-2deg); }
+}
+@keyframes bell-two-tone-halo {
+  0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+  40% { opacity: 0.55; transform: translate(-50%, -50%) scale(1.15); }
+}
+
+.bell-two-tone {
+  position: relative;
+}
+.bell-two-tone svg {
+  animation: bell-two-tone-swing 1.6s ease-in-out 2;
+  transform-origin: 50% 12%;
+}
+/* The second tone: a warm bloom behind the glyph, in the brand primary. */
+.bell-two-tone::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 150%;
+  height: 150%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, hsl(var(--primary) / 0.45), transparent 68%);
+  /* Centred AND invisible at rest.
+     Without these two the element sat at its natural top/left offset with
+     full opacity, so the bloom parked below the bell as a permanent orange
+     smudge — only the keyframes ever centred it. The resting state has to be
+     the same as the 0% frame, or the element is visible before and after the
+     animation runs. */
+  transform: translate(-50%, -50%) scale(0.7);
+  opacity: 0;
+  animation: bell-two-tone-halo 1.6s ease-out 2;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bell-two-tone svg,
+  .bell-two-tone::before {
+    animation: none;
+  }
+  /* The unread dot still carries the state, so nothing is lost. */
+}
+
 /* Conversation canvas
    ------------------------------------------------------------------
    The conversation owns the screen, so it supplies its own ground rather
@@ -1962,6 +2034,7 @@ select {
   }
 }
 
+
 /* A message settling into place. Deliberately small: a short rise and fade,
    no bounce, no scale — the thread should feel calm, not springy. */
 @keyframes conversation-message-in {
@@ -1984,6 +2057,7 @@ select {
     animation: none;
   }
 }
+
 
 /* Mad Buddy Orb
    ------------------------------------------------------------------
@@ -2039,7 +2113,7 @@ select {
   border-radius: inherit;
   background:
     radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.42), transparent 52%),
-    linear-gradient(150deg, #fb923c 0%, var(--color-brand-orange) 52%, #ea580c 100%);
+    linear-gradient(150deg, #f2a855 0%, var(--color-brand-orange) 52%, #c96f18 100%);
 }
 
 /* Glass depth: a fine bright rim on the upper edge, fading out by the middle.
@@ -2156,6 +2230,7 @@ select {
   }
 }
 
+
 /* Socialize status control
    ------------------------------------------------------------------
    One subtle pulse after the SERVER confirms a state change — never a loop,
@@ -2180,11 +2255,14 @@ select {
   }
 }
 
+
+
 /* Socialize radar field
    ------------------------------------------------------------------
    Rebuilt for the approved design: a calm immersive surface, four soft orbit
    rings, a warm centre anchor and attached labels. All motion is CSS, so
    there is no timer per node and the browser throttles it when backgrounded. */
+
 
 /* The surface. One restrained radial wash — no particles, no bloom. */
 .socialize-field {
@@ -2234,16 +2312,16 @@ select {
     #34d399,
     #a3e635 22%,
     #fbbf24 46%,
-    #fb923c 64%,
+    #f2a855 64%,
     #7c3aed 86%,
     #34d399
   );
   /* Layered lighting rather than one flat blob: a tight inner halo, a wider
      soft falloff, and a faint ambient bloom. Static — no animated glow. */
   box-shadow:
-    0 0 0 1px color-mix(in srgb, #fb923c 18%, transparent),
+    0 0 0 1px color-mix(in srgb, #f2a855 18%, transparent),
     0 0 14px color-mix(in srgb, #fbbf24 26%, transparent),
-    0 0 38px color-mix(in srgb, #fb923c 16%, transparent),
+    0 0 38px color-mix(in srgb, #f2a855 16%, transparent),
     0 0 76px color-mix(in srgb, #7c3aed 12%, transparent);
 }
 
@@ -2256,7 +2334,7 @@ select {
   border-radius: 999px;
   background: radial-gradient(
     circle at 50% 50%,
-    color-mix(in srgb, #fb923c 15%, transparent) 0%,
+    color-mix(in srgb, #f2a855 15%, transparent) 0%,
     color-mix(in srgb, #7c3aed 8%, transparent) 42%,
     transparent 68%
   );
@@ -2405,6 +2483,99 @@ select {
   .socialize-depth {
     animation: none;
   }
+}
+
+/* -----------------------------------------------------------------------
+ * Socialize hero ambience.
+ *
+ * Proximity and discovery, deliberately NOT a radar: no rings, no sweep, no
+ * concentric bands. Two soft lights drifting at different speeds read as
+ * "people around you" without drawing a diagram of it.
+ *
+ * Every animation here is transform/opacity only, so it stays on the
+ * compositor and costs no layout or paint. Long, low-amplitude cycles on
+ * purpose — this should read as the surface being alive, not as something
+ * asking for attention. All of it no-ops under prefers-reduced-motion via
+ * the block below.
+ * --------------------------------------------------------------------- */
+@keyframes socialize-glow-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.55; }
+  50% { transform: scale(1.09); opacity: 0.8; }
+}
+@keyframes socialize-drift {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(6px, -10px, 0); }
+}
+
+.socialize-hero-glow {
+  will-change: transform, opacity;
+  animation: socialize-glow-breathe 7s ease-in-out infinite;
+}
+.socialize-hero-drift {
+  will-change: transform;
+  animation: socialize-drift 13s ease-in-out infinite;
+}
+/* The second light runs slower and out of phase, so the two never pulse
+   together and the movement never reads as a loop. */
+.socialize-hero-drift-slow {
+  will-change: transform;
+  animation: socialize-drift 19s ease-in-out infinite reverse;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .socialize-hero-glow,
+  .socialize-hero-drift,
+  .socialize-hero-drift-slow {
+    animation: none;
+  }
+}
+
+/* -----------------------------------------------------------------------
+ * Socialize person cards.
+ *
+ * A short fade with a few pixels of upward travel — enough for a rail to
+ * feel like it arrived rather than appeared, and deliberately no bounce and
+ * no parallax. `both` so a staggered card is invisible until its turn
+ * instead of flashing at full opacity first.
+ *
+ * The portrait settles separately and more slowly, which reads as depth
+ * without any transform on scroll.
+ * --------------------------------------------------------------------- */
+@keyframes socialize-card-in {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes socialize-card-image-in {
+  from { opacity: 0; transform: scale(1.04); }
+  to { opacity: 1; transform: scale(1); }
+}
+.socialize-card-in {
+  animation: socialize-card-in 340ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+.socialize-card-image {
+  animation: socialize-card-image-in 520ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .socialize-card-in,
+  .socialize-card-image {
+    animation: none;
+  }
+}
+
+/* The Home mark inside the Orb. Centred over the gradient, in white, so it
+   reads on the brand fill in both themes. Sits under the rim highlight, so
+   every existing glow layer is unchanged. */
+.mb-orb-mark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 46%;
+  height: 46%;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  opacity: 0.95;
+  pointer-events: none;
 }
 
 /* Socialize People Nearby rows

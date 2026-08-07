@@ -13,6 +13,11 @@ import {
   type CommunicationPreferences
 } from "@/lib/messaging/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { guardAction } from "@/lib/admin/enforcement";
+import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import { signMediaForAsset } from "@/lib/content/service";
+import { sniffImageKind, storageKeyFor, uploadValidationMessage, validateImageUpload } from "@/lib/media/validation";
+import type { MediaContentType } from "@/lib/supabase/database.types";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { MessageReactionType } from "@/lib/supabase/database.types";
@@ -315,4 +320,218 @@ export async function updateCommunicationPreferencesAction(input: unknown): Prom
     );
   if (error) return { ok: false, message: "Couldn't save your settings." };
   return { ok: true, message: "Communication settings saved." };
+}
+
+// ---------------------------------------------------------------------------
+// Messaging attachments (Stage 3D.1) — canonical, every conversation type.
+// ---------------------------------------------------------------------------
+
+export type AttachmentUploadState = MessagingActionState & {
+  mediaId?: string;
+  previewUrl?: string | null;
+};
+
+/**
+ * Upload one image for a message attachment.
+ *
+ * CANONICAL, not group-specific: it takes a conversation id, so direct
+ * messages, group chats, plan chats, event chats and Safe Arrival threads all
+ * use this one action. Nothing about it knows what kind of conversation it is
+ * serving.
+ *
+ * Mirrors the Moments upload pipeline exactly — EXIF stripping, server-derived
+ * storage key, thumb/feed variants, post-upload signature verification and
+ * compensating cleanup — because that pipeline is already correct and a second
+ * one would be a second place for a privacy rule to be forgotten.
+ *
+ * Membership is checked BEFORE any bytes are read, so a non-member cannot use
+ * this as free storage or probe conversation ids.
+ */
+export async function uploadMessageAttachmentAction(formData: FormData): Promise<AttachmentUploadState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in before uploading." };
+
+  const conversationId = formData.get("conversationId");
+  if (typeof conversationId !== "string" || !uuidSchema.safeParse(conversationId).success) {
+    return { ok: false, message: "That conversation isn't available." };
+  }
+
+  const rateLimit = await consumeRateLimit({ action: "media.upload", userId });
+  if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
+
+  const admin = createSupabaseAdminClient();
+
+  // Kill switch + account restrictions, before any bytes are read or stored.
+  const guard = await guardAction(admin, { userId, surface: "messaging", control: "media_uploads" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+
+  // Membership first: never store bytes for someone who cannot post here.
+  const { resolveConversationAccess } = await import("@/lib/messaging/service");
+  const access = await resolveConversationAccess(admin, userId, conversationId);
+  if (!access.canView) return { ok: false, message: "That conversation isn't available." };
+
+  const file = formData.get("media");
+  if (!(file instanceof File)) return { ok: false, message: "Choose a photo first." };
+
+  // Magic bytes, never the filename extension or the claimed MIME alone.
+  const headerBytes = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+  const validation = validateImageUpload({
+    claimedMimeType: file.type,
+    headerBytes,
+    sizeBytes: file.size,
+    context: "chat"
+  });
+  if (!validation.valid) {
+    return { ok: false, message: uploadValidationMessage(validation.reason) };
+  }
+
+  const { data: asset, error: assetError } = await admin
+    .from("media_assets")
+    .insert({
+      owner_id: userId,
+      // Placeholder; replaced with the real key below once the id is known.
+      storage_key: `pending/${userId}/${Date.now()}`,
+      content_type: validation.mimeType as MediaContentType,
+      size_bytes: file.size,
+      context_type: "chat",
+      processing_status: "pending"
+    })
+    .select("id")
+    .single();
+  if (assetError || !asset) return { ok: false, message: "Couldn't prepare the upload." };
+
+  // The path is DERIVED server-side from owner + context + asset id. The
+  // uploader never supplies it, so it cannot write outside its own namespace
+  // or collide with another conversation's media.
+  const key = storageKeyFor({ ownerId: userId, context: "chat", mediaId: asset.id, kind: validation.kind });
+  const removeFailedUpload = async (paths: string[] = []) => {
+    if (paths.length > 0) await admin.storage.from("media").remove(paths);
+    await admin.from("media_assets").delete().eq("id", asset.id).eq("owner_id", userId);
+  };
+
+  // Strip EXIF (GPS!) and build thumb/feed variants BEFORE anything reaches
+  // storage — the stored original is already the metadata-free re-encode.
+  let processed;
+  try {
+    const { processImageUpload } = await import("@/lib/media/processing");
+    processed = await processImageUpload(Buffer.from(await file.arrayBuffer()), validation.kind);
+  } catch {
+    await removeFailedUpload();
+    return { ok: false, message: "That image couldn't be processed. Try a different photo." };
+  }
+
+  const { toStorageArrayBuffer, variantStorageKey } = await import("@/lib/media/processing");
+  const { error: uploadError } = await admin.storage
+    .from("media")
+    .upload(key, toStorageArrayBuffer(processed.original.buffer), {
+      contentType: validation.mimeType,
+      upsert: false
+    });
+  if (uploadError) {
+    await removeFailedUpload();
+    return { ok: false, message: "Couldn't upload that photo. Try again." };
+  }
+
+  // Variants are best-effort: signMediaForAsset falls back to the (already
+  // stripped) original if a variant upload failed.
+  const variantRows = [
+    { variant: "thumb" as const, key: variantStorageKey(key, "thumb"), image: processed.variants.thumb },
+    { variant: "feed" as const, key: variantStorageKey(key, "feed"), image: processed.variants.feed }
+  ];
+  await Promise.all(
+    variantRows.map(async ({ variant, key: variantKey, image }) => {
+      const { error } = await admin.storage.from("media").upload(variantKey, toStorageArrayBuffer(image.buffer), {
+        contentType: validation.mimeType,
+        upsert: false
+      });
+      if (error) return;
+      await admin.from("media_variants").insert({
+        media_asset_id: asset.id,
+        variant_type: variant,
+        storage_key: variantKey,
+        width: image.width,
+        height: image.height,
+        size_bytes: image.buffer.byteLength
+      });
+    })
+  );
+
+  // Storage can acknowledge an upload even when a runtime has transformed its
+  // request body. Verify the persisted signature before exposing the asset.
+  const { data: storedOriginal, error: verifyError } = await admin.storage.from("media").download(key);
+  const storedKind = storedOriginal
+    ? sniffImageKind(new Uint8Array(await storedOriginal.slice(0, 12).arrayBuffer()))
+    : null;
+  if (verifyError || storedKind !== validation.kind) {
+    await removeFailedUpload([key, ...variantRows.map((row) => row.key)]);
+    return { ok: false, message: "That photo was not stored correctly. Please try again." };
+  }
+
+  const { error: readyError } = await admin
+    .from("media_assets")
+    .update({
+      storage_key: key,
+      processing_status: "ready",
+      width: processed.original.width,
+      height: processed.original.height,
+      size_bytes: processed.original.buffer.byteLength,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", asset.id)
+    .eq("owner_id", userId);
+  if (readyError) {
+    await removeFailedUpload([key, ...variantRows.map((row) => row.key)]);
+    return { ok: false, message: "Couldn't finish processing that photo. Try again." };
+  }
+
+  // A signed preview so the composer can show the real thumbnail before send,
+  // rather than holding the original File in memory.
+  const previewUrl = await signMediaForAsset(admin, asset.id, "thumb");
+
+  return { ok: true, message: "Photo ready.", mediaId: asset.id, previewUrl };
+}
+
+/**
+ * Discard an attachment the sender chose not to send.
+ *
+ * Without this, cancelling a photo would leave a ready `media_assets` row and
+ * its stored objects behind forever — an orphan nobody can see and nobody
+ * cleans up. Owner-scoped and only for unsent chat assets, so it can never
+ * delete media already attached to a message.
+ */
+export async function discardMessageAttachmentAction(mediaId: string): Promise<AttachmentUploadState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  const userId = await getAuthedUserId();
+  if (!userId || !uuidSchema.safeParse(mediaId).success) return { ok: false, message: "Nothing to discard." };
+
+  const admin = createSupabaseAdminClient();
+  const { data: attached } = await admin
+    .from("messages")
+    .select("id")
+    .eq("media_id", mediaId)
+    .limit(1)
+    .maybeSingle();
+  // Already sent: the message owns it now, and deleting it would blank a
+  // message someone has already received.
+  if (attached) return { ok: true, message: "Already sent." };
+
+  const { data: asset } = await admin
+    .from("media_assets")
+    .select("storage_key")
+    .eq("id", mediaId)
+    .eq("owner_id", userId)
+    .eq("context_type", "chat")
+    .maybeSingle();
+  if (!asset) return { ok: true, message: "Nothing to discard." };
+
+  const { variantStorageKey } = await import("@/lib/media/processing");
+  await admin.storage
+    .from("media")
+    .remove([asset.storage_key, variantStorageKey(asset.storage_key, "thumb"), variantStorageKey(asset.storage_key, "feed")]);
+  await admin.from("media_assets").delete().eq("id", mediaId).eq("owner_id", userId);
+  return { ok: true, message: "Photo removed." };
 }

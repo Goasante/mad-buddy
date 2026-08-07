@@ -8,7 +8,7 @@ import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import type { ConversationRole } from "@/lib/supabase/database.types";
+import type { ConversationRole, GroupVisibility } from "@/lib/supabase/database.types";
 
 /**
  * Mobile Groups v1: list (my groups + discoverable + invitations), create, and
@@ -123,6 +123,11 @@ async function summariesFor(
           memberCount: memberCountById.get(id) ?? 0,
           role: roleById.get(id) ?? null,
           joinMode: setting.join_mode,
+          // Read defensively: the `visibility` column ships in a PENDING
+        // migration, and selecting a column that does not exist yet fails
+        // the WHOLE query — which silently emptied every group list.
+        // Absent means private, matching the migration's own default.
+        visibility: (setting as { visibility?: GroupVisibility }).visibility ?? "private",
           lastMessageAt: conversation.last_message_at,
           lastMessagePreview: lastMessage
             ? lastMessage.message_type === "voice_note"
@@ -153,7 +158,8 @@ export async function listGroupsPageData(userId: string): Promise<GroupsPageData
     admin
       .from("friendships")
       .select("user_one_id, user_two_id")
-      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`),
+      // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
+      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
     admin.from("group_settings").select("conversation_id").eq("join_mode", "link")
   ]);
 

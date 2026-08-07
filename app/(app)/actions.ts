@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { emitLifeEvent } from "@/lib/life/emit";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { sniffImageKind, uploadValidationMessage, validateImageUpload } from "@/lib/media/validation";
@@ -290,6 +291,30 @@ export async function acceptFriendRequestAction(requestId: string): Promise<Inte
   const result = await acceptFriendRequest(supabase, userId, requestId);
 
   if (result.ok) {
+    // Life event, COMPENSATING: recorded after the friendship exists, and
+    // never awaited into the result. A failed event must not make a real
+    // friendship look like a failure — rebuildRelationship replays it from
+    // the friendships table later.
+    //
+    // The other party is read here rather than returned by the service:
+    // ServiceResult is shared by many callers and widening it for one
+    // consumer would be the wrong trade.
+    void (async () => {
+      const admin = createSupabaseAdminClient();
+      const { data: request } = await admin
+        .from("friend_requests")
+        .select("sender_id, receiver_id")
+        .eq("id", requestId)
+        .maybeSingle();
+      const otherUserId = request?.sender_id === userId ? request?.receiver_id : request?.sender_id;
+      if (!otherUserId) return;
+      await emitLifeEvent(admin, {
+        eventType: "relationship.created",
+        actorId: userId,
+        subjectId: otherUserId,
+        naturalKey: "created"
+      });
+    })();
     revalidatePath("/friends");
   }
 
@@ -331,11 +356,25 @@ export async function removeFriendAction(friendId: string): Promise<IntegrationA
 
   const pair = orderedPair(userId, parsedFriend.data);
   const admin = createSupabaseAdminClient();
+  const endedAt = new Date().toISOString();
+
+  // SOFT ENDING. The row is retained with ended_at set, never deleted.
+  //
+  // A relationship is a persistent identity, not a disposable row: the pair's
+  // canonical id, its created_at, and everything keyed to it must survive an
+  // unfriending so the timeline stays continuous and a later reactivation
+  // resumes the SAME relationship rather than inventing a new one.
+  //
+  // `.is("ended_at", null)` makes this idempotent under concurrency: two
+  // simultaneous removals both match at most once, so the second updates no
+  // rows and reports "no longer in your Muddies" instead of re-stamping
+  // ended_at and moving the ending later than it really was.
   const { data: removed, error } = await admin
     .from("friendships")
-    .delete()
+    .update({ ended_at: endedAt })
     .eq("user_one_id", pair.user_one_id)
     .eq("user_two_id", pair.user_two_id)
+    .is("ended_at", null)
     .select("id")
     .maybeSingle();
 
@@ -346,6 +385,17 @@ export async function removeFriendAction(friendId: string): Promise<IntegrationA
   if (!removed) {
     return { ok: false, message: "This person is no longer in your Muddies." };
   }
+
+  // Life event, COMPENSATING. Emitted after the ending has already been
+  // persisted, so a failure here can never un-end the friendship; the event is
+  // recoverable by replay because the ended row is still there to replay from.
+  void emitLifeEvent(admin, {
+    eventType: "relationship.ended",
+    actorId: userId,
+    subjectId: parsedFriend.data,
+    naturalKey: "ended",
+    occurredAt: endedAt
+  });
 
   await admin
     .from("close_friend_relationships")
@@ -385,8 +435,16 @@ export async function blockUserAction(targetUserId: string): Promise<Integration
 
   const admin = createSupabaseAdminClient();
   const pair = orderedPair(userId, parsedTarget.data);
+  const blockedAt = new Date().toISOString();
   await Promise.all([
-    admin.from("friendships").delete().match(pair),
+    // Blocking ENDS the friendship; it does not erase it. Access is revoked
+    // the moment ended_at is set (every active-friend read filters on it), and
+    // the block itself independently overrides everything on top of that.
+    //
+    // Retaining the row matters for the blocked pair specifically: if blocking
+    // deleted it, unblocking would have nothing to reactivate and the pair's
+    // shared history would be gone — a punishment neither of them chose.
+    admin.from("friendships").update({ ended_at: blockedAt }).match(pair).is("ended_at", null),
     admin
       .from("friend_requests")
       .update({ status: "blocked", responded_at: new Date().toISOString() })
@@ -401,6 +459,23 @@ export async function blockUserAction(targetUserId: string): Promise<Integration
         `and(owner_id.eq.${userId},friend_id.eq.${parsedTarget.data}),and(owner_id.eq.${parsedTarget.data},friend_id.eq.${userId})`
       )
   ]);
+
+  // Life event, COMPENSATING. Blocking is an ending, so the timeline records
+  // one — otherwise a blocked relationship would read as still running.
+  //
+  // The event says only that the relationship ended, never that a block caused
+  // it: the timeline is shared with the other party, and "they blocked you" is
+  // not a fact either side is entitled to read out of a projection.
+  //
+  // Same dedupe key as removeFriendAction, so blocking someone already removed
+  // records nothing new rather than a second, later ending.
+  void emitLifeEvent(admin, {
+    eventType: "relationship.ended",
+    actorId: userId,
+    subjectId: parsedTarget.data,
+    naturalKey: "ended",
+    occurredAt: blockedAt
+  });
 
   // Blocking archives the pair's direct conversation immediately (batch 7):
   // sends were already refused via per-send block checks; this removes the

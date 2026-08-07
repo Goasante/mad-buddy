@@ -404,12 +404,25 @@ export const handleCompletePastPlans: JobHandler = async (admin) => {
   const { grantAchievement, grantCountAchievement } = await import("@/lib/engagement/achievements");
   const { data: goers } = await admin
     .from("plan_participants")
-    .select("user_id")
+    .select("plan_id, user_id")
     .in(
       "plan_id",
       completed.map((plan) => plan.id)
     )
     .eq("rsvp_status", "going");
+
+  // Life: attending a plan together is a relationship fact. Emitted here
+  // because this job is the only thing that ever completes a plan, and
+  // compensating — a failed event never un-completes the plan above.
+  const { planAttendancePairs } = await import("@/lib/life/plan-attendance");
+  const { emitLifeEvents } = await import("@/lib/life/emit");
+  await emitLifeEvents(
+    admin,
+    planAttendancePairs(
+      (goers ?? []).map((row) => ({ planId: row.plan_id, userId: row.user_id })),
+      nowIso
+    )
+  );
 
   const userIds = [...new Set([...completed.map((plan) => plan.creator_id), ...(goers ?? []).map((row) => row.user_id)])];
   for (const userId of userIds) {
@@ -515,6 +528,9 @@ export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
       .lt("created_at", endIso)
       .limit(10000),
     admin
+      // LIFE-HISTORICAL: counts friendships FORMED in this window, so an
+      // ended_at filter would be wrong — a friendship that formed and then
+      // ended still happened during the period being recapped.
       .from("friendships")
       .select("user_one_id, user_two_id")
       .gte("created_at", startIso)

@@ -1,4 +1,11 @@
-import type { ConversationRole, GroupJoinMode, GroupPostingMode } from "@/lib/supabase/database.types";
+import type {
+  ConversationMemberStatus,
+  ConversationRole,
+  GroupJoinMode,
+  GroupVisibility,
+  GroupPostingMode,
+  SubscriptionPlan
+} from "@/lib/supabase/database.types";
 
 export type GroupSummary = {
   id: string;
@@ -7,6 +14,8 @@ export type GroupSummary = {
   memberCount: number;
   role: ConversationRole | null;
   joinMode: GroupJoinMode;
+  /** Who can see the group exists. Never implies who can join it. */
+  visibility: GroupVisibility;
   lastMessageAt: string | null;
   lastMessagePreview: string | null;
 };
@@ -21,12 +30,24 @@ export type GroupsPageData = {
   invitations: GroupInvitation[];
 };
 
+/**
+ * One group member, as a co-member is authorised to see them.
+ *
+ * Deliberately narrow: display name, username, avatar, membership tier, group
+ * role and membership state — the fields the member list and the message
+ * identity layer need, and nothing else. No email, phone, location or hidden
+ * profile fields are ever projected here.
+ */
 export type GroupMemberView = {
   userId: string;
   displayName: string;
   username: string;
   avatarUrl: string | null;
   role: ConversationRole;
+  /** Effective membership tier, for the canonical premium ring/badge. */
+  plan: SubscriptionPlan | null;
+  /** Current membership state, so Stage 3C can render it without re-querying. */
+  status: ConversationMemberStatus;
 };
 
 export type GroupInviteCandidate = {
@@ -39,6 +60,8 @@ export type GroupInviteCandidate = {
 export type GroupDetailView = GroupSummary & {
   postingMode: GroupPostingMode;
   canManageMembers: boolean;
+  /** The signed-in viewer, so role-aware rows can identify their own row. */
+  viewerId: string;
   members: GroupMemberView[];
   inviteCandidates: GroupInviteCandidate[];
 };

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Ban, Eye, MapPin, MessageCircle, ShieldCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/app-shell/page-header";
 
 const safetyTools = [
   { title: "Safe Arrival", description: "Ask approved friends to check on you and confirm when you arrive safely.", icon: MapPin, href: "/safe-arrival" as const },
@@ -17,11 +18,16 @@ const safetyTips = [
 export function SafetyCenterPage() {
   return (
     <div className="mx-auto max-w-[900px] space-y-8 pt-6">
+      {/* The hero below is the page's own identity and stays on every
+          breakpoint; the canonical bar adds the Back affordance and title that
+          mobile was missing entirely. */}
+      <PageHeader title="Safety Center" backHref="/settings/privacy" />
+
       <div className="rounded-2xl border border-primary/30 bg-primary/10 p-6 text-center">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary/15 text-primary">
           <ShieldCheck className="h-7 w-7" aria-hidden="true" />
         </span>
-        <h1 className="mt-4 text-xl font-semibold tracking-tight">Your safety is our priority.</h1>
+        <p className="mt-4 text-xl font-semibold tracking-tight">Your safety is our priority.</p>
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
           Tips, tools, and resources to help you stay safe while you connect and meet.
         </p>

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { entitlementsFor, upgradePromptFor } from "@/lib/billing/entitlements";
+import { UNLIMITED, entitlementsFor, upgradePromptFor } from "@/lib/billing/entitlements";
 import {
   composeArrivalMs,
   contactCoverageSummary,
@@ -115,7 +115,15 @@ describe("lead-time copy", () => {
 // Watcher capacity comes from the canonical entitlement registry
 // ---------------------------------------------------------------------------
 
-describe("subscription-tiered watcher capacity", () => {
+/**
+ * Phase 0: watcher capacity is NOT a subscription feature.
+ *
+ * Watchers are the people who get told you did not arrive. Selling more of
+ * them means charging the person in more danger, so every tier receives the
+ * same permissive access. These tests replace the previous "each paid tier
+ * gets a strictly higher allowance" suite.
+ */
+describe("safety capacity is equal on every tier", () => {
   const PLANS: SubscriptionPlan[] = ["free", "buddy_plus", "buddy_pro"];
 
   it("reuses the existing canonical entitlement key", () => {
@@ -126,30 +134,46 @@ describe("subscription-tiered watcher capacity", () => {
     }
   });
 
-  it("gives each paid tier a strictly higher allowance", () => {
-    const [free, plus, pro] = PLANS.map((plan) => safeArrivalLimitsFor(plan).maxContacts);
-    expect(plus).toBeGreaterThan(free);
-    // Pro previously inherited the Plus value, so the top tier bought nothing.
-    expect(pro).toBeGreaterThan(plus);
+  it("gives every tier the same unlimited watcher allowance", () => {
+    const values = PLANS.map((plan) => safeArrivalLimitsFor(plan).maxContacts);
+    expect(new Set(values).size, "watcher capacity must not differ by plan").toBe(1);
+    for (const value of values) expect(value).toBe(UNLIMITED);
   });
 
-  it("validates counts against the plan's OWN limit, whatever it is configured to", () => {
+  it("gives every tier the same concurrent-journey allowance", () => {
+    const values = PLANS.map((plan) => safeArrivalLimitsFor(plan).maxActiveSessions);
+    expect(new Set(values).size).toBe(1);
+  });
+
+  it("does not depend on payment, trial or reward state", () => {
+    // Identical across plans means no billing status, grace period, trial or
+    // earned tier override can change it.
+    const contacts = PLANS.map((plan) => entitlementsFor(plan).max_safe_arrival_contacts);
+    expect(new Set(contacts).size).toBe(1);
+  });
+
+  it("still requires at least one watcher, on every plan", () => {
+    // The one validation that survives: a journey nobody is watching is not
+    // a Safe Arrival.
     for (const plan of PLANS) {
-      const limit = safeArrivalLimitsFor(plan).maxContacts;
-      expect(validateContactCount(limit, plan)).toBeNull();
-      expect(validateContactCount(limit + 1, plan)).not.toBeNull();
-      expect(validateContactCount(0, plan)).not.toBeNull();
+      expect(validateContactCount(0, plan), plan).not.toBeNull();
+      expect(validateContactCount(1, plan), plan).toBeNull();
+      // No upper bound to hit.
+      expect(validateContactCount(25, plan), plan).toBeNull();
     }
   });
 
-  it("has a central upgrade prompt whose numbers match the registry", () => {
-    const prompt = upgradePromptFor("max_safe_arrival_contacts", "free");
-    expect(prompt).toBeTruthy();
+  it("offers no upgrade prompt anywhere in the safety path", () => {
+    // The strongest form of the rule: not "the prompt is correct" but "there
+    // is no prompt".
     for (const plan of PLANS) {
-      expect(prompt).toContain(String(entitlementsFor(plan).max_safe_arrival_contacts));
+      expect(upgradePromptFor("max_safe_arrival_contacts", plan), plan).toBeNull();
     }
-    // Paid plans are not nagged.
-    expect(upgradePromptFor("max_safe_arrival_contacts", "buddy_pro")).toBeNull();
+    const actions = stripComments(read("app/(app)/safe-arrival-actions.ts"));
+    expect(actions).not.toContain("upgradePromptFor");
+
+    const rules = stripComments(read("lib/safety/safe-arrival.ts"));
+    expect(rules.toLowerCase()).not.toContain("upgrade");
   });
 
   it("is enforced server-side, not only hidden in the UI", () => {
@@ -158,8 +182,10 @@ describe("subscription-tiered watcher capacity", () => {
     expect(actions).toContain("getCurrentSubscriptionAccess");
     // The wire schema must not impose a lower cap than the top plan allows: a
     // hardcoded max(5) silently truncated Buddy Pro before plan logic ran.
+    // The wire schema keeps a generous OPERATIONAL ceiling — a system limit,
+    // not a plan limit. It must be high enough never to act as a paywall.
     const schemaMax = /contactIds: z\.array\(uuidSchema\)\.min\(1\)\.max\((\d+)\)/.exec(actions)?.[1];
-    expect(Number(schemaMax)).toBeGreaterThanOrEqual(entitlementsFor("buddy_pro").max_safe_arrival_contacts);
+    expect(Number(schemaMax)).toBeGreaterThanOrEqual(10);
   });
 
   it("resolves the limit on the server and passes it down, never computing it in the component", () => {

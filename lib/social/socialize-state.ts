@@ -125,8 +125,12 @@ export function socializeStateCopy(state: SocializeDisplayState): SocializeState
   switch (state) {
     case "inactive":
       return {
-        message: "Socialize is off.",
-        detail: "Turn it on to meet people nearby.",
+        // The hero already says this — and says it aspirationally, with the
+        // control attached. Repeating "Socialize is off" in the empty state
+        // spends the screen twice on the same fact, so the inactive state
+        // contributes nothing here.
+        message: null,
+        detail: null,
         action: null
       };
     case "activating":
@@ -136,7 +140,7 @@ export function socializeStateCopy(state: SocializeDisplayState): SocializeState
     case "empty":
       return {
         message: "No one nearby right now.",
-        detail: "Keep Socializing on and check again soon.",
+        detail: "Keep Linkr on and check again soon.",
         action: "Refresh"
       };
     case "failed":
