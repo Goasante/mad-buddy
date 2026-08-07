@@ -12,6 +12,7 @@ import {
   leaveGroupAction,
   promoteGroupAdminAction,
   removeGroupMemberAction,
+  setGroupVisibilityAction,
   transferGroupOwnershipAction
 } from "@/app/(app)/group-actions";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
@@ -669,6 +670,58 @@ export function GroupDetailPage({
           {/* Leaving lives at the foot, away from the member rows, so it is
               never the thing under a mis-tap. The owner sees the transfer
               route instead of a Leave button that would always fail. */}
+          <section aria-labelledby="group-discovery-heading" className="space-y-2">
+            <h2 id="group-discovery-heading" className="text-sm font-semibold">
+              Discovery
+            </h2>
+            {group.role === "owner" ? (
+              <div className="rounded-2xl border border-border/70 bg-card/50 p-4">
+                <p className="text-sm font-medium">
+                  {group.visibility === "public" ? "Public group" : "Private group"}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {group.visibility === "public"
+                    ? "Anyone on Mad Buddy can find this group on Linkr. Members are never listed publicly — only the name, description and member count."
+                    : "Only people you invite can find this group. Make it public to let others discover it on Linkr."}
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-3"
+                  disabled={isPending}
+                  onClick={() => {
+                    if (isPending) return;
+                    startTransition(async () => {
+                      const result = await setGroupVisibilityAction({
+                        groupId: group.id,
+                        visibility: group.visibility === "public" ? "private" : "public"
+                      });
+                      setFeedback(result.message);
+                      if (result.ok) router.refresh();
+                    });
+                  }}
+                >
+                  {group.visibility === "public" ? "Make private" : "Make public"}
+                </Button>
+                {/* Visibility and joining are separate: a public group can
+                    still require an invitation, and this control never
+                    silently opens the door. */}
+                {group.visibility === "public" && group.joinMode !== "link" ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    People can find this group but still need an invitation to join.
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="rounded-2xl border border-border/70 bg-card/50 p-4 text-xs text-muted-foreground">
+                {group.visibility === "public"
+                  ? "This group is public — anyone can find it on Linkr."
+                  : "This group is private. Only invited people can find it."}
+              </p>
+            )}
+          </section>
+
           <section aria-labelledby="group-danger-heading" className="space-y-2">
             <h2 id="group-danger-heading" className="text-sm font-semibold">
               Leaving this group

@@ -242,3 +242,50 @@ describe("group card", () => {
     expect(rails).toContain("Create a group");
   });
 });
+
+describe("changing visibility after creation", () => {
+  const page = stripComments(read("components/groups/group-detail-page.tsx"));
+
+  it("is OWNER only", () => {
+    // Admins manage people and content; listing a group publicly is a
+    // decision about every member's exposure, so it belongs to the one
+    // person accountable for the group.
+    expect(actions).toContain('membership.role !== "owner"');
+    expect(page).toContain('group.role === "owner" ? (');
+  });
+
+  it("fails neutrally for anyone else", () => {
+    // Never confirm a group exists to someone who is not its owner.
+    const action = actions.slice(actions.indexOf("export async function setGroupVisibilityAction"));
+    expect(action.slice(0, 1600)).toContain("That change isn't available.");
+  });
+
+  it("leaves join_mode alone", () => {
+    // Visibility and joining are separate axes: making a group findable must
+    // not silently make it openly joinable.
+    const action = actions.slice(actions.indexOf("export async function setGroupVisibilityAction"));
+    expect(action.slice(0, 1800)).not.toContain("join_mode");
+  });
+
+  it("says so when a public group still needs an invitation", () => {
+    expect(page).toContain("People can find this group but still need an invitation to join.");
+  });
+
+  it("tells non-owners the state without offering the control", () => {
+    expect(page).toContain("This group is private. Only invited people can find it.");
+  });
+
+  it("revalidates every surface the change affects", () => {
+    const action = actions.slice(actions.indexOf("export async function setGroupVisibilityAction"));
+    expect(action.slice(0, 2200)).toContain('revalidatePath("/discover")');
+  });
+});
+
+describe("repository hygiene", () => {
+  it("ignores downloaded binaries and dev logs", () => {
+    // A 40MB installer in git is a cost every clone pays forever.
+    const ignore = read(".gitignore");
+    expect(ignore).toContain("assets/*.exe");
+    expect(ignore).toContain(".stage*-dev.log");
+  });
+});

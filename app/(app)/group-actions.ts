@@ -812,3 +812,55 @@ export async function transferGroupOwnershipAction(input: unknown): Promise<Grou
   revalidatePath(`/groups/${groupId}`);
   return { ok: true, message: "Ownership transferred." };
 }
+
+const visibilitySchema = z.object({
+  groupId: uuidSchema,
+  visibility: z.enum(["private", "public"])
+});
+
+/**
+ * Change who can SEE a group exists.
+ *
+ * OWNER ONLY, deliberately. Admins manage people and content; making a group
+ * publicly listable is a decision about every member's exposure, and the one
+ * person accountable for the group should be the one who makes it.
+ *
+ * Separate from join_mode, which is left untouched: a public group may still
+ * be invite-only, and collapsing the two would silently make every
+ * discoverable group openly joinable.
+ */
+export async function setGroupVisibilityAction(input: unknown): Promise<GroupActionState> {
+  if (!serverReady()) return { ok: false, message: "Groups need the server database configuration." };
+  const parsed = visibilitySchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "That change isn't available." };
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  const { data: membership } = await admin
+    .from("conversation_members")
+    .select("role, status")
+    .eq("conversation_id", parsed.data.groupId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  // Neutral on failure: never confirm whether a group exists to someone who
+  // is not its owner.
+  if (membership?.status !== "joined" || membership.role !== "owner") {
+    return { ok: false, message: "That change isn't available." };
+  }
+
+  const { error } = await admin
+    .from("group_settings")
+    .update({ visibility: parsed.data.visibility, updated_at: new Date().toISOString() })
+    .eq("conversation_id", parsed.data.groupId);
+  if (error) return { ok: false, message: "Couldn't update that group." };
+
+  revalidatePath(`/groups/${parsed.data.groupId}`);
+  revalidatePath("/groups");
+  revalidatePath("/discover");
+  return {
+    ok: true,
+    message: parsed.data.visibility === "public" ? "Group is now public." : "Group is now private."
+  };
+}

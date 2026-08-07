@@ -23,3 +23,14 @@ tmp/
 # own. Remove these lines if you deliberately commit them (private repo).
 android/app/google-services.json
 ios/App/App/GoogleService-Info.plist
+
+# Local dev logs. Written by `next dev` runs and never worth committing.
+*.dev.log
+.codex-dev.*
+.stage*-dev.log
+
+# Downloaded tooling binaries. Large, machine-specific, and reproducible from
+# the vendor — an installer in git is 40MB every clone pays for forever.
+assets/*.exe
+assets/*.dmg
+assets/*.zip
