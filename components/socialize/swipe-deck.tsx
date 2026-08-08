@@ -7,6 +7,7 @@ import { FeatureIcon } from "@/components/ui/feature-icon";
 import { useCallback, useRef, useState, type CSSProperties } from "react";
 
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { presenceLabel } from "@/lib/presence/freshness";
@@ -414,8 +415,12 @@ function PersonFace({ person, interactive }: { person: SocializePerson; interact
           ) : (
             <span className="truncate">{name}</span>
           )}
-          {/* Membership, never presented as identity verification. */}
+          {/* TWO SEPARATE SIGNALS, never merged into one badge: membership is
+              a plan someone pays for, Trusted Member is standing they earned
+              and staff approved. Both compact, so the name keeps the weight
+              and neither competes with proximity or the action beneath. */}
           <PremiumPlanBadge plan={person.plan} compact />
+          <TrustedMemberMark trustedSince={person.trustedSince} compact />
         </p>
 
         {/* Their own words when they wrote any, otherwise proximity. Never an

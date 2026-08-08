@@ -2194,6 +2194,32 @@ select {
   text-shadow: 0 1px 10px rgb(0 0 0 / 0.45);
 }
 
+/* The name yields, the marks do not.
+   A long name beside a Pro badge AND a Trusted mark overflows a 320px card,
+   and the two things that must survive that squeeze are the marks — they are
+   already small, and a half-rendered badge reads as a glitch where a
+   truncated name reads as a long name. */
+.linkr-deck-name > :first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linkr-deck-name .premium-plan-badge,
+.linkr-deck-name .trusted-member-mark {
+  flex-shrink: 0;
+}
+
+/* On the narrowest phones the mark drops to its icon alone. The compact prop
+   already omits the word; this is the belt to that braces, since the badge
+   beside it may itself be wide. */
+@media (max-width: 22rem) {
+  .linkr-deck-name {
+    gap: 0.3125rem;
+  }
+}
+
 .linkr-deck-note {
   display: -webkit-box;
   -webkit-line-clamp: 1;

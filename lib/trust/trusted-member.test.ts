@@ -214,3 +214,65 @@ describe("tenure stops accruing when premium lapses", () => {
     expect(actions).toContain("const standing = await getTrustedMemberStandingAction()");
   });
 });
+
+describe("the mark on Linkr discovery cards", () => {
+  const deck = stripComments(read("components/socialize/swipe-deck.tsx"));
+  const projection = stripComments(read("lib/social/socialize-mobile.ts"));
+  const css = read("app/globals.css");
+  const mark = stripComments(read("components/trust/trusted-member-mark.tsx"));
+
+  it("reuses the one canonical mark component", () => {
+    expect(deck).toContain('import { TrustedMemberMark } from "@/components/trust/trusted-member-mark"');
+  });
+
+  it("sits beside the name, not as its own pill or banner", () => {
+    const nameRow = deck.slice(deck.indexOf("linkr-deck-name"), deck.indexOf("linkr-deck-note"));
+    expect(nameRow).toContain("<TrustedMemberMark");
+  });
+
+  it("keeps premium and Trusted Member as separate signals", () => {
+    // One is a plan someone pays for; the other is standing they earned.
+    // Merging them into a single badge would make the first imply the second.
+    const nameRow = deck.slice(deck.indexOf("linkr-deck-name"), deck.indexOf("linkr-deck-note"));
+    expect(nameRow).toContain("<PremiumPlanBadge");
+    expect(nameRow).toContain("<TrustedMemberMark");
+  });
+
+  it("renders compact, so it stays quieter than the name", () => {
+    expect(deck).toContain("<TrustedMemberMark trustedSince={person.trustedSince} compact />");
+  });
+
+  it("comes from the server projection, never inferred on the client", () => {
+    expect(projection).toContain("trustedSince:");
+    expect(projection).toContain("trusted_member_since");
+    // Never derived from plan, tenure or anything the client can see.
+    expect(deck).not.toMatch(/trusted[A-Za-z]*\s*=\s*.*plan/);
+  });
+
+  it("adds no query: the profiles read was already batched", () => {
+    // A card-level lookup would be one query per person shown.
+    expect(projection).toContain(
+      '.select("user_id, full_name, username, avatar_url, visibility_status, trusted_member_since")'
+    );
+  });
+
+  it("never calls itself Verified, and says what it means", () => {
+    expect(mark).toContain('aria-label="Trusted Member"');
+    expect(mark).not.toContain("Verified");
+    expect(mark).not.toContain("identity");
+  });
+
+  it("survives a long name beside both badges on a narrow card", () => {
+    // The name yields and the marks hold: a half-rendered badge reads as a
+    // glitch, a truncated name reads as a long name.
+    const rule = css.slice(css.indexOf(".linkr-deck-name > :first-child"));
+    expect(rule.slice(0, 300)).toContain("text-overflow: ellipsis");
+    const shrink = css.slice(css.indexOf(".linkr-deck-name .premium-plan-badge"));
+    expect(shrink.slice(0, 200)).toContain("flex-shrink: 0");
+  });
+
+  it("does not change how cards are ordered", () => {
+    // Standing is not rank. The feed sorts on proximity and recency only.
+    expect(projection).not.toMatch(/sort[\s\S]{0,120}trusted/i);
+  });
+});

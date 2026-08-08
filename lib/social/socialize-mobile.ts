@@ -44,6 +44,14 @@ export type SocializePerson = {
   displayName: string;
   username: string;
   avatarUrl: string | null;
+  /**
+   * When staff approved this person as a Trusted Member, or null.
+   *
+   * Server-authoritative and read straight from the profile — never inferred
+   * from premium, tenure or anything the client can see. Premium and Trusted
+   * Member are separate signals and stay separate fields.
+   */
+  trustedSince: string | null;
   activity: SocializeActivity;
   note: string | null;
   proximityTier: Extract<ProximityLevel, "close" | "near" | "far">;
@@ -298,7 +306,7 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
         .in("user_id", candidateIds),
       admin
         .from("profiles")
-        .select("user_id, full_name, username, avatar_url, visibility_status")
+        .select("user_id, full_name, username, avatar_url, visibility_status, trusted_member_since")
         .in("user_id", candidateIds),
       // People this viewer passed on in the deck. Filtered by expires_at
       // rather than trusting a cleanup job: an expired pass stops applying
@@ -398,6 +406,9 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
         lastPresenceUpdate,
         approxDistance,
         displayName: candidate.display_name,
+        trustedSince:
+          (profileByUserId.get(candidate.friend_id) as { trusted_member_since?: string | null } | undefined)
+            ?.trusted_member_since ?? null,
         username: candidate.username,
         avatarUrl: candidate.avatar_url,
         activity: session.activity as SocializeActivity,
