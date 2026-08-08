@@ -782,11 +782,11 @@ export function SocializePage({
   return (
     // The header scrolls with the feed, so AppShell reserves no fixed-header
     // height here (see IMMERSIVE_HEADER_PAGES). That makes THIS the one place
-    // the notch is cleared — a modest inset, not a full header's worth, so the
-    // title sits just below the status bar rather than half a screen down.
-    <div className="mx-auto flex w-full max-w-[900px] flex-col pt-[max(0.5rem,env(safe-area-inset-top))] md:pt-0">
-      {/* No card, no divider, no blur: the header sits directly on the
-          immersive surface the radar lives on. */}
+    // The header is FIXED, so it occupies no flow height and the feed would
+    // start underneath it. This reserves exactly its footprint: the safe-area
+    // inset (which the header pads by internally) plus its own content height.
+    // Reserved once here and cleared once in the header — never doubled.
+    <div className="mx-auto flex w-full max-w-[900px] flex-col pt-[calc(env(safe-area-inset-top,0px)+4.25rem)]">
 
 
 

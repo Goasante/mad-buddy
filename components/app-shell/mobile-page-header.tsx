@@ -4,25 +4,8 @@ import type { Route } from "next";
 import Link from "next/link";
 import { Bell, ChevronLeft, Menu, MoreHorizontal, UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useHasScrolled } from "@/hooks/use-has-scrolled";
 import { cn } from "@/lib/utils";
-
-/**
- * True once the page has scrolled far enough that content is passing under
- * the header. Drives the divider/shadow, which stays off at rest so the
- * header reads as part of the page rather than a permanently stuck bar.
- */
-function useHasScrolled(threshold = 4): boolean {
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const read = () => setScrolled(window.scrollY > threshold);
-    read();
-    window.addEventListener("scroll", read, { passive: true });
-    return () => window.removeEventListener("scroll", read);
-  }, [threshold]);
-
-  return scrolled;
-}
 
 /**
  * The canonical mobile page header, shared by every primary screen.

@@ -53,12 +53,31 @@ describe("socialize header", () => {
     expect(sheet).toContain('href="/settings/glow-visibility"');
   });
 
-  it("reserves no fixed-header height, and clears the notch once", () => {
-    // /discover takes the canonical header like every other root destination.
-    // The header scrolls with the feed, so no fixed-header height is
-    // reserved and the page clears the notch exactly once itself.
+  it("pins its own header and reserves exactly its footprint", () => {
+    // /discover renders its own header rather than the shell's, so it stays
+    // out of IMMERSIVE_HEADER_PAGES' fixed-header offset. That header is now
+    // FIXED like the canonical one, so the page reserves its height instead
+    // of only the notch.
     expect(appShell).toContain('IMMERSIVE_HEADER_PAGES: readonly string[] = ["/discover"]');
-    expect(page).toContain("env(safe-area-inset-top)");
+    expect(page).toContain("pt-[calc(env(safe-area-inset-top,0px)+4.25rem)]");
+  });
+
+  it("fixes the header to the viewport rather than sticking it in the scroll container", () => {
+    // Pull-to-refresh transforms that container, and a transformed ANCESTOR
+    // re-bases sticky onto itself — the header would ride down with the pull.
+    expect(feed).toContain("fixed inset-x-0 top-0 z-40");
+    expect(feed).not.toContain("sticky top-0");
+  });
+
+  it("keeps the header opaque, so nothing bleeds through from behind", () => {
+    // Content passes underneath a fixed header; a translucent surface shows
+    // cards and ambient artwork moving behind the title.
+    expect(feed).toContain("bg-background dark:bg-[#111112]");
+    expect(feed).not.toContain("backdrop-blur");
+  });
+
+  it("clears the notch exactly once, in the header itself", () => {
+    expect(feed).toContain("pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]");
   });
 
 });

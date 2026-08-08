@@ -71,7 +71,10 @@ describe("mobile header behaviour", () => {
   });
 
   it("shows its divider only once content scrolls beneath it", () => {
-    expect(header).toContain("function useHasScrolled");
+    // The hook moved to hooks/use-has-scrolled so Linkr's own header shares
+    // the same threshold and listener — two copies would drift, and the
+    // symptom is two headers growing dividers at different scroll offsets.
+    expect(header).toContain("useHasScrolled()");
     expect(header).toContain("border-transparent shadow-none");
   });
 

@@ -5,6 +5,7 @@ import { Bell, MoreHorizontal, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useHasScrolled } from "@/hooks/use-has-scrolled";
 import { cn } from "@/lib/utils";
 import {
   DISCOVERY_PAGE_SIZE,
@@ -105,12 +106,43 @@ export function DiscoveryFeed({
     return searchDiscoveryPeople(ordered, query);
   }, [people, query]);
 
+  // Drives the header divider, from the same hook the canonical header uses.
+  const scrolled = useHasScrolled();
+
   const visible = results.slice(0, visibleCount);
   const hasMore = results.length > visible.length;
 
   return (
     <div ref={feedRef} className="space-y-6">
-      <header className="flex items-start justify-between gap-3">
+      {/*
+        FIXED to the viewport, matching the canonical header on every other
+        page. Linkr's header used to scroll away with the feed, so the page
+        identity and the notifications bell left the screen entirely.
+
+        Fixed rather than sticky, for the same reason MobilePageHeader is:
+        pull-to-refresh transforms the scroll container, and a transformed
+        ANCESTOR re-bases sticky onto itself — the header would ride down with
+        the pull instead of staying put.
+
+        OPAQUE, not translucent. Content passes underneath a fixed header, so
+        a see-through surface shows cards bleeding through behind the title.
+        The blur that was there before did exactly that.
+      */}
+      <header
+        className={cn(
+          "fixed inset-x-0 top-0 z-40 mx-auto flex w-full max-w-[900px] items-start justify-between gap-3 px-4 pb-3 sm:px-6",
+          // The safe-area inset is reserved HERE and nowhere else in the
+          // chain, so the notch is cleared exactly once.
+          "pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]",
+          "bg-background dark:bg-[#111112]",
+          // Divider appears only once content is actually passing under it, so
+          // the header reads as part of the page at rest.
+          "border-b transition-colors duration-200 motion-reduce:transition-none",
+          scrolled
+            ? "border-border/60 shadow-[0_1px_12px_hsl(var(--shadow)/0.08)] dark:border-white/10"
+            : "border-transparent shadow-none"
+        )}
+      >
         <div className="min-w-0">
           <h1 className="text-[1.75rem] font-bold leading-none tracking-tight">Linkr</h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
