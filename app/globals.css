@@ -2067,12 +2067,24 @@ select {
   /* The stack needs a fixed height: the cards are absolutely positioned so
      they overlap, which removes them from flow. */
   height: 26rem;
+  /* The cards translate in Z, so the stack needs a real 3D context — without
+     preserve-3d every depth transform collapses flat and the effect is just
+     a slightly offset pile. Perspective is set inline from the shared
+     constant, so the maths and the paint cannot drift apart. */
+  transform-style: preserve-3d;
+  /* Vertical pans belong to the page; horizontal ones are ours. Declaring it
+     here lets the browser scroll on its own thread instead of waiting to see
+     whether a touchmove gets prevented. */
   touch-action: pan-y;
 }
 
 .linkr-deck-card {
   position: absolute;
   inset: 0;
+  /* Each card is its own 3D object, and backface-visibility keeps the tilted
+     ones from flashing their reverse side mid-rotation. */
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2082,16 +2094,26 @@ select {
   box-shadow:
     0 0 0 1px hsl(var(--primary) / 0.05),
     0 18px 44px -24px hsl(var(--shadow) / 0.75);
+  /* Pivot from the lower centre, so a drag reads as the card tipping in the
+     hand rather than spinning about its middle. */
   transform-origin: center bottom;
-  transition: transform 300ms ease-out, opacity 300ms ease-out;
-  will-change: transform;
+  transition: transform 300ms ease-out, opacity 300ms ease-out, filter 300ms ease-out;
+  will-change: transform, opacity, filter;
   user-select: none;
+  -webkit-user-select: none;
 }
 
-/* While the thumb is down the transform is driven per frame, so a transition
-   would make the card lag behind the pointer. */
+/* While the thumb is down the transform is driven per frame, so ANY transition
+   makes the card lag behind the pointer — it would animate toward each new
+   position instead of sitting at it. The exit tween re-enables it. */
 .linkr-deck-card-active {
-  transition: transform 260ms ease-out, opacity 260ms ease-out;
+  transition: none;
+}
+
+/* The exit: a longer curve than the settle, so a decided card sails out
+   rather than snapping away. */
+.linkr-deck-card-exiting {
+  transition: transform 300ms cubic-bezier(0.32, 0, 0.67, 0), opacity 260ms ease-out;
 }
 .linkr-deck-card-live:not(.linkr-deck-card-active) {
   transition: transform 300ms ease-out, opacity 300ms ease-out;

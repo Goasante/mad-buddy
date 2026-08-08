@@ -10,9 +10,11 @@ import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { presenceLabel } from "@/lib/presence/freshness";
 import {
+  DECK_PERSPECTIVE,
   DECK_VISIBLE_CARDS,
   canWave,
   cardTransform,
+  depthTransform,
   dragDirection,
   isHorizontalSwipe,
   resolveSwipe,
@@ -76,6 +78,16 @@ export function SwipeDeck({ people, onWave, onPass, onUndo, pending = false }: S
 
   const pointerRef = useRef<{ id: number; x: number; y: number; time: number } | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * Pointer moves are coalesced to one state update per animation frame.
+   *
+   * A touch screen can deliver well over 120 pointermove events a second, and
+   * re-rendering the whole stack on each one is what makes a drag feel heavy.
+   * The latest position is held here and flushed on the next frame, so the
+   * card tracks the thumb at display rate instead of event rate.
+   */
+  const frameRef = useRef<number | null>(null);
+  const pendingRef = useRef<Drag | null>(null);
 
   const top = people[0] ?? null;
 
@@ -123,12 +135,28 @@ export function SwipeDeck({ people, onWave, onPass, onUndo, pending = false }: S
     }
 
     const elapsed = Math.max(event.timeStamp - start.time, 1);
-    setDrag({ userId: top.userId, dx, dy, velocity: dx / elapsed });
+    pendingRef.current = { userId: top.userId, dx, dy, velocity: dx / elapsed };
+
+    if (frameRef.current === null) {
+      frameRef.current = window.requestAnimationFrame(() => {
+        frameRef.current = null;
+        if (pendingRef.current) setDrag(pendingRef.current);
+      });
+    }
   }
 
   function endDrag(event: React.PointerEvent) {
     const start = pointerRef.current;
     pointerRef.current = null;
+
+    // Drop any frame still queued: landing after the gesture ends would snap
+    // the card back to a stale offset.
+    if (frameRef.current !== null) {
+      window.cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    const finalDrag = pendingRef.current;
+    pendingRef.current = null;
     if (!start || !top) {
       setDrag(NO_DRAG);
       return;
@@ -137,7 +165,11 @@ export function SwipeDeck({ people, onWave, onPass, onUndo, pending = false }: S
       cardRef.current.releasePointerCapture(event.pointerId);
     }
 
-    const decision = resolveSwipe(activeDrag);
+    // Resolve from the final coalesced sample rather than the last rendered
+    // one: a fast flick can end before the queued frame commits, and reading
+    // stale state there loses the gesture entirely.
+    const settled = finalDrag && finalDrag.userId === top.userId ? finalDrag : activeDrag;
+    const decision = resolveSwipe(settled);
     // A right swipe on someone with a wave already outstanding springs back
     // rather than firing an action the server would reject.
     if (decision === "wave" && !canWave(top)) {
@@ -156,7 +188,13 @@ export function SwipeDeck({ people, onWave, onPass, onUndo, pending = false }: S
 
   return (
     <div className="linkr-deck-wrap">
-      <div className="linkr-deck" role="group" aria-roledescription="card deck" aria-label="People near you">
+      <div
+        className="linkr-deck"
+        role="group"
+        aria-roledescription="card deck"
+        aria-label="People near you"
+        style={{ perspective: `${DECK_PERSPECTIVE}px` }}
+      >
         {/* Painted back-to-front so the live card sits on top without z-index
             juggling: the last child is index 0. */}
         {visible
@@ -164,9 +202,15 @@ export function SwipeDeck({ people, onWave, onPass, onUndo, pending = false }: S
           .reverse()
           .map(({ person, index }) => {
             const isTop = index === 0;
-            const depth = stackStyle(index);
             const isExiting = exiting?.userId === person.userId;
+            // Cards behind advance a full slot while the front card exits.
+            const depth = stackStyle(index, exiting ? 1 : 0);
 
+            /**
+             * While the top card flies out, the stack behind it advances by
+             * the same fraction, so cards rise forward smoothly instead of
+             * snapping one slot when the exiting card unmounts.
+             */
             const transform = isExiting
               ? // Fly off in the direction of the decision, well past the
                 // viewport edge so the card is gone before it unmounts.
@@ -178,7 +222,7 @@ export function SwipeDeck({ people, onWave, onPass, onUndo, pending = false }: S
                     const t = cardTransform(activeDrag.dx, activeDrag.dy);
                     return `translate3d(${t.x}px, ${t.y}px, 0) rotate(${t.rotate}deg)`;
                   })()
-                : `translate3d(0, ${depth.translateY}px, 0) scale(${depth.scale})`;
+                : depthTransform(depth);
 
             return (
               <article
@@ -190,9 +234,18 @@ export function SwipeDeck({ people, onWave, onPass, onUndo, pending = false }: S
                   isTop && "linkr-deck-card-live",
                   // Suppress the settle transition while the thumb is down, or
                   // the card lags behind the pointer.
-                  (isTop && activeDrag.dx !== 0) || isExiting ? "linkr-deck-card-active" : null
+                  isTop && activeDrag.dx !== 0 && !isExiting ? "linkr-deck-card-active" : null,
+                  // The exit runs on its own longer curve.
+                  isExiting && "linkr-deck-card-exiting"
                 )}
-                style={{ transform, opacity: isExiting ? 0 : depth.opacity, zIndex: DECK_VISIBLE_CARDS - index }}
+                style={{
+                  transform,
+                  opacity: isExiting ? 0 : depth.opacity,
+                  zIndex: depth.zIndex,
+                  // Dimming and blur recede the stack without touching the
+                  // live card, which always resolves to brightness(1) blur(0).
+                  filter: `brightness(${depth.brightness}) blur(${depth.blur}px)`
+                }}
                 onPointerDown={isTop ? handlePointerDown : undefined}
                 onPointerMove={isTop ? handlePointerMove : undefined}
                 onPointerUp={isTop ? endDrag : undefined}

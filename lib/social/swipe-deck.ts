@@ -101,23 +101,84 @@ export function cardTransform(dx: number, dy: number): { x: number; y: number; r
   return { x: dx, y: dy * 0.35, rotate };
 }
 
+/** How many cards are rendered. Beyond this the difference is invisible. */
+export const DECK_VISIBLE_CARDS = 4;
+
+/**
+ * Depth tuning.
+ *
+ * The stack recedes along a rail rather than merely shrinking: each card
+ * behind is pushed back in Z, offset laterally, tilted around the vertical
+ * axis and progressively dimmed and blurred. That combination is what reads as
+ * physical depth — scale alone reads as a smaller copy of the same card.
+ */
+export const DECK_DEPTH_Z = 62;
+export const DECK_DEPTH_X = 16;
+export const DECK_DEPTH_TILT = 5;
+export const DECK_PERSPECTIVE = 1400;
+/** How fast dimming and blur ramp with depth. */
+export const DECK_FALLOFF = 0.16;
+export const DECK_MAX_BLUR = 3.5;
+
+export type DeckDepth = {
+  translateZ: number;
+  translateX: number;
+  rotateY: number;
+  translateY: number;
+  opacity: number;
+  brightness: number;
+  blur: number;
+  zIndex: number;
+};
+
 /**
  * Depth styling for a card at position `index` in the stack.
  *
- * Index 0 is live; the rest are scaled down and pushed back to read as a
- * physical pile. Only three are rendered — beyond that the difference is
- * invisible and each extra card is a wasted image fetch.
+ * Index 0 is live and completely untouched — no tilt, no dimming, no blur — so
+ * the card being decided on is never degraded by the effect behind it. Cards
+ * beyond the visible depth return opacity 0: the difference is invisible and
+ * each extra card is a wasted image fetch.
+ *
+ * `offset` carries the in-between position while a card is flying out, so the
+ * stack advances smoothly instead of snapping one slot when it unmounts.
  */
-export const DECK_VISIBLE_CARDS = 3;
+export function stackStyle(index: number, offset = 0): DeckDepth {
+  const d = Math.max(0, index - offset);
 
-export function stackStyle(index: number): { scale: number; translateY: number; opacity: number } {
-  if (index === 0) return { scale: 1, translateY: 0, opacity: 1 };
-  if (index >= DECK_VISIBLE_CARDS) return { scale: 0.9, translateY: 24, opacity: 0 };
+  if (d >= DECK_VISIBLE_CARDS) {
+    return {
+      translateZ: -DECK_DEPTH_Z * DECK_VISIBLE_CARDS,
+      translateX: DECK_DEPTH_X * DECK_VISIBLE_CARDS,
+      rotateY: DECK_DEPTH_TILT,
+      translateY: 0,
+      opacity: 0,
+      brightness: 0.6,
+      blur: DECK_MAX_BLUR,
+      zIndex: 0
+    };
+  }
+
   return {
-    scale: 1 - index * 0.05,
-    translateY: index * 12,
-    opacity: 1
+    translateZ: -DECK_DEPTH_Z * d,
+    translateX: DECK_DEPTH_X * d,
+    // Only cards BEHIND the live one tilt. Clamped at one card's worth, so the
+    // whole stack shares one angle rather than fanning further with depth.
+    rotateY: DECK_DEPTH_TILT * Math.min(d, 1),
+    translateY: 0,
+    // Fades over the last card rather than vanishing at the boundary.
+    opacity: d > DECK_VISIBLE_CARDS - 1 ? Math.max(0, DECK_VISIBLE_CARDS - d) : 1,
+    brightness: Math.max(0.55, 1 - d * DECK_FALLOFF),
+    blur: Math.min(DECK_MAX_BLUR, (d / DECK_VISIBLE_CARDS) * DECK_MAX_BLUR * 2),
+    zIndex: Math.round(100 - d * 10)
   };
+}
+
+/** The composed CSS transform for a depth position. */
+export function depthTransform(depth: DeckDepth): string {
+  return [
+    `translate3d(${depth.translateX.toFixed(2)}px, ${depth.translateY.toFixed(2)}px, ${depth.translateZ.toFixed(2)}px)`,
+    `rotateY(${depth.rotateY.toFixed(3)}deg)`
+  ].join(" ");
 }
 
 /**

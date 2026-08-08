@@ -115,6 +115,35 @@ describe("the deck never invents data about a person", () => {
   });
 });
 
+describe("the depth stack never degrades the card being decided on", () => {
+  const css = readFileSync(join(process.cwd(), "app/globals.css"), "utf8");
+
+  it("builds a real 3D context, so depth is not a flat offset pile", () => {
+    const deckRule = css.slice(css.indexOf(".linkr-deck {"));
+    expect(deckRule.slice(0, 900)).toContain("transform-style: preserve-3d");
+    expect(deck).toContain("perspective: `${DECK_PERSPECTIVE}px`");
+  });
+
+  it("drives the drag from coalesced frames rather than every pointer event", () => {
+    // A touch screen delivers well over 120 moves a second; re-rendering the
+    // stack on each is what makes a drag feel heavy.
+    expect(deck).toContain("requestAnimationFrame");
+    expect(deck).toContain("cancelAnimationFrame");
+  });
+
+  it("never transitions the card while the thumb is down", () => {
+    // Any transition during a drag animates TOWARD each new position instead
+    // of sitting at it, which is felt directly as lag.
+    const active = css.slice(css.indexOf(".linkr-deck-card-active {"));
+    expect(active.slice(0, 200)).toContain("transition: none");
+  });
+
+  it("keeps the deck from swallowing vertical scrolling", () => {
+    const deckRule = css.slice(css.indexOf(".linkr-deck {"));
+    expect(deckRule.slice(0, 900)).toContain("touch-action: pan-y");
+  });
+});
+
 describe("swiping is an enhancement, not the only route", () => {
   it("ships keyboard-reachable buttons for every gesture", () => {
     expect(deck).toContain("linkr-deck-action-pass");

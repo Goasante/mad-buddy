@@ -90,10 +90,34 @@ describe("live affordance", () => {
 });
 
 describe("stack depth", () => {
-  it("renders the live card at full size and recedes the rest", () => {
-    expect(stackStyle(0)).toEqual({ scale: 1, translateY: 0, opacity: 1 });
-    expect(stackStyle(1).scale).toBeLessThan(1);
-    expect(stackStyle(2).translateY).toBeGreaterThan(stackStyle(1).translateY);
+  it("leaves the live card completely untouched by the depth effect", () => {
+    // The card being decided on must never be dimmed, blurred or tilted by
+    // the treatment applied to the stack behind it.
+    const live = stackStyle(0);
+    expect(live.translateZ).toBeCloseTo(0);
+    expect(live.rotateY).toBeCloseTo(0);
+    expect(live.blur).toBeCloseTo(0);
+    expect(live.brightness).toBe(1);
+    expect(live.opacity).toBe(1);
+  });
+
+  it("recedes each card further back, dimmer and blurrier", () => {
+    expect(stackStyle(2).translateZ).toBeLessThan(stackStyle(1).translateZ);
+    expect(stackStyle(2).brightness).toBeLessThan(stackStyle(1).brightness);
+    expect(stackStyle(2).blur).toBeGreaterThan(stackStyle(1).blur);
+    expect(stackStyle(2).zIndex).toBeLessThan(stackStyle(1).zIndex);
+  });
+
+  it("shares one tilt angle rather than fanning further with depth", () => {
+    // Clamped: an unclamped tilt turns the stack into a splayed fan.
+    expect(stackStyle(3).rotateY).toBe(stackStyle(1).rotateY);
+  });
+
+  it("advances smoothly as a card leaves, rather than snapping a slot", () => {
+    // Mid-exit, card 1 sits between its own position and the live one.
+    const mid = stackStyle(1, 0.5);
+    expect(mid.translateZ).toBeGreaterThan(stackStyle(1).translateZ);
+    expect(mid.translateZ).toBeLessThan(stackStyle(0).translateZ + 1);
   });
 
   it("hides cards beyond the visible depth rather than paying for their images", () => {
