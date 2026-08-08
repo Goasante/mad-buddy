@@ -57,11 +57,7 @@ function PlanCard({ plan, onJoin, pending = false, slots }: SocializePlanCardPro
     <article
       aria-label={`${plan.title}${urgency.label ? `, ${urgency.label}` : ""}${time ? ` at ${time}` : ""}`}
       className={cn(
-        "group relative flex h-full flex-col overflow-hidden rounded-3xl",
-        "border border-border/60 bg-card/50",
-        "shadow-[0_0_0_1px_hsl(var(--primary)/0.06),0_10px_30px_-18px_hsl(var(--primary)/0.35)]",
-        "transition-shadow duration-300 ease-out motion-reduce:transition-none",
-        "hover:shadow-[0_0_0_1px_hsl(var(--primary)/0.14),0_16px_40px_-18px_hsl(var(--primary)/0.5)]",
+        "linkr-card group relative flex h-full flex-col overflow-hidden",
         // The nearest plan carries a slightly warmer edge. One card lifted,
         // never a row of competing highlights.
         urgency.imminent && "shadow-[0_0_0_1px_hsl(var(--primary)/0.25),0_16px_44px_-18px_hsl(var(--primary)/0.55)]"
@@ -70,7 +66,7 @@ function PlanCard({ plan, onJoin, pending = false, slots }: SocializePlanCardPro
       <Link
         href={href}
         aria-label={`Open ${plan.title}`}
-        className="focus-ring relative block aspect-[16/9] w-full overflow-hidden"
+        className="focus-ring relative block aspect-[5/3] w-full overflow-hidden"
       >
         {cover.source === "upload" ? (
           // eslint-disable-next-line @next/next/no-img-element -- signed cover URL, not a static asset
@@ -79,18 +75,12 @@ function PlanCard({ plan, onJoin, pending = false, slots }: SocializePlanCardPro
             alt=""
             loading="lazy"
             decoding="async"
-            className={cn(
-              "h-full w-full object-cover transition-transform duration-300 ease-out",
-              "group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-            )}
+            className="linkr-card-media h-full w-full object-cover"
           />
         ) : (
           <span
             aria-hidden="true"
-            className={cn(
-              "absolute inset-0 transition-transform duration-300 ease-out",
-              "group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-            )}
+            className="linkr-card-media absolute inset-0"
             style={{ background: `linear-gradient(135deg, ${cover.art.from}, ${cover.art.to})` }}
           />
         )}
@@ -99,12 +89,12 @@ function PlanCard({ plan, onJoin, pending = false, slots }: SocializePlanCardPro
             thing worth knowing about a plan, so it gets weight and a surface
             of its own instead of sitting in a metadata row. */}
         {date ? (
-          <span className="pointer-events-none absolute left-3 top-3 grid w-14 place-items-center rounded-2xl bg-background/90 py-1.5 text-center shadow-sm backdrop-blur-sm">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="pointer-events-none absolute left-3 top-3 grid w-[3.25rem] place-items-center gap-0.5 rounded-2xl border border-white/15 bg-background/92 py-2 text-center shadow-[0_8px_22px_-12px_hsl(var(--shadow)/0.7)] backdrop-blur-md">
+            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-primary">
               {date.weekday}
             </span>
-            <span className="text-xl font-bold leading-none">{date.day}</span>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="text-[1.375rem] font-bold leading-none tracking-tight">{date.day}</span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               {date.month}
             </span>
           </span>
@@ -130,13 +120,13 @@ function PlanCard({ plan, onJoin, pending = false, slots }: SocializePlanCardPro
         />
       </Link>
 
-      <div className="flex flex-1 flex-col gap-1.5 p-4">
+      <div className="flex flex-1 flex-col gap-1.5 p-4 pt-3.5">
         {/* The strongest text on the card. */}
-        <Link href={href} className="focus-ring text-base font-semibold leading-snug hover:underline">
+        <Link href={href} className="focus-ring text-[1.0625rem] font-semibold leading-snug tracking-tight hover:underline">
           {plan.title}
         </Link>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.8125rem] text-muted-foreground">
           {time ? <span>{time}</span> : null}
           {plan.placeText ? (
             <span className="inline-flex min-w-0 items-center gap-1">
@@ -146,7 +136,7 @@ function PlanCard({ plan, onJoin, pending = false, slots }: SocializePlanCardPro
           ) : null}
         </div>
 
-        <p className="truncate text-xs text-muted-foreground">Hosted by {plan.organiserName}</p>
+        <p className="truncate text-[0.8125rem] text-muted-foreground">Hosted by {plan.organiserName}</p>
 
         {/* Real faces, from the projection's capped attendee list. Shown only
             when someone has actually said they are going. */}
@@ -161,14 +151,14 @@ function PlanCard({ plan, onJoin, pending = false, slots }: SocializePlanCardPro
                     name={attendee.name}
                     size="xs"
                     decorative
-                    className="ring-2 ring-card"
+                    className="shadow-[0_2px_6px_-2px_hsl(var(--shadow)/0.6)] ring-2 ring-card"
                   />
                 ))}
               </span>
             ) : (
               <Users className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
             )}
-            <span className="text-xs text-muted-foreground">{going}</span>
+            <span className="text-[0.8125rem] font-medium text-muted-foreground">{going}</span>
           </div>
         ) : null}
 

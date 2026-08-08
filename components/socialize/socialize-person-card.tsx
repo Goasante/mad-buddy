@@ -85,13 +85,10 @@ function PersonCard({ person, onWave, onMessage, pending = false, slots }: Socia
     <article
       aria-label={accessibleName}
       className={cn(
-        "group relative flex h-full flex-col overflow-hidden rounded-3xl",
-        "border border-border/60 bg-card/50",
-        // The signature glow: a warm edge, not a ring around the portrait.
-        // Deliberately weaker than the photo it frames.
-        "shadow-[0_0_0_1px_hsl(var(--primary)/0.06),0_10px_30px_-18px_hsl(var(--primary)/0.4)]",
-        "transition-shadow duration-300 ease-out motion-reduce:transition-none",
-        "hover:shadow-[0_0_0_1px_hsl(var(--primary)/0.14),0_16px_40px_-18px_hsl(var(--primary)/0.55)]"
+        // `linkr-card` carries radius, border, shadow, hover and press for all
+        // three discovery cards, so People, Plans and Groups cannot drift into
+        // three different design languages.
+        "linkr-card group relative flex h-full flex-col overflow-hidden"
       )}
     >
       {/* PORTRAIT. The whole image is the profile link, so the largest target
@@ -99,7 +96,7 @@ function PersonCard({ person, onWave, onMessage, pending = false, slots }: Socia
       <Link
         href={profileHref}
         aria-label={`View ${name}'s profile`}
-        className="focus-ring relative block aspect-[3/4] w-full overflow-hidden bg-secondary/40"
+        className="focus-ring relative block aspect-[4/5] w-full overflow-hidden bg-secondary/40"
       >
         {person.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- signed avatar URL, not a static asset
@@ -112,8 +109,7 @@ function PersonCard({ person, onWave, onMessage, pending = false, slots }: Socia
               "h-full w-full object-cover",
               // A quiet settle on load and a barely-there zoom on hover: enough
               // to feel alive, not enough to read as motion.
-              "socialize-card-image transition-transform duration-300 ease-out group-hover:scale-[1.03]",
-              "motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+              "socialize-card-image linkr-card-media"
             )}
           />
         ) : (
@@ -148,16 +144,18 @@ function PersonCard({ person, onWave, onMessage, pending = false, slots }: Socia
         />
       </Link>
 
-      <div className="flex flex-1 flex-col gap-1 p-4">
+      <div className="flex flex-1 flex-col gap-1.5 p-4 pt-3.5">
         <p className="flex min-w-0 items-center gap-1.5">
-          <Link href={profileHref} className="focus-ring truncate text-[0.9375rem] font-semibold hover:underline">
+          <Link href={profileHref} className="focus-ring truncate text-[0.9375rem] font-semibold leading-snug hover:underline">
             {name}
           </Link>
           {/* Canonical membership badge. Never presented as verification. */}
           <PremiumPlanBadge plan={person.plan} compact />
         </p>
 
-        {locationLine ? <p className="truncate text-xs text-muted-foreground">{locationLine}</p> : null}
+        {locationLine ? (
+          <p className="truncate text-[0.8125rem] leading-normal text-muted-foreground">{locationLine}</p>
+        ) : null}
 
         {/* Their own words, when they wrote any. Never invented. */}
         {person.note ? (
@@ -175,7 +173,7 @@ function PersonCard({ person, onWave, onMessage, pending = false, slots }: Socia
           {canMessage ? (
             <Button
               type="button"
-              className="min-h-[44px] w-full"
+              className="min-h-[42px] w-full rounded-2xl"
               disabled={pending}
               onClick={() => onMessage?.(person)}
             >
@@ -186,7 +184,7 @@ function PersonCard({ person, onWave, onMessage, pending = false, slots }: Socia
             <Button
               type="button"
               variant={waved ? "outline" : "primary"}
-              className="min-h-[44px] w-full"
+              className="min-h-[42px] w-full rounded-2xl"
               disabled={pending || waved}
               onClick={() => onWave(person)}
             >
@@ -197,7 +195,7 @@ function PersonCard({ person, onWave, onMessage, pending = false, slots }: Socia
 
           <Link
             href={profileHref}
-            className="focus-ring safe-motion flex min-h-[44px] w-full items-center justify-center rounded-xl border border-border/60 text-[0.8125rem] font-semibold text-muted-foreground transition-colors hover:bg-secondary/40 hover:text-foreground"
+            className="focus-ring safe-motion flex min-h-[38px] w-full items-center justify-center rounded-2xl border border-border/60 text-[0.8125rem] font-semibold text-muted-foreground transition-colors hover:bg-secondary/40 hover:text-foreground"
           >
             View profile
           </Link>
@@ -220,14 +218,14 @@ export function SocializePersonCardSkeleton() {
   return (
     <div
       aria-hidden="true"
-      className="flex h-full flex-col overflow-hidden rounded-3xl border border-border/60 bg-card/50"
+      className="linkr-card flex h-full flex-col overflow-hidden"
     >
-      <div className="aspect-[3/4] w-full animate-pulse bg-secondary/50 motion-reduce:animate-none" />
-      <div className="flex flex-1 flex-col gap-2 p-4">
+      <div className="aspect-[4/5] w-full animate-pulse bg-secondary/50 motion-reduce:animate-none" />
+      <div className="flex flex-1 flex-col gap-2 p-4 pt-3.5">
         <div className="h-4 w-2/3 animate-pulse rounded bg-secondary/50 motion-reduce:animate-none" />
         <div className="h-3 w-1/2 animate-pulse rounded bg-secondary/40 motion-reduce:animate-none" />
         <div className="mt-auto space-y-2 pt-3">
-          <div className="h-11 w-full animate-pulse rounded-xl bg-secondary/40 motion-reduce:animate-none" />
+          <div className="h-[42px] w-full animate-pulse rounded-2xl bg-secondary/40 motion-reduce:animate-none" />
         </div>
       </div>
     </div>

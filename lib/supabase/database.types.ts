@@ -328,6 +328,24 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["blocked_users"]["Insert"]>;
         Relationships: [];
       };
+      discovery_passes: {
+        Row: {
+          id: string;
+          user_id: string;
+          passed_user_id: string;
+          created_at: string;
+          expires_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          passed_user_id: string;
+          created_at?: string;
+          expires_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["discovery_passes"]["Insert"]>;
+        Relationships: [];
+      };
       reports: {
         Row: RowWithTimestamps & {
           id: string;

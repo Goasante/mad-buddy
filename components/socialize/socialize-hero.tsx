@@ -59,8 +59,8 @@ export function SocializeHero({
     <section
       aria-labelledby="socialize-hero-heading"
       className={cn(
-        "relative isolate flex min-h-[15.5rem] flex-col justify-end overflow-hidden rounded-3xl",
-        "border border-border/60 p-5 sm:min-h-[17rem] sm:p-6"
+        "relative isolate flex min-h-[16.5rem] flex-col justify-end overflow-hidden rounded-[1.75rem]",
+        "border border-border/60 p-6 sm:min-h-[18rem] sm:p-8"
       )}
     >
       {/* Brand artwork. Decorative and aria-hidden: it carries atmosphere, not
@@ -102,8 +102,11 @@ export function SocializeHero({
         aria-hidden="true"
         className={cn(
           "pointer-events-none absolute inset-0 z-[2]",
-          "bg-gradient-to-t from-background/92 via-background/45 to-transparent",
-          "dark:from-background/90 dark:via-background/40 dark:to-transparent"
+          // Lightened: the previous floor buried the artwork it was meant to
+          // sit over. The text keeps its contrast from the weight and shadow
+          // below rather than from drowning the image.
+          "bg-gradient-to-t from-background/80 via-background/28 to-transparent",
+          "dark:from-background/78 dark:via-background/24 dark:to-transparent"
         )}
       />
       <span
@@ -117,7 +120,12 @@ export function SocializeHero({
       <div className="relative z-10">
         <h2
           id="socialize-hero-heading"
-          className="flex items-center gap-2 text-[1.375rem] font-bold leading-tight tracking-tight"
+          className={cn(
+            "flex items-center gap-2 text-[1.5rem] font-bold leading-tight tracking-tight",
+            // Against artwork rather than a flat surface, so the text carries
+            // its own contrast instead of relying on the scrim to make room.
+            "text-foreground [text-shadow:0_1px_12px_hsl(var(--background)/0.7)]"
+          )}
         >
           <Sparkles className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
           {active && total === 0 ? "You’re the first one here" : active ? "Around you" : "Discover people around you"}
@@ -125,7 +133,10 @@ export function SocializeHero({
 
         {/* The line under the heading. Both states fill it, so the block height
             is stable and the layout never jumps on activation. */}
-        <p className="mt-1.5 max-w-[26rem] text-sm leading-relaxed text-muted-foreground">
+        <p className={cn(
+            "mt-2 max-w-[26rem] text-sm leading-relaxed",
+            "text-foreground/80 [text-shadow:0_1px_10px_hsl(var(--background)/0.6)]"
+          )}>
           {/* "0 people nearby right now" reads as a broken feature rather than a
               quiet moment. Being early is not a failure state, so the empty case
               says what to do next instead of reporting a count of nothing. */}
@@ -150,15 +161,18 @@ export function SocializeHero({
           </div>
         ) : null}
 
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-5 flex items-center gap-3">
           {active ? (
             <Button
               type="button"
               onClick={onExplore}
               disabled={busy}
               className={cn(
-                "min-w-[11rem] transition-transform",
-                "hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]",
+                "min-h-[3rem] min-w-[11.5rem] rounded-2xl text-[0.9375rem]",
+                "shadow-[0_10px_30px_-12px_hsl(var(--primary)/0.65)]",
+                "transition-[transform,box-shadow] duration-300 ease-out",
+                "hover:-translate-y-0.5 hover:shadow-[0_16px_38px_-14px_hsl(var(--primary)/0.75)]",
+                "active:translate-y-0 active:scale-[0.98]",
                 "motion-reduce:transform-none motion-reduce:transition-none"
               )}
             >

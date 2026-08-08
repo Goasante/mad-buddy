@@ -45,6 +45,10 @@ export type DiscoveryFeedProps = {
   groups?: readonly GroupSummary[];
   plans?: readonly HomeUpcomingPlan[];
   onWave: (person: SocializePerson) => void;
+  /** Left swipe: a private, expiring feed preference. Never a block. */
+  onPass: (person: SocializePerson) => void;
+  /** Absent when there is nothing to undo. */
+  onUndoPass?: () => void;
   onInvite: (person: SocializePerson) => void;
   /** Present only for people the viewer can already message. */
   onMessage?: (person: SocializePerson) => void;
@@ -70,6 +74,8 @@ export function DiscoveryFeed({
   groups = [],
   plans = [],
   onWave,
+  onPass,
+  onUndoPass,
   onInvite,
   onMessage,
   pending = false,
@@ -240,7 +246,13 @@ export function DiscoveryFeed({
       {/* Order: people, then plans, then groups. Plans carry a deadline, so
           they sit above groups — the thing you might miss comes before the
           thing that will still be there tomorrow. */}
-      <PeopleRail people={visible} onWave={onWave} onMessage={onMessage ?? onInvite} pending={pending} />
+      <PeopleRail
+        people={visible}
+        onWave={onWave}
+        onPass={onPass}
+        onUndoPass={onUndoPass}
+        pending={pending}
+      />
       <PlansRail plans={plans} onJoin={onJoinPlan ?? (() => {})} pending={pending} />
       <GroupsRail groups={groups} onJoin={onJoinGroup ?? (() => {})} pending={pending} />
 

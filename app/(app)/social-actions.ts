@@ -582,3 +582,92 @@ export async function markPingSeenAction(pingId: string): Promise<SocialActionSt
 
   return { ok: true, message: "" };
 }
+
+/**
+ * Pass on someone in the Linkr discovery deck.
+ *
+ * A left swipe. Records a private, expiring preference so the card does not
+ * come back on the next load — nothing more. It is deliberately NOT a block:
+ * `blockUserAction` already exists for that, is mutual, and cuts off messaging
+ * and visibility. This is one-directional, invisible to the person passed on,
+ * and fades after 30 days (the column default).
+ *
+ * Upsert rather than insert: re-passing someone whose earlier pass is still
+ * live refreshes it instead of erroring on the unique pair constraint.
+ *
+ * Failures return ok:false with a neutral message and the caller rolls its
+ * optimistic removal back — a card that silently stays gone after a failed
+ * write would look identical to success while the person returns on refresh.
+ */
+export async function passPersonAction(targetUserId: string): Promise<SocialActionState> {
+  const requestId = createRequestId();
+  const missing = missingEnvState();
+  if (missing) return missing;
+
+  const parsedTarget = uuidSchema.safeParse(targetUserId);
+  if (!parsedTarget.success) return { ok: false, message: "Not available." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+  // Also enforced by a check constraint; refused here so the round trip is
+  // never made.
+  if (userId === parsedTarget.data) return { ok: false, message: "Not available." };
+
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("discovery_passes")
+    .upsert(
+      {
+        user_id: userId,
+        passed_user_id: parsedTarget.data,
+        created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      },
+      { onConflict: "user_id,passed_user_id" }
+    );
+
+  if (error) {
+    logBackendEvent("warn", { requestId, action: "discovery.pass", userId, errorType: errorType(error) });
+    return { ok: false, message: "Couldn't skip that one. Try again." };
+  }
+
+  // No notification, by design. The passed user is never told, and no event is
+  // emitted about them: "who passed on you" is a number this product will not
+  // compute.
+  return { ok: true, message: "" };
+}
+
+/**
+ * Undo a pass.
+ *
+ * A swipe is easy to trigger by accident on a touch surface, so reversing one
+ * has to be equally cheap. Deletes the row outright rather than marking it
+ * undone — an undone pass carries no information worth keeping.
+ *
+ * Scoped to the caller's own rows, so this can only ever undo your own pass.
+ */
+export async function undoPassAction(targetUserId: string): Promise<SocialActionState> {
+  const requestId = createRequestId();
+  const missing = missingEnvState();
+  if (missing) return missing;
+
+  const parsedTarget = uuidSchema.safeParse(targetUserId);
+  if (!parsedTarget.success) return { ok: false, message: "Not available." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("discovery_passes")
+    .delete()
+    .eq("user_id", userId)
+    .eq("passed_user_id", parsedTarget.data);
+
+  if (error) {
+    logBackendEvent("warn", { requestId, action: "discovery.pass.undo", userId, errorType: errorType(error) });
+    return { ok: false, message: "Couldn't undo that. Try again." };
+  }
+
+  return { ok: true, message: "" };
+}

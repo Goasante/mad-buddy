@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import * as Popover from "@radix-ui/react-popover";
 import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, Clock, Info, Loader2, MapPin, MoreHorizontal, RefreshCcw, Users, X } from "lucide-react";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
+import { passPersonAction, undoPassAction } from "@/app/(app)/social-actions";
 import {
   deactivateSocializeAction,
   discoverSocializePeopleAction,
@@ -180,6 +181,12 @@ export function SocializePage({
   const [duration, setDuration] = useState<SocializeDuration | null>(null);
 
   const [previewPerson, setPreviewPerson] = useState<SocializePerson | null>(null);
+  /**
+   * The most recent pass, held only so a single undo can restore it.
+   * Deliberately one deep: undo recovers a misfire, it is not a history of
+   * everyone you skipped.
+   */
+  const [lastPassed, setLastPassed] = useState<SocializePerson | null>(null);
   const [listOpen, setListOpen] = useState(false);
   // Set when a discovery refresh fails, so the list can offer a retry rather
   // than showing an empty state that implies nobody is there.
@@ -459,6 +466,53 @@ export function SocializePage({
         showToast(result.message, true);
       } else {
         showToast(`Muddy request sent to ${capitalize(person.displayName || person.username)}.`);
+      }
+    });
+  }
+
+  /**
+   * Pass on someone: a left swipe.
+   *
+   * Optimistic, like wave — the card leaves immediately and comes back if the
+   * write fails, because a card that silently stays gone after a failed write
+   * looks exactly like success while the person returns on the next refresh.
+   *
+   * The passed person is remembered so a single undo can restore them. Only
+   * the most recent is kept: undo is an accident-recovery affordance, not a
+   * history.
+   */
+  function passPerson(person: SocializePerson) {
+    setPeople((current) => current.filter((item) => item.userId !== person.userId));
+    setLastPassed(person);
+    startTransition(async () => {
+      const result = await passPersonAction(person.userId);
+      if (!result.ok) {
+        setPeople((current) =>
+          current.some((item) => item.userId === person.userId) ? current : [person, ...current]
+        );
+        setLastPassed(null);
+        showToast(result.message, true);
+      }
+    });
+  }
+
+  /** Undo the last pass, restoring the card to the front of the deck. */
+  function undoPass() {
+    const person = lastPassed;
+    if (!person) return;
+    setLastPassed(null);
+    setPeople((current) =>
+      current.some((item) => item.userId === person.userId) ? current : [person, ...current]
+    );
+    startTransition(async () => {
+      const result = await undoPassAction(person.userId);
+      if (!result.ok) {
+        // The row survived, so the person would return on refresh anyway.
+        // Remove the card again rather than leaving the UI disagreeing with
+        // the server.
+        setPeople((current) => current.filter((item) => item.userId !== person.userId));
+        setLastPassed(person);
+        showToast(result.message, true);
       }
     });
   }
@@ -792,6 +846,8 @@ export function SocializePage({
           people={isActive ? visiblePeople : []}
           pending={isPending}
           onWave={(person) => wave(person)}
+          onPass={passPerson}
+          onUndoPass={lastPassed ? undoPass : undefined}
           onInvite={(person) => setPreviewPerson(person)}
           emptyState={
             stateCopy.message ? (

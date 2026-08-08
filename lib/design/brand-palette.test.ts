@@ -105,7 +105,7 @@ describe("Linkr branding", () => {
   });
 
   it("attributes the empty states honestly", () => {
-    expect(rails).toContain("Linkr surfaces public groups as people create them");
+    expect(rails).toContain("Linkr shows public groups as people create them");
     expect(rails).toContain("Linkr brings your upcoming plans here");
   });
 

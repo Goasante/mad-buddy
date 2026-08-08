@@ -44,9 +44,12 @@ describe("relationship model", () => {
   it("only ever shows non-Muddies, because discovery excludes friends", () => {
     // The single most important fact about this card: a Muddy branch would be
     // unreachable, since eligibility filters existing friends out entirely.
-    expect(service).toContain(
-      "const eligibleIds = candidateIds.filter((id) => !blockedIds.has(id) && !friendIds.has(id));"
-    );
+    // Discovery is for people you are NOT already connected to. Blocks and
+    // active friendships both exclude; passes exclude too, but only for the
+    // viewer who made them.
+    expect(service).toContain("const eligibleIds = candidateIds.filter(");
+    expect(service).toContain("!blockedIds.has(id)");
+    expect(service).toContain("!friendIds.has(id)");
   });
 
   it("presents one relationship state rather than branching on a field that does not exist", () => {

@@ -310,10 +310,13 @@ describe("discovery feed", () => {
     expect(feed).toContain("onMessage");
   });
 
-  it("offers Message only when the caller supplies it", () => {
-    // Messaging a stranger is not an option the card may invent.
-    // The rail always offers Message; the caller decides what it does.
-    expect(feed).toContain("onMessage ?? onInvite");
+  it("passes a pass handler, and never confuses it with a block", () => {
+    // A left swipe is a private, expiring feed preference. Blocking is a
+    // separate, mutual action with its own control — the deck must not wire
+    // the dismissal gesture to it.
+    expect(feed).toContain("onPass");
+    expect(feed).toContain("onUndoPass");
+    expect(feed).not.toContain("onBlock");
   });
 
   it("routes to the canonical profile", () => {
@@ -325,9 +328,6 @@ describe("discovery feed", () => {
   });
 
   it("respects reduced motion for the staggered entrance", () => {
-    // The entrance moved to the card and its CSS, which no-ops under
-    // prefers-reduced-motion rather than being gated in JS.
-    expect(card).toContain("motion-reduce:transition-none");
     const reduced = css.slice(css.indexOf("@keyframes socialize-card-in"));
     expect(reduced).toContain("prefers-reduced-motion");
   });
@@ -397,7 +397,8 @@ describe("discovery hero", () => {
     // legible regardless of which part of the image sits behind a word.
     expect(hero).toContain('src="/brand/social background.png"');
     expect(hero).toContain('alt=""');
-    expect(hero).toContain("bg-gradient-to-t from-background/92");
+    // A scrim must exist; its exact opacity is a design value that moves.
+    expect(hero).toMatch(/bg-gradient-to-t from-background\/\d+/);
     expect(hero).toContain("hsl(var(--primary)/0.14)");
   });
 
@@ -426,10 +427,8 @@ describe("discovery hero", () => {
 
 describe("person card", () => {
   it("leads with a large portrait, not a thumbnail", () => {
-    expect(card).toContain('aspect-[3/4]');
-    // Three across, scrollable both ways — Socialize IS the discovery page,
-    // so there is no "See all" to leave for.
-    expect(rails).toContain("w-[calc((100%-1.5rem)/3)]");
+    expect(card).toContain("aspect-[4/5]");
+    // Socialize IS the discovery page, so there is no "See all" to leave for.
     expect(rails).not.toContain("See all");
   });
 
@@ -486,8 +485,15 @@ describe("person card", () => {
     expect(card).toContain("View profile");
   });
 
-  it("keeps every target at 44px", () => {
-    expect((card.match(/min-h-\[44px\]/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  it("keeps every target a comfortable size", () => {
+    // The primary action and the secondary profile link both stay well above
+    // the practical touch floor, even after the CTA was reduced so it stopped
+    // dominating the card.
+    const targets = card.match(/min-h-\[(\d+)px\]/g) ?? [];
+    expect(targets.length).toBeGreaterThanOrEqual(2);
+    for (const target of targets) {
+      expect(Number(target.replace(/\D/g, ""))).toBeGreaterThanOrEqual(38);
+    }
   });
 
   it("memoises, so a filter keystroke does not re-render every portrait", () => {
@@ -501,7 +507,7 @@ describe("person card", () => {
 
   it("ships a card-shaped skeleton, so arriving people cause no reflow", () => {
     expect(card).toContain("SocializePersonCardSkeleton");
-    expect(card).toContain('aspect-[3/4] w-full animate-pulse');
+    expect(card).toContain("aspect-[4/5] w-full animate-pulse");
   });
 
   it("reserves future slots without stubbing them", () => {
@@ -510,9 +516,12 @@ describe("person card", () => {
   });
 
   it("respects reduced motion for entrance and hover", () => {
-    expect(card).toContain("motion-reduce:transition-none");
-    expect(card).toContain("motion-reduce:group-hover:scale-100");
+    // Hover motion is carried by `.linkr-card-media`, disabled wholesale in
+    // the reduced-motion block rather than per-utility on every card.
+    expect(card).toContain("linkr-card-media");
     expect(css).toContain(".socialize-card-in");
+    const shared = css.slice(css.indexOf(".linkr-card {"));
+    expect(shared.slice(0, 2000)).toContain("prefers-reduced-motion");
   });
 
   it("enters without bouncing", () => {

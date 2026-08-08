@@ -1,9 +1,10 @@
 "use client";
 
+import { Users } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 
-import { SocializePersonCard } from "@/components/socialize/socialize-person-card";
+import { SwipeDeck } from "@/components/socialize/swipe-deck";
 import { SocializeGroupCard } from "@/components/socialize/socialize-group-card";
 import { SocializePlanCard } from "@/components/socialize/socialize-plan-card";
 import { Button } from "@/components/ui/button";
@@ -71,55 +72,45 @@ function Rail({ label, children }: { label: string; children: React.ReactNode })
 }
 
 /**
- * People you might click with.
+ * People you might click with — the swipe deck.
  *
- * Photo-led, matching the approved design. Age, interest chips and a verified
- * tick are ABSENT rather than faked: there is no age in the projection, no
- * interests table in the product, and no identity-verification system — only
- * membership badges, which the avatar ring already carries.
+ * Photo-led, matching the approved design. Age, occupation chips and a
+ * verified tick are ABSENT rather than faked: there is no age or occupation
+ * in the projection, and no identity-verification system exists — only
+ * membership, which the badge beside the name already carries.
+ *
+ * Distance is a phrase ("Close by"), never a number. Exact distances from
+ * several vantage points reconstruct a location, which is the whole reason
+ * the approximate labels exist.
  */
 export function PeopleRail({
   people,
   onWave,
-  onMessage,
+  onPass,
+  onUndoPass,
   pending
 }: {
   people: readonly SocializePerson[];
   onWave: (person: SocializePerson) => void;
-  onMessage: (person: SocializePerson) => void;
+  onPass: (person: SocializePerson) => void;
+  onUndoPass?: () => void;
   pending: boolean;
 }) {
   if (people.length === 0) return null;
 
   return (
     <RailSection id="people-rail-heading" title="People you might click with" first>
-      <Rail label="People nearby">
-        {people.map((person, index) => (
-          <li
-            key={person.userId}
-            // Wider than the old 168px card: a portrait worth stopping for
-            // needs room. Two fit at 430px, one and a peek at 320px, which is
-            // the deliberate horizontal treatment rather than a cramped grid.
-            // Three across the viewport with a peek of the fourth, so the rail
-            // reads as scrollable rather than as a finished row.
-            className="socialize-card-in w-[calc((100%-1.5rem)/3)] min-w-[9.5rem] shrink-0 snap-start"
-            // Soft stagger, capped so the last card is never a long wait.
-            style={{ animationDelay: `${Math.min(index, 6) * 45}ms` }}
-          >
-            <SocializePersonCard
-              person={person}
-              onWave={onWave}
-              onMessage={onMessage}
-              pending={pending}
-            />
-          </li>
-        ))}
-      </Rail>
+      <SwipeDeck
+        people={people}
+        onWave={onWave}
+        onPass={onPass}
+        onUndo={onUndoPass}
+        pending={pending}
+      />
     </RailSection>
   );
 }
 
-/** Groups the viewer can join, from the existing discoverable-groups projection. */
 export function GroupsRail({
   groups,
   onJoin,
@@ -148,13 +139,29 @@ export function GroupsRail({
         /* An empty rail is an invitation, not a dead end: there is nothing to
            browse yet, so the useful thing to offer is starting one. Routes
            into the EXISTING create-group flow rather than a second path. */
-        <div className="rounded-2xl border border-dashed border-border/70 px-4 py-6 text-center">
-          <p className="text-sm font-medium">No groups to discover yet</p>
-          <p className="mx-auto mt-1 max-w-[22rem] text-xs leading-relaxed text-muted-foreground">
-            Linkr surfaces public groups as people create them. Start one and make it public so others can find it.
-          </p>
-          <Button asChild type="button" variant="outline" size="sm" className="mt-3">
-            <Link href={"/groups?create=1" as Route}>Create a group</Link>
+        <div className="linkr-empty">
+          {/* An abstract mark rather than a stock illustration: three
+              overlapping discs reading as a small group, drawn from the brand
+              palette so it belongs to the page instead of sitting on it.
+              Decorative, so it is hidden from screen readers. */}
+          <span className="linkr-empty-art" aria-hidden="true">
+            <span className="linkr-empty-disc linkr-empty-disc-a" />
+            <span className="linkr-empty-disc linkr-empty-disc-b" />
+            <span className="linkr-empty-disc linkr-empty-disc-c" />
+          </span>
+
+          <div className="linkr-empty-body">
+            <p className="linkr-empty-title">No groups to discover yet</p>
+            <p className="linkr-empty-copy">
+              Linkr shows public groups as people create them. Start one and make it public so others can find it.
+            </p>
+          </div>
+
+          <Button asChild type="button" className="linkr-empty-cta">
+            <Link href={"/groups?create=1" as Route}>
+              Create a group
+              <Users className="h-4 w-4" aria-hidden="true" />
+            </Link>
           </Button>
         </div>
       )}

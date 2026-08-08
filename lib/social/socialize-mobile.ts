@@ -279,7 +279,13 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
 
     const candidateIds = [...new Set(sessions.map((session) => session.user_id))];
 
-    const [{ data: blocks }, { data: friendships }, { data: locations }, { data: profiles }] = await Promise.all([
+    const [
+      { data: blocks },
+      { data: friendships },
+      { data: locations },
+      { data: profiles },
+      { data: passes }
+    ] = await Promise.all([
       admin.from("blocked_users").select("blocker_id, blocked_id").or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`),
       admin
         .from("friendships")
@@ -293,7 +299,16 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
       admin
         .from("profiles")
         .select("user_id, full_name, username, avatar_url, visibility_status")
-        .in("user_id", candidateIds)
+        .in("user_id", candidateIds),
+      // People this viewer passed on in the deck. Filtered by expires_at
+      // rather than trusting a cleanup job: an expired pass stops applying
+      // whether or not anything ever deletes the row.
+      admin
+        .from("discovery_passes")
+        .select("passed_user_id")
+        .eq("user_id", userId)
+        .gt("expires_at", nowIso)
+        .in("passed_user_id", candidateIds)
     ]);
 
     const blockedIds = new Set((blocks ?? []).flatMap((block) => [block.blocker_id, block.blocked_id]));
@@ -309,7 +324,13 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
     );
     const sessionByUserId = new Map(sessions.map((session) => [session.user_id, session]));
 
-    const eligibleIds = candidateIds.filter((id) => !blockedIds.has(id) && !friendIds.has(id));
+    // A pass is a private feed preference, so it excludes exactly like a block
+    // does — but only for THIS viewer, and only until it expires.
+    const passedIds = new Set((passes ?? []).map((pass) => pass.passed_user_id));
+
+    const eligibleIds = candidateIds.filter(
+      (id) => !blockedIds.has(id) && !friendIds.has(id) && !passedIds.has(id)
+    );
     if (eligibleIds.length === 0) return [];
 
     const safe = buildSafeNearbyFriends({

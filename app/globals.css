@@ -1978,6 +1978,420 @@ select {
   /* The unread dot still carries the state, so nothing is lost. */
 }
 
+/* -----------------------------------------------------------------------
+ * Linkr discovery: one design language for every card.
+ *
+ * People, Plans and Groups previously each carried their own radius,
+ * shadow and hover, so three cards on one page read as three products.
+ * These classes are the shared vocabulary — a card opts in and inherits
+ * the whole system rather than restating it.
+ *
+ * One timing constant, 300ms ease-out, matches the rest of the app's
+ * motion. No bounce anywhere, and every transition is disabled outright
+ * under prefers-reduced-motion rather than merely shortened.
+ * --------------------------------------------------------------------- */
+.linkr-card {
+  border-radius: 1.5rem;
+  border: 1px solid hsl(var(--border) / 0.5);
+  background: hsl(var(--card) / 0.55);
+  /* A hairline of brand at the edge plus a soft lift. Deliberately weaker
+     than the imagery it frames — the card is a frame, not the subject. */
+  box-shadow:
+    0 0 0 1px hsl(var(--primary) / 0.05),
+    0 8px 26px -18px hsl(var(--shadow) / 0.5);
+  transition: box-shadow 300ms ease-out, transform 300ms ease-out;
+}
+.linkr-card:hover {
+  box-shadow:
+    0 0 0 1px hsl(var(--primary) / 0.13),
+    0 16px 38px -20px hsl(var(--primary) / 0.4);
+  transform: translateY(-2px);
+}
+.linkr-card:active {
+  transform: translateY(0);
+}
+
+/* The media area inside a card. Scales a touch on hover, so the card
+   feels responsive without anything moving in the layout. */
+.linkr-card-media {
+  transition: transform 300ms ease-out;
+}
+.linkr-card:hover .linkr-card-media {
+  transform: scale(1.03);
+}
+
+/* Section headings: one size, one weight, one alignment across People,
+   Plans and Groups. */
+.linkr-section-heading {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .linkr-card,
+  .linkr-card-media {
+    transition: none;
+  }
+  .linkr-card:hover,
+  .linkr-card:active {
+    transform: none;
+  }
+  .linkr-card:hover .linkr-card-media {
+    transform: none;
+  }
+}
+
+/* -----------------------------------------------------------------------
+ * Linkr swipe deck.
+ *
+ * The card is a photo with an identity block laid over its foot, matching
+ * the approved design. Written as classes rather than utilities because the
+ * live transform is set from JS per frame, and mixing per-frame inline
+ * transforms with utility transitions is how cards end up fighting between
+ * the pointer and the cascade.
+ *
+ * Everything transitions on the shared 300ms ease-out, and everything is
+ * disabled under prefers-reduced-motion — including the drag settle, so a
+ * user who asked for less motion gets buttons rather than a flying card.
+ * --------------------------------------------------------------------- */
+.linkr-deck-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.linkr-deck {
+  position: relative;
+  /* The stack needs a fixed height: the cards are absolutely positioned so
+     they overlap, which removes them from flow. */
+  height: 26rem;
+  touch-action: pan-y;
+}
+
+.linkr-deck-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 1.75rem;
+  border: 1px solid hsl(var(--border) / 0.5);
+  background: hsl(var(--card));
+  box-shadow:
+    0 0 0 1px hsl(var(--primary) / 0.05),
+    0 18px 44px -24px hsl(var(--shadow) / 0.75);
+  transform-origin: center bottom;
+  transition: transform 300ms ease-out, opacity 300ms ease-out;
+  will-change: transform;
+  user-select: none;
+}
+
+/* While the thumb is down the transform is driven per frame, so a transition
+   would make the card lag behind the pointer. */
+.linkr-deck-card-active {
+  transition: transform 260ms ease-out, opacity 260ms ease-out;
+}
+.linkr-deck-card-live:not(.linkr-deck-card-active) {
+  transition: transform 300ms ease-out, opacity 300ms ease-out;
+}
+.linkr-deck-card-live {
+  cursor: grab;
+}
+.linkr-deck-card-live:active {
+  cursor: grabbing;
+}
+
+.linkr-deck-photo {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  background: hsl(var(--secondary) / 0.4);
+}
+
+.linkr-deck-scrim {
+  pointer-events: none;
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 62%;
+  background: linear-gradient(
+    to top,
+    hsl(var(--shadow) / 0.94) 0%,
+    hsl(var(--shadow) / 0.6) 45%,
+    transparent 100%
+  );
+}
+
+.linkr-deck-presence {
+  position: absolute;
+  left: 0.875rem;
+  top: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 999px;
+  background: hsl(var(--background) / 0.9);
+  padding: 0.3125rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+}
+
+.linkr-deck-dot {
+  height: 0.4375rem;
+  width: 0.4375rem;
+  border-radius: 999px;
+  background: #10b981;
+}
+
+/* The identity block sits over the foot of the photo, on the scrim. Its text
+   is always light because it sits on a dark gradient in BOTH themes — the
+   scrim is what guarantees contrast, not the page background. */
+.linkr-deck-identity {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1.125rem 1.25rem 1.25rem;
+  color: #fff;
+}
+
+.linkr-deck-name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.4375rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  text-shadow: 0 1px 10px rgb(0 0 0 / 0.45);
+}
+
+.linkr-deck-note {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: rgb(255 255 255 / 0.85);
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.4);
+}
+
+.linkr-deck-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgb(255 255 255 / 0.8);
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.4);
+}
+
+/* A pin drawn in CSS rather than shipped as an icon: it is a 10px dot with a
+   tail, and an SVG import for that is not worth the bytes. */
+.linkr-deck-pin {
+  height: 0.5rem;
+  width: 0.5rem;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+}
+
+/* Swipe stamps. Rotated tags that fade in with the drag. */
+.linkr-stamp {
+  pointer-events: none;
+  position: absolute;
+  top: 1.75rem;
+  border-radius: 0.625rem;
+  border: 3px solid currentColor;
+  padding: 0.25rem 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: opacity 160ms ease-out;
+}
+
+.linkr-stamp-wave {
+  right: 1.25rem;
+  transform: rotate(14deg);
+  color: hsl(var(--primary));
+}
+
+.linkr-stamp-pass {
+  left: 1.25rem;
+  transform: rotate(-14deg);
+  color: #ef4444;
+}
+
+/* -------------------------- Deck controls --------------------------- */
+.linkr-deck-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.linkr-deck-action {
+  display: grid;
+  place-items: center;
+  height: 3.5rem;
+  width: 3.5rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.6);
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+  box-shadow: 0 8px 22px -14px hsl(var(--shadow) / 0.8);
+  transition: transform 300ms ease-out, box-shadow 300ms ease-out, background-color 300ms ease-out;
+}
+
+.linkr-deck-action:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+.linkr-deck-action:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.linkr-deck-action:disabled {
+  opacity: 0.45;
+}
+
+/* Undo is deliberately the smallest of the three: it is a recovery control,
+   not a decision, and sizing it equally would give it weight it has not
+   earned. */
+.linkr-deck-action-undo {
+  height: 2.75rem;
+  width: 2.75rem;
+}
+
+.linkr-deck-action-pass:hover:not(:disabled) {
+  color: #ef4444;
+  border-color: rgb(239 68 68 / 0.4);
+}
+
+/* The affirmative action is the only filled control in the row, so the
+   primary gesture is unmistakable. */
+.linkr-deck-action-wave {
+  border-color: transparent;
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.85));
+  color: hsl(var(--primary-foreground));
+  box-shadow: 0 12px 28px -12px hsl(var(--primary) / 0.7);
+}
+.linkr-deck-action-wave:hover:not(:disabled) {
+  box-shadow: 0 18px 34px -14px hsl(var(--primary) / 0.8);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .linkr-deck-card,
+  .linkr-deck-card-active,
+  .linkr-deck-card-live,
+  .linkr-deck-action,
+  .linkr-stamp {
+    transition: none;
+  }
+  .linkr-deck-action:hover:not(:disabled),
+  .linkr-deck-action:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* -----------------------------------------------------------------------
+ * Linkr empty state.
+ *
+ * A horizontal card — art, copy, action — rather than a dashed box with
+ * centred text. The dashed box reads as a placeholder someone forgot to
+ * finish; this reads as a designed invitation, which is the difference
+ * between "broken" and "nothing here yet, do this".
+ * --------------------------------------------------------------------- */
+.linkr-empty {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border-radius: 1.5rem;
+  /* Solid hairline, not dashed. */
+  border: 1px solid hsl(var(--border) / 0.45);
+  background: hsl(var(--card) / 0.5);
+  padding: 1.125rem 1.25rem;
+}
+
+.linkr-empty-body {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.linkr-empty-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.linkr-empty-copy {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: hsl(var(--muted-foreground));
+}
+
+.linkr-empty-cta {
+  flex-shrink: 0;
+  border-radius: 999px;
+}
+
+/* ---------------------------- The mark ------------------------------- */
+/* Three overlapping discs on a soft field: a group, abstracted. Drawn in CSS
+   so it costs no request and recolours with the theme automatically. */
+.linkr-empty-art {
+  position: relative;
+  display: grid;
+  height: 4.25rem;
+  width: 4.25rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 1.125rem;
+  background: radial-gradient(
+    circle at 30% 25%,
+    hsl(var(--primary) / 0.22),
+    hsl(var(--primary) / 0.08) 70%
+  );
+}
+
+.linkr-empty-disc {
+  position: absolute;
+  border-radius: 999px;
+  background: hsl(var(--primary));
+}
+
+/* Two smaller discs flanking a larger centre one, overlapping just enough to
+   read as people standing together rather than three separate dots. */
+.linkr-empty-disc-a {
+  height: 1.125rem;
+  width: 1.125rem;
+  left: 0.75rem;
+  top: 1.5rem;
+  opacity: 0.55;
+}
+
+.linkr-empty-disc-b {
+  height: 1.5rem;
+  width: 1.5rem;
+  top: 1.0625rem;
+  opacity: 0.95;
+}
+
+.linkr-empty-disc-c {
+  height: 1.125rem;
+  width: 1.125rem;
+  right: 0.75rem;
+  top: 1.5rem;
+  opacity: 0.55;
+}
+
 /* Conversation canvas
    ------------------------------------------------------------------
    The conversation owns the screen, so it supplies its own ground rather
