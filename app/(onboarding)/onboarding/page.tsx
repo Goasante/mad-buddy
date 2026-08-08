@@ -1,3 +1,4 @@
+import { POST_LOGIN_ROUTE } from "@/lib/routes";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import type { MoodStatus } from "@/components/onboarding/mood-status-selector";
 import { redirect } from "next/navigation";
@@ -34,7 +35,7 @@ export default async function OnboardingPage() {
         .eq("user_id", user.id)
         .maybeSingle();
       if (profile?.is_onboarded) {
-        redirect("/dashboard");
+        redirect(POST_LOGIN_ROUTE);
       }
 
       // Self-healing: an account whose completion write partially failed keeps
@@ -47,7 +48,7 @@ export default async function OnboardingPage() {
       if (serverEnv.url && serverEnv.serviceRoleKey) {
         const recovery = await recoverOnboardingIfStranded(createSupabaseAdminClient(), user.id);
         if (recovery.action === "finish") {
-          redirect("/dashboard");
+          redirect(POST_LOGIN_ROUTE);
         }
       }
       const profileName =

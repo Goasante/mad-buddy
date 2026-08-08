@@ -20,7 +20,21 @@ const sheet = read("components/socialize/people-nearby-sheet.tsx");
 const page = read("components/socialize/socialize-page.tsx");
 const service = read("lib/social/socialize-mobile.ts");
 const css = read("app/globals.css");
-const rowCss = stripComments(css.slice(css.indexOf("/* Socialize People Nearby rows")));
+/**
+ * The People Nearby block ONLY.
+ *
+ * Bounded at both ends, not sliced to end-of-file: this block used to be last
+ * in globals.css, so an open-ended slice silently meant "the rest of the
+ * stylesheet" and the assertions below would start reading whatever block was
+ * appended next.
+ */
+const rowCssStart = css.indexOf("/* Socialize People Nearby rows");
+// Match only the stable heading prefix. The punctuation after "Muddies" is
+// intentionally excluded so this boundary survives source-file encodings.
+const rowCssEnd = css.indexOf("* Muddies ", rowCssStart);
+const rowCss = stripComments(
+  css.slice(rowCssStart, rowCssEnd === -1 ? undefined : rowCssEnd)
+);
 
 const row = sheet.slice(sheet.indexOf("function PersonRow"));
 

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { clearUserScopedBrowserState, subscribeToSessionEnd } from "@/lib/auth/client-session";
+import { POST_LOGIN_ROUTE } from "@/lib/routes";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function SessionBoundary({ currentUserId }: { currentUserId?: string | null }) {
@@ -22,7 +23,7 @@ export function SessionBoundary({ currentUserId }: { currentUserId?: string | nu
         }
         if (event === "SIGNED_IN" && currentUserId && session?.user.id !== currentUserId) {
           clearUserScopedBrowserState();
-          window.location.replace("/dashboard");
+          window.location.replace(POST_LOGIN_ROUTE);
         }
       });
       authSubscription = data.subscription;

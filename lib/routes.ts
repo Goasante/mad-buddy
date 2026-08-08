@@ -17,3 +17,13 @@ export const routes = {
   subscriptionSuccess: "/subscription-success",
   subscriptionCancelled: "/subscription-cancelled"
 } as const;
+
+/**
+ * Where a signed-in Muddy lands.
+ *
+ * Muddies is the face of the app: people come back to see who is around, so
+ * that is what they should meet. Declared once here because three different
+ * places used to hardcode the destination independently — the auth `next`
+ * fallback, the guest-only redirect, and the app shell.
+ */
+export const POST_LOGIN_ROUTE = routes.friends;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { authErrorRedirect, oauthErrorMessage, safeAuthNext } from "@/lib/auth/oauth-redirect";
+import { POST_LOGIN_ROUTE } from "@/lib/routes";
 
 describe("OAuth redirects", () => {
   it("keeps local destinations", () => {
@@ -9,15 +10,15 @@ describe("OAuth redirects", () => {
   });
 
   it("rejects external and protocol-relative destinations", () => {
-    expect(safeAuthNext("https://example.com")).toBe("/dashboard");
-    expect(safeAuthNext("//example.com")).toBe("/dashboard");
-    expect(safeAuthNext("/\\example.com")).toBe("/dashboard");
-    expect(safeAuthNext("/login?next=%2Fmessages")).toBe("/dashboard");
-    expect(safeAuthNext("/auth/callback")).toBe("/dashboard");
-    expect(safeAuthNext("/route-that-does-not-exist")).toBe("/dashboard");
-    expect(safeAuthNext("/messages?access_token=secret")).toBe("/dashboard");
-    expect(safeAuthNext("/messages#refresh_token=secret")).toBe("/dashboard");
-    expect(safeAuthNext("/messages\u0000")).toBe("/dashboard");
+    expect(safeAuthNext("https://example.com")).toBe(POST_LOGIN_ROUTE);
+    expect(safeAuthNext("//example.com")).toBe(POST_LOGIN_ROUTE);
+    expect(safeAuthNext("/\\example.com")).toBe(POST_LOGIN_ROUTE);
+    expect(safeAuthNext("/login?next=%2Fmessages")).toBe(POST_LOGIN_ROUTE);
+    expect(safeAuthNext("/auth/callback")).toBe(POST_LOGIN_ROUTE);
+    expect(safeAuthNext("/route-that-does-not-exist")).toBe(POST_LOGIN_ROUTE);
+    expect(safeAuthNext("/messages?access_token=secret")).toBe(POST_LOGIN_ROUTE);
+    expect(safeAuthNext("/messages#refresh_token=secret")).toBe(POST_LOGIN_ROUTE);
+    expect(safeAuthNext("/messages\u0000")).toBe(POST_LOGIN_ROUTE);
   });
 
   it("returns friendly known errors without reflecting unknown input", () => {

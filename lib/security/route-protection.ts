@@ -1,3 +1,5 @@
+import { POST_LOGIN_ROUTE } from "@/lib/routes";
+
 /**
  * Deny-by-default route protection (audit I-08).
  *
@@ -106,14 +108,14 @@ export function requiredLoginRedirect(pathname: string): "/login" | "/admin/logi
 const GUEST_ONLY_EXACT_PATHS = new Set(["/"]);
 const GUEST_ONLY_PREFIXES = ["/login", "/signup", "/forgot-password"];
 
-export function authenticatedRedirect(pathname: string): "/dashboard" | null {
+export function authenticatedRedirect(pathname: string): string | null {
   if (isApiPath(pathname)) {
     return null;
   }
 
   if (GUEST_ONLY_EXACT_PATHS.has(pathname)) {
-    return "/dashboard";
+    return POST_LOGIN_ROUTE;
   }
 
-  return GUEST_ONLY_PREFIXES.some((prefix) => matchesPrefix(pathname, prefix)) ? "/dashboard" : null;
+  return GUEST_ONLY_PREFIXES.some((prefix) => matchesPrefix(pathname, prefix)) ? POST_LOGIN_ROUTE : null;
 }

@@ -146,7 +146,7 @@ describe("recovery wiring", () => {
 
   it("runs on the onboarding gate, where stranded users land", () => {
     expect(page).toContain("recoverOnboardingIfStranded");
-    expect(page).toContain('redirect("/dashboard")');
+    expect(page).toContain("redirect(POST_LOGIN_ROUTE)");
   });
 
   it("still redirects an already-onboarded user without recovering", () => {

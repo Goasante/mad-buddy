@@ -1,3 +1,5 @@
+import { POST_LOGIN_ROUTE } from "@/lib/routes";
+
 const AUTH_ERROR_MESSAGES = {
   cancelled: "Sign in was cancelled. Please try again when you are ready.",
   callback_failed: "We could not complete that sign in. Please try again.",
@@ -38,7 +40,7 @@ const AUTH_DESTINATION_ROOTS = new Set([
   "upgrade"
 ]);
 
-export function safeAuthNext(value: string | null, fallback = "/dashboard") {
+export function safeAuthNext(value: string | null, fallback: string = POST_LOGIN_ROUTE) {
   if (
     !value ||
     !value.startsWith("/") ||

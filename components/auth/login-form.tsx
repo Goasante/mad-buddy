@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/auth/form-field";
 import { startOAuth } from "@/lib/auth/oauth";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
+import { POST_LOGIN_ROUTE } from "@/lib/routes";
 
 const loginSchema = z.object({
   email: z.string().email("Enter your email address."),
@@ -25,7 +26,7 @@ type LoginFormProps = {
   nextDestination?: string;
 };
 
-export function LoginForm({ initialError = null, nextDestination = "/dashboard" }: LoginFormProps) {
+export function LoginForm({ initialError = null, nextDestination = POST_LOGIN_ROUTE }: LoginFormProps) {
   const [isPending, startTransition] = useTransition();
   const [actionState, setActionState] = useState<AuthActionState | null>(
     initialError ? { ok: false, message: initialError } : null

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { POST_LOGIN_ROUTE } from "@/lib/routes";
 import {
   authenticatedRedirect,
   isApiPath,
@@ -7,9 +8,9 @@ import {
 } from "@/lib/security/route-protection";
 
 describe("authenticated visitors on guest-only routes", () => {
-  it("sends a signed-in user from the landing and auth forms to the dashboard", () => {
+  it("sends a signed-in user from the landing and auth forms to the post-login page", () => {
     for (const path of ["/", "/login", "/signup", "/forgot-password"]) {
-      expect(authenticatedRedirect(path)).toBe("/dashboard");
+      expect(authenticatedRedirect(path)).toBe(POST_LOGIN_ROUTE);
     }
   });
 
