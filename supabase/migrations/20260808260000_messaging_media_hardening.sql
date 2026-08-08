@@ -13,7 +13,9 @@ create index if not exists media_assets_chat_intent_idx
 
 -- Backfill the conversation intent only where historical use is unambiguous.
 with bindings as (
-  select media_id, min(conversation_id) as conversation_id
+  -- PostgreSQL does not define min(uuid); aggregate its canonical text form
+  -- only after proving every historical binding points at one conversation.
+  select media_id, min(conversation_id::text)::uuid as conversation_id
   from public.messages
   where media_id is not null
   group by media_id

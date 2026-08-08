@@ -14,6 +14,11 @@ const picker = stripComments(read("components/messaging/attachment-picker.tsx"))
 const handlers = stripComments(read("lib/jobs/handlers.ts"));
 
 describe("media lifecycle authority", () => {
+  it("uses a PostgreSQL-compatible UUID aggregate for the historical backfill", () => {
+    expect(migration).toContain("min(conversation_id::text)::uuid");
+    expect(migration).not.toContain("min(conversation_id) as conversation_id");
+  });
+
   it("removes client lifecycle and raw storage mutation authority", () => {
     expect(migration).toContain('drop policy if exists "media assets owner access"');
     expect(migration).toContain('create policy "media assets owner read"');
