@@ -237,9 +237,13 @@ describe("group card", () => {
   });
 
   it("offers a way forward when the rail is empty", () => {
-    // An empty rail is an invitation, not a dead end.
+    // An empty rail is an invitation, not a dead end — and it names the usual
+    // CAUSE. Groups default to private, so someone who already has groups is
+    // far more often one toggle away than one group away, and copy that only
+    // says "create one" reads to them as a broken feature.
     expect(rails).toContain("No groups to discover yet");
-    expect(rails).toContain("Create a group");
+    expect(rails).toContain("Groups are private unless someone lists them");
+    expect(rails).toContain("My groups");
   });
 });
 

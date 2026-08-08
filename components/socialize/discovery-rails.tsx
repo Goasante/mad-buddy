@@ -155,14 +155,22 @@ export function GroupsRail({
 
           <div className="linkr-empty-body">
             <p className="linkr-empty-title">No groups to discover yet</p>
+            {/* Names the usual CAUSE rather than only offering to create
+                another. Groups default to private, and every group made
+                before the visibility control existed still is — so "make one
+                public" is far more often the fix than "make a new one", and
+                an empty rail that only says "create one" reads as a broken
+                feature to someone who already has groups. */}
             <p className="linkr-empty-copy">
-              Linkr shows public groups as people create them. Start one and make it public so others can find it.
+              Groups are private unless someone lists them. Open a group you
+              own and switch it to public in Settings, and it will show up
+              here for people nearby.
             </p>
           </div>
 
-          <Button asChild type="button" className="linkr-empty-cta">
-            <Link href={"/groups?create=1" as Route}>
-              Create a group
+          <Button asChild type="button" variant="outline" className="linkr-empty-cta">
+            <Link href={"/groups" as Route}>
+              My groups
               <Users className="h-4 w-4" aria-hidden="true" />
             </Link>
           </Button>
