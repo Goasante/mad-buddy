@@ -1,6 +1,8 @@
 import "server-only";
 
 import { z } from "zod";
+import type { ProfilePhoto } from "@/lib/profile/profile-photos";
+import { loadVisibleProfilePhotosFor } from "@/lib/profile/photo-service";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -27,6 +29,13 @@ export type PublicProfile = {
   moodStatus: string | null;
   isMuddy: boolean;
   isSelf: boolean;
+  /**
+   * Gallery photos this viewer is authorised to see, already filtered by the
+   * server. A photo absent from this array was never sent.
+   */
+  photos: ProfilePhoto[];
+  /** Trusted Member approval, or null. Never implies an identity check. */
+  trustedSince: string | null;
   age: number | null;
   zodiacSign: string | null;
   birthdayToday: boolean;
@@ -52,7 +61,9 @@ export async function getPublicProfile(viewerId: string, targetId: string): Prom
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("user_id, full_name, username, avatar_url, bio, mood_status, deleted_at, visibility_status")
+    .select(
+      "user_id, full_name, username, avatar_url, bio, mood_status, deleted_at, visibility_status, trusted_member_since"
+    )
     .eq("user_id", targetId)
     .maybeSingle();
   if (!profile || profile.deleted_at) return null;
@@ -63,9 +74,19 @@ export async function getPublicProfile(viewerId: string, targetId: string): Prom
     resolveViewerRelationship(admin, viewerId, targetId),
     loadEffectivePlan(admin, targetId)
   ]);
-  const [fields, identity] = await Promise.all([
+  const [fields, identity, photos] = await Promise.all([
     getVisibleProfileFields(admin, targetId, relationship),
-    loadProfileIdentitySummary(admin, targetId, relationship)
+    loadProfileIdentitySummary(admin, targetId, relationship),
+    /**
+     * The gallery, filtered SERVER-SIDE.
+     *
+     * A photo the viewer may not see never reaches the client — not hidden
+     * with CSS, not filtered in a component. `isMuddy` above already means
+     * an ACTIVE friendship (areApprovedMuddies checks ended_at IS NULL), and
+     * a block returned null long before this line, so the two hardest cases
+     * are settled by the time the gallery is read.
+     */
+    loadVisibleProfilePhotosFor(admin, targetId, { isOwner: isSelf, isApprovedMuddy: isMuddy })
   ]);
 
   return {
@@ -85,6 +106,13 @@ export async function getPublicProfile(viewerId: string, targetId: string): Prom
     birthdayCountdownDays: fields.birthdayCountdownDays,
     nextBirthdayDate: fields.nextBirthdayDate,
     plan,
-    identity
+    identity,
+    photos,
+    /**
+     * Trusted Member, straight from the profile row already being read.
+     * Never inferred from plan or tenure: those are separate signals, and
+     * conflating them is what "Verified" would have implied.
+     */
+    trustedSince: profile.trusted_member_since ?? null
   };
 }

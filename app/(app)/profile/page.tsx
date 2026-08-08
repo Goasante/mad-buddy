@@ -6,6 +6,8 @@ import { loadFieldPrivacy } from "@/lib/profile/service";
 import { dateKeyInTimeZone } from "@/lib/profile/birth-date";
 import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 import { loadProfileIdentitySummary } from "@/lib/profile/identity-service";
+import { loadVisibleProfilePhotosFor } from "@/lib/profile/photo-service";
+import { getTrustedMemberStandingAction } from "@/app/(app)/trusted-member-actions";
 import { loadJourney } from "@/lib/journey/journey-service";
 
 export const dynamic = "force-dynamic";
@@ -27,13 +29,13 @@ export default async function ProfilePage({
   const { data: profile } = user
     ? await supabase
         .from("profiles")
-        .select("full_name, username, bio, mood_status, avatar_url, visibility_status")
+        .select("full_name, username, bio, mood_status, avatar_url, visibility_status, trusted_member_since")
         .eq("user_id", user.id)
         .maybeSingle()
     : { data: null };
 
   const admin = createSupabaseAdminClient();
-  const [effectivePlan, birthDetails, fieldPrivacy, identitySummary, journey] = user
+  const [effectivePlan, birthDetails, fieldPrivacy, identitySummary, journey, photos, trustedStanding] = user
     ? await Promise.all([
         loadEffectivePlan(admin, user.id),
         admin
@@ -44,9 +46,14 @@ export default async function ProfilePage({
           .then((result) => result.data),
         loadFieldPrivacy(admin, user.id),
         loadProfileIdentitySummary(admin, user.id, "self"),
-        loadJourney(admin, user.id)
+        loadJourney(admin, user.id),
+        // The owner sees every photo, including only_me — a photo you cannot
+        // see is a photo you cannot manage. Loaded here in the same parallel
+        // batch rather than as a follow-up request.
+        loadVisibleProfilePhotosFor(admin, user.id, { isOwner: true, isApprovedMuddy: false }),
+        getTrustedMemberStandingAction()
       ])
-    : ["free" as const, null, null, null, null];
+    : ["free" as const, null, null, null, null, [], null];
 
   return (
     <ProfilePageContent
@@ -58,6 +65,9 @@ export default async function ProfilePage({
       initialVisibilityStatus={profile?.visibility_status ?? "visible"}
       identitySummary={identitySummary}
       journey={journey}
+      photos={photos}
+      trustedSince={profile?.trusted_member_since ?? null}
+      trustedStanding={trustedStanding}
       initialPlan={effectivePlan}
       initialDateOfBirth={birthDetails?.date_of_birth ?? ""}
       initialBirthdayVisibility={fieldPrivacy?.birthday === "approved_muddies" ? "approved_muddies" : "only_me"}

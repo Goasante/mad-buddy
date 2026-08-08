@@ -18,6 +18,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
+import { ProfilePhotoCarousel } from "@/components/profile/profile-photo-carousel";
+import type { ProfilePhoto } from "@/lib/profile/profile-photos";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { GLOW_COLORS } from "@/lib/glow/custom-colors";
 import type { PublicTrustSummary } from "@/lib/discovery/trust";
@@ -40,6 +43,8 @@ export type MuddyProfileData = {
   glowStrength?: number;
   confidence?: ConfidenceLevel;
   plan: SubscriptionPlan;
+  /** Trusted Member approval, or null. Never an identity check. */
+  trustedSince?: string | null;
 };
 
 export function MuddyProfilePage({
@@ -49,7 +54,8 @@ export function MuddyProfilePage({
   identitySummary = null,
   canCustomizeGlow = false,
   isMuddy = false,
-  initialGlowColorId = null
+  initialGlowColorId = null,
+  photos = []
 }: {
   muddy: MuddyProfileData;
   trust?: PublicTrustSummary | null;
@@ -60,6 +66,8 @@ export function MuddyProfilePage({
   /** Viewer is an approved Muddy (drives the free-tier upsell visibility). */
   isMuddy?: boolean;
   initialGlowColorId?: string | null;
+  /** Already filtered by the server for this viewer. */
+  photos?: ProfilePhoto[];
 }) {
   const router = useRouter();
   const [waveSent, setWaveSent] = useState(false);
@@ -190,7 +198,12 @@ export function MuddyProfilePage({
         identity={
           <HeroIdentity
             title={<h1 className="truncate">{muddy.displayName}</h1>}
-            badge={<PremiumPlanBadge plan={muddy.plan} />}
+            badge={
+              <>
+                <PremiumPlanBadge plan={muddy.plan} />
+                <TrustedMemberMark trustedSince={muddy.trustedSince} />
+              </>
+            }
             meta={
               <>
                 <span>@{muddy.username}</span>
@@ -397,6 +410,12 @@ export function MuddyProfilePage({
           </Button>
         </Card>
       ) : null}
+
+      {/* The gallery, already filtered by the server for this viewer. A
+          visitor with nothing visible sees no section at all rather than an
+          empty frame implying something was withheld. Read-only here: only
+          the owner's own profile offers the controls. */}
+      <ProfilePhotoCarousel photos={photos} isOwner={false} />
 
       <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-xl border border-border/70 bg-card/50 p-4">

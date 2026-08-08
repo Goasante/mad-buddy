@@ -189,3 +189,74 @@ describe("the carousel", () => {
     expect(carousel).not.toContain("avatarUrl");
   });
 });
+
+describe("gallery privacy is proved server-side", () => {
+  const service = read("lib/profile/photo-service.ts");
+  const publicLoader = read("lib/profile/public.ts");
+  const muddyRoute = read("app/(app)/friends/[username]/page.tsx");
+  const ownRoute = read("app/(app)/profile/page.tsx");
+
+  it("filters in the WHERE clause, never after the fetch", () => {
+    // An only_me photo is not read into memory and then discarded; the query
+    // never selects it for anyone but its owner.
+    expect(service).toContain('query.in("visibility", ["everyone", "approved_muddies"])');
+    expect(service).toContain('query.eq("visibility", "everyone")');
+  });
+
+  it("gives the owner everything, including only_me", () => {
+    expect(service).toContain("if (!viewer.isOwner) {");
+    expect(ownRoute).toContain("{ isOwner: true, isApprovedMuddy: false }");
+  });
+
+  it("treats an ended Muddy as a stranger without a second check", () => {
+    // areApprovedMuddies already requires ended_at IS NULL, so the ended case
+    // falls into the stranger branch on its own. A separate check could
+    // disagree with the first.
+    expect(muddyRoute).toContain("isApprovedMuddy: areFriends");
+    expect(service).toContain("requires ended_at IS NULL");
+  });
+
+  it("refuses the whole profile to a blocked viewer, gallery included", () => {
+    // Blocking is resolved before the gallery is ever reached, so there is no
+    // "profile with an empty gallery" state for a blocked viewer.
+    expect(publicLoader).toContain("isBlockedEitherDirection(admin, viewerId, targetId)) return null");
+    expect(muddyRoute).toContain("isBlockedEitherDirection(admin, user.id, profile.user_id)");
+  });
+
+  it("is one loader, not a copy per surface", () => {
+    // Two copies is how two surfaces end up disagreeing, and the
+    // disagreement always resolves toward the more permissive one.
+    expect(publicLoader).toContain("loadVisibleProfilePhotosFor(admin, targetId");
+    expect(muddyRoute).toContain("loadVisibleProfilePhotosFor(admin, profile.user_id");
+  });
+
+  it("never filters photos on the client", () => {
+    const carousel = read("components/profile/profile-photo-carousel.tsx");
+    expect(carousel).not.toContain("visiblePhotosFor(");
+    expect(carousel).toContain("Already filtered by the server");
+  });
+});
+
+describe("gallery performance", () => {
+  const service = read("lib/profile/photo-service.ts");
+  const ownRoute = read("app/(app)/profile/page.tsx");
+
+  it("signs thumbnails only, never full images up front", () => {
+    // Three photos would otherwise mint three full-resolution URLs nobody
+    // may open.
+    expect(service).toContain('signMediaForAsset(admin, row.media_asset_id, "thumb")');
+    expect(service).not.toContain('"full"');
+  });
+
+  it("mints signed, expiring URLs rather than permanent ones", () => {
+    // A permanent URL outlives the setting that allowed it, so switching a
+    // photo to only_me could not take back a link already handed out.
+    expect(service).toContain("Signed and short-lived");
+  });
+
+  it("loads the gallery in the route's existing parallel batch", () => {
+    expect(ownRoute).toContain("loadVisibleProfilePhotosFor(admin, user.id");
+    const batch = ownRoute.slice(ownRoute.indexOf("await Promise.all(["));
+    expect(batch.slice(0, 900)).toContain("loadVisibleProfilePhotosFor");
+  });
+});

@@ -16,7 +16,7 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("user_id, full_name, username, avatar_url, bio, mood_status")
+    .select("user_id, full_name, username, avatar_url, bio, mood_status, trusted_member_since")
     .eq("username", username)
     .maybeSingle();
 
@@ -60,6 +60,25 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
       ])
     : [null, false];
   const canCustomizeGlow = Boolean(entitlements && checkFeature(entitlements, "custom_glow_styles") && areFriends);
+
+  /**
+   * Gallery photos this viewer may see.
+   *
+   * Reuses `areFriends` above rather than re-asking: that helper already
+   * means an ACTIVE friendship, so an ended Muddy is treated as a stranger
+   * without a second check that could disagree with the first. A block
+   * already returned notFound() well above this line.
+   *
+   * Never the owner here — this route redirects to /profile when the viewer
+   * is the subject — so `only_me` photos cannot be reached through it at all.
+   */
+  const { loadVisibleProfilePhotosFor } = await import("@/lib/profile/photo-service");
+  const photos = user
+    ? await loadVisibleProfilePhotosFor(admin, profile.user_id, {
+        isOwner: false,
+        isApprovedMuddy: areFriends
+      })
+    : [];
   const glowColors =
     user && entitlements && areFriends
       ? await loadFriendGlowColors(admin, user.id, entitlements)
@@ -75,8 +94,10 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
         bio: fields?.bio ?? "",
         moodStatus: areFriends ? (profile.mood_status ?? "") : "",
         mutualMuddies: trust?.mutualCount ?? 0,
-        plan: profilePlan
+        plan: profilePlan,
+        trustedSince: profile.trusted_member_since ?? null
       }}
+      photos={photos}
       trust={trust}
       fields={fields}
       identitySummary={identitySummary}

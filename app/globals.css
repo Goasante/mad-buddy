@@ -4096,6 +4096,54 @@ select {
   }
 }
 
+/* ------------------------- Trusted Member apply ---------------------- */
+.trusted-apply {
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--border) / 0.6);
+  background: hsl(var(--card) / 0.5);
+  padding: 1rem;
+}
+
+/* Held: a quiet confirmation rather than a second call to action. */
+.trusted-apply-held {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-color: hsl(var(--shadow) / 0.3);
+  background: hsl(var(--shadow) / 0.06);
+  color: hsl(var(--shadow));
+}
+:root:not([data-theme="light"]) .trusted-apply-held,
+:root[data-theme="dark"] .trusted-apply-held {
+  border-color: rgb(255 255 255 / 0.2);
+  background: rgb(255 255 255 / 0.06);
+  color: rgb(255 255 255 / 0.9);
+}
+
+.trusted-apply-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.trusted-apply-copy {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: hsl(var(--muted-foreground));
+  text-wrap: pretty;
+}
+.trusted-apply-held .trusted-apply-copy {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.trusted-apply-status {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--primary));
+}
+
 /* Conversation canvas
    ------------------------------------------------------------------
    The conversation owns the screen, so it supplies its own ground rather

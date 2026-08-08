@@ -14,6 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AppSelect, type AppSelectOption } from "@/components/ui/app-dropdown";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { ProfilePhotoCarousel } from "@/components/profile/profile-photo-carousel";
+import { TrustedMemberApplyCard } from "@/components/trust/trusted-member-apply-card";
+import type { ProfilePhoto } from "@/lib/profile/profile-photos";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { validateImageSelection } from "@/lib/media/validation";
@@ -45,6 +48,19 @@ type ProfilePageContentProps = {
   initialVisibilityStatus: VisibilityStatus;
   identitySummary: ProfileIdentitySummary | null;
   journey: JourneyData | null;
+  /** The owner's own gallery — every photo, including only_me. */
+  photos?: ProfilePhoto[];
+  /** Trusted Member approval, or null. */
+  trustedSince?: string | null;
+  /** Eligibility and application state, for the apply card. */
+  trustedStanding?: {
+    eligible: boolean;
+    premiumDays: number;
+    journeysComplete: number;
+    missing: string[];
+    status: "pending" | "approved" | "declined" | "revoked" | null;
+    canApply: boolean;
+  } | null;
   initialPlan: SubscriptionPlan;
   initialDateOfBirth: string;
   initialBirthdayVisibility: BirthVisibility;
@@ -77,6 +93,9 @@ export function ProfilePageContent({
   initialVisibilityStatus,
   identitySummary,
   journey,
+  photos = [],
+  trustedSince = null,
+  trustedStanding = null,
   initialPlan,
   initialDateOfBirth,
   initialBirthdayVisibility,
@@ -353,6 +372,17 @@ export function ProfilePageContent({
         // Edit form (unchanged flow) — shown in place of the view.
         <Card className="p-5 sm:p-6">
           <div className="grid gap-4">
+            {/* The owner's gallery, manageable in place. Sits above the edit
+                form because it is the part of a profile people actually
+                revisit; the name and bio are set once. */}
+            <ProfilePhotoCarousel
+              photos={photos}
+              isOwner
+              onChanged={() => router.refresh()}
+            />
+
+            <TrustedMemberApplyCard standing={trustedStanding} trustedSince={trustedSince} />
+
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField htmlFor="displayName" label="Display name">
                 <Input id="displayName" value={displayName} maxLength={80} onChange={(event) => setDisplayName(event.target.value)} />
