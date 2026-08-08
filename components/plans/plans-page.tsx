@@ -128,6 +128,38 @@ export function PlansPageContent({
   const unreadNotificationCount = useUnreadNotifications();
   const [createOpen, setCreateOpen] = useState(() => searchParams.get("create") === "1");
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(() => requestedPlan?.id ?? null);
+
+  /**
+   * Open the plan named in ?plan=, including on a CLIENT-SIDE navigation.
+   *
+   * `selectedPlanId` and `activeBucket` above are useState INITIALISERS: they
+   * run once, when the component first mounts. Arriving from Linkr is a
+   * client transition into an already-mounted page, so they never re-ran and
+   * the link silently did nothing — the plan was loaded and the modal simply
+   * never opened.
+   *
+   * Derived during render rather than synced in an effect, matching the
+   * initialPlans sync above: an effect would paint one frame of the plans list
+   * before the modal appeared.
+   *
+   * Tracking the param VALUE (not just its presence) is what lets the user
+   * close the modal and stay closed — without it, every subsequent render
+   * would re-open the same plan.
+   */
+  const planParam = searchParams.get("plan");
+  const [trackedPlanParam, setTrackedPlanParam] = useState(planParam);
+  if (trackedPlanParam !== planParam) {
+    setTrackedPlanParam(planParam);
+    const target = planParam ? plans.find((plan) => plan.id === planParam) ?? null : null;
+    // A param naming a plan this user cannot see leaves the page as it is,
+    // rather than opening an empty modal.
+    if (target) {
+      setSelectedPlanId(target.id);
+      // Follow the plan into its own bucket: a hosted plan opened from the
+      // "upcoming" tab would otherwise sit behind a filter that hides it.
+      setActiveBucket(bucketFor(target));
+    }
+  }
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
 

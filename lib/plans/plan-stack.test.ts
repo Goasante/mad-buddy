@@ -85,6 +85,39 @@ describe("the stack replaces the rail without hiding plans", () => {
   });
 });
 
+describe("tapping a plan opens it", () => {
+  const plansPage = stripComments(read("components/plans/plans-page.tsx"));
+  const card = stripComments(read("components/socialize/socialize-plan-card.tsx"));
+
+  it("links to the plan on the canonical plans page", () => {
+    expect(card).toContain("`/plans?plan=${plan.id}`");
+  });
+
+  it("opens the plan on a CLIENT-SIDE navigation, not only a fresh load", () => {
+    // selectedPlanId and activeBucket are useState INITIALISERS, so they run
+    // once at mount. Arriving from Linkr is a client transition into an
+    // already-mounted page: without this the link silently did nothing.
+    expect(plansPage).toContain("const planParam = searchParams.get(\"plan\")");
+    expect(plansPage).toContain("if (trackedPlanParam !== planParam)");
+  });
+
+  it("tracks the param value, so closing the modal keeps it closed", () => {
+    // Tracking mere presence would re-open the plan on every later render.
+    expect(plansPage).toContain("setTrackedPlanParam(planParam)");
+  });
+
+  it("follows the plan into its own bucket", () => {
+    // A hosted plan opened from the "upcoming" tab would otherwise sit behind
+    // a filter that hides it.
+    expect(plansPage).toContain("setActiveBucket(bucketFor(target))");
+  });
+
+  it("leaves the page alone when the plan is not visible to this user", () => {
+    // Rather than opening an empty modal.
+    expect(plansPage).toContain("if (target) {");
+  });
+});
+
 describe("the host name fits", () => {
   it("lets the detail column shrink, so truncation engages at all", () => {
     // A flex item defaults to min-content width: without min-width:0 the name
