@@ -58,7 +58,8 @@ describe("socialize header", () => {
     // out of IMMERSIVE_HEADER_PAGES' fixed-header offset. That header is now
     // FIXED like the canonical one, so the page reserves its height instead
     // of only the notch.
-    expect(appShell).toContain('IMMERSIVE_HEADER_PAGES: readonly string[] = ["/discover"]');
+    const immersive = appShell.slice(appShell.indexOf("IMMERSIVE_HEADER_PAGES"));
+    expect(immersive.slice(0, 200)).toContain('"/discover"');
     expect(page).toContain("pt-[calc(env(safe-area-inset-top,0px)+4.25rem)]");
   });
 

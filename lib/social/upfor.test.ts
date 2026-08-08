@@ -88,15 +88,22 @@ describe("filters are honest about what they can do", () => {
     expect(items).toEqual(original);
   });
 
-  it("marks Nearby and Just-for-you unavailable rather than faking them", () => {
-    // The projection carries a broad area string, not a distance, and no
-    // recommendation model exists. A chip that looks live and returns the
-    // unfiltered list is worse than one that admits it cannot filter.
+  it("keeps the registry honest about what each filter can do", () => {
+    // The helpers stay for Stage 2, which brings back chips backed by real
+    // data. Nearby needs proximity the session does not carry; for_you needs a
+    // recommendation model that does not exist.
     expect(isUpForFilterAvailable("nearby")).toBe(false);
     expect(isUpForFilterAvailable("for_you")).toBe(false);
     expect(isUpForFilterAvailable("all")).toBe(true);
-    expect(isUpForFilterAvailable("popular")).toBe(true);
-    expect(page).toContain("disabled={!available}");
+  });
+
+  it("renders no filter chips at all until they can filter truthfully", () => {
+    // Stage 1 removed the row rather than shipping controls with no backing:
+    // a single "All" chip is not a filter, and the other three had nothing
+    // behind them.
+    for (const dead of ["Just for you", "See map", "All UpFors"]) {
+      expect(page).not.toContain(dead);
+    }
   });
 });
 
@@ -111,6 +118,39 @@ describe("the card never claims more than the server said", () => {
   it("hides the join button when the server would refuse it", () => {
     // Already asked, or an owner who did not open this one to requests.
     expect(page).toContain("item.allowPings && !requested");
+  });
+});
+
+describe("the safe area is reserved exactly once", () => {
+  const shell = stripComments(read("components/app-shell/app-shell.tsx"));
+  const css = read("app/globals.css");
+
+  it("declares UpFor as drawing its own inline header", () => {
+    // The blank band above the title came from /hangout-mode being in
+    // PAGES_WITH_OWN_HEADER but NOT here: the shell stood its header down and
+    // still reserved --mobile-header-height for it, so the inset was paid for
+    // twice — once by that offset and once by the page header.
+    const immersive = shell.slice(shell.indexOf("IMMERSIVE_HEADER_PAGES"));
+    expect(immersive.slice(0, 200)).toContain('"/hangout-mode"');
+  });
+
+  it("clears the notch in the header and reserves it in the page, once each", () => {
+    const header = css.slice(css.indexOf(".upfor-header {"));
+    expect(header.slice(0, 900)).toContain("env(safe-area-inset-top, 0px)");
+    expect(header.slice(0, 900)).toContain("position: fixed");
+
+    const pageRule = css.slice(css.indexOf(".upfor-page {"));
+    expect(pageRule.slice(0, 900)).toContain("padding-top: calc(env(safe-area-inset-top, 0px)");
+  });
+
+  it("uses no negative margins or device-specific offsets", () => {
+    const block = css.slice(css.indexOf(".upfor-page {"), css.indexOf(".upfor-banner {"));
+    expect(block).not.toMatch(/margin-top:\s*-/);
+    expect(block).not.toContain("-webkit-device-pixel-ratio");
+  });
+
+  it("scrolls as one feed, with no nested vertical scroller", () => {
+    expect(page).not.toContain("overflow-y-auto");
   });
 });
 

@@ -147,8 +147,11 @@ describe("legacy headers are gone", () => {
     // Socialize 2.0 replaced the radar with a scrolling discovery feed, so
     // /discover takes the canonical header like every other root destination.
     // The mechanism is kept for the next immersive screen.
-    expect(appShell).toContain('IMMERSIVE_HEADER_PAGES: readonly string[] = ["/discover"]');
-    expect(appShell).toContain('"/discover"');
+    // Asserted as MEMBERSHIP, not as the literal array: every page that draws
+    // an inline header joins this list, so pinning its exact contents makes
+    // adding one a test failure rather than a behaviour change.
+    const immersive = appShell.slice(appShell.indexOf("IMMERSIVE_HEADER_PAGES"));
+    expect(immersive.slice(0, 200)).toContain('"/discover"');
   });
 });
 

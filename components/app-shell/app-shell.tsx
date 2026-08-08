@@ -158,12 +158,18 @@ const PAGES_WITH_OWN_HEADER = [
  * empty band above the page's own title. These pages clear the safe area
  * themselves, exactly once.
  */
-// Socialize draws its header INLINE at the top of the discovery feed, not as
-// a fixed bar. It therefore belongs here rather than only in the list above:
-// reserving --mobile-header-height for a header that scrolls with the page
-// renders as an empty band under the notch. The page clears the safe area
-// itself, exactly once.
-const IMMERSIVE_HEADER_PAGES: readonly string[] = ["/discover"];
+// Pages that draw their own header INLINE rather than taking the fixed
+// canonical bar. They belong here as well as in the list above: reserving
+// --mobile-header-height for a header the page draws itself renders as an
+// empty band under the notch, because the inset is then paid for twice — once
+// by this offset and once by the page's own header.
+//
+// Each of these clears the safe area itself, exactly once.
+//
+// /hangout-mode joined when UpFor took an inline header carrying a subtitle
+// and its own actions. It was already in PAGES_WITH_OWN_HEADER but not here,
+// which is precisely the gap that produced the blank band above the title.
+const IMMERSIVE_HEADER_PAGES: readonly string[] = ["/discover", "/hangout-mode"];
 
 function hasOwnHeader(pathname: string): boolean {
   return PAGES_WITH_OWN_HEADER.some((href) => pathname === href || pathname.startsWith(`${href}/`));

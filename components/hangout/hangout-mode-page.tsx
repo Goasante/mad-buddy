@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
@@ -21,7 +20,6 @@ import {
   MapPin,
   Navigation,
   Plus,
-  SlidersHorizontal,
   Sparkles,
   Trophy,
   Users,
@@ -40,20 +38,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { useHasScrolled } from "@/hooks/use-has-scrolled";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 import { countActiveRequests } from "@/lib/social/hangout-requests";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
 import {
-  UPFOR_FILTERS,
   UPFOR_QUICK_IDEAS,
-  applyUpForFilter,
   isEndingSoon,
-  isUpForFilterAvailable,
   upForGoingLabel,
   upForTimeLeft,
-  upForTitle,
-  type UpForFilterId
+  upForTitle
 } from "@/lib/social/upfor";
 import { withTimeout } from "@/lib/network/resilience";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
@@ -89,13 +84,6 @@ const audienceOptions: Array<{ id: HangoutAudienceType; label: string }> = [
   { id: "close_friends", label: "Close Friends" }
 ];
 
-/** The chip glyphs from the approved design. Decorative, so emoji is enough. */
-const FILTER_ICON: Record<UpForFilterId, string> = {
-  all: "👥",
-  nearby: "📍",
-  popular: "🔥",
-  for_you: "⭐"
-};
 
 const durationOptions: Array<{ id: Duration; label: string; ms: number }> = [
   { id: "30m", label: "30 mins", ms: 30 * 60 * 1000 },
@@ -163,6 +151,8 @@ export function HangoutModePage({
   const router = useRouter();
   const requestedHangoutId = useSearchParams().get("hangout");
   const reducedMotion = useReducedMotion();
+  // Drives the header divider once content passes beneath it.
+  const scrolled = useHasScrolled();
 
   const [activeHangout, setActiveHangout] = useState(initialActiveHangout);
   const [requests, setRequests] = useState(initialRequests);
@@ -180,8 +170,6 @@ export function HangoutModePage({
   // actually looking, without dismissing the sheet.
   const [setupError, setSetupError] = useState("");
 
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filter, setFilter] = useState<UpForFilterId>("all");
 
   const [toast, setToast] = useState<Toast>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -192,7 +180,7 @@ export function HangoutModePage({
 
   // The feed, narrowed. Derived rather than stored, so a filter change never
   // has to be kept in sync with an arriving refresh.
-  const visibleFeed = applyUpForFilter(feed, filter);
+  const visibleFeed = feed;
 
   // Derive activation straight from the source of truth so an expired session
   // flips the orb back to inactive without a manual refresh.
@@ -427,7 +415,7 @@ export function HangoutModePage({
           approved design. The canonical PageHeader is not used here because
           this screen's header carries a subtitle and its own actions.
           ------------------------------------------------------------------ */}
-      <header className="upfor-header">
+      <header className={cn("upfor-header", scrolled && "upfor-header-scrolled")}>
         <Link href="/dashboard" aria-label="Back" className="upfor-back">
           <ArrowLeft className="h-6 w-6" aria-hidden="true" />
         </Link>
@@ -442,15 +430,6 @@ export function HangoutModePage({
         <div className="upfor-header-actions">
           <button
             type="button"
-            onClick={() => setFiltersOpen((open) => !open)}
-            aria-pressed={filtersOpen}
-            aria-label="Filter UpFors"
-            className="upfor-icon-button"
-          >
-            <SlidersHorizontal className="h-5 w-5" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
             data-tour-id={TOUR_TARGET_IDS.HANGOUT_TOGGLE}
             onClick={() => openSetup()}
             disabled={isPending}
@@ -462,32 +441,6 @@ export function HangoutModePage({
         </div>
       </header>
 
-      {/* FILTER CHIPS. Nearby and Just-for-you are rendered DISABLED with a
-          reason rather than silently returning everything: the projection
-          carries a broad area string, not a distance, and no recommendation
-          model exists. A chip that looks live and does nothing is worse than
-          one that says why it cannot. */}
-      <div className="upfor-chips" role="group" aria-label="Filter UpFors">
-        {UPFOR_FILTERS.map((option) => {
-          const available = isUpForFilterAvailable(option.id);
-          const on = filter === option.id;
-          return (
-            <button
-              key={option.id}
-              type="button"
-              disabled={!available}
-              aria-pressed={on}
-              title={available ? undefined : "Not available yet"}
-              onClick={() => setFilter(option.id)}
-              className={cn("upfor-chip", on && "upfor-chip-on")}
-            >
-              <span aria-hidden="true">{FILTER_ICON[option.id]}</span>
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
-
       {/* THE PROMISE. What makes an UpFor different from a plan: it expires. */}
       <section className="upfor-banner">
         <span className="upfor-banner-icon" aria-hidden="true">
@@ -496,7 +449,7 @@ export function HangoutModePage({
         <div className="min-w-0">
           <p className="upfor-banner-title">Live &amp; temporary</p>
           <p className="upfor-banner-copy">
-            UpFors disappear when they end. Jump in while you can!
+UpFors are temporary and disappear when they end. Jump in while you can!
           </p>
         </div>
       </section>
@@ -687,9 +640,6 @@ export function HangoutModePage({
                       </span>
                     )}
 
-                    <Link href={`/hangout-mode?hangout=${item.id}` as Route} className="upfor-card-view">
-                      View
-                    </Link>
                   </div>
                 </li>
               );

@@ -2969,15 +2969,60 @@ select {
   width: 100%;
   max-width: 560px;
   flex-direction: column;
-  gap: 1.5rem;
+  /* Tightened from 1.5rem: with the filter row gone the page was mostly air
+     above the first UpFor, which is the thing people came to read. */
+  gap: 1.125rem;
+  /* Reserves the FIXED header's footprint exactly once: the safe-area inset
+     (which the header pads by internally) plus its own content height. The
+     shell contributes nothing here — /hangout-mode is in
+     IMMERSIVE_HEADER_PAGES, so it adds no --mobile-header-height on top. */
+  padding-top: calc(env(safe-area-inset-top, 0px) + 4.75rem);
   padding-bottom: 1rem;
 }
 
 /* ------------------------------- Header ------------------------------ */
+/* FIXED to the viewport, like Linkr and the canonical bar.
+   Fixed rather than sticky for the same reason: pull-to-refresh transforms the
+   scroll container, and a transformed ANCESTOR re-bases sticky onto itself, so
+   the header would ride down with the pull.
+   OPAQUE, because content passes underneath — a translucent surface shows
+   cards moving behind the title. */
 .upfor-header {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  z-index: 40;
+  margin-inline: auto;
   display: flex;
+  width: 100%;
+  max-width: 560px;
   align-items: flex-start;
   gap: 0.75rem;
+  padding-inline: 1rem;
+  padding-bottom: 0.75rem;
+  /* The inset is cleared HERE and nowhere else in the chain. */
+  padding-top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+  background: hsl(var(--background));
+  border-bottom: 1px solid transparent;
+  transition: border-color 200ms ease-out;
+}
+
+@media (min-width: 592px) {
+  .upfor-header {
+    padding-inline: 0;
+  }
+}
+
+/* Divider only once content is actually passing beneath. */
+.upfor-header-scrolled {
+  border-bottom-color: hsl(var(--border) / 0.6);
+  box-shadow: 0 1px 12px hsl(var(--shadow) / 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upfor-header {
+    transition: none;
+  }
 }
 
 .upfor-back {
@@ -3050,53 +3095,6 @@ select {
 }
 .upfor-create-button:disabled {
   opacity: 0.6;
-}
-
-/* ------------------------------- Chips ------------------------------- */
-.upfor-chips {
-  display: flex;
-  gap: 0.625rem;
-  overflow-x: auto;
-  margin-inline: -1rem;
-  padding-inline: 1rem;
-  padding-block: 0.125rem;
-  scrollbar-width: none;
-}
-.upfor-chips::-webkit-scrollbar {
-  display: none;
-}
-
-.upfor-chip {
-  display: inline-flex;
-  min-height: 2.875rem;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 0.4375rem;
-  border-radius: 999px;
-  border: 1px solid hsl(var(--border) / 0.7);
-  padding-inline: 1.125rem;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: hsl(var(--foreground));
-  transition: background-color 300ms ease-out, border-color 300ms ease-out, color 300ms ease-out;
-}
-.upfor-chip:hover:not(:disabled):not(.upfor-chip-on) {
-  background: hsl(var(--secondary) / 0.5);
-}
-
-.upfor-chip-on {
-  border-color: transparent;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  font-weight: 600;
-  box-shadow: 0 8px 22px -12px hsl(var(--primary) / 0.7);
-}
-
-/* Not yet possible, and saying so. A chip that looks live and returns the
-   unfiltered list is worse than one that admits it cannot filter. */
-.upfor-chip:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 /* ------------------------------ Banner ------------------------------- */
