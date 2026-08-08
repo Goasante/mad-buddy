@@ -156,7 +156,7 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
   if (missing) return missing;
 
   const parsed = startHangoutSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Check the hangout details and try again." };
+  if (!parsed.success) return { ok: false, message: "Check the UpFor details and try again." };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
@@ -183,7 +183,7 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
       ok: false,
       message:
         upgradePromptFor("max_hangout_capacity", access.plan) ??
-        `Hangouts allow up to ${limits.maxHangoutCapacity} people on your plan.`
+        `An UpFor allows up to ${limits.maxHangoutCapacity} people on your plan.`
     };
   }
 
@@ -247,7 +247,7 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
     })
     .select("id")
     .single();
-  if (error || !session) return { ok: false, message: "Couldn't start Hangout Mode." };
+  if (error || !session) return { ok: false, message: "Couldn't start your UpFor." };
 
   // Audience targets for narrowed audiences (owned circles / eligible muddies).
   if (parsed.data.audienceType === "selected_circles" && parsed.data.circleIds?.length) {
@@ -380,9 +380,9 @@ export async function endHangoutAction(hangoutId: string): Promise<HangoutAction
     .eq("id", hangoutId)
     .maybeSingle();
   if (!session) return { ok: false, message: "UpFor not found." };
-  if (session.owner_id !== userId) return { ok: false, message: "This isn't your hangout." };
+  if (session.owner_id !== userId) return { ok: false, message: "This isn't your UpFor." };
   if (!canTransitionHangout(session.status, "cancelled")) {
-    return { ok: false, message: "This hangout is already over." };
+    return { ok: false, message: "This UpFor is already over." };
   }
 
   await admin
@@ -1032,12 +1032,12 @@ export async function convertHangoutToPlanAction(
     .eq("id", hangoutId)
     .maybeSingle();
   if (!session) return { ok: false, message: "UpFor not found." };
-  if (session.owner_id !== userId) return { ok: false, message: "This isn't your hangout." };
+  if (session.owner_id !== userId) return { ok: false, message: "This isn't your UpFor." };
   if (session.converted_plan_id) {
-    return { ok: false, message: "This hangout already became a plan." };
+    return { ok: false, message: "This UpFor already became a plan." };
   }
   if (!canTransitionHangout(session.status, "converted_to_plan")) {
-    return { ok: false, message: "This hangout can't be turned into a plan." };
+    return { ok: false, message: "This UpFor can't be turned into a plan." };
   }
 
   const { data: accepted } = await admin

@@ -7,6 +7,7 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { getCurrentUser } from "@/lib/supabase/auth";
+import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
 import { currentActiveHangout } from "@/lib/social/planning";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,12 @@ export default async function HangoutModeRoute() {
   const feedPromise: Promise<VisibleHangout[]> = user
     ? getVisibleHangoutsAction()
     : Promise.resolve([]);
+  // Upcoming plans, from the same projection Home and Linkr read. In flight
+  // alongside the feed rather than after it, so the extra section costs no
+  // extra wait.
+  const plansPromise = user
+    ? loadUpcomingPlans(user.id, 3)
+    : Promise.resolve({ plans: [], hasMore: false });
 
   if (user && env.url && env.serviceRoleKey) {
     const admin = createSupabaseAdminClient();
@@ -81,7 +88,7 @@ export default async function HangoutModeRoute() {
     }
   }
 
-  const feed = await feedPromise;
+  const [feed, plansData] = await Promise.all([feedPromise, plansPromise]);
 
   return (
     <HangoutModePage
@@ -92,6 +99,7 @@ export default async function HangoutModeRoute() {
       displayName={displayName}
       muddyCount={muddyCount}
       viewerId={user?.id ?? null}
+      initialPlans={plansData.plans}
     />
   );
 }

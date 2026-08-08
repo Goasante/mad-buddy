@@ -3489,61 +3489,6 @@ select {
   text-wrap: pretty;
 }
 
-/* ------------------------------ Create CTA --------------------------- */
-.upfor-cta {
-  display: flex;
-  align-items: center;
-  gap: 0.875rem;
-  border-radius: 1.25rem;
-  /* The one dark surface on the page, so the primary action reads as the
-     most important thing on it. */
-  background: linear-gradient(120deg, hsl(var(--shadow)), hsl(var(--shadow) / 0.88));
-  padding: 1.125rem;
-  color: #fff;
-}
-
-.upfor-cta-icon {
-  display: grid;
-  height: 2.75rem;
-  width: 2.75rem;
-  flex-shrink: 0;
-  place-items: center;
-  border-radius: 0.875rem;
-  background: rgb(255 255 255 / 0.12);
-  font-size: 1.375rem;
-}
-
-.upfor-cta-title {
-  font-size: 1.0625rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.upfor-cta-copy {
-  margin-top: 0.125rem;
-  font-size: 0.8125rem;
-  color: rgb(255 255 255 / 0.75);
-  text-wrap: pretty;
-}
-
-.upfor-cta-button {
-  min-height: 2.75rem;
-  flex-shrink: 0;
-  border-radius: 0.875rem;
-  background: #fff;
-  padding-inline: 1.25rem;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: hsl(var(--shadow));
-  transition: transform 300ms ease-out, opacity 300ms ease-out;
-}
-.upfor-cta-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-.upfor-cta-button:disabled {
-  opacity: 0.6;
-}
-
 /* ----------------------------- Quick ideas --------------------------- */
 .upfor-ideas-head {
   display: flex;

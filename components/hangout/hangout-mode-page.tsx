@@ -41,6 +41,10 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { UpForDetailSheet } from "@/components/hangout/upfor-detail-sheet";
+import { PlanStack } from "@/components/socialize/plan-stack";
+import { PageSectionHeader } from "@/components/app-shell/page-section-header";
+import { rsvpAction } from "@/app/(app)/plans-actions";
+import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import { useHasScrolled } from "@/hooks/use-has-scrolled";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
@@ -154,7 +158,8 @@ export function HangoutModePage({
   avatarUrl = null,
   displayName = "",
   muddyCount = 0,
-  viewerId = null
+  viewerId = null,
+  initialPlans = []
 }: {
   initialActiveHangout?: ActiveHangout | null;
   initialRequests?: HangoutRequestSummary[];
@@ -164,6 +169,8 @@ export function HangoutModePage({
   muddyCount?: number;
   /** The signed-in user, so the sheet can recognise their own UpFor. */
   viewerId?: string | null;
+  /** Upcoming plans, from the same projection Home and Linkr read. */
+  initialPlans?: HomeUpcomingPlan[];
 }) {
   const router = useRouter();
   const requestedHangoutId = useSearchParams().get("hangout");
@@ -404,6 +411,19 @@ export function HangoutModePage({
         );
         showToast(result.message, true);
       }
+    });
+  }
+
+  /**
+   * RSVP from the plans stack. The canonical action, unchanged — the card
+   * decides only what to OFFER, and the server still authorises.
+   */
+  function joinPlan(plan: HomeUpcomingPlan) {
+    if (isPending) return;
+    startTransition(async () => {
+      const result = await rsvpAction(plan.id, "going");
+      showToast(result.message, !result.ok);
+      if (result.ok) router.refresh();
     });
   }
 
@@ -812,22 +832,9 @@ UpFors are temporary and disappear when they end. Jump in while you can!
         )}
       </section>
 
-      {/* ------------------------ CREATE YOUR UPFOR ---------------------- */}
-      {!isActive ? (
-        <section className="upfor-cta">
-          <span className="upfor-cta-icon" aria-hidden="true">
-            👑
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="upfor-cta-title">Create your UpFor</p>
-            <p className="upfor-cta-copy">Let others nearby know what you&rsquo;re up for.</p>
-          </div>
-          <button type="button" onClick={() => openSetup()} disabled={isPending} className="upfor-cta-button">
-            Create
-          </button>
-        </section>
-      ) : null}
-
+      {/* The "Create your UpFor" banner was removed: the + in the header and
+          the Quick Ideas tiles below already open the same sheet, so it was a
+          third route to one action taking a full band of the screen. */}
       {/* ---------------------------- QUICK IDEAS ------------------------ */}
       <section aria-labelledby="upfor-ideas-heading" className="upfor-section">
         <div className="upfor-ideas-head">
@@ -856,6 +863,27 @@ UpFors are temporary and disappear when they end. Jump in while you can!
           ))}
         </ul>
       </section>
+
+      {/* WHERE AN UPFOR ENDS UP.
+          The same stack Home and Linkr render, from the same projection. It
+          belongs here because the two are one arc rather than two features:
+          an UpFor is "I am free right now", and a Plan is what a good one
+          becomes once people commit to a time. Seeing your plans beside your
+          UpFors is what makes that progression visible instead of implied.
+
+          "See all" points at /plans, which owns the full list — this is a
+          preview, not a second plans page. */}
+      {initialPlans.length > 0 ? (
+        <section aria-labelledby="upfor-plans-heading" className="upfor-section">
+          <PageSectionHeader
+            id="upfor-plans-heading"
+            title="Upcoming Plans"
+            href="/plans"
+            actionAriaLabel="See all plans"
+          />
+          <PlanStack plans={initialPlans} onJoin={joinPlan} pending={isPending} />
+        </section>
+      ) : null}
 
       {/* The route to what this actually shares, kept from the old screen. */}
       <Link href="/safety-center" className="upfor-safety">

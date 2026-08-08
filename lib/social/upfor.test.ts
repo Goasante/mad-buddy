@@ -156,6 +156,31 @@ describe("the safe area is reserved exactly once", () => {
   });
 });
 
+describe("plans sit where an UpFor ends up", () => {
+  it("renders the shared plan stack rather than a second presentation", () => {
+    // An UpFor is "I am free right now"; a Plan is what a good one becomes.
+    // Same projection, same component as Home and Linkr.
+    expect(page).toContain("<PlanStack plans={initialPlans}");
+  });
+
+  it("points See all at the canonical plans page", () => {
+    // A preview, not a second plans page.
+    expect(page).toContain('href="/plans"');
+  });
+
+  it("loads plans alongside the feed rather than after it", () => {
+    const route = read("app/(app)/hangout-mode/page.tsx");
+    expect(route).toContain("Promise.all([feedPromise, plansPromise])");
+  });
+
+  it("offers exactly one create route per surface", () => {
+    // The banner was a third way to open the same sheet, after the header +
+    // and the Quick Ideas tiles, and it cost a full band of the screen.
+    expect(page).not.toContain("upfor-cta");
+    expect(page).toContain("Quick Ideas");
+  });
+});
+
 describe("the rename is UI-only", () => {
   it("keeps the route, table and action names untouched", () => {
     expect(page).toContain("requestHangoutAction");
