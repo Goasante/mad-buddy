@@ -41,7 +41,7 @@ const INITIAL_DEVICE: DevicePlatform = {
 
 const androidBenefits = [
   { icon: MessageCircle, label: "New messages" },
-  { icon: UsersRound, label: "Hangout requests" },
+  { icon: UsersRound, label: "UpFor requests" },
   { icon: Hand, label: "Waves from Muddies" },
   { icon: MapPinCheck, label: "Safe Arrival updates" },
   { icon: PartyPopper, label: "Achievements" },
@@ -50,7 +50,7 @@ const androidBenefits = [
 
 const iosBenefits = [
   { icon: MessageCircle, label: "Messages" },
-  { icon: UsersRound, label: "Hangout requests" },
+  { icon: UsersRound, label: "UpFor requests" },
   { icon: MapPinCheck, label: "Safe Arrival" },
   { icon: PartyPopper, label: "Achievements" },
   { icon: CalendarDays, label: "Plans" }

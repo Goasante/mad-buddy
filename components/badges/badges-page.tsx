@@ -33,7 +33,7 @@ const recapRows: Array<{ key: string; label: string }> = [
   { key: "muddiesInteractedWith", label: "Muddies you made time for" },
   { key: "newMuddies", label: "New Muddies" },
   { key: "wavesSent", label: "Waves sent" },
-  { key: "hangoutSessions", label: "Hangouts hosted" },
+  { key: "hangoutSessions", label: "UpFors hosted" },
   { key: "daysVisible", label: "Days with your glow on" }
 ];
 

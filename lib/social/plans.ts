@@ -93,7 +93,7 @@ export function validatePollOptions(labels: string[]): string | null {
 
 export function validateHangoutDuration(startMs: number, endMs: number): string | null {
   if (endMs <= startMs) return "Choose an end time after the start.";
-  if (endMs - startMs > HANGOUT_MAX_DURATION_MS) return "Hangout sessions can last at most 12 hours.";
+  if (endMs - startMs > HANGOUT_MAX_DURATION_MS) return "An UpFor can last at most 12 hours.";
   return null;
 }
 

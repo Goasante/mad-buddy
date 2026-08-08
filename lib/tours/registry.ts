@@ -185,7 +185,7 @@ export const TOUR_TARGETS: TourTargetOption[] = [
 
   target(TOUR_TARGET_IDS.HANGOUT_TOGGLE, "Hangout control", "/hangout-mode", "Turns Hangout Mode on or opens its setup."),
   target(TOUR_TARGET_IDS.HANGOUT_ACTIVE, "Active Hangout", "/hangout-mode", "The current Hangout state and controls."),
-  target(TOUR_TARGET_IDS.HANGOUT_DISCOVERY, "Active Hangouts", "/hangout-mode", "Hangouts available to the viewer."),
+  target(TOUR_TARGET_IDS.HANGOUT_DISCOVERY, "Active UpFors", "/hangout-mode", "UpFors available to the viewer."),
 
   target(TOUR_TARGET_IDS.SOCIALIZE_ACTIVATION, "Socialize activation", "/discover", "Turns Socialize on or opens its controls."),
   target(TOUR_TARGET_IDS.SOCIALIZE_FEED, "Socialize feed", "/discover", "Nearby opted-in people, with approximate distance only."),

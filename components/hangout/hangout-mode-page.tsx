@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useTransition, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   AlertTriangle,
+  ArrowLeft,
   BookOpen,
   CheckCircle2,
   ChevronRight,
@@ -14,9 +16,12 @@ import {
   Footprints,
   Gamepad2,
   Hand,
-  Info,
   Loader2,
   Lock,
+  MapPin,
+  Navigation,
+  Plus,
+  SlidersHorizontal,
   Sparkles,
   Trophy,
   Users,
@@ -33,14 +38,23 @@ import {
   type VisibleHangout
 } from "@/app/(app)/hangout-actions";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/app-shell/page-header";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 import { countActiveRequests } from "@/lib/social/hangout-requests";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
+import {
+  UPFOR_FILTERS,
+  UPFOR_QUICK_IDEAS,
+  applyUpForFilter,
+  isEndingSoon,
+  isUpForFilterAvailable,
+  upForGoingLabel,
+  upForTimeLeft,
+  upForTitle,
+  type UpForFilterId
+} from "@/lib/social/upfor";
 import { withTimeout } from "@/lib/network/resilience";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import type {
@@ -74,6 +88,14 @@ const audienceOptions: Array<{ id: HangoutAudienceType; label: string }> = [
   { id: "all_muddies", label: "All Muddies" },
   { id: "close_friends", label: "Close Friends" }
 ];
+
+/** The chip glyphs from the approved design. Decorative, so emoji is enough. */
+const FILTER_ICON: Record<UpForFilterId, string> = {
+  all: "👥",
+  nearby: "📍",
+  popular: "🔥",
+  for_you: "⭐"
+};
 
 const durationOptions: Array<{ id: Duration; label: string; ms: number }> = [
   { id: "30m", label: "30 mins", ms: 30 * 60 * 1000 },
@@ -158,13 +180,19 @@ export function HangoutModePage({
   // actually looking, without dismissing the sheet.
   const [setupError, setSetupError] = useState("");
 
-  const [feedback, setFeedback] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filter, setFilter] = useState<UpForFilterId>("all");
+
   const [toast, setToast] = useState<Toast>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [isPending, startTransition] = useTransition();
 
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestRefreshRef = useRef<Promise<void> | null>(null);
+
+  // The feed, narrowed. Derived rather than stored, so a filter change never
+  // has to be kept in sync with an arriving refresh.
+  const visibleFeed = applyUpForFilter(feed, filter);
 
   // Derive activation straight from the source of truth so an expired session
   // flips the orb back to inactive without a manual refresh.
@@ -254,14 +282,23 @@ export function HangoutModePage({
     [scheduleToastDismiss]
   );
 
-  function openSetup() {
+  /**
+   * Open the setup sheet.
+   *
+   * `preset` comes from a Quick Idea tile: the sheet opens with that activity
+   * already chosen, so "one tap" means one tap to the form rather than one tap
+   * to a form you still have to fill from scratch. It is deliberately a
+   * preselection, not a submission — audience and duration are still the
+   * user's to confirm before anything becomes visible to anyone.
+   */
+  function openSetup(preset?: HangoutActivityType) {
     if (isActive && activeHangout) {
-      setActivity(activeHangout.activityType);
+      setActivity(preset ?? activeHangout.activityType);
       setAudience(activeHangout.audienceType);
       setMessage(activeHangout.message ?? "");
       setDuration("1h");
     } else {
-      setActivity(null);
+      setActivity(preset ?? null);
       setAudience("all_muddies");
       setMessage("");
       setDuration("1h");
@@ -274,7 +311,7 @@ export function HangoutModePage({
   function requestToJoin(hangoutId: string) {
     startTransition(async () => {
       const result = await requestHangoutAction(hangoutId);
-      setFeedback(result.message);
+      showToast(result.message, !result.ok);
       if (result.ok) {
         setFeed((current) =>
           current.map((item) => (item.id === hangoutId ? { ...item, myRequestStatus: "pending" } : item))
@@ -327,7 +364,7 @@ export function HangoutModePage({
         showToast(
           `Visible to ${audienceLabel[audience]} until ${formatTime(endsAt)}.`,
           false,
-          editing ? "Hangout Mode updated" : "Hangout Mode is on"
+          editing ? "UpFor updated" : "You're UpFor"
         );
         router.refresh();
       } else {
@@ -347,7 +384,7 @@ export function HangoutModePage({
       if (result.ok) {
         setActiveHangout(null);
         setRequests([]);
-        showToast("You're no longer visible to your Muddies.", false, "Hangout Mode is off");
+        showToast("You're no longer visible to your Muddies.", false, "UpFor ended");
         router.refresh();
       } else {
         showToast(result.message, true);
@@ -358,7 +395,7 @@ export function HangoutModePage({
   function respond(requestId: string, response: "accepted" | "maybe" | "declined") {
     startTransition(async () => {
       const result = await respondHangoutRequestAction(requestId, response);
-      setFeedback(result.message);
+      showToast(result.message, !result.ok);
       // Re-derive the list from the database rather than trusting a local edit,
       // so the count stays canonical after accept/maybe/decline.
       if (result.ok) await refreshRequests();
@@ -369,7 +406,7 @@ export function HangoutModePage({
     if (!activeHangout) return;
     startTransition(async () => {
       const result = await convertHangoutToPlanAction(activeHangout.id);
-      setFeedback(result.message);
+      showToast(result.message, !result.ok);
       if (result.ok) {
         setActiveHangout(null);
         setRequests([]);
@@ -380,131 +417,150 @@ export function HangoutModePage({
 
   const activityType = activeHangout?.activityType ?? "anything";
   const OrbIcon = isActive ? ACTIVITY_ICONS[activityType] ?? Hand : Hand;
-  const activatingGlow = isActive && !reducedMotion;
 
   const remaining = isActive && activeHangout ? remainingLabel(activeHangout.endsAt, nowMs) : "";
 
   return (
-    <div className="mx-auto max-w-[560px] space-y-6 pb-4 pt-5">
-      {/* One canonical header for both states. The bespoke bar it replaces
-          drew its own Back and Info buttons at 40px with a border — visibly
-          different from every other screen's 44px borderless controls. */}
-      <PageHeader title="Hangout Mode" backHref="/dashboard" />
-
-      {/* The desktop heading and the safety note. The note stays on mobile
-          too when idle: it explains what turning this on actually shares,
-          which is the one thing a user needs before deciding. */}
-      <div className={isActive ? "hidden md:block" : undefined}>
-        <h1 className="hidden text-2xl font-semibold tracking-tight sm:text-3xl md:block">Hangout Mode</h1>
-        <p className="text-sm text-muted-foreground md:mt-1">
-          Let approved Muddies know you&apos;re open to do something. Your exact location is{" "}
-          <span className="font-medium text-primary">never</span> shared.
-        </p>
-      </div>
-
-      {/* Preserved from the bespoke bar: the route to what this shares. */}
-      <div className="flex justify-end md:hidden">
-        <Link
-          href="/safety-center"
-          className="focus-ring safe-motion inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <Info className="h-4 w-4" aria-hidden="true" />
-          How this keeps you safe
+    <div className="upfor-page">
+      {/* ------------------------------------------------------------------
+          HEADER. Title, subtitle, filter control and create — matching the
+          approved design. The canonical PageHeader is not used here because
+          this screen's header carries a subtitle and its own actions.
+          ------------------------------------------------------------------ */}
+      <header className="upfor-header">
+        <Link href="/dashboard" aria-label="Back" className="upfor-back">
+          <ArrowLeft className="h-6 w-6" aria-hidden="true" />
         </Link>
+
+        <div className="min-w-0 flex-1">
+          <h1 className="upfor-title">UpFor</h1>
+          <p className="upfor-subtitle">
+            See what people are up for right now <span aria-hidden="true">⚡</span>
+          </p>
+        </div>
+
+        <div className="upfor-header-actions">
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((open) => !open)}
+            aria-pressed={filtersOpen}
+            aria-label="Filter UpFors"
+            className="upfor-icon-button"
+          >
+            <SlidersHorizontal className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            data-tour-id={TOUR_TARGET_IDS.HANGOUT_TOGGLE}
+            onClick={() => openSetup()}
+            disabled={isPending}
+            aria-label={isActive ? "Edit your UpFor" : "Create an UpFor"}
+            className="upfor-create-button"
+          >
+            <Plus className="h-6 w-6" aria-hidden="true" />
+          </button>
+        </div>
+      </header>
+
+      {/* FILTER CHIPS. Nearby and Just-for-you are rendered DISABLED with a
+          reason rather than silently returning everything: the projection
+          carries a broad area string, not a distance, and no recommendation
+          model exists. A chip that looks live and does nothing is worse than
+          one that says why it cannot. */}
+      <div className="upfor-chips" role="group" aria-label="Filter UpFors">
+        {UPFOR_FILTERS.map((option) => {
+          const available = isUpForFilterAvailable(option.id);
+          const on = filter === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              disabled={!available}
+              aria-pressed={on}
+              title={available ? undefined : "Not available yet"}
+              onClick={() => setFilter(option.id)}
+              className={cn("upfor-chip", on && "upfor-chip-on")}
+            >
+              <span aria-hidden="true">{FILTER_ICON[option.id]}</span>
+              {option.label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Avatar hero — tap to set up / edit. */}
-      <div className="flex flex-col items-center text-center">
-        <button
-          type="button"
-          data-tour-id={TOUR_TARGET_IDS.HANGOUT_TOGGLE}
-          onClick={openSetup}
-          disabled={isPending}
-          aria-label={isActive ? "Edit your Hangout Mode details" : "Set up Hangout Mode"}
-          className={cn(
-            "focus-ring safe-motion relative isolate rounded-full p-1.5 transition-all",
-            isActive
-              ? cn(
-                  "bg-gradient-to-br from-primary to-orange-500 shadow-[0_0_44px_hsl(var(--primary)/0.45)]",
-                  activatingGlow && "proximity-halo proximity-halo-nearby proximity-halo-animate"
-                )
-              : "bg-gradient-to-br from-primary/35 to-orange-400/20"
-          )}
-          style={
-            activatingGlow ? ({ "--halo-active-opacity": 0.7, "--halo-rest-opacity": 0.4 } as CSSProperties) : undefined
-          }
-        >
-          {isPending ? (
-            <span className="grid h-32 w-32 place-items-center rounded-full border-4 border-background bg-secondary text-muted-foreground">
-              <Loader2 className="h-10 w-10 animate-spin" aria-hidden="true" />
-            </span>
-          ) : (
-            <UserAvatar
-              src={avatarUrl}
-              name={displayName || "You"}
-              size="profile"
-              decorative
-              className="h-32 w-32 border-4 border-background"
-            />
-          )}
-          {!isActive ? (
-            <span className="absolute bottom-1 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-border/70 bg-background/90 px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-              <Hand className="h-3 w-3" aria-hidden="true" /> Hangout off
-            </span>
-          ) : null}
-        </button>
-      </div>
+      {/* THE PROMISE. What makes an UpFor different from a plan: it expires. */}
+      <section className="upfor-banner">
+        <span className="upfor-banner-icon" aria-hidden="true">
+          <Clock className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="upfor-banner-title">Live &amp; temporary</p>
+          <p className="upfor-banner-copy">
+            UpFors disappear when they end. Jump in while you can!
+          </p>
+        </div>
+      </section>
 
+      {/* --------------------------- YOUR OWN UPFOR ---------------------- */}
       {isActive && activeHangout ? (
-        <>
-          <div data-tour-id={TOUR_TARGET_IDS.HANGOUT_ACTIVE} className="text-center">
-            <p className="text-xs font-semibold uppercase tracking-wide text-primary">I&apos;m open to</p>
-            <p className="mt-1 flex items-center justify-center gap-2 text-2xl font-bold">
-              {HANGOUT_ACTIVITY_LABELS[activeHangout.activityType] ?? "Anything"}
-              <OrbIcon className="h-6 w-6 text-primary" aria-hidden="true" />
-            </p>
-            {activeHangout.message ? (
-              <p className="mt-1 text-sm text-muted-foreground">&ldquo;{activeHangout.message}&rdquo;</p>
-            ) : null}
-            <p className="mt-2 inline-flex items-center gap-1.5 text-sm" suppressHydrationWarning>
-              <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
-              <span className="font-medium text-emerald-600 dark:text-emerald-300">Active</span>
-              <span className="text-muted-foreground">• {remaining}</span>
-            </p>
-            <div className="mt-3">
-              <button
-                type="button"
-                onClick={openSetup}
-                className="focus-ring safe-motion inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/50 px-3.5 py-1.5 text-sm font-medium hover:bg-secondary/40"
-              >
-                <Users className="h-4 w-4 text-primary" aria-hidden="true" />
-                Visible to {visibleToLabel(activeHangout.audienceType, muddyCount)}
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-              </button>
+        <section data-tour-id={TOUR_TARGET_IDS.HANGOUT_ACTIVE} className="upfor-mine">
+          <div className="upfor-mine-head">
+            <span className="upfor-mine-avatar">
+              <UserAvatar src={avatarUrl} name={displayName || "You"} size="lg" decorative />
+              <span className="upfor-mine-glyph" aria-hidden="true">
+                <OrbIcon className="h-3.5 w-3.5" />
+              </span>
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="upfor-mine-label">You&rsquo;re up for</p>
+              <p className="upfor-mine-activity">
+                {HANGOUT_ACTIVITY_LABELS[activeHangout.activityType] ?? "Anything"}
+              </p>
+              {activeHangout.message ? (
+                <p className="upfor-mine-message">&ldquo;{activeHangout.message}&rdquo;</p>
+              ) : null}
             </div>
+            <span className="upfor-mine-timer" suppressHydrationWarning>
+              <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+              {remaining}
+            </span>
           </div>
 
-          <div className="flex gap-3">
-            <Button type="button" variant="outline" className="flex-1" onClick={openSetup} disabled={isPending}>
+          <button type="button" onClick={() => openSetup()} className="upfor-mine-audience">
+            <Users className="h-4 w-4" aria-hidden="true" />
+            Visible to {visibleToLabel(activeHangout.audienceType, muddyCount)}
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+
+          <div className="upfor-mine-actions">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => openSetup()} disabled={isPending}>
               Update
             </Button>
-            <Button type="button" variant="outline" className="flex-1 border-primary/40 text-primary" onClick={turnOff} disabled={isPending}>
-              Turn off
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 border-primary/40 text-primary"
+              onClick={turnOff}
+              disabled={isPending}
+            >
+              End UpFor
             </Button>
           </div>
 
-          <section className="rounded-2xl border border-border/70 bg-card/50 p-4">
-            <p className="mb-2 text-sm font-semibold">Requests to join ({countActiveRequests(requests)})</p>
+          {/* Requests to join. Unchanged behaviour — accept, maybe, decline,
+              and the existing route into a group plan. */}
+          <div className="upfor-requests">
+            <p className="upfor-requests-title">Requests to join ({countActiveRequests(requests)})</p>
             {requests.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No requests yet. We&apos;ll let you know.</p>
+              <p className="upfor-requests-empty">No requests yet. We&apos;ll let you know.</p>
             ) : (
-              <ul className="space-y-2">
+              <ul className="flex flex-col gap-2">
                 {requests.map((request) => (
                   <li
                     key={request.id}
                     id={`hangout-${request.id}`}
                     className={cn(
-                      "flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card/60 p-3",
+                      "upfor-request",
                       requestedHangoutId === request.id && "ring-2 ring-primary/35"
                     )}
                   >
@@ -538,110 +594,165 @@ export function HangoutModePage({
                 Create a group plan with {acceptedCount} {acceptedCount === 1 ? "person" : "people"}
               </Button>
             ) : null}
-          </section>
-
-          <p className="flex items-center justify-center gap-2 pt-1 text-center text-xs text-muted-foreground">
-            <Lock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            Your safety. Your choice. Your community.
-          </p>
-        </>
-      ) : (
-        <>
-          <div className="text-center">
-            <p className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Users className="h-4 w-4 text-primary" aria-hidden="true" />
-              Let your Muddies know
-            </p>
-            <h2 className="mt-1 text-3xl font-bold">Up for something?</h2>
-            <span className="mx-auto mt-2 block h-1 w-16 rounded-full bg-primary" aria-hidden="true" />
-            <p className="mt-3 text-sm text-muted-foreground">Turn on Hangout Mode and let your Muddies know.</p>
           </div>
-
-          <Button
-            type="button"
-            data-tour-id={TOUR_TARGET_IDS.HANGOUT_TOGGLE}
-            disabled={isPending}
-            onClick={openSetup}
-            className="h-12 w-full rounded-full bg-gradient-to-r from-primary to-orange-500 text-base font-semibold text-white shadow-[0_10px_30px_hsl(var(--primary)/0.35)] hover:opacity-95"
-          >
-            <Hand className="h-4 w-4" aria-hidden="true" />
-            Turn on Hangout Mode
-          </Button>
-
-          {/* One lightweight reassurance line (was three large blocks). */}
-          <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <Users className="h-3.5 w-3.5 text-primary" aria-hidden="true" /> Approved Muddies only
-            </span>
-            <span aria-hidden="true">·</span>
-            <span className="inline-flex items-center gap-1">
-              <Clock className="h-3.5 w-3.5 text-primary" aria-hidden="true" /> Limited time
-            </span>
-            <span aria-hidden="true">·</span>
-            <span className="inline-flex items-center gap-1">
-              <Lock className="h-3.5 w-3.5 text-primary" aria-hidden="true" /> Location never shared
-            </span>
-          </p>
-        </>
-      )}
-
-      {/* Muddies open right now — real feed; hidden when empty. */}
-      {feed.length > 0 ? (
-        <section data-tour-id={TOUR_TARGET_IDS.HANGOUT_DISCOVERY} className="pt-1">
-          <h2 className="mb-2 text-sm font-semibold">
-            {feed.length} {feed.length === 1 ? "Muddy is" : "Muddies are"} open too
-          </h2>
-          <ul className="divide-y divide-border/60">
-            {feed.map((hangout) => (
-              <li
-                key={hangout.id}
-                id={`hangout-${hangout.id}`}
-                className={cn(
-                  "flex items-center gap-3 py-3",
-                  requestedHangoutId === hangout.id && "rounded-xl ring-2 ring-primary/35"
-                )}
-              >
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
-                  {hangout.ownerName.trim().charAt(0).toUpperCase() || "?"}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-1.5 truncate text-sm font-medium">
-                    <span className="truncate">{hangout.ownerName} is open to{" "}
-                    {HANGOUT_ACTIVITY_LABELS[hangout.activityType]?.toLowerCase() ?? "hang out"}
-                    </span>
-                    <PremiumPlanBadge plan={hangout.ownerPlan} compact />
-                  </p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {hangout.message ? `“${hangout.message}” · ` : ""}
-                    {hangout.broadAreaText ? `${hangout.broadAreaText} · ` : ""}
-                    Until {formatTime(hangout.endsAt)}
-                  </p>
-                </div>
-                {hangout.myRequestStatus ? (
-                  <span className="shrink-0 text-xs font-medium capitalize text-muted-foreground">
-                    {hangout.myRequestStatus === "pending" ? "Requested" : hangout.myRequestStatus}
-                  </span>
-                ) : (
-                  <Button type="button" size="sm" className="shrink-0" disabled={isPending} onClick={() => requestToJoin(hangout.id)}>
-                    I&apos;m interested
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
         </section>
       ) : null}
 
-      {feedback ? (
-        <p className="text-center text-sm text-muted-foreground" role="status">
-          {feedback}
-        </p>
+      {/* ------------------------- HAPPENING NOW ------------------------- */}
+      <section
+        aria-labelledby="upfor-feed-heading"
+        data-tour-id={TOUR_TARGET_IDS.HANGOUT_DISCOVERY}
+        className="upfor-section"
+      >
+        <div className="upfor-section-head">
+          <h2 id="upfor-feed-heading" className="upfor-section-title">
+            Happening Now Nearby <Navigation className="h-4 w-4 text-primary" aria-hidden="true" />
+          </h2>
+        </div>
+
+        {visibleFeed.length === 0 ? (
+          <div className="upfor-empty">
+            <p className="upfor-empty-title">Nothing happening right now</p>
+            <p className="upfor-empty-copy">
+              {muddyCount === 0
+                ? "UpFors come from your Muddies. Once you have a few, whatever they are up for shows here."
+                : "None of your Muddies are up for anything at the moment. Start one and let them know you are."}
+            </p>
+          </div>
+        ) : (
+          <ul className="upfor-list">
+            {visibleFeed.map((item) => {
+              const timeLeft = upForTimeLeft(item.endsAt, nowMs);
+              const going = upForGoingLabel(item.goingCount);
+              const requested = item.myRequestStatus !== null;
+              return (
+                <li key={item.id} className="upfor-card">
+                  <UserAvatar
+                    src={item.ownerAvatarUrl}
+                    name={item.ownerName}
+                    size="lg"
+                    decorative
+                    className="upfor-card-avatar"
+                  />
+
+                  <div className="upfor-card-body">
+                    <p className="upfor-card-title">{upForTitle(item.activityType)}</p>
+                    {item.message ? <p className="upfor-card-message">{item.message}</p> : null}
+
+                    <div className="upfor-card-meta">
+                      {/* Broad area only. The projection carries no distance,
+                          and inventing one here would be a location claim the
+                          server never made. */}
+                      {item.broadAreaText ? (
+                        <span className="upfor-card-place">
+                          <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                          {item.broadAreaText}
+                        </span>
+                      ) : null}
+                      {going ? (
+                        <span className="upfor-card-going">
+                          <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                          {going}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="upfor-card-actions">
+                    {timeLeft ? (
+                      <span
+                        className={cn("upfor-card-timer", isEndingSoon(item.endsAt, nowMs) && "upfor-card-timer-soon")}
+                        suppressHydrationWarning
+                      >
+                        <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                        {timeLeft}
+                      </span>
+                    ) : null}
+
+                    {/* The card never offers an action the server would
+                        reject: a session that refused pings, or one already
+                        asked, shows its state instead of a live button. */}
+                    {item.allowPings && !requested ? (
+                      <button
+                        type="button"
+                        onClick={() => requestToJoin(item.id)}
+                        disabled={isPending}
+                        className="upfor-card-join"
+                      >
+                        I&rsquo;m in
+                      </button>
+                    ) : (
+                      <span className="upfor-card-state">
+                        {requested ? "Requested" : "Invite only"}
+                      </span>
+                    )}
+
+                    <Link href={`/hangout-mode?hangout=${item.id}` as Route} className="upfor-card-view">
+                      View
+                    </Link>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      {/* ------------------------ CREATE YOUR UPFOR ---------------------- */}
+      {!isActive ? (
+        <section className="upfor-cta">
+          <span className="upfor-cta-icon" aria-hidden="true">
+            👑
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="upfor-cta-title">Create your UpFor</p>
+            <p className="upfor-cta-copy">Let others nearby know what you&rsquo;re up for.</p>
+          </div>
+          <button type="button" onClick={() => openSetup()} disabled={isPending} className="upfor-cta-button">
+            Create
+          </button>
+        </section>
       ) : null}
+
+      {/* ---------------------------- QUICK IDEAS ------------------------ */}
+      <section aria-labelledby="upfor-ideas-heading" className="upfor-section">
+        <div className="upfor-ideas-head">
+          <h2 id="upfor-ideas-heading" className="upfor-section-title">
+            <span aria-hidden="true">⚡</span> Quick Ideas
+          </h2>
+          <p className="upfor-ideas-sub">Start an UpFor in one tap</p>
+        </div>
+
+        <ul className="upfor-ideas">
+          {UPFOR_QUICK_IDEAS.map((idea) => (
+            <li key={idea.id}>
+              <button
+                type="button"
+                onClick={() => openSetup(idea.id)}
+                disabled={isPending}
+                className="upfor-idea"
+                aria-label={`Start an UpFor for ${idea.label}`}
+              >
+                <span className="upfor-idea-emoji" aria-hidden="true">
+                  {idea.emoji}
+                </span>
+                <span className="upfor-idea-label">{idea.label}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* The route to what this actually shares, kept from the old screen. */}
+      <Link href="/safety-center" className="upfor-safety">
+        <Lock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+        Your exact location is never shared. How this keeps you safe
+      </Link>
 
       <Modal
         open={setupOpen}
         onOpenChange={setSetupOpen}
-        title={isActive ? "Update Hangout Mode" : "Turn on Hangout Mode"}
+        title={isActive ? "Update your UpFor" : "What are you up for?"}
         description="Let your Muddies know what you're open to."
         variant="sheet"
         compact
@@ -659,7 +770,7 @@ export function HangoutModePage({
               ) : isActive ? (
                 "Save changes"
               ) : (
-                "Turn on Hangout"
+                "Start UpFor"
               )}
             </Button>
           </>

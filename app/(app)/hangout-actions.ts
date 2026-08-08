@@ -336,6 +336,8 @@ export async function endHangoutAction(hangoutId: string): Promise<HangoutAction
 export type VisibleHangout = {
   id: string;
   ownerName: string;
+  /** The owner's photo. Already public wherever their name is shown. */
+  ownerAvatarUrl: string | null;
   ownerPlan: SubscriptionPlan;
   activityType: HangoutActivityType;
   message: string | null;
@@ -343,6 +345,15 @@ export type VisibleHangout = {
   endsAt: string;
   allowPings: boolean;
   myRequestStatus: string | null;
+  /**
+   * Accepted joiners, plus the owner.
+   *
+   * Counted from `hangout_requests`, which already exists — this is not a new
+   * signal, only one that was computed and thrown away. Pending requests are
+   * NOT counted: "3 going" must mean three people are actually coming, not
+   * three people who asked.
+   */
+  goingCount: number;
 };
 
 /**
@@ -387,7 +398,7 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
   const [{ data: owners }, { data: myRequests }, plans] = await Promise.all([
     admin
       .from("profiles")
-      .select("user_id, full_name")
+      .select("user_id, full_name, avatar_url")
       .in("user_id", ownerIds),
     admin
       .from("hangout_requests")
@@ -399,19 +410,37 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
       ),
     loadEffectivePlansForUsers(admin, ownerIds)
   ]);
-  const nameById = new Map((owners ?? []).map((row) => [row.user_id, row.full_name]));
+  const profileById = new Map((owners ?? []).map((row) => [row.user_id, row]));
   const requestBySession = new Map((myRequests ?? []).map((row) => [row.hangout_session_id, row.status]));
+
+  // Accepted joiners per session. One grouped read rather than a query per
+  // card, and accepted-only so the count never overstates who is coming.
+  const { data: acceptedRows } = await admin
+    .from("hangout_requests")
+    .select("hangout_session_id")
+    .eq("status", "accepted")
+    .in(
+      "hangout_session_id",
+      visible.map((session) => session.id)
+    );
+  const acceptedBySession = new Map<string, number>();
+  for (const row of acceptedRows ?? []) {
+    acceptedBySession.set(row.hangout_session_id, (acceptedBySession.get(row.hangout_session_id) ?? 0) + 1);
+  }
 
   return visible.map((session) => ({
     id: session.id,
-    ownerName: nameById.get(session.owner_id)?.trim() || "A Muddy",
+    ownerName: profileById.get(session.owner_id)?.full_name?.trim() || "A Muddy",
+    ownerAvatarUrl: profileById.get(session.owner_id)?.avatar_url ?? null,
     ownerPlan: plans.get(session.owner_id) ?? "free",
     activityType: session.activity_type,
     message: session.message,
     broadAreaText: session.broad_area_text,
     endsAt: session.ends_at,
     allowPings: session.allow_pings,
-    myRequestStatus: requestBySession.get(session.id) ?? null
+    myRequestStatus: requestBySession.get(session.id) ?? null,
+    // +1 for the owner, who is by definition going to their own hangout.
+    goingCount: (acceptedBySession.get(session.id) ?? 0) + 1
   }));
 }
 

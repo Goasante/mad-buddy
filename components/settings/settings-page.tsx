@@ -172,7 +172,7 @@ export function SettingsPageContent({
           />
           <SettingsLinkRow
             icon={PartyPopper}
-            title="Hangout Mode"
+            title="UpFor"
             description="Let people know you're down to hang out right now."
             href="/hangout-mode"
           />

@@ -68,7 +68,7 @@ export function PulseSummary() {
       <section className="rounded-2xl border border-border/60 bg-card/55 p-4 dark:bg-white/[0.035]" aria-label="Your Pulse">
         <p className="text-sm font-medium">Your Pulse is quiet right now.</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          <Link href="/hangout-mode" className="text-primary underline-offset-2 hover:underline">Start Hangout Mode</Link>
+          <Link href="/hangout-mode" className="text-primary underline-offset-2 hover:underline">Start an UpFor</Link>
           {" or "}
           <Link href="/plans?create=1" className="text-primary underline-offset-2 hover:underline">create a plan</Link>
           {" to get things going."}

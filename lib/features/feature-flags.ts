@@ -102,7 +102,7 @@ const socializeFeature = MANAGED_FEATURES.find((feature) => feature.key === SOCI
 export const ANALYTICS_FEATURE_CATALOG = [
   { key: "socialize", title: socializeFeature.title, flagKey: SOCIALIZE_FLAG, eventNames: ["socialize_enabled", "socialize_connection"] },
   { key: "moments", title: "Moments", flagKey: null, eventNames: ["moment_created"] },
-  { key: "hangout", title: "Hangout", flagKey: null, eventNames: ["hangout_created", "hangout_joined"] },
+  { key: "hangout", title: "UpFor", flagKey: null, eventNames: ["hangout_created", "hangout_joined"] },
   { key: "plans", title: "Plans", flagKey: null, eventNames: ["plan_created"] },
   { key: "events", title: "Events", flagKey: null, eventNames: ["event_created"] },
   { key: "groups", title: "Groups", flagKey: null, eventNames: ["group_created"] },

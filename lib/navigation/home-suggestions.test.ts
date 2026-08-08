@@ -161,7 +161,7 @@ describe("Suggestion card content", () => {
   });
 
   it("carries recommendation copy distinct from the feature description", () => {
-    expect(home).toContain('suggestion: "Find spontaneous meetups."');
+    expect(home).toContain('suggestion: "See who is up for something."');
     expect(home).toContain('suggestion: "Grow your trusted circle."');
     expect(home).toContain('suggestion: "Bring people together."');
     expect(home).toContain("suggestion: \"See what’s happening nearby.\"");

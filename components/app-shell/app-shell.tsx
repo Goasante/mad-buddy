@@ -1024,7 +1024,7 @@ const createActions: Array<{
  * Plans and Profile were removed rather than demoted: Plans already has a
  * section on Home, and Profile is reachable from the account sheet the header
  * menu opens — so both were paying for a permanent tab they did not need.
- * Linkr and Hangout have no other persistent entry point, which is what earns
+ * Linkr and UpFor have no other persistent entry point, which is what earns
  * them the slot.
  *
  * Typed to accept a custom brand mark alongside a Lucide icon: both honour the
@@ -1037,7 +1037,7 @@ const MOBILE_TABS: MobileTab[] = [
   { href: "/messages", label: "Messages", icon: MessageCircle },
   { href: "/friends", label: "Muddies", icon: Users },
   { href: "/discover", label: "Linkr", icon: LinkrIcon },
-  { href: "/hangout-mode", label: "Hangout", icon: HangoutIcon }
+  { href: "/hangout-mode", label: "UpFor", icon: HangoutIcon }
 ];
 
 function MobileNav({ immersive = false }: { immersive?: boolean }) {

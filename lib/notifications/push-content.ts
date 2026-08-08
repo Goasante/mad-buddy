@@ -9,7 +9,7 @@ export type SafePushPayload = {
 const PRIVATE_COPY: Record<string, string> = {
   message: "You have a new Mad Buddy message.",
   safe_arrival: "There is an update to a Safe Arrival session.",
-  hangout: "You have a new Hangout update.",
+  hangout: "You have a new UpFor update.",
   meeting_ping: "You have a new Meet Ping.",
   meetup_request: "A Muddy wants to connect.",
   moment: "A Muddy shared a new Moment.",

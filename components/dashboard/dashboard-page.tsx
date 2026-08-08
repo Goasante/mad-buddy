@@ -1095,7 +1095,7 @@ const SUGGESTION_TONE: Record<
  * filtered by the same Owner feature flags — no new recommendation logic.
  */
 const quickActions: QuickAction[] = [
-  { href: "/hangout-mode", label: "Join a Hangout", description: "Let your Muddies know you’re open to meeting.", suggestion: "Find spontaneous meetups.", tone: "orange", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
+  { href: "/hangout-mode", label: "UpFor", description: "Let your Muddies know you’re free right now.", suggestion: "See who is up for something.", tone: "orange", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
   { href: "/invites", label: "Invite Friends", description: "Review and send invitations.", suggestion: "Grow your trusted circle.", tone: "lavender", icon: UserPlus, featureIcon: "invites", accent: "text-emerald-500 dark:text-emerald-400" },
   { href: "/plans?create=1", label: "Complete a Plan", description: "Create a plan and bring people together.", suggestion: "Bring people together.", tone: "green", icon: CalendarDays, featureIcon: "plans", accent: "text-emerald-500 dark:text-emerald-400" },
   { href: "/events", label: "Discover Events", description: "See what’s coming up.", suggestion: "See what’s happening nearby.", tone: "blue", icon: PartyPopper, featureIcon: "events", accent: "text-violet-500 dark:text-violet-400" },

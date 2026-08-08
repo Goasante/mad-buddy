@@ -110,11 +110,20 @@ describe("legacy headers are gone", () => {
     }
   });
 
-  it("Hangout Mode no longer draws a bespoke back/info bar", () => {
-    // Its buttons were 40px with a border, against the canonical 44px
-    // borderless controls — visibly a different header.
-    const hangout = stripComments(read("components/hangout/hangout-mode-page.tsx"));
-    expect(hangout).not.toContain("ArrowLeft");
+  it("UpFor draws an inline header at canonical control sizes", () => {
+    // UpFor carries a subtitle and its own actions, so like /discover it draws
+    // its own header rather than taking PageHeader. What the old bespoke bar
+    // actually got WRONG was the sizing — 40px bordered buttons against the
+    // canonical 44px borderless ones — so that is what this pins.
+    const upfor = stripComments(read("components/hangout/hangout-mode-page.tsx"));
+    expect(upfor).toContain("upfor-header");
+    expect(upfor).not.toContain("<PageHeader");
+
+    const css = read("app/globals.css");
+    const back = css.slice(css.indexOf(".upfor-back {"));
+    expect(back.slice(0, 300)).toContain("height: 2.75rem");
+    const iconButton = css.slice(css.indexOf(".upfor-icon-button {"));
+    expect(iconButton.slice(0, 300)).toContain("height: 3rem");
   });
 
   it("no migrated screen keeps a second visible h1 on mobile", () => {

@@ -26,7 +26,7 @@ const mobileNav = shell.slice(shell.indexOf("function MobileNav("), shell.indexO
 // ---------------------------------------------------------------------------
 
 describe("bottom navigation order", () => {
-  it("is Messages, Muddies, Orb, Linkr, Hangout", () => {
+  it("is Messages, Muddies, Orb, Linkr, UpFor", () => {
     const tabs = shell.slice(shell.indexOf("const MOBILE_TABS"), shell.indexOf("function MobileNav("));
     const order = [...tabs.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]);
     // The Orb is not a MOBILE_TABS entry — it is rendered between the two
@@ -34,7 +34,7 @@ describe("bottom navigation order", () => {
     // Plans and Profile were removed rather than demoted: Plans already has a
     // section on Home, and Profile is the first row of the account sheet, so
     // both were paying for a permanent tab they did not need.
-    expect(order).toEqual(["Messages", "Muddies", "Linkr", "Hangout"]);
+    expect(order).toEqual(["Messages", "Muddies", "Linkr", "UpFor"]);
     expect(mobileNav).toContain("MOBILE_TABS.slice(0, 2)");
     expect(mobileNav).toContain("MOBILE_TABS.slice(2)");
   });
