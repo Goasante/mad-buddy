@@ -13,6 +13,18 @@ import {
   viewerCircleIds
 } from "@/lib/social/permissions";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import type { SocializeAreaTier } from "@/lib/social/socialize";
+import {
+  canStrangerDiscoverUpFor,
+  confidenceToAreaTier,
+  isLocationFreshEnough
+} from "@/lib/social/upfor-discovery";
+import {
+  buildSafeNearbyFriends,
+  type NearbyLocationRow,
+  type NearbyProfileRow
+} from "@/lib/proximity/backend";
+import { guardAction } from "@/lib/admin/enforcement";
 import {
   canTransitionHangout,
   isHangoutJoinable,
@@ -122,6 +134,15 @@ const startHangoutSchema = z.object({
   message: z.string().max(140).optional(),
   audienceType: z.enum(["all_muddies", "close_friends", "selected_circles", "selected_muddies"]),
   broadAreaText: z.string().max(80).optional(),
+  /**
+   * The creator's visibility choice. Defaults to the private answer, so a
+   * client that omits it can never widen a session by accident.
+   *
+   * Note what is NOT accepted here: an area tier. Proximity is derived
+   * server-side from the canonical engine — a client that could submit its
+   * own tier could claim to be "close by" to everyone.
+   */
+  discoveryScope: z.enum(["muddies", "nearby"]).default("muddies"),
   endsAt: z.string().datetime({ offset: true }),
   maxParticipants: z.number().int().min(1).max(50).optional(),
   allowPings: z.boolean().optional(),
@@ -166,6 +187,43 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
     };
   }
 
+  /**
+   * Coarse area, derived HERE from the creator's own location row.
+   *
+   * The client never sends a tier. It sends an activity and a duration; the
+   * band comes from the same confidence model Linkr uses, and the coordinates
+   * are read, converted and discarded inside this block.
+   *
+   * FALLBACK, stated explicitly: no location row, or one older than the
+   * freshness window, yields tier = null and derivedAt = null. Creation still
+   * succeeds — being unable to place someone is not a reason to stop them
+   * telling their Muddies they are free — but the session carries no proximity
+   * claim, and `discovery_scope` falls back to 'muddies' below, because a
+   * session nobody can be matched against has no business being offered to
+   * strangers.
+   */
+  const derivedArea = await (async () => {
+    const nowIso = new Date().toISOString();
+    const { data: location } = await admin
+      .from("user_locations")
+      .select("confidence, last_updated")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!location || !isLocationFreshEnough(location.last_updated, Date.now())) {
+      return { tier: null as SocializeAreaTier | null, derivedAt: null as string | null };
+    }
+
+    // The creator's OWN position, so the band describes the area they are in
+    // rather than a distance to any particular viewer. Viewer-relative
+    // proximity is computed per request in the discovery path — storing one
+    // viewer's answer as universal truth is exactly the mistake this avoids.
+    return {
+      tier: confidenceToAreaTier(location.confidence),
+      derivedAt: nowIso
+    };
+  })();
+
   const { data: session, error } = await admin
     .from("hangout_sessions")
     .insert({
@@ -174,6 +232,13 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
       message: parsed.data.message?.trim() || null,
       audience_type: parsed.data.audienceType as HangoutAudienceType,
       broad_area_text: parsed.data.broadAreaText?.trim() || null,
+      area_tier: derivedArea.tier,
+      area_derived_at: derivedArea.derivedAt,
+      // A session can only be nearby-discoverable if we actually know where
+      // its creator is. Falling back to 'muddies' rather than publishing a
+      // session nobody can be matched against — and rather than silently
+      // widening one we cannot place.
+      discovery_scope: derivedArea.tier === null ? "muddies" : parsed.data.discoveryScope,
       ends_at: parsed.data.endsAt,
       max_participants: requestedCapacity,
       allow_pings: parsed.data.allowPings ?? true,
@@ -333,9 +398,32 @@ export async function endHangoutAction(hangoutId: string): Promise<HangoutAction
 // Discovery feed (spec §49), hangouts the viewer may see and ask to join.
 // ---------------------------------------------------------------------------
 
+/**
+ * One accepted participant, for the detail sheet's avatar stack.
+ *
+ * Public profile fields only — the same name and photo already shown wherever
+ * this person appears. No email, no plan, no request state: who is coming is
+ * the question, not what their membership looks like.
+ */
+export type HangoutParticipant = {
+  userId: string;
+  displayName: string;
+  username: string;
+  avatarUrl: string | null;
+};
+
 export type VisibleHangout = {
   id: string;
+  /**
+   * Coarse band, or null when the creator's position was unknown or too old.
+   * Null is rendered as silence, never as "far".
+   */
+  areaTier: SocializeAreaTier | null;
+  /** The owner's id, so the viewer can tell their own UpFor from another's. */
+  ownerId: string;
   ownerName: string;
+  /** Links the creator to their canonical profile. */
+  ownerUsername: string;
   /** The owner's photo. Already public wherever their name is shown. */
   ownerAvatarUrl: string | null;
   ownerPlan: SubscriptionPlan;
@@ -345,6 +433,16 @@ export type VisibleHangout = {
   endsAt: string;
   allowPings: boolean;
   myRequestStatus: string | null;
+  /** When it began. Server-authoritative; the client only formats it. */
+  startsAt: string;
+  /**
+   * Accepted participants, excluding the owner.
+   *
+   * Loaded in the SAME grouped read the count already used, plus one batched
+   * profile query for every participant across every session — never one
+   * query per card, and never one per person.
+   */
+  participants: HangoutParticipant[];
   /**
    * The cap the owner set, so "Has space" compares against a real limit
    * rather than inferring capacity from how many people happened to ask.
@@ -366,6 +464,141 @@ export type VisibleHangout = {
  * server-side eligibility as everything else (block > not-muddies > Ghost
  * Mode > audience narrowing). Broad area text only, never location.
  */
+/**
+ * The columns discovery reads. One constant, so the two paths cannot drift
+ * into selecting different shapes.
+ *
+ * Note what is absent: no coordinates, and no location row at all. Proximity
+ * is computed from a separate read that never leaves this module.
+ */
+const HANGOUT_DISCOVERY_COLUMNS =
+  "id, owner_id, activity_type, message, broad_area_text, starts_at, ends_at, allow_pings, audience_type, status, max_participants, area_tier, area_derived_at, discovery_scope";
+
+type HangoutDiscoveryRow = {
+  id: string;
+  owner_id: string;
+  activity_type: HangoutActivityType;
+  message: string | null;
+  broad_area_text: string | null;
+  starts_at: string;
+  ends_at: string;
+  allow_pings: boolean;
+  audience_type: HangoutAudienceType;
+  status: string;
+  max_participants: number;
+  area_tier: string | null;
+  area_derived_at: string | null;
+  discovery_scope: string;
+};
+
+/**
+ * Which opted-in sessions a stranger may actually see.
+ *
+ * Proximity is computed HERE, per viewer, through the canonical Linkr engine.
+ * The row's stored `area_tier` describes how precisely we know where its
+ * creator is — it is NOT a distance to this viewer, and using it for
+ * authorization would make one person's answer everybody's.
+ *
+ * Coordinates are read into this function and never leave it: what returns is
+ * a filtered list of session rows, and `buildSafeNearbyFriends` is the same
+ * helper whose output is guarded against location-shaped keys elsewhere.
+ *
+ * FAIL-CLOSED throughout. No viewer location, no creator location, a stale
+ * either side, a block, ghost mode, a restriction, or a proximity level too
+ * wide — each returns nothing for that session.
+ */
+async function filterStrangerDiscoverable(
+  admin: Admin,
+  viewerId: string,
+  candidates: HangoutDiscoveryRow[]
+): Promise<HangoutDiscoveryRow[]> {
+  const nowMs = Date.now();
+
+  const { data: viewerLocation } = await admin
+    .from("user_locations")
+    .select("latitude, longitude, confidence, last_updated")
+    .eq("user_id", viewerId)
+    .maybeSingle();
+
+  // No position of the viewer's own means nothing to compare against, and
+  // "nearby" would be meaningless rather than merely unknown.
+  if (!viewerLocation || !isLocationFreshEnough(viewerLocation.last_updated, nowMs)) return [];
+
+  const ownerIds = [...new Set(candidates.map((session) => session.owner_id))];
+
+  const [{ data: locations }, { data: profiles }, { data: blocks }] = await Promise.all([
+    admin
+      .from("user_locations")
+      .select("user_id, latitude, longitude, confidence, last_updated")
+      .in("user_id", ownerIds),
+    admin
+      .from("profiles")
+      .select("user_id, full_name, username, avatar_url, visibility_status")
+      .in("user_id", ownerIds),
+    admin
+      .from("blocked_users")
+      .select("blocker_id, blocked_id")
+      .or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`)
+  ]);
+
+  const locationByUserId = new Map(
+    ((locations ?? []) as NearbyLocationRow[]).map((row) => [row.user_id, row])
+  );
+  const profileByUserId = new Map(
+    ((profiles ?? []) as NearbyProfileRow[]).map((row) => [row.user_id, row])
+  );
+  const blockedIds = new Set(
+    (blocks ?? []).flatMap((row) => [row.blocker_id, row.blocked_id])
+  );
+
+  /**
+   * Viewer-relative proximity, from the canonical engine.
+   *
+   * `buildSafeNearbyFriends` already drops blocked users, ghost profiles and
+   * stale positions, and returns coarse levels only — no distance. Reused
+   * rather than reimplemented so UpFor and Linkr agree on what "close" means.
+   */
+  const safe = buildSafeNearbyFriends({
+    viewer: viewerLocation,
+    friendIds: ownerIds,
+    blockedIds,
+    premiumUserIds: new Set(),
+    locationByUserId,
+    profileByUserId,
+    now: nowMs
+  });
+  const levelByOwner = new Map(safe.map((entry) => [entry.friend_id, entry.proximity_level]));
+
+  const results: HangoutDiscoveryRow[] = [];
+  for (const session of candidates) {
+    const profile = profileByUserId.get(session.owner_id);
+    const location = locationByUserId.get(session.owner_id);
+    // The "plans" surface, which is where hangout notifications already
+    // route and the nearest existing restriction scope. No new surface is
+    // invented here: a suspended user must not reach strangers, and reusing
+    // the existing enforcement is how that stays true without a second list
+    // of what counts as restricted.
+    const guard = await guardAction(admin, { userId: session.owner_id, surface: "plans" });
+
+    const allowed = canStrangerDiscoverUpFor({
+      discoveryScope: session.discovery_scope,
+      sessionStatus: session.status,
+      endsAt: session.ends_at,
+      creatorLocationUpdatedAt: location?.last_updated ?? null,
+      viewerHasLocation: true,
+      blockedEitherWay: blockedIds.has(session.owner_id),
+      creatorVisibilityStatus: profile?.visibility_status ?? null,
+      creatorRestricted: !guard.allowed,
+      proximityLevel: levelByOwner.get(session.owner_id) ?? null,
+      nowMs
+    });
+
+    if (allowed) results.push(session);
+  }
+
+  return results;
+}
+
 export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
   const env = getSupabaseServerEnv();
   if (!env.url || !env.serviceRoleKey) return [];
@@ -381,31 +614,76 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
   const friendIds = (friendships ?? []).map((row) =>
     row.user_one_id === userId ? row.user_two_id : row.user_one_id
   );
-  if (friendIds.length === 0) return [];
+  // NOT an early return on an empty friend list. A viewer with no Muddies can
+  // still discover opted-in nearby sessions, and returning here would have
+  // silently made stranger discovery a Muddies-only feature.
+  const nowIso = new Date().toISOString();
 
-  const { data: sessions } = await admin
-    .from("hangout_sessions")
-    .select(
-      "id, owner_id, activity_type, message, broad_area_text, ends_at, allow_pings, audience_type, status, max_participants"
-    )
-    .in("owner_id", friendIds)
-    .eq("status", "active")
-    .gt("ends_at", new Date().toISOString())
-    .order("ends_at", { ascending: true })
-    .limit(50);
-  if (!sessions?.length) return [];
+  const [{ data: muddySessions }, { data: nearbySessions }] = await Promise.all([
+    friendIds.length > 0
+      ? admin
+          .from("hangout_sessions")
+          .select(HANGOUT_DISCOVERY_COLUMNS)
+          .in("owner_id", friendIds)
+          .eq("status", "active")
+          .gt("ends_at", nowIso)
+          .order("ends_at", { ascending: true })
+          .limit(50)
+      : Promise.resolve({ data: [] as HangoutDiscoveryRow[] }),
+    // Sessions whose creator explicitly opted in. Owners other than the
+    // viewer, and other than the viewer's Muddies — those already came back
+    // through the path above, and re-reading them here would be wasted work
+    // before the dedupe.
+    admin
+      .from("hangout_sessions")
+      .select(HANGOUT_DISCOVERY_COLUMNS)
+      .eq("discovery_scope", "nearby")
+      .eq("status", "active")
+      .gt("ends_at", nowIso)
+      .neq("owner_id", userId)
+      .order("ends_at", { ascending: true })
+      .limit(50)
+  ]);
 
-  const visible: typeof sessions = [];
-  for (const session of sessions) {
+  const muddyRows = (muddySessions ?? []) as HangoutDiscoveryRow[];
+  const strangerCandidates = ((nearbySessions ?? []) as HangoutDiscoveryRow[]).filter(
+    (session) => !friendIds.includes(session.owner_id)
+  );
+
+  const visible: HangoutDiscoveryRow[] = [];
+
+  // MUDDIES PATH, unchanged. Same gate, same order, same results.
+  for (const session of muddyRows) {
     if (await canViewHangout(admin, userId, session)) visible.push(session);
   }
+
+  // STRANGER PATH. Every gate in canStrangerDiscoverUpFor must pass, and
+  // proximity is computed per viewer rather than read off the row.
+  if (strangerCandidates.length > 0) {
+    const eligible = await filterStrangerDiscoverable(admin, userId, strangerCandidates);
+    // Dedupe by id: an UpFor can qualify through both paths if its owner
+    // became a Muddy after opting in, and it must appear exactly once.
+    const seen = new Set(visible.map((session) => session.id));
+    for (const session of eligible) {
+      if (!seen.has(session.id)) {
+        seen.add(session.id);
+        visible.push(session);
+      }
+    }
+  }
+
   if (visible.length === 0) return [];
+
+  // ONE canonical ordering across both paths: soonest to end first, so the
+  // thing you are most likely to miss is at the top. Applied after the merge,
+  // because two separately-sorted lists concatenated are not sorted.
+  visible.sort((a, b) => Date.parse(a.ends_at) - Date.parse(b.ends_at));
 
   const ownerIds = [...new Set(visible.map((session) => session.owner_id))];
   const [{ data: owners }, { data: myRequests }, plans] = await Promise.all([
     admin
       .from("profiles")
-      .select("user_id, full_name, avatar_url")
+      .select("user_id, full_name, username, avatar_url")
       .in("user_id", ownerIds),
     admin
       .from("hangout_requests")
@@ -424,20 +702,44 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
   // card, and accepted-only so the count never overstates who is coming.
   const { data: acceptedRows } = await admin
     .from("hangout_requests")
-    .select("hangout_session_id")
+    .select("hangout_session_id, requester_id")
     .eq("status", "accepted")
     .in(
       "hangout_session_id",
       visible.map((session) => session.id)
     );
   const acceptedBySession = new Map<string, number>();
+  const participantIdsBySession = new Map<string, string[]>();
   for (const row of acceptedRows ?? []) {
     acceptedBySession.set(row.hangout_session_id, (acceptedBySession.get(row.hangout_session_id) ?? 0) + 1);
+    const ids = participantIdsBySession.get(row.hangout_session_id) ?? [];
+    ids.push(row.requester_id);
+    participantIdsBySession.set(row.hangout_session_id, ids);
   }
+
+  // ONE profile read for every participant across every session. A query per
+  // card — or worse, per person — is the N+1 this deliberately avoids.
+  const participantIds = [...new Set((acceptedRows ?? []).map((row) => row.requester_id))];
+  const { data: participantProfiles } = participantIds.length
+    ? await admin
+        .from("profiles")
+        .select("user_id, full_name, username, avatar_url")
+        .in("user_id", participantIds)
+    : { data: [] };
+  const participantById = new Map((participantProfiles ?? []).map((row) => [row.user_id, row]));
 
   return visible.map((session) => ({
     id: session.id,
+    ownerId: session.owner_id,
+    // Aged out rather than presented as current: a tier is a claim about now,
+    // and a stale one would keep saying "Close by" long after it stopped
+    // being true. The creator's own area TEXT survives, because that is a
+    // statement about a place rather than about this moment.
+    areaTier: isLocationFreshEnough(session.area_derived_at, Date.now())
+      ? ((session.area_tier as SocializeAreaTier | null) ?? null)
+      : null,
     ownerName: profileById.get(session.owner_id)?.full_name?.trim() || "A Muddy",
+    ownerUsername: profileById.get(session.owner_id)?.username ?? "",
     ownerAvatarUrl: profileById.get(session.owner_id)?.avatar_url ?? null,
     ownerPlan: plans.get(session.owner_id) ?? "free",
     activityType: session.activity_type,
@@ -446,6 +748,21 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
     endsAt: session.ends_at,
     allowPings: session.allow_pings,
     myRequestStatus: requestBySession.get(session.id) ?? null,
+    startsAt: session.starts_at,
+    participants: (participantIdsBySession.get(session.id) ?? [])
+      .map((id) => {
+        const profile = participantById.get(id);
+        // A deleted account leaves its request row behind briefly. Dropped
+        // rather than rendered as a nameless avatar.
+        if (!profile) return null;
+        return {
+          userId: id,
+          displayName: profile.full_name?.trim() || profile.username,
+          username: profile.username,
+          avatarUrl: profile.avatar_url
+        };
+      })
+      .filter((participant): participant is HangoutParticipant => participant !== null),
     maxParticipants: session.max_participants,
     // +1 for the owner, who is by definition going to their own hangout.
     goingCount: (acceptedBySession.get(session.id) ?? 0) + 1

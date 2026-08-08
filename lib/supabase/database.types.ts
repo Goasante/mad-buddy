@@ -1500,6 +1500,9 @@ export type Database = {
         Row: {
           id: string;
           owner_id: string;
+          area_tier: string | null;
+          area_derived_at: string | null;
+          discovery_scope: string;
           activity_type: HangoutActivityType;
           message: string | null;
           audience_type: HangoutAudienceType;
@@ -1517,6 +1520,9 @@ export type Database = {
         Insert: {
           id?: string;
           owner_id: string;
+          area_tier?: string | null;
+          area_derived_at?: string | null;
+          discovery_scope?: string;
           activity_type: HangoutActivityType;
           message?: string | null;
           audience_type?: HangoutAudienceType;

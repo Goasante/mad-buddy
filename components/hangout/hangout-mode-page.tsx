@@ -40,6 +40,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { UpForDetailSheet } from "@/components/hangout/upfor-detail-sheet";
 import { useHasScrolled } from "@/hooks/use-has-scrolled";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,7 @@ import {
   UPFOR_QUICK_IDEAS,
   isEndingSoon,
   upForGoingLabel,
+  upForPlaceLabel,
   upForTimeLeft,
   upForTitle
 } from "@/lib/social/upfor";
@@ -151,7 +153,8 @@ export function HangoutModePage({
   initialFeed = [],
   avatarUrl = null,
   displayName = "",
-  muddyCount = 0
+  muddyCount = 0,
+  viewerId = null
 }: {
   initialActiveHangout?: ActiveHangout | null;
   initialRequests?: HangoutRequestSummary[];
@@ -159,6 +162,8 @@ export function HangoutModePage({
   avatarUrl?: string | null;
   displayName?: string;
   muddyCount?: number;
+  /** The signed-in user, so the sheet can recognise their own UpFor. */
+  viewerId?: string | null;
 }) {
   const router = useRouter();
   const requestedHangoutId = useSearchParams().get("hangout");
@@ -176,6 +181,12 @@ export function HangoutModePage({
   const [audience, setAudience] = useState<HangoutAudienceType>("all_muddies");
   const [duration, setDuration] = useState<Duration>("1h");
   const [message, setMessage] = useState("");
+  const [broadArea, setBroadArea] = useState("");
+  /**
+   * The visibility choice. Defaults to the private answer, so a user who
+   * never touches this control cannot widen their own UpFor by omission.
+   */
+  const [discoveryScope, setDiscoveryScope] = useState<"muddies" | "nearby">("muddies");
   const [attempted, setAttempted] = useState(false);
   // Inline, in-sheet failure — a toast can render behind/underneath an open
   // sheet, so activation failure needs to be visible where the user is
@@ -195,6 +206,15 @@ export function HangoutModePage({
    */
   const [filters, setFilters] = useState<UpForFilterState>(EMPTY_UPFOR_FILTERS);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+
+  /**
+   * The open UpFor, held as an ID rather than the row itself.
+   *
+   * The sheet re-reads from `feed` on every render, so a join, a leave or an
+   * arriving refresh updates it in place. Holding the object would freeze a
+   * copy that silently drifts from the list behind it.
+   */
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -206,6 +226,9 @@ export function HangoutModePage({
   // arriving refresh is narrowed by the same rules without a sync step.
   const visibleFeed = applyUpForFilters(feed, filters, nowMs);
   const filterCount = activeFilterCount(filters);
+  // Null when the row is gone — expired, or access lost on refresh — which
+  // closes the sheet without announcing why.
+  const detailUpFor = detailId ? (feed.find((item) => item.id === detailId) ?? null) : null;
   const filtersActive = filterCount > 0;
 
   // Derive activation straight from the source of truth so an expired session
@@ -310,11 +333,15 @@ export function HangoutModePage({
       setActivity(preset ?? activeHangout.activityType);
       setAudience(activeHangout.audienceType);
       setMessage(activeHangout.message ?? "");
+      setBroadArea("");
+      setDiscoveryScope("muddies");
       setDuration("1h");
     } else {
       setActivity(preset ?? null);
       setAudience("all_muddies");
       setMessage("");
+      setBroadArea("");
+      setDiscoveryScope("muddies");
       setDuration("1h");
     }
     setAttempted(false);
@@ -406,6 +433,8 @@ export function HangoutModePage({
         activityType: activity,
         audienceType: audience,
         message: message.trim() || undefined,
+        broadAreaText: broadArea.trim() || undefined,
+        discoveryScope,
         endsAt
       });
 
@@ -694,7 +723,15 @@ UpFors are temporary and disappear when they end. Jump in while you can!
                     className="upfor-card-avatar"
                   />
 
-                  <div className="upfor-card-body">
+                  {/* The card body is the detail affordance, so no redundant
+                      View button returns. The action column beside it stops
+                      propagation, keeping join and leave one-tap. */}
+                  <button
+                    type="button"
+                    onClick={() => setDetailId(item.id)}
+                    aria-label={`Open ${upForTitle(item.activityType)}`}
+                    className="upfor-card-body upfor-card-open"
+                  >
                     <p className="upfor-card-title">{upForTitle(item.activityType)}</p>
                     {item.message ? <p className="upfor-card-message">{item.message}</p> : null}
 
@@ -702,10 +739,12 @@ UpFors are temporary and disappear when they end. Jump in while you can!
                       {/* Broad area only. The projection carries no distance,
                           and inventing one here would be a location claim the
                           server never made. */}
-                      {item.broadAreaText ? (
+                      {/* One formatter, shared with the detail sheet, so the
+                          two can never disagree about where something is. */}
+                      {upForPlaceLabel(item) ? (
                         <span className="upfor-card-place">
                           <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-                          {item.broadAreaText}
+                          {upForPlaceLabel(item)}
                         </span>
                       ) : null}
                       {going ? (
@@ -715,7 +754,7 @@ UpFors are temporary and disappear when they end. Jump in while you can!
                         </span>
                       ) : null}
                     </div>
-                  </div>
+                  </button>
 
                   <div className="upfor-card-actions">
                     {timeLeft ? (
@@ -823,6 +862,29 @@ UpFors are temporary and disappear when they end. Jump in while you can!
         <Lock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
         Your exact location is never shared. How this keeps you safe
       </Link>
+
+      {/* The UpFor detail sheet. Reads from the same projection the card
+          uses, so opening it costs no round trip. */}
+      <UpForDetailSheet
+        upFor={detailUpFor}
+        viewerId={viewerId}
+        nowMs={nowMs}
+        pending={isPending}
+        onJoin={(id) => requestToJoin(id)}
+        onLeave={(id) => leaveUpFor(id)}
+        onOpenChange={(open) => {
+          if (!open) setDetailId(null);
+        }}
+        onEnd={
+          detailUpFor && viewerId && detailUpFor.ownerId === viewerId
+            ? () => {
+                setDetailId(null);
+                turnOff();
+              }
+            : undefined
+        }
+        requestCount={countActiveRequests(requests)}
+      />
 
       {/* The filter sheet. Rendered from the registry, so a future filter is a
           new entry there rather than an edit here. */}
@@ -945,6 +1007,77 @@ UpFors are temporary and disappear when they end. Jump in while you can!
             </div>
             {attempted && !activity ? (
               <p className="mt-1.5 text-xs text-red-500">Choose an activity to continue.</p>
+            ) : null}
+          </fieldset>
+
+          {/* AREA. Free text the creator types, treated as context rather than
+              geolocation: it never grants access and never narrows anything.
+              Optional — an UpFor with no area is perfectly valid. */}
+          <div>
+            <label
+              htmlFor="upfor-area"
+              className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              Area <span className="font-normal normal-case">(optional)</span>
+            </label>
+            <input
+              id="upfor-area"
+              type="text"
+              value={broadArea}
+              onChange={(event) => setBroadArea(event.target.value)}
+              maxLength={80}
+              placeholder="Osu, East Legon, Campus…"
+              className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              A neighbourhood or landmark. Your exact location is never shared.
+            </p>
+          </div>
+
+          {/* WHO CAN SEE THIS. A deliberate choice, defaulting to Muddies. */}
+          <fieldset>
+            <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Who can see this?
+            </legend>
+            <div className="flex flex-col gap-1.5">
+              {[
+                {
+                  id: "muddies" as const,
+                  label: "Muddies only",
+                  hint: "Only people you are connected to."
+                },
+                {
+                  id: "nearby" as const,
+                  label: "Nearby people",
+                  hint: "People nearby who use Linkr may discover this UpFor."
+                }
+              ].map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setDiscoveryScope(option.id)}
+                  aria-pressed={discoveryScope === option.id}
+                  className={cn(
+                    "focus-ring safe-motion rounded-xl border px-3 py-2 text-left",
+                    discoveryScope === option.id
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover:bg-secondary/50"
+                  )}
+                >
+                  <span className="block text-sm font-medium">{option.label}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{option.hint}</span>
+                </button>
+              ))}
+            </div>
+            {/* Stated up front rather than after a silent failure: if we
+                cannot place the creator, nearby discovery cannot be enabled,
+                and the server falls back to Muddies rather than publishing a
+                session nobody can be matched against. */}
+            {discoveryScope === "nearby" ? (
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Needs a recent location. If we can&rsquo;t tell where you are, this stays visible to
+                your Muddies only.
+              </p>
             ) : null}
           </fieldset>
 

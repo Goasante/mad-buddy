@@ -12,9 +12,6 @@
  *
  * WHAT IS DELIBERATELY ABSENT, and why:
  *
- *   Nearby        — `hangout_sessions` carries a broad area STRING the owner
- *                   typed, not a coordinate or an area tier. There is nothing
- *                   to compare against a viewer's position.
  *   Popular       — sorting by joiner count is not popularity semantics, and
  *                   the product deliberately has no engagement ranking.
  *   Just for you  — no recommendation model exists.
@@ -28,6 +25,8 @@
  */
 
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
+import type { SocializeAreaTier } from "@/lib/social/socialize";
+import { isUpForNearby } from "@/lib/social/upfor";
 import type { HangoutActivityType } from "@/lib/supabase/database.types";
 
 /**
@@ -37,13 +36,15 @@ import type { HangoutActivityType } from "@/lib/supabase/database.types";
  */
 export type UpForFilterable = {
   activityType: HangoutActivityType;
+  /** Coarse band, or null when unknown. Null never counts as near. */
+  areaTier: SocializeAreaTier | null;
   endsAt: string;
   goingCount: number;
   maxParticipants: number;
   myRequestStatus: string | null;
 };
 
-export type UpForFilterId = "happening_now" | "has_space" | "joined";
+export type UpForFilterId = "nearby" | "happening_now" | "has_space" | "joined";
 
 export type UpForFilterDefinition = {
   id: UpForFilterId;
@@ -90,6 +91,14 @@ export function isJoined(item: Pick<UpForFilterable, "myRequestStatus">): boolea
 }
 
 export const UPFOR_FILTERS: ReadonlyArray<UpForFilterDefinition> = [
+  {
+    id: "nearby",
+    label: "Nearby",
+    description: "Close by or nearby",
+    // Real now: the tier is server-derived and aged out when stale, so this
+    // filters on a fact rather than on the area text somebody typed.
+    matches: (item) => isUpForNearby(item.areaTier)
+  },
   {
     id: "happening_now",
     label: "Happening now",

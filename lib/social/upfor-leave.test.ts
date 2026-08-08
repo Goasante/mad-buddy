@@ -155,6 +155,7 @@ describe("leaving frees the seat immediately", () => {
   it("drops out of a Joined-filtered list after leaving", () => {
     const item = {
       activityType: "food" as const,
+      areaTier: null,
       endsAt: new Date(Date.now() + 3_600_000).toISOString(),
       goingCount: 2,
       maxParticipants: 5,

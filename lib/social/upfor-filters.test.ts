@@ -28,6 +28,7 @@ const at = (ms: number) => new Date(NOW + ms).toISOString();
 function upFor(overrides: Partial<UpForFilterable> = {}): UpForFilterable {
   return {
     activityType: "food",
+    areaTier: null,
     endsAt: at(60 * 60_000),
     goingCount: 1,
     maxParticipants: 5,
@@ -196,7 +197,14 @@ describe("the active count and Clear all", () => {
 
 describe("no unsupported filter is offered", () => {
   it("registers only filters backed by real fields", () => {
-    expect(UPFOR_FILTERS.map((f) => f.id)).toEqual(["happening_now", "has_space", "joined"]);
+    // Nearby became real in Stage 5: the tier is server-derived and ages out
+    // when stale, so it filters on a fact rather than on typed text.
+    expect(UPFOR_FILTERS.map((f) => f.id)).toEqual([
+      "nearby",
+      "happening_now",
+      "has_space",
+      "joined"
+    ]);
   });
 
   it("renders no filter the product cannot back", () => {
@@ -206,7 +214,7 @@ describe("no unsupported filter is offered", () => {
     // Matched as filter CHIP labels. "Nearby" alone would hit the section
     // heading "Happening Now Nearby", which is prose, not a control.
     const sheet = page.slice(page.indexOf("upfor-filter-body"), page.indexOf("upfor-filter-actions"));
-    for (const dead of ["Nearby", "Popular", "Just for you", "Starting soon", "See map"]) {
+    for (const dead of ["Popular", "Just for you", "Starting soon", "See map"]) {
       expect(sheet).not.toContain(dead);
     }
   });

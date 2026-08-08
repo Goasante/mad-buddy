@@ -91,6 +91,7 @@ export default async function HangoutModeRoute() {
       avatarUrl={avatarUrl}
       displayName={displayName}
       muddyCount={muddyCount}
+      viewerId={user?.id ?? null}
     />
   );
 }

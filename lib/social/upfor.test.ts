@@ -109,7 +109,9 @@ describe("filters are honest about what they can do", () => {
 
 describe("the card never claims more than the server said", () => {
   it("shows a broad area, never a distance", () => {
-    expect(page).toContain("item.broadAreaText");
+    // Through the shared place formatter, which combines the area text with
+    // the coarse tier and returns null when it knows neither.
+    expect(page).toContain("upForPlaceLabel(item)");
     for (const absent of ["km away", "miles away", "latitude", "longitude"]) {
       expect(page).not.toContain(absent);
     }
