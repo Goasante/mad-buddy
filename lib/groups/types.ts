@@ -11,6 +11,11 @@ export type GroupSummary = {
   id: string;
   name: string;
   description: string | null;
+  /**
+   * Signed thumbnail, or null. Doubles as the group's avatar and as its card
+   * art on Linkr, so one upload serves both rather than two systems.
+   */
+  imageUrl: string | null;
   memberCount: number;
   role: ConversationRole | null;
   joinMode: GroupJoinMode;

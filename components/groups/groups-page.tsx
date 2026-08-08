@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Inbox, Loader2, Plus, Search, Shield, Users2 } from "lucide-react";
+import { ImagePlus, Inbox, Loader2, Plus, Search, Shield, Users2 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import {
   createGroupAction,
   joinDiscoverableGroupAction,
+  uploadGroupImageAction,
   respondToGroupInvitationAction
 } from "@/app/(app)/group-actions";
 import { FormField } from "@/components/auth/form-field";
@@ -35,7 +36,16 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [discoverable, setDiscoverable] = useState(false);
+  /**
+   * Who can FIND the group, and separately whether they can join without an
+   * invitation. Two axes, not one: a public group may still be invite-only —
+   * browsable, but you ask. Both default to the closed answer.
+   */
+  const [visibility, setVisibility] = useState<"private" | "public">("private");
+  const [openToJoin, setOpenToJoin] = useState(false);
+  const [imageMediaId, setImageMediaId] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [query, setQuery] = useState("");
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -54,14 +64,56 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
     router.refresh();
   }
 
+  /**
+   * Upload the group image before the group exists.
+   *
+   * Returns a media id the create call attaches. An abandoned upload leaves
+   * an orphan asset that the retention sweep collects — better than creating
+   * a group first and leaving it half-made if the upload fails.
+   */
+  function pickImage(file: File) {
+    setUploading(true);
+    setFeedback("");
+    startTransition(async () => {
+      const { compressImageForUpload } = await import("@/lib/media/client-compress");
+      // Downscaled in the browser first: a phone photo is routinely 4-12 MB
+      // and would otherwise bounce off the request cap before it is read.
+      // A failed compression falls back to the original, which the server
+      // validates and may still reject — better than refusing here.
+      const compressed = await compressImageForUpload(file).catch(() => null);
+      const prepared = compressed?.ok ? compressed.file : file;
+
+      const form = new FormData();
+      form.append("media", prepared);
+      const result = await uploadGroupImageAction(form);
+      setUploading(false);
+
+      if (!result.ok || !result.mediaId) {
+        setFeedback(result.message);
+        return;
+      }
+      setImageMediaId(result.mediaId);
+      setImagePreview(result.previewUrl ?? null);
+    });
+  }
+
   function createGroup() {
     startTransition(async () => {
-      const result = await createGroupAction({ name, description, discoverable });
+      const result = await createGroupAction({
+        name,
+        description,
+        visibility,
+        openToJoin,
+        imageMediaId: imageMediaId ?? undefined
+      });
       setFeedback(result.message);
       if (!result.ok) return;
       setName("");
       setDescription("");
-      setDiscoverable(false);
+      setVisibility("private");
+      setOpenToJoin(false);
+      setImageMediaId(null);
+      setImagePreview(null);
       setCreateOpen(false);
       setActiveTab("mine");
       router.refresh();
@@ -225,18 +277,97 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
           <FormField htmlFor="group-description" label="Description (optional)">
             <Textarea id="group-description" value={description} maxLength={500} onChange={(event) => setDescription(event.target.value)} placeholder="What is this group for?" />
           </FormField>
-          <label className="flex items-start gap-3 rounded-xl border border-border/70 p-3">
-            <input
-              type="checkbox"
-              checked={discoverable}
-              onChange={(event) => setDiscoverable(event.target.checked)}
-              className="mt-1 h-4 w-4 accent-blue-500"
-            />
-            <span>
-              <span className="block text-sm font-medium">Allow approved Muddies to discover this group</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">Only your approved Muddies can find and join it.</span>
-            </span>
-          </label>
+          {/* THE GROUP IMAGE. Becomes the group's avatar and its card art on
+              Linkr, so one upload serves both. Optional: without it the card
+              falls back to a stable generated cover rather than a grey box. */}
+          <div>
+            <span className="mb-1.5 block text-sm font-medium">Group image (optional)</span>
+            <label className="focus-ring flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3 hover:bg-secondary/40">
+              <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-secondary/60">
+                {imagePreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- signed URL, not a static asset
+                  <img src={imagePreview} alt="" className="h-full w-full object-cover" />
+                ) : uploading ? (
+                  <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                ) : (
+                  <ImagePlus className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                )}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">
+                  {imagePreview ? "Change image" : "Add an image"}
+                </span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Shown as the group photo and on Linkr.
+                </span>
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                disabled={uploading || isPending}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  // Cleared so choosing the SAME file twice still fires.
+                  event.target.value = "";
+                  if (file) pickImage(file);
+                }}
+              />
+            </label>
+          </div>
+
+          {/* WHO CAN FIND IT. A deliberate choice, defaulting to private. */}
+          <fieldset>
+            <legend className="mb-1.5 text-sm font-medium">Who can find this group?</legend>
+            <div className="flex flex-col gap-1.5">
+              {[
+                {
+                  id: "private" as const,
+                  label: "Private",
+                  hint: "Only people you invite can find it."
+                },
+                {
+                  id: "public" as const,
+                  label: "Public",
+                  hint: "Anyone can find it on Linkr."
+                }
+              ].map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setVisibility(option.id)}
+                  aria-pressed={visibility === option.id}
+                  className={cn(
+                    "focus-ring rounded-xl border px-3 py-2 text-left transition-colors",
+                    visibility === option.id
+                      ? "border-primary bg-primary/10"
+                      : "border-border/70 hover:bg-secondary/40"
+                  )}
+                >
+                  <span className="block text-sm font-medium">{option.label}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{option.hint}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          {/* JOINING. Only meaningful once people can find it, so it appears
+              under Public — asking "can strangers join?" about a group nobody
+              can see is a question with no consequence. */}
+          {visibility === "public" ? (
+            <label className="ml-3 flex items-start gap-3 border-l-2 border-border/60 pl-3">
+              <input
+                type="checkbox"
+                checked={openToJoin}
+                onChange={(event) => setOpenToJoin(event.target.checked)}
+                className="mt-1 h-4 w-4 accent-[var(--color-brand-orange)]"
+              />
+              <span>
+                <span className="block text-sm font-medium">Anyone can join without an invite</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">Leave this off to review each person first.</span>
+              </span>
+            </label>
+          ) : null}
         </div>
       </Modal>
     </div>

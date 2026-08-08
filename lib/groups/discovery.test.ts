@@ -29,6 +29,7 @@ const group = (overrides: Partial<GroupSummary> = {}): GroupSummary => ({
   id: "11111111-1111-4111-8111-111111111111",
   name: "Hiking Buddies",
   description: "Weekend trails",
+  imageUrl: null,
   memberCount: 12,
   role: null,
   joinMode: "link",

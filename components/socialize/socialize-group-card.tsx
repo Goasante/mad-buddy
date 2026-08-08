@@ -61,31 +61,47 @@ function GroupCard({ group, onJoin, pending = false, slots }: SocializeGroupCard
         aria-label={`Open ${group.name}`}
         className="focus-ring relative block aspect-[16/10] w-full overflow-hidden"
       >
-        {/* GENERATED COVER.
-            No group has an uploaded image today — `image_media_id` exists in
-            the schema but nothing populates it — so rather than a grey box,
-            each group gets a deterministic gradient derived from its own id.
-            The same group always looks the same, and two groups side by side
-            almost never match. */}
-        <span
-          aria-hidden="true"
-          className="absolute inset-0"
-          style={{ background: cover.gradient }}
-        />
+        {/* THE GROUP'S OWN IMAGE, when its owner uploaded one.
+            Falls back to a deterministic gradient built from the group id, so
+            a group without a picture still gets a stable, distinct cover
+            rather than a grey box — and two groups side by side almost never
+            match. */}
+        {group.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- signed URL, not a static asset
+          <img
+            src={group.imageUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className={cn(
+              "absolute inset-0 h-full w-full object-cover",
+              "transition-transform duration-300 ease-out group-hover:scale-[1.03]",
+              "motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+            )}
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="absolute inset-0"
+            style={{ background: cover.gradient }}
+          />
+        )}
         <span
           aria-hidden="true"
           className="absolute inset-0 bg-[radial-gradient(120%_120%_at_20%_0%,rgb(255_255_255/0.18),transparent_60%)]"
         />
-        <span
-          aria-hidden="true"
-          className={cn(
-            "absolute inset-0 grid place-items-center text-3xl font-bold tracking-tight text-white/90",
-            "transition-transform duration-300 ease-out group-hover:scale-[1.03]",
-            "motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-          )}
-        >
-          {cover.initials}
-        </span>
+        {group.imageUrl ? null : (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "absolute inset-0 grid place-items-center text-3xl font-bold tracking-tight text-white/90",
+              "transition-transform duration-300 ease-out group-hover:scale-[1.03]",
+              "motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+            )}
+          >
+            {cover.initials}
+          </span>
+        )}
 
         {activity ? (
           <span className="pointer-events-none absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-background/85 px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm">

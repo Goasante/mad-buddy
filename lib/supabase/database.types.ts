@@ -4427,7 +4427,7 @@ export type MediaContentType =
   | "video/webm"
   | "video/quicktime";
 export type MediaProcessingStatus = "pending" | "processing" | "ready" | "failed" | "quarantined";
-export type MediaContextType = "profile" | "moment" | "drop" | "event" | "plan" | "chat";
+export type MediaContextType = "profile" | "moment" | "drop" | "event" | "plan" | "chat" | "group";
 export type MediaRetentionPolicy = "follows_parent" | "keep_30d" | "legal_hold";
 export type MediaVariantType = "thumb" | "feed" | "full";
 

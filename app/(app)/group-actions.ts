@@ -17,11 +17,26 @@ import { resolveRoleChange, type GroupRoleChange } from "@/lib/messaging/rules";
 import { errorType, logBackendEvent } from "@/lib/observability/logger";
 import { deliverNotification } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import { signMediaForAsset } from "@/lib/content/service";
+import { uploadValidationMessage, validateImageUpload } from "@/lib/media/validation";
+import type { MediaContentType } from "@/lib/supabase/database.types";
 import { areApprovedMuddies, isBlockedEitherDirection, isCloseFriend } from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ConversationRole, GroupJoinMode, GroupVisibility, SubscriptionPlan } from "@/lib/supabase/database.types";
+
+/**
+ * Upload result. Deliberately NOT exported: a type export from a "use server"
+ * file becomes a runtime ReferenceError under Turbopack, and tsc does not
+ * catch it — only `next build` does.
+ */
+type GroupImageUploadState = {
+  ok: boolean;
+  message: string;
+  mediaId?: string;
+  previewUrl?: string | null;
+};
 
 type GroupActionState = {
   ok: boolean;
@@ -33,7 +48,14 @@ const uuidSchema = z.string().uuid();
 const createGroupSchema = z.object({
   name: z.string().trim().min(2).max(80),
   description: z.string().trim().max(500).optional(),
-  discoverable: z.boolean().default(false)
+  /**
+   * Who can FIND it, and separately whether they can join uninvited. Two
+   * axes, not one: a public group may still be invite-only. Both default to
+   * the closed answer, so an omitted field can never publish a group.
+   */
+  visibility: z.enum(["private", "public"]).default("private"),
+  openToJoin: z.boolean().default(false),
+  imageMediaId: z.string().uuid().optional()
 });
 const invitationSchema = z.object({ groupId: uuidSchema, userId: uuidSchema });
 const invitationResponseSchema = z.object({ groupId: uuidSchema, accept: z.boolean() });
@@ -141,6 +163,10 @@ async function summariesFor(
         id,
         name: setting.name,
         description: setting.description,
+        // Not surfaced here: these builders serve group DETAIL, where the
+        // header renders its own image. The list projection signs URLs in one
+        // batch; doing it per detail view would be a request nobody reads.
+        imageUrl: null,
         memberCount: memberCountById.get(id) ?? 0,
         role: roleById.get(id) ?? null,
         joinMode: setting.join_mode,
@@ -294,8 +320,9 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
       //   join_mode  — what happens when they try to join
       // "Discoverable" now means genuinely public, not merely
       // link-shareable to the creator's own Muddies.
-      visibility: parsed.data.discoverable ? "public" : "private",
-      join_mode: parsed.data.discoverable ? "link" : "invite",
+      visibility: parsed.data.visibility,
+      join_mode: parsed.data.openToJoin ? "link" : "invite",
+      image_media_id: parsed.data.imageMediaId ?? null,
       history_visibility: "since_join",
       posting_mode: "all_members"
     }),
@@ -569,6 +596,10 @@ export async function loadGroupDetailAction(groupId: string): Promise<GroupDetai
     id: groupId,
     name: settings.name,
     description: settings.description,
+    // Not surfaced here: these builders serve group DETAIL, where the
+    // header renders its own image. The list projection signs URLs in one
+    // batch; doing it per detail view would be a request nobody reads.
+    imageUrl: null,
     memberCount: members.length,
     role: myMembership.role,
     joinMode: settings.join_mode as GroupJoinMode,
@@ -881,4 +912,143 @@ export async function setGroupVisibilityAction(input: unknown): Promise<GroupAct
     ok: true,
     message: parsed.data.visibility === "public" ? "Group is now public." : "Group is now private."
   };
+}
+
+
+/**
+ * Upload a group image.
+ *
+ * Follows the messaging attachment pipeline exactly — magic-byte validation,
+ * a pending asset row, EXIF stripping and variant generation before any bytes
+ * reach storage, then a single finalise. Copying that shape rather than
+ * writing a new one keeps group images inside the same moderation, retention
+ * and deletion machinery every other upload already lives in.
+ *
+ * Returns a media id. The caller attaches it when creating or updating the
+ * group, so an abandoned upload leaves an orphan asset the retention sweep
+ * collects rather than a half-created group.
+ *
+ * EXIF matters more here than almost anywhere: a group photo is often taken
+ * at the place the group meets, and GPS tags in it would leak a location the
+ * product otherwise never exposes. `processImageUpload` strips it before the
+ * file is stored, not after.
+ */
+export async function uploadGroupImageAction(formData: FormData): Promise<GroupImageUploadState> {
+  if (!serverReady()) {
+    return { ok: false, message: "This action needs the server database configuration." };
+  }
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in before uploading." };
+
+  const rateLimit = await consumeRateLimit({ action: "media.upload", userId });
+  if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
+
+  const admin = createSupabaseAdminClient();
+
+  // Kill switch and account restrictions, before any bytes are read.
+  const guard = await guardAction(admin, { userId, surface: "messaging", control: "media_uploads" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+
+  const file = formData.get("media");
+  if (!(file instanceof File)) return { ok: false, message: "Choose a photo first." };
+
+  // Magic bytes, never the filename or the claimed MIME type alone.
+  const headerBytes = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+  const validation = validateImageUpload({
+    claimedMimeType: file.type,
+    headerBytes,
+    sizeBytes: file.size,
+    context: "group"
+  });
+  if (!validation.valid) {
+    return { ok: false, message: uploadValidationMessage(validation.reason) };
+  }
+
+  const { data: asset, error: assetError } = await admin
+    .from("media_assets")
+    .insert({
+      owner_id: userId,
+      // Placeholder; replaced with the real key once the id exists.
+      storage_key: `pending/${userId}/${Date.now()}`,
+      content_type: validation.mimeType as MediaContentType,
+      size_bytes: file.size,
+      context_type: "group",
+      processing_status: "pending"
+    })
+    .select("id")
+    .single();
+  if (assetError || !asset) return { ok: false, message: "Couldn't prepare the upload." };
+
+  const { storageKeyFor } = await import("@/lib/media/validation");
+  const key = storageKeyFor({ ownerId: userId, context: "group", mediaId: asset.id, kind: validation.kind });
+  const removeFailedUpload = async (paths: string[] = []) => {
+    if (paths.length > 0) await admin.storage.from("media").remove(paths);
+    await admin.from("media_assets").delete().eq("id", asset.id).eq("owner_id", userId);
+  };
+
+  let processed;
+  try {
+    const { processImageUpload } = await import("@/lib/media/processing");
+    processed = await processImageUpload(Buffer.from(await file.arrayBuffer()), validation.kind);
+  } catch {
+    await removeFailedUpload();
+    return { ok: false, message: "That image couldn't be processed. Try a different photo." };
+  }
+
+  const { toStorageArrayBuffer, variantStorageKey } = await import("@/lib/media/processing");
+  const { error: uploadError } = await admin.storage
+    .from("media")
+    .upload(key, toStorageArrayBuffer(processed.original.buffer), {
+      contentType: validation.mimeType,
+      upsert: false
+    });
+  if (uploadError) {
+    await removeFailedUpload();
+    return { ok: false, message: "Couldn't upload that photo. Try again." };
+  }
+
+  // Variants are best-effort: signing falls back to the (already stripped)
+  // original when one is missing.
+  const variantRows = [
+    { variant: "thumb" as const, key: variantStorageKey(key, "thumb"), image: processed.variants.thumb },
+    { variant: "feed" as const, key: variantStorageKey(key, "feed"), image: processed.variants.feed }
+  ];
+  await Promise.all(
+    variantRows.map(async ({ variant, key: variantKey, image }) => {
+      const { error } = await admin.storage.from("media").upload(variantKey, toStorageArrayBuffer(image.buffer), {
+        contentType: validation.mimeType,
+        upsert: false
+      });
+      if (error) return;
+      await admin.from("media_variants").insert({
+        media_asset_id: asset.id,
+        variant_type: variant,
+        storage_key: variantKey,
+        width: image.width,
+        height: image.height,
+        size_bytes: image.buffer.byteLength
+      });
+    })
+  );
+
+  const { error: readyError } = await admin
+    .from("media_assets")
+    .update({
+      storage_key: key,
+      processing_status: "ready",
+      width: processed.original.width,
+      height: processed.original.height,
+      size_bytes: processed.original.buffer.byteLength,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", asset.id)
+    .eq("owner_id", userId);
+  if (readyError) {
+    await removeFailedUpload([key, ...variantRows.map((row) => row.key)]);
+    return { ok: false, message: "Couldn't finish processing that photo. Try again." };
+  }
+
+  const previewUrl = await signMediaForAsset(admin, asset.id, "thumb");
+  return { ok: true, message: "Image ready.", mediaId: asset.id, previewUrl };
 }

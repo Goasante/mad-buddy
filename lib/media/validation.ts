@@ -152,6 +152,10 @@ export const MAX_UPLOAD_BYTES: Record<MediaContextType, number> = {
   // upload (see lib/media/client-compress.ts), so this is the hard SAFETY bound
   // rather than the thing users bump into.
   profile: 5 * 1024 * 1024,
+  // A group image is an identity tile, shown at avatar and card sizes. Same
+  // bound as a profile photo: it is the same kind of picture doing the same
+  // job, so a different limit would be an arbitrary difference to explain.
+  group: 5 * 1024 * 1024,
   moment: 5 * 1024 * 1024,
   drop: 15 * 1024 * 1024,
   event: 15 * 1024 * 1024,

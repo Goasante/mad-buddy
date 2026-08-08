@@ -25,7 +25,23 @@ export type GroupResult = { ok: boolean; message: string; groupId?: string };
 export const createGroupSchema = z.object({
   name: z.string().trim().min(2).max(80),
   description: z.string().trim().max(500).optional(),
-  discoverable: z.boolean().default(false)
+  /**
+   * Who may FIND the group. Defaults to private, so a client that omits it
+   * can never publish a group by accident.
+   *
+   * Replaces the old `discoverable` boolean, which set visibility AND
+   * join_mode together. Those are separate axes — a public group may still be
+   * invite-only, browsable but not openly joinable — and collapsing them
+   * forced every discoverable group to also accept anyone.
+   */
+  visibility: z.enum(["private", "public"]).default("private"),
+  /**
+   * Whether anyone who finds it may join without an invitation. Independent
+   * of visibility, and also defaulting to the closed answer.
+   */
+  openToJoin: z.boolean().default(false),
+  /** Optional image, already uploaded through uploadGroupImageAction. */
+  imageMediaId: z.string().uuid().optional()
 });
 
 const uuidSchema = z.string().uuid();
@@ -82,7 +98,7 @@ async function summariesFor(
       .eq("status", "active"),
     admin
       .from("group_settings")
-      .select("conversation_id, name, description, join_mode")
+      .select("conversation_id, name, description, join_mode, visibility, image_media_id")
       .in("conversation_id", uniqueIds),
     admin
       .from("conversation_members")
@@ -100,6 +116,28 @@ async function summariesFor(
 
   const conversationById = new Map((conversations ?? []).map((row) => [row.id, row]));
   const settingsById = new Map((settings ?? []).map((row) => [row.conversation_id, row]));
+
+  /**
+   * Signed URLs for group images, in ONE batch.
+   *
+   * A signed URL per card would be a request per group; this signs every
+   * image the page needs in a single pass. Groups without an image are absent
+   * from the map and fall back to the initials tile.
+   */
+  const imageUrlById = new Map<string, string>();
+  const withImages = (settings ?? []).filter(
+    (row): row is typeof row & { image_media_id: string } =>
+      Boolean((row as { image_media_id?: string | null }).image_media_id)
+  );
+  if (withImages.length > 0) {
+    const { signMediaForAsset } = await import("@/lib/content/service");
+    await Promise.all(
+      withImages.map(async (row) => {
+        const url = await signMediaForAsset(admin, row.image_media_id, "thumb");
+        if (url) imageUrlById.set(row.conversation_id, url);
+      })
+    );
+  }
   const memberCountById = new Map<string, number>();
   for (const member of members ?? []) {
     memberCountById.set(member.conversation_id, (memberCountById.get(member.conversation_id) ?? 0) + 1);
@@ -120,6 +158,7 @@ async function summariesFor(
           id,
           name: setting.name,
           description: setting.description,
+          imageUrl: imageUrlById.get(id) ?? null,
           memberCount: memberCountById.get(id) ?? 0,
           role: roleById.get(id) ?? null,
           joinMode: setting.join_mode,
@@ -262,7 +301,12 @@ export async function createGroup(userId: string, input: unknown): Promise<Group
       conversation_id: conversation.id,
       name: parsed.data.name,
       description: parsed.data.description || null,
-      join_mode: parsed.data.discoverable ? "link" : "invite",
+      // Set at creation. It was previously never written here at all, so a
+      // group could only become public by editing it afterwards — which is
+      // why new groups never appeared on Linkr.
+      visibility: parsed.data.visibility,
+      join_mode: parsed.data.openToJoin ? "link" : "invite",
+      image_media_id: parsed.data.imageMediaId ?? null,
       history_visibility: "since_join",
       posting_mode: "all_members"
     }),
