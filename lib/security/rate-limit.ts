@@ -16,6 +16,7 @@ export type RateLimitAction =
   | "location.update"
   | "friends.nearby"
   | "reports.create"
+  | "trusted_member.apply"
   | "paystack.initialize"
   | "paystack.cancel"
   | "paystack.webhook"
@@ -65,6 +66,9 @@ export type RateLimitResult = {
 
 export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeconds: number }> = {
   "auth.signup": { limit: 5, windowSeconds: 15 * 60 },
+  // Applying is rare and reviewed by a human, so the cap exists to stop a
+  // script filling the queue rather than to pace ordinary use.
+  "trusted_member.apply": { limit: 3, windowSeconds: 24 * 60 * 60 },
   "auth.login": { limit: 10, windowSeconds: 15 * 60 },
   "auth.password_recovery": { limit: 5, windowSeconds: 60 * 60 },
   "auth.password_reset": { limit: 5, windowSeconds: 60 * 60 },

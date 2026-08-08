@@ -73,6 +73,7 @@ export type Database = {
           visibility_status: VisibilityStatus;
           is_onboarded: boolean;
           deleted_at: string | null;
+          trusted_member_since: string | null;
           // Added by the batch-9 profiles migration.
           username_normalized: string | null;
           profile_media_id: string | null;
@@ -94,6 +95,7 @@ export type Database = {
           visibility_status?: VisibilityStatus;
           is_onboarded?: boolean;
           deleted_at?: string | null;
+          trusted_member_since?: string | null;
           username_normalized?: string | null;
           profile_media_id?: string | null;
           institution?: string | null;
@@ -326,6 +328,58 @@ export type Database = {
         Row: { id: string; blocker_id: string; blocked_id: string; created_at: string };
         Insert: { id?: string; blocker_id: string; blocked_id: string; created_at?: string };
         Update: Partial<Database["public"]["Tables"]["blocked_users"]["Insert"]>;
+        Relationships: [];
+      };
+      trusted_member_applications: {
+        Row: {
+          id: string;
+          user_id: string;
+          status: string;
+          note: string | null;
+          premium_days_at_apply: number | null;
+          journeys_complete_at_apply: number | null;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          review_note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          status?: string;
+          note?: string | null;
+          premium_days_at_apply?: number | null;
+          journeys_complete_at_apply?: number | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          review_note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["trusted_member_applications"]["Insert"]>;
+        Relationships: [];
+      };
+      profile_photos: {
+        Row: {
+          id: string;
+          user_id: string;
+          media_asset_id: string;
+          position: number;
+          visibility: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          media_asset_id: string;
+          position: number;
+          visibility?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["profile_photos"]["Insert"]>;
         Relationships: [];
       };
       discovery_passes: {

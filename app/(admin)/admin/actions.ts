@@ -38,6 +38,22 @@ const deleteUserSchema = z.object({
   reason: z.string().trim().max(300).optional()
 });
 
+/**
+ * A decline or a revocation must be explained; an approval need not be.
+ * Refined rather than made optional, so the rule is enforced by the schema
+ * rather than remembered in the action.
+ */
+const trustedMemberDecisionSchema = z
+  .object({
+    applicationId: z.string().uuid(),
+    decision: z.enum(["approved", "declined", "revoked"]),
+    reviewNote: z.string().trim().max(500).optional()
+  })
+  .refine(
+    (value) => value.decision === "approved" || (value.reviewNote?.trim().length ?? 0) >= 3,
+    { path: ["reviewNote"] }
+  );
+
 const userAccessSchema = z.object({
   userId: z.string().uuid(),
   disabled: z.boolean(),
@@ -388,6 +404,60 @@ export async function deleteUserAccountAction(input: unknown): Promise<AdminActi
 
     revalidatePath("/admin/users");
     return { ok: true, message: "Account deleted." };
+  } catch {
+    return { ok: false, message: "Admin access is required." };
+  }
+}
+
+/**
+ * Decide a Trusted Member application.
+ *
+ * Reuses `admin.verification.review`, which already exists and already means
+ * "may pass judgement on an account's standing". A new permission would be a
+ * second name for the same authority.
+ *
+ * A review note is required for a decline or a revocation and optional for an
+ * approval. The asymmetry is deliberate: staff need to know why somebody was
+ * turned down — especially before a second application from the same person —
+ * while an approval speaks for itself. The note is never shown to the
+ * applicant, who is told the outcome only.
+ */
+export async function decideTrustedMemberAction(input: unknown): Promise<AdminActionState> {
+  const parsed = trustedMemberDecisionSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: "Add a short note before declining or revoking." };
+  }
+
+  try {
+    const { admin, context } = await requireSafetyAdmin();
+    await requireAdminPermission(admin, context, "admin.verification.review");
+
+    const limit = await consumeRateLimit({ action: "admin.mutate", userId: context.userId });
+    if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
+
+    const { decideTrustedMemberApplication } = await import("@/lib/trust/trusted-member-admin");
+    const result = await decideTrustedMemberApplication(admin, {
+      applicationId: parsed.data.applicationId,
+      reviewerId: context.userId,
+      decision: parsed.data.decision,
+      reviewNote: parsed.data.reviewNote
+    });
+    if (!result.ok || !result.userId) return { ok: false, message: result.message };
+
+    // Recorded AFTER the decision here, unlike account deletion: this is
+    // reversible — a wrong approval is revoked, a wrong decline re-applied —
+    // so a missing audit row must not block a correction.
+    await recordAdminAuditEvent(admin, {
+      actorId: context.userId,
+      action: `trusted_member_${parsed.data.decision}`,
+      targetType: "user",
+      targetId: result.userId,
+      newState: { decision: parsed.data.decision },
+      reason: parsed.data.reviewNote?.trim() || undefined
+    });
+
+    revalidatePath("/admin/trusted-members");
+    return { ok: true, message: "Decision recorded." };
   } catch {
     return { ok: false, message: "Admin access is required." };
   }
