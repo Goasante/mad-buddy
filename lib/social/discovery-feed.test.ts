@@ -284,10 +284,13 @@ describe("discovery feed", () => {
     }
   });
 
-  it("renders header, search, chips and cards in one vertical scroll", () => {
+  it("renders header, search and cards in one vertical scroll", () => {
     expect(feed).toContain("Socialize");
     expect(feed).toContain('aria-label="Search people nearby"');
-    expect(feed).toContain('aria-label="Filters"');
+    // The filters button became a search toggle: the chips it revealed are
+    // gone, so a control named "Filters" now describes nothing.
+    expect(feed).toContain('aria-label={filtersOpen ? "Close search" : "Search people"}');
+    expect(feed).not.toContain('aria-label="Filters"');
   });
 
   it("hides sections with no data rather than showing blanks", () => {

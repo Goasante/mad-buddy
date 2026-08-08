@@ -12,17 +12,39 @@ import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
+/** A status row exists until it expires; the column is the only authority. */
+function isStatusActiveAtRequestTime(expiresAt: string) {
+  return Date.parse(expiresAt) > Date.now();
+}
+
 export default async function DiscoverPage() {
   const admin = createSupabaseAdminClient();
   if (!(await isSocializeEnabled(admin))) redirect("/dashboard");
 
   const user = await getCurrentUser();
-  const [profileResult, session] = await Promise.all([
+  // Quick Controls needs the same own-profile and status rows Home reads, so
+  // the sheet opens on this page showing the user's real state rather than a
+  // default. Own rows only, read with the admin client exactly as Home does.
+  const [profileResult, statusResult, session] = await Promise.all([
     user
-      ? admin.from("profiles").select("full_name, avatar_url").eq("user_id", user.id).maybeSingle()
+      ? admin
+          .from("profiles")
+          .select("full_name, avatar_url, visibility_status")
+          .eq("user_id", user.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    user
+      ? admin
+          .from("user_statuses")
+          .select("availability_type, activity_type, custom_text, expires_at")
+          .eq("user_id", user.id)
+          .maybeSingle()
       : Promise.resolve({ data: null }),
     getCurrentSocializeAction()
   ]);
+
+  const status = statusResult?.data;
+  const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
   const people = session ? await discoverSocializePeopleAction() : [];
   // Groups and plans for the discovery rails. Both reuse EXISTING
   // projections, loaded in parallel with each other rather than in series.
@@ -39,6 +61,11 @@ export default async function DiscoverPage() {
       initialPlans={plansData.plans}
       myAvatarUrl={profileResult.data?.avatar_url ?? null}
       myName={profileResult.data?.full_name?.trim() ?? ""}
+      initialVisibilityStatus={profileResult.data?.visibility_status ?? "visible"}
+      hasActiveStatus={hasActiveStatus}
+      initialStatusAvailability={hasActiveStatus ? status?.availability_type : undefined}
+      initialStatusActivity={hasActiveStatus ? status?.activity_type ?? null : null}
+      initialStatusNote={hasActiveStatus ? status?.custom_text ?? "" : ""}
     />
   );
 }

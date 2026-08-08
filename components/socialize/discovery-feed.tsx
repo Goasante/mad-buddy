@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Search, SlidersHorizontal } from "lucide-react";
+import { Bell, MoreHorizontal, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import {
   DISCOVERY_PAGE_SIZE,
   orderDiscoveryPeople,
@@ -40,6 +41,8 @@ export type DiscoveryFeedProps = {
   onJoinPlan?: (plan: HomeUpcomingPlan) => void;
   groups?: readonly GroupSummary[];
   plans?: readonly HomeUpcomingPlan[];
+  /** Opens the shared Quick Controls sheet. Absent hides the control. */
+  onOpenQuickControls?: () => void;
   onWave: (person: SocializePerson) => void;
   /** Left swipe: a private, expiring feed preference. Never a block. */
   onPass: (person: SocializePerson) => void;
@@ -69,6 +72,7 @@ export function DiscoveryFeed({
   onJoinPlan,
   groups = [],
   plans = [],
+  onOpenQuickControls,
   onWave,
   onPass,
   onUndoPass,
@@ -115,11 +119,21 @@ export function DiscoveryFeed({
             type="button"
             onClick={() => setFiltersOpen((open) => !open)}
             aria-pressed={filtersOpen}
-            aria-label="Filters"
-            title="Filters"
-            className="focus-ring safe-motion grid h-11 w-11 place-items-center rounded-full border border-border/70 text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+            aria-expanded={filtersOpen}
+            aria-label={filtersOpen ? "Close search" : "Search people"}
+            title={filtersOpen ? "Close search" : "Search"}
+            className={cn(
+              "focus-ring safe-motion grid h-11 w-11 place-items-center rounded-full border transition-colors",
+              filtersOpen
+                ? "border-primary/50 bg-primary/10 text-primary"
+                : "border-border/70 text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+            )}
           >
-            <SlidersHorizontal className="h-5 w-5" aria-hidden="true" />
+            {filtersOpen ? (
+              <X className="h-5 w-5" aria-hidden="true" />
+            ) : (
+              <Search className="h-5 w-5" aria-hidden="true" />
+            )}
           </button>
           <Link
             href="/notifications"
@@ -139,10 +153,25 @@ export function DiscoveryFeed({
               />
             ) : null}
           </Link>
+
+          {/* The same Quick Controls as Home — visibility, status, ghost mode
+              and a proximity refresh. They belong here more than anywhere:
+              this is the page where being visible actually does something. */}
+          {onOpenQuickControls ? (
+            <button
+              type="button"
+              onClick={onOpenQuickControls}
+              aria-label="Quick controls"
+              title="Quick controls"
+              className="focus-ring safe-motion grid h-11 w-11 place-items-center rounded-full border border-border/70 text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+            >
+              <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       </header>
 
-      {/* Search, behind the header's filter button.
+      {/* Search, behind the header's search icon.
           The chip row that sat here ("Nearby", "Active", "Not connected yet")
           is gone: every chip narrowed a feed that is usually small enough to
           read in full, so they cost a permanent row of the screen to solve a
@@ -154,33 +183,25 @@ export function DiscoveryFeed({
       {/* Search and filter share a row: the filter is a modifier OF the
             search, and separating them wasted a full row of vertical space at
             the top of a feed-first screen. */}
-        <div className="flex items-center gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setVisibleCount(DISCOVERY_PAGE_SIZE);
-              }}
-              placeholder="Search by name or username"
-              aria-label="Search people nearby"
-              className="pl-9"
-            />
-          </div>
-          <Link
-            href="/settings/glow-visibility"
-            aria-label="Discovery settings"
-            title="Discovery settings"
-            className="focus-ring safe-motion grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border/70 text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-          >
-            <SlidersHorizontal className="h-5 w-5" aria-hidden="true" />
-          </Link>
+        <div className="relative min-w-0">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            // Focused on open, so the icon press lands the cursor in the field
+            // rather than asking for a second tap.
+            autoFocus
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setVisibleCount(DISCOVERY_PAGE_SIZE);
+            }}
+            placeholder="Search by name or username"
+            aria-label="Search people nearby"
+            className="pl-9"
+          />
         </div>
-
         </div>
       ) : null}
 

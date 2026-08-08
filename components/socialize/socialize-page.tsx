@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import * as Popover from "@radix-ui/react-popover";
-import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, Clock, Info, Loader2, MapPin, MoreHorizontal, Pause, Play, RefreshCcw, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, Clock, Info, Loader2, MapPin, MessageSquareText, MoreHorizontal, Pause, Play, RefreshCcw, Users, X } from "lucide-react";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
 import { passPersonAction, undoPassAction } from "@/app/(app)/social-actions";
 import {
@@ -24,6 +24,10 @@ import { joinDiscoverableGroupAction } from "@/app/(app)/group-actions";
 import { rsvpAction } from "@/app/(app)/plans-actions";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
+import { useQuickControls } from "@/hooks/use-quick-controls";
+import { QuickControlsSheet } from "@/components/dashboard/quick-controls-sheet";
+import { StatusComposer } from "@/components/social/status-composer";
+import type { ActivityType, AvailabilityType } from "@/lib/supabase/database.types";
 import {
   announcesState,
   offersRetry,
@@ -162,7 +166,12 @@ export function SocializePage({
   initialGroups = [],
   initialPlans = [],
   myAvatarUrl = null,
-  myName = ""
+  myName = "",
+  initialVisibilityStatus = "visible",
+  hasActiveStatus = false,
+  initialStatusAvailability,
+  initialStatusActivity = null,
+  initialStatusNote = ""
 }: {
   initialSession: SocializeSession | null;
   initialPeople: SocializePerson[];
@@ -172,6 +181,12 @@ export function SocializePage({
   initialPlans?: HomeUpcomingPlan[];
   myAvatarUrl?: string | null;
   myName?: string;
+  /** Quick Controls state, loaded by the route exactly as Home loads it. */
+  initialVisibilityStatus?: "visible" | "ghost" | "app_open_only";
+  hasActiveStatus?: boolean;
+  initialStatusAvailability?: AvailabilityType;
+  initialStatusActivity?: ActivityType | null;
+  initialStatusNote?: string;
 }) {
   const router = useRouter();
   const reducedMotion = useReducedMotion();
@@ -198,6 +213,7 @@ export function SocializePage({
    * everyone you skipped.
    */
   const [lastPassed, setLastPassed] = useState<SocializePerson | null>(null);
+  const [quickControlsOpen, setQuickControlsOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   // Set when a discovery refresh fails, so the list can offer a retry rather
   // than showing an empty state that implies nobody is there.
@@ -216,6 +232,23 @@ export function SocializePage({
 
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
+
+  /**
+   * The SAME Quick Controls behaviour as Home, from the shared hook rather
+   * than a second copy — two implementations would drift, and the failure is
+   * a user turning ghost mode on here while Home still shows them visible.
+   */
+  const quickControls = useQuickControls({
+    initialGhostMode: initialVisibilityStatus === "ghost",
+    // A fresh position changes who is nearby, so the feed reloads rather than
+    // showing results computed from the old one.
+    onLocationUpdated: useCallback(() => {
+      startTransition(async () => {
+        setPeople(await discoverSocializePeopleAction());
+      });
+    }, [])
+  });
+
   const [activating, setActivating] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -864,6 +897,7 @@ export function SocializePage({
           people={isActive ? visiblePeople : []}
           pending={isPending}
           onWave={(person) => wave(person)}
+          onOpenQuickControls={() => setQuickControlsOpen(true)}
           onPass={passPerson}
           onUndoPass={lastPassed ? undoPass : undefined}
           onInvite={(person) => setPreviewPerson(person)}
@@ -1124,6 +1158,58 @@ export function SocializePage({
           </div>
         </div>
       ) : null}
+
+      {/* Quick Controls, the SAME sheet Home uses. Visibility, status, ghost
+          mode and a proximity refresh — all of which matter more here than
+          anywhere else, because this is the page where being visible does
+          something. One component, one implementation. */}
+      <QuickControlsSheet
+        open={quickControlsOpen}
+        onOpenChange={setQuickControlsOpen}
+        ghostMode={quickControls.ghostMode}
+        isPending={quickControls.isPending}
+        isCheckingNearby={quickControls.isCheckingNearby}
+        statusMessage={quickControls.statusMessage}
+        statusSummary={initialStatusNote.trim() || (hasActiveStatus ? "Status on" : "No status set")}
+        hasActiveStatus={hasActiveStatus}
+        onToggleVisibility={quickControls.toggleVisibility}
+        onRefreshNearby={quickControls.refreshNearby}
+        statusTrigger={
+          <StatusComposer
+            hasActiveStatus={hasActiveStatus}
+            initialAvailability={initialStatusAvailability}
+            initialActivity={initialStatusActivity}
+            initialNote={initialStatusNote}
+            onSaved={({ message, expiresAt }) => {
+              setQuickControlsOpen(false);
+              if (expiresAt) {
+                const time = new Date(expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+                showToast(`Visible to your Muddies until ${time}.`);
+              } else {
+                showToast(message);
+              }
+              router.refresh();
+            }}
+            // The row inside the sheet, matching Home so the same control
+            // looks the same wherever it is opened from.
+            trigger={
+              <button
+                type="button"
+                className="focus-ring safe-motion flex min-h-[60px] w-full items-center gap-3.5 px-4 py-3 text-left transition-colors hover:bg-secondary/40"
+              >
+                <MessageSquareText className="h-5 w-5 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[0.9375rem] font-medium">Current Status</span>
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                    {hasActiveStatus ? initialStatusNote.trim() || "Status on" : "Set a status"}
+                  </span>
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </button>
+            }
+          />
+        }
+      />
     </div>
   );
 }

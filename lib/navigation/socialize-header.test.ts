@@ -44,8 +44,13 @@ describe("socialize header", () => {
   });
 
   it("offers a settings affordance at a 44px target", () => {
-    expect(feed).toContain('aria-label="Discovery settings"');
+    // The standalone settings link moved into Quick Controls, which already
+    // carries /settings/glow-visibility — the header keeps one control per
+    // job rather than a second route to the same page.
+    expect(feed).toContain('aria-label="Quick controls"');
     expect(feed).toContain("h-11 w-11");
+    const sheet = read("components/dashboard/quick-controls-sheet.tsx");
+    expect(sheet).toContain('href="/settings/glow-visibility"');
   });
 
   it("reserves no fixed-header height, and clears the notch once", () => {
