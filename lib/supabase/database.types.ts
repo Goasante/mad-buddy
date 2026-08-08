@@ -1924,6 +1924,8 @@ export type Database = {
           processing_status: MediaProcessingStatus;
           moderation_status: ModerationStatus;
           context_type: MediaContextType;
+          intended_conversation_id: string | null;
+          upload_expires_at: string | null;
           retention_policy: MediaRetentionPolicy;
           created_at: string;
           updated_at: string;
@@ -1940,6 +1942,8 @@ export type Database = {
           processing_status?: MediaProcessingStatus;
           moderation_status?: ModerationStatus;
           context_type: MediaContextType;
+          intended_conversation_id?: string | null;
+          upload_expires_at?: string | null;
           retention_policy?: MediaRetentionPolicy;
           created_at?: string;
           updated_at?: string;
@@ -1976,14 +1980,14 @@ export type Database = {
         Row: {
           id: string;
           media_asset_id: string;
-          reason: "parent_deleted" | "parent_expired" | "user_deleted" | "moderation";
+          reason: "parent_deleted" | "parent_expired" | "user_deleted" | "moderation" | "orphaned_upload";
           queued_at: string;
           processed_at: string | null;
         };
         Insert: {
           id?: string;
           media_asset_id: string;
-          reason: "parent_deleted" | "parent_expired" | "user_deleted" | "moderation";
+          reason: "parent_deleted" | "parent_expired" | "user_deleted" | "moderation" | "orphaned_upload";
           queued_at?: string;
           processed_at?: string | null;
         };
@@ -4054,6 +4058,14 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      queue_stale_unattached_chat_media: {
+        Args: {
+          p_ready_before: string;
+          p_incomplete_before: string;
+          p_limit?: number;
+        };
+        Returns: number;
+      };
       buddy_score_total: {
         Args: { target_user_id: string };
         Returns: Array<{ score_total: number }>;

@@ -9,6 +9,10 @@ import {
 } from "@/lib/safety/safe-arrival";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { JobType } from "@/lib/jobs/rules";
+import {
+  INCOMPLETE_CHAT_ORPHAN_AGE_MS,
+  READY_CHAT_ORPHAN_AGE_MS
+} from "@/lib/media/constants";
 import { deliverBirthdayNotifications } from "@/lib/profile/birthday-service";
 
 /**
@@ -144,16 +148,42 @@ export const handleSafeArrivalUnconfirmedAlert: JobHandler = async (admin) => {
 // ---------------------------------------------------------------------------
 
 /** Drains the media deletion queue: removes objects, then marks the row done. */
+export const handleCleanupOrphanChatMedia: JobHandler = async (admin) => {
+  const now = Date.now();
+  const { data, error } = await admin.rpc("queue_stale_unattached_chat_media", {
+    p_ready_before: new Date(now - READY_CHAT_ORPHAN_AGE_MS).toISOString(),
+    p_incomplete_before: new Date(now - INCOMPLETE_CHAT_ORPHAN_AGE_MS).toISOString(),
+    p_limit: 100
+  });
+  if (error) throw new JobError("DATABASE_TIMEOUT", error.message);
+  return data ?? 0;
+};
+
 export const handleMediaDeleteQueued: JobHandler = async (admin) => {
   const { data: queued, error } = await admin
     .from("media_deletion_queue")
-    .select("id, media_asset_id")
+    .select("id, media_asset_id, reason")
     .is("processed_at", null)
     .limit(100);
   if (error) throw new JobError("DATABASE_TIMEOUT", error.message);
 
   let deleted = 0;
   for (const row of queued ?? []) {
+    if (row.reason === "orphaned_upload") {
+      const { data: attached } = await admin
+        .from("messages")
+        .select("id")
+        .eq("media_id", row.media_asset_id)
+        .limit(1)
+        .maybeSingle();
+      if (attached) {
+        // Defensive second check. The database trigger already makes a queued
+        // asset unattachable, but this protects data during rolling deploys.
+        await admin.from("media_deletion_queue").delete().eq("id", row.id);
+        continue;
+      }
+    }
+
     const { data: asset } = await admin
       .from("media_assets")
       .select("id, storage_key")
@@ -670,6 +700,7 @@ export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
 
 export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
   "safe_arrival.unconfirmed_alert": handleSafeArrivalUnconfirmedAlert,
+  "media.cleanup_orphan_chat": handleCleanupOrphanChatMedia,
   "media.delete_queued": handleMediaDeleteQueued,
   "billing.apply_scheduled_downgrade": handleApplyScheduledDowngrade,
   "financial.capture_daily_snapshot": handleCaptureDailyFinancialSnapshot,

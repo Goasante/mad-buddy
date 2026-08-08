@@ -7,6 +7,7 @@ import {
   validateMessageText
 } from "@/lib/messaging/rules";
 import {
+  canSendMessage as canSendIntoConversation,
   loadCommunicationPreferences,
   normalizeCommunicationPreferences,
   resolveConversationAccess,
@@ -331,6 +332,95 @@ export type AttachmentUploadState = MessagingActionState & {
   previewUrl?: string | null;
 };
 
+export type AttachmentUploadIntentState = AttachmentUploadState & {
+  path?: string;
+  token?: string;
+  signedUrl?: string;
+  expiresAt?: string;
+};
+
+const attachmentIntentSchema = z.object({
+  conversationId: z.string().uuid(),
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  sizeBytes: z.number().int().positive()
+});
+
+/** Starts the canonical direct-to-private-storage upload lifecycle. */
+export async function createMessageAttachmentUploadIntentAction(
+  input: unknown
+): Promise<AttachmentUploadIntentState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in before uploading." };
+  const parsed = attachmentIntentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check that photo and try again." };
+
+  const rateLimit = await consumeRateLimit({ action: "media.upload", userId });
+  if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
+  const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId, surface: "messaging", control: "media_uploads" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+
+  const { createChatUploadIntent } = await import("@/lib/media/chat-upload-service");
+  const result = await createChatUploadIntent(admin, userId, parsed.data);
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    message: "Upload ready.",
+    mediaId: result.intent.mediaId,
+    path: result.intent.path,
+    token: result.intent.token,
+    signedUrl: result.intent.signedUrl,
+    expiresAt: result.intent.expiresAt
+  };
+}
+
+/** Finalizes and validates bytes uploaded through a server-issued intent. */
+export async function finalizeMessageAttachmentUploadAction(input: unknown): Promise<AttachmentUploadState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in before uploading." };
+  const parsed = z.object({ conversationId: z.string().uuid(), mediaId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false, message: "That upload isn't available." };
+
+  const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId, surface: "messaging", control: "media_uploads" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+  const { finalizeChatUpload } = await import("@/lib/media/chat-upload-service");
+  const result = await finalizeChatUpload(admin, userId, parsed.data);
+  return result.ok
+    ? { ok: true, message: "Photo ready.", mediaId: result.mediaId, previewUrl: result.previewUrl }
+    : result;
+}
+
+export async function refreshMessageAttachmentAction(input: unknown): Promise<{
+  ok: boolean;
+  message: string;
+  attachment?: import("@/lib/messaging/attachments").AttachmentView;
+}> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+  const parsed = z.object({ conversationId: z.string().uuid(), messageId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false, message: "That attachment isn't available." };
+
+  const admin = createSupabaseAdminClient();
+  const { signAttachmentsForMessages } = await import("@/lib/messaging/attachments");
+  const signed = await signAttachmentsForMessages(
+    admin,
+    userId,
+    parsed.data.conversationId,
+    [parsed.data.messageId]
+  );
+  const attachment = signed.values().next().value;
+  return attachment
+    ? { ok: true, message: "Attachment refreshed.", attachment }
+    : { ok: false, message: "That attachment isn't available." };
+}
+
 /**
  * Upload one image for a message attachment.
  *
@@ -369,9 +459,8 @@ export async function uploadMessageAttachmentAction(formData: FormData): Promise
   if (!guard.allowed) return { ok: false, message: guard.message };
 
   // Membership first: never store bytes for someone who cannot post here.
-  const { resolveConversationAccess } = await import("@/lib/messaging/service");
-  const access = await resolveConversationAccess(admin, userId, conversationId);
-  if (!access.canView) return { ok: false, message: "That conversation isn't available." };
+  const access = await canSendIntoConversation(admin, userId, conversationId);
+  if (!access.allowed) return { ok: false, message: "That conversation isn't available." };
 
   const file = formData.get("media");
   if (!(file instanceof File)) return { ok: false, message: "Choose a photo first." };
@@ -397,6 +486,7 @@ export async function uploadMessageAttachmentAction(formData: FormData): Promise
       content_type: validation.mimeType as MediaContentType,
       size_bytes: file.size,
       context_type: "chat",
+      intended_conversation_id: conversationId,
       processing_status: "pending"
     })
     .select("id")

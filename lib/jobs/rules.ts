@@ -22,6 +22,7 @@ export type JobType =
   // The six that batches 5-13 left un-run.
   | "safe_arrival.unconfirmed_alert"
   | "media.strip_exif"
+  | "media.cleanup_orphan_chat"
   | "media.delete_queued"
   | "billing.apply_scheduled_downgrade"
   | "financial.capture_daily_snapshot"
@@ -160,6 +161,7 @@ export type ScheduleSpec = {
  */
 export const SCHEDULE: readonly ScheduleSpec[] = [
   { jobType: "safe_arrival.unconfirmed_alert", everyMinutes: 5, priority: 1 },
+  { jobType: "media.cleanup_orphan_chat", everyMinutes: 60, priority: 4 },
   { jobType: "media.delete_queued", everyMinutes: 60, priority: 4 },
   { jobType: "billing.apply_scheduled_downgrade", everyMinutes: 60, priority: 3 },
   { jobType: "financial.capture_daily_snapshot", everyMinutes: 60 * 24, priority: 6 },

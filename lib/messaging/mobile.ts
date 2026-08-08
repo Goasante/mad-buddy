@@ -215,7 +215,12 @@ export async function sendMessage(userId: string, input: unknown): Promise<Messa
   // whether a media id exists.
   if (parsed.data.mediaId) {
     const { canAttachMedia } = await import("@/lib/messaging/attachments");
-    const allowed = await canAttachMedia(admin, userId, parsed.data.mediaId);
+    const allowed = await canAttachMedia(
+      admin,
+      userId,
+      parsed.data.conversationId,
+      parsed.data.mediaId
+    );
     if (!allowed) return { ok: false, message: "That photo isn't available to send." };
   }
 
@@ -562,7 +567,7 @@ export async function listMessages(userId: string, conversationId: string): Prom
     admin,
     userId,
     conversationId,
-    rows.map((row) => row.media_id)
+    rows.map((row) => row.id)
   );
 
   const myPrefs = await loadCommunicationPreferences(admin, userId);

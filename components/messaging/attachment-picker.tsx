@@ -3,10 +3,13 @@
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { useRef, useState, useTransition } from "react";
 import {
+  createMessageAttachmentUploadIntentAction,
   discardMessageAttachmentAction,
-  uploadMessageAttachmentAction
+  finalizeMessageAttachmentUploadAction
 } from "@/app/(app)/messaging-actions";
 import { AppMenu } from "@/components/ui/app-dropdown";
+import { validateImageSelection } from "@/lib/media/validation";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 /**
@@ -67,12 +70,43 @@ export function AttachmentPicker({
 
   function upload(file: File | undefined) {
     if (!file) return;
+    const selectionError = validateImageSelection(file, "chat");
+    if (selectionError) {
+      setState({ status: "failed", message: selectionError });
+      return;
+    }
     setState({ status: "uploading" });
     startTransition(async () => {
-      const body = new FormData();
-      body.set("conversationId", conversationId);
-      body.set("media", file);
-      const result = await uploadMessageAttachmentAction(body);
+      const intent = await createMessageAttachmentUploadIntentAction({
+        conversationId,
+        contentType: file.type,
+        sizeBytes: file.size
+      });
+      if (!intent.ok || !intent.mediaId || !intent.path || !intent.token) {
+        setState({ status: "failed", message: intent.message });
+        return;
+      }
+
+      let uploadFailed = false;
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const { error } = await supabase.storage
+          .from("media")
+          .uploadToSignedUrl(intent.path, intent.token, file, { contentType: file.type });
+        uploadFailed = Boolean(error);
+      } catch {
+        uploadFailed = true;
+      }
+      if (uploadFailed) {
+        void discardMessageAttachmentAction(intent.mediaId);
+        setState({ status: "failed", message: "Couldn't upload that photo. Try again." });
+        return;
+      }
+
+      const result = await finalizeMessageAttachmentUploadAction({
+        conversationId,
+        mediaId: intent.mediaId
+      });
       if (!result.ok || !result.mediaId) {
         // The typed draft is untouched: a failed photo must never cost
         // someone the message they were writing.

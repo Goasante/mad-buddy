@@ -3,6 +3,7 @@ import "server-only";
 import { rankSpotlightMoments, resolveMomentVisibility } from "@/lib/content/moments";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import { isOpenMomentsEnabled } from "@/lib/features/feature-flags";
+import { MEDIA_SIGNED_URL_TTL_SECONDS } from "@/lib/media/constants";
 import { loadNearbyForUser } from "@/lib/proximity/nearby-service";
 import { isCloseFriend, viewerCircleIds } from "@/lib/social/permissions";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -17,7 +18,7 @@ import type { MediaVariantType, ReportableContentType, SubscriptionPlan } from "
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
 /** Signed read URLs are short-lived by design (spec §41, §42). */
-export const SIGNED_URL_TTL_SECONDS = 5 * 60;
+export const SIGNED_URL_TTL_SECONDS = MEDIA_SIGNED_URL_TTL_SECONDS;
 
 /**
  * Mints a short-lived signed URL for a media asset. The caller MUST have

@@ -188,6 +188,8 @@ export async function getOrCreateDirectConversation(
 
 export type ConversationAccess = {
   exists: boolean;
+  conversationType: "direct" | "group" | "plan" | "event" | "safe_arrival" | null;
+  directKey: string | null;
   status: ConversationStatus | null;
   role: ConversationRole | null;
   memberStatus: ConversationMemberStatus | null;
@@ -204,12 +206,14 @@ export async function resolveConversationAccess(
 ): Promise<ConversationAccess> {
   const { data: conversation } = await admin
     .from("conversations")
-    .select("id, status, conversation_type")
+    .select("id, status, conversation_type, direct_key")
     .eq("id", conversationId)
     .maybeSingle();
   if (!conversation) {
     return {
       exists: false,
+      conversationType: null,
+      directKey: null,
       status: null,
       role: null,
       memberStatus: null,
@@ -231,6 +235,8 @@ export async function resolveConversationAccess(
 
   return {
     exists: true,
+    conversationType: conversation.conversation_type,
+    directKey: conversation.direct_key,
     status: conversation.status,
     role: member?.role ?? null,
     memberStatus: member?.status ?? null,

@@ -15,6 +15,7 @@ import {
   type SpotlightRankingInput
 } from "@/lib/content/moments";
 import { PRODUCT_EVENT_NAMES } from "@/lib/analytics/product-analytics";
+import { MEDIA_SIGNED_URL_TTL_SECONDS } from "@/lib/media/constants";
 import type { MomentAudienceType } from "@/lib/supabase/database.types";
 
 const ROOT = join(__dirname, "..", "..");
@@ -596,8 +597,8 @@ describe("media storage and delivery", () => {
 
   it("keeps private Moment media unreadable without a short-lived signed URL", () => {
     expect(SERVICE).toContain("createSignedUrl");
-    const ttl = /SIGNED_URL_TTL_SECONDS = ([^;]+);/.exec(read("lib/content/service.ts"))?.[1] ?? "";
-    expect(ttl).toContain("60");
+    expect(MEDIA_SIGNED_URL_TTL_SECONDS).toBeGreaterThan(0);
+    expect(MEDIA_SIGNED_URL_TTL_SECONDS).toBeLessThanOrEqual(10 * 60);
   });
 
   it("serves a processed variant, not the original, to a feed card", () => {

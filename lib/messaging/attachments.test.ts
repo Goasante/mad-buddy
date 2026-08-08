@@ -20,6 +20,7 @@ const projection = stripComments(read("lib/messaging/mobile.ts"));
 const picker = stripComments(read("components/messaging/attachment-picker.tsx"));
 const viewer = stripComments(read("components/messaging/message-media-viewer.tsx"));
 const groupPage = stripComments(read("components/groups/group-detail-page.tsx"));
+const constants = stripComments(read("lib/media/constants.ts"));
 
 const header = (bytes: number[]) => new Uint8Array([...bytes, ...Array(28).fill(0)]);
 const JPEG = header([0xff, 0xd8, 0xff, 0xe0]);
@@ -115,15 +116,15 @@ describe("storage and authorization", () => {
   });
 
   it("refuses a moderated or deleted asset", () => {
-    expect(attachments).toContain('asset.moderation_status === "active"');
+    expect(attachments).toContain('asset.moderation_status !== "active"');
     expect(attachments).toContain("asset.deleted_at");
   });
 
   it("authorises the conversation before signing anything", () => {
     // This is what denies a removed member a fresh URL.
     const sign = attachments.slice(attachments.indexOf("export async function signAttachmentsForMessages"));
-    expect(sign.indexOf("resolveConversationAccess")).toBeLessThan(sign.indexOf("signMediaForAsset"));
-    expect(sign).toContain("if (!access.canView) return byId;");
+    expect(sign.indexOf("resolveConversationAccess")).toBeLessThan(sign.indexOf("createSignedUrls"));
+    expect(sign).toContain('if (!access.canView || access.status !== "active") return byId;');
   });
 
   it("stores no permanent public URL", () => {
@@ -133,7 +134,8 @@ describe("storage and authorization", () => {
   });
 
   it("keeps the signed TTL short", () => {
-    expect(attachments).toContain("ATTACHMENT_SIGNED_TTL_SECONDS = 600");
+    expect(attachments).toContain("ATTACHMENT_SIGNED_TTL_SECONDS = MEDIA_SIGNED_URL_TTL_SECONDS");
+    expect(constants).toContain("MEDIA_SIGNED_URL_TTL_SECONDS = 5 * 60");
   });
 });
 
@@ -143,7 +145,8 @@ describe("storage and authorization", () => {
 
 describe("performance", () => {
   it("signs attachments once per page, deduped", () => {
-    expect(attachments).toContain("[...new Set(mediaIds.filter(");
+    expect(attachments).toContain("[...new Set(messageIds.filter(Boolean))]");
+    expect((attachments.match(/createSignedUrls\(/g) ?? []).length).toBe(1);
     expect(projection).toContain("signAttachmentsForMessages(");
   });
 
