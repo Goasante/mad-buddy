@@ -3406,6 +3406,35 @@ select {
   opacity: 0.6;
 }
 
+/* Withdrawing. Deliberately quieter than the join control: leaving is always
+   available but should never compete with the action that grows the UpFor. */
+.upfor-card-leave {
+  display: inline-flex;
+  min-height: 2.375rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  border: 1px solid hsl(var(--border) / 0.7);
+  padding-inline: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  transition: background-color 300ms ease-out, color 300ms ease-out;
+}
+.upfor-card-leave:hover:not(:disabled) {
+  background: hsl(var(--secondary) / 0.6);
+  color: hsl(var(--foreground));
+}
+.upfor-card-leave:disabled {
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upfor-card-leave {
+    transition: none;
+  }
+}
+
 /* Shown instead of the join button when the server would refuse: already
    asked, or the owner did not open this one to requests. */
 .upfor-card-state {

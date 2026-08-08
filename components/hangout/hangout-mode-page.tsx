@@ -31,6 +31,7 @@ import {
   convertHangoutToPlanAction,
   endHangoutAction,
   getOwnerHangoutRequestsAction,
+  leaveHangoutAction,
   requestHangoutAction,
   respondHangoutRequestAction,
   startHangoutAction,
@@ -335,6 +336,50 @@ export function HangoutModePage({
 
   const acceptedCount = requests.filter((request) => request.status === "accepted").length;
 
+  /**
+   * Withdraw: cancel a pending request, or leave after being accepted.
+   *
+   * Optimistic, then reconciled. The card returns to its join state
+   * immediately and reverts if the server refuses, because a card that
+   * silently keeps saying "Going" after a failed write looks identical to one
+   * that worked.
+   */
+  function leaveUpFor(hangoutId: string) {
+    const previous = feed.find((item) => item.id === hangoutId)?.myRequestStatus ?? null;
+    setFeed((current) =>
+      current.map((item) =>
+        item.id === hangoutId
+          ? {
+              ...item,
+              myRequestStatus: "cancelled",
+              // The seat is freed the moment the row is cancelled, so the
+              // count drops here rather than waiting for a refresh.
+              goingCount: previous === "accepted" ? Math.max(1, item.goingCount - 1) : item.goingCount
+            }
+          : item
+      )
+    );
+    startTransition(async () => {
+      const result = await leaveHangoutAction(hangoutId);
+      if (result.ok) {
+        showToast(result.message);
+      } else {
+        setFeed((current) =>
+          current.map((item) =>
+            item.id === hangoutId
+              ? {
+                  ...item,
+                  myRequestStatus: previous,
+                  goingCount: previous === "accepted" ? item.goingCount + 1 : item.goingCount
+                }
+              : item
+          )
+        );
+        showToast(result.message, true);
+      }
+    });
+  }
+
   function submitSetup() {
     setAttempted(true);
     setSetupError("");
@@ -635,7 +680,10 @@ UpFors are temporary and disappear when they end. Jump in while you can!
             {visibleFeed.map((item) => {
               const timeLeft = upForTimeLeft(item.endsAt, nowMs);
               const going = upForGoingLabel(item.goingCount);
-              const requested = item.myRequestStatus !== null;
+              // A cancelled row is NOT an outstanding request: treating it as one would
+              // leave the card stuck showing "Requested" forever.
+              const requested =
+                item.myRequestStatus !== null && item.myRequestStatus !== "cancelled";
               return (
                 <li key={item.id} className="upfor-card">
                   <UserAvatar
@@ -680,10 +728,29 @@ UpFors are temporary and disappear when they end. Jump in while you can!
                       </span>
                     ) : null}
 
-                    {/* The card never offers an action the server would
-                        reject: a session that refused pings, or one already
-                        asked, shows its state instead of a live button. */}
-                    {item.allowPings && !requested ? (
+                    {/* Three states, each offering only what the server would
+                        accept. A withdrawn row shows the join control again if
+                        the session still takes requests — the server decides
+                        whether that re-request succeeds, not this card. */}
+                    {item.myRequestStatus === "accepted" ? (
+                      <button
+                        type="button"
+                        onClick={() => leaveUpFor(item.id)}
+                        disabled={isPending}
+                        className="upfor-card-leave"
+                      >
+                        Leave
+                      </button>
+                    ) : item.myRequestStatus === "pending" ? (
+                      <button
+                        type="button"
+                        onClick={() => leaveUpFor(item.id)}
+                        disabled={isPending}
+                        className="upfor-card-leave"
+                      >
+                        Cancel request
+                      </button>
+                    ) : item.allowPings && !requested ? (
                       <button
                         type="button"
                         onClick={() => requestToJoin(item.id)}
@@ -694,7 +761,7 @@ UpFors are temporary and disappear when they end. Jump in while you can!
                       </button>
                     ) : (
                       <span className="upfor-card-state">
-                        {requested ? "Requested" : "Invite only"}
+                        {requested ? "Not going" : "Invite only"}
                       </span>
                     )}
 

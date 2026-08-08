@@ -760,3 +760,63 @@ export async function getOwnerHangoutRequestsAction(): Promise<OwnerHangoutReque
     }))
   };
 }
+
+/**
+ * Withdraw from an UpFor: cancel a pending request, or leave after accepting.
+ *
+ * One action for both, because they are the same transition of the same row.
+ * `hangout_requests` already models participation — pending is "I asked",
+ * accepted is "I am going" — so leaving is a third state, not a second table.
+ *
+ * IDEMPOTENT. The update is scoped to rows still in ('pending','accepted'), so
+ * a repeat call simply matches nothing and reports success. A user who taps
+ * Leave twice, or whose first tap succeeded but whose response was lost, must
+ * not see an error for a state the product is already in.
+ *
+ * NEUTRAL FAILURES. Every refusal returns the same shape regardless of cause —
+ * blocked, unfriended, expired, or never a member. Distinguishing them would
+ * let anyone probe why access ended, which is exactly the information the
+ * privacy model withholds.
+ *
+ * The owner cannot use this to end their own UpFor: they have no request row,
+ * so nothing matches. `endHangoutAction` remains the only way to end one, and
+ * it is deliberately separate — leaving is a participant action, ending is an
+ * ownership decision that affects everyone.
+ */
+export async function leaveHangoutAction(hangoutId: string): Promise<HangoutActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  if (!uuidSchema.safeParse(hangoutId).success) return { ok: false, message: "Not available." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+
+  // Scoped to the caller's own row AND to states that can still be withdrawn.
+  // A declined row is the owner's decision and is not the requester's to
+  // rewrite; an already-cancelled one is a no-op by construction.
+  const { data: updated, error } = await admin
+    .from("hangout_requests")
+    .update({ status: "cancelled", responded_at: new Date().toISOString() })
+    .eq("hangout_session_id", hangoutId)
+    .eq("requester_id", userId)
+    .in("status", ["pending", "accepted"])
+    .select("id");
+
+  if (error) return { ok: false, message: "Couldn't update that. Try again." };
+
+  // Zero rows means there was nothing to withdraw — already cancelled, or
+  // never joined. Both are the state the caller asked for, so both succeed:
+  // reporting an error here would turn a harmless repeat tap into a failure.
+  const left = (updated ?? []).length > 0;
+
+  // The freed seat needs no bookkeeping. Every capacity read counts
+  // status = 'accepted', so cancelling releases it immediately and nothing
+  // can drift out of step with a stored counter.
+  return {
+    ok: true,
+    message: left ? "You're no longer going." : "You're not going to this.",
+    hangoutId
+  };
+}
