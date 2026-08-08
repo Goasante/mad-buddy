@@ -42,15 +42,18 @@ import { MessageMediaViewer } from "@/components/messaging/message-media-viewer"
 import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { withTimeout } from "@/lib/network/resilience";
 import { cn, formatRelativeTime } from "@/lib/utils";
+import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 
 type GroupTab = "chat" | "members" | "media";
 
 export function GroupDetailPage({
   group,
-  initialMessages
+  initialMessages,
+  voiceRecorderConfig
 }: {
   group: GroupDetailView;
   initialMessages: ChatMessageView[];
+  voiceRecorderConfig: VoiceRecorderConfig;
 }) {
   const router = useRouter();
   const reducedMotion = useReducedMotion();
@@ -468,6 +471,7 @@ export function GroupDetailPage({
           </div>
           <MessageComposer
             conversationId={group.id}
+            voiceRecorderConfig={voiceRecorderConfig}
             placeholder="Message the group"
             onFeedback={setFeedback}
             onSent={async () => {

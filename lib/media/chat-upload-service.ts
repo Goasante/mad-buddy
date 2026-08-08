@@ -6,6 +6,15 @@ import { canSendMessage } from "@/lib/messaging/service";
 import { CHAT_UPLOAD_INTENT_TTL_MS } from "@/lib/media/constants";
 import { processImageUpload, toStorageArrayBuffer, variantStorageKey } from "@/lib/media/processing";
 import {
+  inspectVoiceAudio,
+  MAX_VOICE_NOTE_BYTES,
+  normalizeVoiceAudioMime,
+  voiceAudioExtension,
+  voiceAudioInspectionMessage
+} from "@/lib/media/audio-inspection";
+import { resolveUserEntitlements } from "@/lib/billing/service";
+import { validateVoiceWaveform } from "@/lib/messaging/voice-waveform";
+import {
   MAX_UPLOAD_BYTES,
   kindForMimeType,
   sniffImageKind,
@@ -31,29 +40,43 @@ export type ChatUploadResult =
   | { ok: false; message: string };
 
 export type ChatFinalizeResult =
-  | { ok: true; mediaId: string; previewUrl: string | null }
+  | { ok: true; mediaId: string; previewUrl: string | null; mediaKind: ChatMediaKind; durationMs: number | null }
   | { ok: false; message: string };
+
+export type ChatMediaKind = "image" | "voice_note";
 
 /** Creates a server-owned, conversation-bound pending asset and upload target. */
 export async function createChatUploadIntent(
   admin: Admin,
   userId: string,
-  input: { conversationId: string; contentType: string; sizeBytes: number }
+  input: { conversationId: string; contentType: string; sizeBytes: number; mediaKind: ChatMediaKind }
 ): Promise<ChatUploadResult> {
   const permission = await canSendMessage(admin, userId, input.conversationId);
   if (!permission.allowed) return { ok: false, message: "That conversation isn't available." };
-  if (!(ATTACHMENT_CONTENT_TYPES as readonly string[]).includes(input.contentType)) {
-    return { ok: false, message: "Upload a JPG, JPEG, PNG, or WebP image." };
-  }
   if (!Number.isSafeInteger(input.sizeBytes) || input.sizeBytes <= 0) {
-    return { ok: false, message: "Choose a photo first." };
-  }
-  if (input.sizeBytes > MAX_UPLOAD_BYTES.chat) {
-    return { ok: false, message: "That image is too large." };
+    return { ok: false, message: input.mediaKind === "image" ? "Choose a photo first." : "Record a voice message first." };
   }
 
-  const kind = kindForMimeType(input.contentType);
-  if (!kind || kind === "heic") return { ok: false, message: "That image type isn't supported here." };
+  let contentType: string;
+  let kind: "jpg" | "png" | "webp" | "webm" | "mp4";
+  if (input.mediaKind === "image") {
+    if (!(ATTACHMENT_CONTENT_TYPES as readonly string[]).includes(input.contentType)) {
+      return { ok: false, message: "Upload a JPG, JPEG, PNG, or WebP image." };
+    }
+    if (input.sizeBytes > MAX_UPLOAD_BYTES.chat) return { ok: false, message: "That image is too large." };
+    const imageKind = kindForMimeType(input.contentType);
+    if (!imageKind || imageKind === "heic") return { ok: false, message: "That image type isn't supported here." };
+    contentType = input.contentType;
+    kind = imageKind;
+  } else {
+    const audioMime = normalizeVoiceAudioMime(input.contentType);
+    if (!audioMime) return { ok: false, message: "That voice recording format isn't supported." };
+    if (input.sizeBytes > MAX_VOICE_NOTE_BYTES) {
+      return { ok: false, message: "That voice message is larger than 3 MB. Record a shorter one." };
+    }
+    contentType = audioMime;
+    kind = voiceAudioExtension(audioMime);
+  }
 
   const mediaId = crypto.randomUUID();
   const path = storageKeyFor({ ownerId: userId, context: "chat", mediaId, kind });
@@ -62,10 +85,11 @@ export async function createChatUploadIntent(
     id: mediaId,
     owner_id: userId,
     storage_key: path,
-    content_type: input.contentType as MediaContentType,
+    content_type: contentType as MediaContentType,
     size_bytes: input.sizeBytes,
     context_type: "chat",
     intended_conversation_id: input.conversationId,
+    intended_media_kind: input.mediaKind,
     upload_expires_at: expiresAt,
     processing_status: "pending"
   });
@@ -86,29 +110,35 @@ export async function createChatUploadIntent(
 export async function finalizeChatUpload(
   admin: Admin,
   userId: string,
-  input: { conversationId: string; mediaId: string }
+  input: { conversationId: string; mediaId: string; expectedMediaKind: ChatMediaKind; waveform?: unknown }
 ): Promise<ChatFinalizeResult> {
   const permission = await canSendMessage(admin, userId, input.conversationId);
   if (!permission.allowed) return { ok: false, message: "That conversation isn't available." };
 
   const { data: asset } = await admin
     .from("media_assets")
-    .select("id, owner_id, storage_key, content_type, processing_status, intended_conversation_id, upload_expires_at")
+    .select("id, owner_id, storage_key, content_type, processing_status, intended_conversation_id, intended_media_kind, upload_expires_at, duration_ms, waveform_data")
     .eq("id", input.mediaId)
     .eq("owner_id", userId)
     .eq("context_type", "chat")
     .maybeSingle();
-  if (!asset || asset.intended_conversation_id !== input.conversationId) {
+  if (!asset || asset.intended_conversation_id !== input.conversationId || asset.intended_media_kind !== input.expectedMediaKind) {
     return { ok: false, message: "That upload isn't available." };
   }
   if (asset.processing_status === "ready") {
-    return { ok: true, mediaId: asset.id, previewUrl: await signMediaForAsset(admin, asset.id, "thumb") };
+    return {
+      ok: true,
+      mediaId: asset.id,
+      previewUrl: input.expectedMediaKind === "image" ? await signMediaForAsset(admin, asset.id, "thumb") : null,
+      mediaKind: input.expectedMediaKind,
+      durationMs: asset.duration_ms
+    };
   }
   if (asset.processing_status !== "pending") {
     return { ok: false, message: "That upload cannot be finalized." };
   }
   if (asset.upload_expires_at && Date.parse(asset.upload_expires_at) < Date.now()) {
-    return { ok: false, message: "That upload expired. Choose the photo again." };
+    return { ok: false, message: "That upload expired. Prepare it again." };
   }
 
   const { data: claimed } = await admin
@@ -121,7 +151,9 @@ export async function finalizeChatUpload(
     .maybeSingle();
   if (!claimed) return { ok: false, message: "That upload is already being processed." };
 
-  const variantKeys = [variantStorageKey(asset.storage_key, "thumb"), variantStorageKey(asset.storage_key, "feed")];
+  const variantKeys = input.expectedMediaKind === "image"
+    ? [variantStorageKey(asset.storage_key, "thumb"), variantStorageKey(asset.storage_key, "feed")]
+    : [];
   const removeFailedUpload = async () => {
     await admin.storage.from("media").remove([asset.storage_key, ...variantKeys]);
     await admin.from("media_assets").delete().eq("id", asset.id).eq("owner_id", userId);
@@ -131,6 +163,50 @@ export async function finalizeChatUpload(
   if (downloadError || !raw) {
     await removeFailedUpload();
     return { ok: false, message: "The upload could not be read. Try again." };
+  }
+
+  if (input.expectedMediaKind === "voice_note") {
+    const waveform = validateVoiceWaveform(input.waveform);
+    if (!waveform.valid) {
+      await removeFailedUpload();
+      return { ok: false, message: "That voice preview data is invalid. Record it again." };
+    }
+    const inspection = await inspectVoiceAudio(new Uint8Array(await raw.arrayBuffer()), asset.content_type);
+    if (!inspection.valid) {
+      await removeFailedUpload();
+      return { ok: false, message: voiceAudioInspectionMessage(inspection.reason) };
+    }
+    const entitlements = await resolveUserEntitlements(admin, userId);
+    if (!entitlements.voice_notes || inspection.durationMs > entitlements.max_voice_note_seconds * 1000) {
+      await removeFailedUpload();
+      return { ok: false, message: `Voice messages can be up to ${entitlements.max_voice_note_seconds} seconds.` };
+    }
+    const { error: readyError } = await admin
+      .from("media_assets")
+      .update({
+        content_type: inspection.mimeType as MediaContentType,
+        processing_status: "ready",
+        duration_ms: inspection.durationMs,
+        waveform_data: waveform.waveform,
+        size_bytes: raw.size,
+        upload_expires_at: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", asset.id)
+      .eq("owner_id", userId)
+      .eq("intended_media_kind", "voice_note")
+      .eq("processing_status", "processing");
+    if (readyError) {
+      await removeFailedUpload();
+      return { ok: false, message: "Couldn't finish processing that voice message. Try again." };
+    }
+    return {
+      ok: true,
+      mediaId: asset.id,
+      previewUrl: null,
+      mediaKind: "voice_note",
+      durationMs: inspection.durationMs
+    };
   }
 
   const headerBytes = new Uint8Array(await raw.slice(0, 32).arrayBuffer());
@@ -216,5 +292,11 @@ export async function finalizeChatUpload(
     return { ok: false, message: "Couldn't finish processing that photo. Try again." };
   }
 
-  return { ok: true, mediaId: asset.id, previewUrl: await signMediaForAsset(admin, asset.id, "thumb") };
+  return {
+    ok: true,
+    mediaId: asset.id,
+    previewUrl: await signMediaForAsset(admin, asset.id, "thumb"),
+    mediaKind: "image",
+    durationMs: null
+  };
 }

@@ -46,11 +46,12 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
-          // Geolocation is the only sensitive capability this app uses, and
-          // only from its own origin. Everything else is explicitly denied.
+          // Geolocation and voice recording are available only to Mad Buddy's
+          // own top-level origin. Camera remains denied; enabling a microphone
+          // does not loosen framing, payment, USB, or any unrelated capability.
           {
             key: "Permissions-Policy",
-            value: "geolocation=(self), camera=(), microphone=(), payment=(), usb=()"
+            value: "geolocation=(self), camera=(), microphone=(self), payment=(), usb=()"
           },
           // Content-Security-Policy is set per-request in proxy.ts (it needs a
           // nonce). It is now enforced, not Report-Only.

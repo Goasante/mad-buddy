@@ -14,6 +14,7 @@ import {
   type CommunicationPreferences
 } from "@/lib/messaging/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { resolveUserEntitlements } from "@/lib/billing/service";
 import { guardAction } from "@/lib/admin/enforcement";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { signMediaForAsset } from "@/lib/content/service";
@@ -34,6 +35,7 @@ import {
   type ConversationView,
   type MessageableFriend
 } from "@/lib/messaging/mobile";
+import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 
 // The read/send views + logic (and these view types) live in
 // lib/messaging/mobile.ts so the mobile /api/messages/* routes share them.
@@ -363,7 +365,7 @@ export async function createMessageAttachmentUploadIntentAction(
   if (!guard.allowed) return { ok: false, message: guard.message };
 
   const { createChatUploadIntent } = await import("@/lib/media/chat-upload-service");
-  const result = await createChatUploadIntent(admin, userId, parsed.data);
+  const result = await createChatUploadIntent(admin, userId, { ...parsed.data, mediaKind: "image" });
   if (!result.ok) return result;
   return {
     ok: true,
@@ -374,6 +376,90 @@ export async function createMessageAttachmentUploadIntentAction(
     signedUrl: result.intent.signedUrl,
     expiresAt: result.intent.expiresAt
   };
+}
+
+/**
+ * The recorder receives only a server-resolved limit, never a client-selected
+ * plan. Paid, trial, earned, grace, expiry, and Owner overrides therefore use
+ * the same entitlement path as every protected premium capability.
+ */
+export async function getVoiceRecorderConfigAction(): Promise<VoiceRecorderConfig> {
+  const env = getSupabaseServerEnv();
+  const userId = await getAuthedUserId();
+  if (!userId || !env.url || !env.serviceRoleKey) {
+    return { enabled: false, maxDurationSeconds: 0 };
+  }
+
+  const entitlements = await resolveUserEntitlements(createSupabaseAdminClient(), userId);
+  return {
+    enabled: entitlements.voice_notes,
+    maxDurationSeconds: entitlements.max_voice_note_seconds
+  };
+}
+
+const voiceIntentSchema = z.object({
+  conversationId: z.string().uuid(),
+  contentType: z.enum(["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]),
+  sizeBytes: z.number().int().positive()
+});
+
+/** Creates a conversation-bound voice intent after server entitlement checks. */
+export async function createVoiceMessageUploadIntentAction(input: unknown): Promise<AttachmentUploadIntentState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in before uploading." };
+  const parsed = voiceIntentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "That voice recording isn't supported." };
+
+  const rateLimit = await consumeRateLimit({ action: "media.upload", userId });
+  if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
+  const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId, surface: "messaging", control: "media_uploads" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+  const entitlements = await resolveUserEntitlements(admin, userId);
+  if (!entitlements.voice_notes) return { ok: false, message: "Voice messages aren't available for this account." };
+
+  const { createChatUploadIntent } = await import("@/lib/media/chat-upload-service");
+  const result = await createChatUploadIntent(admin, userId, { ...parsed.data, mediaKind: "voice_note" });
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    message: "Voice upload ready.",
+    mediaId: result.intent.mediaId,
+    path: result.intent.path,
+    token: result.intent.token,
+    signedUrl: result.intent.signedUrl,
+    expiresAt: result.intent.expiresAt
+  };
+}
+
+export type VoiceFinalizeState = AttachmentUploadState & { durationMs?: number };
+
+/** Validates the stored container, codec, bytes and duration before READY. */
+export async function finalizeVoiceMessageUploadAction(input: unknown): Promise<VoiceFinalizeState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in before uploading." };
+  const parsed = z.object({
+    conversationId: z.string().uuid(),
+    mediaId: z.string().uuid(),
+    waveform: z.unknown().optional()
+  }).safeParse(input);
+  if (!parsed.success) return { ok: false, message: "That voice upload isn't available." };
+
+  const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId, surface: "messaging", control: "media_uploads" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+  const { finalizeChatUpload } = await import("@/lib/media/chat-upload-service");
+  const result = await finalizeChatUpload(admin, userId, {
+    ...parsed.data,
+    expectedMediaKind: "voice_note"
+  });
+  return result.ok
+    ? { ok: true, message: "Voice message prepared.", mediaId: result.mediaId, durationMs: result.durationMs ?? undefined }
+    : result;
 }
 
 /** Finalizes and validates bytes uploaded through a server-issued intent. */
@@ -389,7 +475,7 @@ export async function finalizeMessageAttachmentUploadAction(input: unknown): Pro
   const guard = await guardAction(admin, { userId, surface: "messaging", control: "media_uploads" });
   if (!guard.allowed) return { ok: false, message: guard.message };
   const { finalizeChatUpload } = await import("@/lib/media/chat-upload-service");
-  const result = await finalizeChatUpload(admin, userId, parsed.data);
+  const result = await finalizeChatUpload(admin, userId, { ...parsed.data, expectedMediaKind: "image" });
   return result.ok
     ? { ok: true, message: "Photo ready.", mediaId: result.mediaId, previewUrl: result.previewUrl }
     : result;
@@ -623,5 +709,5 @@ export async function discardMessageAttachmentAction(mediaId: string): Promise<A
     .from("media")
     .remove([asset.storage_key, variantStorageKey(asset.storage_key, "thumb"), variantStorageKey(asset.storage_key, "feed")]);
   await admin.from("media_assets").delete().eq("id", mediaId).eq("owner_id", userId);
-  return { ok: true, message: "Photo removed." };
+  return { ok: true, message: "Attachment removed." };
 }

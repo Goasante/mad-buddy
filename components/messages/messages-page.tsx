@@ -47,6 +47,7 @@ import { MessageAttachmentImage } from "@/components/messaging/message-attachmen
 import { MessageComposer } from "@/components/messaging/message-composer";
 import { MessageMediaViewer } from "@/components/messaging/message-media-viewer";
 import type { AttachmentView } from "@/lib/messaging/attachments";
+import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 
 // "Groups" filters conversation_type === "group"; "Plans" filters
 // conversation_type === "plan" (the group chat attached to a specific Plan).
@@ -107,9 +108,11 @@ function messageFailure(error: unknown) {
 }
 
 export function MessagesPageContent({
-  initialConversations = []
+  initialConversations = [],
+  voiceRecorderConfig = { enabled: false, maxDurationSeconds: 0 }
 }: {
   initialConversations?: ConversationView[];
+  voiceRecorderConfig?: VoiceRecorderConfig;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1064,6 +1067,7 @@ export function MessagesPageContent({
                   <MessageComposer
                     key={selected.id}
                     conversationId={selected.id}
+                    voiceRecorderConfig={voiceRecorderConfig}
                     placeholder={`Message ${selected.title}`}
                     onFeedback={setFeedback}
                     onSent={async () => {

@@ -1925,7 +1925,10 @@ export type Database = {
           moderation_status: ModerationStatus;
           context_type: MediaContextType;
           intended_conversation_id: string | null;
+          intended_media_kind: "image" | "voice_note" | null;
           upload_expires_at: string | null;
+          duration_ms: number | null;
+          waveform_data: Json | null;
           retention_policy: MediaRetentionPolicy;
           created_at: string;
           updated_at: string;
@@ -1943,7 +1946,10 @@ export type Database = {
           moderation_status?: ModerationStatus;
           context_type: MediaContextType;
           intended_conversation_id?: string | null;
+          intended_media_kind?: "image" | "voice_note" | null;
           upload_expires_at?: string | null;
+          duration_ms?: number | null;
+          waveform_data?: Json | null;
           retention_policy?: MediaRetentionPolicy;
           created_at?: string;
           updated_at?: string;
