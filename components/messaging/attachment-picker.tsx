@@ -1,7 +1,7 @@
 "use client";
 
-import { ImagePlus, Loader2, X } from "lucide-react";
-import { useRef, useState, useTransition } from "react";
+import { ImagePlus, Loader2, RotateCcw, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import {
   createMessageAttachmentUploadIntentAction,
   discardMessageAttachmentAction,
@@ -47,78 +47,141 @@ export function discardAttachment(attachment: SelectedAttachment | null): void {
 }
 
 /** The upload lifecycle, as an explicit state rather than scattered booleans. */
+export type AttachmentUploadLifecycle =
+  | "idle"
+  | "selected"
+  | "uploading"
+  | "processing"
+  | "ready"
+  | "sending"
+  | "failed";
+
 type UploadState =
-  | { status: "idle" }
-  | { status: "uploading" }
+  | { status: Exclude<AttachmentUploadLifecycle, "failed"> }
   | { status: "failed"; message: string };
+
+type UploadIntent = {
+  mediaId: string;
+  path: string;
+  token: string;
+};
 
 export function AttachmentPicker({
   conversationId,
   onAttachmentChange,
+  onLifecycleChange,
   disabled = false
 }: {
   conversationId: string;
   onAttachmentChange: (next: SelectedAttachment | null) => void;
+  onLifecycleChange?: (state: AttachmentUploadLifecycle) => void;
   disabled?: boolean;
 }) {
   const [state, setState] = useState<UploadState>({ status: "idle" });
-  const [isPending, startTransition] = useTransition();
+  const fileRef = useRef<File | null>(null);
+  const intentRef = useRef<UploadIntent | null>(null);
+  const uploadedRef = useRef(false);
+  const [retryAvailable, setRetryAvailable] = useState(false);
   // Two inputs, because `capture` is what makes the second one open the
   // camera directly rather than the gallery.
   const libraryRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
 
-  function upload(file: File | undefined) {
+  function transition(next: UploadState) {
+    setState(next);
+    onLifecycleChange?.(next.status);
+  }
+
+  useEffect(() => {
+    return () => {
+      const intent = intentRef.current;
+      if (intent) void discardMessageAttachmentAction(intent.mediaId);
+    };
+  }, []);
+
+  function cancelFailedUpload() {
+    const intent = intentRef.current;
+    if (intent) void discardMessageAttachmentAction(intent.mediaId);
+    intentRef.current = null;
+    uploadedRef.current = false;
+    fileRef.current = null;
+    setRetryAvailable(false);
+    transition({ status: "idle" });
+  }
+
+  async function continueUpload() {
+    const file = fileRef.current;
     if (!file) return;
-    const selectionError = validateImageSelection(file, "chat");
-    if (selectionError) {
-      setState({ status: "failed", message: selectionError });
-      return;
-    }
-    setState({ status: "uploading" });
-    startTransition(async () => {
-      const intent = await createMessageAttachmentUploadIntentAction({
+
+    transition({ status: "uploading" });
+    let intent = intentRef.current;
+    if (!intent) {
+      const created = await createMessageAttachmentUploadIntentAction({
         conversationId,
         contentType: file.type,
         sizeBytes: file.size
       });
-      if (!intent.ok || !intent.mediaId || !intent.path || !intent.token) {
-        setState({ status: "failed", message: intent.message });
+      if (!created.ok || !created.mediaId || !created.path || !created.token) {
+        transition({ status: "failed", message: created.message });
         return;
       }
+      intent = { mediaId: created.mediaId, path: created.path, token: created.token };
+      intentRef.current = intent;
+    }
 
-      let uploadFailed = false;
+    if (!uploadedRef.current) {
       try {
         const supabase = createSupabaseBrowserClient();
         const { error } = await supabase.storage
           .from("media")
-          .uploadToSignedUrl(intent.path, intent.token, file, { contentType: file.type });
-        uploadFailed = Boolean(error);
+          .uploadToSignedUrl(intent.path, intent.token, file, {
+            contentType: file.type,
+            upsert: true
+          });
+        if (error) throw error;
+        uploadedRef.current = true;
       } catch {
-        uploadFailed = true;
-      }
-      if (uploadFailed) {
         void discardMessageAttachmentAction(intent.mediaId);
-        setState({ status: "failed", message: "Couldn't upload that photo. Try again." });
+        intentRef.current = null;
+        uploadedRef.current = false;
+        transition({ status: "failed", message: "Couldn't upload that photo. Try again." });
         return;
       }
+    }
 
-      const result = await finalizeMessageAttachmentUploadAction({
-        conversationId,
-        mediaId: intent.mediaId
-      });
-      if (!result.ok || !result.mediaId) {
-        // The typed draft is untouched: a failed photo must never cost
-        // someone the message they were writing.
-        setState({ status: "failed", message: result.message });
-        return;
-      }
-      setState({ status: "idle" });
-      onAttachmentChange({ mediaId: result.mediaId, previewUrl: result.previewUrl ?? null });
+    transition({ status: "processing" });
+    const result = await finalizeMessageAttachmentUploadAction({
+      conversationId,
+      mediaId: intent.mediaId
     });
+    if (!result.ok || !result.mediaId) {
+      transition({ status: "failed", message: result.message });
+      return;
+    }
+
+    intentRef.current = null;
+    uploadedRef.current = false;
+    fileRef.current = null;
+    setRetryAvailable(false);
+    transition({ status: "ready" });
+    onAttachmentChange({ mediaId: result.mediaId, previewUrl: result.previewUrl ?? null });
   }
 
-  const busy = disabled || isPending || state.status === "uploading";
+  function upload(file: File | undefined) {
+    if (!file) return;
+    const selectionError = validateImageSelection(file, "chat");
+    if (selectionError) {
+      transition({ status: "failed", message: selectionError });
+      return;
+    }
+    cancelFailedUpload();
+    fileRef.current = file;
+    setRetryAvailable(true);
+    transition({ status: "selected" });
+    void continueUpload();
+  }
+
+  const busy = disabled || state.status === "selected" || state.status === "uploading" || state.status === "processing";
 
   return (
     <>
@@ -172,6 +235,34 @@ export function AttachmentPicker({
           </button>
         }
       />
+      {state.status === "processing" ? (
+        <span className="sr-only" role="status">Preparing photo</span>
+      ) : null}
+      {state.status === "failed" ? (
+        <div className="flex items-center gap-1" role="alert">
+          <span className="sr-only">{state.message}</span>
+          {retryAvailable ? (
+            <button
+              type="button"
+              onClick={() => void continueUpload()}
+              className="focus-ring grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-secondary/60"
+              aria-label="Retry photo upload"
+              title="Retry photo upload"
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={cancelFailedUpload}
+            className="focus-ring grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-secondary/60"
+            aria-label="Cancel photo upload"
+            title="Cancel photo upload"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
     </>
   );
 }

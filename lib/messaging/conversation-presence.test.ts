@@ -13,6 +13,7 @@ import type { ConversationView } from "@/lib/messaging/mobile";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const page = read("components/messages/messages-page.tsx");
+const composerSource = read("components/messaging/message-composer.tsx");
 const css = read("app/globals.css");
 const canvasCss = css.slice(
   css.indexOf("/* Conversation canvas"),
@@ -193,7 +194,7 @@ describe("conversation screen", () => {
 });
 
 describe("composer", () => {
-  const composer = page.slice(page.indexOf("MESSAGES_COMPOSER"));
+  const composer = composerSource;
 
   it("is one soft pill rather than a field plus a button", () => {
     expect(composer).toContain("rounded-full bg-secondary/70");
@@ -201,13 +202,13 @@ describe("composer", () => {
   });
 
   it("keeps send quiet until there is something to send", () => {
-    expect(composer).toContain("draft.trim() && !isPending");
+    expect(composer).toContain("canSend && !uploadBusy && !isPending");
     expect(composer).toContain("scale-90 bg-transparent");
   });
 
   it("still labels the send action for assistive tech", () => {
     expect(composer).toContain('aria-label="Send message"');
-    expect(composer).toContain('aria-label={`Message ${selected.title}`}');
+    expect(composer).toContain('aria-label={attachment ? "Photo caption" : placeholder}');
   });
 });
 

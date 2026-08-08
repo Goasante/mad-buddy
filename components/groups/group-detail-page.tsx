@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Loader2, LogOut, MoreHorizontal, Send, UserPlus, Users2 } from "lucide-react";
+import { ChevronLeft, LogOut, MoreHorizontal, UserPlus, Users2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { getMessagesAction, sendMessageAction } from "@/app/(app)/messaging-actions";
+import { getMessagesAction } from "@/app/(app)/messaging-actions";
 import type { ChatMessageView } from "@/lib/messaging/mobile";
 import {
   demoteGroupAdminAction,
@@ -18,7 +18,6 @@ import {
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
@@ -37,16 +36,11 @@ import {
   type MemberAction
 } from "@/lib/groups/member-presentation";
 import { AppMenu } from "@/components/ui/app-dropdown";
-import {
-  AttachmentPicker,
-  AttachmentPreview,
-  discardAttachment,
-  type SelectedAttachment
-} from "@/components/messaging/attachment-picker";
-import { attachmentAltText } from "@/lib/messaging/attachment-labels";
+import { MessageAttachmentImage } from "@/components/messaging/message-attachment-image";
+import { MessageComposer } from "@/components/messaging/message-composer";
 import { MessageMediaViewer } from "@/components/messaging/message-media-viewer";
 import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
+import { withTimeout } from "@/lib/network/resilience";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
 type GroupTab = "chat" | "members" | "media";
@@ -62,8 +56,6 @@ export function GroupDetailPage({
   const reducedMotion = useReducedMotion();
   const [tab, setTab] = useState<GroupTab>("chat");
   const [messages, setMessages] = useState(initialMessages);
-  const [draft, setDraft] = useState("");
-  const [attachment, setAttachment] = useState<SelectedAttachment | null>(null);
   // Which message's photo is open full-screen. The id (not the object) so a
   // realtime refresh cannot leave a stale copy of the message on screen.
   const [viewerMessageId, setViewerMessageId] = useState<string | null>(null);
@@ -224,42 +216,6 @@ export function GroupDetailPage({
       void supabase.removeChannel(channel);
     };
   }, [group.id]);
-
-  function sendMessage() {
-    const text = draft.trim();
-    // A photo with no caption is a complete message, so either one is enough.
-    if (!text && !attachment) return;
-    setFeedback("");
-    startTransition(async () => {
-      try {
-        const result = await withTimeout(sendMessageAction({
-          conversationId: group.id,
-          text,
-          mediaId: attachment?.mediaId,
-          clientMessageId: crypto.randomUUID()
-        }), {
-          operation: "send group message"
-        });
-        setFeedback(result.message);
-        if (result.ok) {
-          setDraft("");
-          // Cleared only on success: a failed send must keep both the caption
-          // and the uploaded photo so the sender can simply retry.
-          setAttachment(null);
-          const loaded = await withTimeout(getMessagesAction(group.id), {
-            operation: "refresh group messages"
-          });
-          if (mountedRef.current) setMessages(loaded);
-        }
-      } catch (error) {
-        setFeedback(
-          isRequestTimeoutError(error)
-            ? "Sending took too long. Your message was kept so you can try again."
-            : "The message could not be sent. Try again."
-        );
-      }
-    });
-  }
 
   function invite(candidate: GroupInviteCandidate) {
     startTransition(async () => {
@@ -470,22 +426,14 @@ export function GroupDetailPage({
                           })}
                         </p>
                         {message.attachment ? (
-                          <button
-                            type="button"
-                            onClick={() => setViewerMessageId(message.id)}
-                            aria-label={attachmentAltText(message.senderName, message.isMine)}
-                            className="focus-ring safe-motion -mx-1 mb-1 block overflow-hidden rounded-xl"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL */}
-                            <img
-                              src={message.attachment.thumbUrl ?? ""}
-                              alt={attachmentAltText(message.senderName, message.isMine)}
-                              loading="lazy"
-                              width={message.attachment.width ?? undefined}
-                              height={message.attachment.height ?? undefined}
-                              className="max-h-64 w-full max-w-[15rem] object-cover"
-                            />
-                          </button>
+                          <MessageAttachmentImage
+                            conversationId={group.id}
+                            message={message}
+                            onOpen={() => setViewerMessageId(message.id)}
+                            onRefreshed={(next) => setMessages((current) => current.map((item) =>
+                              item.id === message.id ? { ...item, attachment: next } : item
+                            ))}
+                          />
                         ) : null}
                         {/* The caption, when there is one. A photo alone is a
                             complete message, so no placeholder text is
@@ -518,42 +466,17 @@ export function GroupDetailPage({
               />
             )}
           </div>
-          <AttachmentPreview
-            attachment={attachment}
-            onRemove={() => {
-              discardAttachment(attachment);
-              setAttachment(null);
+          <MessageComposer
+            conversationId={group.id}
+            placeholder="Message the group"
+            onFeedback={setFeedback}
+            onSent={async () => {
+              const loaded = await withTimeout(getMessagesAction(group.id), {
+                operation: "refresh group messages"
+              });
+              if (mountedRef.current) setMessages(loaded);
             }}
           />
-          <form
-            className="flex items-center gap-2 border-t border-border/70 bg-background/80 p-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              sendMessage();
-            }}
-          >
-            <AttachmentPicker
-              conversationId={group.id}
-              onAttachmentChange={setAttachment}
-              disabled={isPending}
-            />
-            <Input
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder={attachment ? "Add a caption" : "Message the group"}
-              maxLength={2000}
-              className="flex-1"
-              disabled={isPending}
-            />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={isPending || (!draft.trim() && !attachment)}
-              aria-label="Send message"
-            >
-              {isPending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
-            </Button>
-          </form>
         </section>
       ) : null}
 
@@ -568,20 +491,15 @@ export function GroupDetailPage({
             <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
               {mediaMessages.map((item) => (
                 <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => setViewerMessageId(item.id)}
-                    aria-label={attachmentAltText(item.senderName, item.isMine)}
-                    className="focus-ring safe-motion block aspect-square w-full overflow-hidden rounded-xl"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL */}
-                    <img
-                      src={item.attachment?.thumbUrl ?? ""}
-                      alt={attachmentAltText(item.senderName, item.isMine)}
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                    />
-                  </button>
+                  <MessageAttachmentImage
+                    conversationId={group.id}
+                    message={item}
+                    square
+                    onOpen={() => setViewerMessageId(item.id)}
+                    onRefreshed={(next) => setMessages((current) => current.map((message) =>
+                      message.id === item.id ? { ...message, attachment: next } : message
+                    ))}
+                  />
                 </li>
               ))}
             </ul>

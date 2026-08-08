@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarCheck2, ChevronLeft, Info, MessagesSquare, PenSquare, Plus, Search, Send, Star, UsersRound, VolumeX, X } from "lucide-react";
+import { CalendarCheck2, ChevronLeft, Info, MessagesSquare, PenSquare, Plus, Search, Star, UsersRound, VolumeX, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -43,6 +43,10 @@ import {
 } from "@/lib/messaging/conversation-presence";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { PageHeader } from "@/components/app-shell/page-header";
+import { MessageAttachmentImage } from "@/components/messaging/message-attachment-image";
+import { MessageComposer } from "@/components/messaging/message-composer";
+import { MessageMediaViewer } from "@/components/messaging/message-media-viewer";
+import type { AttachmentView } from "@/lib/messaging/attachments";
 
 // "Groups" filters conversation_type === "group"; "Plans" filters
 // conversation_type === "plan" (the group chat attached to a specific Plan).
@@ -126,7 +130,7 @@ export function MessagesPageContent({
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const [draft, setDraft] = useState("");
+  const [viewerMessageId, setViewerMessageId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -420,19 +424,16 @@ export function MessagesPageContent({
     void loadConversation(conversationId);
   }
 
-  function send(text: string, quickActionType?: string) {
+  function sendQuickAction(quickActionType: string) {
     if (!selectedId) return;
-    const body = text.trim();
-    if (!body && !quickActionType) return;
 
     // Idempotency key: a retry can never create a second message (spec §7).
     const clientMessageId = crypto.randomUUID();
-    setDraft("");
     startTransition(async () => {
       try {
         const result = await withTimeout(sendMessageAction({
           conversationId: selectedId,
-          text: quickActionType ? undefined : body,
+          text: undefined,
           quickActionType,
           clientMessageId
         }), {
@@ -440,17 +441,21 @@ export function MessagesPageContent({
         });
         if (!result.ok) {
           setFeedback(result.message);
-          if (!quickActionType) setDraft(body);
           return;
         }
         await refreshMessages(selectedId);
         router.refresh();
       } catch (error) {
         setFeedback(messageFailure(error));
-        if (!quickActionType) setDraft(body);
       }
     });
   }
+
+  const updateMessageAttachment = useCallback((messageId: string, attachment: AttachmentView) => {
+    setMessages((current) => current.map((message) =>
+      message.id === messageId ? { ...message, attachment } : message
+    ));
+  }, []);
 
   function toggleMute() {
     if (!selected) return;
@@ -905,6 +910,14 @@ export function MessagesPageContent({
                                   : "bg-secondary/70 text-foreground"
                               )}
                             >
+                              {!message.deleted && message.attachment ? (
+                                <MessageAttachmentImage
+                                  conversationId={selected.id}
+                                  message={message}
+                                  onOpen={() => setViewerMessageId(message.id)}
+                                  onRefreshed={(attachment) => updateMessageAttachment(message.id, attachment)}
+                                />
+                              ) : null}
                               {editingId === message.id ? (
                                 <form
                                   className="flex items-center gap-1.5"
@@ -934,7 +947,7 @@ export function MessagesPageContent({
                                     ? DELETED_MESSAGE_PLACEHOLDER
                                     : message.quickActionType
                                       ? quickActionLabel(message.quickActionType)
-                                      : message.text}
+                                      : message.text ?? (message.attachment ? null : "Message")}
                                 </p>
                               )}
                               {/* One timestamp per run, on its last message:
@@ -1035,7 +1048,7 @@ export function MessagesPageContent({
                     <button
                       key={action.id}
                       type="button"
-                      onClick={() => send("", action.id)}
+                      onClick={() => sendQuickAction(action.id)}
                       disabled={isPending}
                       className="focus-ring safe-motion rounded-full bg-secondary/60 px-3 py-1.5 text-[0.75rem] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:scale-[0.97] motion-reduce:active:scale-100"
                     >
@@ -1044,43 +1057,22 @@ export function MessagesPageContent({
                   ))}
                 </div>
 
-                <form
+                <div
                   data-tour-id={TOUR_TARGET_IDS.MESSAGES_COMPOSER}
-                  className="flex shrink-0 items-end gap-2 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 lg:pb-3"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    send(draft);
-                  }}
+                  className="shrink-0"
                 >
-                  {/* One soft pill holding the field and its send action, so the
-                      composer reads as a single calm control rather than a
-                      bordered strip with a button bolted on. */}
-                  <div className="flex min-h-[2.75rem] flex-1 items-center gap-1.5 rounded-full bg-secondary/70 pl-4 pr-1.5 transition-colors focus-within:bg-secondary">
-                    <input
-                      value={draft}
-                      maxLength={2000}
-                      onChange={(event) => setDraft(event.target.value)}
-                      placeholder={`Message ${selected.title}`}
-                      aria-label={`Message ${selected.title}`}
-                      className="min-w-0 flex-1 bg-transparent py-2 text-[0.9375rem] outline-none placeholder:text-muted-foreground/70"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!draft.trim() || isPending}
-                      aria-label="Send message"
-                      className={cn(
-                        "focus-ring safe-motion grid h-9 w-9 shrink-0 place-items-center rounded-full transition-all duration-200 motion-reduce:transition-none",
-                        // The send action only becomes solid once there is
-                        // something to send — the composer stays quiet at rest.
-                        draft.trim() && !isPending
-                          ? "scale-100 bg-primary text-white opacity-100"
-                          : "scale-90 bg-transparent text-muted-foreground/50 opacity-60"
-                      )}
-                    >
-                      <Send className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                </form>
+                  <MessageComposer
+                    key={selected.id}
+                    conversationId={selected.id}
+                    placeholder={`Message ${selected.title}`}
+                    onFeedback={setFeedback}
+                    onSent={async () => {
+                      await refreshMessages(selected.id);
+                      router.refresh();
+                    }}
+                    className="w-full border-0 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:pb-0"
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -1088,6 +1080,11 @@ export function MessagesPageContent({
       )}
 
       <NewMessageModal open={newMessageOpen} onOpenChange={setNewMessageOpen} onSelect={startConversationWith} />
+      <MessageMediaViewer
+        message={messages.find((message) => message.id === viewerMessageId) ?? null}
+        open={Boolean(viewerMessageId)}
+        onClose={() => setViewerMessageId(null)}
+      />
       <PinPickerModal
         open={pinPickerOpen}
         onOpenChange={setPinPickerOpen}

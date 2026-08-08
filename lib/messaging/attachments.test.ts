@@ -18,6 +18,9 @@ const attachments = stripComments(read("lib/messaging/attachments.ts"));
 const actions = stripComments(read("app/(app)/messaging-actions.ts"));
 const projection = stripComments(read("lib/messaging/mobile.ts"));
 const picker = stripComments(read("components/messaging/attachment-picker.tsx"));
+const composer = stripComments(read("components/messaging/message-composer.tsx"));
+const attachmentImage = stripComments(read("components/messaging/message-attachment-image.tsx"));
+const messagesPage = stripComments(read("components/messages/messages-page.tsx"));
 const viewer = stripComments(read("components/messaging/message-media-viewer.tsx"));
 const groupPage = stripComments(read("components/groups/group-detail-page.tsx"));
 const constants = stripComments(read("lib/media/constants.ts"));
@@ -157,7 +160,7 @@ describe("performance", () => {
   });
 
   it("lazy-loads thread and gallery images", () => {
-    expect((groupPage.match(/loading="lazy"/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect(attachmentImage).toContain('loading="lazy"');
   });
 });
 
@@ -185,7 +188,7 @@ describe("upload lifecycle", () => {
   });
 
   it("preserves the typed draft when an upload fails", () => {
-    expect(picker).toContain('setState({ status: "failed"');
+    expect(picker).toContain('transition({ status: "failed"');
     // The failure path touches only upload state, never the caption.
     const fail = picker.slice(picker.indexOf('if (!result.ok || !result.mediaId)'));
     expect(fail.slice(0, 200)).not.toContain("setDraft");
@@ -194,24 +197,36 @@ describe("upload lifecycle", () => {
   it("clears the attachment only after a confirmed send", () => {
     // Anchored inside sendMessage — the file has other `if (result.ok)`
     // branches (transfer, role changes) that would match first.
-    const send = groupPage.slice(groupPage.indexOf("function sendMessage()"));
-    const success = send.slice(send.indexOf("if (result.ok) {"));
-    expect(success.slice(0, 200)).toContain("setAttachment(null)");
+    const failure = composer.slice(
+      composer.indexOf("if (!result.ok) {"),
+      composer.indexOf('setDraft("")')
+    );
+    expect(failure).not.toContain("setAttachment(null)");
+    const success = composer.slice(composer.indexOf('setDraft("")'));
+    expect(success.slice(0, 250)).toContain("setAttachment(null)");
     // And only there: a failed send keeps the photo so retry is one tap.
     expect(success.indexOf("setAttachment(null)")).toBeGreaterThan(-1);
   });
 
   it("blocks a send with neither text nor photo", () => {
-    expect(groupPage).toContain("if (!text && !attachment) return;");
+    expect(composer).toContain("if ((!text && !attachment) || uploadBusy || isPending) return;");
   });
 
   it("keeps idempotency on the send", () => {
-    expect(groupPage).toContain("clientMessageId: crypto.randomUUID()");
+    expect(composer).toContain("clientMessageIdRef.current ?? crypto.randomUUID()");
+    expect(composer).toContain("clientMessageIdRef.current = clientMessageId");
   });
 
   it("treats a photo with no caption as a complete message", () => {
     expect(projection).toContain("hasAttachment");
     expect(projection).toContain('hasAttachment ? "image" : "text"');
+  });
+
+  it("uses the same composer for DM, Plan, and Group conversations", () => {
+    expect(messagesPage).toContain("<MessageComposer");
+    expect(messagesPage).toContain('id: "plans"');
+    expect(groupPage).toContain("<MessageComposer");
+    expect(groupPage).not.toContain("<AttachmentPicker");
   });
 });
 
@@ -228,7 +243,8 @@ describe("rendering", () => {
 
   it("passes the larger variant to the viewer and the thumb to the thread", () => {
     expect(viewer).toContain("message.attachment.fullUrl");
-    expect(groupPage).toContain("message.attachment.thumbUrl");
+    expect(attachmentImage).toContain("attachment.thumbUrl ?? attachment.fullUrl");
+    expect(attachmentImage).toContain("refreshMessageAttachmentAction({ conversationId, messageId })");
   });
 
   it("does not render a photo for a deleted message", () => {
@@ -237,6 +253,13 @@ describe("rendering", () => {
 
   it("renders the caption without inventing placeholder text", () => {
     expect(groupPage).toContain("message.attachment ? null : (");
+    expect(messagesPage).toContain('message.text ?? (message.attachment ? null : "Message")');
+  });
+
+  it("deduplicates signed URL refreshes and fails closed", () => {
+    expect(attachmentImage).toContain("const refreshes = new Map");
+    expect(attachmentImage).toContain("if (existing) return existing");
+    expect(attachmentImage).toContain("setFailed(true)");
   });
 });
 
@@ -293,7 +316,7 @@ describe("accessibility", () => {
   });
 
   it("gives every thread image an accessible name", () => {
-    expect(groupPage).toContain("attachmentAltText(message.senderName, message.isMine)");
+    expect(attachmentImage).toContain("attachmentAltText(message.senderName, message.isMine)");
   });
 
   it("respects reduced motion on the upload spinner", () => {
