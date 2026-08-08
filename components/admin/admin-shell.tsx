@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 type AdminHref =
   | "/admin"
   | "/admin/users"
+  | "/admin/trusted-members"
   | "/admin/reports"
   | "/admin/support"
   | "/admin/repairs"
@@ -68,6 +69,7 @@ const adminNavigationGroups: Array<{ label: string; items: AdminNavigationItem[]
     items: [
       { href: "/admin", label: "Overview", icon: Gauge },
       { href: "/admin/users", label: "Users", icon: UsersRound, permission: "admin.users.view_summary" },
+      { href: "/admin/trusted-members", label: "Trusted Members", icon: ShieldCheck, permission: "admin.verification.review" },
       { href: "/admin/reports", label: "Reports", icon: ShieldAlert, permission: "admin.reports.review" },
       { href: "/admin/support", label: "Support", icon: Headphones, permission: "admin.support.manage" },
       { href: "/admin/repairs", label: "Repairs", icon: Wrench, permission: "admin.support.manage" }

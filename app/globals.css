@@ -3913,6 +3913,189 @@ select {
   text-wrap: pretty;
 }
 
+/* ------------------------- Profile photo carousel -------------------- */
+/* Extra photos beside the avatar, each with its own visibility. The avatar
+   is never part of this strip: it is the identity used across the product,
+   and mixing the two would make "delete this photo" ambiguous. */
+.profile-photos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.profile-photos-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.profile-photos-title {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.profile-photos-count {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-photos-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  border: 1px solid hsl(var(--border) / 0.5);
+  background: hsl(var(--secondary) / 0.4);
+  /* Portrait, matching how phone photos are actually taken. */
+  aspect-ratio: 4 / 5;
+}
+
+.profile-photos-image {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
+
+.profile-photos-nav {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  height: 2.25rem;
+  width: 2.25rem;
+  translate: 0 -50%;
+  place-items: center;
+  border-radius: 999px;
+  background: hsl(var(--background) / 0.85);
+  color: hsl(var(--foreground));
+  backdrop-filter: blur(8px);
+  transition: background-color 300ms ease-out;
+}
+.profile-photos-nav:hover {
+  background: hsl(var(--background));
+}
+.profile-photos-nav-prev {
+  left: 0.625rem;
+}
+.profile-photos-nav-next {
+  right: 0.625rem;
+}
+
+.profile-photos-dots {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  display: flex;
+  translate: -50% 0;
+  gap: 0.3125rem;
+  border-radius: 999px;
+  background: hsl(var(--background) / 0.6);
+  padding: 0.3125rem 0.5rem;
+  backdrop-filter: blur(6px);
+}
+
+.profile-photos-dot {
+  height: 0.375rem;
+  width: 0.375rem;
+  border-radius: 999px;
+  background: hsl(var(--foreground) / 0.3);
+  transition: width 300ms ease-out, background-color 300ms ease-out;
+}
+
+.profile-photos-dot-on {
+  width: 1rem;
+  background: hsl(var(--primary));
+}
+
+/* ----------------------------- Owner only ---------------------------- */
+.profile-photos-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.profile-photos-visibility {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  gap: 0.375rem;
+}
+
+.profile-photos-chip {
+  min-height: 2.25rem;
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  padding-inline: 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  transition: background-color 300ms ease-out, border-color 300ms ease-out, color 300ms ease-out;
+}
+.profile-photos-chip:hover:not(:disabled):not(.profile-photos-chip-on) {
+  background: hsl(var(--secondary) / 0.5);
+}
+
+.profile-photos-chip-on {
+  border-color: transparent;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-weight: 600;
+}
+
+/* Quieter than the visibility chips: removing is rarer than adjusting who
+   can see, and the destructive control should not draw the eye first. */
+.profile-photos-remove {
+  display: grid;
+  height: 2.25rem;
+  width: 2.25rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  color: hsl(var(--muted-foreground));
+  transition: background-color 300ms ease-out, color 300ms ease-out;
+}
+.profile-photos-remove:hover:not(:disabled) {
+  border-color: rgb(239 68 68 / 0.4);
+  color: #ef4444;
+}
+
+.profile-photos-add {
+  display: inline-flex;
+  min-height: 2.5rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4375rem;
+  border-radius: 999px;
+  border: 1px dashed hsl(var(--border));
+  padding-inline: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color 300ms ease-out;
+}
+.profile-photos-add:hover {
+  background: hsl(var(--secondary) / 0.4);
+}
+
+.profile-photos-feedback {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-photos-nav,
+  .profile-photos-dot,
+  .profile-photos-chip,
+  .profile-photos-remove,
+  .profile-photos-add {
+    transition: none;
+  }
+}
+
 /* Conversation canvas
    ------------------------------------------------------------------
    The conversation owns the screen, so it supplies its own ground rather

@@ -125,3 +125,67 @@ describe("the avatar is left alone", () => {
     expect(photosBlock).not.toContain("avatar_url");
   });
 });
+
+describe("the carousel", () => {
+  const carousel = read("components/profile/profile-photo-carousel.tsx");
+  const actions = read("app/(app)/profile-photo-actions.ts");
+
+  it("is one component for viewing and managing", () => {
+    // The owner must see exactly what a visitor sees while managing it; a
+    // separate edit screen would let the two drift.
+    expect(carousel).toContain("isOwner");
+    expect(carousel).toContain("PHOTO_VISIBILITY_OPTIONS.map");
+  });
+
+  it("puts visibility on the photo it governs", () => {
+    // "Who can see this one?" is harder to check than to change if the answer
+    // lives in a settings list somewhere else.
+    expect(carousel).toContain("setVisibility(current.id, option.id)");
+  });
+
+  it("renders nothing to a visitor with no visible photos", () => {
+    // An empty frame would imply something was hidden from them.
+    expect(carousel).toContain("if (count === 0 && !isOwner) return null;");
+  });
+
+  it("clamps the index during render, so deleting the last photo is safe", () => {
+    expect(carousel).toContain("Math.min(index, count - 1)");
+  });
+
+  it("hides the arrows when there is nowhere to go", () => {
+    expect(carousel).toContain("count > 1 ?");
+  });
+
+  it("announces position politely for screen readers", () => {
+    expect(carousel).toContain('aria-live="polite"');
+    expect(carousel).toContain("Photo {active + 1} of {count}");
+  });
+
+  it("compresses before upload so a phone photo is not rejected on size", () => {
+    expect(carousel).toContain("compressImageForUpload");
+  });
+
+  it("strips EXIF before anything reaches storage", () => {
+    // A profile photo often carries GPS from where it was taken.
+    expect(actions).toContain("processImageUpload");
+  });
+
+  it("chooses the slot server-side, never from the client", () => {
+    // A client-supplied position could overwrite a photo or exceed the cap.
+    expect(actions).toContain("const slot = nextPhotoSlot(");
+    expect(actions).not.toContain("formData.get(\"position\")");
+  });
+
+  it("scopes every mutation to the caller's own rows", () => {
+    const visibility = actions.slice(actions.indexOf("setProfilePhotoVisibilityAction"));
+    expect(visibility).toContain('.eq("user_id", userId)');
+    const remove = actions.slice(actions.indexOf("deleteProfilePhotoAction"));
+    expect(remove).toContain('.eq("user_id", userId)');
+  });
+
+  it("never renders the avatar inside the gallery", () => {
+    // It is the identity used across the product; mixing them would make
+    // "delete this photo" ambiguous.
+    expect(carousel).not.toContain("avatarUrl");
+  });
+});
