@@ -403,9 +403,24 @@ describe("discovery hero", () => {
     // legible regardless of which part of the image sits behind a word.
     expect(hero).toContain('src="/brand/social background.png"');
     expect(hero).toContain('alt=""');
-    // A scrim must exist; its exact opacity is a design value that moves.
-    expect(hero).toMatch(/bg-gradient-to-t from-background\/\d+/);
+    // The scrim is keyed to --shadow (the maroon ink), never --background.
+    // --background is near-white in light mode, so a scrim built from it
+    // barely darkened the artwork while the text above stayed dark ink —
+    // unreadable in exactly one theme. The hero is a photographic surface,
+    // dark in both themes; it does not flip with the page.
+    expect(hero).toContain("bg-gradient-to-t from-[hsl(var(--shadow)");
+    expect(hero).not.toMatch(/from-background\/\d+/);
     expect(hero).toContain("hsl(var(--primary)/0.14)");
+  });
+
+  it("uses light text throughout, because it sits on a dark scrim in both themes", () => {
+    // A single --foreground or --muted-foreground inside the hero is dark ink
+    // on bright artwork in light mode. The scrim is the surface here, not the
+    // page, so the text must not follow the page's tokens.
+    const content = hero.slice(hero.indexOf('<div className="relative z-10">'));
+    expect(content).not.toContain("text-foreground");
+    expect(content).not.toContain("text-muted-foreground");
+    expect(content).toContain("text-white");
   });
 
   it("stacks content ABOVE the readability scrim", () => {

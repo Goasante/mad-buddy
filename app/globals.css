@@ -2789,7 +2789,9 @@ select {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  border-top: 1px solid hsl(var(--border) / 0.35);
+  /* On the scrim, not the page: a --border hairline vanishes against dark
+     artwork in light mode. */
+  border-top: 1px solid rgb(255 255 255 / 0.16);
   padding-top: 1rem;
 }
 
@@ -2797,7 +2799,9 @@ select {
   font-size: 0.8125rem;
   line-height: 1.5;
   text-wrap: pretty;
-  color: hsl(var(--muted-foreground));
+  /* Light in both themes — it sits on the hero's dark scrim, never on the
+     page surface. */
+  color: rgb(255 255 255 / 0.75);
 }
 
 .linkr-reach {
@@ -2815,7 +2819,7 @@ select {
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: hsl(var(--muted-foreground));
+  color: rgb(255 255 255 / 0.7);
 }
 
 /* -------------------------- Segmented control ------------------------ */
@@ -2829,8 +2833,9 @@ select {
   align-items: center;
   gap: 0.125rem;
   border-radius: 999px;
-  border: 1px solid hsl(var(--border) / 0.5);
-  background: hsl(var(--background) / 0.5);
+  /* A dark track on the scrim, in both themes. */
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: rgb(0 0 0 / 0.25);
   padding: 0.1875rem;
 }
 
@@ -2841,12 +2846,12 @@ select {
   padding-inline: 0.75rem;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: hsl(var(--muted-foreground));
+  color: rgb(255 255 255 / 0.7);
   transition: background-color 300ms ease-out, color 300ms ease-out;
 }
 
 .linkr-segment:hover:not(:disabled):not(.linkr-segment-on) {
-  color: hsl(var(--foreground));
+  color: #fff;
 }
 
 .linkr-segment-on {

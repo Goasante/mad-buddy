@@ -105,11 +105,17 @@ export function SocializeHero({
         aria-hidden="true"
         className={cn(
           "pointer-events-none absolute inset-0 z-[2]",
-          // Lightened: the previous floor buried the artwork it was meant to
-          // sit over. The text keeps its contrast from the weight and shadow
-          // below rather than from drowning the image.
-          "bg-gradient-to-t from-background/80 via-background/28 to-transparent",
-          "dark:from-background/78 dark:via-background/24 dark:to-transparent"
+          // Keyed to --shadow (the maroon ink), NOT --background.
+          //
+          // --background is near-white in light mode, so the old scrim barely
+          // darkened anything while the text below it stayed dark ink — dark
+          // type on bright orange artwork, unreadable in exactly one theme.
+          //
+          // The artwork is dark and warm in BOTH themes, so the surface it
+          // creates is dark in both and the text on it is light in both. The
+          // hero is a photographic surface, not a page surface; it does not
+          // flip with the theme.
+          "bg-gradient-to-t from-[hsl(var(--shadow)/0.88)] via-[hsl(var(--shadow)/0.45)] to-[hsl(var(--shadow)/0.12)]"
         )}
       />
       <span
@@ -125,9 +131,9 @@ export function SocializeHero({
           id="socialize-hero-heading"
           className={cn(
             "flex items-center gap-2.5 text-balance text-[1.5rem] font-bold leading-tight tracking-tight",
-            // Against artwork rather than a flat surface, so the text carries
-            // its own contrast instead of relying on the scrim to make room.
-            "text-foreground [text-shadow:0_1px_12px_hsl(var(--background)/0.7)]"
+            // White in both themes: it sits on the dark scrim above, never on
+            // the page surface, so it must not follow --foreground.
+            "text-white [text-shadow:0_1px_14px_hsl(var(--shadow)/0.85)]"
           )}
         >
           <Radar className="h-[1.375rem] w-[1.375rem] shrink-0 text-primary" aria-hidden="true" />
@@ -138,7 +144,7 @@ export function SocializeHero({
             is stable and the layout never jumps on activation. */}
         <p className={cn(
             "mt-2 max-w-[24rem] text-pretty text-sm leading-relaxed",
-            "text-foreground/80 [text-shadow:0_1px_10px_hsl(var(--background)/0.6)]"
+            "text-white/85 [text-shadow:0_1px_12px_hsl(var(--shadow)/0.8)]"
           )}>
           {/* "0 people nearby right now" reads as a broken feature rather than a
               quiet moment. Being early is not a failure state, so the empty case
@@ -153,7 +159,7 @@ export function SocializeHero({
         {/* Live insights, ON only. Each is hidden when zero — a row of zeroes
             reads as a dead room and says less than nothing. */}
         {active && (activeNow > 0 || newToday > 0) ? (
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/80">
             {activeNow > 0 ? (
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
