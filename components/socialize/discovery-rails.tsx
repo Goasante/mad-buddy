@@ -6,7 +6,7 @@ import Link from "next/link";
 
 import { SwipeDeck } from "@/components/socialize/swipe-deck";
 import { SocializeGroupCard } from "@/components/socialize/socialize-group-card";
-import { SocializePlanCard } from "@/components/socialize/socialize-plan-card";
+import { PlanStack } from "@/components/socialize/plan-stack";
 import { Button } from "@/components/ui/button";
 import type { GroupSummary } from "@/lib/groups/types";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
@@ -183,20 +183,10 @@ export function PlansRail({
     <RailSection id="plans-rail-heading" title="Upcoming Social Plans">
 
       {plans.length > 0 ? (
-        <Rail label="Upcoming plans">
-          {plans.map((plan, index) => (
-            <li
-              key={plan.id}
-              // Roughly 1.3 cards per viewport: a plan is the one thing here
-              // with a deadline, and a card you can only half-read cannot make
-              // someone feel they might miss it.
-              className="socialize-card-in w-[78%] min-w-[16rem] shrink-0 snap-start sm:w-[22rem]"
-              style={{ animationDelay: `${Math.min(index, 6) * 45}ms` }}
-            >
-              <SocializePlanCard plan={plan} onJoin={onJoin} pending={pending} />
-            </li>
-          ))}
-        </Rail>
+        // A stack, not a rail. A rail asks the user to scroll sideways before
+        // discovering there is anything past the first card; a stack shows the
+        // depth immediately. Chronology is preserved — see PlanStack.
+        <PlanStack plans={plans} onJoin={onJoin} pending={pending} />
       ) : (
         <div className="rounded-2xl border border-dashed border-border/70 px-4 py-6 text-center">
           <p className="text-sm font-medium">Nothing planned yet</p>

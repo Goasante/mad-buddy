@@ -215,7 +215,9 @@ describe("plan card", () => {
   it("keeps the CTA a comfortable touch target and names the card accessibly", () => {
     expect(card).toContain("linkr-plan-cta");
     const rule = css.slice(css.indexOf(".linkr-plan-cta {"));
-    expect(rule.slice(0, 400)).toContain("min-height: 2.5rem");
+    // 38px: trimmed from 40 so the host name stops truncating, still well
+    // above the practical touch floor.
+    expect(rule.slice(0, 500)).toContain("min-height: 2.375rem");
     expect(card).toContain("aria-label={`${plan.title}");
   });
 
@@ -227,9 +229,11 @@ describe("plan card", () => {
     expect(rules.slice(0, 5200)).toContain("prefers-reduced-motion");
   });
 
-  it("shows roughly 1.3 cards, not three across", () => {
-    // A plan you can only half-read cannot make anyone feel they might miss it.
-    expect(rails).toContain('w-[78%] min-w-[16rem]');
+  it("shows plans as a stack rather than a half-read horizontal card", () => {
+    // The rail asked the user to scroll sideways before discovering there was
+    // anything past the first card. The stack shows the depth immediately,
+    // and PlanStack keeps the chronological order intact.
+    expect(rails).toContain("<PlanStack");
   });
 
   it("offers a way forward when there are no plans", () => {
