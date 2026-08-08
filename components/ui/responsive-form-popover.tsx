@@ -110,7 +110,7 @@ export function ResponsiveFormPopover({
         <Dialog.Overlay className="responsive-form-sheet-overlay fixed inset-0 bg-black/45" />
         <Dialog.Content
           aria-describedby={descriptionId}
-          className="responsive-form-sheet fixed inset-x-0 bottom-0 flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl border-x border-t border-border bg-card text-foreground shadow-[0_-18px_60px_hsl(var(--shadow)/0.3)] outline-none"
+          className="responsive-form-sheet fixed inset-x-0 bottom-0 flex max-h-[calc(88dvh-env(safe-area-inset-top,0px))] w-full flex-col overflow-hidden rounded-t-2xl border-x border-t border-border bg-card text-foreground shadow-[0_-18px_60px_hsl(var(--shadow)/0.3)] outline-none"
         >
           <div
             className={cn(

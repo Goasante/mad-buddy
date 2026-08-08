@@ -86,7 +86,7 @@ export function SkippedPeopleSheet({
         <Dialog.Overlay className="modal-drop-overlay fixed inset-0 z-[60] bg-black/50 backdrop-blur-md" />
         <Dialog.Content
           aria-describedby="skipped-people-description"
-          className="modal-sheet-panel fixed inset-x-0 bottom-0 z-[61] flex max-h-[92svh] w-full flex-col overflow-hidden rounded-t-[2rem] border border-b-0 border-border/80 bg-card pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-18px_60px_hsl(var(--shadow)/0.28)] outline-none sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-16 sm:max-h-[calc(100svh-5rem)] sm:w-[calc(100%-1.5rem)] sm:max-w-[26rem] sm:-translate-x-1/2 sm:rounded-[1.5rem] sm:border sm:pb-4"
+          className="modal-sheet-panel fixed inset-x-0 bottom-0 z-[61] flex max-h-[calc(92svh-env(safe-area-inset-top,0px))] w-full flex-col overflow-hidden rounded-t-[2rem] border border-b-0 border-border/80 bg-card pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-18px_60px_hsl(var(--shadow)/0.28)] outline-none sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-16 sm:max-h-[calc(100svh-5rem)] sm:w-[calc(100%-1.5rem)] sm:max-w-[26rem] sm:-translate-x-1/2 sm:rounded-[1.5rem] sm:border sm:pb-4"
         >
           <div className="flex items-start justify-between gap-3 px-5 pt-5">
             <div className="min-w-0">

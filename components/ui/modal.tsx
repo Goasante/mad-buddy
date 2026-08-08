@@ -58,8 +58,8 @@ export function Modal({
             isSheet
               ? // Phone: pinned to the bottom, full width, safe-area padded,
                 // slide-up entrance. From sm up it becomes the centred panel.
-                "modal-sheet-panel fixed inset-x-0 bottom-0 max-h-[88svh] w-full rounded-t-2xl border-x-0 border-b-0 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-18px_60px_hsl(var(--shadow)/0.28)] sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-16 sm:max-h-[calc(100svh-5rem)] sm:-translate-x-1/2 sm:rounded-2xl sm:border sm:pb-4 sm:shadow-[0_18px_60px_hsl(var(--shadow)/0.24)]"
-              : "modal-drop-panel fixed left-1/2 top-3 max-h-[calc(100svh-1.5rem)] w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-2xl shadow-[0_18px_60px_hsl(var(--shadow)/0.24)] sm:top-16 sm:max-h-[calc(100svh-5rem)]",
+                "modal-sheet-panel fixed inset-x-0 bottom-0 max-h-[calc(88svh-env(safe-area-inset-top,0px))] w-full rounded-t-2xl border-x-0 border-b-0 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-18px_60px_hsl(var(--shadow)/0.28)] sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-16 sm:max-h-[calc(100svh-5rem)] sm:-translate-x-1/2 sm:rounded-2xl sm:border sm:pb-4 sm:shadow-[0_18px_60px_hsl(var(--shadow)/0.24)]"
+              : "modal-drop-panel fixed left-1/2 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] max-h-[calc(100svh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-1.5rem)] w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-2xl shadow-[0_18px_60px_hsl(var(--shadow)/0.24)] sm:top-16 sm:max-h-[calc(100svh-5rem)]",
             widthClassName,
             "max-w-[32rem]",
             isSheet && "sm:w-[calc(100%-1.5rem)]"

@@ -301,7 +301,7 @@ export function TourRunner({
         aria-modal="false"
         aria-labelledby="tour-step-title"
         aria-describedby="tour-step-body"
-        className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[95] max-h-[70svh] w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 overflow-y-auto overscroll-contain rounded-2xl border border-border bg-card p-4 shadow-xl focus:outline-none md:bottom-5"
+        className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[95] max-h-[calc(70svh-env(safe-area-inset-top,0px))] w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 overflow-y-auto overscroll-contain rounded-2xl border border-border bg-card p-4 shadow-xl focus:outline-none md:bottom-5"
       >
         {/* Persistent but unobtrusive preview banner, with the way out always
             visible so an admin is never stranded inside a preview. */}

@@ -81,7 +81,7 @@ export function QuickControlsSheet({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="modal-drop-overlay fixed inset-0 z-[60] bg-black/50 backdrop-blur-md" />
-        <Dialog.Content className="modal-sheet-panel account-sheet-panel fixed inset-x-0 bottom-0 z-[61] flex max-h-[92svh] w-full flex-col overflow-hidden rounded-t-[2rem] border border-b-0 border-border/80 bg-card pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-18px_60px_hsl(var(--shadow)/0.28)] outline-none sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-16 sm:max-h-[calc(100svh-5rem)] sm:w-[calc(100%-1.5rem)] sm:max-w-[26rem] sm:-translate-x-1/2 sm:rounded-[1.5rem] sm:border sm:pb-4">
+        <Dialog.Content className="modal-sheet-panel account-sheet-panel fixed inset-x-0 bottom-0 z-[61] flex max-h-[calc(92svh-env(safe-area-inset-top,0px))] w-full flex-col overflow-hidden rounded-t-[2rem] border border-b-0 border-border/80 bg-card pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-18px_60px_hsl(var(--shadow)/0.28)] outline-none sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-16 sm:max-h-[calc(100svh-5rem)] sm:w-[calc(100%-1.5rem)] sm:max-w-[26rem] sm:-translate-x-1/2 sm:rounded-[1.5rem] sm:border sm:pb-4">
           <Dialog.Title className="sr-only">Quick controls</Dialog.Title>
 
           <div className="flex shrink-0 justify-center pb-1 pt-3 sm:hidden" aria-hidden="true">
