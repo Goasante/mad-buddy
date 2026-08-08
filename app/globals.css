@@ -2992,25 +2992,19 @@ select {
   inset-inline: 0;
   top: 0;
   z-index: 40;
-  margin-inline: auto;
   display: flex;
-  width: 100%;
-  max-width: 560px;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.75rem;
-  padding-inline: 1rem;
   padding-bottom: 0.75rem;
   /* The inset is cleared HERE and nowhere else in the chain. */
   padding-top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+  /* The BAR spans the viewport; only its contents are width-capped below.
+     Capping the bar itself left transparent gutters either side of 560px,
+     and content scrolled up through them. */
+  padding-inline: max(1rem, calc((100vw - 560px) / 2));
   background: hsl(var(--background));
   border-bottom: 1px solid transparent;
   transition: border-color 200ms ease-out;
-}
-
-@media (min-width: 592px) {
-  .upfor-header {
-    padding-inline: 0;
-  }
 }
 
 /* Divider only once content is actually passing beneath. */
@@ -3041,15 +3035,18 @@ select {
 }
 
 .upfor-title {
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.05;
 }
 
 .upfor-subtitle {
-  margin-top: 0.25rem;
-  font-size: 0.875rem;
+  margin-top: 0.125rem;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: hsl(var(--muted-foreground));
 }
 
@@ -3612,6 +3609,115 @@ select {
   .upfor-cta-button:hover:not(:disabled),
   .upfor-idea:hover:not(:disabled) {
     transform: none;
+  }
+}
+
+/* ---------------------------- UpFor filters -------------------------- */
+/* The control needs to say HOW MANY narrowings are on, not just that some
+   are: "3 active" is the difference between an empty list reading as broken
+   and reading as over-filtered. */
+.upfor-icon-button {
+  position: relative;
+}
+
+.upfor-filter-badge {
+  position: absolute;
+  right: -0.125rem;
+  top: -0.125rem;
+  display: grid;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  border-radius: 999px;
+  border: 2px solid hsl(var(--background));
+  background: hsl(var(--primary));
+  padding-inline: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+  color: hsl(var(--primary-foreground));
+  font-variant-numeric: tabular-nums;
+}
+
+.upfor-filter-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.upfor-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.upfor-filter-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Wraps rather than scrolling sideways: a hidden filter is one nobody uses,
+   and this sits inside a sheet that is already vertically scrollable. */
+.upfor-filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.upfor-filter-chip {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  padding-inline: 0.9375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  transition: background-color 300ms ease-out, border-color 300ms ease-out, color 300ms ease-out;
+}
+.upfor-filter-chip:hover:not(.upfor-filter-chip-on) {
+  background: hsl(var(--secondary) / 0.5);
+}
+
+.upfor-filter-chip-on {
+  border-color: transparent;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-weight: 600;
+}
+
+.upfor-filter-actions {
+  display: flex;
+  gap: 0.625rem;
+  border-top: 1px solid hsl(var(--border) / 0.5);
+  padding-top: 1rem;
+}
+
+/* The way out of an over-narrowed list, offered where the user hits it. */
+.upfor-empty-action {
+  margin-top: 0.875rem;
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  padding-inline: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background-color 300ms ease-out;
+}
+.upfor-empty-action:hover {
+  background: hsl(var(--secondary) / 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upfor-filter-chip,
+  .upfor-empty-action {
+    transition: none;
   }
 }
 

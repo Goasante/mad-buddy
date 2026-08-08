@@ -346,6 +346,11 @@ export type VisibleHangout = {
   allowPings: boolean;
   myRequestStatus: string | null;
   /**
+   * The cap the owner set, so "Has space" compares against a real limit
+   * rather than inferring capacity from how many people happened to ask.
+   */
+  maxParticipants: number;
+  /**
    * Accepted joiners, plus the owner.
    *
    * Counted from `hangout_requests`, which already exists — this is not a new
@@ -380,7 +385,9 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
 
   const { data: sessions } = await admin
     .from("hangout_sessions")
-    .select("id, owner_id, activity_type, message, broad_area_text, ends_at, allow_pings, audience_type, status")
+    .select(
+      "id, owner_id, activity_type, message, broad_area_text, ends_at, allow_pings, audience_type, status, max_participants"
+    )
     .in("owner_id", friendIds)
     .eq("status", "active")
     .gt("ends_at", new Date().toISOString())
@@ -439,6 +446,7 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
     endsAt: session.ends_at,
     allowPings: session.allow_pings,
     myRequestStatus: requestBySession.get(session.id) ?? null,
+    maxParticipants: session.max_participants,
     // +1 for the owner, who is by definition going to their own hangout.
     goingCount: (acceptedBySession.get(session.id) ?? 0) + 1
   }));

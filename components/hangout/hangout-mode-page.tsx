@@ -20,6 +20,7 @@ import {
   MapPin,
   Navigation,
   Plus,
+  SlidersHorizontal,
   Sparkles,
   Trophy,
   Users,
@@ -50,6 +51,16 @@ import {
   upForTimeLeft,
   upForTitle
 } from "@/lib/social/upfor";
+import {
+  EMPTY_UPFOR_FILTERS,
+  UPFOR_ACTIVITIES,
+  UPFOR_FILTERS,
+  activeFilterCount,
+  applyUpForFilters,
+  setUpForActivity,
+  toggleUpForFilter,
+  type UpForFilterState
+} from "@/lib/social/upfor-filters";
 import { withTimeout } from "@/lib/network/resilience";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import type {
@@ -173,6 +184,16 @@ export function HangoutModePage({
 
   const [toast, setToast] = useState<Toast>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+
+  /**
+   * Filter state, held here rather than in the sheet.
+   *
+   * The sheet is presentation: it unmounts when closed, and state living
+   * inside it would reset every time — so a user could not open the sheet,
+   * close it, and still see their narrowing applied.
+   */
+  const [filters, setFilters] = useState<UpForFilterState>(EMPTY_UPFOR_FILTERS);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -180,7 +201,11 @@ export function HangoutModePage({
 
   // The feed, narrowed. Derived rather than stored, so a filter change never
   // has to be kept in sync with an arriving refresh.
-  const visibleFeed = feed;
+  // One filtering path, from the registry. Derived rather than stored, so an
+  // arriving refresh is narrowed by the same rules without a sync step.
+  const visibleFeed = applyUpForFilters(feed, filters, nowMs);
+  const filterCount = activeFilterCount(filters);
+  const filtersActive = filterCount > 0;
 
   // Derive activation straight from the source of truth so an expired session
   // flips the orb back to inactive without a manual refresh.
@@ -430,6 +455,19 @@ export function HangoutModePage({
         <div className="upfor-header-actions">
           <button
             type="button"
+            onClick={() => setFilterSheetOpen(true)}
+            aria-label={filtersActive ? `Filters, ${filterCount} active` : "Filters"}
+            className="upfor-icon-button"
+          >
+            <SlidersHorizontal className="h-5 w-5" aria-hidden="true" />
+            {filtersActive ? (
+              <span className="upfor-filter-badge" aria-hidden="true">
+                {filterCount}
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
             data-tour-id={TOUR_TARGET_IDS.HANGOUT_TOGGLE}
             onClick={() => openSetup()}
             disabled={isPending}
@@ -565,12 +603,32 @@ UpFors are temporary and disappear when they end. Jump in while you can!
 
         {visibleFeed.length === 0 ? (
           <div className="upfor-empty">
-            <p className="upfor-empty-title">Nothing happening right now</p>
-            <p className="upfor-empty-copy">
-              {muddyCount === 0
-                ? "UpFors come from your Muddies. Once you have a few, whatever they are up for shows here."
-                : "None of your Muddies are up for anything at the moment. Start one and let them know you are."}
-            </p>
+            {filtersActive ? (
+              <>
+                <p className="upfor-empty-title">Nothing matches those filters</p>
+                <p className="upfor-empty-copy">
+                  {feed.length === 1
+                    ? "There is 1 UpFor right now, and it does not match."
+                    : `There are ${feed.length} UpFors right now, and none match.`}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setFilters(EMPTY_UPFOR_FILTERS)}
+                  className="upfor-empty-action"
+                >
+                  Clear filters
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="upfor-empty-title">Nothing happening right now</p>
+                <p className="upfor-empty-copy">
+                  {muddyCount === 0
+                    ? "UpFors come from your Muddies. Once you have a few, whatever they are up for shows here."
+                    : "None of your Muddies are up for anything at the moment. Start one and let them know you are."}
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <ul className="upfor-list">
@@ -698,6 +756,75 @@ UpFors are temporary and disappear when they end. Jump in while you can!
         <Lock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
         Your exact location is never shared. How this keeps you safe
       </Link>
+
+      {/* The filter sheet. Rendered from the registry, so a future filter is a
+          new entry there rather than an edit here. */}
+      <Modal
+        open={filterSheetOpen}
+        onOpenChange={setFilterSheetOpen}
+        title="Filter UpFors"
+        description="Narrow the list to what you are looking for."
+      >
+        <div className="upfor-filter-body">
+          <div className="upfor-filter-group">
+            <p className="upfor-filter-label">Show</p>
+            <div className="upfor-filter-options">
+              {UPFOR_FILTERS.map((definition) => {
+                const on = filters.toggles.has(definition.id);
+                return (
+                  <button
+                    key={definition.id}
+                    type="button"
+                    aria-pressed={on}
+                    title={definition.description}
+                    onClick={() => setFilters((current) => toggleUpForFilter(current, definition.id))}
+                    className={cn("upfor-filter-chip", on && "upfor-filter-chip-on")}
+                  >
+                    {definition.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="upfor-filter-group">
+            <p className="upfor-filter-label">Activity</p>
+            <div className="upfor-filter-options">
+              {UPFOR_ACTIVITIES.map((option) => {
+                const on = filters.activity === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setFilters((current) => setUpForActivity(current, option.id))}
+                    className={cn("upfor-filter-chip", on && "upfor-filter-chip-on")}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="upfor-filter-actions">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              disabled={!filtersActive}
+              onClick={() => setFilters(EMPTY_UPFOR_FILTERS)}
+            >
+              Clear all
+            </Button>
+            <Button type="button" className="flex-1" onClick={() => setFilterSheetOpen(false)}>
+              {filtersActive
+                ? `Show ${visibleFeed.length} ${visibleFeed.length === 1 ? "UpFor" : "UpFors"}`
+                : "Done"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={setupOpen}
