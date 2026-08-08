@@ -146,6 +146,43 @@ describe("the two paths merge without duplicating or reordering", () => {
   });
 });
 
+describe("seeing an UpFor and joining it agree", () => {
+  const join = actions.slice(actions.indexOf("export async function requestHangoutAction"));
+
+  it("lets a stranger join what a stranger can see", () => {
+    // The gap this closes: discovery admitted opted-in sessions while the
+    // join gate still required mutual friendship, so a visible UpFor
+    // refused the tap with "isn't open to you".
+    expect(join).toContain("canStrangerJoinUpFor(admin, userId, session)");
+  });
+
+  it("keeps the Muddies path as the first answer", () => {
+    expect(join).toContain("const viewableAsMuddy = await canViewHangout(admin, userId, session)");
+  });
+
+  it("re-runs every gate at write time rather than trusting the feed", () => {
+    // A request is a write: the session may have been withdrawn, the creator
+    // may have moved or gone ghost, or a block may have appeared since the
+    // list was rendered.
+    const gateFn = actions.slice(actions.indexOf("async function canStrangerJoinUpFor"));
+    const body = gateFn.slice(0, gateFn.indexOf("export async function requestHangoutAction"));
+    expect(body).toContain("canStrangerDiscoverUpFor({");
+    expect(body).toContain("buildSafeNearbyFriends({");
+    expect(body).toContain("isBlockedEitherDirection");
+    expect(body).toContain("guardAction");
+  });
+
+  it("refuses anything not opted in", () => {
+    const gateFn = actions.slice(actions.indexOf("async function canStrangerJoinUpFor"));
+    expect(gateFn.slice(0, 400)).toContain('if (session.discovery_scope !== "nearby") return false;');
+  });
+
+  it("says UpFor, not hangout, when it refuses", () => {
+    expect(join).toContain("This UpFor isn't open to you.");
+    expect(actions).not.toContain("This hangout isn't open to you.");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Nothing location-shaped escapes
 // ---------------------------------------------------------------------------

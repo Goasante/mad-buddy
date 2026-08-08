@@ -312,7 +312,10 @@ describe("the creator chooses, and the default is private", () => {
   it("offers both options with an honest explanation", () => {
     expect(page).toContain("Muddies only");
     expect(page).toContain("Nearby people");
-    expect(page).toContain("People nearby who use Linkr may discover this UpFor.");
+    expect(page).toContain("People nearby can discover this and ask to join.");
+    // UpFor stands on its own: naming another feature here described the
+    // plumbing rather than what happens.
+    expect(page).not.toContain("who use Linkr");
   });
 
   it("never implies exact location sharing", () => {

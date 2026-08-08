@@ -3920,6 +3920,28 @@ select {
   }
 }
 
+/* ------------------------- UpFor audience nesting -------------------- */
+/* "Which Muddies" is a sub-question of "Muddies only", not a peer of it. The
+   indent and rule say so at a glance, so nobody reads the two controls as
+   competing answers to the same question. */
+.upfor-audience-nested {
+  margin-left: 0.75rem;
+  border-left: 2px solid hsl(var(--border) / 0.6);
+  padding-left: 0.875rem;
+}
+
+/* Shown in its place when the choice is Nearby: the Muddies scope did not
+   disappear, it widened, and saying so beats leaving it implied. */
+.upfor-audience-note {
+  margin-left: 0.75rem;
+  border-left: 2px solid hsl(var(--primary) / 0.35);
+  padding-left: 0.875rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: hsl(var(--muted-foreground));
+  text-wrap: pretty;
+}
+
 /* Conversation canvas
    ------------------------------------------------------------------
    The conversation owns the screen, so it supplies its own ground rather

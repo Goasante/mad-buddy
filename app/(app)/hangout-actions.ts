@@ -368,7 +368,7 @@ async function resolveHangoutAudience(
 export async function endHangoutAction(hangoutId: string): Promise<HangoutActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
-  if (!uuidSchema.safeParse(hangoutId).success) return { ok: false, message: "Hangout not found." };
+  if (!uuidSchema.safeParse(hangoutId).success) return { ok: false, message: "UpFor not found." };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
@@ -379,7 +379,7 @@ export async function endHangoutAction(hangoutId: string): Promise<HangoutAction
     .select("status, owner_id")
     .eq("id", hangoutId)
     .maybeSingle();
-  if (!session) return { ok: false, message: "Hangout not found." };
+  if (!session) return { ok: false, message: "UpFor not found." };
   if (session.owner_id !== userId) return { ok: false, message: "This isn't your hangout." };
   if (!canTransitionHangout(session.status, "cancelled")) {
     return { ok: false, message: "This hangout is already over." };
@@ -391,7 +391,7 @@ export async function endHangoutAction(hangoutId: string): Promise<HangoutAction
     .eq("id", hangoutId)
     .eq("owner_id", userId);
 
-  return { ok: true, message: "Hangout ended." };
+  return { ok: true, message: "UpFor ended." };
 }
 
 // ---------------------------------------------------------------------------
@@ -773,13 +773,82 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
 // Join requests (spec §49, §55, §56)
 // ---------------------------------------------------------------------------
 
+/**
+ * May this stranger request to join an opted-in UpFor?
+ *
+ * The same gates the discovery path applies, re-evaluated at write time
+ * against fresh reads. Deliberately a separate function from the feed's
+ * batched filter: that one answers "which of these fifty may be shown", this
+ * one answers "may this one person join this one session right now", and
+ * conflating them would make the write depend on list-shaped machinery.
+ *
+ * Fails closed on every unknown, exactly like the feed.
+ */
+async function canStrangerJoinUpFor(
+  admin: Admin,
+  viewerId: string,
+  session: { owner_id: string; status: string; ends_at: string; discovery_scope?: string }
+): Promise<boolean> {
+  if (session.discovery_scope !== "nearby") return false;
+
+  const nowMs = Date.now();
+  const [{ data: viewerLocation }, { data: ownerLocation }, { data: profile }, blocked, guard] =
+    await Promise.all([
+      admin
+        .from("user_locations")
+        .select("latitude, longitude, confidence, last_updated")
+        .eq("user_id", viewerId)
+        .maybeSingle(),
+      admin
+        .from("user_locations")
+        .select("user_id, latitude, longitude, confidence, last_updated")
+        .eq("user_id", session.owner_id)
+        .maybeSingle(),
+      admin
+        .from("profiles")
+        .select("user_id, full_name, username, avatar_url, visibility_status")
+        .eq("user_id", session.owner_id)
+        .maybeSingle(),
+      isBlockedEitherDirection(admin, session.owner_id, viewerId),
+      guardAction(admin, { userId: session.owner_id, surface: "plans" })
+    ]);
+
+  if (!viewerLocation || !ownerLocation || !profile) return false;
+  if (!isLocationFreshEnough(viewerLocation.last_updated, nowMs)) return false;
+
+  // Proximity through the canonical engine, so join and discovery agree on
+  // what "near" means rather than each deciding for itself.
+  const safe = buildSafeNearbyFriends({
+    viewer: viewerLocation,
+    friendIds: [session.owner_id],
+    blockedIds: new Set(blocked ? [session.owner_id] : []),
+    premiumUserIds: new Set(),
+    locationByUserId: new Map([[session.owner_id, ownerLocation as NearbyLocationRow]]),
+    profileByUserId: new Map([[session.owner_id, profile as NearbyProfileRow]]),
+    now: nowMs
+  });
+
+  return canStrangerDiscoverUpFor({
+    discoveryScope: session.discovery_scope,
+    sessionStatus: session.status,
+    endsAt: session.ends_at,
+    creatorLocationUpdatedAt: ownerLocation.last_updated,
+    viewerHasLocation: true,
+    blockedEitherWay: blocked,
+    creatorVisibilityStatus: profile.visibility_status,
+    creatorRestricted: !guard.allowed,
+    proximityLevel: safe[0]?.proximity_level ?? null,
+    nowMs
+  });
+}
+
 export async function requestHangoutAction(
   hangoutId: string,
   message?: string
 ): Promise<HangoutActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
-  if (!uuidSchema.safeParse(hangoutId).success) return { ok: false, message: "Hangout not found." };
+  if (!uuidSchema.safeParse(hangoutId).success) return { ok: false, message: "UpFor not found." };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
@@ -787,19 +856,39 @@ export async function requestHangoutAction(
   const admin = createSupabaseAdminClient();
   const { data: session } = await admin
     .from("hangout_sessions")
-    .select("id, owner_id, audience_type, status, ends_at, max_participants, allow_pings")
+    .select(
+      "id, owner_id, audience_type, status, ends_at, max_participants, allow_pings, discovery_scope"
+    )
     .eq("id", hangoutId)
     .maybeSingle();
-  if (!session) return { ok: false, message: "Hangout not found." };
-  if (session.owner_id === userId) return { ok: false, message: "This is your own hangout." };
+  if (!session) return { ok: false, message: "UpFor not found." };
+  if (session.owner_id === userId) return { ok: false, message: "This is your own UpFor." };
   if (!isHangoutJoinable(session.status, Date.parse(session.ends_at), Date.now())) {
-    return { ok: false, message: "This hangout is no longer open." };
+    return { ok: false, message: "This UpFor is no longer open." };
   }
   if (!session.allow_pings) return { ok: false, message: "The host isn't taking requests right now." };
 
-  // Privacy gate, server decides, never the client.
-  if (!(await canViewHangout(admin, userId, session))) {
-    return { ok: false, message: "This hangout isn't open to you." };
+  /**
+   * Privacy gate. The server decides, never the client.
+   *
+   * TWO ways in, matching the two discovery paths exactly: a Muddy through
+   * the audience rules, or a stranger through the nearby opt-in. Checking
+   * only the first meant somebody could see an opted-in UpFor and then be
+   * refused when they tapped join — the feature was half-wired.
+   *
+   * The stranger check re-runs every gate rather than trusting that the
+   * viewer got here from a feed. A request is a write, and a write must
+   * verify its own preconditions: the session may have been withdrawn, the
+   * creator may have moved or gone ghost, or a block may have appeared since
+   * the list was rendered.
+   */
+  const viewableAsMuddy = await canViewHangout(admin, userId, session);
+  const viewableAsStranger = viewableAsMuddy
+    ? false
+    : await canStrangerJoinUpFor(admin, userId, session);
+
+  if (!viewableAsMuddy && !viewableAsStranger) {
+    return { ok: false, message: "This UpFor isn't open to you." };
   }
 
   const rateLimit = await consumeRateLimit({ action: "hangouts.request", userId });
@@ -812,7 +901,7 @@ export async function requestHangoutAction(
     .eq("hangout_session_id", hangoutId)
     .eq("status", "accepted");
   if ((acceptedCount ?? 0) >= session.max_participants) {
-    return { ok: false, message: "This hangout is full." };
+    return { ok: false, message: "This UpFor is full." };
   }
 
   // Idempotent create: the unique constraint (hangout_session_id, requester_id)
@@ -848,8 +937,8 @@ export async function requestHangoutAction(
     senderId: userId,
     category: "plans",
     type: `hangout:${hangoutId}`,
-    title: "New Hangout request",
-    message: `${name} is interested in joining your Hangout.`
+    title: "New UpFor request",
+    message: `${name} is interested in joining your UpFor.`
   });
   return { ok: true, message: "Request sent.", hangoutId };
 }
@@ -883,7 +972,7 @@ export async function respondHangoutRequestAction(
     .select("owner_id, max_participants")
     .eq("id", request.hangout_session_id)
     .maybeSingle();
-  if (!session) return { ok: false, message: "Hangout not found." };
+  if (!session) return { ok: false, message: "UpFor not found." };
   if (session.owner_id !== userId) return { ok: false, message: "Only the host can respond." };
 
   // Enforce capacity at the moment of acceptance (spec §56 concurrency).
@@ -894,7 +983,7 @@ export async function respondHangoutRequestAction(
       .eq("hangout_session_id", request.hangout_session_id)
       .eq("status", "accepted");
     if ((acceptedCount ?? 0) >= session.max_participants) {
-      return { ok: false, message: "This hangout is already full." };
+      return { ok: false, message: "This UpFor is already full." };
     }
   }
 
@@ -931,7 +1020,7 @@ export async function convertHangoutToPlanAction(
 ): Promise<HangoutActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
-  if (!uuidSchema.safeParse(hangoutId).success) return { ok: false, message: "Hangout not found." };
+  if (!uuidSchema.safeParse(hangoutId).success) return { ok: false, message: "UpFor not found." };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
@@ -942,7 +1031,7 @@ export async function convertHangoutToPlanAction(
     .select("id, owner_id, status, activity_type, message, converted_plan_id")
     .eq("id", hangoutId)
     .maybeSingle();
-  if (!session) return { ok: false, message: "Hangout not found." };
+  if (!session) return { ok: false, message: "UpFor not found." };
   if (session.owner_id !== userId) return { ok: false, message: "This isn't your hangout." };
   if (session.converted_plan_id) {
     return { ok: false, message: "This hangout already became a plan." };

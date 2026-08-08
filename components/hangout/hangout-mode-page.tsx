@@ -522,7 +522,7 @@ export function HangoutModePage({
         <div className="min-w-0 flex-1">
           <h1 className="upfor-title">UpFor</h1>
           <p className="upfor-subtitle">
-            See what people are up for right now <span aria-hidden="true">⚡</span>
+            See what people are up for <span aria-hidden="true">⚡</span>
           </p>
         </div>
 
@@ -1049,13 +1049,21 @@ UpFors are temporary and disappear when they end. Jump in while you can!
                 {
                   id: "nearby" as const,
                   label: "Nearby people",
-                  hint: "People nearby who use Linkr may discover this UpFor."
+                  hint: "People nearby can discover this and ask to join."
                 }
               ].map((option) => (
                 <button
                   key={option.id}
                   type="button"
-                  onClick={() => setDiscoveryScope(option.id)}
+                  onClick={() => {
+                    setDiscoveryScope(option.id);
+                    // Widening past Muddies resets the narrowing beneath it.
+                    // Leaving "Close Friends" set would hide the UpFor from
+                    // most Muddies while showing it to strangers — and the
+                    // control that did so is no longer on screen to explain
+                    // it.
+                    if (option.id === "nearby") setAudience("all_muddies");
+                  }}
                   aria-pressed={discoveryScope === option.id}
                   className={cn(
                     "focus-ring safe-motion rounded-xl border px-3 py-2 text-left",
@@ -1081,29 +1089,41 @@ UpFors are temporary and disappear when they end. Jump in while you can!
             ) : null}
           </fieldset>
 
-          <fieldset>
-            <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Visible to
-            </legend>
-            <div className="flex gap-1.5">
-              {audienceOptions.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setAudience(option.id)}
-                  aria-pressed={audience === option.id}
-                  className={cn(
-                    "focus-ring safe-motion flex-1 rounded-full border px-2 py-1.5 text-sm font-medium",
-                    audience === option.id
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground hover:bg-secondary"
-                  )}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
+          {/* WHICH Muddies — a sub-question of "Muddies only", not a peer of
+              it. Shown only under that branch, because "Close Friends" has no
+              meaning once nearby strangers are included: the form would be
+              claiming two incompatible audiences at once. Choosing Nearby
+              still keeps every Muddy in scope, which is why the branch below
+              says so rather than leaving it implied. */}
+          {discoveryScope === "muddies" ? (
+            <fieldset className="upfor-audience-nested">
+              <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Which Muddies
+              </legend>
+              <div className="flex gap-1.5">
+                {audienceOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setAudience(option.id)}
+                    aria-pressed={audience === option.id}
+                    className={cn(
+                      "focus-ring safe-motion flex-1 rounded-full border px-2 py-1.5 text-sm font-medium",
+                      audience === option.id
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:bg-secondary"
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          ) : (
+            <p className="upfor-audience-note">
+              Your Muddies can see this too, plus people nearby.
+            </p>
+          )}
 
           <fieldset>
             <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
