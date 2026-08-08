@@ -1196,21 +1196,33 @@ html.landing-snap .landing-section {
  * Elements stay fully visible when reduced motion is preferred (the
  * observer's .is-visible class then has nothing to change). */
 @media (prefers-reduced-motion: no-preference) {
-  .landing-reveal {
+  /* HIDDEN ONLY ONCE JAVASCRIPT IS RUNNING.
+   *
+   * `opacity: 0` on the bare class made the reveal hidden-by-default: if the
+   * script was slow, blocked or disabled, the hero never received .is-visible
+   * and the landing page stayed permanently blank. The content a first-time
+   * visitor is there to read must not depend on hydration completing.
+   *
+   * The root .js class is set by the inline theme script in the document head,
+   * so it lands before first paint -- meaning a JS-capable browser still gets
+   * the full animation with no flash of settled content. */
+  :root.js .landing-reveal {
     opacity: 0;
     transform: translateY(16px);
     transition: opacity 400ms ease-out, transform 400ms ease-out;
   }
 
-  .landing-reveal.is-visible {
+  :root.js .landing-reveal.is-visible {
     opacity: 1;
     transform: none;
   }
 
-  .moment-story .moment-step,
-  .moment-story .moment-benefit,
-  .moment-story .moment-trust,
-  .moment-story .moment-cta {
+  /* Same JS gate as .landing-reveal above: hidden only once the script that
+     can reveal them is confirmed to be running. */
+  :root.js .moment-story .moment-step,
+  :root.js .moment-story .moment-benefit,
+  :root.js .moment-story .moment-trust,
+  :root.js .moment-story .moment-cta {
     opacity: 0;
     transform: translateY(14px);
     transition: opacity 420ms ease-out, transform 420ms ease-out;

@@ -18,7 +18,19 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client"],
     "paths": {
-      "@/*": ["../*"]
+      "@/*": ["../*"],
+      // ONE React type identity for the whole graph.
+      //
+      // `@/*` maps into the repository root, so this project compiles root
+      // components as well as its own. Without these pins those root files
+      // resolve @types/react from mobile/node_modules while the root project
+      // resolves its own copy -- two physically distinct copies of the SAME
+      // version, which TypeScript treats as unrelated nominal types. The
+      // symptom is "Two different types with this name exist, but they are
+      // unrelated" on any shared component that takes a ref.
+      "react": ["../node_modules/@types/react"],
+      "react-dom": ["../node_modules/@types/react-dom"],
+      "react/jsx-runtime": ["../node_modules/@types/react/jsx-runtime"]
     }
   },
   "include": ["src"]

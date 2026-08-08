@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,7 @@ const audienceOptions: { value: GlowAudience; label: string; description: string
 
 export function OnboardingScreen() {
   const navigate = useNavigate();
+  const { refreshOnboarding } = useAuth();
   const [stepIndex, setStepIndex] = useState(0);
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
@@ -86,9 +88,18 @@ export function OnboardingScreen() {
       notifications: "smart",
       firstFriend: firstFriend.trim().toLowerCase() || undefined
     });
+    if (!complete.ok) {
+      setBusy(false);
+      return setFeedback(complete.error);
+    }
+
+    // Re-read is_onboarded BEFORE navigating. The route guard reads this from
+    // the profile, so navigating on stale state would send the user to /home
+    // and be bounced straight back here by a guard that has not yet seen the
+    // write that just succeeded.
+    await refreshOnboarding();
     setBusy(false);
-    if (!complete.ok) return setFeedback(complete.error);
-    navigate("/home");
+    navigate("/home", { replace: true });
   }
 
   return (

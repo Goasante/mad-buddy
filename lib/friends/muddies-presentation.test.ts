@@ -281,6 +281,37 @@ describe("the pill row keeps its labels readable", () => {
   });
 });
 
+describe("a rail card announces itself once", () => {
+  const card = rail.slice(rail.indexOf("muddies-rail-button"));
+  const subtree = card.slice(0, card.indexOf("</button>"));
+
+  it("carries one composed label for the whole card", () => {
+    // Previously the avatar labelled itself AND the visible text was read, so
+    // a screen reader heard "Ama, close. Ama. Very close." -- the name twice,
+    // the distance twice, in two different vocabularies.
+    expect(subtree).toContain("aria-label={[");
+    expect(subtree).toContain("person.displayName");
+  });
+
+  it("hides the glow wrapper rather than the avatar component", () => {
+    // GlowAvatar has a closed prop type and no spread, so aria-hidden passed
+    // to it is silently dropped -- and its GlowRing sets role="img" with its
+    // own label. The attribute has to land on a real DOM node.
+    expect(subtree).toMatch(/muddies-rail-glow[^>]*aria-hidden="true"/);
+  });
+
+  it("marks the visible text decorative, since the label repeats it", () => {
+    expect(subtree).toMatch(/muddies-rail-name"\s+aria-hidden="true"/);
+    expect(subtree).toMatch(/muddies-rail-distance[^>]*aria-hidden="true"/);
+  });
+
+  it("uses one vocabulary, the rail's own", () => {
+    // proximityLabels says "Close"; the rail says "Very close". Mixing them in
+    // one announcement implied two different states.
+    expect(subtree).toContain("proximityRailLabels[level].toLowerCase()");
+  });
+});
+
 describe("the card carries identity and one action", () => {
   it("keeps premium and Trusted as separate marks", () => {
     expect(grid).toContain("<PremiumPlanBadge");

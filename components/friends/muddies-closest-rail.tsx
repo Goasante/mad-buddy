@@ -63,8 +63,26 @@ export function MuddiesClosestRail({
                 type="button"
                 onClick={() => onSelect(person.id)}
                 className="muddies-rail-button focus-ring"
+                /* ONE composed label for the whole card.
+                   The visible text below is marked aria-hidden and the avatar
+                   is passed no proximityLevel, so a screen reader hears this
+                   sentence once instead of "Ama, close. Ama. Very close." --
+                   the name twice, the distance twice, and in two different
+                   vocabularies ("Close" from proximityLabels vs "Very close"
+                   from the rail). */
+                aria-label={[
+                  person.displayName,
+                  proximityRailLabels[level].toLowerCase(),
+                  presence
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
               >
-                <span className={cn("muddies-rail-glow", railToneClass(level))}>
+                {/* aria-hidden on the WRAPPER, not on GlowAvatar: that
+                    component has a closed prop type and no spread, so the
+                    attribute would be dropped and its GlowRing would keep
+                    announcing itself as an image with its own label. */}
+                <span className={cn("muddies-rail-glow", railToneClass(level))} aria-hidden="true">
                   <GlowAvatar
                     name={person.displayName}
                     src={person.avatarUrl}
@@ -88,12 +106,14 @@ export function MuddiesClosestRail({
                   ) : null}
                 </span>
 
-                <span className="muddies-rail-name">{person.displayName}</span>
-                <span className={cn("muddies-rail-distance", railToneClass(level))}>
+                <span className="muddies-rail-name" aria-hidden="true">
+                  {person.displayName}
+                </span>
+                <span className={cn("muddies-rail-distance", railToneClass(level))} aria-hidden="true">
                   {proximityRailLabels[level]}
                 </span>
                 {presence ? (
-                  <span className="muddies-rail-presence">
+                  <span className="muddies-rail-presence" aria-hidden="true">
                     <span
                       className={cn("muddies-presence-dot", online && "muddies-presence-dot-online")}
                       aria-hidden="true"

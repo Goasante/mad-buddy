@@ -114,6 +114,18 @@ type RootLayoutProps = {
 
 const themeScript = `
 (function() {
+  // OUTSIDE the try, and first.
+  //
+  // This marks "JavaScript is running", which is what gates the landing
+  // reveal animation. Progressive enhancement in the strict sense: without
+  // it the hero renders plainly and is readable; with it the animation runs.
+  //
+  // It must not sit inside the try below -- localStorage throws in some
+  // privacy modes, and if that exception skipped this line the landing page
+  // would stay blank for exactly the privacy-conscious users this product is
+  // built for.
+  document.documentElement.classList.add('js');
+
   try {
     var storedPreference = window.localStorage.getItem('mad-buddy-theme-preference');
     var preference = (storedPreference === 'light' || storedPreference === 'dark') ? storedPreference : 'system';

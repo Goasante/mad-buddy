@@ -144,8 +144,26 @@ export function SignupScreen() {
                 onChange={(e) => setAccepted(e.target.checked)}
               />
               <span>
-                I agree to the <span className="font-semibold text-foreground underline decoration-border underline-offset-2">Terms</span> and acknowledge the{" "}
-                <span className="font-semibold text-foreground underline decoration-border underline-offset-2">Privacy Policy</span>.
+                {/* REAL links, not styled spans. These looked like links and
+                    could not be opened, so consent was being asked for
+                    documents the user had no way to read. Anchors also give
+                    assistive technology and keyboard users the link role the
+                    underline was only implying. */}
+                I agree to the{" "}
+                <Link
+                  to="/terms"
+                  className="focus-ring font-semibold text-foreground underline decoration-border underline-offset-2"
+                >
+                  Terms
+                </Link>{" "}
+                and acknowledge the{" "}
+                <Link
+                  to="/privacy"
+                  className="focus-ring font-semibold text-foreground underline decoration-border underline-offset-2"
+                >
+                  Privacy Policy
+                </Link>
+                .
               </span>
             </label>
 
