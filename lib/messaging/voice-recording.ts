@@ -24,9 +24,25 @@ export type LocalVoiceRecording = {
   blob: Blob;
   objectUrl: string;
   mimeType: VoiceRecordingMime;
+  blobMimeType: string;
   durationSeconds: number;
   waveform: number[] | null;
+  diagnostics: VoiceCaptureDiagnostics;
 };
+
+export type VoiceCaptureDiagnostics = {
+  selectedMimeType: VoiceRecordingMime;
+  blobMimeType: string;
+  blobBytes: number;
+  measuredDurationSeconds: number;
+  audioTrackCount: number;
+  trackEnabled: boolean;
+  trackMuted: boolean;
+  trackReadyState: MediaStreamTrackState;
+};
+
+export const MIN_VOICE_RECORDING_BYTES = 256;
+const FINAL_DATA_GRACE_MS = 50;
 
 export type VoiceRecorderErrorCode =
   | "permission_denied"
@@ -71,6 +87,8 @@ export type VoiceRecordingRuntime = {
   now: () => number;
   setInterval: (callback: () => void, delayMs: number) => ReturnType<typeof setInterval>;
   clearInterval: (handle: ReturnType<typeof setInterval>) => void;
+  setTimeout: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
+  clearTimeout: (handle: ReturnType<typeof setTimeout>) => void;
   createObjectURL: (blob: Blob) => string;
   revokeObjectURL: (url: string) => void;
   generateWaveform?: (blob: Blob) => Promise<number[] | null>;
@@ -94,6 +112,8 @@ function browserRuntime(): VoiceRecordingRuntime {
     now: () => performance.now(),
     setInterval: (callback, delayMs) => globalThis.setInterval(callback, delayMs),
     clearInterval: (handle) => globalThis.clearInterval(handle),
+    setTimeout: (callback, delayMs) => globalThis.setTimeout(callback, delayMs),
+    clearTimeout: (handle) => globalThis.clearTimeout(handle),
     createObjectURL: (blob) => URL.createObjectURL(blob),
     revokeObjectURL: (url) => URL.revokeObjectURL(url),
     generateWaveform: (blob) => generateVoiceWaveform(blob)
@@ -153,9 +173,16 @@ export class VoiceRecorderController {
   private chunks: Blob[] = [];
   private startedAtMs = 0;
   private elapsedTimer: ReturnType<typeof setInterval> | null = null;
+  private finalizationTimer: ReturnType<typeof setTimeout> | null = null;
   private operationId = 0;
   private selectedMime: VoiceRecordingMime | null = null;
   private objectUrl: string | null = null;
+  private stopEventReceived = false;
+  private captureTrack: MediaStreamTrack | null = null;
+  private captureTrackSnapshot: Pick<
+    VoiceCaptureDiagnostics,
+    "audioTrackCount" | "trackEnabled" | "trackMuted" | "trackReadyState"
+  > | null = null;
   private destroyed = false;
 
   constructor(config: VoiceRecorderConfig, runtime: VoiceRecordingRuntime = browserRuntime()) {
@@ -202,12 +229,9 @@ export class VoiceRecorderController {
     let stream: MediaStream;
     try {
       stream = await this.runtime.getUserMedia!({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        },
+        // Keep capture conservative. Individual processing constraints have
+        // produced silent tracks on otherwise supported mobile devices.
+        audio: true,
         video: false
       });
     } catch (error) {
@@ -222,37 +246,55 @@ export class VoiceRecorderController {
     }
 
     this.stream = stream;
+    const audioTracks = getAudioTracks(stream);
+    const captureTrack = audioTracks[0] ?? null;
+    if (
+      !captureTrack ||
+      !captureTrack.enabled ||
+      captureTrack.muted ||
+      captureTrack.readyState !== "live"
+    ) {
+      this.fail({ name: "NotFoundError" });
+      return;
+    }
+    this.captureTrack = captureTrack;
+    this.captureTrackSnapshot = {
+      audioTrackCount: audioTracks.length,
+      trackEnabled: captureTrack.enabled,
+      trackMuted: captureTrack.muted,
+      trackReadyState: captureTrack.readyState
+    };
     let recorder: MediaRecorderLike;
     try {
-      // 32 kbps is a speech-oriented size hint. Browsers may ignore it; a
-      // rejected hint is retried without the bitrate rather than blocking use.
-      recorder = this.runtime.createMediaRecorder!(stream, {
-        mimeType: capability.mimeType,
-        audioBitsPerSecond: 32_000
-      });
-    } catch {
-      try {
-        recorder = this.runtime.createMediaRecorder!(stream, { mimeType: capability.mimeType });
-      } catch (error) {
-        this.fail(error);
-        return;
-      }
+      recorder = this.runtime.createMediaRecorder!(stream, { mimeType: capability.mimeType });
+    } catch (error) {
+      this.fail(error);
+      return;
     }
 
     this.recorder = recorder;
     this.chunks = [];
+    this.stopEventReceived = false;
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) this.chunks.push(event.data);
+      // Some mobile implementations dispatch the final data event very close
+      // to (or just after) stop. Wait for a brief quiet period before assembly.
+      if (this.stopEventReceived) this.scheduleFinalization();
     };
     recorder.onerror = () => this.fail({ name: "MediaRecorderError" });
-    recorder.onstop = () => void this.finishPreview();
+    recorder.onstop = () => {
+      this.stopEventReceived = true;
+      this.scheduleFinalization();
+    };
 
     for (const track of stream.getTracks()) {
       track.addEventListener("ended", this.handleTrackEnded, { once: true });
     }
 
     try {
-      recorder.start(1_000);
+      // A single final Blob is more interoperable than timesliced MP4 chunks,
+      // especially on mobile WebKit where container metadata is finalized at stop.
+      recorder.start();
     } catch (error) {
       this.fail(error);
       return;
@@ -312,7 +354,15 @@ export class VoiceRecorderController {
     }
   }
 
-  private async finishPreview(): Promise<void> {
+  private scheduleFinalization(): void {
+    this.clearFinalizationTimer();
+    this.finalizationTimer = this.runtime.setTimeout(() => {
+      this.finalizationTimer = null;
+      this.finishPreview();
+    }, FINAL_DATA_GRACE_MS);
+  }
+
+  private finishPreview(): void {
     if (this.destroyed || this.state.kind === "idle") return;
     this.setState({ kind: "processing" });
     const mimeType = this.selectedMime;
@@ -320,11 +370,15 @@ export class VoiceRecorderController {
       this.maxDurationSeconds,
       Math.max(0.1, (this.runtime.now() - this.startedAtMs) / 1_000)
     );
-    const blob = new Blob(this.chunks, { type: this.recorder?.mimeType || mimeType || "" });
+    const blobMimeType = this.recorder?.mimeType || mimeType || "";
+    const blob = new Blob(this.chunks, { type: blobMimeType });
+    const captureSnapshot = this.captureTrackSnapshot;
     this.recorder = null;
     this.chunks = [];
+    this.captureTrack = null;
+    this.captureTrackSnapshot = null;
 
-    if (!mimeType || blob.size === 0) {
+    if (!mimeType || blob.size < MIN_VOICE_RECORDING_BYTES) {
       this.setState({
         kind: "failed",
         code: "recording_interrupted",
@@ -335,14 +389,42 @@ export class VoiceRecorderController {
 
     this.revokePreview();
     this.objectUrl = this.runtime.createObjectURL(blob);
-    const waveform = this.runtime.generateWaveform
-      ? await this.runtime.generateWaveform(blob).catch(() => null)
-      : null;
-    if (this.destroyed || this.state.kind !== "processing") return;
+    const objectUrl = this.objectUrl;
+    const diagnostics: VoiceCaptureDiagnostics = {
+      selectedMimeType: mimeType,
+      blobMimeType: blob.type,
+      blobBytes: blob.size,
+      measuredDurationSeconds: durationSeconds,
+      audioTrackCount: captureSnapshot?.audioTrackCount ?? 0,
+      trackEnabled: captureSnapshot?.trackEnabled ?? false,
+      trackMuted: captureSnapshot?.trackMuted ?? true,
+      trackReadyState: captureSnapshot?.trackReadyState ?? "ended"
+    };
     this.setState({
       kind: "preview",
-      recording: { blob, objectUrl: this.objectUrl, mimeType, durationSeconds, waveform }
+      recording: {
+        blob,
+        objectUrl,
+        mimeType,
+        blobMimeType: blob.type,
+        durationSeconds,
+        waveform: null,
+        diagnostics
+      }
     });
+
+    // Waveform decoding is presentation-only. It must never delay or disable
+    // native audio playback, and a decode failure leaves a valid audio preview.
+    if (this.runtime.generateWaveform) {
+      void this.runtime.generateWaveform(blob).catch(() => null).then((waveform) => {
+        if (this.destroyed || this.state.kind !== "preview") return;
+        if (this.state.recording.objectUrl !== objectUrl) return;
+        this.setState({
+          kind: "preview",
+          recording: { ...this.state.recording, waveform }
+        });
+      });
+    }
   }
 
   private updateElapsed(): void {
@@ -354,8 +436,11 @@ export class VoiceRecorderController {
 
   private fail(error: unknown): void {
     this.clearElapsedTimer();
+    this.clearFinalizationTimer();
     this.releaseStream();
     this.recorder = null;
+    this.captureTrack = null;
+    this.captureTrackSnapshot = null;
     this.chunks = [];
     const mapped = recorderError(error);
     this.setState({ kind: "failed", ...mapped });
@@ -363,6 +448,7 @@ export class VoiceRecorderController {
 
   private abandon(emitIdle: boolean): void {
     this.clearElapsedTimer();
+    this.clearFinalizationTimer();
     if (this.recorder && this.recorder.state !== "inactive") {
       this.recorder.ondataavailable = null;
       this.recorder.onstop = null;
@@ -378,6 +464,9 @@ export class VoiceRecorderController {
     this.releaseStream();
     this.revokePreview();
     this.selectedMime = null;
+    this.stopEventReceived = false;
+    this.captureTrack = null;
+    this.captureTrackSnapshot = null;
     if (emitIdle) this.setState(IDLE_VOICE_RECORDER_STATE);
   }
 
@@ -402,6 +491,12 @@ export class VoiceRecorderController {
     this.elapsedTimer = null;
   }
 
+  private clearFinalizationTimer(): void {
+    if (this.finalizationTimer === null) return;
+    this.runtime.clearTimeout(this.finalizationTimer);
+    this.finalizationTimer = null;
+  }
+
   private setState(state: VoiceRecorderState): void {
     this.state = state;
     for (const listener of this.listeners) listener(state);
@@ -410,4 +505,9 @@ export class VoiceRecorderController {
 
 function stopStream(stream: MediaStream): void {
   for (const track of stream.getTracks()) track.stop();
+}
+
+function getAudioTracks(stream: MediaStream): MediaStreamTrack[] {
+  if (typeof stream.getAudioTracks === "function") return stream.getAudioTracks();
+  return stream.getTracks().filter((track) => track.kind === "audio");
 }

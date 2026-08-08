@@ -7,15 +7,14 @@ import {
   discardMessageAttachmentAction,
   finalizeVoiceMessageUploadAction
 } from "@/app/(app)/messaging-actions";
+import { VoiceNotePlayer } from "@/components/messaging/voice-note-player";
+import { playLocalVoicePreview } from "@/lib/messaging/local-voice-playback";
 import type { LocalVoiceRecording } from "@/lib/messaging/voice-recording";
+import type { PreparedVoiceAsset } from "@/lib/messaging/voice-playback";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-export type PreparedVoiceAttachment = {
-  mediaId: string;
-  durationMs: number;
-  waveform: number[] | null;
-};
+export type PreparedVoiceAttachment = PreparedVoiceAsset;
 
 type PrepareState =
   | { kind: "idle" }
@@ -23,6 +22,15 @@ type PrepareState =
   | { kind: "finalizing" }
   | { kind: "ready"; attachment: PreparedVoiceAttachment }
   | { kind: "failed"; message: string };
+
+type PlaybackDiagnostic = {
+  readyState: number;
+  duration: number | null;
+  muted: boolean;
+  volume: number;
+  errorName: string | null;
+  errorCode: number | null;
+};
 
 export function VoiceRecordingPreview({
   conversationId,
@@ -43,23 +51,56 @@ export function VoiceRecordingPreview({
   const [playing, setPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [state, setState] = useState<PrepareState>({ kind: "idle" });
+  const [playbackDiagnostic, setPlaybackDiagnostic] = useState<PlaybackDiagnostic>({
+    readyState: 0,
+    duration: null,
+    muted: false,
+    volume: 1,
+    errorName: null,
+    errorCode: null
+  });
   const duration = Math.max(0.1, recording.durationSeconds);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    audio.defaultMuted = false;
+    audio.muted = false;
+    audio.volume = 1;
     const update = () => setElapsed(Number.isFinite(audio.currentTime) ? audio.currentTime : 0);
     const stopped = () => setPlaying(false);
+    const updateDiagnostic = () => setPlaybackDiagnostic((current) => ({
+      ...current,
+      readyState: audio.readyState,
+      duration: Number.isFinite(audio.duration) ? audio.duration : null,
+      muted: audio.muted,
+      volume: audio.volume
+    }));
+    const mediaFailed = () => setPlaybackDiagnostic({
+      readyState: audio.readyState,
+      duration: Number.isFinite(audio.duration) ? audio.duration : null,
+      muted: audio.muted,
+      volume: audio.volume,
+      errorName: "MediaError",
+      errorCode: audio.error?.code ?? null
+    });
     audio.addEventListener("timeupdate", update);
     audio.addEventListener("seeked", update);
     audio.addEventListener("pause", stopped);
     audio.addEventListener("ended", stopped);
+    audio.addEventListener("loadedmetadata", updateDiagnostic);
+    audio.addEventListener("canplay", updateDiagnostic);
+    audio.addEventListener("error", mediaFailed);
+    audio.load();
     return () => {
       audio.pause();
       audio.removeEventListener("timeupdate", update);
       audio.removeEventListener("seeked", update);
       audio.removeEventListener("pause", stopped);
       audio.removeEventListener("ended", stopped);
+      audio.removeEventListener("loadedmetadata", updateDiagnostic);
+      audio.removeEventListener("canplay", updateDiagnostic);
+      audio.removeEventListener("error", mediaFailed);
     };
   }, [recording.objectUrl]);
 
@@ -75,10 +116,13 @@ export function VoiceRecordingPreview({
       audio.pause();
       return;
     }
-    try {
-      await audio.play();
+    const result = await playLocalVoicePreview(audio);
+    setPlaybackDiagnostic(result.ok
+      ? { ...result, errorName: null, errorCode: null }
+      : result);
+    if (result.ok) {
       setPlaying(true);
-    } catch {
+    } else {
       setPlaying(false);
     }
   }
@@ -177,8 +221,18 @@ export function VoiceRecordingPreview({
   const busy = state.kind === "uploading" || state.kind === "finalizing";
   return (
     <section className="mx-3 mt-3 rounded-2xl border border-border/70 bg-secondary/45 p-3" aria-label="Voice message preview">
-      <audio ref={audioRef} src={recording.objectUrl} preload="metadata" />
-      <div className="flex items-center gap-3">
+      {state.kind === "ready" ? (
+        <VoiceNotePlayer conversationId={conversationId} asset={state.attachment} />
+      ) : (
+        <>
+          <audio
+            ref={audioRef}
+            src={recording.objectUrl}
+            preload="auto"
+            playsInline
+            muted={false}
+          />
+          <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={() => void togglePlayback()}
@@ -214,7 +268,9 @@ export function VoiceRecordingPreview({
           />
           <p className="text-xs text-muted-foreground">{formatDuration(elapsed)} / {formatDuration(duration)}</p>
         </div>
-      </div>
+          </div>
+        </>
+      )}
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {state.kind === "ready" ? (
@@ -240,7 +296,28 @@ export function VoiceRecordingPreview({
         </button>
       </div>
       {state.kind === "failed" ? <p className="mt-2 text-xs text-destructive" role="alert">{state.message}</p> : null}
+      {playbackDiagnostic.errorName ? (
+        <p className="mt-2 text-xs text-destructive" role="alert">
+          This recording couldn&apos;t be played. Try recording it again.
+        </p>
+      ) : null}
       {state.kind === "ready" ? <p className="mt-1 text-xs text-muted-foreground">Prepared locally and verified. Sending arrives in the next phase.</p> : null}
+      {process.env.NODE_ENV !== "production" && state.kind !== "ready" ? (
+        <details className="mt-2 text-[11px] text-muted-foreground">
+          <summary>Voice playback diagnostics</summary>
+          <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
+            <dt>Selected MIME</dt><dd>{recording.diagnostics.selectedMimeType}</dd>
+            <dt>Blob MIME</dt><dd>{recording.diagnostics.blobMimeType || "unknown"}</dd>
+            <dt>Bytes</dt><dd>{recording.diagnostics.blobBytes}</dd>
+            <dt>Measured duration</dt><dd>{recording.diagnostics.measuredDurationSeconds.toFixed(2)}s</dd>
+            <dt>Audio readyState</dt><dd>{playbackDiagnostic.readyState}</dd>
+            <dt>Audio duration</dt><dd>{playbackDiagnostic.duration?.toFixed(2) ?? "unknown"}</dd>
+            <dt>Output</dt><dd>{playbackDiagnostic.muted ? "muted" : "audible"}, {playbackDiagnostic.volume}</dd>
+            <dt>Playback error</dt><dd>{playbackDiagnostic.errorName ?? "none"}{playbackDiagnostic.errorCode === null ? "" : ` (${playbackDiagnostic.errorCode})`}</dd>
+            <dt>Capture track</dt><dd>{recording.diagnostics.audioTrackCount}, {recording.diagnostics.trackReadyState}</dd>
+          </dl>
+        </details>
+      ) : null}
     </section>
   );
 }

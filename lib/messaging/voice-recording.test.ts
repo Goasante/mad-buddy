@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   detectVoiceRecordingCapability,
+  MIN_VOICE_RECORDING_BYTES,
   recorderError,
   VoiceRecorderController,
   type MediaRecorderLike,
@@ -12,6 +13,10 @@ import { messagingLimitsFor } from "@/lib/messaging/rules";
 import { stripComments } from "@/lib/content/strip-comments";
 
 class FakeTrack {
+  kind = "audio";
+  enabled = true;
+  muted = false;
+  readyState: MediaStreamTrackState = "live";
   stopCount = 0;
   private ended: (() => void) | null = null;
 
@@ -25,6 +30,7 @@ class FakeTrack {
 
   stop() {
     this.stopCount += 1;
+    this.readyState = "ended";
   }
 
   endUnexpectedly() {
@@ -40,20 +46,22 @@ class FakeRecorder implements MediaRecorderLike {
   onerror: (() => void) | null = null;
   startCount = 0;
   stopCount = 0;
+  startTimeslice: number | undefined;
 
   constructor(mimeType: string) {
     this.mimeType = mimeType;
   }
 
-  start() {
+  start(timeslice?: number) {
     this.startCount += 1;
+    this.startTimeslice = timeslice;
     this.state = "recording";
   }
 
   stop() {
     this.stopCount += 1;
     this.state = "inactive";
-    this.ondataavailable?.({ data: new Blob(["voice"], { type: this.mimeType }) });
+    this.ondataavailable?.({ data: new Blob([new Uint8Array(512)], { type: this.mimeType }) });
     this.onstop?.();
   }
 
@@ -66,7 +74,10 @@ class FakeRecorder implements MediaRecorderLike {
 function harness(overrides: Partial<VoiceRecordingRuntime> = {}) {
   let nowMs = 0;
   const track = new FakeTrack();
-  const stream = { getTracks: () => [track as unknown as MediaStreamTrack] } as MediaStream;
+  const stream = {
+    getTracks: () => [track as unknown as MediaStreamTrack],
+    getAudioTracks: () => [track as unknown as MediaStreamTrack]
+  } as unknown as MediaStream;
   const recorders: FakeRecorder[] = [];
   const intervals = new Map<number, () => void>();
   const revoked: string[] = [];
@@ -75,7 +86,14 @@ function harness(overrides: Partial<VoiceRecordingRuntime> = {}) {
 
   const runtime: VoiceRecordingRuntime = {
     secureContext: true,
-    getUserMedia: vi.fn(async () => stream),
+    getUserMedia: vi.fn(async () => {
+      // Each browser request returns a fresh live track. Reuse the fake object
+      // while restoring that lifecycle for concise controller tests.
+      track.enabled = true;
+      track.muted = false;
+      track.readyState = "live";
+      return stream;
+    }),
     createMediaRecorder: vi.fn((_stream, options) => {
       const recorder = new FakeRecorder(options.mimeType ?? "audio/webm");
       recorders.push(recorder);
@@ -89,6 +107,8 @@ function harness(overrides: Partial<VoiceRecordingRuntime> = {}) {
       return id as unknown as ReturnType<typeof setInterval>;
     },
     clearInterval: (handle) => intervals.delete(handle as unknown as number),
+    setTimeout: (callback, delayMs) => globalThis.setTimeout(callback, delayMs),
+    clearTimeout: (handle) => globalThis.clearTimeout(handle),
     createObjectURL: () => `blob:voice-${nextUrl++}`,
     revokeObjectURL: (url) => revoked.push(url),
     ...overrides
@@ -97,6 +117,7 @@ function harness(overrides: Partial<VoiceRecordingRuntime> = {}) {
   return {
     runtime,
     track,
+    stream,
     recorders,
     revoked,
     advance(ms: number) {
@@ -141,7 +162,81 @@ describe("voice recorder controller", () => {
     expect(h.runtime.getUserMedia).not.toHaveBeenCalled();
     await controller.start();
     expect(h.runtime.getUserMedia).toHaveBeenCalledOnce();
+    expect(h.runtime.getUserMedia).toHaveBeenCalledWith({ audio: true, video: false });
+    expect(h.recorders[0].startTimeslice).toBeUndefined();
     expect(controller.getState().kind).toBe("recording");
+  });
+
+  it("refuses a missing, muted, disabled, or ended microphone track", async () => {
+    for (const state of ["missing", "muted", "disabled", "ended"] as const) {
+      const h = harness();
+      h.runtime.getUserMedia = vi.fn(async () => {
+        if (state === "missing") {
+          return {
+            getTracks: () => [],
+            getAudioTracks: () => []
+          } as unknown as MediaStream;
+        }
+        h.track.muted = state === "muted";
+        h.track.enabled = state !== "disabled";
+        h.track.readyState = state === "ended" ? "ended" : "live";
+        return h.stream;
+      });
+      const controller = new VoiceRecorderController({ enabled: true, maxDurationSeconds: 60 }, h.runtime);
+      await controller.start();
+      expect(controller.getState()).toMatchObject({ kind: "failed", code: "microphone_unavailable" });
+    }
+  });
+
+  it("waits for a trailing final data chunk before creating the preview", async () => {
+    class StopFirstRecorder extends FakeRecorder {
+      override stop() {
+        this.stopCount += 1;
+        this.state = "inactive";
+        this.onstop?.();
+        globalThis.setTimeout(() => {
+          this.ondataavailable?.({
+            data: new Blob([new Uint8Array(MIN_VOICE_RECORDING_BYTES + 32)], { type: this.mimeType })
+          });
+        }, 10);
+      }
+    }
+    const h = harness({
+      createMediaRecorder: vi.fn((_stream, options) => new StopFirstRecorder(options.mimeType ?? "audio/webm"))
+    });
+    const controller = new VoiceRecorderController({ enabled: true, maxDurationSeconds: 60 }, h.runtime);
+    await controller.start();
+    controller.stop();
+
+    expect(controller.getState().kind).toBe("stopping");
+    await vi.waitFor(() => expect(controller.getState().kind).toBe("preview"));
+    const state = controller.getState();
+    if (state.kind === "preview") {
+      expect(state.recording.blob.size).toBe(MIN_VOICE_RECORDING_BYTES + 32);
+    }
+  });
+
+  it("rejects tiny recorder output instead of presenting a silent preview", async () => {
+    class TinyRecorder extends FakeRecorder {
+      override stop() {
+        this.state = "inactive";
+        this.ondataavailable?.({ data: new Blob([new Uint8Array(32)], { type: this.mimeType }) });
+        this.onstop?.();
+      }
+    }
+    const h = harness({
+      createMediaRecorder: vi.fn((_stream, options) => new TinyRecorder(options.mimeType ?? "audio/webm"))
+    });
+    const controller = new VoiceRecorderController({ enabled: true, maxDurationSeconds: 60 }, h.runtime);
+    await controller.start();
+    controller.stop();
+
+    await vi.waitFor(() => expect(controller.getState().kind).toBe("failed"));
+    expect(controller.getState()).toMatchObject({
+      kind: "failed",
+      code: "recording_interrupted",
+      message: "No audio was captured. Try recording again."
+    });
   });
 
   it("moves Stop through processing to a local preview and releases the microphone", async () => {
@@ -153,6 +248,7 @@ describe("voice recorder controller", () => {
     h.advance(2_400);
     controller.stop();
 
+    await vi.waitFor(() => expect(controller.getState().kind).toBe("preview"));
     expect(states).toEqual(["requesting_permission", "recording", "recording", "stopping", "processing", "preview"]);
     const state = controller.getState();
     expect(state.kind).toBe("preview");
@@ -178,6 +274,37 @@ describe("voice recorder controller", () => {
     const state = controller.getState();
     if (state.kind === "preview") expect(state.recording.waveform).toHaveLength(48);
   });
+
+  it("keeps a playable preview when waveform decoding fails", async () => {
+    const h = harness({ generateWaveform: vi.fn(async () => Promise.reject(new Error("decode failed"))) });
+    const controller = new VoiceRecorderController({ enabled: true, maxDurationSeconds: 60 }, h.runtime);
+    await controller.start();
+    controller.stop();
+
+    await vi.waitFor(() => expect(controller.getState().kind).toBe("preview"));
+    const state = controller.getState();
+    if (state.kind === "preview") {
+      expect(state.recording.waveform).toBeNull();
+      expect(state.recording.objectUrl).toBe("blob:voice-1");
+    }
+  });
+
+  it.each(["audio/webm;codecs=opus", "audio/mp4"] as const)(
+    "preserves a %s Blob for native preview",
+    async (mimeType) => {
+      const h = harness({ isTypeSupported: (candidate) => candidate === mimeType });
+      const controller = new VoiceRecorderController({ enabled: true, maxDurationSeconds: 60 }, h.runtime);
+      await controller.start();
+      controller.stop();
+      await vi.waitFor(() => expect(controller.getState().kind).toBe("preview"));
+      const state = controller.getState();
+      if (state.kind === "preview") {
+        expect(state.recording.mimeType).toBe(mimeType);
+        expect(state.recording.blobMimeType).toBe(mimeType);
+        expect(state.recording.blob.type).toBe(mimeType);
+      }
+    }
+  );
 
   it.each([
     ["NotAllowedError", "permission_denied"],
@@ -214,7 +341,8 @@ describe("voice recorder controller", () => {
     await controller.start();
     h.advance(1_000);
     controller.stop();
-    expect(controller.getState().kind).toBe("preview");
+    await vi.waitFor(() => expect(controller.getState().kind).toBe("preview"));
+    expect(h.revoked).toEqual([]);
     await controller.rerecord();
     expect(h.revoked).toEqual(["blob:voice-1"]);
     expect(controller.getState().kind).toBe("recording");
@@ -228,6 +356,7 @@ describe("voice recorder controller", () => {
     const controller = new VoiceRecorderController({ enabled: true, maxDurationSeconds: 60 }, h.runtime);
     await controller.start();
     h.advance(60_100);
+    await vi.waitFor(() => expect(controller.getState().kind).toBe("preview"));
     const state = controller.getState();
     expect(state.kind).toBe("preview");
     if (state.kind === "preview") expect(state.recording.durationSeconds).toBe(60);
@@ -239,14 +368,14 @@ describe("voice recorder controller", () => {
     await endedController.start();
     ended.advance(500);
     ended.track.endUnexpectedly();
-    expect(endedController.getState().kind).toBe("preview");
+    await vi.waitFor(() => expect(endedController.getState().kind).toBe("preview"));
 
     const hidden = harness();
     const hiddenController = new VoiceRecorderController({ enabled: true, maxDurationSeconds: 60 }, hidden.runtime);
     await hiddenController.start();
     hidden.advance(500);
     hiddenController.handleVisibilityChange(true);
-    expect(hiddenController.getState().kind).toBe("preview");
+    await vi.waitFor(() => expect(hiddenController.getState().kind).toBe("preview"));
   });
 
   it("cleans tracks and object URLs on unmount/page discard", async () => {
@@ -254,6 +383,7 @@ describe("voice recorder controller", () => {
     const controller = new VoiceRecorderController({ enabled: true, maxDurationSeconds: 60 }, h.runtime);
     await controller.start();
     controller.stop();
+    await vi.waitFor(() => expect(controller.getState().kind).toBe("preview"));
     controller.handlePageHide();
     expect(h.revoked).toEqual(["blob:voice-1"]);
     expect(h.track.stopCount).toBe(1);

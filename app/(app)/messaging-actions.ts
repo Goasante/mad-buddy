@@ -36,6 +36,7 @@ import {
   type MessageableFriend
 } from "@/lib/messaging/mobile";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
+import type { AuthorizedVoicePlayback } from "@/lib/messaging/voice-playback";
 
 // The read/send views + logic (and these view types) live in
 // lib/messaging/mobile.ts so the mobile /api/messages/* routes share them.
@@ -460,6 +461,27 @@ export async function finalizeVoiceMessageUploadAction(input: unknown): Promise<
   return result.ok
     ? { ok: true, message: "Voice message prepared.", mediaId: result.mediaId, durationMs: result.durationMs ?? undefined }
     : result;
+}
+
+export type PreparedVoicePlaybackState = MessagingActionState & {
+  playback?: AuthorizedVoicePlayback;
+};
+
+/** Mints a short-lived read grant only for the owner's ready, unsent asset. */
+export async function getPreparedVoicePlaybackAction(input: unknown): Promise<PreparedVoicePlaybackState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in before playing this voice message." };
+  const parsed = z.object({ conversationId: z.string().uuid(), mediaId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false, message: "That voice message isn't available." };
+
+  const admin = createSupabaseAdminClient();
+  const { getPreparedVoicePlayback } = await import("@/lib/media/voice-playback-service");
+  const playback = await getPreparedVoicePlayback(admin, userId, parsed.data);
+  return playback
+    ? { ok: true, message: "Voice message ready.", playback }
+    : { ok: false, message: "That voice message isn't available." };
 }
 
 /** Finalizes and validates bytes uploaded through a server-issued intent. */
