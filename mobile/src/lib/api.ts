@@ -89,3 +89,18 @@ export function postCurrentLocation(): Promise<ApiResult> {
     );
   });
 }
+
+/**
+ * Deletes the signed-in account.
+ *
+ * Both stores require an in-app route to deletion for apps that create
+ * accounts, so this is not optional chrome. The server runs the same resumable
+ * workflow the web flow uses; a failure after the data is gone reports that
+ * honestly rather than as a plain "deletion failed".
+ */
+export function deleteAccount(reason?: string): Promise<ApiResult<{ ok: boolean }>> {
+  return request<{ ok: boolean }>("/api/account/delete", {
+    method: "POST",
+    body: JSON.stringify({ confirm: true, reason: reason?.trim() || undefined })
+  });
+}

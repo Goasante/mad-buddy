@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { markDeletionRequested, recordDeletionStage } from "@/lib/account/deletion";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
@@ -143,12 +144,30 @@ export async function deleteAccountAction(input: unknown): Promise<SettingsActio
     .eq("user_id", userId)
     .maybeSingle();
 
+  // INTENT FIRST, before anything is destroyed.
+  //
+  // Deletion spans Postgres, storage and the Auth registry -- three systems
+  // that cannot share a transaction, so some step always runs second. This row
+  // is what makes a half-finished run recoverable: without it, a failure after
+  // the first destructive step left no evidence the user had ever asked, and
+  // the workflow could not be resumed or swept.
+  //
+  // Idempotent on user_id, so a double tap or a retried request re-asserts the
+  // same intent instead of starting a second workflow.
+  const intent = await markDeletionRequested(admin, userId, parsed.data.reason || null);
+  if (!intent.ok) {
+    return { ok: false, message: intent.message ?? "Your deletion request could not be recorded." };
+  }
+
   const { error: reportPreparationError } = await admin.rpc("prepare_deleted_user_reports", {
     target_user_id: userId
   });
   if (reportPreparationError) {
+    // Nothing destroyed yet, and the intent row survives, so a retry starts
+    // cleanly from here.
     return { ok: false, message: "Your account could not be prepared for deletion." };
   }
+  await recordDeletionStage(admin, userId, "reports_anonymised");
 
   const [avatarRemovalError, mediaRemovalError] = await Promise.all([
     removeAvatarFolder(userId),
@@ -187,8 +206,12 @@ export async function deleteAccountAction(input: unknown): Promise<SettingsActio
   const failedDeletion = deletions.find((result) => result.error);
 
   if (failedDeletion?.error) {
+    // Partial purge. Every delete above is idempotent -- removing rows that are
+    // already gone is a no-op -- so retrying repeats the whole step safely
+    // rather than needing to know exactly where it stopped.
     return { ok: false, message: "Your account data could not be removed." };
   }
+  await recordDeletionStage(admin, userId, "data_purged");
 
   const billingReference = subscription
     ? JSON.stringify({
@@ -219,12 +242,28 @@ export async function deleteAccountAction(input: unknown): Promise<SettingsActio
   if (auditError) {
     return { ok: false, message: "The deletion audit record could not be saved." };
   }
+  await recordDeletionStage(admin, userId, "audited");
 
   const { error: authDeleteError } = await admin.auth.admin.deleteUser(userId);
 
   if (authDeleteError) {
-    return { ok: false, message: "Your sign-in account could not be removed." };
+    // THE STATE THIS WHOLE WORKFLOW EXISTS FOR.
+    //
+    // The data is already gone; only the login remains. Previously this said
+    // deletion had failed, which was the opposite of the truth and left the
+    // user with no way to finish. The intent row is still at 'audited', so a
+    // retry -- or a sweeper -- resumes at exactly this step, and the message
+    // now describes what actually happened.
+    return {
+      ok: false,
+      message:
+        "Your data has been deleted, but your sign-in could not be removed yet. We'll finish this shortly; signing in again will complete it."
+    };
   }
+
+  // Completed: the intent row has done its job and would otherwise outlive the
+  // account it describes. The audit record is the durable history, not this.
+  await admin.from("account_deletion_requests").delete().eq("user_id", userId);
 
   redirect("/signup");
 }

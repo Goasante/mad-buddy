@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "../auth/AuthProvider";
 import { supabase } from "../lib/supabase";
-import { api } from "../lib/api";
+import { api, deleteAccount } from "../lib/api";
 
 type Visibility = "visible" | "ghost" | "app_open_only";
 
@@ -29,6 +29,28 @@ export function SettingsScreen() {
   const [nearbyAlerts, setNearbyAlerts] = useState(true);
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<"idle" | "confirm">("idle");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  async function handleDelete() {
+    setDeleting(true);
+    setDeleteError("");
+    const result = await deleteAccount();
+    if (result.ok) {
+      // The account is gone, so the local session is now meaningless. Signing
+      // out clears it and unregisters this device's push token rather than
+      // leaving a token pointed at a deleted user.
+      await signOut();
+      navigate("/login", { replace: true });
+      return;
+    }
+    setDeleting(false);
+    // Shows the server's own message: it distinguishes "nothing was deleted"
+    // from "your data is gone but the sign-in remains", and those are very
+    // different things to tell someone.
+    setDeleteError(result.error);
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -138,6 +160,63 @@ export function SettingsScreen() {
       </Button>
 
       <p className="mt-4 text-center text-xs text-muted-foreground">Signed in as {user?.email}</p>
+
+      {/* ACCOUNT DELETION.
+          Required in-app by both stores for apps that create accounts, and it
+          was previously unavailable in the native build entirely. Placed last
+          and styled quietly: reachable without hunting, never a tap away by
+          accident. */}
+      <SectionTitle>Delete account</SectionTitle>
+      <Card>
+        <div className="p-4">
+          <p className="text-xs leading-5 text-muted-foreground">
+            Deleting removes your profile, Muddies, plans, messages and location
+            history. This cannot be undone.
+          </p>
+
+          {deleteStep === "idle" ? (
+            <button
+              type="button"
+              onClick={() => setDeleteStep("confirm")}
+              className="focus-ring mt-3 h-11 w-full rounded-xl border border-destructive/40 text-sm font-semibold text-destructive"
+            >
+              Delete my account
+            </button>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {/* Second step, deliberately. A single destructive tap on a phone
+                  is too easy to hit by accident. */}
+              <p className="text-xs font-semibold text-foreground">
+                Delete your account permanently?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => setDeleteStep("idle")}
+                  className="focus-ring h-11 flex-1 rounded-xl border border-border text-sm font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => void handleDelete()}
+                  className="focus-ring h-11 flex-1 rounded-xl bg-destructive text-sm font-semibold text-destructive-foreground disabled:opacity-60"
+                >
+                  {deleting ? "Deleting…" : "Delete forever"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {deleteError ? (
+            <p role="alert" className="mt-3 text-xs leading-5 text-destructive">
+              {deleteError}
+            </p>
+          ) : null}
+        </div>
+      </Card>
     </div>
   );
 }
