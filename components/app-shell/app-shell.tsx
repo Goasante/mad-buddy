@@ -175,6 +175,19 @@ function hasOwnHeader(pathname: string): boolean {
   return PAGES_WITH_OWN_HEADER.some((href) => pathname === href || pathname.startsWith(`${href}/`));
 }
 
+/**
+ * Where the branded wallpaper appears.
+ *
+ * Messages only. A conversation is the one place the backdrop reads as the
+ * room the chat happens in; everywhere else it sits behind cards and numbers
+ * that need a plain ground to be legible.
+ */
+const WALLPAPER_PAGES: readonly string[] = ["/messages"];
+
+function hasWallpaper(pathname: string): boolean {
+  return WALLPAPER_PAGES.some((href) => pathname === href || pathname.startsWith(`${href}/`));
+}
+
 function hasImmersiveHeader(pathname: string): boolean {
   return IMMERSIVE_HEADER_PAGES.some((href) => pathname === href || pathname.startsWith(`${href}/`));
 }
@@ -250,6 +263,7 @@ function AppShellInner({
   useEffect(() => bindCachesToSession(), []);
   const pathname = usePathname();
   const immersiveHeader = hasImmersiveHeader(pathname);
+  const showsWallpaper = hasWallpaper(pathname);
   // Canonical unread count, shared with the mobile header via the same hook —
   // one fetch/poll/broadcast implementation, so the sidebar badge and the
   // header Bell badge can never disagree.
@@ -319,15 +333,21 @@ function AppShellInner({
         currentAvatarUrl={currentAvatarUrl}
       />
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-background dark:bg-[#111112]">
-        {/* Branded wallpaper, painted behind the header AND the content (chrome
-            here means bottom nav / modals, which keep their own opaque
-            surfaces). Mounted at this level — not inside <main> — so the
-            header's translucent/blurred background shows the same wallpaper
-            rather than sitting on top of it as a flat, non-blending bar.
-            Purely decorative. */}
-        <Suspense fallback={<WallpaperLayer wallpaper={null} />}>
-          <WallpaperLayerAsync wallpaperPromise={wallpaperPromise} />
-        </Suspense>
+        {/* Branded wallpaper — MESSAGES ONLY.
+            It was mounted shell-wide, so every screen carried a decorative
+            backdrop. A conversation is the one surface where a wallpaper is
+            the content's own setting rather than noise behind unrelated data:
+            Home, Linkr and UpFor are dense with cards, counts and controls,
+            and a patterned ground competes with all of it.
+
+            Still mounted at THIS level rather than inside <main>, so the
+            header's translucent background shows the same wallpaper instead
+            of sitting on it as a flat, non-blending bar. Purely decorative. */}
+        {showsWallpaper ? (
+          <Suspense fallback={<WallpaperLayer wallpaper={null} />}>
+            <WallpaperLayerAsync wallpaperPromise={wallpaperPromise} />
+          </Suspense>
+        ) : null}
         <AppHeader
           currentUsername={currentUsername}
           currentAvatarUrl={currentAvatarUrl}

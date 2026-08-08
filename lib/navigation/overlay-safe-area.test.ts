@@ -72,3 +72,14 @@ describe("bottom insets stay handled too", () => {
     expect(runner).toContain("env(safe-area-inset-bottom,0px)");
   });
 });
+
+describe("the wallpaper belongs to messages only", () => {
+  it("is scoped by route rather than mounted shell-wide", () => {
+    // It painted behind every screen. A conversation is the one surface where
+    // a backdrop is the content's own setting; elsewhere it sits behind cards,
+    // counts and controls that need a plain ground to stay legible.
+    const shell = read("components/app-shell/app-shell.tsx");
+    expect(shell).toContain('const WALLPAPER_PAGES: readonly string[] = ["/messages"]');
+    expect(shell).toContain("{showsWallpaper ? (");
+  });
+});
