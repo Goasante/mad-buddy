@@ -28,26 +28,43 @@ function apiMutationRoutes(): Array<{ path: string; source: string }> {
   return routes;
 }
 
-describe("ordinary signup requires provider email verification", () => {
+describe("signup creates confirmed accounts without provider email", () => {
   const webSignup = read("app/(auth)/actions.ts");
   const nativeSignup = read("lib/auth/bootstrap.ts");
 
-  it("uses public Supabase signUp and never pre-confirms ordinary users", () => {
+  /**
+   * POLICY REVERSED, DELIBERATELY.
+   *
+   * These previously asserted the opposite -- that signup must go through
+   * `auth.signUp` and must NOT pre-confirm. That policy made account creation
+   * depend on Supabase's built-in SMTP, which caps at a few messages an hour;
+   * once exhausted, signup failed and created no account while telling the
+   * user it had worked. It also produced a live dead end: the form said "check
+   * your email" for a message that was never sent, because Confirm Email is
+   * disabled on the project.
+   *
+   * Mad Buddy does not verify email at signup. Accounts are created confirmed
+   * by the service role, so behaviour is decided here rather than by a
+   * dashboard toggle. The detailed guarantees live in
+   * lib/auth/signup-policy.test.ts; these two keep the security suite honest
+   * about which policy is in force.
+   */
+  it("creates accounts with the service role and pre-confirms them", () => {
     for (const source of [webSignup, nativeSignup]) {
-      expect(source).toContain(".auth.signUp(");
-      expect(source).not.toContain("admin.auth.admin.createUser");
-      expect(source).not.toMatch(/email_confirm\s*:\s*true/);
+      expect(source).not.toContain(".auth.signUp(");
     }
+    expect(nativeSignup).toContain("admin.auth.admin.createUser");
+    expect(nativeSignup).toMatch(/email_confirm\s*:\s*true/);
   });
 
-  it("does not return an authenticated product redirect after signup", () => {
+  it("returns an authenticated product redirect after signup", () => {
     const signupAction = webSignup.slice(
       webSignup.indexOf("export async function signUpAction"),
       webSignup.indexOf("export async function loginAction")
     );
-    expect(signupAction).not.toContain('redirectTo: "/onboarding"');
-    expect(signupAction).toContain("Check your email and open the confirmation link");
-    expect(nativeSignup).toContain("requiresEmailConfirmation: true");
+    expect(signupAction).toContain('redirectTo: "/onboarding"');
+    expect(signupAction).not.toContain("Check your email and open the confirmation link");
+    expect(nativeSignup).not.toContain("requiresEmailConfirmation: true");
   });
 });
 

@@ -171,10 +171,23 @@ describe("provider error mapping", () => {
   });
 
   it("keeps duplicate emails indistinguishable from a fresh signup", () => {
-    // Anti-enumeration: the form must not reveal which addresses exist, so
-    // this deliberately does NOT say "an account already exists".
-    expect(actions).toContain("indistinguishable from a fresh sign-up");
-    expect(actions).not.toContain("An account with this email already exists");
+    // Anti-enumeration: the form must not reveal which addresses exist.
+    //
+    // Asserted on BEHAVIOUR rather than on a comment: a duplicate returns
+    // ok:true, exactly as a fresh signup does, and never a message naming the
+    // conflict. The previous version of this test pinned a sentence in a code
+    // comment, so it broke when that comment moved while the guarantee itself
+    // was untouched -- and would equally have passed if the comment stayed and
+    // the behaviour changed.
+    const duplicateBranch = actions.slice(actions.indexOf('reason === "duplicate"'));
+    expect(duplicateBranch.slice(0, 300)).toContain("ok: true");
+    // Scoped to the RETURNED message, not the whole file: a comment may
+    // legitimately explain the anti-enumeration rule using these words.
+    const returnedMessages = [...actions.matchAll(/message:\s*"([^"]+)"/g)].map((match) => match[1]);
+    for (const message of returnedMessages) {
+      expect(message.toLowerCase()).not.toContain("already exists");
+      expect(message.toLowerCase()).not.toContain("already registered");
+    }
   });
 });
 

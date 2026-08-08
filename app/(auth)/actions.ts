@@ -11,7 +11,8 @@ import {
   rateLimitMessage
 } from "@/lib/security/rate-limit";
 import { getAdminEmailAccess } from "@/lib/safety/admin";
-import { bootstrapNewUser } from "@/lib/auth/bootstrap";
+import { createConfirmedAccount } from "@/lib/auth/bootstrap";
+import { recordSignupConsent } from "@/lib/legal/consent-logger";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
@@ -225,89 +226,67 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
 
   const { email, password } = parsed.data;
 
-  const supabase = await createSupabaseServerClient();
-  const origin = await resolveRequestOrigin();
+  const admin = createSupabaseAdminClient();
 
-  // Ordinary accounts use Supabase's public sign-up flow. The provider owns
-  // email verification and does not issue an application session until the
-  // address has been confirmed.
-  // TODO(consent): Persist a PolicyConsentEvent through ConsentLogger after
-  // consent_logs RLS, retention, and audit access are approved.
-  const { data: created, error: createError } = await supabase.auth.signUp({
+  // Mad Buddy does not verify email at sign-up, so the account is created
+  // pre-confirmed by the service role. Shared with the mobile route, so the two
+  // cannot drift into different verification policies again.
+  const creation = await createConfirmedAccount(admin, {
     email,
     password,
-    options: {
-      emailRedirectTo: `${origin}/auth/callback?next=/onboarding`,
-      data: { full_name: PLACEHOLDER_DISPLAY_NAME }
-    }
+    fullName: PLACEHOLDER_DISPLAY_NAME,
+    // Derived from the new user id, never the email: the username is public.
+    username: (userId) => createPlaceholderUsername(userId),
+    requestId,
+    startedAt
   });
 
-  if (createError || !created?.user) {
-    // Duplicate email: keep the response indistinguishable from a fresh sign-up
-    // so the form can't be used to discover which addresses are registered;
-    // returning users are nudged to log in.
-    const duplicate =
-      (createError && "code" in createError && (createError as { code?: string }).code === "email_exists") ||
-      /already|registered|exists/i.test(createError?.message ?? "");
-    if (duplicate) {
-      logBackendEvent("info", { requestId, action: "auth.signup", statusCode: 200, latencyMs: Date.now() - startedAt });
-      return { ok: true, message: "Check your email for the confirmation link." };
+  if (!creation.ok) {
+    if (creation.failure.reason === "duplicate") {
+      // Indistinguishable from a fresh sign-up, so the form cannot be used to
+      // discover which addresses are registered. Returning users land on login.
+      return { ok: true, message: "Check your details and log in to continue.", redirectTo: "/login" };
     }
+
+    if (creation.failure.reason === "bootstrap") {
+      return {
+        ok: false,
+        message:
+          creation.failure.label === "profile" && creation.failure.code === "23505"
+            ? "Your account could not be prepared. Please try again."
+            : "Your account could not be set up. Please try again."
+      };
+    }
+
+    // Provider failure. The raw Supabase message is never surfaced -- only a
+    // sentence we control.
+    return { ok: false, message: signupProviderMessage(creation.failure.error as never) };
+  }
+
+  const { userId } = creation.account;
+
+  // The consent the checkbox on the form actually collected. Runs after the
+  // account exists because it needs a real user id; a failure is logged with
+  // that id rather than failing the signup, so a transient database error
+  // cannot delete an account the person was already told they created.
+  await recordSignupConsent(admin, { userId, requestId, source: "signup" });
+
+  // The cookie session, so they continue straight into onboarding rather than
+  // being left on the signup form. The account is already confirmed, so a
+  // failure here is transient -- and even then they can simply log in, so
+  // nobody is stranded.
+  const supabase = await createSupabaseServerClient();
+  const { error: sessionError } = await supabase.auth.signInWithPassword({ email, password });
+  if (sessionError) {
     logBackendEvent("warn", {
       requestId,
       action: "auth.signup",
-      statusCode: 400,
+      statusCode: 200,
       latencyMs: Date.now() - startedAt,
-      errorType: createError?.name ?? "create_user_failed"
+      userId,
+      errorType: "auto_signin_failed"
     });
-    // Map the provider's known failures to our own wording. The raw Supabase
-    // message is never surfaced — only a sentence we control.
-    return { ok: false, message: signupProviderMessage(createError) };
-  }
-
-  if (created.user.identities?.length === 0) {
-    return { ok: true, message: "Check your email for the confirmation link." };
-  }
-
-  if (created.session) {
-    await supabase.auth.signOut({ scope: "local" });
-  }
-
-  const admin = createSupabaseAdminClient();
-
-  // Per-user rows (profile / subscription / preferences). Idempotent; shared
-  // with the mobile path (lib/auth/bootstrap) so the two can't drift.
-  const bootstrapResults = await bootstrapNewUser(admin, {
-    userId: created.user.id,
-    fullName: PLACEHOLDER_DISPLAY_NAME,
-    username: createPlaceholderUsername(created.user.id)
-  });
-  const failedBootstrap = bootstrapResults.find((result) => result.error);
-  for (const { label, error: rowError } of bootstrapResults) {
-    if (rowError) {
-      logBackendEvent("error", {
-        requestId,
-        action: "auth.signup",
-        statusCode: 500,
-        latencyMs: Date.now() - startedAt,
-        userId: created.user.id,
-        errorType: `bootstrap_${label}_failed`
-      });
-    }
-  }
-
-  if (failedBootstrap) {
-    // Do not leave an auth-only account behind. It appears in Admin but cannot
-    // complete onboarding because its required profile row was never created.
-    await admin.auth.admin.deleteUser(created.user.id);
-    const code = (failedBootstrap.error as { code?: string } | null)?.code;
-    return {
-      ok: false,
-      message:
-        failedBootstrap.label === "profile" && code === "23505"
-          ? "Your account could not be prepared. Please try again."
-          : "Your account could not be set up. Please try again."
-    };
+    return { ok: true, message: "Account created. Log in to continue.", redirectTo: "/login" };
   }
 
   logBackendEvent("info", {
@@ -315,12 +294,9 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     action: "auth.signup",
     statusCode: 200,
     latencyMs: Date.now() - startedAt,
-    userId: created.user.id
+    userId
   });
-  return {
-    ok: true,
-    message: "Check your email and open the confirmation link to continue."
-  };
+  return { ok: true, message: "Account created. Continue onboarding.", redirectTo: "/onboarding" };
 }
 
 export async function loginAction(input: unknown): Promise<AuthActionState> {

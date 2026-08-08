@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import {
   consumeRateLimit,
@@ -11,8 +10,8 @@ import { createRequestId, logBackendEvent } from "@/lib/observability/logger";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
+import { recordSignupConsent } from "@/lib/legal/consent-logger";
 import { normalizeUsername, validateUsername } from "@/lib/profile/rules";
-import { getSiteUrl } from "@/lib/seo";
 import { turnstileErrorMessage, verifyTurnstileToken } from "@/lib/security/turnstile";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -63,6 +62,146 @@ export async function bootstrapNewUser(
     { label: "subscription", error: subscriptionResult.error },
     { label: "preferences", error: preferencesResult.error }
   ];
+}
+
+/**
+ * Creates a pre-confirmed account, and the rows that go with it.
+ *
+ * THE ONE PLACE AN ACCOUNT IS CREATED. Web and mobile both call this, because
+ * the last time they each had their own copy the two drifted into different
+ * verification policies without anyone noticing.
+ *
+ * WHY admin.createUser AND NOT auth.signUp:
+ *
+ *   Mad Buddy does not verify email at sign-up. `auth.signUp` tries to SEND a
+ *   confirmation message through Supabase's built-in SMTP, which allows only a
+ *   few per hour; once exhausted it fails outright and creates NO account. The
+ *   user is told they signed up, then gets "invalid login credentials" for an
+ *   account that never existed. That was a real, reproduced production
+ *   incident, and it is a failure mode with no upside here because the app
+ *   never uses the confirmation link.
+ *
+ *   `admin.createUser({ email_confirm: true })` sends nothing, cannot be rate
+ *   limited, and marks the address confirmed in the same call.
+ *
+ * WHY THIS DOES NOT READ THE DASHBOARD SETTING:
+ *
+ *   `email_confirm: true` is applied by the service role at creation time, so
+ *   the account is usable whether or not "Confirm email" is enabled in the
+ *   Supabase project. Behaviour is decided by this code, not by a toggle
+ *   someone can flip in a console. Enabling that setting cannot strand a user
+ *   here the way it could with auth.signUp.
+ *
+ * Rolls back on failure: an auth user whose profile row could not be created
+ * can log in but can never finish onboarding, so it is deleted rather than
+ * left behind as an orphan.
+ */
+export type CreatedAccount = {
+  userId: string;
+  email: string;
+};
+
+export type AccountCreationFailure = {
+  reason: "duplicate" | "provider" | "bootstrap";
+  /** The bootstrap row that failed, when reason is "bootstrap". */
+  label?: "profile" | "subscription" | "preferences";
+  code?: string;
+  error?: unknown;
+};
+
+export async function createConfirmedAccount(
+  admin: Admin,
+  {
+    email,
+    password,
+    fullName,
+    username,
+    requestId,
+    startedAt
+  }: {
+    email: string;
+    password: string;
+    fullName: string;
+    /**
+     * The username to claim, or a function deriving it from the new user id.
+     *
+     * Web has no username at sign-up and uses a placeholder derived from the
+     * id -- which does not exist until createUser returns, hence the callback.
+     * Deriving it from the email instead would leak part of the address into a
+     * publicly visible username.
+     */
+    username: string | ((userId: string) => string);
+    requestId: string;
+    startedAt: number;
+  }
+): Promise<{ ok: true; account: CreatedAccount } | { ok: false; failure: AccountCreationFailure }> {
+  // Resolved after creation when it depends on the id; a fixed username is
+  // used as-is so the mobile path keeps claiming the name the user chose.
+  const fixedUsername = typeof username === "string" ? username : null;
+
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
+    email,
+    password,
+    // The whole point. No email is sent, and the address is confirmed by this
+    // call rather than by a link the product never uses.
+    email_confirm: true,
+    user_metadata: fixedUsername ? { full_name: fullName, username: fixedUsername } : { full_name: fullName }
+  });
+
+  if (createError || !created?.user) {
+    const duplicate =
+      (createError && "code" in createError && (createError as { code?: string }).code === "email_exists") ||
+      /already|registered|exists/i.test(createError?.message ?? "");
+
+    logBackendEvent(duplicate ? "info" : "warn", {
+      requestId,
+      action: "auth.signup",
+      statusCode: duplicate ? 200 : 400,
+      latencyMs: Date.now() - startedAt,
+      errorType: duplicate ? "duplicate_email" : (createError?.name ?? "create_user_failed")
+    });
+
+    return { ok: false, failure: { reason: duplicate ? "duplicate" : "provider", error: createError } };
+  }
+
+  const resolvedUsername = typeof username === "string" ? username : username(created.user.id);
+
+  const bootstrapResults = await bootstrapNewUser(admin, {
+    userId: created.user.id,
+    fullName,
+    username: resolvedUsername
+  });
+
+  for (const { label, error: rowError } of bootstrapResults) {
+    if (rowError) {
+      logBackendEvent("error", {
+        requestId,
+        action: "auth.signup",
+        statusCode: 500,
+        latencyMs: Date.now() - startedAt,
+        userId: created.user.id,
+        errorType: `bootstrap_${label}_failed`
+      });
+    }
+  }
+
+  const failedBootstrap = bootstrapResults.find((result) => result.error);
+  if (failedBootstrap) {
+    // No auth-only accounts. Such a user appears in Admin, can log in, and can
+    // never complete onboarding because the profile row it needs is missing.
+    await admin.auth.admin.deleteUser(created.user.id);
+    return {
+      ok: false,
+      failure: {
+        reason: "bootstrap",
+        label: failedBootstrap.label,
+        code: (failedBootstrap.error as { code?: string } | null)?.code,
+        error: failedBootstrap.error
+      }
+    };
+  }
+
+  return { ok: true, account: { userId: created.user.id, email } };
 }
 
 const mobileSignupSchema = z
@@ -124,22 +263,27 @@ function nativeSignupValidationMessage(error: z.ZodError): string {
 export type MobileSignUpResult = {
   ok: boolean;
   message: string;
-  requiresEmailConfirmation?: boolean;
 };
 
 /**
- * Registers a native-app account through the same public Supabase sign-up flow
- * as web. Supabase owns email verification; the native client must not receive
- * a session before the address is confirmed. Any creation error stays generic
- * so this endpoint cannot be used to discover registered email addresses.
+ * Registers a native-app account.
+ *
+ * Delegates account creation to createConfirmedAccount, the same function the
+ * web action uses, so both paths share one verification policy by construction.
+ * Mad Buddy does not verify email at sign-up: the account is created confirmed
+ * and the client signs in straight away.
+ *
+ * Any creation error stays generic so this endpoint cannot be used to discover
+ * which email addresses are registered.
  */
 export async function registerUserWithEmailVerification(input: unknown): Promise<MobileSignUpResult> {
   const requestId = createRequestId();
   const startedAt = Date.now();
 
   const serverEnv = getSupabaseServerEnv();
-  const publicEnv = getSupabaseBrowserEnv();
-  if (!serverEnv.url || !serverEnv.serviceRoleKey || !publicEnv.url || !publicEnv.anonKey) {
+  // Only the service role is required now: account creation no longer goes
+  // through an anon client, so the browser keys are not part of this path.
+  if (!serverEnv.url || !serverEnv.serviceRoleKey) {
     return { ok: false, message: "Sign-up is not available right now." };
   }
 
@@ -163,87 +307,50 @@ export async function registerUserWithEmailVerification(input: unknown): Promise
   }
 
   const { fullName, username, email, password } = parsed.data;
-  const authClient = createClient(publicEnv.url, publicEnv.anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
-  });
   const admin = createSupabaseAdminClient();
 
-  const { data, error } = await authClient.auth.signUp({
+  // The SAME creator the web action uses. Both paths therefore share one
+  // verification policy by construction rather than by two copies agreeing.
+  const creation = await createConfirmedAccount(admin, {
     email,
     password,
-    options: {
-      emailRedirectTo: `${getSiteUrl().origin}/auth/callback?next=/login`,
-      data: { full_name: fullName, username }
-    }
+    fullName,
+    username,
+    requestId,
+    startedAt
   });
 
-  if (error || !data.user) {
-    // Generic message for every failure (incl. "already registered") so the
-    // endpoint never reveals whether an address is registered.
-    logBackendEvent("warn", {
-      requestId,
-      action: "auth.signup",
-      statusCode: 400,
-      latencyMs: Date.now() - startedAt,
-      errorType: error?.name ?? "create_user_failed"
-    });
+  if (!creation.ok) {
+    if (creation.failure.reason === "bootstrap") {
+      const code = creation.failure.code;
+      return {
+        ok: false,
+        message:
+          creation.failure.label === "profile" && code === "23505"
+            ? "That username is already taken. Try another one."
+            : "Your account could not be set up. Please try again."
+      };
+    }
+
+    // One generic message for both duplicate and provider failures, so the
+    // endpoint never reveals whether an address is already registered.
     return { ok: false, message: "Your account could not be created. Check the form and try again." };
   }
 
-  if (data.user.identities?.length === 0) {
-    return {
-      ok: true,
-      message: "Check your email for the confirmation link.",
-      requiresEmailConfirmation: true
-    };
-  }
-
-  if (data.session) {
-    await authClient.auth.signOut({ scope: "local" });
-  }
-
-  const bootstrapResults = await bootstrapNewUser(admin, {
-    userId: data.user.id,
-    fullName,
-    username
-  });
-  const failedBootstrap = bootstrapResults.find((result) => result.error);
-  for (const { label, error: rowError } of bootstrapResults) {
-    if (rowError) {
-      logBackendEvent("error", {
-        requestId,
-        action: "auth.signup",
-        statusCode: 500,
-        latencyMs: Date.now() - startedAt,
-        userId: data.user.id,
-        errorType: `bootstrap_${label}_failed`
-      });
-    }
-  }
-
-  if (failedBootstrap) {
-    await admin.auth.admin.deleteUser(data.user.id);
-    const code = (failedBootstrap.error as { code?: string } | null)?.code;
-    return {
-      ok: false,
-      message:
-        failedBootstrap.label === "profile" && code === "23505"
-          ? "That username is already taken. Try another one."
-          : "Your account could not be set up. Please try again."
-    };
-  }
+  // The consent the native signup screen collected. Logged with the id the
+  // server just created, never one supplied by the client.
+  await recordSignupConsent(admin, { userId: creation.account.userId, requestId, source: "signup" });
 
   logBackendEvent("info", {
     requestId,
     action: "auth.signup",
     statusCode: 200,
     latencyMs: Date.now() - startedAt,
-    userId: data.user.id
+    userId: creation.account.userId
   });
 
-  return {
-    ok: true,
-    message: "Check your email and open the confirmation link before logging in.",
-    requiresEmailConfirmation: true
-  };
+  // No confirmation step: the account is created already confirmed, so the
+  // native client signs in immediately. Telling the user to check their email
+  // would send them looking for a message that is never sent.
+  return { ok: true, message: "Account created. You can sign in now." };
 }

@@ -1,15 +1,17 @@
 import { useCallback, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { AlertTriangle, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
 import { api } from "../lib/api";
+import { supabase } from "../lib/supabase";
 import { assertEnv, env } from "../lib/env";
 import { BrandMark } from "../components/BrandMark";
 import { TurnstileWidget } from "@/components/security/turnstile-widget";
 
 export function SignupScreen() {
+  const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -37,7 +39,7 @@ export function SignupScreen() {
     setBusy(true);
     setError("");
     setNotice("");
-    const result = await api.post<{ ok: boolean; message: string; requiresEmailConfirmation?: boolean }>(
+    const result = await api.post<{ ok: boolean; message: string }>(
       "/api/auth/signup",
       {
         fullName: fullName.trim(),
@@ -56,8 +58,26 @@ export function SignupScreen() {
       setBusy(false);
       return setError(result.error);
     }
+    // The account is created already confirmed, so sign in immediately rather
+    // than leaving the user on this form. Showing a notice and stopping here
+    // was a dead end: no confirmation email is ever sent, so there was nothing
+    // for them to go and do.
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password
+    });
     setBusy(false);
-    setNotice(result.data.message);
+
+    if (signInError) {
+      // The account exists, so this is recoverable by logging in -- say that
+      // rather than implying the signup failed.
+      setNotice("Account created. Sign in to continue.");
+      return;
+    }
+
+    // Onboarding is the canonical next step; the route guard sends a finished
+    // user onward if they somehow already completed it.
+    navigate("/onboarding", { replace: true });
   }
 
   return (
