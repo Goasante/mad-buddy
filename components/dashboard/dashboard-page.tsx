@@ -10,12 +10,10 @@ import {
   ChevronRight,
   CalendarDays,
   CircleDollarSign,
-  Clock,
   Compass,
   Ghost,
   GraduationCap,
   Hand,
-  MapPin,
   MessageSquareText,
   Moon,
   PartyPopper,
@@ -33,9 +31,11 @@ import { createPortal } from "react-dom";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { updateVisibilityStatusAction } from "@/app/(app)/settings-actions";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
-import { PlanCover } from "@/components/plans/plan-cover";
 import { MomentsPreview } from "@/components/content/moments-preview";
+import { useRouter } from "next/navigation";
 import { PageSectionHeader } from "@/components/app-shell/page-section-header";
+import { PlanStack } from "@/components/socialize/plan-stack";
+import { rsvpAction } from "@/app/(app)/plans-actions";
 import type { VisibleMoment } from "@/lib/content/service";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { usePullRefreshListener } from "@/components/ui/pull-to-refresh";
@@ -184,11 +184,6 @@ function capitalize(name: string) {
   return name ? name.charAt(0).toUpperCase() + name.slice(1) : name;
 }
 
-/** First letter of a name for the attendee-avatar fallback. */
-function initialOf(name: string) {
-  return name.trim().charAt(0).toUpperCase() || "?";
-}
-
 /** Short status text for the compact card (custom note wins, else availability). */
 const AVAILABILITY_LABEL: Record<AvailabilityType, string> = {
   free: "Free",
@@ -225,13 +220,7 @@ const PROXIMITY_DOT_CLASS: Partial<Record<ProximityLevel, string>> = {
  */
 const NEAR_GLOW_INTENSITY = 0.72;
 
-/**
- * One optical size and colour for the plan card's three leading icons, so the
- * what/when/where rail reads as a single system.
- */
-const PLAN_ICON = "h-4 w-4 shrink-0 text-muted-foreground";
-
-/** First name only, for the Near row's one-line labels. */
+/** "Ama Serwaa" -> "Ama". The greeting uses a first name, not a full one. */
 function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name;
 }
@@ -265,6 +254,7 @@ export function DashboardPageContent({
     null
   );
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+  const router = useRouter();
   const [quickControlsOpen, setQuickControlsOpen] = useState(false);
   // The app-wide menu sheet lives in AppShell; Home just asks it to open.
   const openAppMenu = useAppMenu();
@@ -509,7 +499,22 @@ export function DashboardPageContent({
     });
   }
 
-  const plan = upcomingPlans[0];
+  /**
+   * RSVP from the Home plan stack.
+   *
+   * The canonical action, unchanged — the card decides only what to OFFER,
+   * and the server still authorises. router.refresh() rather than local state
+   * so the count and the attendee faces come back from the projection rather
+   * than being guessed here.
+   */
+  function joinPlan(plan: HomeUpcomingPlan) {
+    if (isPending) return;
+    startTransition(async () => {
+      const result = await rsvpAction(plan.id, "going");
+      showPromptFeedback(result.message, !result.ok);
+      if (result.ok) router.refresh();
+    });
+  }
 
   // Quick actions are split once here so the launcher row, the More sheet and
   // the bottom gap-filler stay in agreement: whatever the filler promotes is
@@ -602,8 +607,26 @@ export function DashboardPageContent({
 
         {/* Upcoming Plans sits directly under Near: both answer "what is
             happening with my people", so they belong together, above the
-            generic action shortcuts. */}
-        {plan ? <UpcomingPlanRow plan={plan} /> : <UpcomingPlanEmpty />}
+            generic action shortcuts.
+
+            The SAME stack Linkr uses, rather than a second plan presentation:
+            two components showing the same projection would drift, and a plan
+            that looks different depending on which screen you found it on is
+            a plan you have to re-read. "See all" stays here only — Linkr IS
+            the discovery page, so it has nowhere to send you. */}
+        {upcomingPlans.length > 0 ? (
+          <section aria-labelledby="home-plans-heading" data-tour-id={TOUR_TARGET_IDS.HOME_UPCOMING_PLAN}>
+            <PageSectionHeader
+              id="home-plans-heading"
+              title="Upcoming Plans"
+              href="/plans"
+              actionAriaLabel="See all plans"
+            />
+            <PlanStack plans={upcomingPlans} onJoin={joinPlan} pending={isPending} />
+          </section>
+        ) : (
+          <UpcomingPlanEmpty />
+        )}
 
         {/* Quick actions: first-time activation set, or the returning-user set. */}
         {isFirstTimeUser ? (
@@ -1357,155 +1380,6 @@ function HomeGapFillerActions({
 // ---------------------------------------------------------------------------
 // Upcoming plan — one compact tappable row.
 // ---------------------------------------------------------------------------
-
-function rsvpLabel(rsvp: string): string {
-  switch (rsvp) {
-    case "going":
-      return "Going";
-    case "maybe":
-      return "Maybe";
-    case "not_going":
-    case "declined":
-      return "Not going";
-    default:
-      return "Respond";
-  }
-}
-
-/**
- * Home's single upcoming-Plan preview.
- *
- * The Plan shown is `upcomingPlans[0]` — the soonest by `start_at`, ordered
- * server-side by loadUpcomingPlans. No ranking is computed here.
- *
- * Everything rendered comes from the existing authorised projection: the venue
- * is the plan's own `custom_place_text` (never a coordinate or a private
- * address), and the attendee faces are the same "going" profiles the Plans
- * page uses.
- */
-function UpcomingPlanRow({ plan }: { plan: HomeUpcomingPlan }) {
-  const startAt = new Date(plan.startAt);
-  // Split date and time so they can carry different weight — the date is what
-  // people scan for, the time qualifies it.
-  const day = startAt.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-  const time = startAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  // "Hosting" when the projection already says this viewer created the plan.
-  // Not inferred: loadUpcomingPlans sets organiserName to the literal "You"
-  // for the creator. It has to be checked here because the same projection
-  // collapses a host's own attendance into myRsvp: "going", so the RSVP alone
-  // cannot tell a host from an attendee.
-  const attendance = plan.organiserName === "You" ? "Hosting" : rsvpLabel(plan.myRsvp);
-  // goingCount is the canonical number; the faces are a capped sample of it.
-  const extraAttendees = Math.max(0, plan.goingCount - plan.attendees.slice(0, 3).length);
-
-  return (
-    <section aria-labelledby="home-plan-heading" data-tour-id={TOUR_TARGET_IDS.HOME_UPCOMING_PLAN}>
-      <PageSectionHeader
-        id="home-plan-heading"
-        title="Upcoming Plans"
-        href="/plans"
-        actionAriaLabel="See all plans"
-      />
-
-      {/* One tappable card. There is no /plans/[id] route in the app, so this
-          opens the canonical Plans page — the same destination the previous
-          preview used. No new navigation is introduced here. */}
-      <Link
-        href="/plans"
-        aria-label={`${capitalize(plan.title)}, ${day} at ${time}${
-          plan.placeText ? `, ${capitalize(plan.placeText)}` : ""
-        }, ${attendance}`}
-        className="focus-ring safe-motion flex items-center gap-3 rounded-[1.375rem] border border-border/70 bg-card px-4 py-4 shadow-[0_1px_3px_hsl(var(--shadow)/0.06)] transition-transform active:scale-[0.99] motion-reduce:active:scale-100 dark:bg-[#1a1a1d]"
-      >
-        {/* The plan's cover, resolved by the canonical system: a user upload
-            if there is one, otherwise the category illustration, otherwise
-            the branded fallback. This card never picks an image itself. */}
-        <PlanCover
-          category={plan.category}
-          coverImageUrl={plan.coverImageUrl}
-          rounded="rounded-[0.875rem]"
-          className="h-14 w-14 shrink-0"
-        />
-
-        {/* Three metadata rows, each led by its own icon: what, when, where.
-            The icons form a consistent left rail so the three lines scan as a
-            set rather than as a paragraph. */}
-        <div className="min-w-0 flex-1 space-y-1.5">
-          {/* No leading icon on the title row: the cover to its left already
-              identifies the plan, so a calendar glyph here would be a second
-              marker for the same thing. */}
-          <p className="truncate text-[0.9375rem] font-semibold leading-tight">
-            {capitalize(plan.title)}
-          </p>
-          {/* Date/time and venue are secondary and scannable. Each line
-              truncates as a unit so a long venue can never wrap the card. */}
-          <p className="flex items-center gap-2 text-[0.8125rem] leading-tight text-muted-foreground">
-            <Clock className={PLAN_ICON} strokeWidth={1.75} aria-hidden="true" />
-            <span className="truncate" suppressHydrationWarning>
-              {day} • {time}
-            </span>
-          </p>
-          {plan.placeText ? (
-            <p className="flex items-center gap-2 text-[0.8125rem] leading-tight text-muted-foreground">
-              <MapPin className={PLAN_ICON} strokeWidth={1.75} aria-hidden="true" />
-              <span className="truncate">{capitalize(plan.placeText)}</span>
-            </p>
-          ) : null}
-        </div>
-
-        {/* Faces and count sit on one line, vertically centred against the
-            three metadata rows; the attendance state tucks underneath so it
-            never competes with them for horizontal space. */}
-        <div className="flex shrink-0 flex-col items-end gap-1.5 self-center">
-          {plan.attendees.length > 0 ? (
-            // Faces are the first thing to go on a narrow screen: they are
-            // decorative, while the title, time and venue are not. Below
-            // 380px only the count remains, which keeps the text column wide
-            // enough that the time is never truncated.
-            <span className="flex items-center" aria-hidden="true">
-              <span className="hidden -space-x-2 min-[380px]:flex">
-                {plan.attendees.slice(0, 3).map((attendee, index) => (
-                  <span
-                    key={`${attendee.name}-${index}`}
-                    // Plain avatars: the attendee projection carries no
-                    // membership tier, and a tier must never be inferred.
-                    className="grid h-7 w-7 place-items-center overflow-hidden rounded-full border-2 border-card bg-secondary text-[10px] font-semibold uppercase text-muted-foreground dark:border-[#1a1a1d]"
-                  >
-                    {attendee.avatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={attendee.avatarUrl} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      initialOf(attendee.name)
-                    )}
-                  </span>
-                ))}
-              </span>
-              {/* Two forms of the same count. Wide: the faces plus whoever
-                  they don't cover ("+12"). Narrow: the faces are hidden, so
-                  the total going count stands alone ("12 going") and no
-                  information is lost. */}
-              {extraAttendees > 0 ? (
-                <span className="ml-1.5 hidden text-xs font-semibold tabular-nums text-muted-foreground min-[380px]:inline">
-                  +{extraAttendees}
-                </span>
-              ) : null}
-              {/* Below 340px even this count squeezes the text column hard
-                  enough to truncate the DATE, which is core information being
-                  lost to a secondary detail. The attendance pill still says
-                  what matters, and the full roster is one tap away. */}
-              <span className="hidden text-xs font-semibold tabular-nums text-muted-foreground min-[340px]:inline min-[380px]:hidden">
-                {plan.goingCount} going
-              </span>
-            </span>
-          ) : null}
-          <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[0.6875rem] font-semibold text-primary">
-            {attendance}
-          </span>
-        </div>
-      </Link>
-    </section>
-  );
-}
 
 /**
  * Shown in place of the card when there is nothing coming up. Deliberately a

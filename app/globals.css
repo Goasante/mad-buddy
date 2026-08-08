@@ -2330,19 +2330,35 @@ select {
  * between "broken" and "nothing here yet, do this".
  * --------------------------------------------------------------------- */
 .linkr-empty {
+  /* Stacked by default. The horizontal arrangement below needs roughly 30rem
+     to seat art, copy and a button side by side; below that the text column
+     collapses toward min-content and the copy wraps one word per line. Phones
+     are the common case, so they get the layout that fits rather than the one
+     that has to be rescued. */
   display: flex;
-  align-items: center;
-  gap: 1rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.875rem;
   border-radius: 1.5rem;
   /* Solid hairline, not dashed. */
   border: 1px solid hsl(var(--border) / 0.45);
   background: hsl(var(--card) / 0.5);
-  padding: 1.125rem 1.25rem;
+  padding: 1.25rem;
+}
+
+@media (min-width: 30rem) {
+  .linkr-empty {
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.125rem 1.25rem;
+  }
 }
 
 .linkr-empty-body {
   display: flex;
   min-width: 0;
+  width: 100%;
   flex: 1;
   flex-direction: column;
   gap: 0.25rem;
@@ -2363,6 +2379,16 @@ select {
 .linkr-empty-cta {
   flex-shrink: 0;
   border-radius: 999px;
+  /* Full width while stacked, so the action is a clear target rather than a
+     pill floating under the copy. */
+  width: 100%;
+  justify-content: center;
+}
+
+@media (min-width: 30rem) {
+  .linkr-empty-cta {
+    width: auto;
+  }
 }
 
 /* ---------------------------- The mark ------------------------------- */
@@ -2580,6 +2606,21 @@ select {
   gap: 0.875rem;
   padding: 1rem;
   color: #fff;
+}
+
+/* Very narrow screens: the CTA drops under the copy rather than squeezing it.
+   The date badge stays beside the text — it is small, fixed, and the first
+   thing worth reading. */
+@media (max-width: 22rem) {
+  .linkr-plan-body {
+    flex-wrap: wrap;
+  }
+  .linkr-plan-actions {
+    width: 100%;
+    flex-direction: row-reverse;
+    justify-content: flex-start;
+    gap: 0.5rem;
+  }
 }
 
 /* ---------------------------- Date badge ----------------------------- */

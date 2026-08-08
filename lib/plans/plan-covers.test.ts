@@ -156,13 +156,23 @@ describe("plan cover architecture", () => {
   });
 
   it("is the only thing that decides a cover — surfaces just pass fields", () => {
-    for (const path of ["components/dashboard/dashboard-page.tsx", "components/plans/plans-page.tsx"]) {
+    // Every surface that shows plans, whether it renders a cover itself or
+    // delegates to a shared card. The guarantee is that NONE of them resolves
+    // or styles a cover of its own.
+    for (const path of [
+      "components/dashboard/dashboard-page.tsx",
+      "components/plans/plans-page.tsx",
+      "components/socialize/plan-stack.tsx"
+    ]) {
       const surface = read(path);
-      expect(surface, `${path} should render <PlanCover>`).toContain("<PlanCover");
-      // No surface resolves or styles a cover itself.
       expect(surface, `${path} must not call the resolver directly`).not.toContain("resolvePlanCover(");
       expect(surface, `${path} must not hardcode cover art`).not.toContain("PLAN_COVERS[");
     }
+
+    // The Plans page still renders the canonical component directly; Home and
+    // Linkr both go through SocializePlanCard, which does the same.
+    expect(read("components/plans/plans-page.tsx")).toContain("<PlanCover");
+    expect(read("components/socialize/socialize-plan-card.tsx")).toContain("resolvePlanCover(plan)");
   });
 
   it("routes the component through the resolver", () => {

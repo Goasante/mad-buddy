@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Sun,
   TrendingUp,
+  UserRound,
   type LucideIcon
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -162,7 +163,10 @@ export function QuickControlsSheet({
 
             {/* Shortcuts — existing destinations only. */}
             <QuickGroup label="Shortcuts" className="mt-5">
-              <QuickLink href="/billing" icon={CircleDollarSign} label="Membership" description="Your plan and billing" />
+              {/* Profile first: it is the destination people reach for most,
+                  and it moved here when the bottom nav made room for Linkr. */}
+              <QuickLink href="/profile" icon={UserRound} label="Profile" description="How other people see you" />
+              <QuickLink href="/billing" icon={CircleDollarSign} label="Membership" description="Your plan and billing" divider />
               <QuickLink href="/buddy-score" icon={TrendingUp} label="My Progress" description="Buddy Score and activity" divider />
               <QuickLink href="/settings" icon={SettingsIcon} label="Settings" description="Preferences and account" divider />
             </QuickGroup>
