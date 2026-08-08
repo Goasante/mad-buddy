@@ -10,6 +10,7 @@ import {
   MoreHorizontal,
   Plus,
   Search,
+  SlidersHorizontal,
   UserMinus,
   UserPlus,
   Users,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useLongPress } from "@/hooks/use-long-press";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useSwipeTabs } from "@/hooks/use-swipe-tabs";
 import { SWIPE_OPT_OUT_ATTRIBUTE } from "@/lib/navigation/swipe-tabs";
@@ -42,7 +44,7 @@ import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
 import { useAppMenu } from "@/hooks/app-menu-context";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
-import { AppMenu } from "@/components/ui/app-dropdown";
+import { AppMenu, type AppMenuItem } from "@/components/ui/app-dropdown";
 import { conversationHref } from "@/lib/messaging/open-conversation";
 import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
@@ -53,6 +55,15 @@ import { Modal } from "@/components/ui/modal";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { Textarea } from "@/components/ui/textarea";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
+import { MuddiesClosestRail } from "@/components/friends/muddies-closest-rail";
+import { MuddiesGrid } from "@/components/friends/muddies-grid";
+import { MuddiesRequests } from "@/components/friends/muddies-requests";
+import {
+  MUDDIES_FILTERS,
+  closestMuddies,
+  matchesMuddiesFilter,
+  type MuddiesFilterId
+} from "@/lib/friends/muddies-presentation";
 import { cn } from "@/lib/utils";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
@@ -69,15 +80,25 @@ export type UserSummary = {
   username: string;
   avatarUrl: string | null;
   mutualFriends: number;
+  /** Avatars for the mutual stack. May be shorter than mutualFriends. */
+  mutualAvatarUrls?: string[];
   status: "friend" | "available" | "received" | "sent" | "blocked";
   note: string;
   plan: SubscriptionPlan;
+  /** Trusted Member approval, or null. Resolved with the profile, never per card. */
+  trustedSince?: string | null;
 };
 
 type ProximityInfo = {
   proximityLevel: ProximityLevel;
   glowStrength: number;
   confidence: ConfidenceLevel;
+  /**
+   * The API's own coarse presence string ("Active recently", and so on).
+   * Deliberately not a timestamp: the server never sends an exact last-seen
+   * time, so nothing downstream can render one.
+   */
+  lastActiveEstimate?: string;
 };
 
 type Circle = {
@@ -101,6 +122,7 @@ type NearbyFriendApiItem = {
   proximity_level: ProximityLevel;
   glow_strength: number;
   confidence: ConfidenceLevel;
+  last_active_estimate?: string;
 };
 
 const tabs: Array<{ id: FriendTab; label: string }> = [
@@ -145,6 +167,7 @@ export function FriendsPageContent({
     : "all";
 
   const [requestSubTab, setRequestSubTab] = useState<"received" | "sent">("received");
+  const [muddiesFilter, setMuddiesFilter] = useState<MuddiesFilterId>("all");
   const [users, setUsers] = useState<UserSummary[]>(initialUsers);
   const [proximityByFriendId, setProximityByFriendId] = useState<Record<string, ProximityInfo>>({});
   const [circles, setCircles] = useState<Circle[]>(() => [
@@ -193,6 +216,9 @@ export function FriendsPageContent({
       setActiveCircleId(null);
       setQuery("");
       setFeedback("");
+      // Leaving All abandons its filters. Carrying one back would silently
+      // narrow the grid on return, with the reason scrolled out of sight.
+      setMuddiesFilter("all");
       if (id === "requests") router.refresh();
     },
     [activeTab, router, searchParams]
@@ -283,6 +309,7 @@ export function FriendsPageContent({
         data.friends.forEach((friend) => {
           next[friend.friend_id] = {
             proximityLevel: friend.proximity_level,
+            lastActiveEstimate: friend.last_active_estimate,
             glowStrength: friend.glow_strength,
             confidence: friend.confidence
           };
@@ -327,6 +354,33 @@ export function FriendsPageContent({
   const requestUsers = useMemo(
     () => users.filter((user) => user.status === (requestSubTab === "received" ? "received" : "sent")),
     [users, requestSubTab]
+  );
+
+  /** The closest rail: friends with a live proximity signal, nearest first. */
+  const railPeople = useMemo(
+    () => closestMuddies(friendUsers, proximityByFriendId),
+    [friendUsers, proximityByFriendId]
+  );
+
+  /**
+   * The grid, after the chip row.
+   *
+   * Filtering happens on top of the search-filtered list rather than beside
+   * it, so a chip and a query narrow together instead of one silently
+   * discarding the other.
+   */
+  const gridPeople = useMemo(
+    () =>
+      visibleFriendUsers.filter((user) =>
+        matchesMuddiesFilter(muddiesFilter, proximityByFriendId[user.id])
+      ),
+    [visibleFriendUsers, muddiesFilter, proximityByFriendId]
+  );
+
+  /** Incoming requests, in the shape the Requests list renders. */
+  const incomingRequests = useMemo(
+    () => users.filter((user) => user.status === "received"),
+    [users]
   );
   const blockedUsers = useMemo(() => users.filter((user) => user.status === "blocked"), [users]);
 
@@ -486,6 +540,47 @@ export function FriendsPageContent({
 
   // Shared row renderer so the "Active now" and "All Muddies" sections render
   // identical cards without duplicating the (many) action closures.
+  /**
+   * The actions available on a Muddy, defined once.
+   *
+   * The list row and the Active-now strip both use this, so an action can
+   * never exist on one surface and quietly be missing from the other — which
+   * is exactly how Remove became unreachable for anyone who was online.
+   */
+  const muddyActions = (user: UserSummary): AppMenuItem[] => [
+    { id: "profile", label: "View profile", onSelect: () => setProfileUser(user) },
+    { id: "message", label: "Message", icon: <MessagesSquare className="h-4 w-4" />, onSelect: () => openConversationWith(user.id) },
+    {
+      id: "close-friend",
+      label: closeFriendIds.includes(user.id) ? "Remove from Close Friends" : "Add to Close Friends",
+      onSelect: () => toggleCloseFriend(user)
+    },
+    {
+      id: "remove",
+      label: "Remove Muddy",
+      icon: <UserMinus className="h-4 w-4" />,
+      destructive: true,
+      separatorBefore: true,
+      onSelect: () =>
+        runFriendAction(
+          () => removeFriendAction(user.id),
+          () => removeUser(user.id, `${user.displayName} was removed.`)
+        )
+    },
+    {
+      id: "block",
+      label: "Block",
+      icon: <Ban className="h-4 w-4" />,
+      destructive: true,
+      onSelect: () =>
+        runFriendAction(
+          () => blockUserAction(user.id),
+          () => updateUserStatus(user.id, "blocked", `${user.displayName} is blocked.`)
+        )
+    },
+    { id: "report", label: "Report", icon: <Flag className="h-4 w-4" />, onSelect: () => setReportUser(user) }
+  ];
+
   const renderUserRow = (user: UserSummary) => (
     <MuddyRow
       key={user.id}
@@ -543,24 +638,40 @@ export function FriendsPageContent({
       />
 
       <header className="flex min-w-0 items-center justify-between gap-3 pt-1 md:pt-5">
-        <p className="min-w-0 truncate text-sm text-muted-foreground">Your Muddies, all in one place.</p>
+        <p className="muddies-subtitle min-w-0">Find and connect with Muddies near you</p>
         <Button data-tour-id={TOUR_TARGET_IDS.MUDDIES_ADD} type="button" size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAddOpen(true)}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           Add Muddy
         </Button>
       </header>
 
-      {/* Scrollable tab bar. The extra end padding + no-scrollbar utility stop
-          the last tab (Blocked) from clipping on narrow screens. */}
+      {/* The rail sits ABOVE the pill row, so the pills read as controls
+          underneath it rather than as chrome the rail hangs off. Scoped to
+          All, which is the only tab it belongs to. */}
+      {activeTab === "all" ? (
+        <MuddiesClosestRail
+          people={railPeople}
+          proximityByFriendId={proximityByFriendId}
+          glowColorByFriendId={glowColorByFriendId}
+          reducedMotion={reducedMotion}
+          onSelect={(id) => {
+            const person = friendUsers.find((candidate) => candidate.id === id);
+            if (person) setProfileUser(person);
+          }}
+        />
+      ) : null}
+
+      {/* Scrollable pill row. The extra end padding + no-scrollbar utility stop
+          the last pill from clipping on narrow screens. */}
       {/* Scrollable tab bar. The strip itself scrolls horizontally, so it is
           marked as swipe-exempt: dragging the labels sideways to reach
           "Blocked" must scroll the strip, not skip a tab under the finger. */}
       <div
         data-tour-id={TOUR_TARGET_IDS.MUDDIES_TABS}
         {...{ [SWIPE_OPT_OUT_ATTRIBUTE]: "" }}
-        className="no-scrollbar -mx-4 max-w-[calc(100%+2rem)] overflow-x-auto border-b border-border/70 px-4 sm:mx-0 sm:max-w-full sm:px-0"
+        className="no-scrollbar muddies-pills"
       >
-        <div role="tablist" aria-label="Muddies tabs" aria-orientation="horizontal" className="flex w-max gap-1 pr-4 sm:pr-0">
+        <div role="tablist" aria-label="Muddies tabs" aria-orientation="horizontal" className="muddies-pills-row">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -577,22 +688,44 @@ export function FriendsPageContent({
               // user pass through every tab to reach the list below.
               tabIndex={activeTab === tab.id ? 0 : -1}
               onKeyDown={onTabKeyDown}
-              className={cn(
-                "focus-ring safe-motion inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium",
-                activeTab === tab.id
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
+              className={cn("muddies-filter focus-ring", activeTab === tab.id && "muddies-filter-on")}
               onClick={() => selectTab(tab.id)}
             >
               {tab.label}
               {tab.id === "requests" && receivedRequestCount > 0 ? (
-                <span className="grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-primary px-1 text-[11px] font-bold leading-none text-primary-foreground">
-                  {receivedRequestCount}
-                </span>
+                <span className="muddies-pill-count">{receivedRequestCount}</span>
               ) : null}
             </button>
           ))}
+
+          {/* The proximity filters share the row but NOT the semantics: a tab
+              swaps the panel below, a filter narrows the grid inside the panel
+              already open. They are buttons rather than tabs for exactly that
+              reason — announcing a filter as a tab would promise a panel
+              change that never comes. Only on All, the one tab they act on.
+
+              "All" is deliberately absent here: the tab of the same name is
+              already the leftmost pill, and two pills reading All in one row
+              would be a coin toss as to which does what. Choosing any filter
+              turns it on; choosing it again clears it back to unfiltered. */}
+          {activeTab === "all"
+            ? MUDDIES_FILTERS.filter((filter) => filter.id !== "all").map((filter) => (
+                <button
+                  key={filter.id}
+                  type="button"
+                  aria-pressed={muddiesFilter === filter.id}
+                  onClick={() =>
+                    setMuddiesFilter((current) => (current === filter.id ? "all" : filter.id))
+                  }
+                  className={cn(
+                    "muddies-filter focus-ring",
+                    muddiesFilter === filter.id && "muddies-filter-on"
+                  )}
+                >
+                  {filter.label}
+                </button>
+              ))
+            : null}
         </div>
       </div>
 
@@ -624,8 +757,111 @@ export function FriendsPageContent({
         }}
         {...swipeHandlers}
       >
-      {activeTab === "all" || activeTab === "close" || (activeTab === "circles" && activeCircleId) ? (
-        <div data-tour-id={TOUR_TARGET_IDS.MUDDIES_LIST} className="space-y-4">
+      {/* THE MUDDIES LANDING LAYOUT.
+          Only the All tab: Close Friends and a single Circle are deliberate
+          subsets, and a rail called "Who is closest to you" on top of a
+          filtered subset would answer a question nobody asked. */}
+      {activeTab === "all" ? (
+        <div data-tour-id={TOUR_TARGET_IDS.MUDDIES_LIST} className="muddies-page">
+          <div className="muddies-search-row">
+            <div className="muddies-search">
+              <Search className="muddies-search-icon h-[18px] w-[18px]" aria-hidden="true" />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search Muddies"
+                aria-label="Search Muddies"
+                className="muddies-search-input focus-ring"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              aria-label="Find and add Muddies"
+              title="Find and add Muddies"
+              className="muddies-search-tune focus-ring"
+            >
+              <SlidersHorizontal className="h-[18px] w-[18px]" aria-hidden="true" />
+            </button>
+          </div>
+
+          <section aria-labelledby="my-muddies-heading">
+            <div className="muddies-section-head">
+              <h2 id="my-muddies-heading" className="muddies-section-title">
+                My Muddies
+                <span className="muddies-section-count">{friendUsers.length}</span>
+              </h2>
+            </div>
+
+            {gridPeople.length > 0 ? (
+              <MuddiesGrid
+                people={gridPeople}
+                proximityByFriendId={proximityByFriendId}
+                onOpenProfile={(id) => {
+                  const person = friendUsers.find((candidate) => candidate.id === id);
+                  if (person) setProfileUser(person);
+                }}
+                onMessage={openConversationWith}
+                renderActions={(id) => {
+                  const person = friendUsers.find((candidate) => candidate.id === id);
+                  return person ? muddyActions(person) : [];
+                }}
+              />
+            ) : (
+              <FriendsEmptyState
+                activeTab="all"
+                hasQuery={Boolean(query.trim()) || muddiesFilter !== "all"}
+                onAddFriends={() => setAddOpen(true)}
+              />
+            )}
+          </section>
+
+          {incomingRequests.length > 0 ? (
+            <section aria-labelledby="muddies-requests-heading">
+              <div className="muddies-section-head">
+                <h2 id="muddies-requests-heading" className="muddies-section-title">
+                  Requests
+                  <span className="muddies-section-count">{incomingRequests.length}</span>
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => selectTab("requests")}
+                  className="muddies-section-link focus-ring"
+                >
+                  See all
+                </button>
+              </div>
+
+              <MuddiesRequests
+                requests={incomingRequests.slice(0, 3).map((person) => ({
+                  id: person.id,
+                  requestId: person.requestId,
+                  displayName: person.displayName,
+                  avatarUrl: person.avatarUrl,
+                  mutualFriends: person.mutualFriends,
+                  mutualAvatarUrls: person.mutualAvatarUrls
+                }))}
+                onAccept={(person) =>
+                  runFriendAction(
+                    () => acceptFriendRequestAction(person.requestId ?? person.id),
+                    () => promoteUserToFriend(person.id, `${person.displayName} is now your Muddy.`)
+                  )
+                }
+                onIgnore={(person) =>
+                  runFriendAction(
+                    () => updateFriendRequestStatusAction(person.requestId ?? person.id, "declined"),
+                    () => removeUser(person.id, `${person.displayName}'s request was ignored.`)
+                  )
+                }
+              />
+            </section>
+          ) : null}
+        </div>
+      ) : null}
+
+      {activeTab === "close" || (activeTab === "circles" && activeCircleId) ? (
+        <div className="space-y-4">
           <div className="flex items-center gap-2">
             <div className="relative min-w-0 flex-1 sm:max-w-sm">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -657,6 +893,7 @@ export function FriendsPageContent({
                       friends={activeFriends}
                       proximityByFriendId={proximityByFriendId}
                       onSelect={setProfileUser}
+                      renderActions={muddyActions}
                     />
                   ) : null}
 
@@ -1160,11 +1397,20 @@ function MuddyRow({
 function ActiveNowStrip({
   friends,
   proximityByFriendId,
-  onSelect
+  onSelect,
+  renderActions
 }: {
   friends: UserSummary[];
   proximityByFriendId: Record<string, ProximityInfo>;
   onSelect: (user: UserSummary) => void;
+  /**
+   * The same actions a list row carries.
+   *
+   * Being active moves a Muddy OUT of the list and into this strip, so without
+   * this they lost every action except "open profile" — including Remove.
+   * Whether someone is online is not a reason to be unable to unfriend them.
+   */
+  renderActions: (user: UserSummary) => AppMenuItem[];
 }) {
   return (
     <section aria-labelledby="active-now-heading">
@@ -1189,9 +1435,11 @@ function ActiveNowStrip({
           const level = proximity?.proximityLevel ?? "hidden";
           return (
             <li key={friend.id} className="shrink-0">
-              <button
-                type="button"
-                onClick={() => onSelect(friend)}
+              <ActiveNowAvatar
+                friend={friend}
+                level={level}
+                onSelect={() => onSelect(friend)}
+                actions={renderActions(friend)}
                 className="focus-ring safe-motion flex w-[76px] flex-col items-center gap-1.5 rounded-xl text-center"
                 aria-label={`${friend.displayName}, ${proximityLabels[level]}`}
               >
@@ -1210,12 +1458,79 @@ function ActiveNowStrip({
                 <span className={cn("w-full truncate text-[11px] font-semibold", PROXIMITY_TEXT_CLASS[level] ?? "text-primary")}>
                   {proximityLabels[level]}
                 </span>
-              </button>
+              </ActiveNowAvatar>
             </li>
           );
         })}
       </ul>
     </section>
+  );
+}
+
+/**
+ * One avatar in the Active-now strip.
+ *
+ * Tap opens the profile, as before. Press and hold (or right-click) opens the
+ * same action menu a list row carries, which is how an active Muddy regains
+ * Remove, Block and the rest — being online used to hide all of them.
+ *
+ * The menu is rendered anchored to this avatar with a zero-size trigger: the
+ * gesture IS the affordance, so a visible button would defeat the point, but
+ * the menu still needs something to position against.
+ */
+function ActiveNowAvatar({
+  friend,
+  level,
+  onSelect,
+  actions,
+  className,
+  children,
+  ...props
+}: {
+  friend: UserSummary;
+  level: ProximityLevel;
+  onSelect: () => void;
+  actions: AppMenuItem[];
+  className?: string;
+  children: React.ReactNode;
+} & React.HTMLAttributes<HTMLButtonElement>) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { pressing, handlers } = useLongPress(() => setMenuOpen(true));
+
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        onClick={(event) => {
+          // The hook swallows the click that follows a fired long press, so
+          // holding cannot also open the profile behind the menu.
+          handlers.onClick(event);
+          if (event.defaultPrevented) return;
+          onSelect();
+        }}
+        onPointerDown={handlers.onPointerDown}
+        onPointerMove={handlers.onPointerMove}
+        onPointerUp={handlers.onPointerUp}
+        onPointerLeave={handlers.onPointerLeave}
+        onPointerCancel={handlers.onPointerCancel}
+        onContextMenu={handlers.onContextMenu}
+        className={cn(className, pressing && "scale-95 transition-transform motion-reduce:transform-none")}
+        {...props}
+      >
+        {children}
+      </button>
+
+      {/* Anchored to the avatar. The trigger is inert and invisible because the
+          long press is what opens this; it exists only to position the menu. */}
+      <AppMenu
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        label={`Actions for ${friend.displayName}`}
+        trigger={<span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 block h-0" />}
+        items={actions}
+      />
+      <span className="sr-only">{proximityLabels[level]}</span>
+    </span>
   );
 }
 

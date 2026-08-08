@@ -7,6 +7,11 @@ import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { actionableFriendRequests } from "@/lib/friends/relationship-state";
+import {
+  friendIdsFrom,
+  summariseMutualsForMany,
+  type MutualSummary
+} from "@/lib/friends/mutual-muddies";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 
 export const dynamic = "force-dynamic";
@@ -79,7 +84,7 @@ async function loadFriendNetwork(): Promise<{
 
   const { data: profiles } = await admin
     .from("profiles")
-    .select("user_id, full_name, username, avatar_url")
+    .select("user_id, full_name, username, avatar_url, trusted_member_since")
     .in("user_id", [...profileIds]);
   const plans = await loadEffectivePlansForUsers(admin, [...profileIds]);
   const profilesById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
@@ -102,10 +107,63 @@ async function loadFriendNetwork(): Promise<{
         user_id: profileId,
         full_name: metadataName?.trim() || "Mad Buddy user",
         username: metadataUsername || `muddy_${profileId.slice(0, 8)}`,
-        avatar_url: typeof metadata?.avatar_url === "string" ? metadata.avatar_url : null
+        avatar_url: typeof metadata?.avatar_url === "string" ? metadata.avatar_url : null,
+        // No profiles row yet, so no standing to report.
+        trusted_member_since: null
       });
     })
   );
+  /**
+   * Mutual Muddies, in ONE batched read.
+   *
+   * Scoped to requests and existing friends only. Blocked users are left out
+   * deliberately: showing who you both know is social-graph information, and
+   * blocking someone is a request to stop being shown their world.
+   */
+  const viewerFriendIds = friendIdsFrom(user.id, friendships);
+  const mutualSubjectIds = [...profileIds].filter((id) => !blockedIds.has(id));
+  let mutualsById = new Map<string, MutualSummary>();
+
+  if (mutualSubjectIds.length > 0) {
+    // Every active friendship edge touching the people on this page. One query
+    // for the whole list rather than one per row.
+    const orFilter = `user_one_id.in.(${mutualSubjectIds.join(",")}),user_two_id.in.(${mutualSubjectIds.join(",")})`;
+    const { data: mutualEdges } = await admin
+      .from("friendships")
+      .select("user_one_id, user_two_id")
+      .or(orFilter)
+      .is("ended_at", null);
+
+    mutualsById = summariseMutualsForMany(
+      user.id,
+      viewerFriendIds,
+      mutualSubjectIds,
+      mutualEdges ?? []
+    );
+  }
+
+  // Avatars for the faces shown beside a count. Drawn from profiles already
+  // fetched where possible; anyone not in that map simply contributes to the
+  // count without a face rather than triggering another read.
+  const mutualPreviewIds = new Set<string>();
+  for (const summary of mutualsById.values()) {
+    for (const id of summary.previewIds) mutualPreviewIds.add(id);
+  }
+  const missingPreviewIds = [...mutualPreviewIds].filter((id) => !profilesById.has(id));
+  const previewAvatarById = new Map<string, string | null>();
+  if (missingPreviewIds.length > 0) {
+    const { data: previewProfiles } = await admin
+      .from("profiles")
+      .select("user_id, avatar_url")
+      .in("user_id", missingPreviewIds);
+    for (const row of previewProfiles ?? []) previewAvatarById.set(row.user_id, row.avatar_url);
+  }
+
+  const mutualAvatarUrls = (id: string) =>
+    (mutualsById.get(id)?.previewIds ?? [])
+      .map((mutualId) => profilesById.get(mutualId)?.avatar_url ?? previewAvatarById.get(mutualId) ?? null)
+      .filter((url): url is string => Boolean(url));
+
   const results: UserSummary[] = [];
   const renderedRequests = new Set<string>();
 
@@ -123,10 +181,12 @@ async function loadFriendNetwork(): Promise<{
         displayName: profile.full_name,
         username: profile.username,
         avatarUrl: profile.avatar_url,
-        mutualFriends: 0,
+        mutualFriends: mutualsById.get(profileId)?.count ?? 0,
+        mutualAvatarUrls: mutualAvatarUrls(profileId),
         status: isReceived ? "received" : "sent",
         note: isReceived ? "Wants to connect with you" : "Waiting for a response",
-        plan: plans.get(profileId) ?? "free"
+        plan: plans.get(profileId) ?? "free",
+        trustedSince: profile.trusted_member_since ?? null
       });
     }
   });
@@ -141,10 +201,12 @@ async function loadFriendNetwork(): Promise<{
         displayName: profile.full_name,
         username: profile.username,
         avatarUrl: profile.avatar_url,
-        mutualFriends: 0,
+        mutualFriends: mutualsById.get(profileId)?.count ?? 0,
+        mutualAvatarUrls: mutualAvatarUrls(profileId),
         status: "friend",
         note: "Approved Muddy",
-        plan: plans.get(profileId) ?? "free"
+        plan: plans.get(profileId) ?? "free",
+        trustedSince: profile.trusted_member_since ?? null
       });
     }
   });
@@ -158,10 +220,13 @@ async function loadFriendNetwork(): Promise<{
         displayName: profile.full_name,
         username: profile.username,
         avatarUrl: profile.avatar_url,
+        // Deliberately zero: blocking someone is a request to stop being shown
+        // their world, and a mutual count is social-graph information.
         mutualFriends: 0,
         status: "blocked",
         note: "Blocked user",
-        plan: plans.get(profile.user_id) ?? "free"
+        plan: plans.get(profile.user_id) ?? "free",
+        trustedSince: profile.trusted_member_since ?? null
       });
     }
   });
