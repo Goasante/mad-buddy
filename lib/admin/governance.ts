@@ -25,6 +25,13 @@ export const ADMIN_PERMISSIONS = [
   "admin.users.view_summary",
   "admin.users.restrict",
   "admin.users.suspend",
+  /**
+   * Soft-delete an account. Separate from suspend because the outcomes
+   * differ: a suspension is a door held shut and reopenable at any time,
+   * while a deletion removes the person from every surface and starts a
+   * purge clock. Same catalogue, distinct permission.
+   */
+  "admin.users.delete",
   "admin.users.restore",
   "admin.users.recovery_link",
   "admin.sessions.revoke",
@@ -149,6 +156,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, readonly AdminPermission[]> = {
     "admin.users.view_summary",
     "admin.users.restrict",
     "admin.users.suspend",
+    "admin.users.delete",
     "admin.users.restore",
     "admin.users.recovery_link",
     "admin.reports.review",
@@ -165,6 +173,10 @@ export const ROLE_PERMISSIONS: Record<AdminRole, readonly AdminPermission[]> = {
   customer_support_agent: [
     "admin.users.view_summary",
     "admin.users.suspend",
+    // Support may delete too — fake accounts are exactly what they field —
+    // but the action requires a written reason from them (see the schema in
+    // app/(admin)/admin/actions.ts). Owner and admin are not prompted.
+    "admin.users.delete",
     "admin.users.recovery_link",
     "admin.sessions.revoke",
     "admin.support.manage"

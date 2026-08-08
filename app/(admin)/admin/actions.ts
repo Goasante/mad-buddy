@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireAdminPermission } from "@/lib/admin/access";
+import { getAdminAccess, requireAdminPermission } from "@/lib/admin/access";
 import { recordAdminAuditEvent } from "@/lib/admin/service";
 import { deliverNotification } from "@/lib/notifications/server";
 import { requireSafetyAdmin } from "@/lib/safety/admin";
@@ -23,6 +23,19 @@ const privacyStatusSchema = z.object({
 const supportReplySchema = z.object({
   ticketId: z.string().uuid(),
   message: z.string().trim().min(2).max(2000)
+});
+
+/**
+ * Deleting an account.
+ *
+ * The reason is OPTIONAL in the schema and enforced per role in the action:
+ * owner and admin are trusted to act without explaining themselves, support
+ * must write one. Validating that here rather than in the schema keeps the
+ * rule where the role is actually known.
+ */
+const deleteUserSchema = z.object({
+  userId: z.string().uuid(),
+  reason: z.string().trim().max(300).optional()
 });
 
 const userAccessSchema = z.object({
@@ -288,6 +301,93 @@ export async function runUserQuickFixAction(input: unknown): Promise<AdminAction
 
     revalidatePath("/admin/users");
     return { ok: true, message: "Quick fix completed." };
+  } catch {
+    return { ok: false, message: "Admin access is required." };
+  }
+}
+
+
+/**
+ * Soft-delete a user account.
+ *
+ * SOFT, deliberately. A hard delete cascades across roughly thirty tables and
+ * cannot be undone, so a mistaken tap on a real account would destroy their
+ * messages, plans and friendships with no recovery. This sets `deleted_at`,
+ * which every profile read already honours, and bans the auth user — so from
+ * the product's point of view the account is gone immediately, while the rows
+ * survive a grace period in which a mistake can still be reversed.
+ *
+ * The reason rule follows the role: owner and admin are not asked, support
+ * must supply one. Both are recorded either way — "who deleted this account"
+ * must always be answerable, and an unexplained deletion is still an
+ * attributable one.
+ *
+ * The audit entry is written BEFORE the change, and a failure to record it
+ * aborts the whole thing. That is the existing pattern for account access
+ * changes here: an unlogged deletion is worse than no deletion.
+ */
+export async function deleteUserAccountAction(input: unknown): Promise<AdminActionState> {
+  const parsed = deleteUserSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "That account is unavailable." };
+
+  try {
+    const { admin, context } = await requireSafetyAdmin();
+    await requireAdminPermission(admin, context, "admin.users.delete");
+
+    const limit = await consumeRateLimit({ action: "admin.mutate", userId: context.userId });
+    if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
+
+    // Deleting yourself would revoke the access needed to undo it.
+    if (parsed.data.userId === context.userId) {
+      return { ok: false, message: "You cannot delete your own account." };
+    }
+
+    // Support explains; owner and admin do not have to. The role comes from
+    // the canonical resolver rather than being inferred from permissions —
+    // "may delete" and "must justify" are different questions.
+    const { role } = await getAdminAccess(admin, context);
+    const reason = parsed.data.reason?.trim() || undefined;
+    const mustExplain = role === "support";
+    if (mustExplain && (!reason || reason.length < 3)) {
+      return { ok: false, message: "Add a short reason before deleting this account." };
+    }
+
+    const { data: target, error: targetError } = await admin.auth.admin.getUserById(parsed.data.userId);
+    if (targetError || !target.user) return { ok: false, message: "That user account is unavailable." };
+
+    const logged = await recordAdminAuditEvent(admin, {
+      actorId: context.userId,
+      action: "user_account_deleted",
+      targetType: "user",
+      targetId: parsed.data.userId,
+      newState: { deleted: true, softDelete: true },
+      // Absent for owner/admin, which is a truthful "not required" rather
+      // than an invented justification.
+      reason
+    });
+    if (!logged) return { ok: false, message: "The audit entry could not be recorded, so no change was made." };
+
+    const nowIso = new Date().toISOString();
+    const { error: profileError } = await admin
+      .from("profiles")
+      .update({ deleted_at: nowIso, updated_at: nowIso })
+      .eq("user_id", parsed.data.userId);
+    if (profileError) return { ok: false, message: "Couldn't delete that account. Try again." };
+
+    // Ban the auth user too: without this the person could still sign in and
+    // see an app that has erased them from everyone else's view.
+    const { error: authError } = await admin.auth.admin.updateUserById(parsed.data.userId, {
+      ban_duration: "876000h"
+    });
+    if (authError) {
+      // Roll the profile back rather than leaving a half-deleted account that
+      // is invisible to others but still usable by its owner.
+      await admin.from("profiles").update({ deleted_at: null, updated_at: nowIso }).eq("user_id", parsed.data.userId);
+      return { ok: false, message: "Couldn't revoke sign-in for that account. Nothing was changed." };
+    }
+
+    revalidatePath("/admin/users");
+    return { ok: true, message: "Account deleted." };
   } catch {
     return { ok: false, message: "Admin access is required." };
   }

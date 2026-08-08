@@ -116,13 +116,32 @@ describe("no ambient staff access to private data (spec §1, §4)", () => {
   });
 
   it("keeps support focused on account help and the universal safety hold", () => {
+    // Asserted exactly, so support's scope cannot widen unnoticed. Deletion
+    // was added deliberately — fake accounts are what support fields — and
+    // unlike owner and admin they must write a reason for each one.
     expect(permissionsForRole("customer_support_agent")).toEqual([
       "admin.users.view_summary",
       "admin.users.suspend",
+      "admin.users.delete",
       "admin.users.recovery_link",
       "admin.sessions.revoke",
       "admin.support.manage"
     ]);
+  });
+
+  it("still withholds everything support has no business reaching", () => {
+    // Deletion is account help. Reviewing reports, moving money and managing
+    // roles are not, and adding one permission must not quietly bring others.
+    const support = permissionsForRole("customer_support_agent");
+    for (const withheld of [
+      "admin.reports.review",
+      "admin.appeals.review",
+      "admin.billing.refund",
+      "admin.roles.manage",
+      "admin.audit.view"
+    ]) {
+      expect(support).not.toContain(withheld);
+    }
   });
 
   it("keeps product analytics with business administrators, not support", () => {
