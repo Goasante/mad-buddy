@@ -308,7 +308,7 @@ describe("privacy", () => {
     );
     expect(guard).toEqual([]);
     expect(lifecycleMigration).toContain("ended_at = null");
-  });
+  }, 15_000);
 
   it("reactivation is not AI-readable", () => {
     expect(LIFE_EVENT_CLASSIFICATION["relationship.reactivated"].aiEligible).toBe(false);

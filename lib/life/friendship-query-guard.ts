@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, type Dirent } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 /**
@@ -58,22 +58,22 @@ export function collectSourceFiles(root: string): string[] {
   const found: string[] = [];
 
   const walk = (directory: string) => {
-    let entries: string[];
+    let entries: Dirent<string>[];
     try {
-      entries = readdirSync(directory);
+      entries = readdirSync(directory, { withFileTypes: true, encoding: "utf8" });
     } catch {
       return;
     }
     for (const entry of entries) {
-      if (SKIP_DIRECTORIES.has(entry)) continue;
-      const full = join(directory, entry);
-      if (statSync(full).isDirectory()) {
+      if (SKIP_DIRECTORIES.has(entry.name)) continue;
+      const full = join(directory, entry.name);
+      if (entry.isDirectory()) {
         walk(full);
         continue;
       }
-      if (!SCAN_EXTENSIONS.some((extension) => entry.endsWith(extension))) continue;
+      if (!SCAN_EXTENSIONS.some((extension) => entry.name.endsWith(extension))) continue;
       // A test may legitimately construct an unfiltered query as a fixture.
-      if (entry.includes(".test.")) continue;
+      if (entry.name.includes(".test.")) continue;
       found.push(full);
     }
   };
