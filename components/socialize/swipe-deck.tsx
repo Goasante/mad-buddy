@@ -2,7 +2,8 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { Heart, RotateCcw, X } from "lucide-react";
+import { RotateCcw, X } from "lucide-react";
+import { FeatureIcon } from "@/components/ui/feature-icon";
 import { useCallback, useRef, useState, type CSSProperties } from "react";
 
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
@@ -66,12 +67,21 @@ export type SwipeDeckProps = {
   people: readonly SocializePerson[];
   onWave: (person: SocializePerson) => void;
   onPass: (person: SocializePerson) => void;
-  /** Absent when there is nothing to undo. */
+  /** Instant undo of the last skip. Absent when there is nothing in session. */
   onUndo?: () => void;
+  /** Opens the full list of skipped people. Always available. */
+  onOpenSkipped?: () => void;
   pending?: boolean;
 };
 
-export function SwipeDeck({ people, onWave, onPass, onUndo, pending = false }: SwipeDeckProps) {
+export function SwipeDeck({
+  people,
+  onWave,
+  onPass,
+  onUndo,
+  onOpenSkipped,
+  pending = false
+}: SwipeDeckProps) {
   const [drag, setDrag] = useState<Drag>(NO_DRAG);
   /** The card flying off screen, so its exit animates before it unmounts. */
   const [exiting, setExiting] = useState<{ userId: string; decision: DeckDecision } | null>(null);
@@ -302,12 +312,16 @@ export function SwipeDeck({ people, onWave, onPass, onUndo, pending = false }: S
         {/* Undo sits between the two decisions because it belongs to whichever
             one just happened. Rendered disabled rather than removed, so the
             row never reflows after the first swipe. */}
+        {/* One control, two jobs. The last skip undoes instantly; with nothing
+            in session it opens the full list instead of sitting disabled.
+            A disabled recovery control is worst exactly when it is needed —
+            after a reload, when the in-memory undo is already gone. */}
         <button
           type="button"
           className="linkr-deck-action linkr-deck-action-undo"
-          disabled={!onUndo || pending}
-          onClick={() => onUndo?.()}
-          aria-label="Undo last skip"
+          disabled={pending || (!onUndo && !onOpenSkipped)}
+          onClick={() => (onUndo ? onUndo() : onOpenSkipped?.())}
+          aria-label={onUndo ? "Undo last skip" : "See people you skipped"}
         >
           <RotateCcw className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -329,7 +343,7 @@ export function SwipeDeck({ people, onWave, onPass, onUndo, pending = false }: S
               : "Wave"
           }
         >
-          <Heart className="h-5 w-5" aria-hidden="true" />
+          <FeatureIcon feature="wave" size={20} decorative />
         </button>
       </div>
     </div>

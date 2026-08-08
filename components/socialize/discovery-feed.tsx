@@ -48,6 +48,8 @@ export type DiscoveryFeedProps = {
   onPass: (person: SocializePerson) => void;
   /** Absent when there is nothing to undo. */
   onUndoPass?: () => void;
+  /** Opens the full list of skipped people. */
+  onOpenSkipped?: () => void;
   onInvite: (person: SocializePerson) => void;
   /** Present only for people the viewer can already message. */
   onMessage?: (person: SocializePerson) => void;
@@ -76,6 +78,7 @@ export function DiscoveryFeed({
   onWave,
   onPass,
   onUndoPass,
+  onOpenSkipped,
   onInvite,
   onMessage,
   pending = false,
@@ -217,6 +220,7 @@ export function DiscoveryFeed({
         onWave={onWave}
         onPass={onPass}
         onUndoPass={onUndoPass}
+        onOpenSkipped={onOpenSkipped}
         pending={pending}
       />
       <PlansRail plans={plans} onJoin={onJoinPlan ?? (() => {})} pending={pending} />

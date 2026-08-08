@@ -21,6 +21,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { PingResponseType, PingStatus, WaveSource } from "@/lib/supabase/database.types";
+import type { SkippedPerson } from "@/lib/social/skipped-people-shared";
 
 export type SocialActionState = {
   ok: boolean;
@@ -670,4 +671,23 @@ export async function undoPassAction(targetUserId: string): Promise<SocialAction
   }
 
   return { ok: true, message: "" };
+}
+
+/**
+ * The people this viewer skipped, for the recovery list.
+ *
+ * A thin authorised wrapper: the loader takes a viewer id, and this is what
+ * guarantees that id is always the caller's own. Returns an empty list rather
+ * than an error for a signed-out caller — there is nothing to reveal either
+ * way, and the sheet renders its empty state.
+ */
+export async function loadSkippedPeopleAction(): Promise<SkippedPerson[]> {
+  const missing = missingEnvState();
+  if (missing) return [];
+
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+
+  const { loadSkippedPeople } = await import("@/lib/social/skipped-people");
+  return loadSkippedPeople(userId);
 }

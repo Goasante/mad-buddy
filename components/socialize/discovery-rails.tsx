@@ -88,12 +88,14 @@ export function PeopleRail({
   onWave,
   onPass,
   onUndoPass,
+  onOpenSkipped,
   pending
 }: {
   people: readonly SocializePerson[];
   onWave: (person: SocializePerson) => void;
   onPass: (person: SocializePerson) => void;
   onUndoPass?: () => void;
+  onOpenSkipped?: () => void;
   pending: boolean;
 }) {
   if (people.length === 0) return null;
@@ -105,6 +107,7 @@ export function PeopleRail({
         onWave={onWave}
         onPass={onPass}
         onUndo={onUndoPass}
+        onOpenSkipped={onOpenSkipped}
         pending={pending}
       />
     </RailSection>

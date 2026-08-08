@@ -26,6 +26,7 @@ import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { useQuickControls } from "@/hooks/use-quick-controls";
 import { QuickControlsSheet } from "@/components/dashboard/quick-controls-sheet";
+import { SkippedPeopleSheet } from "@/components/socialize/skipped-people-sheet";
 import { StatusComposer } from "@/components/social/status-composer";
 import type { ActivityType, AvailabilityType } from "@/lib/supabase/database.types";
 import {
@@ -214,6 +215,7 @@ export function SocializePage({
    */
   const [lastPassed, setLastPassed] = useState<SocializePerson | null>(null);
   const [quickControlsOpen, setQuickControlsOpen] = useState(false);
+  const [skippedOpen, setSkippedOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   // Set when a discovery refresh fails, so the list can offer a retry rather
   // than showing an empty state that implies nobody is there.
@@ -900,6 +902,7 @@ export function SocializePage({
           onOpenQuickControls={() => setQuickControlsOpen(true)}
           onPass={passPerson}
           onUndoPass={lastPassed ? undoPass : undefined}
+          onOpenSkipped={() => setSkippedOpen(true)}
           onInvite={(person) => setPreviewPerson(person)}
           emptyState={
             stateCopy.message ? (
@@ -1163,6 +1166,20 @@ export function SocializePage({
           mode and a proximity refresh — all of which matter more here than
           anywhere else, because this is the page where being visible does
           something. One component, one implementation. */}
+      {/* Recovery for a mistaken swipe that outlived the in-session undo.
+          The rows always existed; this is the way to look at them. */}
+      <SkippedPeopleSheet
+        open={skippedOpen}
+        onOpenChange={setSkippedOpen}
+        onRestored={() => {
+          // Reload discovery so the restored person reappears in the deck
+          // rather than only vanishing from the skipped list.
+          startTransition(async () => {
+            setPeople(await discoverSocializePeopleAction());
+          });
+        }}
+      />
+
       <QuickControlsSheet
         open={quickControlsOpen}
         onOpenChange={setQuickControlsOpen}
