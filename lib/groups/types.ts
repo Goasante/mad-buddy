@@ -51,6 +51,13 @@ export type GroupMemberView = {
   role: ConversationRole;
   /** Effective membership tier, for the canonical premium ring/badge. */
   plan: SubscriptionPlan | null;
+  /**
+   * Trusted Member approval, or null.
+   *
+   * Presentation only. Ordering stays Owner → Admins → Members → name, and
+   * standing never buys a position in that list.
+   */
+  trustedSince: string | null;
   /** Current membership state, so Stage 3C can render it without re-querying. */
   status: ConversationMemberStatus;
 };

@@ -49,6 +49,14 @@ export type ChatMessageView = {
   senderAvatarUrl: string | null;
   senderUsername: string | null;
   senderPlan: SubscriptionPlan | null;
+  /**
+   * Trusted Member approval, or null.
+   *
+   * A THIRD signal, kept separate from senderPlan and senderRole: premium is
+   * a plan, Owner/Admin is authority in this group, and this is standing
+   * across the product. Merging any two would make one imply the others.
+   */
+  senderTrustedSince: string | null;
   /** Deleted, deactivated or otherwise unavailable — never says which. */
   senderUnavailable: boolean;
   /** Group role, for the subtle Owner/Admin indicator. Null in direct chats. */
@@ -82,6 +90,11 @@ export type ConversationView = {
   pinned: boolean;
   contextBadge: string | null;
   otherPlan: SubscriptionPlan | null;
+  /**
+   * The other person's Trusted Member approval, or null. Direct chats only —
+   * a group has no single "other person", and its senders carry their own.
+   */
+  otherTrustedSince: string | null;
 };
 
 export type MessageableFriend = {
@@ -394,7 +407,7 @@ export async function listConversations(userId: string): Promise<ConversationVie
   const [{ data: pins }, { data: otherProfiles }, { data: groupSettings }, { data: previews }, plans] = await Promise.all([
     admin.from("conversation_pins").select("conversation_id").eq("user_id", userId).in("conversation_id", conversationIds),
     otherIds.length > 0
-      ? admin.from("profiles").select("user_id, full_name, username, avatar_url").in("user_id", otherIds)
+      ? admin.from("profiles").select("user_id, full_name, username, avatar_url, trusted_member_since").in("user_id", otherIds)
       : Promise.resolve({ data: [] }),
     groupConversationIds.length > 0
       ? admin.from("group_settings").select("conversation_id, name").in("conversation_id", groupConversationIds)
@@ -452,6 +465,10 @@ export async function listConversations(userId: string): Promise<ConversationVie
       otherPlan:
         conversation.conversation_type === "direct"
           ? plans.get(otherIdByConversation.get(conversation.id) ?? "") ?? "free"
+          : null,
+      otherTrustedSince:
+        conversation.conversation_type === "direct"
+          ? profileByUserId.get(otherIdByConversation.get(conversation.id) ?? "")?.trusted_member_since ?? null
           : null
     });
   }
@@ -503,14 +520,20 @@ export async function listMessages(userId: string, conversationId: string): Prom
    * message list by accident.
    */
   const senderIds = [...new Set(rows.map((row) => row.sender_id).filter((id): id is string => Boolean(id)))];
-  const senderById = new Map<string, { name: string; avatarUrl: string | null; username: string | null }>();
+  const senderById = new Map<
+    string,
+    { name: string; avatarUrl: string | null; username: string | null; trustedSince: string | null }
+  >();
   let plansBySender = new Map<string, SubscriptionPlan>();
   // Group role per sender, for the subtle Owner/Admin indicator. Batched with
   // the profile read, so it costs one more query per PAGE, never per message.
   const roleBySender = new Map<string, ConversationRole>();
   if (senderIds.length > 0) {
     const [{ data: profiles }, plans, { data: roleRows }] = await Promise.all([
-      admin.from("profiles").select("user_id, full_name, avatar_url, username").in("user_id", senderIds),
+      admin
+        .from("profiles")
+        .select("user_id, full_name, avatar_url, username, trusted_member_since")
+        .in("user_id", senderIds),
       loadEffectivePlansForUsers(admin, senderIds),
       admin
         .from("conversation_members")
@@ -523,7 +546,8 @@ export async function listMessages(userId: string, conversationId: string): Prom
       senderById.set(profile.user_id, {
         name: profile.full_name?.trim() || "A Muddy",
         avatarUrl: profile.avatar_url ?? null,
-        username: profile.username ?? null
+        username: profile.username ?? null,
+        trustedSince: profile.trusted_member_since ?? null
       });
     }
     plansBySender = plans;
@@ -552,6 +576,7 @@ export async function listMessages(userId: string, conversationId: string): Prom
       senderAvatarUrl: row.sender_id ? senderById.get(row.sender_id)?.avatarUrl ?? null : null,
       senderUsername: row.sender_id ? senderById.get(row.sender_id)?.username ?? null : null,
       senderPlan: row.sender_id ? plansBySender.get(row.sender_id) ?? null : null,
+      senderTrustedSince: row.sender_id ? senderById.get(row.sender_id)?.trustedSince ?? null : null,
       /**
        * ONE fallback for every "we cannot show this person" case.
        *

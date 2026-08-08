@@ -547,7 +547,10 @@ export async function loadGroupDetailAction(groupId: string): Promise<GroupDetai
   // lookup for the whole list, never per member. Only fields a co-member is
   // already entitled to see — no email, phone, location or hidden fields.
   const { data: profiles } = memberIds.length
-    ? await admin.from("profiles").select("user_id, full_name, username, avatar_url").in("user_id", memberIds)
+    ? await admin
+        .from("profiles")
+        .select("user_id, full_name, username, avatar_url, trusted_member_since")
+        .in("user_id", memberIds)
     : { data: [] };
   const memberPlans = memberIds.length
     ? await loadEffectivePlansForUsers(admin, memberIds)
@@ -562,6 +565,7 @@ export async function loadGroupDetailAction(groupId: string): Promise<GroupDetai
       avatarUrl: profile?.avatar_url ?? null,
       role: row.role,
       plan: memberPlans.get(row.user_id) ?? null,
+      trustedSince: profile?.trusted_member_since ?? null,
       status: row.status
     };
   });

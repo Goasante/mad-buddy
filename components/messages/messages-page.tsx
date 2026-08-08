@@ -21,6 +21,7 @@ import {
 } from "@/app/(app)/messaging-actions";
 import type { ChatMessageView, ConversationView, MessageableFriend } from "@/lib/messaging/mobile";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -725,6 +726,7 @@ export function MessagesPageContent({
                           <span className="flex items-center gap-1.5">
                             <span className="truncate text-sm font-semibold">{conversation.title}</span>
                             <PremiumPlanBadge plan={conversation.otherPlan} compact />
+                            <TrustedMemberMark trustedSince={conversation.otherTrustedSince} compact />
                             {conversation.pinned ? (
                               <Star className="h-3 w-3 shrink-0 fill-primary text-primary" aria-label="Pinned" />
                             ) : null}
@@ -1128,6 +1130,13 @@ function ConversationIdentity({
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[0.9375rem] font-semibold leading-tight">{conversation.title}</span>
           <PremiumPlanBadge plan={conversation.otherPlan} compact />
+          {/* THE DM identity surface.
+              A direct chat has one other person, established once at the top,
+              so the mark belongs here and nowhere else in the thread. Putting
+              it on every bubble would repeat a fact that does not change
+              between messages — which is why groups differ: there, the sender
+              changes line to line, so the mark travels with the sender. */}
+          <TrustedMemberMark trustedSince={conversation.otherTrustedSince} compact />
         </span>
         {/* Why this conversation exists — a shared plan, an event — or the
             handle. Never a guessed distance or availability. */}

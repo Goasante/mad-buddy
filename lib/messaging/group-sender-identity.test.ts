@@ -106,12 +106,14 @@ describe("sender projection", () => {
   });
 
   it("selects ONLY fields a co-member may already see", () => {
-    // The column list itself, between select( and its closing paren — sliced
-    // past `from("profiles")` so the table name's own bracket is not the one
-    // that terminates the match.
-    const anchor = 'admin.from("profiles").select(';
-    const select = projection.slice(projection.indexOf(anchor) + anchor.length);
-    const columns = select.slice(0, select.indexOf(")"));
+    // EVERY profile column list in the file, so the guarantee holds however
+    // the chain happens to be formatted or split across lines. Anchoring on one
+    // literal call shape made this pass vacuously when the code was reflowed.
+    const columnLists = [...projection.matchAll(/from\("profiles"\)[\s\S]{0,40}?\.select\("([^"]+)"\)/g)].map(
+      (match) => match[1]
+    );
+    expect(columnLists.length).toBeGreaterThan(0);
+    const columns = columnLists.join(" | ");
     expect(columns).toContain("full_name");
     expect(columns).toContain("avatar_url");
     expect(columns).toContain("username");

@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { startsNewDay, startsNewRun } from "@/lib/messaging/conversation-presence";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -432,6 +433,12 @@ export function GroupDetailPage({
                           {message.senderName}
                           {/* The canonical badge — never a Groups-specific one. */}
                           <PremiumPlanBadge plan={message.senderPlan} compact />
+                          {/* THREE distinct signals on this line, never merged:
+                              premium is a plan, this is standing across the
+                              product, and the role below is authority in THIS
+                              group. Icon-only here so a name, a badge, a mark
+                              and a role still fit one line on a phone. */}
+                          <TrustedMemberMark trustedSince={message.senderTrustedSince} compact />
                           {/* Role indicator, deliberately the quietest thing
                               on the line: plain text, muted, no colour and no
                               pill, so it never competes with the name or with
@@ -631,6 +638,10 @@ export function GroupDetailPage({
                         <span className="truncate">{member.displayName}</span>
                         {isSelf ? <span className="shrink-0 text-xs text-muted-foreground">You</span> : null}
                         <PremiumPlanBadge plan={member.plan} compact />
+                        {/* Presentation only. The list is still ordered
+                            Owner → Admins → Members → name; standing never
+                            buys a position in it. */}
+                        <TrustedMemberMark trustedSince={member.trustedSince} compact />
                       </p>
                       {/* Authority is stated in words, not colour alone, so it
                           survives a screen reader and a colour-blind viewer. */}

@@ -1,11 +1,12 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, ImagePlus, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { useCallback, useState, useTransition } from "react";
 
 import {
   addProfilePhotoAction,
   deleteProfilePhotoAction,
+  reorderProfilePhotoAction,
   setProfilePhotoVisibilityAction
 } from "@/app/(app)/profile-photo-actions";
 import {
@@ -86,6 +87,29 @@ export function ProfilePhotoCarousel({
       const result = await setProfilePhotoVisibilityAction({ photoId, visibility });
       setFeedback(result.message);
       if (result.ok) onChanged?.();
+    });
+  }
+
+  /**
+   * Move a photo one slot.
+   *
+   * Buttons rather than drag as the PRIMARY control: drag is unreachable by
+   * keyboard, awkward on a three-item strip, and would need a dependency for
+   * something two arrows do exactly. The photo keeps its id, its media and
+   * its visibility — only the slot changes, and nothing is re-uploaded.
+   */
+  function move(photo: ProfilePhoto, delta: number) {
+    const target = photo.position + delta;
+    if (target < 0 || target >= MAX_PROFILE_PHOTOS) return;
+    startTransition(async () => {
+      const result = await reorderProfilePhotoAction({ photoId: photo.id, newPosition: target });
+      setFeedback(result.message);
+      if (result.ok) {
+        // Follow the photo, so the viewer stays on the picture they moved
+        // rather than on whatever slid into its old place.
+        setIndex(target);
+        onChanged?.();
+      }
     });
   }
 
@@ -191,6 +215,30 @@ export function ProfilePhotoCarousel({
               </button>
             ))}
           </div>
+
+          {/* Reorder, only when there is something to reorder against. */}
+          {count > 1 ? (
+            <div className="profile-photos-move" role="group" aria-label="Reorder photos">
+              <button
+                type="button"
+                onClick={() => move(current, -1)}
+                disabled={isPending || current.position === 0}
+                aria-label={`Move photo ${active + 1} earlier`}
+                className="profile-photos-move-button"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => move(current, 1)}
+                disabled={isPending || current.position >= count - 1}
+                aria-label={`Move photo ${active + 1} later`}
+                className="profile-photos-move-button"
+              >
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
 
           <button
             type="button"

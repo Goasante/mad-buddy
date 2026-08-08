@@ -38,6 +38,7 @@ const member = (
   displayName,
   username: displayName.toLowerCase(),
   avatarUrl: null,
+  trustedSince: null,
   role,
   plan,
   status: "joined"

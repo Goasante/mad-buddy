@@ -38,6 +38,7 @@ function conversation(overrides: Partial<ConversationView> = {}): ConversationVi
     pinned: false,
     contextBadge: null,
     otherPlan: null,
+  otherTrustedSince: null,
     ...overrides
   };
 }

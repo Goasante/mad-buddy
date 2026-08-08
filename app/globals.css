@@ -4047,6 +4047,34 @@ select {
 
 /* Quieter than the visibility chips: removing is rarer than adjusting who
    can see, and the destructive control should not draw the eye first. */
+/* Reorder. Buttons rather than drag: drag is unreachable by keyboard and
+   awkward on a three-item strip, and two arrows do exactly the job. */
+.profile-photos-move {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.25rem;
+}
+
+.profile-photos-move-button {
+  display: grid;
+  height: 2.25rem;
+  width: 2.25rem;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  color: hsl(var(--muted-foreground));
+  transition: background-color 300ms ease-out, color 300ms ease-out;
+}
+.profile-photos-move-button:hover:not(:disabled) {
+  background: hsl(var(--secondary) / 0.5);
+  color: hsl(var(--foreground));
+}
+/* Disabled at the ends rather than hidden, so the control row does not
+   reflow as a photo moves between slots. */
+.profile-photos-move-button:disabled {
+  opacity: 0.4;
+}
+
 .profile-photos-remove {
   display: grid;
   height: 2.25rem;

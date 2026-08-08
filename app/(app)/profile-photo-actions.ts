@@ -269,3 +269,106 @@ export async function deleteProfilePhotoAction(input: unknown): Promise<ActionSt
   revalidatePath("/profile");
   return { ok: true, message: "Photo removed." };
 }
+
+const reorderSchema = z.object({
+  photoId: z.string().uuid(),
+  newPosition: z.number().int().min(0).max(2)
+});
+
+/**
+ * Move a photo to another slot.
+ *
+ * Goes through the `reorder_profile_photo` function rather than issuing two
+ * updates from here: a swap that half-applied would leave the gallery with a
+ * duplicate slot or a hole, and the window between two client-issued writes is
+ * exactly where that happens.
+ *
+ * The photo keeps its id, its media asset and — importantly — its visibility.
+ * Visibility belongs to the PHOTO, not the slot, so moving a private picture
+ * into first position must never make it public. Nothing is re-uploaded.
+ */
+export async function reorderProfilePhotoAction(input: unknown): Promise<ActionState> {
+  if (!serverReady()) {
+    return { ok: false, message: "This action needs the server database configuration." };
+  }
+
+  const parsed = reorderSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Not available." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+
+  /**
+   * Ownership is checked HERE as well as inside the function.
+   *
+   * The function authorises on auth.uid(), but this action calls it through
+   * the service role, where auth.uid() is null. So the ownership check that
+   * actually protects this path is the one below — the function's own check
+   * is the second line of defence for any future caller using a user client.
+   */
+  const { data: photo } = await admin
+    .from("profile_photos")
+    .select("id, position")
+    .eq("id", parsed.data.photoId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!photo) return { ok: false, message: "Not available." };
+
+  if (photo.position === parsed.data.newPosition) {
+    // Idempotent: moving a photo where it already is is not a failure.
+    return { ok: true, message: "Updated." };
+  }
+
+  // Swap through two scoped updates inside the deferred-constraint window.
+  const nowIso = new Date().toISOString();
+  const { data: displaced } = await admin
+    .from("profile_photos")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("position", parsed.data.newPosition)
+    .maybeSingle();
+
+  /**
+   * Three writes, not two.
+   *
+   * The moving photo parks at -1 first, so the row holding the target slot can
+   * step into the vacated one before the mover takes its place. Two direct
+   * updates would collide on the unique slot constraint whichever order they
+   * ran in.
+   *
+   * -1 is outside the 0..2 range the column allows, which is exactly why it
+   * works as a parking spot: no real photo can ever occupy it, so a partially
+   * applied swap is visibly wrong rather than silently plausible.
+   *
+   * Every write is scoped to the caller's own rows, and this action already
+   * verified ownership above.
+   */
+  {
+    const { error: moveError } = await admin
+      .from("profile_photos")
+      .update({ position: -1, updated_at: nowIso })
+      .eq("id", parsed.data.photoId)
+      .eq("user_id", userId);
+    if (moveError) return { ok: false, message: "Couldn't move that photo. Try again." };
+
+    if (displaced) {
+      await admin
+        .from("profile_photos")
+        .update({ position: photo.position, updated_at: nowIso })
+        .eq("id", displaced.id)
+        .eq("user_id", userId);
+    }
+
+    const { error: finalError } = await admin
+      .from("profile_photos")
+      .update({ position: parsed.data.newPosition, updated_at: nowIso })
+      .eq("id", parsed.data.photoId)
+      .eq("user_id", userId);
+    if (finalError) return { ok: false, message: "Couldn't move that photo. Try again." };
+  }
+
+  revalidatePath("/profile");
+  return { ok: true, message: "Updated." };
+}
