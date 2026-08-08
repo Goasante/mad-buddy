@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Radar } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -43,6 +43,8 @@ export type SocializeHeroProps = {
   onExplore: () => void;
   /** Who can see you — the question the control has to answer. */
   visibilityNote?: ReactNode;
+  /** Reach, adjustable while live. Absent when not discoverable. */
+  reachControl?: ReactNode;
 };
 
 export function SocializeHero({
@@ -53,7 +55,8 @@ export function SocializeHero({
   newToday,
   activationTrigger,
   onExplore,
-  visibilityNote
+  visibilityNote,
+  reachControl
 }: SocializeHeroProps) {
   return (
     <section
@@ -121,20 +124,20 @@ export function SocializeHero({
         <h2
           id="socialize-hero-heading"
           className={cn(
-            "flex items-center gap-2 text-[1.5rem] font-bold leading-tight tracking-tight",
+            "flex items-center gap-2.5 text-balance text-[1.5rem] font-bold leading-tight tracking-tight",
             // Against artwork rather than a flat surface, so the text carries
             // its own contrast instead of relying on the scrim to make room.
             "text-foreground [text-shadow:0_1px_12px_hsl(var(--background)/0.7)]"
           )}
         >
-          <Sparkles className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+          <Radar className="h-[1.375rem] w-[1.375rem] shrink-0 text-primary" aria-hidden="true" />
           {active && total === 0 ? "You’re the first one here" : active ? "Around you" : "Discover people around you"}
         </h2>
 
         {/* The line under the heading. Both states fill it, so the block height
             is stable and the layout never jumps on activation. */}
         <p className={cn(
-            "mt-2 max-w-[26rem] text-sm leading-relaxed",
+            "mt-2 max-w-[24rem] text-pretty text-sm leading-relaxed",
             "text-foreground/80 [text-shadow:0_1px_10px_hsl(var(--background)/0.6)]"
           )}>
           {/* "0 people nearby right now" reads as a broken feature rather than a
@@ -189,8 +192,16 @@ export function SocializeHero({
           )}
         </div>
 
-        {visibilityNote ? (
-          <p className="mt-3 text-[0.8125rem] leading-snug text-muted-foreground">{visibilityNote}</p>
+        {/* Visibility and reach form ONE block: the note states who can see
+            you, the control changes how far that reaches. Separating them left
+            the control reading as an unexplained row of chips. */}
+        {visibilityNote || reachControl ? (
+          <div className="linkr-hero-footer">
+            {visibilityNote ? (
+              <p className="linkr-hero-note">{visibilityNote}</p>
+            ) : null}
+            {reachControl}
+          </div>
         ) : null}
       </div>
     </section>

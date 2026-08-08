@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { Check, MapPin, Users } from "lucide-react";
-import { memo, type ReactNode } from "react";
+import { memo, type CSSProperties, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { resolvePlanCover } from "@/lib/plans/plan-covers";
@@ -57,124 +57,107 @@ function PlanCard({ plan, onJoin, pending = false, slots }: SocializePlanCardPro
     <article
       aria-label={`${plan.title}${urgency.label ? `, ${urgency.label}` : ""}${time ? ` at ${time}` : ""}`}
       className={cn(
-        "linkr-card group relative flex h-full flex-col overflow-hidden",
-        // The nearest plan carries a slightly warmer edge. One card lifted,
+        "linkr-plan",
+        // The nearest plan carries a slightly brighter edge. One card lifted,
         // never a row of competing highlights.
-        urgency.imminent && "shadow-[0_0_0_1px_hsl(var(--primary)/0.25),0_16px_44px_-18px_hsl(var(--primary)/0.55)]"
+        urgency.imminent && "linkr-plan-imminent"
       )}
+      style={
+        cover.source === "upload"
+          ? undefined
+          : ({
+              // The category's own gradient IS the card, rather than a strip
+              // above a white block. An uploaded cover takes the same role
+              // below, as an image layer.
+              "--linkr-plan-from": cover.art.from,
+              "--linkr-plan-to": cover.art.to
+            } as CSSProperties)
+      }
     >
-      <Link
-        href={href}
-        aria-label={`Open ${plan.title}`}
-        className="focus-ring relative block aspect-[5/3] w-full overflow-hidden"
-      >
-        {cover.source === "upload" ? (
-          // eslint-disable-next-line @next/next/no-img-element -- signed cover URL, not a static asset
-          <img
-            src={cover.imageUrl}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="linkr-card-media h-full w-full object-cover"
-          />
-        ) : (
-          <span
-            aria-hidden="true"
-            className="linkr-card-media absolute inset-0"
-            style={{ background: `linear-gradient(135deg, ${cover.art.from}, ${cover.art.to})` }}
-          />
-        )}
-
-        {/* THE DATE, as an object rather than a line of text. It is the first
-            thing worth knowing about a plan, so it gets weight and a surface
-            of its own instead of sitting in a metadata row. */}
-        {date ? (
-          <span className="pointer-events-none absolute left-3 top-3 grid w-[3.25rem] place-items-center gap-0.5 rounded-2xl border border-white/15 bg-background/92 py-2 text-center shadow-[0_8px_22px_-12px_hsl(var(--shadow)/0.7)] backdrop-blur-md">
-            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-primary">
-              {date.weekday}
-            </span>
-            <span className="text-[1.375rem] font-bold leading-none tracking-tight">{date.day}</span>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              {date.month}
-            </span>
-          </span>
-        ) : null}
-
-        {/* Urgency, only when it is real. Absent for anything beyond a week. */}
-        {urgency.label ? (
-          <span
-            className={cn(
-              "pointer-events-none absolute right-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm",
-              urgency.imminent
-                ? "bg-primary text-primary-foreground"
-                : "bg-background/85 text-foreground"
-            )}
-          >
-            {urgency.label}
-          </span>
-        ) : null}
-
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-card/80 to-transparent"
+      {cover.source === "upload" ? (
+        // eslint-disable-next-line @next/next/no-img-element -- signed cover URL, not a static asset
+        <img
+          src={cover.imageUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="linkr-plan-image"
         />
-      </Link>
+      ) : null}
 
-      <div className="flex flex-1 flex-col gap-1.5 p-4 pt-3.5">
-        {/* The strongest text on the card. */}
-        <Link href={href} className="focus-ring text-[1.0625rem] font-semibold leading-snug tracking-tight hover:underline">
-          {plan.title}
-        </Link>
+      {/* A scrim only over uploaded photography. The generated gradients are
+          already dark enough to carry white text, and layering a scrim on them
+          just muddies the colour. */}
+      {cover.source === "upload" ? <span aria-hidden="true" className="linkr-plan-scrim" /> : null}
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.8125rem] text-muted-foreground">
-          {time ? <span>{time}</span> : null}
-          {plan.placeText ? (
-            <span className="inline-flex min-w-0 items-center gap-1">
-              <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">{plan.placeText}</span>
-            </span>
+      <div className="linkr-plan-body">
+        {/* THE DATE, as an object rather than a line of text. It is the first
+            thing worth knowing about a plan. */}
+        {date ? (
+          <span className="linkr-plan-date" aria-hidden="true">
+            <span className="linkr-plan-date-weekday">{date.weekday}</span>
+            <span className="linkr-plan-date-day">{date.day}</span>
+            <span className="linkr-plan-date-month">{date.month}</span>
+          </span>
+        ) : null}
+
+        <div className="linkr-plan-detail">
+          <Link href={href} className="focus-ring linkr-plan-title">
+            {plan.title}
+          </Link>
+
+          <div className="linkr-plan-meta">
+            {time ? <span>{time}</span> : null}
+            {plan.placeText ? (
+              <span className="inline-flex min-w-0 items-center gap-1">
+                <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{plan.placeText}</span>
+              </span>
+            ) : null}
+          </div>
+
+          <p className="linkr-plan-host">Hosted by {plan.organiserName}</p>
+
+          {/* Real faces, from the projection's capped attendee list. Shown
+              only when someone has actually said they are going. */}
+          {going ? (
+            <div className="linkr-plan-going">
+              {plan.attendees.length > 0 ? (
+                <span className="flex -space-x-2" aria-hidden="true">
+                  {plan.attendees.slice(0, 3).map((attendee, index) => (
+                    <UserAvatar
+                      key={`${attendee.name}-${index}`}
+                      src={attendee.avatarUrl}
+                      name={attendee.name}
+                      size="xs"
+                      decorative
+                      className="linkr-plan-avatar"
+                    />
+                  ))}
+                </span>
+              ) : (
+                <Users className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              <span>{going}</span>
+            </div>
           ) : null}
+
+          {slots?.afterMeta}
         </div>
 
-        <p className="truncate text-[0.8125rem] text-muted-foreground">Hosted by {plan.organiserName}</p>
-
-        {/* Real faces, from the projection's capped attendee list. Shown only
-            when someone has actually said they are going. */}
-        {going ? (
-          <div className="flex items-center gap-2 pt-0.5">
-            {plan.attendees.length > 0 ? (
-              <span className="flex -space-x-2" aria-hidden="true">
-                {plan.attendees.slice(0, 4).map((attendee, index) => (
-                  <UserAvatar
-                    key={`${attendee.name}-${index}`}
-                    src={attendee.avatarUrl}
-                    name={attendee.name}
-                    size="xs"
-                    decorative
-                    className="shadow-[0_2px_6px_-2px_hsl(var(--shadow)/0.6)] ring-2 ring-card"
-                  />
-                ))}
-              </span>
-            ) : (
-              <Users className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-            )}
-            <span className="text-[0.8125rem] font-medium text-muted-foreground">{going}</span>
-          </div>
-        ) : null}
-
-        {slots?.afterMeta}
-
-        <div className="mt-auto pt-3">
-          <Button
+        {/* The RSVP, as a pill on the cover. Urgency, when real, sits beside
+            it rather than in a corner badge competing with the date. */}
+        <div className="linkr-plan-actions">
+          {urgency.label ? <span className="linkr-plan-urgency">{urgency.label}</span> : null}
+          <button
             type="button"
-            variant={join.kind === "going" ? "outline" : "primary"}
-            className="min-h-[44px] w-full"
+            className={cn("linkr-plan-cta", join.kind === "going" && "linkr-plan-cta-going")}
             disabled={pending || join.disabled}
             onClick={() => onJoin(plan)}
           >
             {join.kind === "going" ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
             {join.label}
-          </Button>
+          </button>
         </div>
       </div>
     </article>

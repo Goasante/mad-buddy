@@ -68,7 +68,7 @@ export const TOUR_TARGET_IDS = {
   // Socialize 2.0 replaced the radar with a discovery feed; the tour still
   // points at the same place on the screen, so the id is renamed with it.
   SOCIALIZE_FEED: "socialize-feed",
-  SOCIALIZE_CONTROLS: "socialize-controls",
+  SOCIALIZE_REACH: "socialize-reach",
 
   SAFE_ARRIVAL_OVERVIEW: "safe-arrival-overview",
   SAFE_ARRIVAL_START: "safe-arrival-start",
@@ -189,7 +189,7 @@ export const TOUR_TARGETS: TourTargetOption[] = [
 
   target(TOUR_TARGET_IDS.SOCIALIZE_ACTIVATION, "Socialize activation", "/discover", "Turns Socialize on or opens its controls."),
   target(TOUR_TARGET_IDS.SOCIALIZE_FEED, "Socialize feed", "/discover", "Nearby opted-in people, with approximate distance only."),
-  target(TOUR_TARGET_IDS.SOCIALIZE_CONTROLS, "Socialize controls", "/discover", "Area, duration, and visibility controls."),
+  target(TOUR_TARGET_IDS.SOCIALIZE_REACH, "Linkr reach", "/discover", "How far you are discoverable while Linkr is on."),
 
   target(TOUR_TARGET_IDS.SAFE_ARRIVAL_OVERVIEW, "Safe Arrival", "/safe-arrival", "The Safe Arrival landing or current journey."),
   target(TOUR_TARGET_IDS.SAFE_ARRIVAL_START, "Start Safe Arrival", "/safe-arrival", "Starts the real Safe Arrival setup."),

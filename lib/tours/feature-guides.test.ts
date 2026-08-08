@@ -22,7 +22,16 @@ const MIGRATION = read("supabase/migrations/20260801120000_feature_walkthroughs.
   // 20260807200000 renames the Socialize guide copy to Linkr.
   .replaceAll("Socialize guide", "Linkr guide")
   .replaceAll("Opt in to Socialize", "Opt in to Linkr")
-  .replaceAll("Socialize never grants", "Linkr never grants");
+  .replaceAll("Socialize never grants", "Linkr never grants")
+  // 20260808140000 re-points and rewords the controls step: activation
+  // collapsed into one play/pause control, so the old popover target no longer
+  // renders and its "choose a window" copy describes a choice that is gone.
+  .replaceAll("'socialize-controls'", "'socialize-reach'")
+  .replaceAll("Choose the window", "Choose how far")
+  .replaceAll(
+    "Set a broad area and a short visibility period. It turns off when time runs out.",
+    "Pick how far you want to be discoverable. Your session ends on its own, and you can pause any time."
+  );
 
 type SeededStep = {
   tourSlug: string;

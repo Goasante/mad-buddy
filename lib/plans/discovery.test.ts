@@ -24,6 +24,8 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const card = stripComments(read("components/socialize/socialize-plan-card.tsx"));
 const rails = stripComments(read("components/socialize/discovery-rails.tsx"));
 const page = stripComments(read("components/socialize/socialize-page.tsx"));
+// Not stripped: CSS comments are not JS comments, and the rules matter.
+const css = read("app/globals.css");
 
 // A fixed local clock: Friday 7 August 2026, 10:00.
 const NOW = new Date(2026, 7, 7, 10, 0, 0).getTime();
@@ -178,8 +180,12 @@ describe("plan card", () => {
     // that also interpolates plan.title.
     const titleAt = card.lastIndexOf("{plan.title}");
     const titleLink = card.slice(card.lastIndexOf("<Link", titleAt), titleAt);
-    expect(titleLink).toContain("font-semibold");
-    expect(titleLink).toContain("text-[1.0625rem]");
+    expect(titleLink).toContain("linkr-plan-title");
+    // Weight and size live on the class, so the hierarchy is asserted there.
+    const rule = css.slice(css.indexOf(".linkr-plan-title {"));
+    expect(rule.slice(0, 300)).toContain("font-weight: 700");
+    // The metadata rows sit at 0.8125rem, so the title must outweigh them.
+    expect(rule.slice(0, 300)).toContain("font-size: 1.0625rem");
   });
 
   it("hides place and time when absent", () => {
@@ -188,7 +194,7 @@ describe("plan card", () => {
   });
 
   it("shows real attendee faces only when someone is going", () => {
-    expect(card).toContain("plan.attendees.slice(0, 4)");
+    expect(card).toContain("plan.attendees.slice(0, 3)");
     expect(card).toContain("{going ? (");
   });
 
@@ -207,16 +213,18 @@ describe("plan card", () => {
   });
 
   it("keeps the CTA a comfortable touch target and names the card accessibly", () => {
-    // 42px+ with generous padding stays above the practical touch floor while
-    // letting the CTA stop dominating the card.
-    expect(card).toMatch(/min-h-\[4[2-9]px\]/);
+    expect(card).toContain("linkr-plan-cta");
+    const rule = css.slice(css.indexOf(".linkr-plan-cta {"));
+    expect(rule.slice(0, 400)).toContain("min-height: 2.5rem");
     expect(card).toContain("aria-label={`${plan.title}");
   });
 
   it("respects reduced motion", () => {
-    // Hover motion moved into `.linkr-card-media`, which is disabled wholesale
-    // under prefers-reduced-motion rather than per-utility on the card.
-    expect(card).toContain("linkr-card-media");
+    // Motion lives on the card's own classes, disabled wholesale in the
+    // reduced-motion block rather than per-utility on the element.
+    expect(card).toContain("linkr-plan");
+    const rules = css.slice(css.indexOf(".linkr-plan {"));
+    expect(rules.slice(0, 5200)).toContain("prefers-reduced-motion");
   });
 
   it("shows roughly 1.3 cards, not three across", () => {

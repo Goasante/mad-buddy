@@ -26,10 +26,15 @@ const pulseCss = css.slice(
   css.indexOf("/* Socialize radar field")
 );
 
-/** The status control and its supporting line only. */
+/**
+ * The activation control only.
+ *
+ * Sliced from the hero's trigger prop to the end of the visibility note it
+ * carries, so these assertions describe the control rather than the page.
+ */
 const control = page.slice(
-  page.indexOf("Socializing status control"),
-  page.indexOf("The radar IS the interface")
+  page.indexOf("activationTrigger={"),
+  page.indexOf("/>", page.indexOf("visibilityNote={"))
 );
 
 // ---------------------------------------------------------------------------
@@ -61,9 +66,18 @@ describe("state model", () => {
 // ---------------------------------------------------------------------------
 
 describe("copy", () => {
-  it("uses the approved active wording", () => {
-    expect(control).toContain('"Linkr is on"');
-    expect(control).toContain("Visible to nearby people.");
+  it("uses one name for the experience", () => {
+    // "Turn On Socialize" and "Discover Nearby" were two labels for entering
+    // the same thing, which asked the user to tell apart something that was
+    // never different. One name, one control.
+    expect(control).toContain('"Discover Nearby"');
+    expect(control).not.toContain("Turn On Socialize");
+  });
+
+  it("states the live condition rather than naming a setting", () => {
+    // "You're discoverable" says what is true of the user; "Linkr is on" says
+    // what is true of a toggle.
+    expect(control).toContain("You're discoverable");
   });
 
   it("drops the system-style boolean wording entirely", () => {
@@ -85,13 +99,17 @@ describe("copy", () => {
 // ---------------------------------------------------------------------------
 
 describe("appearance", () => {
-  it("uses a subtle green accent when active", () => {
-    expect(control).toContain("border-emerald-500/35 bg-emerald-500/10");
-    expect(control).toContain("bg-emerald-500");
+  it("recedes once live, so the people become the call to action", () => {
+    // Off, the button IS the call to action. On, it is a status the user
+    // occasionally revisits — a second loud CTA competes with the feed.
+    expect(control).toContain("linkr-discover-cta-live");
+    const live = css.slice(css.indexOf(".linkr-discover-cta-live {"));
+    expect(live.slice(0, 400)).toContain("hsl(var(--card)");
   });
 
-  it("shows a clear status indicator", () => {
-    expect(control).toContain("h-2.5 w-2.5 rounded-full");
+  it("shows state in the icon, not only the label", () => {
+    expect(control).toContain("<Pause");
+    expect(control).toContain("<Play");
   });
 });
 
@@ -100,24 +118,38 @@ describe("appearance", () => {
 // ---------------------------------------------------------------------------
 
 describe("interaction", () => {
-  it("routes through the existing options panel rather than activating silently", () => {
-    expect(control).toContain("<Popover.Trigger asChild>");
-    expect(control).toContain("{statusPanel}");
+  it("activates in one tap, with no setup form first", () => {
+    // Asking "how long?" and "how far?" before anyone had seen a single person
+    // made a form the price of looking. Both are changeable afterwards.
+    expect(page).toContain("function startDiscovering()");
+    expect(control).toContain("onClick={isActive ? turnOff : startDiscovering}");
   });
 
-  it("is the single entry point into the options panel", () => {
-    // Step 3 removed the avatar trigger (no controls over the avatar), so the
-    // status control is now the only anchor — one panel, rendered once.
-    expect(page).toContain("const statusPanel = (");
-    expect((page.match(/\{statusPanel\}/g) ?? []).length).toBe(1);
+  it("is one control with two states, not two controls", () => {
+    // The same button starts and pauses, so the two can never disagree about
+    // whether the user is discoverable.
+    expect(control).toContain("aria-pressed={isActive}");
+    expect((page.match(/activationTrigger=\{/g) ?? []).length).toBe(1);
+  });
+
+  it("still expires the session rather than leaving visibility on forever", () => {
+    // Removing the duration QUESTION must not remove the duration. Visibility
+    // that never lapses is one the user forgot they left on.
+    expect(page).toContain("const DEFAULT_DISCOVER_DURATION: SocializeDuration");
+    expect(page).toContain("duration: DEFAULT_DISCOVER_DURATION");
+  });
+
+  it("keeps reach adjustable, because it decides who can see you", () => {
+    expect(page).toContain("function selectReach(");
+    expect(page).toContain("linkr-segmented");
   });
 
   it("introduces no duplicate confirmation flow", () => {
     const block = stripComments(control);
     expect(block).not.toContain("window.confirm");
     expect(block).not.toContain("Are you sure");
-    // Turn off still runs through the existing panel action.
-    expect(page).toContain("onClick={turnOff}");
+    // Pausing runs through the existing deactivate action.
+    expect(page).toContain("function turnOff()");
   });
 
   it("prepares the prerequisite choices before opening", () => {
@@ -139,19 +171,22 @@ describe("loading and failure", () => {
 
   it("shows compact progress rather than a full-screen spinner", () => {
     expect(control).toContain("<Loader2");
-    expect(control).toContain('"Turning on…"');
+    expect(control).toContain('"Starting…"');
     expect(rendered).not.toContain("fixed inset-0 grid place-items-center");
   });
 
   it("keeps the control the same size while loading", () => {
-    // The spinner replaces the dot inside a fixed-size box, so nothing reflows.
-    expect(control).toContain("relative grid h-4 w-4 shrink-0 place-items-center");
+    // The spinner replaces the glyph inside a fixed-size box, so nothing
+    // reflows mid-activation.
+    expect(control).toContain("linkr-discover-icon");
+    const icon = css.slice(css.indexOf(".linkr-discover-icon {"));
+    expect(icon.slice(0, 300)).toContain("height: 1.75rem");
   });
 
   it("falls back to the confirmed state on failure", () => {
     // The failure branch only shows a message; it never writes session state.
-    const submit = page.slice(page.indexOf("function submitSetup"), page.indexOf("function turnOff"));
-    const failure = submit.slice(submit.indexOf("} else {"));
+    const start = page.slice(page.indexOf("function startDiscovering"), page.indexOf("function turnOff"));
+    const failure = start.slice(start.indexOf("} else {"));
     expect(failure).toContain("showToast(");
     expect(failure).not.toContain("setSession(");
   });
@@ -202,7 +237,10 @@ describe("motion", () => {
   it("respects reduced motion", () => {
     const reduced = pulseCss.slice(pulseCss.indexOf("prefers-reduced-motion"));
     expect(reduced).toContain("animation: none");
-    expect(control).toContain("motion-reduce:active:scale-100");
+    // Motion moved into the control's own class, disabled wholesale under
+    // prefers-reduced-motion rather than per-utility.
+    const cta = css.slice(css.indexOf(".linkr-discover-cta {"));
+    expect(cta.slice(0, 2600)).toContain("prefers-reduced-motion");
     expect(control).toContain("motion-reduce:animate-none");
   });
 });
@@ -218,12 +256,15 @@ describe("accessibility", () => {
   });
 
   it("announces the current state in its label", () => {
-    expect(control).toContain("Linkr is on. Visible to nearby people.");
-    expect(control).toContain("Linkr is off. Turn it on to meet people nearby.");
+    // The label states what the next press DOES, plus the current condition.
+    expect(control).toContain("Pause Discover Nearby. You are currently visible to nearby people.");
+    expect(control).toContain("Start Discover Nearby. You will become visible to nearby people.");
   });
 
   it("keeps a 44px touch target", () => {
-    expect(control).toContain("min-h-[44px]");
+    // 48px, set on the control's own class.
+    const cta = css.slice(css.indexOf(".linkr-discover-cta {"));
+    expect(cta.slice(0, 400)).toContain("min-height: 3rem");
   });
 
   it("keeps a visible focus ring", () => {
@@ -256,7 +297,7 @@ describe("hero-owned activation", () => {
     // twice on the same fact.
     const hero = stripComments(read("components/socialize/socialize-hero.tsx"));
     expect(hero).toContain("Discover people around you");
-    expect(page).toContain('"Turn On Socialize"');
+    expect(page).toContain('"Discover Nearby"');
     // The visible label; the aria-label still describes the state, which is
     // correct for a screen reader announcing a toggle.
     expect(page).not.toContain('> Socialize is off<');

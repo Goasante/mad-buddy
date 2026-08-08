@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { Heart, RotateCcw, X } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, type CSSProperties } from "react";
 
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
@@ -232,7 +232,13 @@ export function SwipeDeck({ people, onWave, onPass, onUndo, pending = false }: S
       <div className="linkr-deck-actions">
         <button
           type="button"
-          className="linkr-deck-action linkr-deck-action-pass"
+          className={cn(
+            "linkr-deck-action linkr-deck-action-pass",
+            // Lights with the drag, so the gesture and the button read as the
+            // same action rather than two separate ways to do it.
+            direction === "left" && "linkr-deck-action-armed"
+          )}
+          style={{ "--linkr-arm": direction === "left" ? progress : 0 } as CSSProperties}
           disabled={!top || pending}
           onClick={() => top && commit(top, "pass")}
           aria-label={top ? `Skip ${top.displayName || top.username}` : "Skip"}
@@ -255,7 +261,11 @@ export function SwipeDeck({ people, onWave, onPass, onUndo, pending = false }: S
 
         <button
           type="button"
-          className="linkr-deck-action linkr-deck-action-wave"
+          className={cn(
+            "linkr-deck-action linkr-deck-action-wave",
+            direction === "right" && "linkr-deck-action-armed"
+          )}
+          style={{ "--linkr-arm": direction === "right" ? progress : 0 } as CSSProperties}
           disabled={!top || pending || !canWave(top)}
           onClick={() => top && commit(top, "wave")}
           aria-label={

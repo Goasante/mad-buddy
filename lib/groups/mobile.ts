@@ -152,7 +152,7 @@ export async function listGroupsPageData(userId: string): Promise<GroupsPageData
   const joinedIds = (memberships ?? []).filter((row) => row.status === "joined").map((row) => row.conversation_id);
   const invitedIds = (memberships ?? []).filter((row) => row.status === "invited").map((row) => row.conversation_id);
 
-  const [groups, invitationSummaries, friendshipsResult, linkSettingsResult] = await Promise.all([
+  const [groups, invitationSummaries, friendshipsResult, linkSettingsResult, publicSettingsResult] = await Promise.all([
     summariesFor(admin, joinedIds, roleById),
     summariesFor(admin, invitedIds, roleById),
     admin
@@ -160,7 +160,10 @@ export async function listGroupsPageData(userId: string): Promise<GroupsPageData
       .select("user_one_id, user_two_id")
       // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
       .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
-    admin.from("group_settings").select("conversation_id").eq("join_mode", "link")
+    admin.from("group_settings").select("conversation_id").eq("join_mode", "link"),
+    // Genuinely public groups. Separate from join_mode: a public group may
+    // still be invite-only, which is browsable but not openly joinable.
+    admin.from("group_settings").select("conversation_id").eq("visibility", "public")
   ]);
 
   const invitations: GroupInvitation[] = [];
@@ -193,17 +196,37 @@ export async function listGroupsPageData(userId: string): Promise<GroupsPageData
     (friendshipsResult.data ?? []).map((row) => (row.user_one_id === userId ? row.user_two_id : row.user_one_id))
   );
   const knownMembership = new Map((memberships ?? []).map((row) => [row.conversation_id, row.status]));
+  /**
+   * Discoverable groups come from TWO independent routes; qualifying by
+   * either one is enough:
+   *
+   *   1. PUBLIC    — the owner listed it, so anyone may find it.
+   *   2. A MUDDY'S — a link-joinable group created by someone you are already
+   *                  connected to. The original behaviour, kept intact.
+   *
+   * Route 1 shipped as a column and an RLS policy but was never read here, so
+   * making a group public had no visible effect — the query still required
+   * the creator to be one of your Muddies, and someone with no Muddies could
+   * never find any group at all.
+   */
   const linkIds = (linkSettingsResult.data ?? []).map((row) => row.conversation_id);
+  const publicIds = (publicSettingsResult.data ?? []).map((row) => row.conversation_id);
+  const candidateIds = [...new Set([...linkIds, ...publicIds])];
+
   let discoverableGroups: GroupSummary[] = [];
-  if (linkIds.length > 0 && friendIds.size > 0) {
+  if (candidateIds.length > 0) {
     const { data: discoverableConversations } = await admin
       .from("conversations")
       .select("id, created_by")
-      .in("id", linkIds)
+      .in("id", candidateIds)
       .eq("conversation_type", "group")
       .eq("status", "active");
+
+    const publicIdSet = new Set(publicIds);
     const eligibleIds = (discoverableConversations ?? [])
-      .filter((row) => row.created_by && friendIds.has(row.created_by))
+      .filter((row) => publicIdSet.has(row.id) || (row.created_by && friendIds.has(row.created_by)))
+      // A group you are already in is not a discovery. Someone who left may
+      // find their way back.
       .filter((row) => !knownMembership.has(row.id) || knownMembership.get(row.id) === "left")
       .map((row) => row.id);
     discoverableGroups = await summariesFor(admin, eligibleIds);

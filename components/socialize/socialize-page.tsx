@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import * as Popover from "@radix-ui/react-popover";
-import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, Clock, Info, Loader2, MapPin, MoreHorizontal, RefreshCcw, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, Clock, Info, Loader2, MapPin, MoreHorizontal, Pause, Play, RefreshCcw, Users, X } from "lucide-react";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
 import { passPersonAction, undoPassAction } from "@/app/(app)/social-actions";
 import {
@@ -144,6 +144,17 @@ function ChipRow<T extends string>({
 }
 
 type Toast = { title?: string; message: string; error: boolean } | null;
+
+/**
+ * Defaults for one-tap activation.
+ *
+ * "Nearby" is the middle reach and "1h" the middle duration — both are
+ * changeable once you are in, and neither is a question worth asking before
+ * the user has seen a single person. The duration matters: a session that
+ * never lapses is visibility the user forgot they left on.
+ */
+const DEFAULT_DISCOVER_AREA: SocializeAreaTier = "nearby";
+const DEFAULT_DISCOVER_DURATION: SocializeDuration = "1h";
 
 export function SocializePage({
   initialSession,
@@ -439,6 +450,38 @@ export function SocializePage({
     });
   }
 
+  /**
+   * Start discovering — the single activation path.
+   *
+   * Takes no options. Asking "how long?" and "how far?" before anyone has seen
+   * a single person made a setup form the price of looking, and the answers
+   * are both changeable afterwards from the same control.
+   *
+   * A session still EXPIRES: visibility that never lapses is a privacy
+   * problem, not a convenience. It defaults to the middle duration, and the
+   * pause button is the explicit off switch.
+   */
+  function startDiscovering() {
+    setActivating(true);
+    startTransition(async () => {
+      const result = await activateSocializeAction({
+        areaTier: DEFAULT_DISCOVER_AREA,
+        duration: DEFAULT_DISCOVER_DURATION
+      });
+      if (result.ok && result.session) {
+        setSession(result.session);
+        setJustExpired(false);
+        setPanelOpen(false);
+        setStatusOpen(false);
+        pulseStatus();
+        setPeople(await discoverSocializePeopleAction());
+      } else {
+        showToast(result.message || "Couldn't start Discover Nearby. Try again.", true);
+      }
+      setActivating(false);
+    });
+  }
+
   function turnOff() {
     startTransition(async () => {
       const result = await deactivateSocializeAction();
@@ -557,64 +600,71 @@ export function SocializePage({
   }
 
   /**
-   * The Socialize options panel. ONE implementation, rendered by both the
-   * avatar popover and the new status control, so the two triggers can never
-   * offer different options or drift apart.
+   * Reach, adjustable while live.
    *
-   * For an inactive user this is the existing prerequisite flow (how long,
-   * how far) — activation is never silent. For an active user it is the
-   * existing view / change / turn-off panel, including its own confirmation
-   * rules. No duplicate flow is introduced.
+   * Duration was removed as a question — it is a timer, not a decision, and
+   * asking it before anyone had seen a single person made a setup form the
+   * price of looking. Reach is different: it decides who can see you, so it
+   * stays a control the user can reach at any time.
+   *
+   * Shown only while discoverable, because it has nothing to change when you
+   * are not visible to anyone.
    */
-  const statusPanel = (
-    <>
-    {!isActive ? (
-      <>
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <ChipRow label="How long" options={SOCIALIZE_DURATIONS.map((option) => ({ value: option.id, label: DURATION_SHORT[option.id] }))} value={duration} onSelect={setDuration} />
-        </div>
-        <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <ChipRow label="How far" options={RANGE_OPTIONS} value={areaTier} onSelect={setAreaTier} />
-        </div>
-        <Button type="button" size="sm" onClick={submitSetup} disabled={isPending || !canSubmit} className="w-full bg-gradient-to-r from-primary to-orange-500 text-white hover:opacity-95">
-          {isPending ? "Turning on…" : "Turn on"}
-        </Button>
-      </>
-    ) : controlsMode === "view" ? (
-      <>
-        <p className="text-center text-xs font-medium">
-          {session ? remainingLabel(session.expiresAt, nowMs) : ""} · {session ? SOCIALIZE_AREA_LABELS[session.areaTier] : ""}
-        </p>
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => { setAreaTier(session?.areaTier ?? "nearby"); setDuration(null); setControlsMode("change"); }}>
-            <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
-            Change
-          </Button>
-          <Button type="button" variant="outline" size="sm" className="flex-1 border-red-400/40 text-red-500" onClick={turnOff} disabled={isPending}>
-            <X className="h-3.5 w-3.5" aria-hidden="true" />
-            Turn off
-          </Button>
-        </div>
-      </>
-    ) : (
-      <>
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <ChipRow label="How long" options={SOCIALIZE_DURATIONS.map((option) => ({ value: option.id, label: DURATION_SHORT[option.id] }))} value={duration} onSelect={setDuration} />
-        </div>
-        <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <ChipRow label="How far" options={RANGE_OPTIONS} value={areaTier} onSelect={setAreaTier} />
-        </div>
-        <Button type="button" size="sm" onClick={submitSetup} disabled={isPending || !canSubmit} className="w-full">
-          {isPending ? "Updating…" : "Update"}
-        </Button>
-      </>
-    )}
-    </>
-  );
+  const reachControl = isActive ? (
+    <div className="linkr-reach" data-tour-id={TOUR_TARGET_IDS.SOCIALIZE_REACH}>
+      <span className="linkr-reach-label" id="linkr-reach-label">
+        <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+        How far
+      </span>
+      {/* A segmented control, not three separate pills: the options are
+          mutually exclusive, and one connected track says "pick one of these"
+          where separate buttons say "toggle any of these". */}
+      <div className="linkr-segmented" role="group" aria-labelledby="linkr-reach-label">
+        {RANGE_OPTIONS.map((option) => {
+          const current = (areaTier ?? session?.areaTier ?? null) === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={current}
+              disabled={isPending}
+              className={cn("linkr-segment", current && "linkr-segment-on")}
+              onClick={() => selectReach(option.value)}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
+
+  /**
+   * Change reach while live.
+   *
+   * Optimistic, then reconciled: the segment highlights immediately and
+   * reverts if the server refuses, because a control that silently keeps the
+   * old value looks identical to one that worked.
+   */
+  function selectReach(next: SocializeAreaTier) {
+    const previous = areaTier ?? session?.areaTier ?? null;
+    setAreaTier(next);
+    startTransition(async () => {
+      // Duration is preserved: changing reach must not silently extend or
+      // shorten how long the user stays visible.
+      const result = await updateSocializeAction({
+        areaTier: next,
+        duration: DEFAULT_DISCOVER_DURATION
+      });
+      if (result.ok && result.session) {
+        setSession(result.session);
+        setPeople(await discoverSocializePeopleAction());
+      } else {
+        setAreaTier(previous);
+        showToast(result.message || "Couldn't change your reach. Try again.", true);
+      }
+    });
+  }
 
   const measured = size.w > 80 && size.h > 80;
   const geometry = radarSizeFor(size.w);
@@ -734,71 +784,39 @@ export function SocializePage({
               feedRef.current?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
             }}
             activationTrigger={
-          <Popover.Root open={statusOpen} onOpenChange={handleStatusOpenChange}>
-              <Popover.Trigger asChild>
-                <button
-                  type="button"
-                  // The activation target moved here when the avatar stopped being a
-                  // control: this IS the entry point now, so the tour still resolves.
-                  data-tour-id={TOUR_TARGET_IDS.SOCIALIZE_ACTIVATION}
-                  disabled={isPending || activating}
-                  aria-label={
-                    isActive
-                      ? "Linkr is on. Visible to nearby people. Opens Linkr options."
-                      : "Linkr is off. Turn it on to meet people nearby."
-                  }
-                  className={cn(
-                    // The hero's primary action. Styled as a real CTA rather than a
-                    // floating pill, because the toggle IS the call to action when
-                    // Socializing is off.
-                    "focus-ring safe-motion inline-flex min-h-[44px] items-center gap-2.5 rounded-full px-5 py-2 transition-colors",
-                    "active:scale-[0.98] motion-reduce:active:scale-100 disabled:opacity-70",
-                    isActive
-                      ? "border border-emerald-500/35 bg-emerald-500/10"
-                      : "bg-primary text-primary-foreground hover:bg-primary/90",
-                    // One subtle pulse when the state has just changed. Not a loop.
-                    statusPulse && "socialize-status-pulse"
+              <button
+                type="button"
+                // Still the tour's activation target: this IS the entry point.
+                data-tour-id={TOUR_TARGET_IDS.SOCIALIZE_ACTIVATION}
+                disabled={isPending || activating}
+                onClick={isActive ? turnOff : startDiscovering}
+                aria-pressed={isActive}
+                aria-label={
+                  isActive
+                    ? "Pause Discover Nearby. You are currently visible to nearby people."
+                    : "Start Discover Nearby. You will become visible to nearby people."
+                }
+                className={cn(
+                  "linkr-discover-cta focus-ring",
+                  isActive && "linkr-discover-cta-live",
+                  statusPulse && "socialize-status-pulse"
+                )}
+              >
+                <span className="linkr-discover-icon" aria-hidden="true">
+                  {busy ? (
+                    <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+                  ) : isActive ? (
+                    <Pause className="h-4 w-4 fill-current" />
+                  ) : (
+                    <Play className="h-4 w-4 fill-current" />
                   )}
-                >
-                  <span className="relative grid h-4 w-4 shrink-0 place-items-center" aria-hidden="true">
-                    {busy ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
-                    ) : isActive ? (
-                      <span className="block h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgb(16_185_129/0.55)]" />
-                    ) : (
-                      <span className="block h-2.5 w-2.5 rounded-full bg-muted-foreground/45" />
-                    )}
-                  </span>
-                  <span
-                    className={cn(
-                      "text-[0.9375rem] font-semibold leading-none",
-                      isActive ? "text-emerald-700 dark:text-emerald-300" : "text-primary-foreground"
-                    )}
-                  >
-                    {busy
-                      ? isActive
-                        ? "Updating…"
-                        : "Turning on…"
-                      : isActive
-                        ? "Linkr is on"
-                        : "Turn On Socialize"}
-                  </span>
-                </button>
-              </Popover.Trigger>
-              <Popover.Portal>
-                <Popover.Content
-                  data-tour-id={TOUR_TARGET_IDS.SOCIALIZE_CONTROLS}
-                  side="bottom"
-                  align="center"
-                  sideOffset={10}
-                  collisionPadding={16}
-                  className="compact-drop-popover app-dropdown-content z-50 w-[min(240px,calc(100vw-2rem))] space-y-2 p-2.5"
-                >
-                  {statusPanel}
-                </Popover.Content>
-              </Popover.Portal>
-            </Popover.Root>
+                </span>
+                <span className="linkr-discover-label">
+                  {busy ? (isActive ? "Pausing…" : "Starting…") : isActive ? "You're discoverable" : "Discover Nearby"}
+                </span>
+              </button>
             }
+            reachControl={reachControl}
             visibilityNote={
               isActive ? (
               <>

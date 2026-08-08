@@ -385,7 +385,10 @@ describe("discovery hero", () => {
 
   it("offers one primary action that clears narrowing", () => {
     expect(hero).toContain("Explore");
-    expect(feed).toContain("setActiveFilters(new Set())");
+    // The chip row is gone, so Explore clears the search — the only narrowing
+    // the feed still has.
+    expect(feed).toContain('setQuery("")');
+    expect(feed).not.toContain("DISCOVERY_FILTERS");
   });
 
   it("is a labelled landmark, not a decorative div", () => {

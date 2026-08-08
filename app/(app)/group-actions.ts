@@ -328,16 +328,34 @@ export async function joinDiscoverableGroupAction(groupId: string): Promise<Grou
   const admin = createSupabaseAdminClient();
   const [{ data: conversation }, { data: settings }] = await Promise.all([
     admin.from("conversations").select("id, created_by, status").eq("id", groupId).eq("conversation_type", "group").maybeSingle(),
-    admin.from("group_settings").select("join_mode, history_visibility").eq("conversation_id", groupId).maybeSingle()
+    admin
+      .from("group_settings")
+      .select("join_mode, history_visibility, visibility")
+      .eq("conversation_id", groupId)
+      .maybeSingle()
   ]);
   if (!conversation || conversation.status !== "active" || settings?.join_mode !== "link" || !conversation.created_by) {
     return { ok: false, message: "This group isn't open to join." };
   }
-  const [approved, blocked] = await Promise.all([
-    areApprovedMuddies(admin, userId, conversation.created_by),
-    isBlockedEitherDirection(admin, userId, conversation.created_by)
-  ]);
-  if (!approved || blocked) return { ok: false, message: "This group isn't available." };
+
+  /**
+   * A PUBLIC group is joinable by anyone; a merely link-joinable one still
+   * requires a connection to its creator.
+   *
+   * Requiring friendship for public groups made the Join button on every
+   * public group fail — the group was listed precisely so strangers could
+   * find it, then refused them on the grounds that they were strangers.
+   *
+   * Blocks still apply in both cases. Being publicly listed does not oblige
+   * an owner to admit someone either of them has blocked.
+   */
+  const isPublic = (settings as { visibility?: string }).visibility === "public";
+  const blocked = await isBlockedEitherDirection(admin, userId, conversation.created_by);
+  if (blocked) return { ok: false, message: "This group isn't available." };
+  if (!isPublic) {
+    const approved = await areApprovedMuddies(admin, userId, conversation.created_by);
+    if (!approved) return { ok: false, message: "This group isn't available." };
+  }
   const capacity = await groupCapacityAvailable(admin, groupId, conversation.created_by);
   if (!capacity.allowed) return { ok: false, message: "This group is full." };
   const now = new Date().toISOString();
