@@ -52,7 +52,8 @@ export function QuickControlsSheet({
   hasActiveStatus,
   onToggleVisibility,
   onRefreshNearby,
-  statusTrigger
+  statusTrigger,
+  extraShortcuts
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -66,6 +67,13 @@ export function QuickControlsSheet({
   onRefreshNearby: () => void;
   /** The existing StatusComposer, wired by the parent. Reused, not rebuilt. */
   statusTrigger: ReactNode;
+  /**
+   * Page-specific rows, appended to Shortcuts.
+   *
+   * A slot rather than a hardcoded entry: this sheet is shared with Home,
+   * where a Linkr-only control would be a row that does nothing.
+   */
+  extraShortcuts?: ReactNode;
 }) {
   const { preference, setPreference } = useTheme();
 
@@ -169,6 +177,7 @@ export function QuickControlsSheet({
               <QuickLink href="/billing" icon={CircleDollarSign} label="Membership" description="Your plan and billing" divider />
               <QuickLink href="/buddy-score" icon={TrendingUp} label="My Progress" description="Buddy Score and activity" divider />
               <QuickLink href="/settings" icon={SettingsIcon} label="Settings" description="Preferences and account" divider />
+              {extraShortcuts}
             </QuickGroup>
 
             {/* Status summary, so the sheet reports what it just changed. */}

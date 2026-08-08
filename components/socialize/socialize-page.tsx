@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import * as Popover from "@radix-ui/react-popover";
-import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, Clock, Info, Loader2, MapPin, MessageSquareText, MoreHorizontal, Pause, Play, RefreshCcw, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, Clock, Info, Loader2, MapPin, MessageSquareText, MoreHorizontal, Pause, Play, RefreshCcw, RotateCcw, Users, X } from "lucide-react";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
 import { passPersonAction, undoPassAction } from "@/app/(app)/social-actions";
 import {
@@ -1191,6 +1191,32 @@ export function SocializePage({
         hasActiveStatus={hasActiveStatus}
         onToggleVisibility={quickControls.toggleVisibility}
         onRefreshNearby={quickControls.refreshNearby}
+        extraShortcuts={
+          /*
+           * The skipped list, where someone would actually look for it.
+           *
+           * The deck's circular-arrow button already opens this, but an icon
+           * that sometimes undoes and sometimes opens a list does not tell
+           * anyone the list exists. A labelled row does.
+           */
+          <button
+            type="button"
+            onClick={() => {
+              setQuickControlsOpen(false);
+              setSkippedOpen(true);
+            }}
+            className="focus-ring safe-motion flex min-h-[60px] w-full items-center gap-3.5 border-t border-border/50 px-4 py-3 text-left transition-colors hover:bg-secondary/40"
+          >
+            <RotateCcw className="h-5 w-5 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[0.9375rem] font-medium">People you skipped</span>
+              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                Bring back anyone you passed by mistake
+              </span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </button>
+        }
         statusTrigger={
           <StatusComposer
             hasActiveStatus={hasActiveStatus}

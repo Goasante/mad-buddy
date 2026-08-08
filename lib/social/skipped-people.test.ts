@@ -47,6 +47,26 @@ describe("a mistaken skip is recoverable after a reload", () => {
   });
 });
 
+describe("the list is findable", () => {
+  const page = stripComments(read("components/socialize/socialize-page.tsx"));
+  const sheetChrome = stripComments(read("components/dashboard/quick-controls-sheet.tsx"));
+
+  it("has a labelled entry, not only an icon", () => {
+    // The deck's circular arrow opens this too, but an icon that sometimes
+    // undoes and sometimes opens a list does not tell anyone the list exists.
+    expect(page).toContain("People you skipped");
+    expect(page).toContain("Bring back anyone you passed by mistake");
+  });
+
+  it("adds the entry through a slot, so Home does not inherit it", () => {
+    // Quick Controls is shared. A hardcoded Linkr row would be a control that
+    // does nothing on Home.
+    expect(sheetChrome).toContain("extraShortcuts");
+    const home = stripComments(read("components/dashboard/dashboard-page.tsx"));
+    expect(home).not.toContain("People you skipped");
+  });
+});
+
 describe("the list stays the viewer's own", () => {
   it("is scoped to the caller, never to who skipped them", () => {
     expect(loader).toContain('.eq("user_id", viewerId)');
