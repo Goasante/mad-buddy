@@ -28,6 +28,7 @@ export type LocalVoiceRecording = {
   durationSeconds: number;
   waveform: number[] | null;
   diagnostics: VoiceCaptureDiagnostics;
+  interruption: "backgrounded" | "microphone_ended" | null;
 };
 
 export type VoiceCaptureDiagnostics = {
@@ -72,6 +73,7 @@ export type MediaRecorderLike = {
   ondataavailable: ((event: { data: Blob }) => void) | null;
   onstop: (() => void) | null;
   onerror: (() => void) | null;
+  onpause?: (() => void) | null;
   start(timeslice?: number): void;
   stop(): void;
 };
@@ -151,6 +153,8 @@ export function recorderError(error: unknown): Pick<Extract<VoiceRecorderState, 
     case "NotReadableError":
     case "AbortError":
       return { code: "microphone_busy", message: "The microphone is busy. Close other audio apps and try again." };
+    case "NotSupportedError":
+      return { code: "recording_unsupported", message: "Voice recording is not supported in this browser." };
     default:
       return { code: "recording_interrupted", message: "Recording was interrupted. Try again." };
   }
@@ -184,6 +188,7 @@ export class VoiceRecorderController {
     "audioTrackCount" | "trackEnabled" | "trackMuted" | "trackReadyState"
   > | null = null;
   private destroyed = false;
+  private interruption: LocalVoiceRecording["interruption"] = null;
 
   constructor(config: VoiceRecorderConfig, runtime: VoiceRecordingRuntime = browserRuntime()) {
     this.maxDurationSeconds = Math.max(1, config.maxDurationSeconds);
@@ -224,6 +229,7 @@ export class VoiceRecorderController {
 
     const operationId = ++this.operationId;
     this.selectedMime = capability.mimeType;
+    this.interruption = null;
     this.setState({ kind: "requesting_permission" });
 
     let stream: MediaStream;
@@ -282,6 +288,11 @@ export class VoiceRecorderController {
       if (this.stopEventReceived) this.scheduleFinalization();
     };
     recorder.onerror = () => this.fail({ name: "MediaRecorderError" });
+    recorder.onpause = () => {
+      if (this.state.kind !== "recording") return;
+      this.interruption = "microphone_ended";
+      this.stopRecording();
+    };
     recorder.onstop = () => {
       this.stopEventReceived = true;
       this.scheduleFinalization();
@@ -321,7 +332,10 @@ export class VoiceRecorderController {
   }
 
   handleVisibilityChange(hidden: boolean): void {
-    if (hidden && this.state.kind === "recording") this.stopRecording();
+    if (hidden && this.state.kind === "recording") {
+      this.interruption = "backgrounded";
+      this.stopRecording();
+    }
   }
 
   handlePageHide(): void {
@@ -337,7 +351,10 @@ export class VoiceRecorderController {
   }
 
   private readonly handleTrackEnded = () => {
-    if (this.state.kind === "recording") this.stopRecording();
+    if (this.state.kind === "recording") {
+      this.interruption = "microphone_ended";
+      this.stopRecording();
+    }
   };
 
   private stopRecording(): void {
@@ -409,7 +426,8 @@ export class VoiceRecorderController {
         blobMimeType: blob.type,
         durationSeconds,
         waveform: null,
-        diagnostics
+        diagnostics,
+        interruption: this.interruption
       }
     });
 
@@ -453,6 +471,7 @@ export class VoiceRecorderController {
       this.recorder.ondataavailable = null;
       this.recorder.onstop = null;
       this.recorder.onerror = null;
+      this.recorder.onpause = null;
       try {
         this.recorder.stop();
       } catch {
@@ -464,6 +483,7 @@ export class VoiceRecorderController {
     this.releaseStream();
     this.revokePreview();
     this.selectedMime = null;
+    this.interruption = null;
     this.stopEventReceived = false;
     this.captureTrack = null;
     this.captureTrackSnapshot = null;

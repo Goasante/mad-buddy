@@ -207,7 +207,8 @@ describe("composer", () => {
   });
 
   it("still labels the send action for assistive tech", () => {
-    expect(composer).toContain('aria-label="Send message"');
+    expect(composer).toContain('preparedVoice ? "Send voice message" : "Send message"');
+    expect(composer).toContain('"Retry voice message"');
     expect(composer).toContain('aria-label={attachment ? "Photo caption" : placeholder}');
   });
 });

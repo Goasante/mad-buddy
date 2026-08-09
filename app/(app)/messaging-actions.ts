@@ -484,6 +484,22 @@ export async function getPreparedVoicePlaybackAction(input: unknown): Promise<Pr
     : { ok: false, message: "That voice message isn't available." };
 }
 
+/** Playback grant rooted in the sent parent message, never a bare asset id. */
+export async function getMessageVoicePlaybackAction(input: unknown): Promise<PreparedVoicePlaybackState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in before playing this voice message." };
+  const parsed = z.object({ conversationId: z.string().uuid(), messageId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false, message: "That voice message isn't available." };
+  const admin = createSupabaseAdminClient();
+  const { getMessageVoicePlayback } = await import("@/lib/media/voice-playback-service");
+  const playback = await getMessageVoicePlayback(admin, userId, parsed.data);
+  return playback
+    ? { ok: true, message: "Voice message ready.", playback }
+    : { ok: false, message: "That voice message isn't available." };
+}
+
 /** Finalizes and validates bytes uploaded through a server-issued intent. */
 export async function finalizeMessageAttachmentUploadAction(input: unknown): Promise<AttachmentUploadState> {
   const missing = missingEnvState();

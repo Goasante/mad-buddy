@@ -7,6 +7,7 @@ import {
   VoiceRecorderController,
   type VoiceRecorderConfig
 } from "@/lib/messaging/voice-recording";
+import { reportVoiceFailure } from "@/lib/messaging/voice-reliability";
 
 const subscribeToNothing = () => () => undefined;
 
@@ -53,6 +54,17 @@ export function useVoiceRecorder(conversationId: string, config: VoiceRecorderCo
       controller.destroy();
     };
   }, [controller]);
+
+  useEffect(() => {
+    if (state.kind !== "failed") return;
+    reportVoiceFailure(
+      state.code === "recording_unsupported"
+        ? "recording_unsupported"
+        : state.code === "permission_denied"
+          ? "permission_denied"
+          : "recording_interrupted"
+    );
+  }, [state]);
 
   return {
     state,

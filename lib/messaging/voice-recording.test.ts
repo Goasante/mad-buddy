@@ -324,7 +324,7 @@ describe("voice recorder controller", () => {
       constructorHarness.runtime
     );
     await constructorController.start();
-    expect(constructorController.getState()).toMatchObject({ kind: "failed", code: "recording_interrupted" });
+    expect(constructorController.getState()).toMatchObject({ kind: "failed", code: "recording_unsupported" });
     expect(constructorHarness.track.stopCount).toBe(1);
 
     const runtimeHarness = harness();

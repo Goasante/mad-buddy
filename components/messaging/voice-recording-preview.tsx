@@ -13,6 +13,7 @@ import type { LocalVoiceRecording } from "@/lib/messaging/voice-recording";
 import type { PreparedVoiceAsset } from "@/lib/messaging/voice-playback";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { browserIsOnline, reportVoiceFailure } from "@/lib/messaging/voice-reliability";
 
 export type PreparedVoiceAttachment = PreparedVoiceAsset;
 
@@ -59,6 +60,7 @@ export function VoiceRecordingPreview({
     errorName: null,
     errorCode: null
   });
+  const [online, setOnline] = useState(browserIsOnline);
   const duration = Math.max(0.1, recording.durationSeconds);
 
   useEffect(() => {
@@ -109,6 +111,16 @@ export function VoiceRecordingPreview({
     if (intentRef.current) void discardMessageAttachmentAction(intentRef.current);
   }, []);
 
+  useEffect(() => {
+    const update = () => setOnline(browserIsOnline());
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+
   async function togglePlayback() {
     const audio = audioRef.current;
     if (!audio) return;
@@ -129,43 +141,52 @@ export function VoiceRecordingPreview({
 
   async function prepare() {
     if (state.kind === "uploading" || state.kind === "finalizing" || state.kind === "ready") return;
+    if (!browserIsOnline()) {
+      setState({ kind: "failed", message: "You're offline. Your recording is safe here. Reconnect to upload it." });
+      return;
+    }
     const operation = ++operationRef.current;
-    setState({ kind: "uploading" });
-    let created: Awaited<ReturnType<typeof createVoiceMessageUploadIntentAction>>;
-    try {
-      created = await createVoiceMessageUploadIntentAction({
-        conversationId,
-        contentType: recording.mimeType,
-        sizeBytes: recording.blob.size
-      });
-    } catch {
-      if (operation === operationRef.current) {
-        setState({ kind: "failed", message: "Couldn't prepare that voice message. Try again." });
+    let mediaId = intentRef.current;
+    if (!mediaId) {
+      setState({ kind: "uploading" });
+      let created: Awaited<ReturnType<typeof createVoiceMessageUploadIntentAction>>;
+      try {
+        created = await createVoiceMessageUploadIntentAction({
+          conversationId,
+          contentType: recording.mimeType,
+          sizeBytes: recording.blob.size
+        });
+      } catch {
+        reportVoiceFailure("upload_intent_failed");
+        if (operation === operationRef.current) setState({ kind: "failed", message: "Couldn't prepare that voice message. Try again." });
+        return;
       }
-      return;
-    }
-    if (operation !== operationRef.current) return;
-    if (!created.ok || !created.mediaId || !created.path || !created.token) {
-      setState({ kind: "failed", message: created.message });
-      return;
-    }
-    intentRef.current = created.mediaId;
-
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.storage.from("media").uploadToSignedUrl(
-        created.path,
-        created.token,
-        recording.blob,
-        { contentType: recording.mimeType, upsert: true }
-      );
-      if (error) throw error;
-    } catch {
       if (operation !== operationRef.current) return;
-      void discardMessageAttachmentAction(created.mediaId);
-      intentRef.current = null;
-      setState({ kind: "failed", message: "Couldn't upload that voice message. Try again." });
-      return;
+      if (!created.ok || !created.mediaId || !created.path || !created.token) {
+        reportVoiceFailure("upload_intent_failed");
+        setState({ kind: "failed", message: created.message });
+        return;
+      }
+      mediaId = created.mediaId;
+      intentRef.current = mediaId;
+
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const { error } = await supabase.storage.from("media").uploadToSignedUrl(
+          created.path,
+          created.token,
+          recording.blob,
+          { contentType: recording.mimeType, upsert: true }
+        );
+        if (error) throw error;
+      } catch {
+        if (operation !== operationRef.current) return;
+        reportVoiceFailure("upload_failed");
+        void discardMessageAttachmentAction(mediaId);
+        intentRef.current = null;
+        setState({ kind: "failed", message: browserIsOnline() ? "Couldn't upload that voice message. Try again." : "You're offline. Your recording is safe here. Reconnect to upload it." });
+        return;
+      }
     }
 
     if (operation !== operationRef.current) return;
@@ -174,19 +195,19 @@ export function VoiceRecordingPreview({
     try {
       finalized = await finalizeVoiceMessageUploadAction({
         conversationId,
-        mediaId: created.mediaId,
+        mediaId,
         waveform: recording.waveform
       });
     } catch {
       if (operation !== operationRef.current) return;
-      void discardMessageAttachmentAction(created.mediaId);
-      intentRef.current = null;
+      reportVoiceFailure("finalize_failed");
       setState({ kind: "failed", message: "Couldn't verify that voice message. Try again." });
       return;
     }
     if (operation !== operationRef.current) return;
     if (!finalized.ok || !finalized.mediaId || !finalized.durationMs) {
-      void discardMessageAttachmentAction(created.mediaId);
+      reportVoiceFailure("validation_failed");
+      void discardMessageAttachmentAction(mediaId);
       intentRef.current = null;
       setState({ kind: "failed", message: finalized.message });
       return;
@@ -196,6 +217,11 @@ export function VoiceRecordingPreview({
       durationMs: finalized.durationMs,
       waveform: recording.waveform
     };
+    // READY is no longer an in-flight upload intent. Do not let an unmount
+    // caused by successful message send discard the now-attached asset.
+    // Explicit delete/re-record below still discards it; abandoned READY
+    // assets are handled by the canonical orphan lifecycle.
+    intentRef.current = null;
     setState({ kind: "ready", attachment });
     onPrepared(attachment);
   }
@@ -203,7 +229,8 @@ export function VoiceRecordingPreview({
   function discard() {
     operationRef.current += 1;
     audioRef.current?.pause();
-    if (intentRef.current) void discardMessageAttachmentAction(intentRef.current);
+    const mediaId = intentRef.current ?? (state.kind === "ready" ? state.attachment.mediaId : null);
+    if (mediaId) void discardMessageAttachmentAction(mediaId);
     intentRef.current = null;
     onPrepared(null);
     onDelete();
@@ -212,7 +239,8 @@ export function VoiceRecordingPreview({
   function rerecord() {
     operationRef.current += 1;
     audioRef.current?.pause();
-    if (intentRef.current) void discardMessageAttachmentAction(intentRef.current);
+    const mediaId = intentRef.current ?? (state.kind === "ready" ? state.attachment.mediaId : null);
+    if (mediaId) void discardMessageAttachmentAction(mediaId);
     intentRef.current = null;
     onPrepared(null);
     onRerecord();
@@ -296,12 +324,18 @@ export function VoiceRecordingPreview({
         </button>
       </div>
       {state.kind === "failed" ? <p className="mt-2 text-xs text-destructive" role="alert">{state.message}</p> : null}
+      {!online ? <p className="mt-2 text-xs text-muted-foreground" role="status">Offline. You can preview this recording and upload it after reconnecting.</p> : null}
+      {recording.interruption ? (
+        <p className="mt-2 text-xs text-muted-foreground" role="status">
+          Recording stopped when {recording.interruption === "backgrounded" ? "the app moved to the background" : "microphone access ended"}. Your captured audio was kept.
+        </p>
+      ) : null}
       {playbackDiagnostic.errorName ? (
         <p className="mt-2 text-xs text-destructive" role="alert">
           This recording couldn&apos;t be played. Try recording it again.
         </p>
       ) : null}
-      {state.kind === "ready" ? <p className="mt-1 text-xs text-muted-foreground">Prepared locally and verified. Sending arrives in the next phase.</p> : null}
+      {state.kind === "ready" ? <p className="mt-1 text-xs text-muted-foreground">Ready to send.</p> : null}
       {process.env.NODE_ENV !== "production" && state.kind !== "ready" ? (
         <details className="mt-2 text-[11px] text-muted-foreground">
           <summary>Voice playback diagnostics</summary>

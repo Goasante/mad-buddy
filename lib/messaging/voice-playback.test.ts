@@ -64,9 +64,10 @@ describe("Phase 4E boundaries", () => {
     expect(preview).toContain("<VoiceNotePlayer");
   });
 
-  it("does not connect prepared audio to message sending or conversation rendering", () => {
-    expect(player).not.toContain("sendMessage");
+  it("keeps playback separate from sending while allowing a sent-message grant", () => {
+    expect(player).not.toContain("sendMessageAction");
     expect(actions).not.toContain("sendVoiceMessageAction");
-    expect(preview).toContain("Sending arrives in the next phase.");
+    expect(actions).toContain("getMessageVoicePlaybackAction");
+    expect(preview).toContain("Ready to send.");
   });
 });

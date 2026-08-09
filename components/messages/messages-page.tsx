@@ -44,6 +44,7 @@ import {
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { MessageAttachmentImage } from "@/components/messaging/message-attachment-image";
+import { VoiceNotePlayer } from "@/components/messaging/voice-note-player";
 import { MessageComposer } from "@/components/messaging/message-composer";
 import { MessageMediaViewer } from "@/components/messaging/message-media-viewer";
 import type { AttachmentView } from "@/lib/messaging/attachments";
@@ -921,6 +922,14 @@ export function MessagesPageContent({
                                   onRefreshed={(attachment) => updateMessageAttachment(message.id, attachment)}
                                 />
                               ) : null}
+                              {!message.deleted && message.voice ? (
+                                <VoiceNotePlayer
+                                  conversationId={selected.id}
+                                  messageId={message.id}
+                                  senderName={message.isMine ? "you" : message.senderName}
+                                  asset={message.voice}
+                                />
+                              ) : null}
                               {editingId === message.id ? (
                                 <form
                                   className="flex items-center gap-1.5"
@@ -950,7 +959,7 @@ export function MessagesPageContent({
                                     ? DELETED_MESSAGE_PLACEHOLDER
                                     : message.quickActionType
                                       ? quickActionLabel(message.quickActionType)
-                                      : message.text ?? (message.attachment ? null : "Message")}
+                                      : message.text ?? (message.attachment || message.voice ? null : "Message")}
                                 </p>
                               )}
                               {/* One timestamp per run, on its last message:
@@ -1021,14 +1030,16 @@ export function MessagesPageContent({
                                         >
                                           Edit
                                         </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => remove(message.id)}
-                                          className="focus-ring rounded px-1 hover:text-destructive"
-                                        >
-                                          Delete
-                                        </button>
                                       </>
+                                    ) : null}
+                                    {message.isMine ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => remove(message.id)}
+                                        className="focus-ring rounded px-1 hover:text-destructive"
+                                      >
+                                        Delete
+                                      </button>
                                     ) : null}
                                   </>
                                 )}

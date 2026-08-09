@@ -4,6 +4,8 @@ import { z } from "zod";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import { senderVisibleState, validateMessageText, type UserFacingMessageState } from "@/lib/messaging/rules";
 import type { AttachmentView } from "@/lib/messaging/attachments";
+import type { PreparedVoiceAsset } from "@/lib/messaging/voice-playback";
+import { messagePreviewText } from "@/lib/messaging/message-preview";
 import {
   canSendMessage,
   getOrCreateDirectConversation,
@@ -66,6 +68,8 @@ export type ChatMessageView = {
    * never a permanent public URL.
    */
   attachment: AttachmentView | null;
+  /** Trusted, URL-free voice metadata. Playback is authorized lazily by message. */
+  voice: PreparedVoiceAsset | null;
   isMine: boolean;
   messageType: string;
   text: string | null;
@@ -178,6 +182,7 @@ export async function sendMessage(userId: string, input: unknown): Promise<Messa
 
   const isQuickAction = Boolean(parsed.data.quickActionType);
   const hasAttachment = Boolean(parsed.data.mediaId);
+  if (isQuickAction && hasAttachment) return { ok: false, message: "Choose one message type." };
   // A photo with no caption is a complete message, so the text requirement is
   // relaxed when an attachment carries the content. A caption that IS present
   // is still validated.
@@ -210,31 +215,48 @@ export async function sendMessage(userId: string, input: unknown): Promise<Messa
     };
   }
 
-  // The asset must belong to the sender and be a ready chat image. Checked
+  // Resolve a lost-response retry before attachment reuse validation. The
+  // canonical sender/client id pair is immutable, so the same retry returns
+  // the original message and never uploads or inserts again.
+  const { data: existing } = await admin
+    .from("messages")
+    .select("id, conversation_id, media_id")
+    .eq("sender_id", userId)
+    .eq("client_message_id", parsed.data.clientMessageId)
+    .maybeSingle();
+  if (existing) {
+    return existing.conversation_id === parsed.data.conversationId && existing.media_id === (parsed.data.mediaId ?? null)
+      ? { ok: true, message: "Sent.", messageId: existing.id }
+      : { ok: false, message: "That message retry is no longer valid." };
+  }
+
+  // The asset must belong to the sender and be canonical READY chat media. Checked
   // AFTER conversation permission, so an unauthorised sender never learns
   // whether a media id exists.
-  if (parsed.data.mediaId) {
-    const { canAttachMedia } = await import("@/lib/messaging/attachments");
-    const allowed = await canAttachMedia(
-      admin,
-      userId,
-      parsed.data.conversationId,
-      parsed.data.mediaId
-    );
-    if (!allowed) return { ok: false, message: "That photo isn't available to send." };
+  const media = parsed.data.mediaId
+    ? await (await import("@/lib/messaging/voice-message-service")).resolveSendableMessageMedia(
+        admin, userId, parsed.data.conversationId, parsed.data.mediaId
+      )
+    : null;
+  if (parsed.data.mediaId && !media) return { ok: false, message: "That attachment isn't available to send." };
+  if (media?.kind === "voice_note" && (parsed.data.text ?? "").trim()) {
+    return { ok: false, message: "Send the voice message and text separately." };
   }
+  const messageType = isQuickAction ? "quick_action" : media?.kind ?? "text";
 
   const { data: message, error } = await admin
     .from("messages")
     .insert({
       conversation_id: parsed.data.conversationId,
       sender_id: userId,
-      message_type: isQuickAction ? "quick_action" : hasAttachment ? "image" : "text",
+      message_type: messageType,
       media_id: parsed.data.mediaId ?? null,
-      text_content: parsed.data.text?.trim() || null,
+      text_content: media?.kind === "voice_note" ? null : parsed.data.text?.trim() || null,
       quick_action_type: (parsed.data.quickActionType ?? null) as QuickActionType | null,
       reply_to_message_id: parsed.data.replyToMessageId ?? null,
       client_message_id: parsed.data.clientMessageId,
+      duration_seconds: media?.kind === "voice_note" ? media.durationSeconds : null,
+      waveform_data: media?.kind === "voice_note" ? media.waveform : null,
       status: "sent"
     })
     .select("id")
@@ -243,13 +265,13 @@ export async function sendMessage(userId: string, input: unknown): Promise<Messa
   // A duplicate send collides on (sender_id, client_message_id), return the
   // existing message rather than erroring or double-posting.
   if (error || !message) {
-    const { data: existing } = await admin
+    const { data: duplicate } = await admin
       .from("messages")
       .select("id")
       .eq("sender_id", userId)
       .eq("client_message_id", parsed.data.clientMessageId)
       .maybeSingle();
-    if (existing) return { ok: true, message: "Sent.", messageId: existing.id };
+    if (duplicate) return { ok: true, message: "Sent.", messageId: duplicate.id };
     return { ok: false, message: "Couldn't send that message." };
   }
 
@@ -258,7 +280,7 @@ export async function sendMessage(userId: string, input: unknown): Promise<Messa
     .update({ last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq("id", parsed.data.conversationId);
 
-  await notifyOtherMembers(admin, parsed.data.conversationId, userId, parsed.data.text ?? "");
+  await notifyOtherMembers(admin, parsed.data.conversationId, userId, messagePreviewText(messageType, parsed.data.text) ?? "");
   return { ok: true, message: "Sent.", messageId: message.id };
 }
 
@@ -453,8 +475,7 @@ export async function listConversations(userId: string): Promise<ConversationVie
       avatarUrl,
       otherUsername,
       kind: conversation.conversation_type,
-      lastMessagePreview:
-        preview?.last_message_type === "voice_note" ? "Voice note" : preview?.last_text ?? null,
+      lastMessagePreview: preview ? messagePreviewText(preview.last_message_type, preview.last_text) : null,
       lastMessageAt: conversation.last_message_at,
       unreadCount: preview?.unread_count ?? 0,
       muted: Boolean(membership?.muted_until && membership.muted_until > nowIso),
@@ -569,6 +590,8 @@ export async function listMessages(userId: string, conversationId: string): Prom
     conversationId,
     rows.map((row) => row.id)
   );
+  const { projectVoiceMessages } = await import("@/lib/messaging/voice-message-service");
+  const voicesByMessageId = await projectVoiceMessages(admin, userId, conversationId, rows.map((row) => row.id));
 
   const myPrefs = await loadCommunicationPreferences(admin, userId);
 
@@ -601,6 +624,7 @@ export async function listMessages(userId: string, conversationId: string): Prom
       senderRole: row.sender_id ? roleBySender.get(row.sender_id) ?? null : null,
       // Null for a deleted message, so a tombstone never renders its photo.
       attachment: row.deleted_at ? null : attachmentsById.get(row.media_id ?? "") ?? null,
+      voice: row.deleted_at ? null : voicesByMessageId.get(row.id) ?? null,
       isMine: row.sender_id === userId,
       messageType: row.message_type,
       text: row.deleted_at ? null : row.text_content,

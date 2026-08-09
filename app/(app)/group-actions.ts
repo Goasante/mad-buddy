@@ -13,6 +13,7 @@ import type {
   GroupSummary
 } from "@/lib/groups/types";
 import { loadCommunicationPreferences } from "@/lib/messaging/service";
+import { messagePreviewText } from "@/lib/messaging/message-preview";
 import { resolveRoleChange, type GroupRoleChange } from "@/lib/messaging/rules";
 import { errorType, logBackendEvent } from "@/lib/observability/logger";
 import { deliverNotification } from "@/lib/notifications/server";
@@ -176,11 +177,7 @@ async function summariesFor(
         // Absent means private, matching the migration's own default.
         visibility: (setting as { visibility?: GroupVisibility }).visibility ?? "private",
         lastMessageAt: conversation.last_message_at,
-        lastMessagePreview: lastMessage
-          ? lastMessage.message_type === "voice_note"
-            ? "Voice note"
-            : lastMessage.text_content
-          : null
+        lastMessagePreview: lastMessage ? messagePreviewText(lastMessage.message_type, lastMessage.text_content) : null
       } satisfies GroupSummary];
     })
     .sort((a, b) => (b.lastMessageAt ?? "").localeCompare(a.lastMessageAt ?? "") || a.name.localeCompare(b.name));
@@ -609,7 +606,7 @@ export async function loadGroupDetailAction(groupId: string): Promise<GroupDetai
     joinMode: settings.join_mode as GroupJoinMode,
     visibility: (settings as { visibility?: GroupVisibility }).visibility ?? "private",
     lastMessageAt: conversation.last_message_at,
-    lastMessagePreview: lastMessage?.message_type === "voice_note" ? "Voice note" : lastMessage?.text_content ?? null,
+    lastMessagePreview: lastMessage ? messagePreviewText(lastMessage.message_type, lastMessage.text_content) : null,
     postingMode: settings.posting_mode,
     canManageMembers,
     viewerId: userId,

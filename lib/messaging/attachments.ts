@@ -136,6 +136,7 @@ export async function signAttachmentsForMessages(
       .in("id", mediaIds)
       .eq("context_type", "chat")
       .eq("intended_conversation_id", conversationId)
+      .eq("intended_media_kind", "image")
       .eq("processing_status", "ready")
       .eq("moderation_status", "active")
       .is("deleted_at", null),

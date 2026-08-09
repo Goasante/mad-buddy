@@ -14,6 +14,7 @@ import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 import { cn } from "@/lib/utils";
 import { useVoiceRecorder } from "@/hooks/use-voice-recorder";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
+import { browserIsOnline, reportVoiceFailure } from "@/lib/messaging/voice-reliability";
 import {
   VoiceRecordingPreview,
   type PreparedVoiceAttachment
@@ -28,7 +29,7 @@ type MessageComposerProps = {
   className?: string;
 };
 
-/** Canonical text + image composer shared by every real conversation surface. */
+/** Canonical text, image, and voice composer shared by every real conversation surface. */
 export function MessageComposer({
   conversationId,
   placeholder,
@@ -41,15 +42,16 @@ export function MessageComposer({
   const [attachment, setAttachment] = useState<SelectedAttachment | null>(null);
   const [uploadState, setUploadState] = useState<AttachmentUploadLifecycle>("idle");
   const [preparedVoice, setPreparedVoice] = useState<PreparedVoiceAttachment | null>(null);
+  const [voiceSendFailed, setVoiceSendFailed] = useState(false);
   const [isPending, startTransition] = useTransition();
   const clientMessageIdRef = useRef<string | null>(null);
   const voice = useVoiceRecorder(conversationId, voiceRecorderConfig);
 
   const uploadBusy = uploadState === "selected" || uploadState === "uploading" || uploadState === "processing";
   const voiceBusy = ["requesting_permission", "recording", "stopping", "processing"].includes(voice.state.kind);
-  const voiceBlocksSend = voiceBusy || voice.state.kind === "preview";
+  const voiceBlocksSend = voiceBusy || (voice.state.kind === "preview" && !preparedVoice);
   const voiceSupported = voiceRecorderConfig.enabled && voice.capability.supported;
-  const canSend = Boolean(draft.trim() || attachment) && !voiceBlocksSend;
+  const canSend = Boolean(draft.trim() || attachment || preparedVoice) && !voiceBlocksSend;
   const voiceAnnouncement = voice.state.kind === "recording"
     ? "Recording started."
     : voice.state.kind === "preview"
@@ -60,20 +62,23 @@ export function MessageComposer({
 
   function send() {
     const text = draft.trim();
-    if ((!text && !attachment) || uploadBusy || isPending) return;
+    if ((!text && !attachment && !preparedVoice) || uploadBusy || isPending) return;
     if (voiceBlocksSend) return;
 
     const clientMessageId = clientMessageIdRef.current ?? crypto.randomUUID();
     clientMessageIdRef.current = clientMessageId;
     setUploadState("sending");
+    setVoiceSendFailed(false);
     onFeedback("");
     startTransition(async () => {
       try {
         const result = await withTimeout(
           sendMessageAction({
             conversationId,
-            text,
-            mediaId: attachment?.mediaId,
+            // Voice is its own message. Any typed draft stays untouched for a
+            // separate text send after the voice message succeeds.
+            text: preparedVoice ? undefined : text,
+            mediaId: preparedVoice?.mediaId ?? attachment?.mediaId,
             clientMessageId
           }),
           { operation: "send message" }
@@ -81,18 +86,26 @@ export function MessageComposer({
         onFeedback(result.message);
         if (!result.ok) {
           setUploadState(attachment ? "ready" : "idle");
+          setVoiceSendFailed(Boolean(preparedVoice));
           return;
         }
 
-        setDraft("");
+        if (!preparedVoice) setDraft("");
         setAttachment(null);
+        if (preparedVoice) voice.cancel();
+        setPreparedVoice(null);
+        setVoiceSendFailed(false);
         setUploadState("idle");
         clientMessageIdRef.current = null;
         await onSent();
       } catch (error) {
+        if (preparedVoice) reportVoiceFailure("send_failed");
         setUploadState(attachment ? "ready" : "idle");
+        setVoiceSendFailed(Boolean(preparedVoice));
         onFeedback(
-          isRequestTimeoutError(error)
+          !browserIsOnline()
+            ? "You're offline. Your voice message is ready and can be retried after reconnecting."
+            : isRequestTimeoutError(error)
             ? "Sending took too long. Your message was kept so you can try again."
             : "The message could not be sent. Try again."
         );
@@ -163,7 +176,7 @@ export function MessageComposer({
           conversationId={conversationId}
           onAttachmentChange={setAttachment}
           onLifecycleChange={setUploadState}
-          disabled={isPending || voiceBlocksSend}
+          disabled={isPending || voice.state.kind !== "idle"}
         />
         {voiceSupported && voice.state.kind === "idle" ? (
           <button
@@ -196,7 +209,7 @@ export function MessageComposer({
           <button
             type="submit"
             disabled={!canSend || uploadBusy || isPending || voiceBlocksSend}
-            aria-label="Send message"
+            aria-label={voiceSendFailed && preparedVoice ? "Retry voice message" : preparedVoice ? "Send voice message" : "Send message"}
             className={cn(
               "focus-ring safe-motion grid h-10 w-10 shrink-0 place-items-center rounded-full",
               canSend && !uploadBusy && !isPending

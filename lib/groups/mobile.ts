@@ -6,6 +6,7 @@ import { assertWithinLimit } from "@/lib/billing/service";
 import type { GroupInvitation, GroupsPageData, GroupSummary } from "@/lib/groups/types";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
+import { messagePreviewText } from "@/lib/messaging/message-preview";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import type { ConversationRole, GroupVisibility } from "@/lib/supabase/database.types";
@@ -168,11 +169,7 @@ async function summariesFor(
         // Absent means private, matching the migration's own default.
         visibility: (setting as { visibility?: GroupVisibility }).visibility ?? "private",
           lastMessageAt: conversation.last_message_at,
-          lastMessagePreview: lastMessage
-            ? lastMessage.message_type === "voice_note"
-              ? "Voice note"
-              : lastMessage.text_content
-            : null
+          lastMessagePreview: lastMessage ? messagePreviewText(lastMessage.message_type, lastMessage.text_content) : null
         } satisfies GroupSummary
       ];
     })

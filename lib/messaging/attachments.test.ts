@@ -208,8 +208,8 @@ describe("upload lifecycle", () => {
     expect(success.indexOf("setAttachment(null)")).toBeGreaterThan(-1);
   });
 
-  it("blocks a send with neither text nor photo", () => {
-    expect(composer).toContain("if ((!text && !attachment) || uploadBusy || isPending) return;");
+  it("blocks a send with neither text, photo nor prepared voice", () => {
+    expect(composer).toContain("if ((!text && !attachment && !preparedVoice) || uploadBusy || isPending) return;");
   });
 
   it("keeps idempotency on the send", () => {
@@ -219,7 +219,7 @@ describe("upload lifecycle", () => {
 
   it("treats a photo with no caption as a complete message", () => {
     expect(projection).toContain("hasAttachment");
-    expect(projection).toContain('hasAttachment ? "image" : "text"');
+    expect(projection).toContain('media?.kind ?? "text"');
   });
 
   it("uses the same composer for DM, Plan, and Group conversations", () => {
@@ -252,8 +252,8 @@ describe("rendering", () => {
   });
 
   it("renders the caption without inventing placeholder text", () => {
-    expect(groupPage).toContain("message.attachment ? null : (");
-    expect(messagesPage).toContain('message.text ?? (message.attachment ? null : "Message")');
+    expect(groupPage).toContain("message.attachment || message.voice ? null : (");
+    expect(messagesPage).toContain('message.text ?? (message.attachment || message.voice ? null : "Message")');
   });
 
   it("deduplicates signed URL refreshes and fails closed", () => {

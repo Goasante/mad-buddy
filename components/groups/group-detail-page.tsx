@@ -37,6 +37,7 @@ import {
 } from "@/lib/groups/member-presentation";
 import { AppMenu } from "@/components/ui/app-dropdown";
 import { MessageAttachmentImage } from "@/components/messaging/message-attachment-image";
+import { VoiceNotePlayer } from "@/components/messaging/voice-note-player";
 import { MessageComposer } from "@/components/messaging/message-composer";
 import { MessageMediaViewer } from "@/components/messaging/message-media-viewer";
 import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -438,13 +439,21 @@ export function GroupDetailPage({
                             ))}
                           />
                         ) : null}
+                        {message.voice ? (
+                          <VoiceNotePlayer
+                            conversationId={group.id}
+                            messageId={message.id}
+                            senderName={message.isMine ? "you" : message.senderName}
+                            asset={message.voice}
+                          />
+                        ) : null}
                         {/* The caption, when there is one. A photo alone is a
                             complete message, so no placeholder text is
                             invented for it. */}
                         {message.text ? (
                           <p>{message.text}</p>
-                        ) : message.attachment ? null : (
-                          <p>{message.messageType === "voice_note" ? "Voice note" : "Message"}</p>
+                        ) : message.attachment || message.voice ? null : (
+                          <p>Message</p>
                         )}
                         <p
                           aria-hidden="true"

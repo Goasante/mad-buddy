@@ -59,3 +59,51 @@ export async function getPreparedVoicePlayback(
     waveform: waveform.valid ? waveform.waveform : null
   };
 }
+
+/**
+ * Mints playback only through an authorized conversation -> message -> asset
+ * chain. A bare media id is never sufficient for a sent voice message.
+ */
+export async function getMessageVoicePlayback(
+  admin: Admin,
+  userId: string,
+  input: { conversationId: string; messageId: string }
+): Promise<AuthorizedVoicePlayback | null> {
+  const { projectVoiceMessages } = await import("@/lib/messaging/voice-message-service");
+  const projected = await projectVoiceMessages(admin, userId, input.conversationId, [input.messageId]);
+  const voice = projected.get(input.messageId);
+  if (!voice) return null;
+
+  const { data: message } = await admin
+    .from("messages")
+    .select("media_id")
+    .eq("id", input.messageId)
+    .eq("conversation_id", input.conversationId)
+    .eq("message_type", "voice_note")
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!message?.media_id || message.media_id !== voice.mediaId) return null;
+  const { data: asset } = await admin
+    .from("media_assets")
+    .select("storage_key, content_type")
+    .eq("id", message.media_id)
+    .eq("context_type", "chat")
+    .eq("intended_conversation_id", input.conversationId)
+    .eq("intended_media_kind", "voice_note")
+    .eq("processing_status", "ready")
+    .eq("moderation_status", "active")
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!asset || !["audio/webm", "audio/mp4"].includes(asset.content_type)) return null;
+  const { data: queued } = await admin.from("media_deletion_queue").select("id")
+    .eq("media_asset_id", message.media_id).is("processed_at", null).limit(1).maybeSingle();
+  if (queued) return null;
+  const { data, error } = await admin.storage.from("media").createSignedUrl(asset.storage_key, MEDIA_SIGNED_URL_TTL_SECONDS);
+  if (error || !data?.signedUrl) return null;
+  return {
+    ...voice,
+    url: data.signedUrl,
+    expiresAt: mediaSignedUrlExpiresAt(),
+    contentType: asset.content_type as AuthorizedVoicePlayback["contentType"]
+  };
+}

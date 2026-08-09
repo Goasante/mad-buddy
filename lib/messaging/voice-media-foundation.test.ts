@@ -188,9 +188,9 @@ describe("Phase 4C/4D architecture boundaries", () => {
     expect(preview).not.toContain("createSignedUrl");
   });
 
-  it("stops before actual message sending or final conversation playback", () => {
-    expect(preview).toContain("Sending arrives in the next phase.");
-    expect(composer).not.toContain("mediaId: preparedVoice");
+  it("hands the canonical prepared asset to the shared send path", () => {
+    expect(preview).toContain("Ready to send.");
+    expect(composer).toContain("preparedVoice?.mediaId ?? attachment?.mediaId");
     expect(actions).not.toContain("sendVoiceMessageAction");
   });
 });
