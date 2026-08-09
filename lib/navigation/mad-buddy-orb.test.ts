@@ -189,7 +189,8 @@ describe("active state", () => {
 
   it("is driven by the shared route-matching rule", () => {
     expect(mobileNav).toContain("isNavigationItemActive(");
-    expect(mobileNav).toContain("<MadBuddyOrb isActive={homeActive} />");
+    expect(mobileNav).toContain("isActive={homeActive}");
+    expect(mobileNav).toContain("onHomeReselect={onHomeReselect}");
   });
 });
 
@@ -208,13 +209,13 @@ describe("Home behaviour", () => {
     expect(orb).toContain("if (!isActive) return;");
   });
 
-  it("scrolls to top when already on Home", () => {
-    expect(orb).toContain("window.scrollTo({");
-    expect(orb).toContain("top: 0");
+  it("opens the camera composer when Home is already active", () => {
+    expect(orb).toContain("onHomeReselect?.()");
   });
 
-  it("does nothing at all when already at the top", () => {
-    expect(orb).toContain("if (window.scrollY <= 0) return;");
+  it("does not depend on a timing-based double tap", () => {
+    expect(orb).not.toContain("setTimeout");
+    expect(orb).not.toContain("Date.now");
   });
 
   it("never resets the page, refreshes or reopens anything", () => {
@@ -282,8 +283,4 @@ describe("orb accessibility", () => {
     expect(reduced).not.toContain("opacity: 0;");
   });
 
-  it("honours reduced motion when scrolling Home to top", () => {
-    expect(orb).toContain("prefers-reduced-motion: reduce");
-    expect(orb).toContain('? "auto" : "smooth"');
-  });
 });

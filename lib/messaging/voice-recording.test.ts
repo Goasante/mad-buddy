@@ -424,7 +424,7 @@ describe("Phase 4B boundaries and canonical limits", () => {
 
   it("keeps framing and unrelated Permissions Policy restrictions closed", () => {
     const config = readFileSync(join(process.cwd(), "next.config.ts"), "utf8");
-    expect(config).toContain("camera=(), microphone=(self), payment=(), usb=()");
+    expect(config).toContain("camera=(self), microphone=(self), payment=(), usb=()");
     expect(config).toContain('{ key: "X-Frame-Options", value: "DENY" }');
   });
 

@@ -228,7 +228,9 @@ describe("page wiring", () => {
   const page = read("components/socialize/socialize-page.tsx");
   const sheet = read("components/socialize/people-nearby-sheet.tsx");
   const css = read("app/globals.css");
-  const stateCss = stripComments(css.slice(css.indexOf("/* Socialize state messages")));
+  const stateStart = css.indexOf("/* Socialize state messages");
+  const stateEnd = css.indexOf(".muddies-page", stateStart);
+  const stateCss = stripComments(css.slice(stateStart, stateEnd));
 
   it("resolves the state once and renders from that", () => {
     expect(page).toContain("const displayState = resolveSocializeState({");

@@ -332,7 +332,11 @@ describe("module boundaries", () => {
 
 describe("radar motion", () => {
   const css = read("app/globals.css");
-  const fieldCss = stripComments(css.slice(css.indexOf("/* Socialize radar field")));
+  // Bounded at the next named component block. Without an end boundary this
+  // test accidentally polices every stylesheet rule added after Socialize.
+  const fieldStart = css.indexOf("/* Socialize radar field");
+  const fieldEnd = css.indexOf(".camera-primary-action", fieldStart);
+  const fieldCss = stripComments(css.slice(fieldStart, fieldEnd));
 
   it("breathes the orbit rings gently", () => {
     expect(fieldCss).toContain("@keyframes socialize-orbit-breathe");

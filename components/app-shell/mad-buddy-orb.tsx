@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  *
  * It is a real <Link> to /dashboard, so routing, prefetch, middle-click and
  * "open in new tab" all behave exactly like the other tabs. The click handler
- * only adds the already-Home case, and never blocks navigation.
+ * only adds the already-Home reselect case, and never blocks navigation.
  */
 
 export const ORB_HOME_HREF = "/dashboard" as Route;
@@ -30,10 +30,12 @@ export function MadBuddyOrb({
    * notification badges in the header.
    */
   hasActivity = false,
+  onHomeReselect,
   className
 }: {
   isActive: boolean;
   hasActivity?: boolean;
+  onHomeReselect?: () => void;
   className?: string;
 }) {
   function handleClick(event: React.MouseEvent<HTMLAnchorElement>) {
@@ -41,16 +43,11 @@ export function MadBuddyOrb({
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
     if (!isActive) return;
 
-    // Already on Home. Scroll to top if there is anywhere to scroll, otherwise
-    // do nothing at all: no re-navigation, no refresh, no reopened sheets.
+    // Route-state reselect, not a timing-based double tap. The first tap from
+    // another destination remains ordinary navigation; only an already-active
+    // Home control can open the camera composer.
     event.preventDefault();
-    if (typeof window === "undefined") return;
-    if (window.scrollY <= 0) return;
-
-    window.scrollTo({
-      top: 0,
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
-    });
+    onHomeReselect?.();
   }
 
   return (

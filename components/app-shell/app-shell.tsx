@@ -2,6 +2,7 @@
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import type { Route } from "next";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
@@ -28,7 +29,7 @@ import {
   UsersRound
 } from "lucide-react";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
-import { Suspense, use, useEffect, useRef, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useRef, useState } from "react";
 import { LocationSignalSync } from "@/components/app-shell/location-signal-sync";
 import { SessionBoundary } from "@/components/auth/session-boundary";
 import { useSecureLogout } from "@/components/auth/use-secure-logout";
@@ -51,6 +52,21 @@ import { AppMenuProvider } from "@/hooks/app-menu-context";
 import { HomeSettingsSheet } from "@/components/dashboard/home-settings-sheet";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { NavigationWatchdog } from "@/components/navigation/navigation-watchdog";
+
+// Camera code is intentionally absent from the normal Home bundle. The chunk
+// is requested only after an already-active Home control is deliberately
+// selected, and the fallback covers the viewport immediately while it loads.
+const LazyCameraComposer = dynamic(
+  () => import("@/components/camera/camera-composer").then((module) => module.CameraComposer),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="fixed inset-0 z-[120] grid h-[100dvh] place-items-center bg-[#080706] text-sm text-[#FEFBF3]" role="status">
+        Opening camera
+      </div>
+    )
+  }
+);
 
 // Order matters for MobileNav, which just takes the first five (minus
 // admin/billing). Primary destinations are listed first so the bottom bar's
@@ -255,6 +271,7 @@ function AppShellInner({
 }: AppShellProps) {
   // One menu sheet for the whole authenticated app.
   const [appMenuOpen, setAppMenuOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const { immersive } = useImmersiveMode();
 
   // Clear the client caches whenever the session ends — in this tab or any
@@ -262,6 +279,16 @@ function AppShellInner({
   // rendering a previous account's metadata.
   useEffect(() => bindCachesToSession(), []);
   const pathname = usePathname();
+  const openCameraFromHome = useCallback(() => {
+    if (pathname === ORB_HOME_HREF) setCameraOpen(true);
+  }, [pathname]);
+  const closeCamera = useCallback(() => setCameraOpen(false), []);
+
+  useEffect(() => {
+    if (!cameraOpen || pathname === ORB_HOME_HREF) return;
+    const frame = window.requestAnimationFrame(() => setCameraOpen(false));
+    return () => window.cancelAnimationFrame(frame);
+  }, [cameraOpen, pathname]);
   const immersiveHeader = hasImmersiveHeader(pathname);
   const showsWallpaper = hasWallpaper(pathname);
   // Canonical unread count, shared with the mobile header via the same hook —
@@ -331,6 +358,7 @@ function AppShellInner({
         unreadCount={unreadCount}
         currentUsername={currentUsername}
         currentAvatarUrl={currentAvatarUrl}
+        onHomeReselect={openCameraFromHome}
       />
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-background dark:bg-[#111112]">
         {/* Branded wallpaper — MESSAGES ONLY.
@@ -397,7 +425,7 @@ function AppShellInner({
         </main>
         </div>
       </div>
-      <MobileNav immersive={immersive} />
+      <MobileNav immersive={immersive} onHomeReselect={openCameraFromHome} />
 
       {/* The app-wide menu sheet. Mounted once here — every screen's header
           Menu opens this same instance through AppMenuProvider. */}
@@ -414,6 +442,7 @@ function AppShellInner({
         // the two entry points can never disagree about who is staff.
         showAdminLink={showAdminLink}
       />
+      {cameraOpen ? <LazyCameraComposer onClose={closeCamera} /> : null}
     </div>
   );
 }
@@ -428,6 +457,16 @@ function isNavigationItemActive(item: NavigationItem, pathname: string) {
   );
 }
 
+function isModifiedNavigationClick(event: {
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+  button: number;
+}) {
+  return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
+}
+
 function notificationAriaLabel(label: string, unreadCount: number) {
   return unreadCount > 0 ? `${label}, ${unreadCount} unread` : label;
 }
@@ -436,12 +475,14 @@ function DesktopSidebar({
   navigationItems,
   unreadCount,
   currentUsername,
-  currentAvatarUrl
+  currentAvatarUrl,
+  onHomeReselect
 }: {
   navigationItems: NavigationItem[];
   unreadCount: number;
   currentUsername: string | null;
   currentAvatarUrl: string | null;
+  onHomeReselect: () => void;
 }) {
   const pathname = usePathname();
   const primaryItems = navigationItems.filter((item) => (PRIMARY_HREFS as readonly string[]).includes(item.href));
@@ -462,6 +503,11 @@ function DesktopSidebar({
         aria-label="Mad Buddy home"
         title="Mad Buddy home"
         className="focus-ring grid h-14 shrink-0 place-items-center border-b border-border/70 dark:border-white/10"
+        onClick={(event) => {
+          if (pathname !== ORB_HOME_HREF || isModifiedNavigationClick(event)) return;
+          event.preventDefault();
+          onHomeReselect();
+        }}
       >
         <BrandMark className="h-9 w-9" priority />
       </Link>
@@ -488,6 +534,11 @@ function DesktopSidebar({
                   aria-label={ariaLabel}
                   title={item.label}
                   className="focus-ring grid h-11 w-11 place-items-center rounded-xl"
+                  onClick={(event) => {
+                    if (item.href !== ORB_HOME_HREF || !isActive || isModifiedNavigationClick(event)) return;
+                    event.preventDefault();
+                    onHomeReselect();
+                  }}
                 >
                   <NavIconPill isActive={isActive}>
                     <NavItemIcon item={item} lucideClass="h-5 w-5" size={20} isActive={isActive} />
@@ -1066,7 +1117,13 @@ const MOBILE_TABS: MobileTab[] = [
   { href: "/hangout-mode", label: "UpFor", icon: HangoutIcon }
 ];
 
-function MobileNav({ immersive = false }: { immersive?: boolean }) {
+function MobileNav({
+  immersive = false,
+  onHomeReselect
+}: {
+  immersive?: boolean;
+  onHomeReselect: () => void;
+}) {
   const pathname = usePathname();
 
   // The Orb sits in the middle; the four destinations split around it.
@@ -1104,7 +1161,10 @@ function MobileNav({ immersive = false }: { immersive?: boolean }) {
         ))}
 
         <li className="flex-1 py-2">
-          <MadBuddyOrb isActive={homeActive} />
+          <MadBuddyOrb
+            isActive={homeActive}
+            onHomeReselect={onHomeReselect}
+          />
         </li>
 
         {rightTabs.map((tab) => (
