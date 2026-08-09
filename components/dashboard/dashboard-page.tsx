@@ -44,6 +44,7 @@ import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
 import { useAppMenu } from "@/hooks/app-menu-context";
 import { useInteractionPause, useSequenceHighlight } from "@/hooks/use-sequence-highlight";
 import { QuickControlsSheet } from "@/components/dashboard/quick-controls-sheet";
+import { SplitText } from "@/components/ui/split-text";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { PendingInvitePrompt } from "@/components/discovery/pending-invite-prompt";
@@ -578,7 +579,18 @@ export function DashboardPageContent({
             never a fixed line, so it always answers "what should I do, and
             why" — that's where the personality/personalisation lives now. */}
         <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold leading-tight tracking-tight">Welcome</h1>
+          <SplitText
+            tag="h1"
+            text="Welcome"
+            splitType="chars"
+            delay={45}
+            duration={0.55}
+            ease="power3.out"
+            from={{ opacity: 0, y: 24 }}
+            to={{ opacity: 1, y: 0 }}
+            textAlign="left"
+            className="truncate text-2xl font-bold leading-tight tracking-tight"
+          />
           {/* Deliberately a step smaller than the body scale so the greeting
               itself stays clearly dominant. */}
           <p className="mt-1 text-[0.8125rem] leading-[1.45] text-muted-foreground">

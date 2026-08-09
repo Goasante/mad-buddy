@@ -209,7 +209,9 @@ describe("press feedback", () => {
 
 describe("accessibility", () => {
   it("keeps one h1 and section h2s beneath it", () => {
-    expect((home.match(/<h1/g) ?? []).length).toBe(1);
+    const semanticH1Count = (home.match(/<h1/g) ?? []).length +
+      (home.match(/<SplitText[\s\S]*?tag="h1"/g) ?? []).length;
+    expect(semanticH1Count).toBe(1);
     expect(header).toContain("<h2");
   });
 
