@@ -20,6 +20,7 @@ import { listOrphanAuthAccounts } from "@/lib/admin/orphan-accounts";
 import { getAdminAccess } from "@/lib/admin/access";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
 import { redirect } from "next/navigation";
+import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 
 type UserFilter = "all" | "active" | "new" | "deleted";
 type AdminUsersPageProps = {
@@ -49,7 +50,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
 
   let profilesQuery = admin
     .from("profiles")
-    .select("user_id, full_name, username, visibility_status, is_onboarded, deleted_at, created_at", { count: "exact" })
+    .select("user_id, full_name, username, visibility_status, is_onboarded, deleted_at, created_at, trusted_member_since", { count: "exact" })
     .order("created_at", { ascending: false });
 
   if (search) profilesQuery = profilesQuery.or(`username.ilike.%${search}%,full_name.ilike.%${search}%`);
@@ -86,6 +87,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   const canRepairAccounts = access.permissions.has("admin.support.manage");
   const canMessageUsers = access.permissions.has("admin.support.manage");
   const canSendPasswordReset = access.permissions.has("admin.users.recovery_link");
+  const canManageTrustedMember = access.permissions.has("admin.verification.review");
   // The user's Pulse tag depends on the sender's tier.
   const staffTag = access.role === "support" ? "Support" : "Mad Buddy core team";
   const orphanAccounts = page === 1 && !search ? await listOrphanAuthAccounts(admin) : [];
@@ -170,7 +172,10 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
               return (
                 <div key={profile.user_id} className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(240px,1.4fr)_140px_130px_130px_110px] md:items-center md:gap-4">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{profile.full_name}</p>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <p className="truncate text-sm font-semibold">{profile.full_name}</p>
+                      <TrustedMemberMark trustedSince={profile.trusted_member_since} compact />
+                    </div>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">@{profile.username}</p>
                   </div>
                   <p className="text-xs text-muted-foreground"><span className="mr-2 font-medium md:hidden">Joined</span>{formatAdminDate(profile.created_at)}</p>
@@ -184,6 +189,8 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                     disabled={suspendedUsers.has(profile.user_id)}
                     canQuickFix={access.permissions.has("admin.support.manage")}
                     canSendPasswordReset={canSendPasswordReset}
+                    canManageTrustedMember={canManageTrustedMember && !profile.deleted_at}
+                    trustedMember={Boolean(profile.trusted_member_since)}
                   />
                   {canMessageUsers ? <AdminUserMessage userId={profile.user_id} tag={staffTag} /> : null}
                 </div>

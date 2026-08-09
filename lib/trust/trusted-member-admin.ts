@@ -157,3 +157,107 @@ export async function decideTrustedMemberApplication(
 
   return { ok: true, message: "Decision recorded.", userId: application.user_id };
 }
+
+/**
+ * Direct staff recognition from the Users console.
+ *
+ * This intentionally writes the same profile field and the same permanent
+ * review-history row as the application workflow. It is not a second badge
+ * system and it does not weaken the server-authoritative projection used by
+ * profile, Messages, Muddies, Groups, or Linkr.
+ */
+export async function setTrustedMemberRecognition(
+  admin: Admin,
+  input: {
+    userId: string;
+    reviewerId: string;
+    trusted: boolean;
+    reason: string;
+  }
+): Promise<{ ok: boolean; changed: boolean; message: string }> {
+  const [{ data: profile }, { data: existingApplication }] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("user_id, trusted_member_since, deleted_at")
+      .eq("user_id", input.userId)
+      .maybeSingle(),
+    admin
+      .from("trusted_member_applications")
+      .select("id, status, reviewed_by, reviewed_at, review_note, updated_at")
+      .eq("user_id", input.userId)
+      .maybeSingle()
+  ]);
+
+  if (!profile || profile.deleted_at) {
+    return { ok: false, changed: false, message: "That account is unavailable." };
+  }
+  if (Boolean(profile.trusted_member_since) === input.trusted) {
+    return {
+      ok: true,
+      changed: false,
+      message: input.trusted ? "This user is already a Trusted Member." : "This user does not have the Trusted Member badge."
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const status = input.trusted ? "approved" : "revoked";
+  let applicationId: string | null = existingApplication?.id ?? null;
+
+  if (existingApplication) {
+    const { error } = await admin
+      .from("trusted_member_applications")
+      .update({
+        status,
+        reviewed_by: input.reviewerId,
+        reviewed_at: nowIso,
+        review_note: input.reason.trim(),
+        updated_at: nowIso
+      })
+      .eq("id", existingApplication.id);
+    if (error) return { ok: false, changed: false, message: "Couldn't record the Trusted Member decision." };
+  } else {
+    const { data, error } = await admin
+      .from("trusted_member_applications")
+      .insert({
+        user_id: input.userId,
+        status,
+        reviewed_by: input.reviewerId,
+        reviewed_at: nowIso,
+        review_note: input.reason.trim(),
+        updated_at: nowIso
+      })
+      .select("id")
+      .single();
+    if (error || !data) return { ok: false, changed: false, message: "Couldn't record the Trusted Member decision." };
+    applicationId = data.id;
+  }
+
+  const { error: profileError } = await admin
+    .from("profiles")
+    .update({ trusted_member_since: input.trusted ? nowIso : null, updated_at: nowIso })
+    .eq("user_id", input.userId);
+
+  if (profileError) {
+    if (existingApplication) {
+      await admin
+        .from("trusted_member_applications")
+        .update({
+          status: existingApplication.status,
+          reviewed_by: existingApplication.reviewed_by,
+          reviewed_at: existingApplication.reviewed_at,
+          review_note: existingApplication.review_note,
+          updated_at: existingApplication.updated_at
+        })
+        .eq("id", existingApplication.id);
+    } else if (applicationId) {
+      await admin.from("trusted_member_applications").delete().eq("id", applicationId);
+    }
+    return { ok: false, changed: false, message: "Couldn't update the badge. Nothing was changed." };
+  }
+
+  return {
+    ok: true,
+    changed: true,
+    message: input.trusted ? "Trusted Member badge granted." : "Trusted Member badge removed."
+  };
+}

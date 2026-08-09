@@ -1,9 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { KeyRound, LoaderCircle, Wrench } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { KeyRound, LoaderCircle, ShieldCheck, Wrench } from "lucide-react";
 import { runUserQuickFixAction, setUserAccessAction } from "@/app/(admin)/admin/actions";
-import { sendUserPasswordResetAction } from "@/app/(admin)/admin/users/actions";
+import {
+  sendUserPasswordResetAction,
+  setTrustedMemberRecognitionAction
+} from "@/app/(admin)/admin/users/actions";
 import { AppSelect, type AppSelectOption } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +15,8 @@ import { Input } from "@/components/ui/input";
 type UserOperation =
   | "disable"
   | "enable"
+  | "grant_trusted_member"
+  | "revoke_trusted_member"
   | "send_password_reset"
   | "pause_visibility"
   | "clear_notification_badge"
@@ -20,19 +26,39 @@ export function AdminUserControls({
   userId,
   disabled,
   canQuickFix,
-  canSendPasswordReset
+  canSendPasswordReset,
+  canManageTrustedMember,
+  trustedMember
 }: {
   userId: string;
   disabled: boolean;
   canQuickFix: boolean;
   canSendPasswordReset: boolean;
+  canManageTrustedMember: boolean;
+  trustedMember: boolean;
 }) {
+  const router = useRouter();
   const [operation, setOperation] = useState<UserOperation>(disabled ? "enable" : "disable");
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const options: AppSelectOption<UserOperation>[] = [
     { value: disabled ? "enable" : "disable", label: disabled ? "Enable account" : "Disable account" },
+    ...(canManageTrustedMember
+      ? [
+          trustedMember
+            ? {
+                value: "revoke_trusted_member" as const,
+                label: "Remove Trusted Member",
+                description: "Remove the account's Trusted Member badge"
+              }
+            : {
+                value: "grant_trusted_member" as const,
+                label: "Grant Trusted Member",
+                description: "Recognise this account with the Trusted Member badge"
+              }
+        ]
+      : []),
     ...(canSendPasswordReset
       ? [
           {
@@ -51,14 +77,26 @@ export function AdminUserControls({
 
   function apply() {
     startTransition(async () => {
-      const result =
-        operation === "disable" || operation === "enable"
-          ? await setUserAccessAction({ userId, disabled: operation === "disable", reason })
-          : operation === "send_password_reset"
-            ? await sendUserPasswordResetAction({ userId, reason })
-            : await runUserQuickFixAction({ userId, fix: operation, reason });
+      let result: { ok: boolean; message: string };
+      if (operation === "disable" || operation === "enable") {
+        result = await setUserAccessAction({ userId, disabled: operation === "disable", reason });
+      } else if (operation === "grant_trusted_member" || operation === "revoke_trusted_member") {
+        result = await setTrustedMemberRecognitionAction({
+          userId,
+          trusted: operation === "grant_trusted_member",
+          reason
+        });
+      } else if (operation === "send_password_reset") {
+        result = await sendUserPasswordResetAction({ userId, reason });
+      } else {
+        result = await runUserQuickFixAction({ userId, fix: operation, reason });
+      }
       setMessage(result.message);
-      if (result.ok) setReason("");
+      if (result.ok) {
+        setReason("");
+        setOperation(disabled ? "enable" : "disable");
+        router.refresh();
+      }
     });
   }
 
@@ -81,7 +119,16 @@ export function AdminUserControls({
         <Button type="button" size="sm" variant={operation === "disable" ? "danger" : "outline"} disabled={pending || reason.trim().length < 3} onClick={apply}>
           {pending ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
           {!pending && operation === "send_password_reset" ? <KeyRound className="h-4 w-4" aria-hidden="true" /> : null}
-          {operation === "send_password_reset" ? "Send link" : "Apply"}
+          {!pending && (operation === "grant_trusted_member" || operation === "revoke_trusted_member") ? (
+            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+          ) : null}
+          {operation === "send_password_reset"
+            ? "Send link"
+            : operation === "grant_trusted_member"
+              ? "Grant badge"
+              : operation === "revoke_trusted_member"
+                ? "Remove badge"
+                : "Apply"}
         </Button>
         {message ? <p className="text-xs text-muted-foreground sm:col-span-3" role="status">{message}</p> : null}
       </div>

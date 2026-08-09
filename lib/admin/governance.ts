@@ -161,6 +161,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, readonly AdminPermission[]> = {
     "admin.users.recovery_link",
     "admin.reports.review",
     "admin.appeals.review",
+    "admin.verification.review",
     "admin.organisations.restrict",
     "admin.audit.view",
     "admin.analytics.view",

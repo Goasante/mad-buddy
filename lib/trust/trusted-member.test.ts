@@ -201,6 +201,56 @@ describe("review is a staff decision, recorded", () => {
   });
 });
 
+describe("direct admin recognition", () => {
+  const userActions = stripComments(read("app/(admin)/admin/users/actions.ts"));
+  const userPage = stripComments(read("app/(admin)/admin/users/page.tsx"));
+  const controls = stripComments(read("components/admin/admin-user-controls.tsx"));
+  const service = stripComments(read("lib/trust/trusted-member-admin.ts"));
+  const governance = stripComments(read("lib/admin/governance.ts"));
+
+  it("gives trust and safety admins the existing review permission", () => {
+    const role = governance.slice(
+      governance.indexOf("trust_safety_administrator:"),
+      governance.indexOf("customer_support_agent:")
+    );
+    expect(role).toContain('"admin.verification.review"');
+  });
+
+  it("does not grant the permission to support", () => {
+    const role = governance.slice(
+      governance.indexOf("customer_support_agent:"),
+      governance.indexOf("billing_support_agent:")
+    );
+    expect(role).not.toContain('"admin.verification.review"');
+  });
+
+  it("enforces permission and blocks self-recognition on the server", () => {
+    expect(userActions).toContain('requireAdminPermission(admin, context, "admin.verification.review")');
+    expect(userActions).toContain("parsed.data.userId === context.userId");
+  });
+
+  it("uses the canonical badge and preserves the permanent review history", () => {
+    expect(service).toContain('.from("trusted_member_applications")');
+    expect(service).toContain("trusted_member_since: input.trusted ? nowIso : null");
+    expect(service).toContain('status = input.trusted ? "approved" : "revoked"');
+  });
+
+  it("requires a reason and audits grants and removals", () => {
+    expect(userActions).toContain("reason: z.string().trim().min(3).max(500)");
+    expect(userActions).toContain("trusted_member_staff_granted");
+    expect(userActions).toContain("trusted_member_staff_revoked");
+    expect(userActions).toContain("recordAdminAuditEvent");
+  });
+
+  it("shows the current mark and only exposes controls to authorised staff", () => {
+    expect(userPage).toContain("trusted_member_since");
+    expect(userPage).toContain("<TrustedMemberMark");
+    expect(userPage).toContain('access.permissions.has("admin.verification.review")');
+    expect(controls).toContain("Grant Trusted Member");
+    expect(controls).toContain("Remove Trusted Member");
+  });
+});
+
 describe("tenure stops accruing when premium lapses", () => {
   it("counts days only while the subscription is active", () => {
     // Otherwise a cancelled subscriber keeps earning standing they are no

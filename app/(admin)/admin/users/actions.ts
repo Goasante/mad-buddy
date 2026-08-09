@@ -9,6 +9,7 @@ import { requireSafetyAdmin } from "@/lib/safety/admin";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { backfillProfileForAuthUser } from "@/lib/admin/orphan-accounts";
 import { absoluteUrl } from "@/lib/seo";
+import { setTrustedMemberRecognition } from "@/lib/trust/trusted-member-admin";
 
 export type CreateProfileState = { ok: boolean; message: string };
 
@@ -18,8 +19,67 @@ const passwordResetSchema = z.object({
   reason: z.string().trim().min(3).max(300),
   ticketId: z.string().uuid().optional()
 });
+const trustedMemberSchema = z.object({
+  userId: z.string().uuid(),
+  trusted: z.boolean(),
+  reason: z.string().trim().min(3).max(500)
+});
 
 export type PasswordResetState = { ok: boolean; message: string };
+export type TrustedMemberRecognitionState = { ok: boolean; message: string };
+
+export async function setTrustedMemberRecognitionAction(
+  input: unknown
+): Promise<TrustedMemberRecognitionState> {
+  const parsed = trustedMemberSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Add a short reason for this decision." };
+
+  try {
+    const { admin, context } = await requireSafetyAdmin();
+    await requireAdminPermission(admin, context, "admin.verification.review");
+    if (parsed.data.userId === context.userId) {
+      return { ok: false, message: "Staff cannot grant or remove their own Trusted Member badge." };
+    }
+    const limit = await consumeRateLimit({ action: "admin.mutate", userId: context.userId });
+    if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
+
+    const result = await setTrustedMemberRecognition(admin, {
+      userId: parsed.data.userId,
+      reviewerId: context.userId,
+      trusted: parsed.data.trusted,
+      reason: parsed.data.reason
+    });
+    if (!result.ok) return { ok: false, message: result.message };
+    if (!result.changed) return { ok: true, message: result.message };
+
+    await recordAdminAuditEvent(admin, {
+      actorId: context.userId,
+      action: parsed.data.trusted ? "trusted_member_staff_granted" : "trusted_member_staff_revoked",
+      targetType: "user",
+      targetId: parsed.data.userId,
+      newState: { trustedMember: parsed.data.trusted },
+      reason: parsed.data.reason
+    });
+
+    await deliverNotification(admin, {
+      userId: parsed.data.userId,
+      type: "system_alert",
+      priority: "high",
+      title: parsed.data.trusted ? "Trusted Member badge granted" : "Trusted Member badge removed",
+      message: parsed.data.trusted
+        ? "Mad Buddy has recognised you as a Trusted Member."
+        : "Your Trusted Member badge has been removed. Contact support if you have questions."
+    });
+
+    revalidatePath("/admin/users");
+    revalidatePath("/admin/trusted-members");
+    revalidatePath("/profile");
+    revalidatePath("/friends", "layout");
+    return { ok: true, message: result.message };
+  } catch {
+    return { ok: false, message: "You don't have permission to manage Trusted Member badges." };
+  }
+}
 
 /**
  * Sends Supabase's standard recovery email. Staff never receive or set the
