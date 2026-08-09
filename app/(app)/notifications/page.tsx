@@ -4,6 +4,7 @@ import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { birthdayTitle } from "@/lib/profile/birthday-experience";
+import { CONVERSATION_NOTIFICATION_TYPE_PATTERNS } from "@/lib/notifications/conversation-boundary";
 
 export default async function NotificationsPage({
   searchParams
@@ -20,6 +21,8 @@ export default async function NotificationsPage({
           .from("notifications")
           .select("*")
           .eq("user_id", user.id)
+          .not("type", "like", CONVERSATION_NOTIFICATION_TYPE_PATTERNS[0])
+          .not("type", "like", CONVERSATION_NOTIFICATION_TYPE_PATTERNS[1])
           .order("created_at", { ascending: false })
           .limit(50)
       ])

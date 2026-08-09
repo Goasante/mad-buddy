@@ -39,6 +39,7 @@ const DESTINATION_BY_BASE: Record<string, Route> = {
   moment: "/moments" as Route,
   drop: "/drops" as Route,
   message: "/messages" as Route,
+  group_message: "/groups" as Route,
   group: "/groups" as Route,
   // Personal milestones
   achievement: "/badges" as Route,
@@ -65,6 +66,8 @@ export function resolveNotificationDestination(type: string): NotificationDestin
     switch (base) {
       case "message":
         return { type: "internal", href: withQuery("/messages", "conversation", entityId) };
+      case "group_message":
+        return { type: "internal", href: `/groups/${entityId}` as Route };
       case "hangout":
         return { type: "internal", href: withQuery("/hangout-mode", "hangout", entityId) };
       case "plan":

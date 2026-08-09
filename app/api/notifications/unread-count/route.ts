@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveApiUser } from "@/lib/api/auth";
 import { preflightResponse, withCors } from "@/lib/api/cors";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
+import { CONVERSATION_NOTIFICATION_TYPE_PATTERNS } from "@/lib/notifications/conversation-boundary";
 
 // Cost note: the client previously derived this badge count by fetching a
 // full page of notification rows and counting the unread ones in JS — both
@@ -28,6 +29,8 @@ export async function GET(request: Request) {
     .from("notifications")
     .select("id", { count: "exact", head: true })
     .eq("user_id", user.id)
+    .not("type", "like", CONVERSATION_NOTIFICATION_TYPE_PATTERNS[0])
+    .not("type", "like", CONVERSATION_NOTIFICATION_TYPE_PATTERNS[1])
     .eq("is_read", false);
 
   if (error) {

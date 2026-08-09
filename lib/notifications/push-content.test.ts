@@ -27,6 +27,20 @@ describe("privacy-safe push payloads", () => {
     expect(JSON.stringify(payload)).not.toMatch(/5\.6037|-0\.1870|private destination/i);
   });
 
+  it("does not expose group message content", () => {
+    expect(
+      privacySafePushPayload({
+        type: `group_message:${ID}`,
+        title: "Weekend Crew",
+        message: "Private group message"
+      })
+    ).toEqual({
+      title: "Mad Buddy",
+      body: "You have a new Mad Buddy group message.",
+      url: `/groups/${ID}`
+    });
+  });
+
   it("keeps concise non-sensitive achievement copy", () => {
     expect(
       privacySafePushPayload({

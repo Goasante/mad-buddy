@@ -9,6 +9,7 @@ describe("record-specific notification destinations", () => {
     [`hangout:${ID}`, `/hangout-mode?hangout=${ID}`],
     [`plan:${ID}`, `/plans?plan=${ID}`],
     [`event:${ID}`, `/events?event=${ID}`],
+    [`group_message:${ID}`, `/groups/${ID}`],
     [`group:${ID}`, `/groups/${ID}`],
     [`safe_arrival:${ID}`, `/safe-arrival?session=${ID}`]
   ])("resolves %s", (type, href) => {

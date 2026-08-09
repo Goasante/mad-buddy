@@ -49,6 +49,7 @@ import { MessageComposer } from "@/components/messaging/message-composer";
 import { MessageMediaViewer } from "@/components/messaging/message-media-viewer";
 import type { AttachmentView } from "@/lib/messaging/attachments";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
+import { MESSAGES_UPDATED_EVENT } from "@/hooks/use-unread-message-count";
 
 // "Groups" filters conversation_type === "group"; "Plans" filters
 // conversation_type === "plan" (the group chat attached to a specific Plan).
@@ -169,6 +170,7 @@ export function MessagesPageContent({
           conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation
         )
       );
+      window.dispatchEvent(new Event(MESSAGES_UPDATED_EVENT));
     } catch (error) {
       if (requestId === loadRequestIdRef.current) {
         setFeedback(messageFailure(error));
@@ -350,7 +352,10 @@ export function MessagesPageContent({
         const loaded = await withTimeout(getMessagesAction(selectedId), {
           operation: "realtime message refresh"
         });
-        if (!disposed) setMessages(loaded);
+        if (!disposed) {
+          setMessages(loaded);
+          window.dispatchEvent(new Event(MESSAGES_UPDATED_EVENT));
+        }
       } catch (error) {
         if (!disposed) setFeedback(messageFailure(error));
       } finally {

@@ -6,6 +6,7 @@ import { toNotificationResponse } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { resolveApiUser } from "@/lib/api/auth";
 import { preflightResponse, withCors } from "@/lib/api/cors";
+import { CONVERSATION_NOTIFICATION_TYPE_PATTERNS } from "@/lib/notifications/conversation-boundary";
 
 const notificationResponseSchema = z.object({
   notifications: z.array(
@@ -71,6 +72,8 @@ export async function GET(request: Request) {
     .from("notifications")
     .select("*")
     .eq("user_id", user.id)
+    .not("type", "like", CONVERSATION_NOTIFICATION_TYPE_PATTERNS[0])
+    .not("type", "like", CONVERSATION_NOTIFICATION_TYPE_PATTERNS[1])
     .order("created_at", { ascending: false })
     .limit(parsedPagination.data.limit);
 

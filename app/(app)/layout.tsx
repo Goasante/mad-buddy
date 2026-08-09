@@ -18,6 +18,7 @@ import { resolveWallpaperForRender } from "@/lib/wallpapers/service";
 import { defaultResolvedWallpaper, type ResolvedWallpaper } from "@/lib/wallpapers/catalog";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 import { loadBuddyScoreLevel } from "@/lib/engagement/buddy-score-service";
+import { CONVERSATION_NOTIFICATION_TYPE_PATTERNS } from "@/lib/notifications/conversation-boundary";
 
 /**
  * The same three-item completion model the Home profile reminder uses: photo,
@@ -71,6 +72,8 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
           .from("notifications")
           .select("id", { count: "exact", head: true })
           .eq("user_id", user.id)
+          .not("type", "like", CONVERSATION_NOTIFICATION_TYPE_PATTERNS[0])
+          .not("type", "like", CONVERSATION_NOTIFICATION_TYPE_PATTERNS[1])
           .eq("is_read", false)
       : Promise.resolve({ count: 0 }),
     user

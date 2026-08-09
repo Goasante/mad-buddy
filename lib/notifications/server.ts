@@ -41,6 +41,7 @@ export type CreateNotificationInput = {
     | `moment:${string}`
     | `drop:${string}`
     | `message:${string}`
+    | `group_message:${string}`
     | `group:${string}`
     | `achievement:${string}`
     | `birthday:${string}`
@@ -74,6 +75,12 @@ export type DeliverNotificationInput = CreateNotificationInput & {
   priority?: NotificationPriority;
   /** Who triggered it, for close-friends-only gating. Null for system events. */
   senderId?: string | null;
+  /**
+   * Persist a row in Pulse. Chat messages set this to false because their
+   * canonical unread state lives on conversation_members, while push delivery
+   * remains available. Defaults to true for every other notification.
+   */
+  persistInApp?: boolean;
 };
 
 export type DeliveryResult = { inApp: boolean; push: boolean; reason: string };
@@ -152,37 +159,36 @@ export async function deliverNotification(
     nowMs: now.getTime()
   });
 
-  if (!decision.inApp) return decision;
+  const shouldPersistInApp = decision.inApp && input.persistInApp !== false;
+  if (!shouldPersistInApp && !decision.push) {
+    return { ...decision, inApp: false };
+  }
 
-  await createNotification(supabase, {
-    userId: input.userId,
-    type: input.type,
-    title: input.title,
-    message: input.message
-  });
+  if (shouldPersistInApp) {
+    await createNotification(supabase, {
+      userId: input.userId,
+      type: input.type,
+      title: input.title,
+      message: input.message
+    });
+  }
 
   if (decision.push) {
     const safePush = privacySafePushPayload(input);
-    // The in-app row above is what "immediate consistency" actually means
-    // here — the recipient's own Pulse feed. The push round trip is a real
-    // network call to an external provider (web push / FCM / APNs) with no
-    // bearing on that, so it has no reason to hold open the ACTOR's request
-    // (e.g. "Plan created" waiting on every invitee's push delivery). Deferred
-    // via Next's after() — same established pattern as onboarding's milestone
-    // recording — so it still runs to completion, just not on the response's
-    // critical path. Errors are swallowed either way: a push failure must
-    // never surface as a failure of the action that triggered it.
+    // The push round trip is an external network call and must not hold open
+    // the actor's request. It is deferred with Next's established after()
+    // pattern and remains independent from optional Pulse persistence.
     after(async () => {
       try {
         const { sendPushToUser } = await import("@/lib/notifications/push");
         await sendPushToUser(supabase, input.userId, safePush);
       } catch {
-        // swallow — the in-app notification already landed
+        // A transport failure must not fail the originating action.
       }
 
       // Native push (FCM/APNs) to the user's mobile devices. Best-effort and a
       // silent no-op until FIREBASE_SERVICE_ACCOUNT_BASE64 is configured; never
-      // let a push transport error interrupt in-app delivery.
+      // let a push transport error interrupt the originating action.
       try {
         const { sendNativePushToUser } = await import("@/lib/notifications/fcm");
         await sendNativePushToUser(input.userId, {
@@ -191,7 +197,7 @@ export async function deliverNotification(
           data: { url: safePush.url, type: input.type }
         });
       } catch {
-        // swallow — the in-app notification already landed
+        // A transport failure must not fail the originating action.
       }
     });
   }
@@ -210,7 +216,7 @@ export async function deliverNotification(
     );
   }
 
-  return decision;
+  return { ...decision, inApp: shouldPersistInApp };
 }
 
 /**

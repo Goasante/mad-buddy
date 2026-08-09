@@ -18,6 +18,7 @@ import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import type { ConversationRole, QuickActionType, SubscriptionPlan } from "@/lib/supabase/database.types";
+import { sumUnreadConversationCounts } from "@/lib/messaging/unread-count";
 
 /**
  * Transport-agnostic messaging read/send logic. Takes an already-authenticated
@@ -335,9 +336,10 @@ async function notifyOtherMembers(admin: Admin, conversationId: string, senderId
         userId: member.user_id,
         senderId,
         priority: "high",
-        // `group:<id>` resolves to /groups/<id> — the exact thread. The
-        // resolver already supported this; nothing was emitting it.
-        type: isGroup ? `group:${conversationId}` : `message:${conversationId}`,
+        // Chat unread state belongs to Messages. Keep private push delivery,
+        // but do not create a duplicate Pulse row or increment its bell badge.
+        persistInApp: false,
+        type: isGroup ? `group_message:${conversationId}` : `message:${conversationId}`,
         // The group name is context, never content: it is appended to the
         // TITLE, so a recipient whose preview preference hides message text
         // still sees who and where, and never what.
@@ -500,6 +502,29 @@ export async function listConversations(userId: string): Promise<ConversationVie
   }
 
   return views;
+}
+
+/**
+ * Lightweight app-chrome projection. It deliberately avoids profile, plan,
+ * pin, avatar, and media work performed by the full conversation list.
+ */
+export async function getUnreadMessageCount(userId: string): Promise<number> {
+  if (!hasServiceRoleEnv()) return 0;
+
+  const admin = createSupabaseAdminClient();
+  const { data: memberships } = await admin
+    .from("conversation_members")
+    .select("conversation_id")
+    .eq("user_id", userId)
+    .eq("status", "joined");
+  const conversationIds = (memberships ?? []).map((row) => row.conversation_id);
+  if (conversationIds.length === 0) return 0;
+
+  const { data: previews } = await admin.rpc("conversation_previews", {
+    p_user_id: userId,
+    p_conversation_ids: conversationIds
+  });
+  return sumUnreadConversationCounts(previews ?? []);
 }
 
 export async function listMessages(userId: string, conversationId: string): Promise<ChatMessageView[]> {

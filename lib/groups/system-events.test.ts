@@ -150,11 +150,12 @@ describe("group notifications", () => {
   it("routes a group message to the group, not the DM inbox", () => {
     // The bug this fixes: group messages were sent as `message:<id>`, which
     // resolves to /messages — the direct-message inbox.
-    expect(projection).toContain("isGroup ? `group:${conversationId}`");
+    expect(projection).toContain("isGroup ? `group_message:${conversationId}`");
+    expect(projection).toContain("persistInApp: false");
   });
 
   it("resolves a group notification to the exact conversation", () => {
-    expect(resolveNotificationDestination(`group:${GROUP}`)).toEqual({
+    expect(resolveNotificationDestination(`group_message:${GROUP}`)).toEqual({
       type: "internal",
       href: `/groups/${GROUP}`
     });

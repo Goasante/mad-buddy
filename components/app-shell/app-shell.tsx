@@ -47,6 +47,7 @@ import type { ResolvedWallpaper } from "@/lib/wallpapers/catalog";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { HangoutIcon, LinkrIcon } from "@/components/brand/brand-icons";
 import { useUnreadNotificationCount } from "@/hooks/use-unread-notification-count";
+import { useUnreadMessageCount } from "@/hooks/use-unread-message-count";
 import { UnreadNotificationProvider } from "@/hooks/unread-notification-context";
 import { AppMenuProvider } from "@/hooks/app-menu-context";
 import { HomeSettingsSheet } from "@/components/dashboard/home-settings-sheet";
@@ -295,6 +296,7 @@ function AppShellInner({
   // one fetch/poll/broadcast implementation, so the sidebar badge and the
   // header Bell badge can never disagree.
   const { unreadCount, refresh: refreshUnreadCount } = useUnreadNotificationCount(initialUnreadCount);
+  const { unreadCount: messageUnreadCount } = useUnreadMessageCount(currentUserId);
   const hasCompletedInitialRender = useRef(false);
 
   useEffect(() => {
@@ -356,6 +358,7 @@ function AppShellInner({
       <DesktopSidebar
         navigationItems={visibleNavigationItems}
         unreadCount={unreadCount}
+        messageUnreadCount={messageUnreadCount}
         currentUsername={currentUsername}
         currentAvatarUrl={currentAvatarUrl}
         onHomeReselect={openCameraFromHome}
@@ -425,7 +428,11 @@ function AppShellInner({
         </main>
         </div>
       </div>
-      <MobileNav immersive={immersive} onHomeReselect={openCameraFromHome} />
+      <MobileNav
+        immersive={immersive}
+        onHomeReselect={openCameraFromHome}
+        messageUnreadCount={messageUnreadCount}
+      />
 
       {/* The app-wide menu sheet. Mounted once here — every screen's header
           Menu opens this same instance through AppMenuProvider. */}
@@ -474,12 +481,14 @@ function notificationAriaLabel(label: string, unreadCount: number) {
 function DesktopSidebar({
   navigationItems,
   unreadCount,
+  messageUnreadCount,
   currentUsername,
   currentAvatarUrl,
   onHomeReselect
 }: {
   navigationItems: NavigationItem[];
   unreadCount: number;
+  messageUnreadCount: number;
   currentUsername: string | null;
   currentAvatarUrl: string | null;
   onHomeReselect: () => void;
@@ -524,7 +533,9 @@ function DesktopSidebar({
             const ariaLabel =
               item.href === "/notifications"
                 ? notificationAriaLabel(item.label, unreadCount)
-                : item.label;
+                : item.href === "/messages"
+                  ? notificationAriaLabel(item.label, messageUnreadCount)
+                  : item.label;
             return (
               <li key={item.href}>
                 <Link
@@ -543,6 +554,7 @@ function DesktopSidebar({
                   <NavIconPill isActive={isActive}>
                     <NavItemIcon item={item} lucideClass="h-5 w-5" size={20} isActive={isActive} />
                     {item.href === "/notifications" ? <UnreadBadge count={unreadCount} /> : null}
+                    {item.href === "/messages" ? <UnreadBadge count={messageUnreadCount} /> : null}
                   </NavIconPill>
                 </Link>
               </li>
@@ -1119,10 +1131,12 @@ const MOBILE_TABS: MobileTab[] = [
 
 function MobileNav({
   immersive = false,
-  onHomeReselect
+  onHomeReselect,
+  messageUnreadCount = 0
 }: {
   immersive?: boolean;
   onHomeReselect: () => void;
+  messageUnreadCount?: number;
 }) {
   const pathname = usePathname();
 
@@ -1157,7 +1171,12 @@ function MobileNav({
     >
       <ul className="mx-auto flex w-full max-w-[30rem] items-stretch justify-between px-1.5">
         {leftTabs.map((tab) => (
-          <MobileNavTab key={tab.href} tab={tab} pathname={pathname} />
+          <MobileNavTab
+            key={tab.href}
+            tab={tab}
+            pathname={pathname}
+            messageUnreadCount={tab.href === "/messages" ? messageUnreadCount : 0}
+          />
         ))}
 
         <li className="flex-1 py-2">
@@ -1168,7 +1187,12 @@ function MobileNav({
         </li>
 
         {rightTabs.map((tab) => (
-          <MobileNavTab key={tab.href} tab={tab} pathname={pathname} />
+          <MobileNavTab
+            key={tab.href}
+            tab={tab}
+            pathname={pathname}
+            messageUnreadCount={tab.href === "/messages" ? messageUnreadCount : 0}
+          />
         ))}
       </ul>
     </nav>
@@ -1177,10 +1201,12 @@ function MobileNav({
 
 function MobileNavTab({
   tab,
-  pathname
+  pathname,
+  messageUnreadCount = 0
 }: {
   tab: MobileTab;
   pathname: string;
+  messageUnreadCount?: number;
 }) {
   // Reuses the shared route-matching rule so a tab stays lit on nested
   // routes (/friends/someone, /plans/123) exactly like the desktop sidebar.
@@ -1204,7 +1230,7 @@ function MobileNavTab({
       >
         <span
           className={cn(
-            "grid h-10 w-10 place-items-center rounded-full transition-colors duration-200 ease-out motion-reduce:transition-none",
+            "relative grid h-10 w-10 place-items-center rounded-full transition-colors duration-200 ease-out motion-reduce:transition-none",
             isActive ? "bg-primary/12 text-primary" : "text-muted-foreground"
           )}
         >
@@ -1213,6 +1239,7 @@ function MobileNavTab({
             strokeWidth={isActive ? 2.25 : 1.75}
             aria-hidden="true"
           />
+          {tab.href === "/messages" && messageUnreadCount > 0 ? <UnreadBadge count={messageUnreadCount} /> : null}
         </span>
         {isActive ? (
           <span className="text-[10px] font-medium leading-none tracking-wide text-primary">{tab.label}</span>

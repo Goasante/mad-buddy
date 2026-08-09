@@ -49,6 +49,7 @@ import { fetchWithTimeout } from "@/lib/network/resilience";
 import { cn } from "@/lib/utils";
 import { BIRTHDAY_WISHES } from "@/lib/profile/birthday-experience";
 import { PageHeader } from "@/components/app-shell/page-header";
+import { isConversationMessageNotificationType } from "@/lib/notifications/conversation-boundary";
 
 type NotificationItem = {
   id: string;
@@ -106,8 +107,7 @@ function categoryForType(type: string): Exclude<PulseCategory, "all"> | "system"
     base === "hangout" ||
     base === "moment" ||
     base === "birthday" ||
-    base === "group" ||
-    base === "message"
+    base === "group"
   ) {
     return "social";
   }
@@ -153,7 +153,9 @@ export function NotificationsPageContent({
   initialNotifications = []
 }: NotificationsPageContentProps) {
   const [notifications, setNotifications] = useState<NotificationItem[]>(() =>
-    initialNotifications.map(toNotificationItem)
+    initialNotifications
+      .filter((notification) => !isConversationMessageNotificationType(notification.type))
+      .map(toNotificationItem)
   );
   const [nearbyAlerts, setNearbyAlerts] = useState(true);
   const [quietMode, setQuietMode] = useState(false);
@@ -228,10 +230,13 @@ export function NotificationsPageContent({
           if (!isMounted) return;
 
           setFeedback("");
-          setNotifications(data.notifications.map(toNotificationItem));
+          const pulseNotifications = data.notifications.filter(
+            (notification) => !isConversationMessageNotificationType(notification.type)
+          );
+          setNotifications(pulseNotifications.map(toNotificationItem));
           window.dispatchEvent(
             new CustomEvent("mad-buddy:notifications-updated", {
-              detail: { unreadCount: data.notifications.filter((notification) => !notification.is_read).length }
+              detail: { unreadCount: pulseNotifications.filter((notification) => !notification.is_read).length }
             })
           );
         } catch {
