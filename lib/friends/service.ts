@@ -26,7 +26,23 @@ import { isSocializeEnabled } from "@/lib/features/feature-flags";
  * (cookie or bearer token) and passed in — it can never be forged by the body.
  */
 
-export type ServiceResult = { ok: boolean; message: string; resourceId?: string; created?: boolean };
+/**
+ * `reason` is a STABLE CODE for callers that must branch on why.
+ *
+ * Added because a caller was matching on the message text to tell "they
+ * already sent you a request" apart from an ordinary failure -- and a copy
+ * edit would silently have broken it. The message stays the thing users read;
+ * this is the thing code reads.
+ */
+export type ServiceFailureReason = "incoming_request_exists";
+
+export type ServiceResult = {
+  ok: boolean;
+  message: string;
+  resourceId?: string;
+  created?: boolean;
+  reason?: ServiceFailureReason;
+};
 
 export type SearchUserResult = {
   id: string;
@@ -491,7 +507,14 @@ export async function sendFriendRequest(
     if (existingRequest.sender_id === userId) {
       return { ok: true, message: "Your request is already pending." };
     }
-    return { ok: false, message: "This user already sent you a request. Open Requests to respond." };
+    // Carries a code as well as the sentence: the caller needs to know a
+    // request EXISTS, so it does not put this person back in the swipe deck
+    // as though nothing had passed between them.
+    return {
+      ok: false,
+      message: "This user already sent you a request. Open Requests to respond.",
+      reason: "incoming_request_exists"
+    };
   }
 
   const rateLimit = await consumeRateLimit({ action: "friends.request", userId, requestId });

@@ -548,11 +548,22 @@ export function SocializePage({
     startTransition(async () => {
       const result = await sendFriendRequestAction(person.userId, "socialize");
       if (!result.ok) {
-        // Restored with waveState intact, so the card comes back in a state
-        // that still allows another attempt. A card that stayed gone after a
-        // failed write would look like success while the person reappeared on
-        // the next refresh.
-        setPeople((current) => restoreToDeck(current, { ...person, waveState: "none" }));
+        // NOT EVERY FAILURE MEANS "TRY AGAIN".
+        //
+        // A network error or a rate limit leaves no request behind, so the
+        // person comes back as "none" and another attempt is the right offer.
+        //
+        // But the action also refuses when THEY already sent a request, and
+        // that failure means a request very much exists. Restoring that person
+        // as "none" put them straight back in the deck, swipeable, to fail
+        // identically forever -- the same silent loop the deck filter exists
+        // to prevent. They are restored with the state that is actually true,
+        // so deckCandidates keeps them out and the radar offers Accept.
+        if (result.reason === "incoming_request_exists") {
+          setPeople((current) => restoreToDeck(current, { ...person, waveState: "received" }));
+        } else {
+          setPeople((current) => restoreToDeck(current, { ...person, waveState: "none" }));
+        }
         showToast(result.message, true);
       } else {
         showToast(`Muddy request sent to ${capitalize(person.displayName || person.username)}.`);

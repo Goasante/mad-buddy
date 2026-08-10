@@ -39,6 +39,34 @@ describe("waving removes the card, as passing does", () => {
     expect(wave).toContain('waveState: "none"');
   });
 
+  it("does not restore a person who already sent YOU a request as swipeable", () => {
+    // THE LOOP THIS CLOSES. sendFriendRequest refuses when a request exists in
+    // the other direction, and that failure was restoring the person with
+    // waveState "none" -- so deckCandidates let them straight back into the
+    // deck, to be swiped and refused identically, forever.
+    const wave = page.slice(page.indexOf("function wave(person"), page.indexOf("function passPerson"));
+    expect(wave).toContain('result.reason === "incoming_request_exists"');
+    expect(wave).toContain('waveState: "received"');
+  });
+
+  it("branches on a stable code, never on the message text", () => {
+    // A copy edit must not be able to change behaviour.
+    const wave = page.slice(page.indexOf("function wave(person"), page.indexOf("function passPerson"));
+    expect(wave).not.toContain("message.includes");
+
+    // And the service actually sends that code alongside the sentence.
+    const service = stripComments(read("lib/friends/service.ts"));
+    const incoming = service.slice(service.indexOf("already sent you a request"));
+    expect(incoming.slice(0, 200)).toContain('reason: "incoming_request_exists"');
+  });
+
+  it("still offers a retry for failures that leave no request behind", () => {
+    // A network error or a rate limit is worth another attempt; those restore
+    // as "none" exactly as before.
+    const wave = page.slice(page.indexOf("function wave(person"), page.indexOf("function passPerson"));
+    expect(wave).toContain('waveState: "none"');
+  });
+
   it("uses the shared deck helpers rather than its own filter", () => {
     // Filtering by id is what stops a concurrent refresh removing the wrong
     // person; both decisions go through the same helper.

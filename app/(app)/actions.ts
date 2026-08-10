@@ -15,7 +15,8 @@ import {
   searchUsers,
   sendFriendRequest,
   updateFriendRequestStatus,
-  type SearchUserResult
+  type SearchUserResult,
+  type ServiceFailureReason
 } from "@/lib/friends/service";
 import { updateProfile } from "@/lib/profile/service";
 
@@ -23,6 +24,14 @@ export type IntegrationActionState = {
   ok: boolean;
   message: string;
   avatarUrl?: string;
+  /**
+   * A stable code for callers that must branch on WHY something failed.
+   *
+   * Mirrors ServiceResult.reason so it survives the trip through the action.
+   * Callers read this; users read `message`. Matching on the sentence instead
+   * meant a copy edit could silently change behaviour.
+   */
+  reason?: ServiceFailureReason;
 };
 
 const uuidSchema = z.string().uuid();
