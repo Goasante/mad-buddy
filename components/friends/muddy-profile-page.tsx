@@ -19,6 +19,7 @@ import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { ProfilePhotoCarousel } from "@/components/profile/profile-photo-carousel";
 import type { ProfilePhoto } from "@/lib/profile/profile-photos";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
@@ -202,6 +203,7 @@ export function MuddyProfilePage({
             title={<h1 className="truncate">{muddy.displayName}</h1>}
             badge={
               <>
+                <VerifiedAccountMark isVerifiedAccount={muddy.isVerifiedAccount} compact />
                 <PremiumPlanBadge plan={muddy.plan} />
                 <TrustedMemberMark trustedSince={muddy.trustedSince} />
               </>

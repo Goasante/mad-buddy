@@ -574,6 +574,7 @@ export function GroupDetailPage({
                         {/* Presentation only. The list is still ordered
                             Owner → Admins → Members → name; standing never
                             buys a position in it. */}
+                        <VerifiedAccountMark isVerifiedAccount={member.isVerifiedAccount} compact />
                         <TrustedMemberMark trustedSince={member.trustedSince} compact />
                       </p>
                       {/* Authority is stated in words, not colour alone, so it

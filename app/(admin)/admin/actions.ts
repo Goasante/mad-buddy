@@ -54,6 +54,22 @@ const trustedMemberDecisionSchema = z
     { path: ["reviewNote"] }
   );
 
+const accountVerificationSchema = z
+  .object({
+    userId: z.string().uuid(),
+    decision: z.enum(["verified", "revoked", "failed"]),
+    // A few words describing what was checked -- never the evidence itself,
+    // which must not be stored on an identity row a reviewer can browse.
+    evidenceLabel: z.string().trim().max(120).optional()
+  })
+  .refine(
+    // Approving without saying what was checked leaves no record of WHY an
+    // account carries the badge. Revoking and failing are corrections, so they
+    // do not need one.
+    (value) => value.decision !== "verified" || (value.evidenceLabel?.trim().length ?? 0) >= 3,
+    { path: ["evidenceLabel"] }
+  );
+
 const userAccessSchema = z.object({
   userId: z.string().uuid(),
   disabled: z.boolean(),
@@ -422,6 +438,62 @@ export async function deleteUserAccountAction(input: unknown): Promise<AdminActi
  * while an approval speaks for itself. The note is never shown to the
  * applicant, who is told the outcome only.
  */
+/**
+ * Approves, revokes or fails an account verification.
+ *
+ * Kept separate from decideTrustedMemberAction on purpose: Trusted Member is
+ * earned standing and Verified Account is an identity check. One action
+ * covering both would be the first step towards one implying the other.
+ */
+export async function decideAccountVerificationAction(input: unknown): Promise<AdminActionState> {
+  const parsed = accountVerificationSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: "Say what was checked before verifying an account." };
+  }
+
+  try {
+    const { admin, context } = await requireSafetyAdmin();
+    // The same permission the Trusted Member queue uses, and the one the
+    // existing verification_reviewer role already grants.
+    await requireAdminPermission(admin, context, "admin.verification.review");
+
+    const limit = await consumeRateLimit({ action: "admin.mutate", userId: context.userId });
+    if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
+
+    const { decideAccountVerification, getAccountVerification } = await import(
+      "@/lib/trust/verified-account-admin"
+    );
+
+    // Read first, so the audit entry records what actually changed rather than
+    // only where it landed.
+    const previous = await getAccountVerification(admin, parsed.data.userId);
+
+    const result = await decideAccountVerification(admin, {
+      userId: parsed.data.userId,
+      decision: parsed.data.decision,
+      evidenceLabel: parsed.data.evidenceLabel
+    });
+    if (!result.ok) return { ok: false, message: result.message };
+
+    // AFTER the write, as with Trusted Member: verification is reversible, so
+    // a missing audit row must not block a correction.
+    await recordAdminAuditEvent(admin, {
+      actorId: context.userId,
+      action: `account_verification_${parsed.data.decision}`,
+      targetType: "user",
+      targetId: parsed.data.userId,
+      previousState: previous ? { status: previous.status } : undefined,
+      newState: { status: parsed.data.decision },
+      reason: parsed.data.evidenceLabel?.trim() || undefined
+    });
+
+    revalidatePath("/admin/verifications");
+    return { ok: true, message: result.message };
+  } catch {
+    return { ok: false, message: "Admin access is required." };
+  }
+}
+
 export async function decideTrustedMemberAction(input: unknown): Promise<AdminActionState> {
   const parsed = trustedMemberDecisionSchema.safeParse(input);
   if (!parsed.success) {

@@ -7,6 +7,7 @@ import { memo, type ReactNode } from "react";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { Button } from "@/components/ui/button";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { presenceLabel } from "@/lib/presence/freshness";
@@ -150,6 +151,7 @@ function PersonCard({ person, onWave, onMessage, pending = false, slots }: Socia
             {name}
           </Link>
           {/* Canonical membership badge. Never presented as verification. */}
+          <VerifiedAccountMark isVerifiedAccount={person.isVerifiedAccount} compact />
           <PremiumPlanBadge plan={person.plan} compact />
         </p>
 

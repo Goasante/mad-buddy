@@ -9,6 +9,7 @@ import { useLongPress } from "@/hooks/use-long-press";
 
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { isOnline, presenceLabel, type MuddyProximity } from "@/lib/friends/muddies-presentation";
@@ -21,6 +22,8 @@ export type MuddyCardPerson = {
   avatarUrl: string | null;
   plan: SubscriptionPlan;
   trustedSince?: string | null;
+  /** Mad Buddy has verified this account. Independent of plan and standing. */
+  isVerifiedAccount?: boolean;
 };
 
 /**
@@ -80,6 +83,7 @@ export function MuddiesGrid({
               <span className="muddies-card-name-row">
                 <span className="muddies-card-name">{person.displayName}</span>
                 <PremiumPlanBadge plan={person.plan} compact />
+                <VerifiedAccountMark isVerifiedAccount={person.isVerifiedAccount ?? false} compact />
                 <TrustedMemberMark trustedSince={person.trustedSince ?? null} compact />
               </span>
 

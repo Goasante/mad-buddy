@@ -4,6 +4,7 @@ import { z } from "zod";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { hasVerifiedAccountStatus, type VerificationRow } from "@/lib/trust/verified-account";
 import { deliverNotification } from "@/lib/notifications/server";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
@@ -36,6 +37,11 @@ export type SearchUserResult = {
   status: "available";
   note: string;
   plan: SubscriptionPlan;
+  /**
+   * Mad Buddy has verified this account. Independent of plan and of Trusted
+   * Member, and it never affects where a result ranks.
+   */
+  isVerifiedAccount: boolean;
 };
 
 export type SearchUsersResult = ServiceResult & { users: SearchUserResult[] };
@@ -248,7 +254,27 @@ export async function searchUsers(userId: string, query: string): Promise<Search
   }
 
   const otherProfiles = data.filter((profile) => profile.user_id !== userId);
-  const plans = await loadEffectivePlansForUsers(admin, otherProfiles.map((profile) => profile.user_id));
+  const resultIds = otherProfiles.map((profile) => profile.user_id);
+
+  // Plans and verification, batched together for the whole result set. Ten
+  // results cost two reads here, not twenty -- and verification is fetched
+  // alongside rather than as its own pass, so adding the mark did not add a
+  // round trip.
+  const [plans, verificationRows] = await Promise.all([
+    loadEffectivePlansForUsers(admin, resultIds),
+    resultIds.length > 0
+      ? admin.from("account_verifications").select("user_id, status").in("user_id", resultIds)
+      : Promise.resolve({ data: [] as { user_id: string; status: string }[] })
+  ]);
+
+  // Grouped per user: an account may hold several verification rows, and
+  // hasVerifiedAccountStatus decides which states actually count.
+  const verificationByUserId = new Map<string, VerificationRow[]>();
+  for (const row of verificationRows.data ?? []) {
+    const existing = verificationByUserId.get(row.user_id) ?? [];
+    existing.push(row as VerificationRow);
+    verificationByUserId.set(row.user_id, existing);
+  }
 
   if (otherProfiles.length === 0 && data.some((profile) => profile.user_id === userId)) {
     return { ok: false, message: "This is your account. Search for another username.", users: [] };
@@ -273,7 +299,8 @@ export async function searchUsers(userId: string, query: string): Promise<Search
       mutualFriends: 0,
       status: "available",
       note: "Search result",
-      plan: plans.get(profile.user_id) ?? "free"
+      plan: plans.get(profile.user_id) ?? "free",
+      isVerifiedAccount: hasVerifiedAccountStatus(verificationByUserId.get(profile.user_id) ?? [])
     }))
   };
 }

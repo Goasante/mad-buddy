@@ -58,6 +58,8 @@ export type GroupMemberView = {
    * standing never buys a position in that list.
    */
   trustedSince: string | null;
+  /** Mad Buddy has verified this account. Never affects role or ordering. */
+  isVerifiedAccount: boolean;
   /** Current membership state, so Stage 3C can render it without re-querying. */
   status: ConversationMemberStatus;
 };

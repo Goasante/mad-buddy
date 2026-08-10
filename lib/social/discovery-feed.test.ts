@@ -489,8 +489,18 @@ describe("person card", () => {
   });
 
   it("never presents membership as verification", () => {
-    expect(card).toContain("<PremiumPlanBadge");
-    expect(card.toLowerCase()).not.toContain("verified");
+    // This originally banned the word "verified" from the card entirely,
+    // because Premium was the only badge and the risk was a plan reading as a
+    // verification. Verified Account is now a real, separate signal with its
+    // own source, so the guarantee is no longer "the word is absent" -- it is
+    // that the two marks are DRIVEN BY DIFFERENT INPUTS and neither is derived
+    // from the other.
+    expect(card).toContain("<PremiumPlanBadge plan={person.plan} compact />");
+    expect(card).toContain("<VerifiedAccountMark isVerifiedAccount={person.isVerifiedAccount} compact />");
+
+    // The plan must never be what decides the verification mark.
+    expect(card).not.toContain("isVerifiedAccount={person.plan");
+    expect(card).not.toContain('plan !== "free"');
   });
 
   it("invents no age, interests or mutual count", () => {
