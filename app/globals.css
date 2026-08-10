@@ -5953,3 +5953,265 @@ select {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Quick Actions — the compact launcher for features without a nav slot.
+ *
+ * LAYER: 40. Deliberately below the bottom navigation (z-50), every dialog
+ * (--layer-modal 60), dropdowns (70), toasts (90) and the camera (120). The
+ * launcher is the least important thing on screen; anything that opens over it
+ * should cover it, and a floating pill on top of a full-screen editor is the
+ * exact failure this ordering prevents.
+ * ------------------------------------------------------------------------ */
+
+.quick-actions {
+  position: fixed;
+  right: 0.75rem;
+  /* Clears the nav's own height AND the device safe area, so the pill never
+     lands on the home indicator or behind the bar. The nav pads itself by the
+     same inset internally, hence adding it once here rather than twice. */
+  bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px) + 0.75rem);
+  z-index: 40;
+  /* The container spans only its contents; the page beneath stays fully
+     interactive everywhere else. */
+  pointer-events: none;
+}
+
+@media (min-width: 768px) {
+  .quick-actions {
+    /* No mobile nav on desktop, so the reserved height would leave it
+       floating oddly high. */
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 1.25rem);
+    right: 1.25rem;
+  }
+}
+
+.quick-actions-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+  pointer-events: auto;
+}
+
+/* --- The collapsed control ------------------------------------------------
+ * 44x60, inside the 42-48 x 58-68 target. Restrained by design: translucent
+ * ground, hairline border, no glow, and only a whisper of the brand accent.
+ * It should read as part of the interface furniture until touched. */
+
+.quick-actions-trigger {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  width: 2.75rem;
+  height: 3.75rem;
+  border: 1px solid hsl(var(--border) / 0.9);
+  border-radius: 1.25rem;
+  background: hsl(var(--card) / 0.82);
+  color: hsl(var(--muted-foreground));
+  /* Restrained: a soft lift, not a spotlight. */
+  box-shadow: 0 4px 16px hsl(var(--shadow) / 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition:
+    background-color 220ms ease-out,
+    border-color 220ms ease-out,
+    color 220ms ease-out,
+    transform 220ms ease-out;
+}
+
+.quick-actions-trigger:hover {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--primary) / 0.45);
+}
+
+.quick-actions-trigger:active {
+  transform: scale(0.94);
+}
+
+/* Open: the control becomes the menu's anchor and earns its accent. */
+.quick-actions[data-open="true"] .quick-actions-trigger {
+  background: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.quick-actions-trigger-icon {
+  display: grid;
+  place-items: center;
+}
+
+.quick-actions-chevron {
+  opacity: 0.65;
+  transition: transform 220ms ease-out, opacity 220ms ease-out;
+}
+
+.quick-actions[data-open="true"] .quick-actions-chevron {
+  transform: rotate(180deg);
+}
+
+/* --- The expanded column --------------------------------------------------
+ * Grows upward out of the trigger. Each row is a label pill plus a 44px glyph
+ * button, so the icon column stays narrow while the label extends leftward. */
+
+.quick-actions-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* Collapsed: no height, no hit area, nothing to tab into. */
+  max-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.quick-actions[data-open="true"] .quick-actions-list {
+  /* Room for five rows plus gaps. A max-height rather than auto keeps the
+     transition animatable; the value is generous so nothing clips. */
+  max-height: 22rem;
+  overflow: visible;
+  pointer-events: auto;
+}
+
+/* Short viewports only: if five rows plus the nav cannot fit, the column
+   scrolls instead of running off the top of the screen. Scrollbars hidden,
+   because a visible one on a 44px column is mostly scrollbar. */
+@media (max-height: 620px) {
+  .quick-actions[data-open="true"] .quick-actions-list {
+    max-height: calc(100svh - var(--mobile-nav-height) - env(safe-area-inset-bottom, 0px) - 9rem);
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    overscroll-behavior: contain;
+  }
+
+  .quick-actions[data-open="true"] .quick-actions-list::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.quick-actions-item {
+  opacity: 0;
+  transform: translateY(8px) scale(0.96);
+  transition:
+    opacity 200ms ease-out,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* Staggered from the trigger outward, so the column unfurls rather than
+     appearing all at once. --qa-index is 0 for the row nearest the trigger. */
+  transition-delay: calc(var(--qa-index, 0) * 28ms);
+}
+
+.quick-actions[data-open="true"] .quick-actions-item {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.quick-actions-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* 44px minimum touch target, on the row as a whole. */
+  min-height: 2.75rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+  border: 1px solid hsl(var(--border) / 0.9);
+  border-radius: 1.5rem;
+  background: hsl(var(--card) / 0.92);
+  color: hsl(var(--foreground));
+  text-decoration: none;
+  box-shadow: 0 6px 20px hsl(var(--shadow) / 0.12);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: border-color 200ms ease-out, transform 200ms ease-out;
+}
+
+.quick-actions-action:active {
+  transform: scale(0.97);
+}
+
+.quick-actions-action:hover {
+  border-color: var(--qa-tone, hsl(var(--primary)));
+}
+
+.quick-actions-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.quick-actions-glyph {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  /* The feature's own accent, tinted rather than solid so five bright circles
+     do not compete with each other. Colour is never the only signal -- every
+     row carries its label. */
+  background: color-mix(in srgb, var(--qa-tone, hsl(var(--primary))) 16%, transparent);
+  color: var(--qa-tone, hsl(var(--primary)));
+}
+
+/* --- Feature accents ------------------------------------------------------
+ * Declared once here rather than inline, so a theme can restate them and no
+ * component hardcodes a hex value. */
+
+.qa-tone-moments {
+  --qa-tone: #d65f7a;
+}
+
+.qa-tone-plans {
+  /* Orange Grove, the product's primary. */
+  --qa-tone: hsl(var(--primary));
+}
+
+.qa-tone-events {
+  --qa-tone: #8b7bd8;
+}
+
+.qa-tone-safe-arrival {
+  --qa-tone: #3fa96b;
+}
+
+.qa-tone-groups {
+  --qa-tone: #c9922f;
+}
+
+/* --- Reduced motion -------------------------------------------------------
+ * Near-instant reveal rather than spring movement. The stagger is removed
+ * entirely: a sequential delay is itself motion, even without transforms. */
+
+.quick-actions[data-reduced-motion="true"] .quick-actions-item {
+  transition: opacity 90ms linear;
+  transition-delay: 0ms;
+  transform: none;
+}
+
+.quick-actions[data-reduced-motion="true"] .quick-actions-trigger,
+.quick-actions[data-reduced-motion="true"] .quick-actions-chevron,
+.quick-actions[data-reduced-motion="true"] .quick-actions-action {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-actions-item {
+    transition: opacity 90ms linear;
+    transition-delay: 0ms;
+    transform: none;
+  }
+
+  .quick-actions-trigger,
+  .quick-actions-chevron,
+  .quick-actions-action {
+    transition: none;
+  }
+
+  .quick-actions-trigger:active,
+  .quick-actions-action:active {
+    transform: none;
+  }
+}

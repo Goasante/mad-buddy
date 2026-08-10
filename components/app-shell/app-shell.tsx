@@ -40,6 +40,7 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { PullToRefresh } from "@/components/ui/pull-to-refresh";
 import { cn } from "@/lib/utils";
 import { MadBuddyOrb, ORB_HOME_HREF } from "@/components/app-shell/mad-buddy-orb";
+import { QuickActionsLauncher } from "@/components/app-shell/quick-actions-launcher";
 import { ImmersiveModeProvider, useImmersiveMode } from "@/components/app-shell/immersive-mode";
 import { bindCachesToSession } from "@/lib/cache/session-binding";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
@@ -433,6 +434,13 @@ function AppShellInner({
         onHomeReselect={openCameraFromHome}
         messageUnreadCount={messageUnreadCount}
       />
+
+      {/* Quick Actions — mounted ONCE, here, for the whole app.
+          Route visibility is decided inside the component by the single rule
+          in lib/navigation/quick-actions, so no page mounts its own copy and
+          there can never be two launchers on screen. Hidden while immersive
+          (a conversation is open), where the composer owns the lower right. */}
+      {immersive ? null : <QuickActionsLauncher />}
 
       {/* The app-wide menu sheet. Mounted once here — every screen's header
           Menu opens this same instance through AppMenuProvider. */}
