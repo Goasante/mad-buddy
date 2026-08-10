@@ -58,6 +58,7 @@ export const DELETION_TABLES = [
   "privacy_zones",
   "user_preferences",
   "user_locations",
+  "user_phone_identities",
   "blocked_users",
   "friend_requests",
   "friendships",
@@ -132,6 +133,10 @@ export async function purgeUserData(
     ["privacy_zones", admin.from("privacy_zones").delete().eq("user_id", userId)],
     ["user_preferences", admin.from("user_preferences").delete().eq("user_id", userId)],
     ["user_locations", admin.from("user_locations").delete().eq("user_id", userId)],
+    // Contact discovery must not outlive the account. While this row exists
+    // the number keeps producing matches, so a deleted person would still be
+    // findable by anyone who has them saved.
+    ["user_phone_identities", admin.from("user_phone_identities").delete().eq("user_id", userId)],
     ["blocked_users", admin.from("blocked_users").delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)],
     ["friend_requests", admin.from("friend_requests").delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)],
     // HARD delete, deliberately. Removing a Muddy soft-ends the row so the
