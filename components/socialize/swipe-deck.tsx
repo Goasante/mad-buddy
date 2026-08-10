@@ -2,9 +2,11 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { RotateCcw, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, RotateCcw, X } from "lucide-react";
 import { FeatureIcon } from "@/components/ui/feature-icon";
-import { useCallback, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+
+import { haptic } from "@/lib/device/haptics";
 
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
@@ -86,6 +88,8 @@ export function SwipeDeck({
   const [drag, setDrag] = useState<Drag>(NO_DRAG);
   /** The card flying off screen, so its exit animates before it unmounts. */
   const [exiting, setExiting] = useState<{ userId: string; decision: DeckDecision } | null>(null);
+  // Shown once per mount, then never again. See the note above showHint.
+  const [showSwipeHint, setShowSwipeHint] = useState(true);
 
   const pointerRef = useRef<{ id: number; x: number; y: number; time: number } | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -102,11 +106,23 @@ export function SwipeDeck({
 
   const top = people[0] ?? null;
 
+  // Retires on its own after one cycle, so it does not sit there indefinitely
+  // for someone reading the card rather than acting on it.
+  useEffect(() => {
+    if (!showSwipeHint) return;
+    const timer = window.setTimeout(() => setShowSwipeHint(false), 4200);
+    return () => window.clearTimeout(timer);
+  }, [showSwipeHint]);
+
   // The drag applies only to the card it started on. Derived, never synced.
   const activeDrag = top && drag.userId === top.userId ? drag : NO_DRAG;
 
   const commit = useCallback(
     (person: SocializePerson, decision: DeckDecision) => {
+      // Fires when the decision is made, not when the animation ends -- the
+      // tick should land under the thumb that made it. Waving is the
+      // affirmative choice and gets the firmer of the two patterns.
+      haptic(decision === "wave" ? "select" : "tick");
       setExiting({ userId: person.userId, decision });
       setDrag(NO_DRAG);
       // Let the exit transition play before the parent removes the person.
@@ -123,6 +139,8 @@ export function SwipeDeck({
   );
 
   function handlePointerDown(event: React.PointerEvent) {
+    // Touching the deck at all proves the affordance was understood.
+    setShowSwipeHint(false);
     if (!top || pending || exiting) return;
     // Ignore secondary buttons and anything starting on a real control.
     if (event.button !== 0) return;
@@ -193,12 +211,43 @@ export function SwipeDeck({
 
   if (people.length === 0) return null;
 
+  /**
+   * The one-time nudge.
+   *
+   * A stack of cards does not announce that it is swipeable, and the buttons
+   * below are easy to read as the only way to act. This shows once per visit
+   * and never repeats: a hint that keeps appearing is a distraction, and by
+   * the second card the gesture has either been learned or the buttons are
+   * being used instead.
+   *
+   * Hidden the moment a drag or an exit begins -- somebody already swiping
+   * does not need to be told to swipe.
+   */
+  const showHint = showSwipeHint && activeDrag.dx === 0 && !exiting;
+
   const visible = people.slice(0, DECK_VISIBLE_CARDS);
   const direction = dragDirection(activeDrag.dx);
   const progress = swipeProgress(activeDrag.dx);
 
   return (
     <div className="linkr-deck-wrap">
+      {/* Purely decorative and aria-hidden: the deck already carries a real
+          role and label, and the buttons below state both actions in words,
+          so a screen reader loses nothing by skipping this. */}
+      {showHint ? (
+        <div className="linkr-swipe-hint" aria-hidden="true">
+          <span className="linkr-swipe-hint-side linkr-swipe-hint-pass">
+            <ArrowLeft className="h-4 w-4" />
+            Pass
+          </span>
+          <span className="linkr-swipe-hint-card" />
+          <span className="linkr-swipe-hint-side linkr-swipe-hint-wave">
+            Wave
+            <ArrowRight className="h-4 w-4" />
+          </span>
+        </div>
+      ) : null}
+
       <div
         className="linkr-deck"
         role="group"

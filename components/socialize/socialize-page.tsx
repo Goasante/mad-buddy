@@ -8,6 +8,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, Clock, Info, Loader2, MapPin, MessageSquareText, MoreHorizontal, Pause, Play, RefreshCcw, RotateCcw, Users, X } from "lucide-react";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
 import { passPersonAction, undoPassAction } from "@/app/(app)/social-actions";
+import { removeFromDeck, restoreToDeck } from "@/lib/social/swipe-deck";
 import {
   deactivateSocializeAction,
   discoverSocializePeopleAction,
@@ -535,12 +536,23 @@ export function SocializePage({
   }
 
   function wave(person: SocializePerson) {
-    setPeople((current) => current.map((item) => (item.userId === person.userId ? { ...item, waveState: "sent" } : item)));
+    // THE CARD LEAVES, exactly as a pass does.
+    //
+    // This previously only marked the person as waved and left them in the
+    // deck, so a right swipe animated the card away and then put it straight
+    // back -- the request had been sent, but the deck said otherwise, and the
+    // obvious next move was to swipe again. Both decisions remove the card;
+    // only what happens on the server differs.
+    setPeople((current) => removeFromDeck(current, person.userId));
     setPreviewPerson((current) => (current?.userId === person.userId ? { ...current, waveState: "sent" } : current));
     startTransition(async () => {
       const result = await sendFriendRequestAction(person.userId, "socialize");
       if (!result.ok) {
-        setPeople((current) => current.map((item) => (item.userId === person.userId ? { ...item, waveState: "none" } : item)));
+        // Restored with waveState intact, so the card comes back in a state
+        // that still allows another attempt. A card that stayed gone after a
+        // failed write would look like success while the person reappeared on
+        // the next refresh.
+        setPeople((current) => restoreToDeck(current, { ...person, waveState: "none" }));
         showToast(result.message, true);
       } else {
         showToast(`Muddy request sent to ${capitalize(person.displayName || person.username)}.`);

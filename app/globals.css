@@ -6215,3 +6215,92 @@ select {
     transform: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * The Linkr swipe hint.
+ *
+ * Shown once, above the deck, then gone. A card stack gives no sign that it can
+ * be dragged, and the buttons underneath read as the only way to act -- so the
+ * gesture goes undiscovered. This says it in one pass and retires.
+ * ------------------------------------------------------------------------ */
+
+.linkr-swipe-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  pointer-events: none;
+  animation: linkr-hint-in 320ms ease-out both;
+}
+
+.linkr-swipe-hint-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+}
+
+.linkr-swipe-hint-pass {
+  animation: linkr-hint-left 2100ms ease-in-out infinite;
+}
+
+.linkr-swipe-hint-wave {
+  color: hsl(var(--primary));
+  animation: linkr-hint-right 2100ms ease-in-out infinite;
+}
+
+/* A miniature of the card itself, tilting the way a real drag would. Reads as
+   "this thing moves" faster than an arrow alone. */
+.linkr-swipe-hint-card {
+  width: 1.5rem;
+  height: 2rem;
+  border: 1.5px solid hsl(var(--border));
+  border-radius: 0.35rem;
+  background: hsl(var(--card));
+  animation: linkr-hint-tilt 2100ms ease-in-out infinite;
+}
+
+@keyframes linkr-hint-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes linkr-hint-left {
+  0%, 100% { opacity: 0.45; transform: translateX(0); }
+  30% { opacity: 1; transform: translateX(-3px); }
+}
+
+@keyframes linkr-hint-right {
+  0%, 100% { opacity: 0.45; transform: translateX(0); }
+  65% { opacity: 1; transform: translateX(3px); }
+}
+
+@keyframes linkr-hint-tilt {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-7deg); }
+  65% { transform: rotate(7deg); }
+}
+
+/* Reduced motion keeps the hint but stops it moving: the words and the arrows
+   still say what to do, which is the part that matters. */
+@media (prefers-reduced-motion: reduce) {
+  .linkr-swipe-hint,
+  .linkr-swipe-hint-pass,
+  .linkr-swipe-hint-wave,
+  .linkr-swipe-hint-card {
+    animation: none;
+  }
+
+  .linkr-swipe-hint-side {
+    opacity: 1;
+  }
+}

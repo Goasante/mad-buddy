@@ -46,6 +46,7 @@ import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import dynamic from "next/dynamic";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
 import { haptic } from "@/lib/device/haptics";
+import { announceMuddyRequestsUpdated } from "@/hooks/use-incoming-request-count";
 
 const LazyFindMuddiesSheet = dynamic(
   () => import("@/components/contacts/find-muddies-sheet").then((module) => module.FindMuddiesSheet),
@@ -455,6 +456,11 @@ export function FriendsPageContent({
 
       if (result.ok) {
         onLocalSuccess();
+        // The nav badge re-reads immediately rather than waiting out its
+        // poll, so accepting the last request clears the tab in the same
+        // moment the row disappears. Every accept, decline, cancel and block
+        // funnels through here, so one call covers them all.
+        announceMuddyRequestsUpdated();
         router.refresh();
       }
     });

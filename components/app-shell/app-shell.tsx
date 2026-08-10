@@ -48,7 +48,8 @@ import type { ResolvedWallpaper } from "@/lib/wallpapers/catalog";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { HangoutIcon, LinkrIcon } from "@/components/brand/brand-icons";
 import { useUnreadNotificationCount } from "@/hooks/use-unread-notification-count";
-import { useUnreadMessageCount } from "@/hooks/use-unread-message-count";
+import { useIncomingRequestCount } from "@/hooks/use-incoming-request-count";
+  import { useUnreadMessageCount } from "@/hooks/use-unread-message-count";
 import { UnreadNotificationProvider } from "@/hooks/unread-notification-context";
 import { AppMenuProvider } from "@/hooks/app-menu-context";
 import { HomeSettingsSheet } from "@/components/dashboard/home-settings-sheet";
@@ -298,6 +299,7 @@ function AppShellInner({
   // header Bell badge can never disagree.
   const { unreadCount, refresh: refreshUnreadCount } = useUnreadNotificationCount(initialUnreadCount);
   const { unreadCount: messageUnreadCount } = useUnreadMessageCount(currentUserId);
+  const { requestCount: muddyRequestCount } = useIncomingRequestCount(currentUserId);
   const hasCompletedInitialRender = useRef(false);
 
   useEffect(() => {
@@ -360,6 +362,7 @@ function AppShellInner({
         navigationItems={visibleNavigationItems}
         unreadCount={unreadCount}
         messageUnreadCount={messageUnreadCount}
+        muddyRequestCount={muddyRequestCount}
         currentUsername={currentUsername}
         currentAvatarUrl={currentAvatarUrl}
         onHomeReselect={openCameraFromHome}
@@ -433,6 +436,7 @@ function AppShellInner({
         immersive={immersive}
         onHomeReselect={openCameraFromHome}
         messageUnreadCount={messageUnreadCount}
+        muddyRequestCount={muddyRequestCount}
       />
 
       {/* Quick Actions — mounted ONCE, here, for the whole app.
@@ -490,6 +494,7 @@ function DesktopSidebar({
   navigationItems,
   unreadCount,
   messageUnreadCount,
+  muddyRequestCount,
   currentUsername,
   currentAvatarUrl,
   onHomeReselect
@@ -497,6 +502,7 @@ function DesktopSidebar({
   navigationItems: NavigationItem[];
   unreadCount: number;
   messageUnreadCount: number;
+  muddyRequestCount: number;
   currentUsername: string | null;
   currentAvatarUrl: string | null;
   onHomeReselect: () => void;
@@ -543,7 +549,10 @@ function DesktopSidebar({
                 ? notificationAriaLabel(item.label, unreadCount)
                 : item.href === "/messages"
                   ? notificationAriaLabel(item.label, messageUnreadCount)
-                  : item.label;
+                  : // A count nobody can hear is a count only sighted users get.
+                    item.href === "/friends"
+                    ? notificationAriaLabel(item.label, muddyRequestCount)
+                    : item.label;
             return (
               <li key={item.href}>
                 <Link
@@ -563,6 +572,10 @@ function DesktopSidebar({
                     <NavItemIcon item={item} lucideClass="h-5 w-5" size={20} isActive={isActive} />
                     {item.href === "/notifications" ? <UnreadBadge count={unreadCount} /> : null}
                     {item.href === "/messages" ? <UnreadBadge count={messageUnreadCount} /> : null}
+                    {/* Pending Muddy requests. Clears when each is accepted or
+                        declined -- the same badge language as Messages, so one
+                        tab does not behave unlike the other. */}
+                    {item.href === "/friends" ? <UnreadBadge count={muddyRequestCount} /> : null}
                   </NavIconPill>
                 </Link>
               </li>
@@ -1140,11 +1153,13 @@ const MOBILE_TABS: MobileTab[] = [
 function MobileNav({
   immersive = false,
   onHomeReselect,
-  messageUnreadCount = 0
+  messageUnreadCount = 0,
+  muddyRequestCount = 0
 }: {
   immersive?: boolean;
   onHomeReselect: () => void;
   messageUnreadCount?: number;
+  muddyRequestCount?: number;
 }) {
   const pathname = usePathname();
 
@@ -1184,6 +1199,7 @@ function MobileNav({
             tab={tab}
             pathname={pathname}
             messageUnreadCount={tab.href === "/messages" ? messageUnreadCount : 0}
+            muddyRequestCount={tab.href === "/friends" ? muddyRequestCount : 0}
           />
         ))}
 
@@ -1200,6 +1216,7 @@ function MobileNav({
             tab={tab}
             pathname={pathname}
             messageUnreadCount={tab.href === "/messages" ? messageUnreadCount : 0}
+            muddyRequestCount={tab.href === "/friends" ? muddyRequestCount : 0}
           />
         ))}
       </ul>
@@ -1210,11 +1227,13 @@ function MobileNav({
 function MobileNavTab({
   tab,
   pathname,
-  messageUnreadCount = 0
+  messageUnreadCount = 0,
+  muddyRequestCount = 0
 }: {
   tab: MobileTab;
   pathname: string;
   messageUnreadCount?: number;
+  muddyRequestCount?: number;
 }) {
   // Reuses the shared route-matching rule so a tab stays lit on nested
   // routes (/friends/someone, /plans/123) exactly like the desktop sidebar.
@@ -1248,6 +1267,7 @@ function MobileNavTab({
             aria-hidden="true"
           />
           {tab.href === "/messages" && messageUnreadCount > 0 ? <UnreadBadge count={messageUnreadCount} /> : null}
+          {tab.href === "/friends" && muddyRequestCount > 0 ? <UnreadBadge count={muddyRequestCount} /> : null}
         </span>
         {isActive ? (
           <span className="text-[10px] font-medium leading-none tracking-wide text-primary">{tab.label}</span>
