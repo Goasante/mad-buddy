@@ -9,6 +9,8 @@ import {
   MessagesSquare,
   MoreHorizontal,
   Plus,
+  BookUser,
+  ChevronRight,
   Search,
   SlidersHorizontal,
   UserMinus,
@@ -41,7 +43,14 @@ import {
   removeCloseFriendAction
 } from "@/app/(app)/circles-actions";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
+import dynamic from "next/dynamic";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
+import { haptic } from "@/lib/device/haptics";
+
+const LazyFindMuddiesSheet = dynamic(
+  () => import("@/components/contacts/find-muddies-sheet").then((module) => module.FindMuddiesSheet),
+  { ssr: false }
+);
 import { useAppMenu } from "@/hooks/app-menu-context";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { AppMenu, type AppMenuItem } from "@/components/ui/app-dropdown";
@@ -170,6 +179,7 @@ export function FriendsPageContent({
 
   const [requestSubTab, setRequestSubTab] = useState<"received" | "sent">("received");
   const [muddiesFilter, setMuddiesFilter] = useState<MuddiesFilterId>("all");
+  const [findMuddiesOpen, setFindMuddiesOpen] = useState(false);
   const [users, setUsers] = useState<UserSummary[]>(initialUsers);
   const [proximityByFriendId, setProximityByFriendId] = useState<Record<string, ProximityInfo>>({});
   const [circles, setCircles] = useState<Circle[]>(() => [
@@ -788,6 +798,30 @@ export function FriendsPageContent({
             </button>
           </div>
 
+          {/* Contact discovery, offered ONCE and quietly.
+              An additional way to find people, not a replacement for search --
+              so it sits below the search row as a single card rather than
+              turning the page into a phonebook. */}
+          <button
+            type="button"
+            onClick={() => {
+              haptic("tick");
+              setFindMuddiesOpen(true);
+            }}
+            className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-border/80 bg-card/60 p-4 text-left hover:bg-secondary/30"
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+              <BookUser className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">Find Your Muddies</span>
+              <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+                See which people you already know are on Mad Buddy.
+              </span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </button>
+
           <section aria-labelledby="my-muddies-heading">
             <div className="muddies-section-head">
               <h2 id="my-muddies-heading" className="muddies-section-title">
@@ -1130,6 +1164,12 @@ export function FriendsPageContent({
           aria-label="Circle name"
         />
       </Modal>
+
+      {/* Lazy: the sheet and its capability layer are not part of the initial
+          Muddies bundle, since most visits never open it. */}
+      {findMuddiesOpen ? (
+        <LazyFindMuddiesSheet open onClose={() => setFindMuddiesOpen(false)} />
+      ) : null}
 
       <MuddyProfileModal
         muddy={

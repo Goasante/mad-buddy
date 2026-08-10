@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, Eye, MessageCircle, ShieldCheck, UserRoundX } from "lucide-react";
+import { ChevronRight, Eye, MessageCircle, ShieldCheck, UserRoundX, Phone } from "lucide-react";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
@@ -15,6 +15,12 @@ const privacyRows = [
     title: "Messaging privacy",
     description: "Control who can message you, add you to groups, and see chat activity.",
     icon: MessageCircle
+  },
+  {
+    href: "/settings/contact-discovery",
+    title: "Contact discovery",
+    description: "Let people who already have your number find you. Off unless you turn it on.",
+    icon: Phone
   },
   {
     href: "/settings/privacy-setup",
