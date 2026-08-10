@@ -2,9 +2,11 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import { deriveMatchIdentifiers, matchingConfigured } from "@/lib/contacts/match-identifier";
 import { normalisePhoneNumbers } from "@/lib/contacts/phone-normalization";
 import { logBackendEvent } from "@/lib/observability/logger";
+import { hasVerifiedAccountStatus, type VerificationRow } from "@/lib/trust/verified-account";
 import type { CountryCode } from "libphonenumber-js/min";
 
 /**
@@ -18,8 +20,18 @@ import type { CountryCode } from "libphonenumber-js/min";
  * enumeration attack the design has to prevent.
  *
  * WHAT A CALLER RECEIVES: a safe profile projection -- id, name, username,
- * avatar. Never a phone number, never a matching identifier, never a hint
- * about accounts that exist but chose not to be discoverable.
+ * avatar, the identity marks that already show beside that person's name
+ * anywhere else, and the viewer's existing relationship with them. Never a
+ * phone number, never a matching identifier, never a hint about accounts that
+ * exist but chose not to be discoverable.
+ *
+ * WHY THE MARKS AND THE RELATIONSHIP ARE SAFE TO ADD: both are things the
+ * viewer can already read by searching the same username, and neither says
+ * anything about phone numbers. The projection is the same one `searchUsers`
+ * returns, resolved by the same helpers, so a person cannot look verified in
+ * search and unverified here. What is still withheld is unchanged: which
+ * submitted number produced which match, and whether any particular number is
+ * registered at all.
  *
  * DORMANT DUPLICATES, and how matching behaves:
  *
@@ -54,11 +66,28 @@ export const MAX_CONTACT_BATCH = 1000;
  */
 export const MIN_CONTACT_BATCH = 5;
 
+/**
+ * Where the viewer already stands with a match.
+ *
+ * Decides which control the row offers, so the results list can never show
+ * "Add Muddy" beside somebody who is already a Muddy or has a request waiting.
+ * Resolved server-side from the same friendships table every other surface
+ * reads -- a client that guessed would guess wrong the moment a request was
+ * sent from another device.
+ */
+export type ContactMatchRelationship = "none" | "requested" | "incoming" | "muddies";
+
 export type ContactMatch = {
   userId: string;
   displayName: string;
   username: string;
   avatarUrl: string | null;
+  /** The canonical marks, resolved exactly as search resolves them. */
+  isVerifiedAccount: boolean;
+  /** ISO timestamp, because that is what TrustedMemberMark takes. */
+  trustedSince: string | null;
+  plan: string;
+  relationship: ContactMatchRelationship;
 };
 
 export type ContactMatchResult =
@@ -181,7 +210,7 @@ export async function matchContacts(
       .or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`),
     admin
       .from("profiles")
-      .select("user_id, full_name, username, avatar_url, deleted_at, visibility_status")
+      .select("user_id, full_name, username, avatar_url, deleted_at, visibility_status, trusted_member_since")
       .in("user_id", candidateIds)
   ]);
 
@@ -191,22 +220,86 @@ export async function matchContacts(
     (blocks ?? []).flatMap((block) => [block.blocker_id, block.blocked_id])
   );
 
-  const matches: ContactMatch[] = [];
-  for (const profile of profiles ?? []) {
-    if (blockedIds.has(profile.user_id)) continue;
+  const visible = (profiles ?? []).filter((profile) => {
+    if (blockedIds.has(profile.user_id)) return false;
     // A soft-deleted account is gone as far as discovery is concerned.
-    if (profile.deleted_at) continue;
+    if (profile.deleted_at) return false;
     // Ghost mode hides a person from proximity; it hides them here too, for
     // the same reason -- they asked not to be found.
-    if (profile.visibility_status === "ghost") continue;
+    if (profile.visibility_status === "ghost") return false;
+    return true;
+  });
 
-    matches.push({
-      userId: profile.user_id,
-      displayName: profile.full_name?.trim() || "A Muddy",
-      username: profile.username ?? "muddy",
-      avatarUrl: profile.avatar_url ?? null
-    });
+  const visibleIds = visible.map((profile) => profile.user_id);
+
+  // PRESENTATION DATA, batched for the whole result set rather than per row.
+  //
+  // Everything here is already visible to this viewer on the profile or in
+  // search; resolving it now is what stops the results list offering "Add
+  // Muddy" beside an existing Muddy, and what stops somebody appearing
+  // verified in search but plain here.
+  const [plans, verificationRows, friendships, requests] = await Promise.all([
+    loadEffectivePlansForUsers(admin, visibleIds),
+    visibleIds.length > 0
+      ? admin.from("account_verifications").select("user_id, status").in("user_id", visibleIds)
+      : Promise.resolve({ data: [] as { user_id: string; status: string }[] }),
+    // ended_at IS NULL is the canonical definition of "currently Muddies";
+    // an ended friendship must read as "none" so a fresh request is offered.
+    visibleIds.length > 0
+      ? admin
+          .from("friendships")
+          .select("user_one_id, user_two_id")
+          .or(`user_one_id.eq.${viewerId},user_two_id.eq.${viewerId}`)
+          .is("ended_at", null)
+      : Promise.resolve({ data: [] as { user_one_id: string; user_two_id: string }[] }),
+    visibleIds.length > 0
+      ? admin
+          .from("friend_requests")
+          .select("sender_id, receiver_id")
+          .eq("status", "pending")
+          .or(`sender_id.eq.${viewerId},receiver_id.eq.${viewerId}`)
+      : Promise.resolve({ data: [] as { sender_id: string; receiver_id: string }[] })
+  ]);
+
+  const verificationByUserId = new Map<string, VerificationRow[]>();
+  for (const row of verificationRows.data ?? []) {
+    const existing = verificationByUserId.get(row.user_id) ?? [];
+    existing.push(row as VerificationRow);
+    verificationByUserId.set(row.user_id, existing);
   }
+
+  const muddyIds = new Set(
+    (friendships.data ?? [])
+      .map((row) => (row.user_one_id === viewerId ? row.user_two_id : row.user_one_id))
+      .filter((id) => id !== viewerId)
+  );
+
+  // Direction matters: one offers "Requested", the other sends the viewer to
+  // their own Requests queue rather than creating a duplicate.
+  const outgoingIds = new Set<string>();
+  const incomingIds = new Set<string>();
+  for (const row of requests.data ?? []) {
+    if (row.sender_id === viewerId) outgoingIds.add(row.receiver_id);
+    else if (row.receiver_id === viewerId) incomingIds.add(row.sender_id);
+  }
+
+  const matches: ContactMatch[] = visible.map((profile) => ({
+    userId: profile.user_id,
+    displayName: profile.full_name?.trim() || "A Muddy",
+    username: profile.username ?? "muddy",
+    avatarUrl: profile.avatar_url ?? null,
+    isVerifiedAccount: hasVerifiedAccountStatus(verificationByUserId.get(profile.user_id) ?? []),
+    // Denormalised onto the profile, the same column every other mark reads.
+    trustedSince: profile.trusted_member_since ?? null,
+    plan: plans.get(profile.user_id) ?? "free",
+    relationship: muddyIds.has(profile.user_id)
+      ? "muddies"
+      : outgoingIds.has(profile.user_id)
+        ? "requested"
+        : incomingIds.has(profile.user_id)
+          ? "incoming"
+          : "none"
+  }));
 
   logBackendEvent("info", {
     requestId,

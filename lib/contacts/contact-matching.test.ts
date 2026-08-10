@@ -200,7 +200,11 @@ describe("only eligible accounts are ever returned", () => {
   });
 
   it("excludes deleted accounts", () => {
-    expect(matching).toContain("if (profile.deleted_at) continue");
+    // Anchored on the guarantee rather than the loop shape: the filter moved
+    // from a `continue` to a predicate when the projection gained the marks,
+    // and a soft-deleted account must stay out either way.
+    expect(matching).toContain("profile.deleted_at");
+    expect(matching).toMatch(/deleted_at\) return false|deleted_at\) continue/);
   });
 
   it("excludes people who asked not to be found", () => {
@@ -227,7 +231,27 @@ describe("only eligible accounts are ever returned", () => {
 
 describe("no phone number is returned or logged", () => {
   it("projects only safe profile fields", () => {
-    expect(matching).toContain('.select("user_id, full_name, username, avatar_url, deleted_at, visibility_status")');
+    // ENUMERATED, so a future column has to be added here deliberately. The
+    // list grew when results gained the canonical marks -- every entry is
+    // something the viewer can already read on that person's profile, and
+    // none of it says anything about a phone number.
+    const profileSelect = matching.slice(matching.indexOf('from("profiles")'));
+    const opened = profileSelect.indexOf('.select("') + '.select("'.length;
+    const columns = profileSelect
+      .slice(opened, profileSelect.indexOf('"', opened))
+      .split(",")
+      .map((column) => column.trim());
+
+    expect(columns).toEqual([
+      "user_id",
+      "full_name",
+      "username",
+      "avatar_url",
+      "deleted_at",
+      "visibility_status",
+      "trusted_member_since"
+    ]);
+
     // The projection type carries no number and no identifier.
     expect(matching).not.toContain("phoneE164:");
     expect(matching).not.toContain("phone_e164,");

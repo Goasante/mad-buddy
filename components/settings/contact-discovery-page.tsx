@@ -1,6 +1,7 @@
 "use client";
 
-import { Loader2, Phone, Trash2 } from "lucide-react";
+import { Loader2, Phone, Trash2, Users } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 
 import {
@@ -298,6 +299,27 @@ export function ContactDiscoveryPage() {
             {!hasPhone ? (
               <p className="text-xs text-muted-foreground">Add a phone number first.</p>
             ) : null}
+          </section>
+
+          {/* THE OTHER DIRECTION, named as such.
+              The toggle above lets people find YOU. This finds THEM, and the
+              two are separate acts -- turning one on does not perform the
+              other. Saying so here is the only place both appear together. */}
+          <section className="space-y-3 border-b border-border/70 pb-5">
+            <h2 className="text-sm font-semibold">Find people you know</h2>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Separate from the setting above. This checks contacts you choose against people who have turned
+              discovery on &mdash; it doesn&rsquo;t change anything about your own account.
+            </p>
+            {/* Opens the sheet directly rather than dropping somebody on
+                Muddies to hunt for the card that opens it. */}
+            <Link
+              href="/friends?find=contacts"
+              className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-3 text-sm font-medium hover:bg-secondary/40"
+            >
+              <Users className="h-4 w-4" aria-hidden="true" />
+              Find Your Muddies
+            </Link>
           </section>
 
           {feedback ? (

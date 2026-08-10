@@ -137,14 +137,14 @@ describe("the picker asks for as little as possible", () => {
 
 describe("no permission prompt appears unrequested", () => {
   it("shows the explanation before touching any capability", () => {
-    // Opening the sheet renders copy. selectContacts runs only inside the
-    // handler for the explicit action.
-    expect(sheet).toContain('useState<Stage>("explain")');
-    const handler = sheet.slice(sheet.indexOf("async function findMuddies"));
+    // Opening the sheet renders copy and nothing else. The machine starts at
+    // INTRO, and selectContacts lives in `choose` -- two deliberate taps away.
+    expect(sheet).toContain("useReducer(findMuddiesReducer, INITIAL_STATE)");
+    const handler = sheet.slice(sheet.indexOf("async function choose"));
     expect(handler).toContain("selectContacts()");
     // The explanation branch itself invokes nothing.
-    const explain = sheet.slice(sheet.indexOf('stage === "explain"'));
-    expect(explain.slice(0, 900)).not.toContain("selectContacts(");
+    const intro = sheet.slice(sheet.indexOf('state.name === "INTRO"'));
+    expect(intro.slice(0, 900)).not.toContain("selectContacts(");
   });
 
   it("does not reopen the picker after a cancellation", () => {
@@ -155,11 +155,36 @@ describe("no permission prompt appears unrequested", () => {
   });
 
   it("offers no retry button on an unsupported platform", () => {
-    // There is nothing to retry: the capability does not exist.
-    const unsupported = sheet.slice(sheet.indexOf('stage === "unsupported"'));
-    expect(unsupported.slice(0, 1200)).not.toContain("findMuddies");
-    expect(unsupported.slice(0, 1200)).toContain("Search Muddies");
-    expect(unsupported.slice(0, 1200)).toContain("Share Mad Buddy");
+    // There is nothing to retry: the capability does not exist. What it offers
+    // instead are the two shared actions, and BOTH of them do something --
+    // the previous version's Search Muddies was a link to the route the sheet
+    // was already on, so it closed and nothing happened.
+    const unsupported = sheet.slice(sheet.indexOf('state.name === "UNSUPPORTED"'));
+    expect(unsupported.slice(0, 800)).not.toContain("choose()");
+    expect(unsupported.slice(0, 800)).toContain("bottomActions");
+
+    const actionsBlock = sheet.slice(sheet.indexOf("const bottomActions"));
+    expect(actionsBlock.slice(0, 700)).toContain("Search Muddies");
+    expect(actionsBlock.slice(0, 700)).toContain("Invite someone");
+    expect(actionsBlock.slice(0, 700)).toContain("onClick={searchMuddies}");
+    expect(actionsBlock.slice(0, 700)).toContain("onClick={invite}");
+  });
+
+  it("routes Search Muddies to the field rather than the route it is already on", () => {
+    // THE DEAD BUTTON. A <Link href="/friends"> inside a sheet rendered on
+    // /friends is the same route: Next.js no-ops it, the sheet closes, and
+    // nothing else happens. It must close AND focus the real input.
+    const handler = sheet.slice(sheet.indexOf("function searchMuddies"));
+    expect(handler.slice(0, 400)).toContain("close();");
+    expect(handler.slice(0, 400)).toContain("onSearchMuddies?.()");
+    expect(sheet).not.toContain('href="/friends"');
+
+    // And the page underneath genuinely holds the field it focuses.
+    expect(muddiesPage).toContain("ref={searchInputRef}");
+    expect(muddiesPage).toContain("field.focus()");
+    // Deferred a frame: closing a dialog restores focus to its opener, so a
+    // synchronous focus would be undone and look identical to the old bug.
+    expect(muddiesPage).toContain("window.requestAnimationFrame");
   });
 });
 
@@ -171,9 +196,11 @@ describe("the UI uses the canonical batched endpoint", () => {
   it("posts one batch, never one request per number", () => {
     expect(sheet).toContain('fetch("/api/contacts/match"');
     expect(sheet).toContain('method: "POST"');
-    expect(sheet).toContain("phoneNumbers: selection.phoneNumbers");
-    // One fetch call in the whole component.
+    expect(sheet).toContain("JSON.stringify({ phoneNumbers })");
+    // One fetch call in the whole component -- and one submission path, so the
+    // demo fixture and the OS picker cannot diverge after selection.
     expect((sheet.match(/fetch\("\/api\/contacts\/match"/g) ?? []).length).toBe(1);
+    expect((sheet.match(/runMatch\(/g) ?? []).length).toBeGreaterThan(1);
   });
 
   it("implements no client-side matching", () => {
@@ -184,13 +211,30 @@ describe("the UI uses the canonical batched endpoint", () => {
 
   it("explains a small batch without naming the security reason", () => {
     // "Minimum 5 to prevent enumeration" is an implementation detail.
-    expect(sheet).toContain("at least ${MIN_USABLE} contacts");
+    expect(sheet).toContain("Choose a few more contacts");
     expect(sheet.toLowerCase()).not.toContain("enumeration");
   });
 
   it("handles rate limiting and network failure distinctly", () => {
     expect(sheet).toContain("response.status === 429");
-    expect(sheet).toContain("Couldn't reach Mad Buddy");
+    expect(sheet).toContain("Couldn't check your contacts. Check your connection");
+  });
+
+  it("offers a retry only where another tap could help", () => {
+    // A daily limit will not clear by tapping again, so that error carries no
+    // retry -- a "Try again" that always fails is worse than no button.
+    const rateLimited = sheet.slice(sheet.indexOf("response.status === 429"));
+    expect(rateLimited.slice(0, 300)).toContain("null");
+    expect(sheet).toContain("{state.retry ? (");
+  });
+
+  it("uses consumer words for every state", () => {
+    // Nothing on screen may name the mechanism.
+    for (const forbidden of ["navigator", "Contact Picker API", "browser support", "HMAC", "E.164", "hashing"]) {
+      const rendered = sheet.slice(sheet.indexOf("<Modal"));
+      expect(rendered, `copy must not mention ${forbidden}`).not.toContain(forbidden);
+    }
+    expect(sheet).toContain("Finding your Muddies…");
   });
 });
 
@@ -209,8 +253,26 @@ describe("results use the canonical friendship system", () => {
     // Adding is one deliberate tap per person; there is no "add all".
     expect(sheet).toContain("onClick={() => addMuddy(person)}");
     expect(sheet).not.toContain("addAll");
-    const results = sheet.slice(sheet.indexOf('stage === "results"'));
+    const results = sheet.slice(sheet.indexOf('state.name === "RESULTS"'));
     expect(results).not.toContain("forEach(addMuddy");
+  });
+
+  it("offers the right control for an existing relationship", () => {
+    // "Add Muddy" beside somebody who is already a Muddy sends a request that
+    // the action rejects, which reads as the button being broken. The server
+    // resolves the relationship so the row can say what is actually true.
+    const results = sheet.slice(sheet.indexOf('state.name === "RESULTS"'));
+    expect(results).toContain('person.relationship === "muddies"');
+    expect(results).toContain('person.relationship === "incoming"');
+    expect(results).toContain("Muddies");
+    expect(results).toContain("Asked you");
+  });
+
+  it("keeps a failed add beside the list rather than instead of it", () => {
+    // One failed request must not throw away everybody else's row.
+    expect(sheet).toContain("setRowError(result.message)");
+    const results = sheet.slice(sheet.indexOf('state.name === "RESULTS"'));
+    expect(results).toContain("{rowError ? (");
   });
 
   it("moves to Requested after a successful add", () => {
@@ -225,9 +287,19 @@ describe("results use the canonical friendship system", () => {
 
 describe("nothing sensitive reaches or leaves the client", () => {
   it("renders no phone number in results", () => {
-    const results = sheet.slice(sheet.indexOf('stage === "results"'));
+    const results = sheet.slice(sheet.indexOf('state.name === "RESULTS"'));
     expect(results).not.toContain("phone");
     expect(results).not.toContain("tel");
+  });
+
+  it("never claims a contact IS a particular account", () => {
+    // The endpoint deliberately never says which submitted number produced
+    // which match, so the UI cannot truthfully say "Kofi in your address book
+    // is @kofi". It says people you may know, and stops there.
+    expect(sheet).toContain("People you may know");
+    const results = sheet.slice(sheet.indexOf('state.name === "RESULTS"'));
+    expect(results).not.toContain("contactName");
+    expect(results).not.toContain("in your contacts is");
   });
 
   it("never handles identifiers or key versions", () => {
@@ -260,10 +332,24 @@ describe("nothing sensitive reaches or leaves the client", () => {
 
   it("shares a general link, never a per-contact message", () => {
     // No automatic SMS, no mass messaging, and nothing addressed to a specific
-    // unmatched number.
-    expect(sheet).toContain("navigator.share");
-    expect(sheet).toContain("Join me on Mad Buddy");
-    expect(sheet).not.toContain("sms:");
+    // unmatched number. The share itself moved to one shared helper so every
+    // "Invite someone" in the product behaves identically.
+    const invite = stripComments(read("lib/device/invite-share.ts"));
+    expect(invite).toContain("navigator.share");
+    expect(invite).toContain("Join me on Mad Buddy");
+    expect(invite).not.toContain("sms:");
+    // Carries a link and a line, and no recipient of any kind.
+    expect(invite).not.toContain("phoneNumber");
+    expect(invite).not.toContain("contact");
+    expect(sheet).toContain("shareInvite()");
+  });
+
+  it("tells the user what the invite actually did", () => {
+    // A clipboard fallback that reported nothing was the other half of
+    // "tapping does nothing".
+    expect(sheet).toContain('outcome === "copied"');
+    expect(sheet).toContain("Invite link copied.");
+    expect(sheet).toContain('outcome === "unavailable"');
   });
 });
 

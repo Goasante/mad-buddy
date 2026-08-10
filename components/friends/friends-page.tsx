@@ -47,6 +47,8 @@ import dynamic from "next/dynamic";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
 import { haptic } from "@/lib/device/haptics";
 import { announceMuddyRequestsUpdated } from "@/hooks/use-incoming-request-count";
+import { ContactReminderCard } from "@/components/contacts/contact-reminder-card";
+import type { ContactReminderKind } from "@/lib/contacts/reminder-eligibility";
 
 const LazyFindMuddiesSheet = dynamic(
   () => import("@/components/contacts/find-muddies-sheet").then((module) => module.FindMuddiesSheet),
@@ -149,19 +151,34 @@ export function FriendsPageContent({
   initialUsers = [],
   initialCircles = [],
   initialCloseFriendIds = [],
-  glowColorByFriendId = {}
+  glowColorByFriendId = {},
+  contactReminderKind = null
 }: {
   initialUsers?: UserSummary[];
   initialCircles?: InitialCircle[];
   initialCloseFriendIds?: string[];
   /** friendId → custom glow palette id (custom_glow_styles entitlement). */
   glowColorByFriendId?: Record<string, string>;
+  /**
+   * Which Contact Discovery prompt to offer, decided on the server. Null means
+   * the eligibility rules said no -- this component never decides for itself.
+   */
+  contactReminderKind?: ContactReminderKind | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const reducedMotion = useReducedMotion();
   const tabIds = useMemo(() => tabs.map((tab) => tab.id), []);
   const tabRefs = useRef<Partial<Record<FriendTab, HTMLButtonElement | null>>>({});
+  /**
+   * The canonical Muddies search field.
+   *
+   * Held so "Search Muddies" inside Find Your Muddies can actually put the
+   * cursor here. It used to be a link to /friends from a sheet already on
+   * /friends -- the same route, so the navigation was a no-op and the button
+   * appeared to do nothing at all.
+   */
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   /**
    * The open tab is DERIVED from the URL, not mirrored into state.
@@ -180,7 +197,40 @@ export function FriendsPageContent({
 
   const [requestSubTab, setRequestSubTab] = useState<"received" | "sent">("received");
   const [muddiesFilter, setMuddiesFilter] = useState<MuddiesFilterId>("all");
-  const [findMuddiesOpen, setFindMuddiesOpen] = useState(false);
+  /**
+   * Seeded from the URL, so Settings can link straight into the sheet.
+   *
+   * Read ONCE, as the initial value, rather than derived every render: this is
+   * a dismissible overlay, and deriving it would reopen the sheet the instant
+   * somebody closed it while the parameter was still in the address bar.
+   */
+  const [findMuddiesOpen, setFindMuddiesOpen] = useState(
+    () => searchParams.get("find") === "contacts"
+  );
+
+  /**
+   * Puts the cursor in the Muddies search field.
+   *
+   * Deferred by one frame on purpose. The sheet is a Radix dialog, and closing
+   * one restores focus to whatever opened it -- so focusing synchronously would
+   * be immediately undone, which looks exactly like the button doing nothing.
+   * Waiting until after that restore means the field genuinely receives focus,
+   * and on a phone the keyboard comes up with it.
+   */
+  const focusMuddiesSearch = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const field = searchInputRef.current;
+      if (!field) return;
+      field.focus();
+      // Scrolled into view for the case where the page was scrolled down to a
+      // Muddy further along the list.
+      field.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }, []);
+
+  // Seeded from the server decision, then cleared locally once acted on, so
+  // the card disappears immediately rather than after a round trip.
+  const [reminderKind, setReminderKind] = useState<ContactReminderKind | null>(contactReminderKind);
   const [users, setUsers] = useState<UserSummary[]>(initialUsers);
   const [proximityByFriendId, setProximityByFriendId] = useState<Record<string, ProximityInfo>>({});
   const [circles, setCircles] = useState<Circle[]>(() => [
@@ -785,6 +835,7 @@ export function FriendsPageContent({
             <div className="muddies-search">
               <Search className="muddies-search-icon h-[18px] w-[18px]" aria-hidden="true" />
               <input
+                ref={searchInputRef}
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -803,6 +854,26 @@ export function FriendsPageContent({
               <SlidersHorizontal className="h-[18px] w-[18px]" aria-hidden="true" />
             </button>
           </div>
+
+          {/* The reminder takes the place of the entry card while it shows:
+              two versions of the same offer on one screen is clutter, and the
+              card already carries the action. */}
+          {reminderKind ? (
+            <ContactReminderCard
+              kind={reminderKind}
+              onOpenSetup={() => {
+                setReminderKind(null);
+                // TWO DESTINATIONS, because the two variants are missing
+                // different things. Someone without a number sent into Find
+                // Your Muddies would be offered a contact check that cannot
+                // make them findable -- so that card goes to the screen where
+                // a number is added, and the contact card opens the sheet.
+                if (reminderKind === "add_phone") router.push("/settings/contact-discovery");
+                else setFindMuddiesOpen(true);
+              }}
+              onResolved={() => setReminderKind(null)}
+            />
+          ) : null}
 
           {/* Contact discovery, offered ONCE and quietly.
               An additional way to find people, not a replacement for search --
@@ -1174,7 +1245,11 @@ export function FriendsPageContent({
       {/* Lazy: the sheet and its capability layer are not part of the initial
           Muddies bundle, since most visits never open it. */}
       {findMuddiesOpen ? (
-        <LazyFindMuddiesSheet open onClose={() => setFindMuddiesOpen(false)} />
+        <LazyFindMuddiesSheet
+          open
+          onClose={() => setFindMuddiesOpen(false)}
+          onSearchMuddies={focusMuddiesSearch}
+        />
       ) : null}
 
       <MuddyProfileModal
