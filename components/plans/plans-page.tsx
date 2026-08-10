@@ -1,5 +1,6 @@
 "use client";
 
+import type { PlanStatus } from "@/lib/supabase/database.types";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   CalendarDays,
@@ -30,6 +31,7 @@ import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import { isPastPlan } from "@/lib/social/plans";
 import type { PlanCategory, SubscriptionPlan } from "@/lib/supabase/database.types";
 import { PLAN_CATEGORIES, planCategoryLabel } from "@/lib/plans/plan-covers";
 import { PlanCover } from "@/components/plans/plan-cover";
@@ -52,7 +54,12 @@ export type PlanSummary = {
   title: string;
   description: string | null;
   planType: string;
-  status: string;
+  /**
+   * The canonical status union, not a loose string. isPastPlan and the bucket
+   * rules branch on specific values, so a plain `string` let an unhandled
+   * status reach them and be silently mis-bucketed.
+   */
+  status: PlanStatus;
   startAt: string | null;
   placeText: string | null;
   /** Cover inputs, resolved by lib/plans/plan-covers. */
@@ -78,7 +85,7 @@ const bucketTabs: Array<{ id: PlanBucket; label: string }> = [
 const TERMINAL = new Set(["cancelled", "completed", "expired"]);
 
 function bucketFor(plan: PlanSummary): PlanBucket {
-  if (TERMINAL.has(plan.status)) return "past";
+  if (isPastPlan(plan.status, plan.startAt)) return "past";
   if (plan.isHost) return "hosting";
   if (plan.myRsvp === "invited" || plan.myRsvp === "viewed") return "invites";
   return "upcoming";

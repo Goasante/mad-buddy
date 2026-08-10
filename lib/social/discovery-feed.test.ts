@@ -43,6 +43,7 @@ const person = (overrides: Partial<SocializePerson> = {}): SocializePerson => ({
   username: "ama",
   avatarUrl: null,
   trustedSince: null,
+  isVerifiedAccount: false,
   activity: "anything",
   note: null,
   proximityTier: "near",

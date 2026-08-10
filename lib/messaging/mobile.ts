@@ -18,7 +18,7 @@ import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import type { ConversationRole, QuickActionType, SubscriptionPlan } from "@/lib/supabase/database.types";
-import { sumUnreadConversationCounts } from "@/lib/messaging/unread-count";
+import { hasVerifiedAccountStatus, type VerificationRow } from "@/lib/trust/verified-account";
 
 /**
  * Transport-agnostic messaging read/send logic. Takes an already-authenticated
@@ -60,6 +60,8 @@ export type ChatMessageView = {
    * across the product. Merging any two would make one imply the others.
    */
   senderTrustedSince: string | null;
+  /** Server-authoritative identity verification. Separate from plan and Trusted Member. */
+  senderIsVerifiedAccount: boolean;
   /** Deleted, deactivated or otherwise unavailable — never says which. */
   senderUnavailable: boolean;
   /** Group role, for the subtle Owner/Admin indicator. Null in direct chats. */
@@ -100,6 +102,8 @@ export type ConversationView = {
    * a group has no single "other person", and its senders carry their own.
    */
   otherTrustedSince: string | null;
+  /** Server-authoritative identity verification. Separate from plan and Trusted Member. */
+  otherIsVerifiedAccount: boolean;
 };
 
 export type MessageableFriend = {
@@ -336,10 +340,9 @@ async function notifyOtherMembers(admin: Admin, conversationId: string, senderId
         userId: member.user_id,
         senderId,
         priority: "high",
-        // Chat unread state belongs to Messages. Keep private push delivery,
-        // but do not create a duplicate Pulse row or increment its bell badge.
-        persistInApp: false,
-        type: isGroup ? `group_message:${conversationId}` : `message:${conversationId}`,
+        // `group:<id>` resolves to /groups/<id> — the exact thread. The
+        // resolver already supported this; nothing was emitting it.
+        type: isGroup ? `group:${conversationId}` : `message:${conversationId}`,
         // The group name is context, never content: it is appended to the
         // TITLE, so a recipient whose preview preference hides message text
         // still sees who and where, and never what.
@@ -393,6 +396,37 @@ export async function listMessageableFriends(userId: string): Promise<Messageabl
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
+/**
+ * Total unread messages across every conversation, for the app badge.
+ *
+ * Reads the SAME conversation_previews RPC that listConversations uses, so the
+ * badge and the inbox can never disagree about what is unread. It deliberately
+ * does not build the full conversation views -- the badge needs one number,
+ * not every title, avatar, plan and verification state.
+ */
+export async function getUnreadMessageCount(userId: string): Promise<number> {
+  const env = getSupabaseServerEnv();
+  if (!env.url || !env.serviceRoleKey) return 0;
+
+  const admin = createSupabaseAdminClient();
+
+  const { data: memberships } = await admin
+    .from("conversation_members")
+    .select("conversation_id")
+    .eq("user_id", userId)
+    .is("left_at", null);
+
+  const conversationIds = (memberships ?? []).map((row) => row.conversation_id);
+  if (conversationIds.length === 0) return 0;
+
+  const { data: previews } = await admin.rpc("conversation_previews", {
+    p_user_id: userId,
+    p_conversation_ids: conversationIds
+  });
+
+  return (previews ?? []).reduce((total, row) => total + (row.unread_count ?? 0), 0);
+}
+
 export async function listConversations(userId: string): Promise<ConversationView[]> {
   if (!hasServiceRoleEnv()) return [];
 
@@ -433,10 +467,22 @@ export async function listConversations(userId: string): Promise<ConversationVie
     .filter((conversation) => conversation.conversation_type !== "direct")
     .map((conversation) => conversation.id);
 
-  const [{ data: pins }, { data: otherProfiles }, { data: groupSettings }, { data: previews }, plans] = await Promise.all([
+  const [
+    { data: pins },
+    { data: otherProfiles },
+    { data: verifications },
+    { data: groupSettings },
+    { data: previews },
+    plans
+  ] = await Promise.all([
     admin.from("conversation_pins").select("conversation_id").eq("user_id", userId).in("conversation_id", conversationIds),
     otherIds.length > 0
       ? admin.from("profiles").select("user_id, full_name, username, avatar_url, trusted_member_since").in("user_id", otherIds)
+      : Promise.resolve({ data: [] }),
+    // Verification state for the DM partners, in the SAME batch as their
+    // profiles. One query for the page, never one per conversation row.
+    otherIds.length > 0
+      ? admin.from("account_verifications").select("user_id, status").in("user_id", otherIds)
       : Promise.resolve({ data: [] }),
     groupConversationIds.length > 0
       ? admin.from("group_settings").select("conversation_id, name").in("conversation_id", groupConversationIds)
@@ -447,6 +493,14 @@ export async function listConversations(userId: string): Promise<ConversationVie
 
   const pinnedIds = new Set((pins ?? []).map((row) => row.conversation_id));
   const profileByUserId = new Map((otherProfiles ?? []).map((profile) => [profile.user_id, profile]));
+  // Grouped per user: a person may hold more than one verification row, and
+  // hasVerifiedAccountStatus decides which states count as verified.
+  const verificationByUserId = new Map<string, VerificationRow[]>();
+  for (const row of verifications ?? []) {
+    const existing = verificationByUserId.get(row.user_id) ?? [];
+    existing.push(row as VerificationRow);
+    verificationByUserId.set(row.user_id, existing);
+  }
   const groupNameByConversation = new Map((groupSettings ?? []).map((row) => [row.conversation_id, row.name]));
   const previewByConversation = new Map((previews ?? []).map((row) => [row.conversation_id, row]));
   const nowIso = new Date().toISOString();
@@ -497,34 +551,15 @@ export async function listConversations(userId: string): Promise<ConversationVie
       otherTrustedSince:
         conversation.conversation_type === "direct"
           ? profileByUserId.get(otherIdByConversation.get(conversation.id) ?? "")?.trusted_member_since ?? null
-          : null
+          : null,
+      otherIsVerifiedAccount:
+        conversation.conversation_type === "direct"
+          ? hasVerifiedAccountStatus(verificationByUserId.get(otherIdByConversation.get(conversation.id) ?? "") ?? [])
+          : false
     });
   }
 
   return views;
-}
-
-/**
- * Lightweight app-chrome projection. It deliberately avoids profile, plan,
- * pin, avatar, and media work performed by the full conversation list.
- */
-export async function getUnreadMessageCount(userId: string): Promise<number> {
-  if (!hasServiceRoleEnv()) return 0;
-
-  const admin = createSupabaseAdminClient();
-  const { data: memberships } = await admin
-    .from("conversation_members")
-    .select("conversation_id")
-    .eq("user_id", userId)
-    .eq("status", "joined");
-  const conversationIds = (memberships ?? []).map((row) => row.conversation_id);
-  if (conversationIds.length === 0) return 0;
-
-  const { data: previews } = await admin.rpc("conversation_previews", {
-    p_user_id: userId,
-    p_conversation_ids: conversationIds
-  });
-  return sumUnreadConversationCounts(previews ?? []);
 }
 
 export async function listMessages(userId: string, conversationId: string): Promise<ChatMessageView[]> {
@@ -573,14 +608,14 @@ export async function listMessages(userId: string, conversationId: string): Prom
   const senderIds = [...new Set(rows.map((row) => row.sender_id).filter((id): id is string => Boolean(id)))];
   const senderById = new Map<
     string,
-    { name: string; avatarUrl: string | null; username: string | null; trustedSince: string | null }
+    { name: string; avatarUrl: string | null; username: string | null; trustedSince: string | null; isVerifiedAccount: boolean }
   >();
   let plansBySender = new Map<string, SubscriptionPlan>();
   // Group role per sender, for the subtle Owner/Admin indicator. Batched with
   // the profile read, so it costs one more query per PAGE, never per message.
   const roleBySender = new Map<string, ConversationRole>();
   if (senderIds.length > 0) {
-    const [{ data: profiles }, plans, { data: roleRows }] = await Promise.all([
+    const [{ data: profiles }, plans, { data: roleRows }, { data: verificationRows }] = await Promise.all([
       admin
         .from("profiles")
         .select("user_id, full_name, avatar_url, username, trusted_member_since")
@@ -590,15 +625,25 @@ export async function listMessages(userId: string, conversationId: string): Prom
         .from("conversation_members")
         .select("user_id, role")
         .eq("conversation_id", conversationId)
+        .in("user_id", senderIds),
+      admin
+        .from("account_verifications")
+        .select("user_id, status")
         .in("user_id", senderIds)
     ]);
     for (const row of roleRows ?? []) roleBySender.set(row.user_id, row.role);
+    const verificationBySenderId = new Map<string, boolean>();
+    for (const row of verificationRows ?? []) {
+      const current = verificationBySenderId.get(row.user_id) ?? false;
+      verificationBySenderId.set(row.user_id, current || row.status === "verified");
+    }
     for (const profile of profiles ?? []) {
       senderById.set(profile.user_id, {
         name: profile.full_name?.trim() || "A Muddy",
         avatarUrl: profile.avatar_url ?? null,
         username: profile.username ?? null,
-        trustedSince: profile.trusted_member_since ?? null
+        trustedSince: profile.trusted_member_since ?? null,
+        isVerifiedAccount: verificationBySenderId.get(profile.user_id) ?? false
       });
     }
     plansBySender = plans;
@@ -630,6 +675,7 @@ export async function listMessages(userId: string, conversationId: string): Prom
       senderUsername: row.sender_id ? senderById.get(row.sender_id)?.username ?? null : null,
       senderPlan: row.sender_id ? plansBySender.get(row.sender_id) ?? null : null,
       senderTrustedSince: row.sender_id ? senderById.get(row.sender_id)?.trustedSince ?? null : null,
+      senderIsVerifiedAccount: row.sender_id ? senderById.get(row.sender_id)?.isVerifiedAccount ?? false : false,
       /**
        * ONE fallback for every "we cannot show this person" case.
        *

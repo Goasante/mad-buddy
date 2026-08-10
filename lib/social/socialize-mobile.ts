@@ -19,6 +19,7 @@ import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { isSocializeEnabled } from "@/lib/features/feature-flags";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
+import { hasVerifiedAccountStatus } from "@/lib/trust/verified-account";
 
 /**
  * Transport-agnostic Socialize logic. Takes an already-authenticated `userId`;
@@ -52,6 +53,8 @@ export type SocializePerson = {
    * Member are separate signals and stay separate fields.
    */
   trustedSince: string | null;
+  /** Server-authoritative identity verification. Never inferred from plan or tenure. */
+  isVerifiedAccount: boolean;
   activity: SocializeActivity;
   note: string | null;
   proximityTier: Extract<ProximityLevel, "close" | "near" | "far">;
@@ -292,6 +295,7 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
       { data: friendships },
       { data: locations },
       { data: profiles },
+      { data: verificationRows },
       { data: passes }
     ] = await Promise.all([
       admin.from("blocked_users").select("blocker_id, blocked_id").or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`),
@@ -307,6 +311,10 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
       admin
         .from("profiles")
         .select("user_id, full_name, username, avatar_url, visibility_status, trusted_member_since")
+        .in("user_id", candidateIds),
+      admin
+        .from("account_verifications")
+        .select("user_id, status")
         .in("user_id", candidateIds),
       // People this viewer passed on in the deck. Filtered by expires_at
       // rather than trusting a cleanup job: an expired pass stops applying
@@ -330,6 +338,11 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
     const profileByUserId = new Map(
       ((profiles ?? []) as NearbyProfileRow[]).map((profile) => [profile.user_id, profile])
     );
+    const verificationByUserId = new Map<string, boolean>();
+    for (const row of verificationRows ?? []) {
+      const current = verificationByUserId.get(row.user_id) ?? false;
+      verificationByUserId.set(row.user_id, current || row.status === "verified");
+    }
     const sessionByUserId = new Map(sessions.map((session) => [session.user_id, session]));
 
     // A pass is a private feed preference, so it excludes exactly like a block
@@ -409,6 +422,7 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
         trustedSince:
           (profileByUserId.get(candidate.friend_id) as { trusted_member_since?: string | null } | undefined)
             ?.trusted_member_since ?? null,
+        isVerifiedAccount: verificationByUserId.get(candidate.friend_id) ?? false,
         username: candidate.username,
         avatarUrl: candidate.avatar_url,
         activity: session.activity as SocializeActivity,

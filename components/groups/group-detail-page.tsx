@@ -22,6 +22,7 @@ import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { startsNewDay, startsNewRun } from "@/lib/messaging/conversation-presence";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -399,6 +400,7 @@ export function GroupDetailPage({
                               group. Icon-only here so a name, a badge, a mark
                               and a role still fit one line on a phone. */}
                           <TrustedMemberMark trustedSince={message.senderTrustedSince} compact />
+                          <VerifiedAccountMark isVerifiedAccount={message.senderIsVerifiedAccount} compact />
                           {/* Role indicator, deliberately the quietest thing
                               on the line: plain text, muted, no colour and no
                               pill, so it never competes with the name or with

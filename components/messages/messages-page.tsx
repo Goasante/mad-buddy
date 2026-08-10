@@ -22,6 +22,7 @@ import {
 import type { ChatMessageView, ConversationView, MessageableFriend } from "@/lib/messaging/mobile";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -741,6 +742,8 @@ export function MessagesPageContent({
                             <span className="truncate text-sm font-semibold">{conversation.title}</span>
                             <PremiumPlanBadge plan={conversation.otherPlan} compact />
                             <TrustedMemberMark trustedSince={conversation.otherTrustedSince} compact />
+          <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact />
+                            <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact />
                             {conversation.pinned ? (
                               <Star className="h-3 w-3 shrink-0 fill-primary text-primary" aria-label="Pinned" />
                             ) : null}

@@ -87,6 +87,8 @@ export type UserSummary = {
   plan: SubscriptionPlan;
   /** Trusted Member approval, or null. Resolved with the profile, never per card. */
   trustedSince?: string | null;
+  /** Server-authoritative identity verification. Never inferred from plan or tenure. */
+  isVerifiedAccount?: boolean;
 };
 
 type ProximityInfo = {

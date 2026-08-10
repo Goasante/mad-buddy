@@ -40,6 +40,7 @@ function conversation(overrides: Partial<ConversationView> = {}): ConversationVi
     contextBadge: null,
     otherPlan: null,
   otherTrustedSince: null,
+  otherIsVerifiedAccount: false,
     ...overrides
   };
 }

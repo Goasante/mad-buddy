@@ -45,6 +45,8 @@ export type MuddyProfileData = {
   plan: SubscriptionPlan;
   /** Trusted Member approval, or null. Never an identity check. */
   trustedSince?: string | null;
+  /** Server-authoritative identity verification. Never inferred from plan or tenure. */
+  isVerifiedAccount?: boolean;
 };
 
 export function MuddyProfilePage({

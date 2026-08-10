@@ -11,6 +11,7 @@ import { loadEffectivePlan } from "@/lib/billing/service";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { loadProfileIdentitySummary } from "@/lib/profile/identity-service";
 import type { ProfileIdentitySummary } from "@/lib/profile/identity";
+import { hasVerifiedAccountStatus, type VerificationRow } from "@/lib/trust/verified-account";
 
 /**
  * A viewer-safe public profile card (name, username, avatar, bio, mood) plus
@@ -36,6 +37,8 @@ export type PublicProfile = {
   photos: ProfilePhoto[];
   /** Trusted Member approval, or null. Never implies an identity check. */
   trustedSince: string | null;
+  /** Server-authoritative identity verification state. Separate from Premium and Trusted Member. */
+  isVerifiedAccount: boolean;
   age: number | null;
   zodiacSign: string | null;
   birthdayToday: boolean;
@@ -68,8 +71,19 @@ export async function getPublicProfile(viewerId: string, targetId: string): Prom
     .maybeSingle();
   if (!profile || profile.deleted_at) return null;
 
+  // Computed BEFORE the batch below, not inside it. A value declared by a
+  // destructuring assignment cannot be read by the expressions producing that
+  // same assignment, so `isSelf` has to exist first for the friendship read to
+  // branch on it.
   const isSelf = viewerId === targetId;
-  const [isMuddy, relationship, plan] = await Promise.all([
+
+  const [verificationRows, isMuddy, relationship, plan] = await Promise.all([
+    admin
+      .from("account_verifications")
+      .select("status")
+      .eq("user_id", targetId)
+      .maybeSingle()
+      .then((result) => (result.data ? [result.data as VerificationRow] : [])),
     isSelf ? Promise.resolve(false) : areApprovedMuddies(admin, viewerId, targetId),
     resolveViewerRelationship(admin, viewerId, targetId),
     loadEffectivePlan(admin, targetId)
@@ -113,6 +127,7 @@ export async function getPublicProfile(viewerId: string, targetId: string): Prom
      * Never inferred from plan or tenure: those are separate signals, and
      * conflating them is what "Verified" would have implied.
      */
-    trustedSince: profile.trusted_member_since ?? null
+    trustedSince: profile.trusted_member_since ?? null,
+    isVerifiedAccount: hasVerifiedAccountStatus(verificationRows)
   };
 }
