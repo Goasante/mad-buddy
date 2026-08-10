@@ -63,6 +63,15 @@ describe("the gesture is never gated on the network", () => {
     expect(deck).toContain("disabled={!top || Boolean(exiting)}");
   });
 
+  it("frees BOTH decision buttons, not just one", () => {
+    // Pass was freed and wave was left behind, so on a slow connection one
+    // half of the row went dead while the other stayed live -- which reads as
+    // the wave button being broken rather than as the deck waiting.
+    expect(deck).toContain("disabled={!top || Boolean(exiting) || !canWave(top)}");
+    const actions = deck.slice(deck.indexOf("linkr-deck-action-pass"));
+    expect(actions).not.toContain("!top || pending");
+  });
+
   it("still blocks a card that is mid-flight", () => {
     // 260ms of local animation, not an unbounded wait.
     expect(deck).toContain("if (!top || exiting) return;");
@@ -170,11 +179,21 @@ describe("a completed swipe leaves no state behind", () => {
   });
 
   it("produces exactly one decision per gesture", () => {
-    // Only pointerup and pointercancel end a drag, and both route through
-    // endDrag; there is no transitionend path that could advance again.
+    // Only pointerup resolves a decision. There is no transitionend path that
+    // could advance again, and cancel has its own handler (below).
     expect(deck).not.toContain("onTransitionEnd");
     expect(deck).toContain("onPointerUp={isTop ? endDrag : undefined}");
-    expect(deck).toContain("onPointerCancel={isTop ? endDrag : undefined}");
+  });
+
+  it("never turns a cancelled pointer into a decision", () => {
+    // THE SECOND BUG. pointercancel ran the same path as pointerup, so a
+    // gesture the browser or the OS took away -- a scroll taking over, a call
+    // arriving -- resolved as a real swipe. It must only put the card back.
+    expect(deck).toContain("onPointerCancel={isTop ? cancelDrag : undefined}");
+    const cancel = deck.slice(deck.indexOf("function cancelDrag"), deck.indexOf("function endDrag"));
+    expect(cancel).toContain("setDrag(NO_DRAG)");
+    expect(cancel).not.toContain("resolveSwipe");
+    expect(cancel).not.toContain("commit(");
   });
 });
 
@@ -222,16 +241,34 @@ describe("only the top card is interactive", () => {
   });
 
   it("handles a cancelled gesture by restoring the card", () => {
-    // A cancel must not leave the deck locked; endDrag is the same path.
-    expect(deck).toContain("onPointerCancel={isTop ? endDrag : undefined}");
-    const end = deck.slice(deck.indexOf("function endDrag"));
-    expect(end.slice(0, 700)).toContain("setDrag(NO_DRAG)");
+    // A cancel must not leave the deck locked -- and must not resolve a
+    // decision either, which is why it no longer shares endDrag's path.
+    expect(deck).toContain("onPointerCancel={isTop ? cancelDrag : undefined}");
+    const cancel = deck.slice(deck.indexOf("function cancelDrag"), deck.indexOf("function endDrag"));
+    expect(cancel).toContain("setDrag(NO_DRAG)");
+    expect(cancel).toContain("pointerRef.current = null");
+    // And it releases capture, or the next gesture starts already captured.
+    expect(cancel).toContain("releasePointerCapture(event.pointerId)");
   });
 
   it("leaves vertical scrolling to the page", () => {
     const css = read("app/globals.css");
     const rule = css.slice(css.indexOf(".linkr-deck {"));
     expect(rule.slice(0, rule.indexOf("}"))).toContain("touch-action: pan-y");
+  });
+
+  it("declares touch-action on the CARD, not only the deck around it", () => {
+    // THE BUG THAT MADE CARDS FALL BACK TO THE MIDDLE, first swipe included.
+    //
+    // touch-action is resolved on the element the touch actually lands on,
+    // and that is the card. The card carries preserve-3d and
+    // will-change: transform, so it sits on its own compositor layer and does
+    // not answer for the container's declaration. Defaulting to `auto`, the
+    // browser claimed the horizontal pan for scrolling, fired pointercancel
+    // mid-drag, and the card sprang back however far it had been dragged.
+    const css = read("app/globals.css");
+    const card = css.slice(css.indexOf(".linkr-deck-card {"));
+    expect(card.slice(0, card.indexOf("}"))).toContain("touch-action: pan-y");
   });
 });
 

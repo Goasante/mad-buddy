@@ -2106,6 +2106,14 @@ select {
   box-shadow:
     0 0 0 1px hsl(var(--primary) / 0.05),
     0 18px 44px -24px hsl(var(--shadow) / 0.75);
+  /* THE CARD DECLARES THIS TOO, not just the deck around it.
+     touch-action is resolved on the element the touch actually lands on, and
+     that is this card -- it has its own compositor layer (preserve-3d plus
+     will-change: transform), so it does not answer for the container's
+     declaration. Without it the card defaults to `auto`, the browser claims
+     the horizontal pan for scrolling, fires pointercancel mid-drag, and the
+     card springs back to the middle no matter how far it was dragged. */
+  touch-action: pan-y;
   /* Pivot from the lower centre, so a drag reads as the card tipping in the
      hand rather than spinning about its middle. */
   transform-origin: center bottom;

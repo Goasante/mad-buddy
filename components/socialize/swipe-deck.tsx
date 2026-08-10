@@ -210,6 +210,32 @@ export function SwipeDeck({
     }
   }
 
+  /**
+   * The pointer was taken away mid-gesture.
+   *
+   * NEVER RESOLVES A DECISION. A cancel is the browser or the OS saying the
+   * gesture is no longer the user's -- a scroll took it over, a phone call
+   * arrived, the tab lost the pointer. Reading a decision out of that would
+   * wave at somebody because a notification interrupted a scroll, so this only
+   * puts the card back.
+   *
+   * It shares no code with endDrag on purpose: they looked identical when both
+   * were pointerup, which is exactly how a cancel came to be treated as a
+   * completed swipe.
+   */
+  function cancelDrag(event: React.PointerEvent) {
+    pointerRef.current = null;
+    pendingRef.current = null;
+    if (frameRef.current !== null) {
+      window.cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    if (cardRef.current?.hasPointerCapture(event.pointerId)) {
+      cardRef.current.releasePointerCapture(event.pointerId);
+    }
+    setDrag(NO_DRAG);
+  }
+
   function endDrag(event: React.PointerEvent) {
     const start = pointerRef.current;
     pointerRef.current = null;
@@ -345,7 +371,7 @@ export function SwipeDeck({
                 onPointerDown={isTop ? handlePointerDown : undefined}
                 onPointerMove={isTop ? handlePointerMove : undefined}
                 onPointerUp={isTop ? endDrag : undefined}
-                onPointerCancel={isTop ? endDrag : undefined}
+                onPointerCancel={isTop ? cancelDrag : undefined}
               >
                 <PersonFace person={person} interactive={isTop} />
 
@@ -422,7 +448,12 @@ export function SwipeDeck({
             direction === "right" && "linkr-deck-action-armed"
           )}
           style={{ "--linkr-arm": direction === "right" ? progress : 0 } as CSSProperties}
-          disabled={!top || pending || !canWave(top)}
+          // Freed from `pending` alongside pass. Leaving it here meant the two
+          // halves of the same row disagreed: on a slow connection pass stayed
+          // live while wave went dead, which reads as the wave button being
+          // broken rather than as the deck waiting. `canWave` stays -- that is
+          // about this person, not about the network.
+          disabled={!top || Boolean(exiting) || !canWave(top)}
           onClick={() => top && commit(top, "wave")}
           aria-label={
             top
