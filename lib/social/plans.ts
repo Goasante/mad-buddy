@@ -119,6 +119,13 @@ export function isTerminalPlanStatus(status: PlanStatus): boolean {
   return status === "cancelled" || status === "completed" || status === "expired";
 }
 
+/** A plan is past once its status is terminal or its start time has passed. */
+export function isPastPlan(status: PlanStatus, startAt: string | null, nowMs = Date.now()): boolean {
+  if (isTerminalPlanStatus(status)) return true;
+  if (!startAt) return false;
+  return Date.parse(startAt) <= nowMs;
+}
+
 // ---------------------------------------------------------------------------
 // RSVP (spec §8, §22, §23, §30)
 // ---------------------------------------------------------------------------

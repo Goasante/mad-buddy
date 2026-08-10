@@ -549,10 +549,21 @@ export async function loadGroupDetailAction(groupId: string): Promise<GroupDetai
         .select("user_id, full_name, username, avatar_url, trusted_member_since")
         .in("user_id", memberIds)
     : { data: [] };
+  const { data: verificationRows } = memberIds.length
+    ? await admin
+        .from("account_verifications")
+        .select("user_id, status")
+        .in("user_id", memberIds)
+    : { data: [] };
   const memberPlans = memberIds.length
     ? await loadEffectivePlansForUsers(admin, memberIds)
     : new Map<string, SubscriptionPlan>();
   const profileById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
+  const verificationByUserId = new Map<string, boolean>();
+  for (const row of verificationRows ?? []) {
+    const current = verificationByUserId.get(row.user_id) ?? false;
+    verificationByUserId.set(row.user_id, current || row.status === "verified");
+  }
   const members: GroupMemberView[] = (memberRows ?? []).map((row) => {
     const profile = profileById.get(row.user_id);
     return {
@@ -563,6 +574,7 @@ export async function loadGroupDetailAction(groupId: string): Promise<GroupDetai
       role: row.role,
       plan: memberPlans.get(row.user_id) ?? null,
       trustedSince: profile?.trusted_member_since ?? null,
+      isVerifiedAccount: verificationByUserId.get(row.user_id) ?? false,
       status: row.status
     };
   });
