@@ -27,8 +27,18 @@ describe("soonest first, always", () => {
     expect(loader).toContain('.order("start_at", { ascending: true })');
   });
 
-  it("shows only plans that have not already started", () => {
-    expect(loader).toContain('.gte("start_at", nowIso)');
+  it("shows only plans that are genuinely still upcoming", () => {
+    // Re-anchored on the guarantee rather than the old SQL literal. The
+    // filter used to be `.gte("start_at", nowIso)` alone, which dropped a
+    // plan from Home the moment it began even when it ran for hours. The
+    // query now casts wider -- start OR end still ahead -- and the canonical
+    // helper makes the actual decision, so Home and the Plans page cannot
+    // disagree about the same plan.
+    expect(loader).toContain("isUpcomingPlan(");
+    expect(loader).toContain('from "@/lib/social/plans"');
+    // Undated plans still never reach Home; they live under "Waiting on a
+    // time" on the Plans page until they are given one.
+    expect(loader).toContain('.not("start_at", "is", null)');
   });
 
   it("never reorders the array it was given", () => {

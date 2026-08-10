@@ -1,8 +1,9 @@
 import "server-only";
 
+import { isUpcomingPlan } from "@/lib/social/plans";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import type { PlanCategory } from "@/lib/supabase/database.types";
+import type { PlanCategory, PlanStatus } from "@/lib/supabase/database.types";
 
 /**
  * The Home "Upcoming plans" read model. Mirrors the Plans page's membership
@@ -55,7 +56,10 @@ export async function loadUpcomingPlans(userId: string, limit = 3): Promise<Upco
   if (!env.url || !env.serviceRoleKey) return { plans: [], hasMore: false };
 
   const admin = createSupabaseAdminClient();
-  const nowIso = new Date().toISOString();
+  // One instant for the SQL filter and the helper re-check alike, so a slow
+  // query cannot leave the two judging the same plan against different clocks.
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
 
   const [{ data: myRows }, { data: createdRows }] = await Promise.all([
     admin
@@ -74,17 +78,32 @@ export async function loadUpcomingPlans(userId: string, limit = 3): Promise<Upco
   const myRowByPlan = new Map((myRows ?? []).map((row) => [row.plan_id, row]));
 
   // Fetch one extra so "View all" can be decided without a second count query.
+  //
+  // FILTERED IN SQL, then re-checked against the canonical helper below.
+  // The SQL is what keeps this a bounded, indexed read rather than pulling
+  // every plan the user has ever touched; the re-check is what guarantees this
+  // surface and the Plans page can never disagree about the same plan.
+  //
+  // `end_at` is selected because planPhase honours it: a plan running 7-11pm
+  // is still upcoming at 8, and the start-only filter below would have dropped
+  // it from Home the moment it began.
   const { data: planRows } = await admin
     .from("plans")
-    .select("id, creator_id, title, start_at, status, custom_place_text, category, cover_image_url")
+    .select("id, creator_id, title, start_at, end_at, status, custom_place_text, category, cover_image_url")
     .in("id", planIds)
     .in("status", [...ACTIVE_STATUSES])
+    // Undated plans never reach Home. They live under "Waiting on a time" on
+    // the Plans page until they are given one.
     .not("start_at", "is", null)
-    .gte("start_at", nowIso)
+    // Wide enough to include a plan that has started but not yet ended; the
+    // helper decides which of those actually still count.
+    .or(`start_at.gte.${nowIso},end_at.gte.${nowIso}`)
     .order("start_at", { ascending: true })
     .limit(limit + 1);
 
-  const rows = planRows ?? [];
+  const rows = (planRows ?? []).filter((plan) =>
+    isUpcomingPlan({ status: plan.status as PlanStatus, startAt: plan.start_at, endAt: plan.end_at }, nowMs)
+  );
   const shown = rows.slice(0, limit);
   if (shown.length === 0) return { plans: [], hasMore: false };
 

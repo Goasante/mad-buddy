@@ -45,6 +45,10 @@ export type PlanListItem = {
   planType: string;
   status: string;
   startAt: string | null;
+  /** Honoured by planPhase, so a plan stays upcoming until it actually ends. */
+  endAt: string | null;
+  /** Anchors the grace window for an undated plan. */
+  createdAt: string | null;
   placeText: string | null;
   organiserName: string;
   organiserPlan: SubscriptionPlan;
@@ -147,7 +151,11 @@ export async function listPlansForUser(
     admin
       .from("plans")
       .select(
-        "id, creator_id, title, description, plan_type, status, start_at, custom_place_text, category, cover_image_url"
+        // end_at and created_at feed the canonical lifecycle helper: end_at so
+        // a plan running 7-11pm stays upcoming at 8, created_at so an undated
+        // plan's grace window can be measured. Both were written but never
+        // read back, which is why the client could not tell either apart.
+        "id, creator_id, title, description, plan_type, status, start_at, end_at, created_at, custom_place_text, category, cover_image_url"
       )
       .in("id", planIds),
     admin.from("plan_participants").select("plan_id, user_id, role, rsvp_status").in("plan_id", planIds)
@@ -185,6 +193,8 @@ export async function listPlansForUser(
       planType: plan.plan_type,
       status: plan.status,
       startAt: plan.start_at,
+      endAt: plan.end_at ?? null,
+      createdAt: plan.created_at ?? null,
       placeText: plan.custom_place_text,
       // Cover inputs for the canonical resolver (lib/plans/plan-covers).
       category: plan.category ?? null,

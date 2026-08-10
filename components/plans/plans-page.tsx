@@ -1,6 +1,5 @@
 "use client";
 
-import type { PlanStatus } from "@/lib/supabase/database.types";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   CalendarDays,
@@ -31,8 +30,8 @@ import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
-import { isPastPlan } from "@/lib/social/plans";
-import type { PlanCategory, SubscriptionPlan } from "@/lib/supabase/database.types";
+import { isArchivedUnscheduledPlan, planPhase } from "@/lib/social/plans";
+import type { PlanCategory, PlanStatus, SubscriptionPlan } from "@/lib/supabase/database.types";
 import { PLAN_CATEGORIES, planCategoryLabel } from "@/lib/plans/plan-covers";
 import { PlanCover } from "@/components/plans/plan-cover";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
@@ -55,12 +54,16 @@ export type PlanSummary = {
   description: string | null;
   planType: string;
   /**
-   * The canonical status union, not a loose string. isPastPlan and the bucket
-   * rules branch on specific values, so a plain `string` let an unhandled
-   * status reach them and be silently mis-bucketed.
+   * The canonical status union, not a loose string. planPhase branches on
+   * specific values, and a plain `string` lets an unhandled status reach it
+   * and be silently mis-bucketed.
    */
   status: PlanStatus;
   startAt: string | null;
+  /** Honoured by planPhase, so a plan stays upcoming until it actually ends. */
+  endAt: string | null;
+  /** Anchors the grace window for an undated plan. */
+  createdAt: string | null;
   placeText: string | null;
   /** Cover inputs, resolved by lib/plans/plan-covers. */
   category: PlanCategory | null;
@@ -73,26 +76,50 @@ export type PlanSummary = {
   polls: PlanPollSummary[];
 };
 
-type PlanBucket = "upcoming" | "invites" | "hosting" | "past";
+type PlanBucket = "upcoming" | "invites" | "hosting" | "unscheduled" | "past";
 
 const bucketTabs: Array<{ id: PlanBucket; label: string }> = [
   { id: "upcoming", label: "Upcoming" },
   { id: "invites", label: "Invitations" },
   { id: "hosting", label: "Created by you" },
+  { id: "unscheduled", label: "No date yet" },
   { id: "past", label: "Past" }
 ];
 
 const TERMINAL = new Set(["cancelled", "completed", "expired"]);
 
+/**
+ * Which tab a plan belongs to.
+ *
+ * PHASE FIRST, ROLE SECOND, and that order is the fix. This used to ask
+ * `isPastPlan` and then fall through to role, so a plan with no date -- which
+ * the old helper could never call past -- landed in Upcoming, Invitations or
+ * Created by you and stayed there indefinitely. Nine of them were doing
+ * exactly that in production.
+ *
+ * Every branch below reads planPhase, so this file no longer decides anything
+ * about time for itself.
+ */
 function bucketFor(plan: PlanSummary): PlanBucket {
-  if (isPastPlan(plan.status, plan.startAt)) return "past";
+  const phase = planPhase(plan);
+  if (phase === "past") return "past";
+  // Undated: its own home, whether or not the grace window has run out. The
+  // archived ones are still reachable here rather than disappearing, which is
+  // the difference between setting a plan aside and losing it.
+  if (phase === "unscheduled" || phase === "archived_unscheduled") return "unscheduled";
   if (plan.isHost) return "hosting";
   if (plan.myRsvp === "invited" || plan.myRsvp === "viewed") return "invites";
   return "upcoming";
 }
 
 function dateLabel(plan: PlanSummary): string {
-  if (!plan.startAt) return plan.planType === "poll" ? "Time being decided" : "Time TBD";
+  if (!plan.startAt) {
+    // Says what actually happened rather than "Time TBD" forever. An undated
+    // plan past its grace window has left Upcoming, and the owner should learn
+    // that here rather than from its absence.
+    if (isArchivedUnscheduledPlan(plan)) return "Set aside — add a time to bring it back";
+    return plan.planType === "poll" ? "Time being decided" : "No date yet";
+  }
   return new Date(plan.startAt).toLocaleString([], {
     weekday: "short",
     month: "short",
@@ -395,6 +422,10 @@ const emptyCopy: Record<PlanBucket, { title: string; description: string }> = {
   upcoming: { title: "Nothing planned yet", description: "Your upcoming plans will appear here." },
   invites: { title: "No invitations", description: "New plan invitations will appear here." },
   hosting: { title: "No plans created yet", description: "Create a plan and invite your Muddies." },
+  unscheduled: {
+    title: "Nothing waiting on a time",
+    description: "Plans without a date yet will appear here."
+  },
   past: { title: "No past plans", description: "Plans you've joined will appear here." }
 };
 
@@ -402,6 +433,7 @@ const bucketSectionLabel: Record<PlanBucket, string> = {
   upcoming: "Upcoming plans",
   invites: "Invitations",
   hosting: "Created by you",
+  unscheduled: "Waiting on a time",
   past: "Past plans"
 };
 
@@ -409,6 +441,10 @@ const listEndCopy: Record<PlanBucket, { title: string; description: string }> = 
   upcoming: { title: "No more upcoming plans", description: "Create a plan to meet up with your Muddies." },
   invites: { title: "That's every invitation", description: "New plan invitations will appear here." },
   hosting: { title: "That's all you've created", description: "Start another plan whenever you're ready." },
+  unscheduled: {
+    title: "That's everything without a time",
+    description: "Add a date and a plan moves back to Upcoming."
+  },
   past: { title: "You've reached the start", description: "Older plans stay here for reference." }
 };
 
@@ -463,11 +499,16 @@ function DateChip({ startAt }: { startAt: string | null }) {
 function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
   const going = plan.attendees.filter((attendee) => attendee.rsvp === "going");
   const goingCount = going.length;
+  // The card had its own copy of this, so a plan could read "Time TBD" here
+  // while the row above already said it had been set aside. One rule, asked
+  // once.
   const timeLabel = plan.startAt
     ? new Date(plan.startAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-    : plan.planType === "poll"
-      ? "Time being decided"
-      : "Time TBD";
+    : isArchivedUnscheduledPlan(plan)
+      ? "Set aside"
+      : plan.planType === "poll"
+        ? "Time being decided"
+        : "No date yet";
   const pill = rsvpPill(plan.myRsvp, plan.isHost);
 
   return (

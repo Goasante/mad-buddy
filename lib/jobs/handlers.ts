@@ -422,10 +422,21 @@ export const handleExpireAdminAssignments: JobHandler = async (admin) => {
  */
 export const handleCompletePastPlans: JobHandler = async (admin) => {
   const nowIso = new Date().toISOString();
+  // MATCHES THE READ-TIME RULE IN lib/social/plans.ts (planPhase): a plan is
+  // over once its end time passes, or once its start passes when it has no
+  // end. The filter used to be `.lt("end_at", nowIso)` alone, and almost no
+  // plan carries an end time -- every dated plan in production has a null
+  // one -- so this job completed nothing and those plans sat at `inviting`
+  // indefinitely while the UI had already moved them to Past. Two rules for
+  // one question is what let the database and the screen disagree.
+  //
+  // Undated plans are deliberately NOT touched here. They are set aside by
+  // the grace window at read time, which needs no write and can be undone by
+  // simply adding a date.
   const { data: completed, error } = await admin
     .from("plans")
     .update({ status: "completed", updated_at: nowIso })
-    .lt("end_at", nowIso)
+    .or(`end_at.lt.${nowIso},and(end_at.is.null,start_at.lt.${nowIso})`)
     .in("status", ["inviting", "confirmed"])
     .select("id, creator_id");
   if (error) throw new JobError("DATABASE_TIMEOUT", error.message);

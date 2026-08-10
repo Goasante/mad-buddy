@@ -4,7 +4,9 @@ import { createRequestId, errorType, logBackendEvent } from "@/lib/observability
 import { rankPulseItems, basePriorityFor, type PulseItem } from "@/lib/pulse/ranking";
 import { loadNearbyForUser } from "@/lib/proximity/nearby-service";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import { planPhase } from "@/lib/social/plans";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { PlanStatus } from "@/lib/supabase/database.types";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -122,12 +124,26 @@ export async function GET() {
     if (planIds.length > 0) {
       const { data: plans } = await admin
         .from("plans")
-        .select("id, title, status, start_at")
+        .select("id, title, status, start_at, end_at, created_at")
         .in("id", planIds)
         .in("status", ["inviting", "polling", "confirmed"]);
       for (const plan of plans ?? []) {
         const myRsvp = rsvpByPlan.get(plan.id);
         const startsMs = plan.start_at ? Date.parse(plan.start_at) : null;
+
+        // THE SAME RULE THE PLANS PAGE AND HOME USE. Pulse used to push an
+        // invite with no time check at all, so an invitation to a plan that
+        // had already happened -- or one that never had a date -- kept asking
+        // to be answered indefinitely. A plan nobody can still attend is not
+        // a pending decision.
+        const phase = planPhase({
+          status: plan.status as PlanStatus,
+          startAt: plan.start_at,
+          endAt: plan.end_at,
+          createdAt: plan.created_at
+        });
+        if (phase === "past" || phase === "archived_unscheduled") continue;
+
         if (myRsvp === "invited" || myRsvp === "viewed") {
           pendingPlans += 1;
           items.push({

@@ -56,7 +56,10 @@ async function loadPlans(): Promise<{
     admin
       .from("plans")
       .select(
-        "id, creator_id, title, description, plan_type, status, start_at, custom_place_text, place_type, category, cover_image_url"
+        // end_at and created_at feed planPhase: end_at so a plan stays
+        // upcoming until it actually ends, created_at so an undated plan's
+        // grace window can be measured.
+        "id, creator_id, title, description, plan_type, status, start_at, end_at, created_at, custom_place_text, place_type, category, cover_image_url"
       )
       .in("id", planIds),
     admin
@@ -147,6 +150,8 @@ async function loadPlans(): Promise<{
       planType: plan.plan_type,
       status: plan.status,
       startAt: plan.start_at,
+      endAt: plan.end_at ?? null,
+      createdAt: plan.created_at ?? null,
       placeText: plan.custom_place_text,
       // Cover inputs for the canonical resolver (lib/plans/plan-covers).
       category: plan.category ?? null,

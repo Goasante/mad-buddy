@@ -119,11 +119,162 @@ export function isTerminalPlanStatus(status: PlanStatus): boolean {
   return status === "cancelled" || status === "completed" || status === "expired";
 }
 
-/** A plan is past once its status is terminal or its start time has passed. */
-export function isPastPlan(status: PlanStatus, startAt: string | null, nowMs = Date.now()): boolean {
-  if (isTerminalPlanStatus(status)) return true;
-  if (!startAt) return false;
-  return Date.parse(startAt) <= nowMs;
+// ---------------------------------------------------------------------------
+// Plan lifecycle: the ONE rule every surface reads
+// ---------------------------------------------------------------------------
+
+/**
+ * How long an undated plan may sit in Upcoming before it is set aside.
+ *
+ * WHY UNDATED PLANS EXIST AT ALL. `quick` and `poll` plans are allowed to have
+ * no start time -- the schema permits it deliberately (only `scheduled`
+ * carries `plans_scheduled_needs_start`), because "let's do something, time
+ * TBD" and "vote on when" are the point of those two types. So an undated plan
+ * is not corrupt data and must never be treated as such.
+ *
+ * WHAT WENT WRONG. `isPastPlan` returned false for a null start, so an undated
+ * plan could never become past, and the Plans page -- which buckets purely on
+ * that helper -- kept it under Upcoming forever. Nine of them are in
+ * production right now, across six accounts, up to 23 days old.
+ *
+ * WHY A DEADLINE RATHER THAN A REQUIRED DATE. Forcing a date on creation would
+ * delete the feature: a poll has no date until it resolves. Instead the plan
+ * stays live for two weeks, which is long enough to actually agree on a time,
+ * and is then set aside rather than deleted.
+ *
+ * Fourteen days, in one place. Scattering the number is how two surfaces come
+ * to disagree about whether the same plan is still live.
+ */
+export const UNSCHEDULED_PLAN_GRACE_DAYS = 14;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Where a plan sits in time.
+ *
+ * FOUR PHASES, and every surface derives its own view from this one function
+ * rather than re-deciding. The bug this replaces was exactly that: the Home
+ * loader filtered in SQL, the Plans page bucketed in the client, and the
+ * completion job used a third rule -- so the same plan could be upcoming in
+ * one place and past in another.
+ */
+export type PlanPhase =
+  /** Dated, still to happen. */
+  | "upcoming"
+  /** Dated and finished, or terminal by status. */
+  | "past"
+  /** No date yet, still inside the grace window. */
+  | "unscheduled"
+  /** No date, and the grace window has run out. Set aside, never deleted. */
+  | "archived_unscheduled";
+
+export type PlanTiming = {
+  status: PlanStatus;
+  startAt: string | null;
+  /** Optional. Most plans have none, which is why the fallback below matters. */
+  endAt?: string | null;
+  /** When the plan was created. Anchors the grace window for undated plans. */
+  createdAt?: string | null;
+};
+
+/** Milliseconds, or null when the value is absent or unparseable. */
+function parseMs(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * The canonical phase.
+ *
+ * TIME IS COMPARED IN ABSOLUTE MILLISECONDS. Every timestamp here is a UTC
+ * instant from the database, and `Date.parse` on an ISO string with an offset
+ * yields the same number in every timezone -- so a server job in UTC and a
+ * browser in Accra or Los Angeles agree on whether a plan has ended. The
+ * plan's own `timezone` column is for DISPLAY, and must never be used to
+ * decide this.
+ */
+export function planPhase(plan: PlanTiming, nowMs = Date.now()): PlanPhase {
+  // Status wins: a cancelled plan is over whatever its clock says.
+  if (isTerminalPlanStatus(plan.status)) return "past";
+
+  const startMs = parseMs(plan.startAt);
+
+  if (startMs === null) {
+    // Undated. Live until the grace window closes, then set aside.
+    const createdMs = parseMs(plan.createdAt);
+    // No creation date to measure from -- keep it visible rather than
+    // archiving something on the strength of a missing field.
+    if (createdMs === null) return "unscheduled";
+    const deadline = createdMs + UNSCHEDULED_PLAN_GRACE_DAYS * DAY_MS;
+    return nowMs >= deadline ? "archived_unscheduled" : "unscheduled";
+  }
+
+  // END TIME WINS WHERE THERE IS ONE. A plan running 7pm-11pm is still on at
+  // 8pm, and treating it as past the moment it starts is what made a plan
+  // vanish from Upcoming while people were at it.
+  const endMs = parseMs(plan.endAt);
+  if (endMs !== null) return nowMs >= endMs ? "past" : "upcoming";
+
+  // No end time -- which is every dated plan in production today. Falls back
+  // to the start, so it becomes past once it has begun. Deliberately no grace
+  // period: a start-only plan carries no information about how long it runs,
+  // and inventing a duration would be a guess applied to every plan alike.
+  return nowMs >= startMs ? "past" : "upcoming";
+}
+
+/**
+ * Past: finished, or terminal by status.
+ *
+ * KEPT for the surfaces that only need the boolean. The signature widened from
+ * (status, startAt) to the timing object so `end_at` could be honoured -- the
+ * old two-argument form could not see it, which is why a plan mid-way through
+ * its own evening was already being called past.
+ */
+export function isPastPlan(plan: PlanTiming, nowMs = Date.now()): boolean {
+  return planPhase(plan, nowMs) === "past";
+}
+
+/**
+ * Upcoming: dated, and still to happen.
+ *
+ * INDEPENDENT OF RSVP by construction -- there is no participant argument.
+ * Going, maybe, not going, invited and host all resolve identically, so no
+ * caller can accidentally keep a finished plan alive by reading someone's
+ * answer to it.
+ */
+export function isUpcomingPlan(plan: PlanTiming, nowMs = Date.now()): boolean {
+  return planPhase(plan, nowMs) === "upcoming";
+}
+
+/** Undated and still inside its grace window. */
+export function isUnscheduledPlan(plan: PlanTiming, nowMs = Date.now()): boolean {
+  return planPhase(plan, nowMs) === "unscheduled";
+}
+
+/**
+ * Undated, past the grace window, set aside.
+ *
+ * NOT DELETED and not cancelled: the plan and its conversation stay readable,
+ * it simply stops occupying Upcoming and Home. Derived from timestamps at read
+ * time, so nothing has to run for it to take effect and nothing has to be
+ * undone if the grace period is ever changed.
+ */
+export function isArchivedUnscheduledPlan(plan: PlanTiming, nowMs = Date.now()): boolean {
+  return planPhase(plan, nowMs) === "archived_unscheduled";
+}
+
+/**
+ * When an undated plan will be set aside, or null if it is not undated.
+ *
+ * Lets the owner be told "add a time before the 20th" rather than discovering
+ * the plan has quietly left Upcoming.
+ */
+export function unscheduledDeadlineMs(plan: PlanTiming): number | null {
+  if (isTerminalPlanStatus(plan.status)) return null;
+  if (parseMs(plan.startAt) !== null) return null;
+  const createdMs = parseMs(plan.createdAt);
+  return createdMs === null ? null : createdMs + UNSCHEDULED_PLAN_GRACE_DAYS * DAY_MS;
 }
 
 // ---------------------------------------------------------------------------
