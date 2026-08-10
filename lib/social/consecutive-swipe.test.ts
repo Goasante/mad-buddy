@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { stripComments } from "@/lib/content/strip-comments";
-import { removeFromDeck, resolveSwipe, restoreToDeck } from "@/lib/social/swipe-deck";
+import { canWave, deckCandidates, removeFromDeck, resolveSwipe, restoreToDeck } from "@/lib/social/swipe-deck";
 import type { SocializePerson } from "@/lib/social/socialize-mobile";
 
 /**
@@ -81,6 +81,76 @@ describe("the gesture is never gated on the network", () => {
     // Undo is a rollback; letting it race a decision in flight could restore
     // the wrong person.
     expect(deck).toContain("disabled={pending || (!onUndo && !onOpenSkipped)}");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The deck only ever shows people it can actually act on
+// ---------------------------------------------------------------------------
+
+describe("a card the deck cannot act on is never dealt", () => {
+  /**
+   * THE BUG THE USER ACTUALLY HIT, proven by a runtime trace:
+   *
+   *   {"decision":"wave","canWave":false,"waveState":"sent"}
+   *
+   * The gesture was perfect -- 915px of travel, velocity 1.35, resolved as a
+   * wave. canWave then refused it because a request was already outstanding,
+   * and the card sprang back to the middle in total silence. Left swipes kept
+   * working, because only the right path consults canWave, and that asymmetry
+   * is what made it look like a broken gesture rather than a refusal.
+   */
+  const waved = { userId: "sent", waveState: "sent" } as SocializePerson;
+  const theyWaved = { userId: "received", waveState: "received" } as SocializePerson;
+
+  it("keeps someone already waved at out of the deck", () => {
+    expect(deckCandidates([A, waved, B]).map((entry) => entry.userId)).toEqual(["a", "b"]);
+  });
+
+  it("keeps someone who waved first out of it too", () => {
+    // The affirmative action there is accepting, which a swipe cannot express.
+    expect(deckCandidates([A, theyWaved]).map((entry) => entry.userId)).toEqual(["a"]);
+  });
+
+  it("is exactly the complement of the guard inside the deck", () => {
+    // Stated as a property: the deck shows precisely the people whose wave can
+    // succeed, so the guard becomes belt-and-braces instead of the thing users
+    // hit. If the two ever disagree, a silent spring-back returns.
+    for (const person of [A, waved, theyWaved]) {
+      expect(deckCandidates([person]).length === 1, `${person.waveState}`).toBe(canWave(person));
+    }
+  });
+
+  it("is applied where the deck is fed", () => {
+    const rails = stripComments(read("components/socialize/discovery-rails.tsx"));
+    expect(rails).toContain("deckCandidates(people)");
+    expect(rails).toContain("people={candidates}");
+    // And the empty check follows the filtered list, or a deck of nothing but
+    // already-waved people renders an empty stack instead of nothing.
+    expect(rails).toContain("if (candidates.length === 0) return null;");
+  });
+
+  it("does not hide those people from the rest of the product", () => {
+    // They still belong on the radar and in People Nearby, where their real
+    // state has somewhere to show. Only the deck omits them.
+    const page = stripComments(read("components/socialize/socialize-page.tsx"));
+    expect(page).toContain("people={visiblePeople}");
+    expect(page).not.toContain("deckCandidates");
+  });
+
+  it("still explains itself if the guard is ever reached", () => {
+    // An unexplained spring-back is the worst possible answer, filtered or not.
+    const guard = deck.slice(deck.indexOf('if (decision === "wave" && !canWave(top))'));
+    expect(guard.slice(0, 300)).toContain("setRefusal(");
+    expect(deck).toContain("Wave already sent");
+    expect(deck).toContain("They waved at you first");
+    // Announced politely: it is an explanation, not a failure.
+    expect(deck).toContain('aria-live="polite"');
+  });
+
+  it("clears the explanation when the next gesture starts", () => {
+    const down = deck.slice(deck.indexOf("function handlePointerDown"));
+    expect(down.slice(0, 400)).toContain('setRefusal("")');
   });
 });
 

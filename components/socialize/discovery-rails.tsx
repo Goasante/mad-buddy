@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import type { GroupSummary } from "@/lib/groups/types";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import type { SocializePerson } from "@/lib/social/socialize-mobile";
+import { deckCandidates } from "@/lib/social/swipe-deck";
 import { cn } from "@/lib/utils";
 
 /**
@@ -98,12 +99,18 @@ export function PeopleRail({
   onOpenSkipped?: () => void;
   pending: boolean;
 }) {
-  if (people.length === 0) return null;
+  // Only people whose wave can actually succeed. Someone already waved at
+  // would produce a card that travels the full screen on a right swipe and
+  // then springs back unexplained, because canWave refuses it inside endDrag.
+  // They remain visible on the radar and in People Nearby, where their real
+  // state has somewhere to show.
+  const candidates = deckCandidates(people);
+  if (candidates.length === 0) return null;
 
   return (
     <RailSection id="people-rail-heading" title="People you might click with" first>
       <SwipeDeck
-        people={people}
+        people={candidates}
         onWave={onWave}
         onPass={onPass}
         onUndo={onUndoPass}

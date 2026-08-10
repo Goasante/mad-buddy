@@ -194,6 +194,32 @@ export function canWave(person: Pick<SocializePerson, "waveState">): boolean {
 }
 
 /**
+ * The people the DECK may show.
+ *
+ * THE DECK IS A DECISION SURFACE. Every card offers exactly two gestures, and
+ * a card that cannot answer one of them is a card that appears broken: a right
+ * swipe on somebody already waved at travelled the full width of the screen,
+ * resolved as a wave, and was then silently refused by canWave -- so the card
+ * sprang back to the middle with no stamp, no toast and no reason given. From
+ * the thumb it is indistinguishable from the swipe not registering at all.
+ *
+ * So they are filtered out HERE rather than guarded against later. This is the
+ * exact complement of canWave, deliberately: the deck shows precisely the
+ * people whose wave gesture can succeed, and the guard inside endDrag becomes
+ * the belt-and-braces it was meant to be instead of the thing users hit.
+ *
+ * THEY ARE NOT HIDDEN FROM THE PRODUCT. waveState is still carried, and People
+ * Nearby, the preview card and the radar all keep showing these people with
+ * their real state -- "Request sent", or an Accept control when they waved
+ * first. Only the swipe deck, which has no way to express either, omits them.
+ */
+export function deckCandidates(
+  people: readonly SocializePerson[]
+): SocializePerson[] {
+  return people.filter((person) => canWave(person));
+}
+
+/**
  * Remove a decided person from the deck.
  *
  * Returns a new array; the caller holds it in state. Filtering by id rather

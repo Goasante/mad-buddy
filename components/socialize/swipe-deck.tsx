@@ -90,6 +90,13 @@ export function SwipeDeck({
   const [exiting, setExiting] = useState<{ userId: string; decision: DeckDecision } | null>(null);
   // Shown once per mount, then never again. See the note above showHint.
   const [showSwipeHint, setShowSwipeHint] = useState(true);
+  /**
+   * Why a swipe was refused, shown briefly under the deck.
+   *
+   * A gesture that does nothing must always say why. Announced politely rather
+   * than as an alert: it is an explanation, not a failure.
+   */
+  const [refusal, setRefusal] = useState("");
 
   const pointerRef = useRef<{ id: number; x: number; y: number; time: number } | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -124,6 +131,13 @@ export function SwipeDeck({
     const timer = window.setTimeout(() => setShowSwipeHint(false), 4200);
     return () => window.clearTimeout(timer);
   }, [showSwipeHint]);
+
+  // The explanation clears itself, so it never becomes furniture.
+  useEffect(() => {
+    if (!refusal) return;
+    const timer = window.setTimeout(() => setRefusal(""), 2600);
+    return () => window.clearTimeout(timer);
+  }, [refusal]);
 
   // The drag applies only to the card it started on. Derived, never synced.
   const activeDrag = top && drag.userId === top.userId ? drag : NO_DRAG;
@@ -165,6 +179,9 @@ export function SwipeDeck({
   function handlePointerDown(event: React.PointerEvent) {
     // Touching the deck at all proves the affordance was understood.
     setShowSwipeHint(false);
+    // A new attempt clears the previous explanation, so the message on screen
+    // always belongs to the gesture just made.
+    setRefusal("");
 
     // GATED ON THE DECK'S OWN STATE, never on the network.
     //
@@ -263,7 +280,15 @@ export function SwipeDeck({
     const decision = resolveSwipe(settled);
     // A right swipe on someone with a wave already outstanding springs back
     // rather than firing an action the server would reject.
+    //
+    // AND IT SAYS SO. This used to spring back in silence, which is how a
+    // legitimate refusal became indistinguishable from a broken deck: the card
+    // travelled the full width of the screen, resolved as a wave, and simply
+    // returned to centre. deckCandidates now keeps these people out of the
+    // deck entirely, so this should be unreachable -- but if it is ever
+    // reached, an unexplained spring-back is the worst possible answer.
     if (decision === "wave" && !canWave(top)) {
+      setRefusal(top.waveState === "received" ? "They waved at you first" : "Wave already sent");
       setDrag(NO_DRAG);
       return;
     }
@@ -466,6 +491,16 @@ export function SwipeDeck({
           <FeatureIcon feature="wave" size={20} decorative />
         </button>
       </div>
+
+      {/* Why a swipe did nothing. Reserved height, so the actions row does not
+          jump when it appears and disappears. */}
+      <p
+        role="status"
+        aria-live="polite"
+        className="mt-2 min-h-5 text-center text-xs text-muted-foreground"
+      >
+        {refusal}
+      </p>
     </div>
   );
 }
