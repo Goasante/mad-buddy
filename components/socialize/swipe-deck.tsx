@@ -103,8 +103,19 @@ export function SwipeDeck({
    */
   const frameRef = useRef<number | null>(null);
   const pendingRef = useRef<Drag | null>(null);
+  /** The in-flight exit timer, so a rapid second swipe can cancel it. */
+  const exitTimerRef = useRef<number | null>(null);
 
   const top = people[0] ?? null;
+
+  // A pending exit must not fire into an unmounted deck.
+  useEffect(
+    () => () => {
+      if (exitTimerRef.current !== null) window.clearTimeout(exitTimerRef.current);
+      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
+    },
+    []
+  );
 
   // Retires on its own after one cycle, so it does not sit there indefinitely
   // for someone reading the card rather than acting on it.
@@ -123,14 +134,27 @@ export function SwipeDeck({
       // tick should land under the thumb that made it. Waving is the
       // affirmative choice and gets the firmer of the two patterns.
       haptic(decision === "wave" ? "select" : "tick");
+
+      // ONE DECISION PER GESTURE. A queued exit from the previous card is
+      // dropped rather than left to fire later: its callback would clear the
+      // NEW card's exit state mid-flight and hand the parent a second
+      // decision for a person already dealt with.
+      if (exitTimerRef.current !== null) {
+        window.clearTimeout(exitTimerRef.current);
+        exitTimerRef.current = null;
+      }
+
       setExiting({ userId: person.userId, decision });
       setDrag(NO_DRAG);
       // Let the exit transition play before the parent removes the person.
       // 300ms matches the shared motion timing; the callback is what actually
       // mutates the deck, so a dropped frame delays the animation, never the
       // action.
-      window.setTimeout(() => {
-        setExiting(null);
+      exitTimerRef.current = window.setTimeout(() => {
+        exitTimerRef.current = null;
+        // Cleared by identity, not blindly: if a newer card is already
+        // exiting, this stale callback must leave it alone.
+        setExiting((current) => (current?.userId === person.userId ? null : current));
         if (decision === "wave") onWave(person);
         else onPass(person);
       }, 260);
@@ -141,7 +165,19 @@ export function SwipeDeck({
   function handlePointerDown(event: React.PointerEvent) {
     // Touching the deck at all proves the affordance was understood.
     setShowSwipeHint(false);
-    if (!top || pending || exiting) return;
+
+    // GATED ON THE DECK'S OWN STATE, never on the network.
+    //
+    // This used to include `pending`, which is the page's useTransition flag
+    // covering the wave/pass request. Every swipe fires one, so the deck
+    // locked itself for the whole round trip: the first swipe worked, and the
+    // next was dropped before pointerRef was even set. On a slow connection it
+    // stayed dead for seconds, and the card gave no sign why -- the buttons
+    // kept working, because they call commit() directly and never reach here.
+    //
+    // `exiting` stays: a card mid-flight is genuinely not draggable, and that
+    // window is 260ms of local animation rather than an unbounded wait.
+    if (!top || exiting) return;
     // Ignore secondary buttons and anything starting on a real control.
     if (event.button !== 0) return;
     pointerRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, time: event.timeStamp };
@@ -352,7 +388,10 @@ export function SwipeDeck({
             direction === "left" && "linkr-deck-action-armed"
           )}
           style={{ "--linkr-arm": direction === "left" ? progress : 0 } as CSSProperties}
-          disabled={!top || pending}
+          // Also freed from `pending`. Optimistic actions mean the previous
+          // decision is already applied locally; blocking the next one on its
+          // network call just makes the deck feel broken.
+          disabled={!top || Boolean(exiting)}
           onClick={() => top && commit(top, "pass")}
           aria-label={top ? `Skip ${top.displayName || top.username}` : "Skip"}
         >
