@@ -61,36 +61,59 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
 ];
 
 /**
- * The surfaces that show Quick Actions.
+ * Where Quick Actions appears.
  *
- * An ALLOW list, not a deny list, and that choice matters. A deny list means
- * every future route shows the launcher until someone remembers to exclude it
- * -- so a new full-screen editor would ship with a floating pill over it. With
- * an allow list the default for anything new is "hidden", which is the safe
- * direction to be wrong in.
+ * EVERYWHERE IN THE APP, except surfaces that genuinely cannot carry it. The
+ * launcher is a shortcut to five features, and a shortcut that only exists on
+ * four screens is one people never learn is there.
  *
- * These are the browsing surfaces: places where a user is looking around
- * rather than completing a task.
+ * This is a DENY list, reversing the earlier allow list. The tradeoff is real:
+ * a future full-screen feature will show the launcher until somebody excludes
+ * it. That is mitigated by excluding on the CHARACTERISTIC rather than by
+ * naming routes one at a time -- anything full-screen or owning the lower-right
+ * corner is listed below, so the rule describes a shape rather than an
+ * inventory.
+ *
+ * Login, signup, onboarding, admin and billing need no entry here. They live
+ * outside the (app) route group and never render the shell, so they cannot
+ * show the launcher whatever this rule says.
  */
-export const QUICK_ACTION_SURFACES: readonly string[] = [
-  "/dashboard", // Home
-  "/friends", // Muddies
-  "/discover", // Linkr
-  "/hangout-mode" // UpFor
-];
 
 /**
- * Detail and task routes that must stay clear even though their parent is a
- * listed surface.
+ * Surfaces where the launcher does not belong.
  *
- * `/friends` shows the launcher, but `/friends/someone` is a profile with its
- * own actions; `/discover` shows it, but a nested flow does not. Checked before
- * the allow list so a nested path can never inherit visibility from its parent.
+ * Each is here for a stated reason, not a preference:
+ *
+ *   /scan          A camera viewfinder. Full-bleed, and the shutter sits low
+ *                  centre-right -- exactly where the pill would land.
+ *   /safe-arrival  An active journey is a safety surface. Anything floating
+ *                  over the share and check-in controls is unacceptable when
+ *                  the whole point is reaching them quickly.
+ *
+ * Mad Cam and the image editor need no entry: they render full-screen at
+ * z-120 while the launcher sits at z-40, so they already cover it.
+ *
+ * An open conversation is handled in AppShell rather than here, because the
+ * shell already knows it is immersive -- the message composer owns the
+ * lower-right corner there.
  */
-const NESTED_EXCLUSIONS: readonly string[] = [
-  "/friends/", // a specific Muddy's profile
-  "/discover/",
-  "/hangout-mode/"
+const EXCLUDED_SURFACES: readonly string[] = ["/scan", "/safe-arrival"];
+
+/**
+ * Detail routes that keep their own corner.
+ *
+ * A person's profile, a single plan and a single group each have their own
+ * primary action low on the screen. The parent list shows the launcher; the
+ * detail view does not.
+ */
+const EXCLUDED_PREFIXES: readonly string[] = [
+  "/friends/", // somebody's profile
+  "/messages/", // a single conversation
+  "/plans/",
+  "/groups/",
+  "/events/",
+  "/scan/",
+  "/safe-arrival/"
 ];
 
 /**
@@ -103,16 +126,16 @@ const NESTED_EXCLUSIONS: readonly string[] = [
 export function showsQuickActions(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
 
-  // Query strings and hashes never change whether a surface is a browsing
-  // surface, and `/plans?create=1` must not be treated as a different route.
+  // Query strings and hashes never change whether a surface can carry the
+  // launcher, and `/plans?create=1` must not be treated as a different route.
   const path = pathname.split("?")[0].split("#")[0];
 
-  if (NESTED_EXCLUSIONS.some((prefix) => path.startsWith(prefix))) return false;
+  if (EXCLUDED_SURFACES.includes(path)) return false;
+  if (EXCLUDED_PREFIXES.some((prefix) => path.startsWith(prefix))) return false;
 
-  // Exact match only. A prefix match would show the launcher on every child of
-  // a listed surface, which is precisely what the exclusions above exist to
-  // prevent -- and would make the two rules fight each other.
-  return QUICK_ACTION_SURFACES.includes(path);
+  // Everything else in the app. Routes outside the (app) group never reach
+  // this function, because the shell that calls it is not rendered there.
+  return path.startsWith("/");
 }
 
 /** Total actions, for tests and for the scroll fallback's height maths. */

@@ -6,7 +6,6 @@ import { stripComments } from "@/lib/content/strip-comments";
 import {
   QUICK_ACTIONS,
   QUICK_ACTION_COUNT,
-  QUICK_ACTION_SURFACES,
   showsQuickActions
 } from "@/lib/navigation/quick-actions";
 import { FEATURE_ICON_SOURCES } from "@/lib/icons/feature-icons";
@@ -21,45 +20,57 @@ const css = read("app/globals.css");
 // 1 + 2. Route visibility
 // ---------------------------------------------------------------------------
 
-describe("the launcher appears only on browsing surfaces", () => {
-  it("shows on the four social surfaces", () => {
-    for (const path of ["/dashboard", "/friends", "/discover", "/hangout-mode"]) {
+describe("the launcher appears throughout the app", () => {
+  it("shows on every ordinary screen", () => {
+    // POLICY REVERSED, deliberately. This was an allow list of four browsing
+    // surfaces; a shortcut that exists on four screens is one nobody learns is
+    // there. It now appears everywhere it can.
+    for (const path of [
+      "/dashboard",
+      "/friends",
+      "/discover",
+      "/hangout-mode",
+      "/plans",
+      "/events",
+      "/groups",
+      "/moments",
+      "/messages",
+      "/notifications",
+      "/profile",
+      "/settings",
+      "/badges",
+      "/buddy-score"
+    ]) {
       expect(showsQuickActions(path), `${path} should show quick actions`).toBe(true);
     }
   });
 
-  it("hides on focused and task surfaces", () => {
-    // A floating pill over an editor, a composer or a settings form is the
-    // exact "why is this covering my screen" failure this rule prevents.
+  it("stays off surfaces that cannot carry it", () => {
+    // /scan is a viewfinder whose shutter sits where the pill would land.
+    // /safe-arrival is a safety surface; nothing floats over check-in controls.
+    expect(showsQuickActions("/scan")).toBe(false);
+    expect(showsQuickActions("/safe-arrival")).toBe(false);
+  });
+
+  it("leaves detail routes their own corner", () => {
+    // Each of these has its own primary action low on the screen. The parent
+    // list shows the launcher; the detail view does not.
     for (const path of [
-      "/messages",
-      "/settings",
-      "/profile",
-      "/plans",
-      "/events",
-      "/groups",
-      "/safe-arrival",
-      "/moments",
-      "/onboarding",
-      "/login",
-      "/signup"
+      "/friends/ama",
+      "/messages/abc123",
+      "/plans/123",
+      "/groups/456",
+      "/events/789"
     ]) {
       expect(showsQuickActions(path), `${path} should NOT show quick actions`).toBe(false);
     }
   });
 
-  it("hides on nested detail routes of allowed surfaces", () => {
-    // /friends is a browsing surface; /friends/someone is that person's
-    // profile, with its own actions in the same corner.
-    expect(showsQuickActions("/friends/ama")).toBe(false);
-    expect(showsQuickActions("/discover/anything")).toBe(false);
-    expect(showsQuickActions("/hangout-mode/123")).toBe(false);
-  });
-
   it("ignores query strings and hashes", () => {
-    // ?tab=all must not turn a listed surface into an unlisted one.
+    // ?create=1 must not turn a surface into a different route.
+    expect(showsQuickActions("/plans?create=1")).toBe(true);
     expect(showsQuickActions("/friends?tab=all")).toBe(true);
-    expect(showsQuickActions("/dashboard#top")).toBe(true);
+    expect(showsQuickActions("/scan?mode=qr")).toBe(false);
   });
 
   it("handles a missing pathname without throwing", () => {
@@ -68,11 +79,22 @@ describe("the launcher appears only on browsing surfaces", () => {
     expect(showsQuickActions("")).toBe(false);
   });
 
-  it("uses an allow list, so unknown future routes stay hidden", () => {
-    // With a deny list, every new route would show the launcher until someone
-    // remembered to exclude it.
-    expect(showsQuickActions("/some-future-feature")).toBe(false);
-    expect(QUICK_ACTION_SURFACES).toHaveLength(4);
+  it("excludes by characteristic rather than by inventory", () => {
+    // The deny list names full-screen and corner-owning surfaces, so the rule
+    // describes a shape instead of enumerating every route in the app.
+    const routeModule = stripComments(read("lib/navigation/quick-actions.ts"));
+    expect(routeModule).toContain("EXCLUDED_SURFACES");
+    expect(routeModule).toContain("EXCLUDED_PREFIXES");
+  });
+
+  it("needs no rule for routes outside the app shell", () => {
+    // Login, signup, onboarding, admin and billing live outside the (app)
+    // group and never render the shell, so they cannot show the launcher
+    // whatever this function returns.
+    const routeModule = stripComments(read("lib/navigation/quick-actions.ts"));
+    expect(routeModule).not.toContain('"/login"');
+    expect(routeModule).not.toContain('"/signup"');
+    expect(routeModule).not.toContain('"/onboarding"');
   });
 });
 
