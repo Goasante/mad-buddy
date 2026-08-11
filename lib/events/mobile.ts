@@ -283,8 +283,18 @@ export async function createEvent(userId: string, input: unknown): Promise<Event
   return { ok: true, message: `${parsed.data.name.trim()} created.`, eventId: event.id };
 }
 
-/** Simple manual check-in (no QR). Mobile v1 of checkInToEventAction. */
-export async function checkInToEvent(userId: string, eventId: string): Promise<EventResult> {
+/**
+ * Simple manual check-in (no QR). Mobile v1 of checkInToEventAction.
+ *
+ * `eventGlowEnabled` defaults to false for the same reason the web action
+ * does (Stage E): presence is not consent to be seen. A mobile client that
+ * sends nothing gets the private behaviour, not the broadcasting one.
+ */
+export async function checkInToEvent(
+  userId: string,
+  eventId: string,
+  eventGlowEnabled = false
+): Promise<EventResult> {
   if (!hasServiceRoleEnv()) return { ok: false, message: "This action needs the server database configuration." };
   if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
 
@@ -328,7 +338,7 @@ export async function checkInToEvent(userId: string, eventId: string): Promise<E
       context_id: eventId,
       method: "manual",
       visibility: "participants" as CheckInVisibility,
-      event_glow_enabled: true,
+      event_glow_enabled: eventGlowEnabled,
       status: "checked_in"
     })
     .select("id")

@@ -170,7 +170,12 @@ export async function checkInToEventAction(input: unknown): Promise<EventActionS
       context_id: parsed.data.eventId,
       method,
       visibility: (parsed.data.visibility ?? "participants") as CheckInVisibility,
-      event_glow_enabled: parsed.data.eventGlowEnabled ?? true,
+      // Default OFF (Stage E). Being present at an event is not consent to be
+      // shown as present -- the caller has to pass `true` explicitly, which
+      // only happens when someone ticks "Let my Muddies see I'm here". This
+      // used to default ON, which meant every check-in silently broadcast
+      // location-adjacent presence to every Muddy.
+      event_glow_enabled: parsed.data.eventGlowEnabled ?? false,
       status: "checked_in"
     })
     .select("id")

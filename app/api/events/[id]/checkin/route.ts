@@ -14,7 +14,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return withCors(NextResponse.json({ error: "Authentication required." }, { status: 401 }), request);
   }
   const { id } = await params;
-  const result = await checkInToEvent(auth.user.id, id);
+  // Opt-in only: anything other than a literal `true` means Event Glow stays
+  // off, so a malformed or absent body can never turn presence-sharing on.
+  const body = (await request.json().catch(() => null)) as { eventGlowEnabled?: unknown } | null;
+  const result = await checkInToEvent(auth.user.id, id, body?.eventGlowEnabled === true);
   return withCors(NextResponse.json(result, { status: result.ok ? 200 : 400 }), request);
 }
 

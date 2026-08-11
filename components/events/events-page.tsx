@@ -128,15 +128,21 @@ export function EventsPageContent({
     });
   }
 
-  function checkIn(event: EventView) {
+  /**
+   * `sharePresence` is the answer to "Let my Muddies see I'm here", and it is
+   * always passed explicitly -- the card check-in has no room for the choice
+   * so it passes false, and the details modal passes whatever the person
+   * actually ticked. Nothing here may default it to true (Stage E).
+   */
+  function checkIn(event: EventView, sharePresence: boolean) {
     startTransition(async () => {
-      const result = await checkInToEventAction({ eventId: event.id });
+      const result = await checkInToEventAction({ eventId: event.id, eventGlowEnabled: sharePresence });
       setFeedback(result.message);
       if (result.ok && result.checkInId) {
         setEvents((current) =>
           current.map((item) =>
             item.id === event.id
-              ? { ...item, myCheckInId: result.checkInId ?? null, myGlowEnabled: true }
+              ? { ...item, myCheckInId: result.checkInId ?? null, myGlowEnabled: sharePresence }
               : item
           )
         );
@@ -302,7 +308,7 @@ export function EventsPageContent({
               phase={phaseOf(event, nowMs)}
               pending={isPending}
               onView={() => openDetails(event.id)}
-              onCheckIn={() => checkIn(event)}
+              onCheckIn={() => checkIn(event, false)}
               onCheckOut={() => checkOut(event)}
             />
           ))}
@@ -332,7 +338,7 @@ export function EventsPageContent({
         onOpenChange={(open) => {
           if (!open) setSelectedId(null);
         }}
-        onCheckIn={() => selectedEvent && checkIn(selectedEvent)}
+        onCheckIn={(sharePresence) => selectedEvent && checkIn(selectedEvent, sharePresence)}
         onCheckOut={() => selectedEvent && checkOut(selectedEvent)}
         onToggleGlow={() => selectedEvent && toggleGlow(selectedEvent)}
         onRsvpChange={(status) => selectedEvent && changeRsvp(selectedEvent, status)}
@@ -519,12 +525,26 @@ function EventDetailsModal({
   glowList: EventGlowMuddyList | null;
   pending: boolean;
   onOpenChange: (open: boolean) => void;
-  onCheckIn: () => void;
+  onCheckIn: (sharePresence: boolean) => void;
   onCheckOut: () => void;
   onToggleGlow: () => void;
   onRsvpChange: (status: EventRsvpStatus) => void;
 }) {
   const reducedMotion = useReducedMotion();
+  // Starts OFF every time the modal is opened for a different event: a person
+  // who shared their presence at one event has not agreed to share it at the
+  // next one, so this consent is never carried over (Stage E).
+  //
+  // Reset during render off a changed key rather than in an effect: an effect
+  // would leave one render where the previous event's ticked box is on screen
+  // against the new event, and that frame is exactly the wrong thing to show
+  // for a consent control.
+  const [sharePresence, setSharePresence] = useState(false);
+  const [presenceEventId, setPresenceEventId] = useState(event?.id ?? null);
+  if (presenceEventId !== (event?.id ?? null)) {
+    setPresenceEventId(event?.id ?? null);
+    setSharePresence(false);
+  }
   return (
     <Modal
       open={Boolean(event)}
@@ -648,9 +668,32 @@ function EventDetailsModal({
                 </Button>
               </>
             ) : (
-              <Button type="button" disabled={pending} onClick={onCheckIn}>
-                Check in
-              </Button>
+              <div className="flex w-full flex-col gap-3">
+                <label className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                    checked={sharePresence}
+                    disabled={pending}
+                    onChange={(changeEvent) => setSharePresence(changeEvent.target.checked)}
+                  />
+                  <span>
+                    <span className="font-medium text-foreground">Let my Muddies see I&apos;m here</span>
+                    <span className="block text-xs">
+                      Off by default. Only Muddies who are also checked in can see you, and you can turn
+                      it off any time.
+                    </span>
+                  </span>
+                </label>
+                <Button
+                  type="button"
+                  className="self-start"
+                  disabled={pending}
+                  onClick={() => onCheckIn(sharePresence)}
+                >
+                  Check in
+                </Button>
+              </div>
             )}
           </div>
         </div>

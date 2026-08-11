@@ -71,6 +71,39 @@ export async function batchBlockedIds(
 }
 
 /**
+ * Batched replacement for calling `areApprovedMuddies` once per candidate id.
+ *
+ * Returns the subset of `candidateIds` who are currently approved Muddies of
+ * `viewerId` -- same `ended_at IS NULL` definition areApprovedMuddies uses,
+ * one query instead of N.
+ *
+ * DELIBERATELY SEPARATE from batchEligibleMuddyIds below, which folds
+ * mutual-and-not-blocked into a single set. Event Glow needs the two facts
+ * apart: resolveEventGlow reports "blocked" and "not_muddies" as distinct
+ * outcomes, and collapsing them would lose that precedence.
+ */
+export async function batchMutualMuddyIds(
+  admin: Admin,
+  viewerId: string,
+  candidateIds: string[]
+): Promise<Set<string>> {
+  const unique = [...new Set(candidateIds)].filter((id) => id && id !== viewerId);
+  if (unique.length === 0) return new Set();
+
+  const { data: friendships } = await admin
+    .from("friendships")
+    .select("user_one_id, user_two_id")
+    .or(`user_one_id.eq.${viewerId},user_two_id.eq.${viewerId}`)
+    .is("ended_at", null);
+
+  const friendIds = new Set(
+    (friendships ?? []).map((row) => (row.user_one_id === viewerId ? row.user_two_id : row.user_one_id))
+  );
+
+  return new Set(unique.filter((id) => friendIds.has(id)));
+}
+
+/**
  * Batched replacement for calling `areApprovedMuddies`+`isBlockedEitherDirection`
  * once per candidate id (an N+1 that showed up independently in plan invites
  * and Hangout's "selected Muddies" audience check). One friendships query and

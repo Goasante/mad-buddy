@@ -2,7 +2,7 @@ import "server-only";
 
 import { resolveEventGlow } from "@/lib/events/rules";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
-import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
+import { batchBlockedIds, batchMutualMuddyIds } from "@/lib/social/permissions";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { EventCircleRole, SubscriptionPlan } from "@/lib/supabase/database.types";
 
@@ -89,15 +89,25 @@ export async function buildEventGlowList(
   const profileById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
   const statusById = new Map((statuses ?? []).map((status) => [status.user_id, status]));
 
+  // Muddy-ness and blocks, resolved for EVERY candidate in two queries
+  // (Stage E). This loop previously called areApprovedMuddies and
+  // isBlockedEitherDirection once per candidate, so a 200-person event cost
+  // 400 sequential round trips before it could render a single avatar. The
+  // two facts stay separate rather than using batchEligibleMuddyIds, because
+  // resolveEventGlow reports "blocked" and "not_muddies" as distinct
+  // outcomes and folding them together would lose that precedence.
+  const [mutualIds, blockedIds] = await Promise.all([
+    batchMutualMuddyIds(admin, viewerId, candidateIds),
+    batchBlockedIds(admin, viewerId, candidateIds)
+  ]);
+
   const visible: EventGlowMuddy[] = [];
   for (const candidate of candidates) {
     const profile = profileById.get(candidate.user_id);
     if (!profile) continue;
 
-    const [mutual, blocked] = await Promise.all([
-      areApprovedMuddies(admin, viewerId, candidate.user_id),
-      isBlockedEitherDirection(admin, viewerId, candidate.user_id)
-    ]);
+    const mutual = mutualIds.has(candidate.user_id);
+    const blocked = blockedIds.has(candidate.user_id);
 
     const decision = resolveEventGlow({
       viewerCheckedIn: true,
