@@ -7,7 +7,11 @@ import {
   canSendAnnouncement,
   canTransitionEventCircle,
   eventCircleMaxMembersFor,
+  eventPhase,
+  isCurrentEvent,
   isEventCircleWritable,
+  isPastEvent,
+  isUpcomingEvent,
   resolveCheckInWindow,
   resolveEventGlow,
   resolveJoinEventCircle,
@@ -177,5 +181,98 @@ describe("join event circle (spec §48, §57)", () => {
   it("lets a member who left rejoin", () => {
     expect(resolveJoinEventCircle(join({ memberStatus: "left" })).allowed).toBe(true);
     expect(resolveJoinEventCircle(join({ memberStatus: "joined" })).reason).toBe("already_joined");
+  });
+});
+
+/**
+ * eventPhase (Plans + Events lifecycle, Stage C).
+ *
+ * NO FALLBACK DURATION IS TESTED, deliberately: events.ends_at is NOT NULL
+ * with an ends_at > starts_at check constraint, and a production audit before
+ * this was written found zero events with a null end. There is no code path
+ * for a missing end time to exercise.
+ */
+describe("eventPhase (Plans + Events lifecycle, Stage C)", () => {
+  const timing = { startsAtMs: NOW, endsAtMs: NOW + 3 * 60 * MIN };
+
+  it("is upcoming strictly before the start", () => {
+    expect(eventPhase(timing, NOW - 1)).toBe("upcoming");
+    expect(eventPhase(timing, NOW - MIN)).toBe("upcoming");
+    expect(isUpcomingEvent(timing, NOW - 1)).toBe(true);
+  });
+
+  it("is live at the exact start instant", () => {
+    // Closed on the live side: the event has begun the moment now === start.
+    expect(eventPhase(timing, NOW)).toBe("live");
+  });
+
+  it("is live throughout the middle", () => {
+    expect(eventPhase(timing, NOW + 90 * MIN)).toBe("live");
+  });
+
+  it("is past at the exact end instant", () => {
+    // Open on the live side, closed on the past side: the event has finished
+    // the moment now === end, mirroring how a start-only Plan becomes past
+    // the instant it begins (lib/social/plans.ts planPhase).
+    expect(eventPhase(timing, timing.endsAtMs)).toBe("past");
+  });
+
+  it("is past strictly after the end", () => {
+    expect(eventPhase(timing, timing.endsAtMs + 1)).toBe("past");
+    expect(isPastEvent(timing, timing.endsAtMs + MIN)).toBe(true);
+  });
+
+  it("is exact at one millisecond either side of both boundaries", () => {
+    expect(eventPhase(timing, NOW - 1)).toBe("upcoming");
+    expect(eventPhase(timing, NOW)).toBe("live");
+    expect(eventPhase(timing, timing.endsAtMs - 1)).toBe("live");
+    expect(eventPhase(timing, timing.endsAtMs)).toBe("past");
+  });
+
+  it("treats upcoming and live as current; past as not", () => {
+    expect(isCurrentEvent(timing, NOW - MIN)).toBe(true);
+    expect(isCurrentEvent(timing, NOW + 90 * MIN)).toBe(true);
+    expect(isCurrentEvent(timing, timing.endsAtMs)).toBe(false);
+  });
+
+  it("compares absolute instants, so every timezone offset agrees", () => {
+    // The same moment written three ways must resolve identically -- the
+    // same guarantee planPhase's timezone tests establish for Plans, applied
+    // here because eventPhase makes the identical claim about starts_at/
+    // ends_at being real UTC instants regardless of how a client formatted
+    // them.
+    const sameStart = [
+      "2026-07-16T20:00:00.000Z",
+      "2026-07-16T21:00:00.000+01:00",
+      "2026-07-16T13:00:00.000-07:00"
+    ];
+    for (const startsAt of sameStart) {
+      const t = { startsAtMs: Date.parse(startsAt), endsAtMs: Date.parse(startsAt) + 60 * MIN };
+      expect(eventPhase(t, Date.parse(startsAt)), startsAt).toBe("live");
+    }
+  });
+
+  it("does not use the local calendar day to decide", () => {
+    // An event at 00:30 UTC is upcoming at 23:00 UTC the day before, even
+    // though that instant falls on "tomorrow" locally west of Greenwich --
+    // phase is about the instant, never a display-day concern.
+    const dayBefore = Date.parse("2026-07-16T23:00:00.000Z");
+    const t = {
+      startsAtMs: Date.parse("2026-07-17T00:30:00.000Z"),
+      endsAtMs: Date.parse("2026-07-17T02:30:00.000Z")
+    };
+    expect(eventPhase(t, dayBefore)).toBe("upcoming");
+  });
+
+  it("rolls over a date boundary the same way in every direction", () => {
+    // An event spanning midnight UTC: still live one minute before the
+    // rollover and one minute after.
+    const spansMidnight = {
+      startsAtMs: Date.parse("2026-07-16T23:30:00.000Z"),
+      endsAtMs: Date.parse("2026-07-17T00:30:00.000Z")
+    };
+    expect(eventPhase(spansMidnight, Date.parse("2026-07-16T23:59:00.000Z"))).toBe("live");
+    expect(eventPhase(spansMidnight, Date.parse("2026-07-17T00:01:00.000Z"))).toBe("live");
+    expect(eventPhase(spansMidnight, Date.parse("2026-07-17T00:30:00.000Z"))).toBe("past");
   });
 });

@@ -63,6 +63,8 @@ import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 import { formatMuddyStatusLabel } from "@/lib/social/rules";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
+import { UpcomingAgendaList } from "@/components/dashboard/upcoming-agenda-list";
+import type { UpcomingAgendaItem } from "@/lib/social/upcoming-agenda";
 import { type FreshnessState } from "@/lib/proximity/freshness";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import type { ActivityType, AvailabilityType, SubscriptionPlan } from "@/lib/supabase/database.types";
@@ -117,6 +119,13 @@ type DashboardPageContentProps = {
   initialStatusNote?: string;
   upcomingPlans?: HomeUpcomingPlan[];
   hasMorePlans?: boolean;
+  /**
+   * "My Upcoming" (Plans + Events lifecycle, Stage C): Plans and Events
+   * merged, one canonical chronological sort. A SEPARATE prop from
+   * upcomingPlans above, not a replacement for it -- upcomingPlans still
+   * feeds the existing PlanStack section untouched.
+   */
+  agendaItems?: UpcomingAgendaItem[];
   glowColorByFriendId?: Record<string, string>;
   profileReminder?: {
     userId: string;
@@ -236,6 +245,7 @@ export function DashboardPageContent({
   initialStatusActivity = null,
   initialStatusNote = "",
   upcomingPlans = [],
+  agendaItems = [],
   glowColorByFriendId = {},
   profileReminder = null,
   safeArrival = null,
@@ -639,6 +649,27 @@ export function DashboardPageContent({
         ) : (
           <UpcomingPlanEmpty />
         )}
+
+        {/*
+          "My Upcoming" (Plans + Events lifecycle, Stage C).
+
+          A SECOND section, not a replacement for the PlanStack above: that
+          stack is a distinct, deliberately-built interaction (drag, framer
+          spring, "join" affordance) shared with Linkr discovery, and folding
+          Events into it would have meant reworking a component built around
+          exactly one domain shape. This renders only when agendaItems
+          actually contains an Event -- a Plans-only viewer, which is most of
+          them, never sees a second, plainer list duplicating what the stack
+          above already shows richly. The moment an Event enters the mix
+          (Going, or hosting), this is where it -- and every Plan alongside it
+          in one chronological order -- becomes visible.
+        */}
+        {agendaItems.some((item) => item.kind === "event") ? (
+          <section aria-labelledby="home-agenda-heading">
+            <PageSectionHeader id="home-agenda-heading" title="My Upcoming" />
+            <UpcomingAgendaList items={agendaItems} />
+          </section>
+        ) : null}
 
         {/* Quick actions: first-time activation set, or the returning-user set. */}
         {isFirstTimeUser ? (

@@ -53,6 +53,64 @@ export function resolveCheckInWindow(input: CheckInWindowInput): CheckInWindowRe
 }
 
 // ---------------------------------------------------------------------------
+// Event lifecycle (Plans + Events lifecycle, Stage C)
+// ---------------------------------------------------------------------------
+
+/**
+ * Purely time-derived. Where a moment sits between an event's own start and
+ * end -- nothing else.
+ *
+ * upcoming: not yet started.
+ * live:     started, not yet ended. Includes the exact start instant.
+ * past:     ended. Includes the exact end instant.
+ *
+ * NO FALLBACK DURATION. `events.ends_at` is `not null` with a
+ * `ends_at > starts_at` check constraint (20260717120000_safe_arrival_
+ * checkins_events.sql), and a production audit before this was written found
+ * zero events with a null end. Inventing a fallback for a case the schema
+ * cannot produce would be guessing at a rule nobody asked for.
+ *
+ * CANCELLATION IS DELIBERATELY NOT HERE. `events.status` (draft / scheduled /
+ * active / ended / cancelled) is the authoritative record of whether an event
+ * was called off, independent of what its clock says -- a cancelled event
+ * that would still be "live" by time alone must not present as live. Callers
+ * check status themselves (as resolveCheckInWindow already does) rather than
+ * this function silently absorbing that decision; mixing "where in time" with
+ * "was it cancelled" into one return value is how the two get conflated.
+ *
+ * Boundaries are closed on the live side and open on the upcoming side:
+ * `nowMs === startsAtMs` is live (the event has begun), `nowMs === endsAtMs`
+ * is past (it has finished) -- the same "the instant it starts, it has
+ * started" rule planPhase in lib/social/plans.ts applies to a start-only Plan.
+ */
+export type EventPhase = "upcoming" | "live" | "past";
+
+export type EventTiming = {
+  startsAtMs: number;
+  endsAtMs: number;
+};
+
+export function eventPhase({ startsAtMs, endsAtMs }: EventTiming, nowMs: number): EventPhase {
+  if (nowMs < startsAtMs) return "upcoming";
+  if (nowMs < endsAtMs) return "live";
+  return "past";
+}
+
+export function isUpcomingEvent(timing: EventTiming, nowMs: number): boolean {
+  return eventPhase(timing, nowMs) === "upcoming";
+}
+
+/** Upcoming OR live: a currently-current commitment, still worth agenda space. */
+export function isCurrentEvent(timing: EventTiming, nowMs: number): boolean {
+  const phase = eventPhase(timing, nowMs);
+  return phase === "upcoming" || phase === "live";
+}
+
+export function isPastEvent(timing: EventTiming, nowMs: number): boolean {
+  return eventPhase(timing, nowMs) === "past";
+}
+
+// ---------------------------------------------------------------------------
 // Event Glow eligibility (spec §34, §37, §44)
 // ---------------------------------------------------------------------------
 

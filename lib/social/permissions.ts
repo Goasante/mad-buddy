@@ -39,6 +39,38 @@ export async function isBlockedEitherDirection(admin: Admin, userA: string, user
 }
 
 /**
+ * Batched replacement for calling `isBlockedEitherDirection` once per
+ * candidate id -- the same N+1 shape `batchEligibleMuddyIds` below exists to
+ * avoid, added here for the Events list (Plans + Events lifecycle, Stage C):
+ * `listEvents` previously ran no block check at all against event hosts, and
+ * the fix could not become "one query per event" without reintroducing the
+ * exact cost problem that helper was already written to solve.
+ *
+ * Returns the subset of `candidateIds` blocked from `viewerId` in EITHER
+ * direction -- exact same semantics as calling `isBlockedEitherDirection`
+ * once per id, just one query instead of N.
+ */
+export async function batchBlockedIds(
+  admin: Admin,
+  viewerId: string,
+  candidateIds: string[]
+): Promise<Set<string>> {
+  const unique = [...new Set(candidateIds)].filter((id) => id && id !== viewerId);
+  if (unique.length === 0) return new Set();
+
+  const { data: blocks } = await admin
+    .from("blocked_users")
+    .select("blocker_id, blocked_id")
+    .or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`);
+
+  const blockedEitherDirection = new Set(
+    (blocks ?? []).map((row) => (row.blocker_id === viewerId ? row.blocked_id : row.blocker_id))
+  );
+
+  return new Set(unique.filter((id) => blockedEitherDirection.has(id)));
+}
+
+/**
  * Batched replacement for calling `areApprovedMuddies`+`isBlockedEitherDirection`
  * once per candidate id (an N+1 that showed up independently in plan invites
  * and Hangout's "selected Muddies" audience check). One friendships query and

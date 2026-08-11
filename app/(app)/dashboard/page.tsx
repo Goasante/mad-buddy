@@ -3,6 +3,7 @@ import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
 import { loadSafeArrivalJourneys } from "@/lib/safety/safe-arrival-service";
+import { loadUpcomingAgenda } from "@/lib/social/upcoming-agenda";
 import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/auth";
@@ -32,7 +33,7 @@ export default async function DashboardPage() {
   // this page's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
   const admin = createSupabaseAdminClient();
-  const [access, profile, statusResult, upcoming, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air] = user
+  const [access, profile, statusResult, upcoming, agendaItems, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -41,7 +42,12 @@ export default async function DashboardPage() {
           .select("availability_type, activity_type, custom_text, expires_at")
           .eq("user_id", user.id)
           .maybeSingle(),
-        loadUpcomingPlans(user.id),
+        loadUpcomingPlans(user.id, 8),
+        // "My Upcoming" (Plans + Events lifecycle, Stage C): a SEPARATE load
+        // from loadUpcomingPlans above, not a replacement -- upcoming.plans
+        // still feeds weekendPlanCount below and the existing Plan-only
+        // section elsewhere on Home, both untouched.
+        loadUpcomingAgenda(user.id, 8),
         supabase
           .from("profiles")
           .select("username, avatar_url, bio, mood_status")
@@ -73,7 +79,7 @@ export default async function DashboardPage() {
         // labels on Home). Same canonical loader the Moments page uses.
         buildSpotlightFeed(admin, user.id)
       ])
-    : [null, null, null, { plans: [], hasMore: false }, null, null, {}, false, null, 0, null, null, [], []];
+    : [null, null, null, { plans: [], hasMore: false }, [], null, null, {}, false, null, 0, null, null, [], []];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -138,6 +144,7 @@ export default async function DashboardPage() {
       initialStatusNote={hasActiveStatus ? status?.custom_text ?? "" : ""}
       upcomingPlans={upcoming?.plans ?? []}
       hasMorePlans={upcoming?.hasMore ?? false}
+      agendaItems={agendaItems ?? []}
       glowColorByFriendId={glowColorByFriendId}
       safeArrival={
         safeArrival

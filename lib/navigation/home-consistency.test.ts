@@ -16,9 +16,11 @@ const page = read("app/(app)/dashboard/page.tsx");
 
 describe("section headers", () => {
   it("uses the shared component everywhere", () => {
-    // Near, Upcoming Plans (+ empty), Suggestions (+ first-time).
+    // Near, Upcoming Plans (+ empty), My Upcoming (Plans + Events lifecycle,
+    // Stage C -- conditional on an Event being present), Suggestions
+    // (+ first-time).
     const uses = home.match(/<PageSectionHeader/g) ?? [];
-    expect(uses.length).toBe(5);
+    expect(uses.length).toBe(6);
     expect(moments).toContain("<PageSectionHeader");
   });
 
@@ -41,11 +43,17 @@ describe("section headers", () => {
     expect((header.match(/className=\{actionClass\}/g) ?? []).length).toBe(2);
   });
 
-  it("carries the four approved titles", () => {
-    for (const title of ["Near", "Upcoming Plans", "Suggestions for you"]) {
+  it("carries the approved titles", () => {
+    for (const title of ["Near", "Upcoming Plans", "My Upcoming", "Suggestions for you"]) {
       expect(home, `missing section: ${title}`).toContain(`title="${title}"`);
     }
     expect(moments).toContain('title="Moments"');
+  });
+
+  it("shows My Upcoming only once an Event is actually in the agenda", () => {
+    // A Plans-only viewer, which is most of them, must not see a second
+    // plainer list duplicating what the PlanStack above already shows.
+    expect(home).toContain('agendaItems.some((item) => item.kind === "event")');
   });
 
   it("hides the action when there is nothing to see", () => {

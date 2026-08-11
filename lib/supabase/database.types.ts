@@ -1696,6 +1696,26 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["events"]["Insert"]>;
         Relationships: [];
       };
+      event_rsvps: {
+        Row: {
+          id: string;
+          event_id: string;
+          user_id: string;
+          status: EventRsvpStatus;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          user_id: string;
+          status: EventRsvpStatus;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_rsvps"]["Insert"]>;
+        Relationships: [];
+      };
       safe_arrival_sessions: {
         Row: {
           id: string;
@@ -4452,6 +4472,7 @@ export type HangoutRequestStatus = "pending" | "accepted" | "maybe" | "declined"
 
 export type EventVisibility = "invite" | "link" | "community";
 export type EventStatus = "draft" | "scheduled" | "active" | "ended" | "cancelled";
+export type EventRsvpStatus = "interested" | "going" | "not_going";
 
 export type SafeArrivalDestinationType = "custom" | "place" | "event";
 export type SafeArrivalStatus =

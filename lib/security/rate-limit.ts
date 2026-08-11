@@ -32,6 +32,7 @@ export type RateLimitAction =
   | "hangouts.request"
   | "safe_arrival.create"
   | "events.create"
+  | "events.rsvp"
   | "checkins.create"
   | "event_circles.join"
   | "event_announcements.send"
@@ -96,6 +97,9 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   // Safe Arrival / event anti-abuse (feature spec §17, §30, §56).
   "safe_arrival.create": { limit: 10, windowSeconds: 60 * 60 },
   "events.create": { limit: 10, windowSeconds: 24 * 60 * 60 },
+  // Interested/Going/Not Going can all reasonably be tapped and changed a
+  // few times while deciding; generous enough for that, not for scripting.
+  "events.rsvp": { limit: 60, windowSeconds: 60 * 60 },
   "checkins.create": { limit: 20, windowSeconds: 60 * 60 },
   "event_circles.join": { limit: 20, windowSeconds: 60 * 60 },
   "event_announcements.send": { limit: 10, windowSeconds: 60 * 60 },

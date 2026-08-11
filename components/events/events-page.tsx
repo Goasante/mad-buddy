@@ -8,8 +8,11 @@ import {
   checkOutAction,
   createEventAction,
   getEventGlowAction,
-  setEventGlowAction
+  setEventGlowAction,
+  setEventRsvpAction
 } from "@/app/(app)/event-actions";
+import { eventPhase, type EventPhase } from "@/lib/events/rules";
+import type { EventRsvpStatus } from "@/lib/supabase/database.types";
 import type { EventView } from "@/lib/events/mobile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,8 +50,21 @@ function eventDateLabel(startsAt: string): string {
   });
 }
 
-function isLive(event: EventView, nowMs: number): boolean {
-  return Date.parse(event.startsAt) <= nowMs && nowMs < Date.parse(event.endsAt);
+/**
+ * THE BUG THIS REPLACES (Plans + Events lifecycle, Stage C). The Upcoming tab
+ * used to be `events.filter((event) => !isLive(event, nowMs))`, which
+ * logically includes PAST events too -- !live is true for both "hasn't
+ * started" and "already ended". It only looked correct because listEvents
+ * filters `ends_at >= now` in its own query, so a past event could never
+ * reach this component to expose the bug. Upstream SQL hiding incorrect UI
+ * logic is exactly the trap: any other caller of this component, or any
+ * future change to that query, would have silently broken the tab.
+ *
+ * Every comparison now goes through the one canonical eventPhase -- no
+ * component decides "upcoming" or "live" for itself.
+ */
+function phaseOf(event: EventView, nowMs: number): EventPhase {
+  return eventPhase({ startsAtMs: Date.parse(event.startsAt), endsAtMs: Date.parse(event.endsAt) }, nowMs);
 }
 
 export function EventsPageContent({
@@ -97,8 +113,10 @@ export function EventsPageContent({
   const visibleEvents = useMemo(() => {
     if (activeTab === "mine") return events.filter((event) => event.isHost);
     if (nowMs === 0) return activeTab === "live" ? [] : events;
-    if (activeTab === "live") return events.filter((event) => isLive(event, nowMs));
-    return events.filter((event) => !isLive(event, nowMs));
+    if (activeTab === "live") return events.filter((event) => phaseOf(event, nowMs) === "live");
+    // Upcoming means upcoming, not "not currently live". A past event that
+    // somehow reached this list (see phaseOf's note) must not appear here.
+    return events.filter((event) => phaseOf(event, nowMs) === "upcoming");
   }, [events, activeTab, nowMs]);
   const selectedEvent = events.find((event) => event.id === selectedId) ?? null;
 
@@ -159,6 +177,24 @@ export function EventsPageContent({
     });
   }
 
+  /**
+   * RSVP change (Plans + Events lifecycle, Stage C). Same shape as checkIn/
+   * checkOut above: call the server action, trust its answer, update local
+   * state only on success. The server is the one deciding whether this was
+   * allowed -- blocked, cancelled, past, host -- this function never guesses.
+   */
+  function changeRsvp(event: EventView, status: EventRsvpStatus) {
+    startTransition(async () => {
+      const result = await setEventRsvpAction(event.id, status);
+      setFeedback(result.message);
+      if (result.ok) {
+        setEvents((current) =>
+          current.map((item) => (item.id === event.id ? { ...item, myRsvp: status } : item))
+        );
+      }
+    });
+  }
+
   function createEvent(input: {
     name: string;
     date: string;
@@ -196,7 +232,10 @@ export function EventsPageContent({
               hostPlan: currentUserPlan,
               isHost: true,
               myCheckInId: null,
-              myGlowEnabled: false
+              myGlowEnabled: false,
+              // The host never carries an RSVP row -- hosting is derived from
+              // isHost, not fabricated as intent to attend one's own event.
+              myRsvp: null
             },
             ...current
           ]);
@@ -260,7 +299,7 @@ export function EventsPageContent({
             <EventCard
               key={event.id}
               event={event}
-              live={isLive(event, nowMs)}
+              phase={phaseOf(event, nowMs)}
               pending={isPending}
               onView={() => openDetails(event.id)}
               onCheckIn={() => checkIn(event)}
@@ -296,6 +335,7 @@ export function EventsPageContent({
         onCheckIn={() => selectedEvent && checkIn(selectedEvent)}
         onCheckOut={() => selectedEvent && checkOut(selectedEvent)}
         onToggleGlow={() => selectedEvent && toggleGlow(selectedEvent)}
+        onRsvpChange={(status) => selectedEvent && changeRsvp(selectedEvent, status)}
       />
     </div>
   );
@@ -303,14 +343,14 @@ export function EventsPageContent({
 
 function EventCard({
   event,
-  live,
+  phase,
   pending,
   onView,
   onCheckIn,
   onCheckOut
 }: {
   event: EventView;
-  live: boolean;
+  phase: EventPhase;
   pending: boolean;
   onView: () => void;
   onCheckIn: () => void;
@@ -322,8 +362,15 @@ function EventCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate text-base font-semibold">{event.name}</h3>
-            {live ? <Badge variant="violet">Happening now</Badge> : null}
+            {phase === "live" ? <Badge variant="violet">Happening now</Badge> : null}
             {event.myCheckInId ? <Badge>Checked in</Badge> : null}
+            {event.isHost ? (
+              <Badge variant="blue">Hosting</Badge>
+            ) : event.myRsvp === "going" ? (
+              <Badge variant="green">Going</Badge>
+            ) : event.myRsvp === "interested" ? (
+              <Badge>Interested</Badge>
+            ) : null}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{eventDateLabel(event.startsAt)}</p>
           {event.venueLabel ? (
@@ -465,7 +512,8 @@ function EventDetailsModal({
   onOpenChange,
   onCheckIn,
   onCheckOut,
-  onToggleGlow
+  onToggleGlow,
+  onRsvpChange
 }: {
   event: EventView | null;
   glowList: EventGlowMuddyList | null;
@@ -474,6 +522,7 @@ function EventDetailsModal({
   onCheckIn: () => void;
   onCheckOut: () => void;
   onToggleGlow: () => void;
+  onRsvpChange: (status: EventRsvpStatus) => void;
 }) {
   const reducedMotion = useReducedMotion();
   return (
@@ -528,6 +577,59 @@ function EventDetailsModal({
             <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             Hosted by {event.hostName}
           </div>
+
+          {/*
+            RSVP (Plans + Events lifecycle, Stage C). Hosting and RSVPing are
+            different concepts: the host sees their own standing stated
+            plainly rather than being offered Interested/Going on their own
+            event, which setEventRsvp's server-side check would refuse anyway
+            -- this mirrors that rule in the UI rather than showing a control
+            that would always fail.
+
+            Selected state uses the same variant="primary" vs "outline"
+            pattern the Plans RSVP buttons already use (components/plans/
+            plans-page.tsx), not a new segmented control -- one selected-state
+            language across the app's two RSVP surfaces.
+          */}
+          {event.isHost ? (
+            <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-background/60 px-3 py-2 text-sm">
+              <Users className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+              You&apos;re hosting this event.
+            </div>
+          ) : (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your RSVP</p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={event.myRsvp === "interested" ? "primary" : "outline"}
+                  disabled={pending}
+                  onClick={() => onRsvpChange("interested")}
+                >
+                  Interested
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={event.myRsvp === "going" ? "primary" : "outline"}
+                  disabled={pending}
+                  onClick={() => onRsvpChange("going")}
+                >
+                  Going
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={event.myRsvp === "not_going" ? "primary" : "outline"}
+                  disabled={pending}
+                  onClick={() => onRsvpChange("not_going")}
+                >
+                  Not going
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2 border-t border-border/70 pt-4">
             {event.myCheckInId ? (

@@ -26,7 +26,7 @@ import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createEvent, listEvents, type EventView } from "@/lib/events/mobile";
+import { createEvent, listEvents, setEventRsvp, type EventView } from "@/lib/events/mobile";
 import type { CheckInVisibility, EventGlowMuddyList } from "@/lib/events/types";
 
 export type EventActionState = {
@@ -72,6 +72,23 @@ export async function createEventAction(input: unknown): Promise<EventActionStat
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
   return createEvent(userId, input);
+}
+
+// ---------------------------------------------------------------------------
+// RSVP / Going (Plans + Events lifecycle, Stage C)
+// ---------------------------------------------------------------------------
+
+/**
+ * Thin wrapper, same shape as every other action here: resolve the
+ * authenticated user server-side, then hand off. All real validation --
+ * event existence, blocks, cancelled/ended, the host exception -- lives in
+ * setEventRsvp, not duplicated at this layer.
+ */
+export async function setEventRsvpAction(eventId: string, status: unknown): Promise<EventActionState> {
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in before RSVPing." };
+  if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
+  return setEventRsvp(userId, eventId, status);
 }
 
 // ---------------------------------------------------------------------------
