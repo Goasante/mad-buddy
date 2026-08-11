@@ -9,6 +9,7 @@ const moments = read("components/content/moments-preview.tsx");
 const momentTile = read("components/content/moment-tile.tsx");
 const header = read("components/app-shell/page-section-header.tsx");
 const page = read("app/(app)/dashboard/page.tsx");
+const topEvents = read("components/events/top-events-home.tsx");
 
 // ---------------------------------------------------------------------------
 // Section headers — one component, no duplicates
@@ -16,12 +17,14 @@ const page = read("app/(app)/dashboard/page.tsx");
 
 describe("section headers", () => {
   it("uses the shared component everywhere", () => {
-    // Near, Upcoming Plans (+ empty), My Upcoming (Plans + Events lifecycle,
+    // Near, My Plans (+ empty), My Upcoming (Plans + Events lifecycle,
     // Stage C -- conditional on an Event being present), Suggestions
-    // (+ first-time).
+    // (+ first-time). "What's Popping" (Ranked Events Discovery) lives in
+    // its own module component, counted below rather than here.
     const uses = home.match(/<PageSectionHeader/g) ?? [];
     expect(uses.length).toBe(6);
     expect(moments).toContain("<PageSectionHeader");
+    expect(topEvents).toContain("<PageSectionHeader");
   });
 
   it("leaves no hand-written duplicate header markup", () => {
@@ -44,10 +47,19 @@ describe("section headers", () => {
   });
 
   it("carries the approved titles", () => {
-    for (const title of ["Near", "Upcoming Plans", "My Upcoming", "Suggestions for you"]) {
+    for (const title of ["Near", "My Plans", "My Upcoming", "Suggestions for you"]) {
       expect(home, `missing section: ${title}`).toContain(`title="${title}"`);
     }
     expect(moments).toContain('title="Moments"');
+    expect(topEvents).toContain(`title="What's Popping"`);
+  });
+
+  it("never labels two Home sections as the same kind of upcoming", () => {
+    // "Upcoming Plans" next to ranked "Upcoming Events" read as variants of
+    // one another (Ranked Events Discovery). Personal commitments are now
+    // "My Plans"; discovery is "What's Popping".
+    expect(home).not.toContain('title="Upcoming Plans"');
+    expect(home).not.toContain('title="Upcoming Events"');
   });
 
   it("shows My Upcoming only once an Event is actually in the agenda", () => {
@@ -58,7 +70,7 @@ describe("section headers", () => {
 
   it("hides the action when there is nothing to see", () => {
     // Empty Plans and the first-time Suggestions set render title-only.
-    expect(home).toContain('<PageSectionHeader id="home-plan-heading" title="Upcoming Plans" />');
+    expect(home).toContain('<PageSectionHeader id="home-plan-heading" title="My Plans" />');
     expect(home).toContain('<PageSectionHeader id="home-actions-heading" title="Suggestions for you" />');
   });
 

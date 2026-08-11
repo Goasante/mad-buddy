@@ -17,6 +17,8 @@ import { loadSmartCard } from "@/lib/smart-card/smart-card-service";
 import { deriveBirthProfile } from "@/lib/profile/birth-date";
 import { isWeekendPlanningWindow } from "@/lib/smart-card/smart-card";
 import { buildMomentFeed, buildSpotlightFeed } from "@/lib/content/service";
+import { getRankedUpcomingEvents } from "@/lib/events/ranked-events";
+import { HOME_RANKED_EVENTS_LIMIT } from "@/lib/events/ranking";
 
 /**
  * How many Moments the Home rail renders. Enough to fill the viewport with
@@ -33,7 +35,7 @@ export default async function DashboardPage() {
   // this page's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
   const admin = createSupabaseAdminClient();
-  const [access, profile, statusResult, upcoming, agendaItems, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air] = user
+  const [access, profile, statusResult, upcoming, agendaItems, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -77,9 +79,13 @@ export default async function DashboardPage() {
         buildMomentFeed(admin, user.id),
         // Air sessions, mixed into the same rail as Moments (no section
         // labels on Home). Same canonical loader the Moments page uses.
-        buildSpotlightFeed(admin, user.id)
+        buildSpotlightFeed(admin, user.id),
+        // Top 5 ONLY (Ranked Events Discovery). Home never loads the full
+        // ranking: the ranked page asks the same loader for up to 100, so
+        // the two agree on rank without Home paying for 100 rows.
+        getRankedUpcomingEvents(user.id, { limit: HOME_RANKED_EVENTS_LIMIT })
       ])
-    : [null, null, null, { plans: [], hasMore: false }, [], null, null, {}, false, null, 0, null, null, [], []];
+    : [null, null, null, { plans: [], hasMore: false }, [], null, null, {}, false, null, 0, null, null, [], [], []];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -168,6 +174,7 @@ export default async function DashboardPage() {
       moments={(moments ?? []).slice(0, HOME_MOMENTS_LIMIT)}
       // Mixed into the same rail, capped alongside Moments.
       air={(air ?? []).slice(0, HOME_MOMENTS_LIMIT)}
+      topEvents={topEvents ?? []}
       isFirstTimeUser={journey ? isFirstTimeJourneyState(journey) : false}
       incomingRequestCount={incomingRequestCount ?? 0}
     />

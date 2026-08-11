@@ -71,6 +71,8 @@ import type { ActivityType, AvailabilityType, SubscriptionPlan } from "@/lib/sup
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { SmartCardHero } from "@/components/journey/smart-card";
+import { TopEventsHome } from "@/components/events/top-events-home";
+import type { RankedEvent } from "@/lib/events/ranked-events";
 import type { SmartCard } from "@/lib/smart-card/smart-card";
 
 type DashboardFriend = {
@@ -162,6 +164,13 @@ type DashboardPageContentProps = {
    * activation-focused variant; everything else on Home behaves identically.
    */
   isFirstTimeUser?: boolean;
+  /**
+   * Top 5 ranked Events (Ranked Events Discovery). Ranked server-side by the
+   * one canonical loader, so Home and the full Top Events list can never
+   * disagree about what rank an event holds. Empty is a valid, common answer
+   * and renders nothing rather than a placeholder.
+   */
+  topEvents?: RankedEvent[];
   // currentUsername / currentAvatarUrl / buddyScoreLevelLabel used to be
   // passed here for Home's own copy of the menu sheet. That sheet now lives
   // in AppShell and gets its identity from the layout, so Home no longer
@@ -254,6 +263,7 @@ export function DashboardPageContent({
   moments = [],
   air = [],
   isFirstTimeUser = false,
+  topEvents = [],
   incomingRequestCount = 0
 }: DashboardPageContentProps) {
   const reducedMotion = useReducedMotion();
@@ -627,6 +637,20 @@ export function DashboardPageContent({
           onSelect={setSelectedFriendId}
         />
 
+        {/* Top Events (Ranked Events Discovery).
+
+            Sits AFTER the Smart Card and Near, not above them. The brief's
+            target order put Events directly under the hero, but the audit
+            found Near carries the viewer's own live state (who is around
+            them right now) and the Smart Card can be a live Safe Arrival
+            journey. Discovery is not allowed to push either of those below
+            the fold, so Events takes the next slot instead -- still high,
+            still above the fold on a phone once the hero is compact, and
+            without burying personal or safety state to get there.
+
+            Renders nothing when the ranking is empty. */}
+        <TopEventsHome events={topEvents} />
+
         {/* Upcoming Plans sits directly under Near: both answer "what is
             happening with my people", so they belong together, above the
             generic action shortcuts.
@@ -640,7 +664,7 @@ export function DashboardPageContent({
           <section aria-labelledby="home-plans-heading" data-tour-id={TOUR_TARGET_IDS.HOME_UPCOMING_PLAN}>
             <PageSectionHeader
               id="home-plans-heading"
-              title="Upcoming Plans"
+              title="My Plans"
               href="/plans"
               actionAriaLabel="See all plans"
             />
@@ -1433,7 +1457,7 @@ function UpcomingPlanEmpty() {
   return (
     <section aria-labelledby="home-plan-heading">
       {/* No action: with nothing upcoming there is nothing to see all of. */}
-      <PageSectionHeader id="home-plan-heading" title="Upcoming Plans" />
+      <PageSectionHeader id="home-plan-heading" title="My Plans" />
       <div className="flex items-center gap-3.5 py-1">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border/60 text-muted-foreground">
           <CalendarDays className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
