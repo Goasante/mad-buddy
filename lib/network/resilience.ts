@@ -36,15 +36,23 @@ export async function withTimeout<T>(
 ): Promise<T> {
   const startedAt = now();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  // Set only by the timeout branch below, so the `finally` block can tell a
+  // request that actually finished (however slowly) apart from one this
+  // function gave up on and aborted. Without this, both were logged under
+  // the identical "slow operation" label -- which is what turned a genuinely
+  // unresponsive server (every request hitting its 12-15s ceiling) into a
+  // console full of entries that read as "slow" rather than "not answering",
+  // and sent debugging toward the wrong layer.
+  let timedOut = false;
 
   try {
     return await Promise.race([
       Promise.resolve(promise),
       new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(
-          () => reject(new RequestTimeoutError(operation, timeoutMs)),
-          timeoutMs,
-        );
+        timeoutId = setTimeout(() => {
+          timedOut = true;
+          reject(new RequestTimeoutError(operation, timeoutMs));
+        }, timeoutMs);
       }),
     ]);
   } finally {
@@ -53,14 +61,12 @@ export async function withTimeout<T>(
     }
 
     const durationMs = Math.round(now() - startedAt);
-    if (
-      process.env.NODE_ENV !== "test" &&
-      durationMs >= slowAfterMs
-    ) {
-      console.warn("[performance] slow operation", {
-        operation,
-        durationMs,
-      });
+    if (process.env.NODE_ENV !== "test") {
+      if (timedOut) {
+        console.warn("[performance] operation timed out", { operation, durationMs });
+      } else if (durationMs >= slowAfterMs) {
+        console.warn("[performance] slow operation", { operation, durationMs });
+      }
     }
   }
 }
@@ -83,6 +89,11 @@ export async function fetchWithTimeout(
 
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const startedAt = now();
+  // Distinguishes "this fetch aborted because OUR timer fired" from every
+  // other reason a fetch can reject (the caller's own signal, a genuine
+  // network error) so the finally block below can log accordingly -- see the
+  // matching note in withTimeout above for why this distinction matters.
+  let timedOut = false;
 
   try {
     return await fetch(input, {
@@ -91,6 +102,7 @@ export async function fetchWithTimeout(
     });
   } catch (error) {
     if (controller.signal.aborted && !callerSignal?.aborted) {
+      timedOut = true;
       throw new RequestTimeoutError(operation, timeoutMs);
     }
     throw error;
@@ -99,14 +111,12 @@ export async function fetchWithTimeout(
     callerSignal?.removeEventListener("abort", abortFromCaller);
 
     const durationMs = Math.round(now() - startedAt);
-    if (
-      process.env.NODE_ENV !== "test" &&
-      durationMs >= 4_000
-    ) {
-      console.warn("[performance] slow operation", {
-        operation,
-        durationMs,
-      });
+    if (process.env.NODE_ENV !== "test") {
+      if (timedOut) {
+        console.warn("[performance] operation timed out", { operation, durationMs });
+      } else if (durationMs >= 4_000) {
+        console.warn("[performance] slow operation", { operation, durationMs });
+      }
     }
   }
 }
