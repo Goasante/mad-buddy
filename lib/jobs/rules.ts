@@ -43,7 +43,12 @@ export type JobType =
   | "expiry.friend_requests"
   | "expiry.event_circles"
   | "expiry.admin_assignments"
-  | "notifications.send";
+  | "notifications.send"
+  // Plan/Event reminders (Stage D). `scan` is periodic and enqueues `deliver`
+  // jobs at their exact reminder instants; `deliver` is never on SCHEDULE
+  // because it is created with a run_at rather than a cadence.
+  | "reminders.scan"
+  | "reminders.deliver";
 
 // ---------------------------------------------------------------------------
 // Retry policy (spec §29)
@@ -180,7 +185,21 @@ export const SCHEDULE: readonly ScheduleSpec[] = [
   { jobType: "expiry.invites", everyMinutes: 60, priority: 6 },
   { jobType: "expiry.friend_requests", everyMinutes: 60 * 12, priority: 6 },
   { jobType: "expiry.event_circles", everyMinutes: 60, priority: 6 },
-  { jobType: "expiry.admin_assignments", everyMinutes: 60, priority: 2 }
+  { jobType: "expiry.admin_assignments", everyMinutes: 60, priority: 2 },
+  /**
+   * Reminder discovery (Stage D).
+   *
+   * Every 15 minutes, not every 5: the scan only needs to enqueue a delivery
+   * job before its moment arrives, and the horizon (26 hours) is vastly
+   * larger than the gap between scans, so nothing can be missed by scanning
+   * less often. Delivery precision comes from each job's own run_at, never
+   * from this cadence -- a 30-minute reminder fires at 30 minutes regardless
+   * of when the scan that queued it ran.
+   *
+   * Priority 5 keeps it below the Safe Arrival alert, which is the one job
+   * here where lateness is a safety consequence rather than a cosmetic one.
+   */
+  { jobType: "reminders.scan", everyMinutes: 15, priority: 5 }
 ];
 
 /**

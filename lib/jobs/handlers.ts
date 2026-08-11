@@ -733,5 +733,48 @@ export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
   "expiry.invites": handleExpireInvites,
   "expiry.friend_requests": handleExpireFriendRequests,
   "expiry.event_circles": handleExpireEventCircles,
-  "expiry.admin_assignments": handleExpireAdminAssignments
+  "expiry.admin_assignments": handleExpireAdminAssignments,
+  "reminders.scan": async (admin) => {
+    const { scanAndEnqueueReminders } = await import("@/lib/reminders/service");
+    return scanAndEnqueueReminders(admin);
+  },
+  "reminders.deliver": async (admin, payload) => {
+    const { deliverReminder } = await import("@/lib/reminders/service");
+    const parsed = parseReminderPayload(payload);
+    // A malformed payload is permanently unprocessable, never a transient
+    // fault: retrying cannot repair it, so it is a completed no-op rather
+    // than a job that burns five attempts before dead-lettering.
+    if (!parsed) return 0;
+    const outcome = await deliverReminder(admin, parsed);
+    // Only a real send counts as work done. Every skip is a legitimate,
+    // terminal outcome -- cancelled, moved, declined, too late -- and must
+    // not look like a failure to the worker.
+    return outcome === "delivered" ? 1 : 0;
+  }
 };
+
+/**
+ * Narrows an untyped job payload, returning null when it cannot be trusted.
+ *
+ * Every field is checked against the literal unions rather than cast: a job
+ * row is data, and a payload written by an older deploy (or corrupted) must
+ * not be able to reach the delivery path as though it were valid.
+ */
+function parseReminderPayload(
+  payload: Record<string, unknown>
+): import("@/lib/reminders/service").ReminderJobPayload | null {
+  const { domain, itemId, userId, stage, expectedStartAtMs } = payload as {
+    domain?: unknown;
+    itemId?: unknown;
+    userId?: unknown;
+    stage?: unknown;
+    expectedStartAtMs?: unknown;
+  };
+
+  if (domain !== "plan" && domain !== "event") return null;
+  if (typeof itemId !== "string" || typeof userId !== "string") return null;
+  if (stage !== "24h" && stage !== "2h" && stage !== "near_start") return null;
+  if (typeof expectedStartAtMs !== "number" || !Number.isFinite(expectedStartAtMs)) return null;
+
+  return { domain, itemId, userId, stage, expectedStartAtMs };
+}
