@@ -3,6 +3,7 @@ import { randomUUID, timingSafeEqual } from "crypto";
 import { runTick } from "@/lib/jobs/worker";
 import { buildTickSummary, resolveSchedulerSource, workerIdFor } from "@/lib/jobs/scheduler-source";
 import { checkSchedulerHealthAndAlert } from "@/lib/jobs/scheduler-alerts";
+import { isSchedulerHealthCheckDue } from "@/lib/jobs/rules";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -77,14 +78,20 @@ export async function GET(request: Request) {
     const result = await runTick(admin, workerIdFor(source, tickId));
 
     // Check the scheduler's own health after the work is done, so a slow or
-    // failing health check can never delay or fail the jobs themselves.
-    // Deliberately not awaited into the response path beyond this: an alerting
-    // problem must not turn a healthy tick into a failed one.
-    try {
-      await checkSchedulerHealthAndAlert(admin);
-    } catch {
-      // Never let alerting break the tick. A missed health check is far less
-      // serious than a missed job.
+    // failing health check can never delay or fail the jobs themselves, and
+    // only on the tick whose bucket calls for it. This is a cost throttle,
+    // never a correctness one: a scheduler that has actually stopped ticking
+    // produces no invocations at all, so there is no tick to skip and nothing
+    // this check could miss by running less often on the healthy path. See
+    // isSchedulerHealthCheckDue for why 15 minutes stays ahead of the
+    // 12-minute missing-tick alarm.
+    if (isSchedulerHealthCheckDue(Date.now())) {
+      try {
+        await checkSchedulerHealthAndAlert(admin);
+      } catch {
+        // Never let alerting break the tick. A missed health check is far less
+        // serious than a missed job.
+      }
     }
 
     const summary = buildTickSummary({

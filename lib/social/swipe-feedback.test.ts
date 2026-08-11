@@ -187,8 +187,16 @@ describe("pending Muddy requests show on the Muddies tab", () => {
     expect(runner.slice(0, 600)).toContain("announceMuddyRequestsUpdated()");
   });
 
-  it("polls like the messages badge rather than inventing a cadence", () => {
-    expect(hook).toContain("30_000");
+  it("polls as a safety net, not a 30s cadence copied from messages", () => {
+    // Vercel usage optimization pass: this badge is now Realtime-backed
+    // (see lib/network/badge-polling-optimization.test.ts), matching what
+    // useUnreadMessageCount already had. The 30s interval this used to share
+    // with messages is gone from BOTH; messages dropped its poll entirely
+    // once Realtime made it redundant, and this hook -- the newest Realtime
+    // path in the app -- keeps a much slower named safety net rather than
+    // inventing its own cadence.
+    expect(hook).not.toContain("30_000");
+    expect(hook).toContain("FRIEND_REQUEST_SAFETY_POLL_MS");
     expect(hook).toContain("if (!document.hidden)");
   });
 

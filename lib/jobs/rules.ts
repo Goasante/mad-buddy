@@ -198,6 +198,97 @@ export function isDueForSchedule(spec: ScheduleSpec, lastRunAtMs: number | null,
   return nowMs - lastRunAtMs >= spec.everyMinutes * 60 * 1000;
 }
 
+/**
+ * How often the tick itself fires. `pg_cron` runs `cron-tick-5min` on a real
+ * 5-minute schedule (20260723180000_pg_cron_tick.sql); GitHub Actions is the
+ * same nominal cadence but throttled, so this is the tighter of the two and
+ * the correct width to check a bucket boundary against.
+ */
+const TICK_INTERVAL_MINUTES = 5;
+
+/**
+ * Whether THIS TICK is the one that should enqueue `spec`, without reading any
+ * stored state.
+ *
+ * THE PROBLEM THIS REPLACES. `enqueueDueSchedules` used to attempt an insert
+ * for every one of the twenty schedules on every tick and let the database's
+ * unique idempotency index reject the ones not yet due. That works -- nothing
+ * was ever double-enqueued -- but it means an hourly job attempts eleven
+ * guaranteed-to-fail inserts between the one that succeeds, and a daily job
+ * attempts 287. Roughly eighteen of twenty-one round trips a typical tick
+ * spent were exactly that: an insert whose only possible outcomes were
+ * "succeed once a period" or "fail because it already did".
+ *
+ * WHY A BUCKET COMPARISON AND NOT A STORED "LAST RUN" TIMESTAMP. Reading
+ * "when did this last enqueue" would trade twenty semi-wasted inserts for one
+ * extra read per schedule, which is not obviously cheaper and reintroduces the
+ * chicken-and-egg problem of a value only the enqueue itself would set. The
+ * bucket a job belongs to is computable from nowMs alone -- the same
+ * `Math.floor(nowMs / periodMs)` periodicIdempotencyKey already uses -- so
+ * "is this tick the one that starts this schedule's bucket" needs no I/O.
+ *
+ * WHY "FIRST TICK OF THE BUCKET" RATHER THAN "BUCKET CHANGED SINCE LAST
+ * CALL". This function is pure and stateless by design: it must give the same
+ * answer for the same nowMs regardless of when it was last invoked, including
+ * never. A bucket only spans multiple 5-minute ticks for periods above 5
+ * minutes, and this is due on the FIRST of those ticks -- the one where
+ * elapsed time within the bucket is less than one tick width. For
+ * everyMinutes = 5, every tick's own bucket is naturally the first (and only)
+ * tick in it, so nothing changes for the safety-critical Safe Arrival job.
+ *
+ * THE UNIQUE INDEX IS STILL THE GUARANTEE. If two schedulers overlap, or this
+ * function is ever wrong at a boundary, the insert either lands once or is
+ * rejected by `periodic:{jobType}:{bucket}` exactly as before -- this is
+ * purely a cost reduction on the common, nothing-to-do path, never a
+ * correctness mechanism in its own right.
+ */
+export function isScheduleDue(spec: ScheduleSpec, nowMs: number): boolean {
+  const periodMs = spec.everyMinutes * 60 * 1000;
+  const elapsedInBucket = nowMs % periodMs;
+  return elapsedInBucket < TICK_INTERVAL_MINUTES * 60 * 1000;
+}
+
+/**
+ * How often `checkSchedulerHealthAndAlert` actually reads the database,
+ * independent of the 5-minute tick that calls it.
+ *
+ * CANNOT BE THROTTLED THE SAME WAY A REGULAR SCHEDULE IS. A schedule that
+ * misses a tick just runs a little late; the health check exists to notice
+ * when ticks stop happening AT ALL, and it only ever runs from inside a tick
+ * that IS happening. Throttling how often it queries therefore only ever
+ * costs alert LATENCY, never detection: `assessSchedulerHealth` reads a
+ * 12-run window from `cron.job_run_details` every time it does query, so
+ * whenever this next runs it still sees the full gap and still alerts. A
+ * scheduler that is actually down produces zero ticks and therefore zero
+ * calls to this function regardless of the interval chosen here -- throttling
+ * only reduces how often a HEALTHY run re-confirms that it is healthy.
+ *
+ * TEN MINUTES, not the 30-60 suggested for an unconstrained health check:
+ * MISSING_TICK_ALERT_MS (scheduler-health.ts) is 12 minutes, and this interval
+ * is kept BELOW it -- two ticks of headroom -- so a check that lands right at
+ * the start of its throttle window, immediately followed by the scheduler
+ * dying, still has its next scheduled check fire before 12 minutes of silence
+ * would itself have qualified as "missing" on a from-scratch read. Total
+ * worst-case detection-to-alert latency stays under 22 minutes, comfortably
+ * inside how the real incident that motivated this file was actually found
+ * (by hand, "minutes later") -- and unlike that discovery, this one no longer
+ * depends on a person noticing.
+ */
+export const SCHEDULER_HEALTH_CHECK_INTERVAL_MINUTES = 10;
+
+/**
+ * Whether THIS TICK should perform the health check's DB reads.
+ *
+ * Same bucket-boundary shape as isScheduleDue, and deliberately not sharing
+ * its implementation: the two throttle unrelated things for unrelated
+ * reasons, and a future change to one must not silently retune the other.
+ */
+export function isSchedulerHealthCheckDue(nowMs: number): boolean {
+  const periodMs = SCHEDULER_HEALTH_CHECK_INTERVAL_MINUTES * 60 * 1000;
+  const elapsedInBucket = nowMs % periodMs;
+  return elapsedInBucket < TICK_INTERVAL_MINUTES * 60 * 1000;
+}
+
 // ---------------------------------------------------------------------------
 // Worker guards
 // ---------------------------------------------------------------------------

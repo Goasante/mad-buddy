@@ -133,6 +133,68 @@ describe("periodic enqueue idempotency", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Vercel usage optimization: idle ticks stop attempting every insert
+// ---------------------------------------------------------------------------
+
+/**
+ * enqueueDueSchedules used to loop all twenty SCHEDULE entries and attempt an
+ * insert for each, relying on the unique index above to reject the ones not
+ * yet due. isScheduleDue (lib/jobs/rules.ts) now filters the loop itself, so
+ * the database only ever sees an insert attempt on the tick that is actually
+ * due -- the index stays exactly as it was, as the guarantee for concurrent
+ * or overlapping ticks, not as the primary filter.
+ */
+describe("idle ticks no longer attempt every schedule", () => {
+  it("filters SCHEDULE through isScheduleDue before the insert loop", () => {
+    const enqueue = worker.slice(worker.indexOf("export async function enqueueDueSchedules"));
+    const body = enqueue.slice(0, enqueue.indexOf("\n}"));
+    expect(body).toContain("SCHEDULE.filter((spec) => isScheduleDue(spec, nowMs))");
+    // The insert itself, and the comment explaining the index is still the
+    // real guarantee, must both survive this change untouched.
+    expect(body).toContain("admin.from(\"jobs\").insert(");
+    expect(body).toContain("// A unique violation means this period is already enqueued, expected.");
+  });
+
+  it("imports the due check from the one place it is defined", () => {
+    expect(worker).toContain('from "@/lib/jobs/rules"');
+    expect(worker).toContain("isScheduleDue");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Vercel usage optimization: scheduler health throttled independent of work
+// ---------------------------------------------------------------------------
+
+/**
+ * checkSchedulerHealthAndAlert used to run on every tick unconditionally --
+ * two more DB reads (cron.job_run_details via RPC, then scheduler_incidents)
+ * purely to re-confirm health that had not changed since the last tick five
+ * minutes earlier. It is now gated by isSchedulerHealthCheckDue, which cannot
+ * weaken detection: the function only ever runs from inside a tick that IS
+ * executing, so a scheduler that has actually stopped produces zero calls
+ * regardless of any throttle here.
+ */
+describe("scheduler health check runs on its own cadence", () => {
+  it("gates the health check behind isSchedulerHealthCheckDue", () => {
+    expect(route).toContain("isSchedulerHealthCheckDue(Date.now())");
+    const gated = route.slice(route.indexOf("isSchedulerHealthCheckDue(Date.now())"));
+    expect(gated.slice(0, 300)).toContain("checkSchedulerHealthAndAlert(admin)");
+  });
+
+  it("still never lets a health-check failure fail the tick", () => {
+    // The try/catch around the call must survive the new gate wrapping it.
+    const gated = route.slice(route.indexOf("isSchedulerHealthCheckDue(Date.now())"));
+    expect(gated.slice(0, 500)).toContain("try {");
+    expect(gated.slice(0, 500)).toContain("} catch {");
+  });
+
+  it("imports the gate from the same rules module as the schedule check", () => {
+    expect(route).toContain('from "@/lib/jobs/rules"');
+    expect(route).toContain("isSchedulerHealthCheckDue");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Overdue catch-up
 // ---------------------------------------------------------------------------
 

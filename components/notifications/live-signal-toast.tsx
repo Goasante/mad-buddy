@@ -35,9 +35,25 @@ type ActiveSignal = {
  * and takes them to the relevant place if they tap it before it fades.
  *
  * Delivery is a realtime subscription on the recipient's own notification rows
- * (RLS restricts the stream to `auth.uid() = user_id`), so this never polls on
- * its own — the app shell's existing 60s unread poll stays the fallback for
- * the badge if realtime is unavailable.
+ * (RLS restricts the stream to `auth.uid() = user_id`).
+ *
+ * THE POLL BELOW IS CONDITIONAL NOW (Vercel usage optimization pass). It used
+ * to run unconditionally every 45s regardless of whether Realtime was
+ * healthy — full notification rows, fetched purely to be thrown away except
+ * for their `id`/`type`, on a timer that never checked whether the socket it
+ * was meant to stand in for was actually working. It still exists for exactly
+ * the case it always covered — a blocked WebSocket, a restrictive proxy, a
+ * tab that never reaches SUBSCRIBED — but now only RUNS while that case is
+ * true. Once the channel reaches SUBSCRIBED the interval is torn down
+ * entirely; if it later drops to CHANNEL_ERROR/TIMED_OUT/CLOSED the poll
+ * resumes. A healthy connection therefore produces zero recurring requests
+ * from this component, which is the actual point.
+ *
+ * `useUnreadNotificationCount` no longer runs its own interval either — see
+ * that hook. Both now rely on the same `mad-buddy:notifications-updated`
+ * broadcast, fired here on every Realtime insert AND on every poll-fallback
+ * insert, so the badge stays correct through whichever path is currently
+ * live without a second independent timer maintaining it.
  */
 export function LiveSignalToast({ currentUserId }: { currentUserId: string | null }) {
   const router = useRouter();
@@ -149,16 +165,30 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
       }
     };
 
-    void pollOnce();
-    const pollTimer = window.setInterval(() => {
-      if (!document.hidden) void pollOnce();
-    }, 45_000);
+    // Poll timer handle. Only ever running while Realtime is NOT confirmed
+    // healthy -- started here before Realtime has had a chance to connect
+    // (covering the gap and the no-browser-env case below), stopped the
+    // moment SUBSCRIBED is reached, restarted if the channel later drops.
+    let pollTimer: number | undefined;
+    const startPoll = () => {
+      if (pollTimer !== undefined) return;
+      void pollOnce();
+      pollTimer = window.setInterval(() => {
+        if (!document.hidden) void pollOnce();
+      }, 45_000);
+    };
+    const stopPoll = () => {
+      if (pollTimer === undefined) return;
+      window.clearInterval(pollTimer);
+      pollTimer = undefined;
+    };
+    startPoll();
 
     let supabase: ReturnType<typeof createSupabaseBrowserClient> | null = null;
     try {
       supabase = createSupabaseBrowserClient();
     } catch {
-      // No browser env: the poll fallback above still delivers signals.
+      // No browser env: the poll above stays running and delivers signals.
     }
 
     const channel = supabase
@@ -195,10 +225,17 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
       void authenticateRealtime(supabase).then(() => {
         if (cancelled) return;
         channel.subscribe((status) => {
+          if (cancelled) return;
+          if (status === "SUBSCRIBED") {
+            // Realtime is doing the job now; stop paying for the fallback.
+            stopPoll();
+            return;
+          }
           // Silent failure here is what makes "nothing animated" impossible
-          // to diagnose, so surface it. The poll fallback still covers it.
+          // to diagnose, so surface it, and resume the poll it was covering.
           if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
             console.warn(`[live-signal] realtime ${status}; using poll fallback.`);
+            startPoll();
           }
         });
       });
@@ -206,7 +243,7 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
 
     return () => {
       cancelled = true;
-      window.clearInterval(pollTimer);
+      stopPoll();
       window.clearTimeout(dismissTimer.current);
       if (supabase && channel) void supabase.removeChannel(channel);
     };

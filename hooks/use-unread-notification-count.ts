@@ -17,10 +17,16 @@ export const NOTIFICATIONS_UPDATED_EVENT = "mad-buddy:notifications-updated";
  * Deliberately NOT the pending-Muddy-request count: that is a different
  * stream with its own surface, and the two are never merged.
  *
- * Freshness comes from the same signals the shell already used: an immediate
- * refetch on focus/visibility, a 60s poll paused while the tab is hidden, and
- * the `mad-buddy:notifications-updated` broadcast — which may carry an exact
- * count (used directly) or no detail at all (triggers a refetch).
+ * NO INTERVAL POLL (Vercel usage optimization pass). This used to run its own
+ * 60-second timer in addition to listening for the broadcast below -- two
+ * overlapping ways of noticing the same thing, on top of LiveSignalToast's
+ * 45-second poll doing yet a third round of the same work. LiveSignalToast's
+ * Realtime subscription (or its own now-conditional poll fallback, only live
+ * while Realtime is unhealthy) is what actually notices a new notification
+ * and fires `mad-buddy:notifications-updated`; this hook only needs to be
+ * listening when that happens, plus the same resync-on-resume fallback
+ * useUnreadMessageCount uses for the same reason: focus/visibility as the net
+ * for whatever neither Realtime nor its own fallback caught.
  */
 export function useUnreadNotificationCount(initialCount = 0) {
   const [unreadCount, setUnreadCount] = useState(initialCount);
@@ -66,14 +72,10 @@ export function useUnreadNotificationCount(initialCount = 0) {
       else void refresh();
     };
 
-    const interval = window.setInterval(() => {
-      if (!document.hidden) void refresh();
-    }, 60_000);
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, handleUpdated);
     return () => {
-      window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, handleUpdated);

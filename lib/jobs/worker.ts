@@ -6,6 +6,7 @@ import {
   SCHEDULE,
   STALE_LOCK_SECONDS,
   assessQueueHealth,
+  isScheduleDue,
   periodicIdempotencyKey,
   resolveFailure,
   type JobType
@@ -40,7 +41,14 @@ export type TickResult = {
  */
 export async function enqueueDueSchedules(admin: Admin, nowMs = Date.now()): Promise<number> {
   let enqueued = 0;
-  for (const spec of SCHEDULE) {
+  // isScheduleDue is the cost reduction: only a schedule whose period bucket
+  // starts on THIS tick reaches the database at all. The other ~17 of 20 on a
+  // typical 5-minute tick used to attempt an insert purely to be rejected by
+  // the unique index below -- which remains, unchanged, as the actual
+  // concurrency guarantee. This filter can be wrong at a boundary and lose
+  // nothing but a moment's efficiency; the index is what makes a double-tick
+  // or an overlapping scheduler safe.
+  for (const spec of SCHEDULE.filter((spec) => isScheduleDue(spec, nowMs))) {
     const key = periodicIdempotencyKey(spec.jobType, spec.everyMinutes, nowMs);
     const { error } = await admin.from("jobs").insert({
       job_type: spec.jobType,
