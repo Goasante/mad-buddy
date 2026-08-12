@@ -9,6 +9,26 @@ export const OPEN_MOMENTS_FLAG = "open_moments" as const;
 export const SOCIALIZE_FLAG = "socialize" as const;
 
 /**
+ * Scope reduction: features paused for the first release.
+ *
+ * DELIBERATELY OFF, not accidentally unreachable. Both keys have no row in
+ * feature_flags, and resolveGlobalFeatureFlag fails closed on a missing row,
+ * so absent == off. No migration exists to hide UI; creating database state
+ * purely to switch something off would be state we then have to maintain.
+ *
+ * MOMENTS_FLAG is DISTINCT from OPEN_MOMENTS_FLAG and deliberately broader.
+ * open_moments gates only the PUBLIC Open feed (audience_type === 'public');
+ * Muddies-only Moments bypass it entirely. Reusing it here would have left
+ * private Moments fully live while appearing to pause the feature.
+ *
+ * Re-enable either one from Admin -> Features, or locally by seeding a row:
+ *   insert into feature_flags (key, status, default_value)
+ *   values ('moments', 'on', true);
+ */
+export const MOMENTS_FLAG = "moments" as const;
+export const MAD_CAM_FLAG = "mad_cam" as const;
+
+/**
  * Life (Phase 3). Flags control EXISTENCE; entitlements control ACCESS.
  *
  * Keeping them separate is what makes a feature killable after it has been
@@ -35,6 +55,24 @@ export const LIFE_FLAGS = [
 ] as const;
 
 export const MANAGED_FEATURES = [
+  {
+    key: MOMENTS_FLAG,
+    title: "Moments",
+    category: "Social discovery",
+    description: "Short-lived posts members share with their Muddies, and the Moments surfaces around them.",
+    enabledImpact: "Moments returns to navigation, Home, profiles and Quick Actions, and members can post again.",
+    disabledImpact:
+      "Every Moments surface is hidden and new posts, reactions and views are blocked. Existing Moments and their media are kept and keep their normal expiry."
+  },
+  {
+    key: MAD_CAM_FLAG,
+    title: "Mad Cam",
+    category: "Media",
+    description: "The in-app camera for capturing photos and short videos.",
+    enabledImpact: "The camera launcher returns to the app shell.",
+    disabledImpact:
+      "The camera launcher is hidden. Ordinary photo and file attachments in chat are unaffected -- they do not use Mad Cam."
+  },
   {
     key: OPEN_MOMENTS_FLAG,
     title: "Open Moments",
@@ -178,4 +216,17 @@ export async function isOpenMomentsEnabled(admin: Admin): Promise<boolean> {
 
 export async function isSocializeEnabled(admin: Admin): Promise<boolean> {
   return isFeatureEnabled(admin, SOCIALIZE_FLAG);
+}
+
+/**
+ * The whole Moments product surface. Broader than isOpenMomentsEnabled: this
+ * is the switch that decides whether Moments exists for the user at all.
+ */
+export async function isMomentsEnabled(admin: Admin): Promise<boolean> {
+  return isFeatureEnabled(admin, MOMENTS_FLAG);
+}
+
+/** The in-app camera. Never gates ordinary chat media attachments. */
+export async function isMadCamEnabled(admin: Admin): Promise<boolean> {
+  return isFeatureEnabled(admin, MAD_CAM_FLAG);
 }

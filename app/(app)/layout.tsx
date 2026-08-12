@@ -12,7 +12,12 @@ import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { resolveGlobalFeatureFlag, SOCIALIZE_FLAG } from "@/lib/features/feature-flags";
+import {
+  MAD_CAM_FLAG,
+  MOMENTS_FLAG,
+  resolveGlobalFeatureFlag,
+  SOCIALIZE_FLAG
+} from "@/lib/features/feature-flags";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { resolveWallpaperForRender } from "@/lib/wallpapers/service";
 import { defaultResolvedWallpaper, type ResolvedWallpaper } from "@/lib/wallpapers/catalog";
@@ -64,7 +69,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   // the slowest one. This was blocking every page behind this layout, which
   // is why unrelated destinations (Profile, Settings, Billing, Help, Admin)
   // were all affected together.
-  const [adminContext, unreadResult, profileResult, socializeFlagResult, access, buddyScoreLevel] =
+  const [adminContext, unreadResult, profileResult, shellFlagsResult, access, buddyScoreLevel] =
     await Promise.all([
     getSafetyAdminContext(),
     user
@@ -86,12 +91,14 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
           .eq("user_id", user.id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    // All shell-level flags in ONE query rather than one round trip each:
+    // this layout blocks every page behind it, so a second and third
+    // feature_flags lookup would be latency paid on every navigation.
     user
       ? supabase
           .from("feature_flags")
-          .select("status, default_value")
-          .eq("key", SOCIALIZE_FLAG)
-          .maybeSingle()
+          .select("key, status, default_value")
+          .in("key", [SOCIALIZE_FLAG, MOMENTS_FLAG, MAD_CAM_FLAG])
       : Promise.resolve({ data: null }),
     user && env.url && env.serviceRoleKey ? getCurrentSubscriptionAccess(user.id) : Promise.resolve(null),
     // Buddy Score level for the shared menu sheet's identity header. Runs in
@@ -126,6 +133,32 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
         })
       : Promise.resolve(defaultResolvedWallpaper());
 
+  /**
+   * Flag resolution for the shell.
+   *
+   * A missing row means the feature is off: resolveGlobalFeatureFlag fails
+   * closed, which is exactly why pausing Moments and Mad Cam needed no
+   * migration. Seeding a row from Admin -> Features turns either back on.
+   */
+  const flagRows = (shellFlagsResult.data ?? []) as Array<{
+    key: string;
+    status: "off" | "on" | "rollout" | "archived";
+    default_value: boolean;
+  }>;
+  const flagEnabled = (key: string) =>
+    resolveGlobalFeatureFlag(flagRows.find((row) => row.key === key));
+
+  const socializeEnabled = flagEnabled(SOCIALIZE_FLAG);
+  const momentsEnabled = flagEnabled(MOMENTS_FLAG);
+  const madCamEnabled = flagEnabled(MAD_CAM_FLAG);
+
+  // A paused feature stops existing in navigation rather than appearing as a
+  // dead or "coming soon" entry.
+  const hiddenNavigationHrefs = [
+    ...(socializeEnabled ? [] : ["/discover"]),
+    ...(momentsEnabled ? [] : ["/moments"])
+  ];
+
   return (
     <AppShell
       showAdminLink={adminContext.ok}
@@ -141,7 +174,10 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
       // Same three-item completion model the Home reminder uses.
       profileCompletionPercent={profileCompletionPercent(profileResult.data)}
       currentUserId={user?.id ?? null}
-      hiddenNavigationHrefs={resolveGlobalFeatureFlag(socializeFlagResult.data) ? [] : ["/discover"]}
+      hiddenNavigationHrefs={hiddenNavigationHrefs}
+      // Mad Cam is paused: without this the shell never mounts the camera
+      // launcher or its lazy chunk. The camera code itself is untouched.
+      madCamEnabled={madCamEnabled}
       wallpaperPromise={wallpaperPromise}
     >
       {children}

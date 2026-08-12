@@ -1,4 +1,5 @@
 import { ProfilePageContent } from "@/components/profile/profile-page";
+import { isMomentsEnabled } from "@/lib/features/feature-flags";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { loadEffectivePlan } from "@/lib/billing/service";
@@ -35,7 +36,7 @@ export default async function ProfilePage({
     : { data: null };
 
   const admin = createSupabaseAdminClient();
-  const [effectivePlan, birthDetails, fieldPrivacy, identitySummary, journey, photos, trustedStanding] = user
+  const [effectivePlan, birthDetails, fieldPrivacy, identitySummary, journey, photos, trustedStanding, momentsEnabled] = user
     ? await Promise.all([
         loadEffectivePlan(admin, user.id),
         admin
@@ -51,9 +52,10 @@ export default async function ProfilePage({
         // see is a photo you cannot manage. Loaded here in the same parallel
         // batch rather than as a follow-up request.
         loadVisibleProfilePhotosFor(admin, user.id, { isOwner: true, isApprovedMuddy: false }),
-        getTrustedMemberStandingAction()
+        getTrustedMemberStandingAction(),
+        isMomentsEnabled(admin)
       ])
-    : ["free" as const, null, null, null, null, [], null];
+    : ["free" as const, null, null, null, null, [], null, false];
 
   return (
     <ProfilePageContent
@@ -64,6 +66,7 @@ export default async function ProfilePage({
       initialAvatarUrl={profile?.avatar_url ?? null}
       initialVisibilityStatus={profile?.visibility_status ?? "visible"}
       identitySummary={identitySummary}
+      momentsEnabled={momentsEnabled}
       journey={journey}
       photos={photos}
       trustedSince={profile?.trusted_member_since ?? null}

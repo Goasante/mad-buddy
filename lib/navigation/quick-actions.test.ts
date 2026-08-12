@@ -386,8 +386,11 @@ describe("Mad Cam behaviour is unchanged", () => {
     expect(shell).toContain("ORB_HOME_HREF");
   });
 
-  it("keeps the camera mounted separately from the launcher", () => {
-    expect(shell).toContain("{cameraOpen ? <LazyCameraComposer onClose={closeCamera} /> : null}");
+  it("keeps the camera mounted separately from the launcher, behind its flag", () => {
+    // Mad Cam is paused (scope reduction), so the mount is additionally gated
+    // on the server-resolved flag. The separation this test protects is
+    // unchanged: the launcher never renders the composer itself.
+    expect(shell).toContain("{madCamEnabled && cameraOpen ? <LazyCameraComposer onClose={closeCamera} /> : null}");
   });
 
   it("requests no camera or media permission", () => {

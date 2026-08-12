@@ -4,7 +4,8 @@ import type { MomentMuddyOption } from "@/components/content/moment-composer";
 import { checkFeature } from "@/lib/billing/entitlements";
 import { resolveUserEntitlements } from "@/lib/billing/service";
 import { buildMomentFeed, buildSpotlightFeed } from "@/lib/content/service";
-import { isOpenMomentsEnabled } from "@/lib/features/feature-flags";
+import { redirect } from "next/navigation";
+import { isMomentsEnabled, isOpenMomentsEnabled } from "@/lib/features/feature-flags";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { getCurrentUser } from "@/lib/supabase/auth";
@@ -32,6 +33,12 @@ export default async function MomentsRoute({
   }
 
   const admin = createSupabaseAdminClient();
+
+  // Moments paused. Same shape as the Socialize guard on /discover: a direct
+  // URL lands on Home rather than a blank or broken surface, which is also
+  // what makes historical `moment:` notifications safe to leave in place.
+  if (!(await isMomentsEnabled(admin))) redirect("/dashboard");
+
   const [moments, muddies, spotlightEnabled, entitlements, profile, closeFriends, birthDetails] = await Promise.all([
     buildMomentFeed(admin, user.id),
     loadMuddies(admin, user.id),

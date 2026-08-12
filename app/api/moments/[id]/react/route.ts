@@ -3,6 +3,8 @@ import { z } from "zod";
 import { resolveApiUser } from "@/lib/api/auth";
 import { preflightResponse, withCors } from "@/lib/api/cors";
 import { reactToMoment, removeMomentReaction } from "@/lib/content/moment-mobile";
+import { isMomentsEnabled } from "@/lib/features/feature-flags";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const bodySchema = z.object({ reaction: z.string() });
 
@@ -15,6 +17,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const auth = await resolveApiUser(request);
   if (!auth) {
     return withCors(NextResponse.json({ error: "Authentication required." }, { status: 401 }), request);
+  }
+
+  // Moments paused: reactions are engagement on a switched-off feature.
+  if (!(await isMomentsEnabled(createSupabaseAdminClient()))) {
+    return withCors(
+      NextResponse.json({ ok: false, message: "Moments isn't available right now." }, { status: 403 }),
+      request
+    );
   }
 
   const body = bodySchema.safeParse(await request.json().catch(() => null));

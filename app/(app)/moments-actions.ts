@@ -42,7 +42,7 @@ import {
 } from "@/lib/media/validation";
 import { checkFeature } from "@/lib/billing/entitlements";
 import { resolveUserEntitlements } from "@/lib/billing/service";
-import { isOpenMomentsEnabled } from "@/lib/features/feature-flags";
+import { isMomentsEnabled, isOpenMomentsEnabled } from "@/lib/features/feature-flags";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
@@ -104,6 +104,27 @@ async function getAuthedUserId() {
  * URLs minted after their permission on the parent object is checked. Photos
  * are re-encoded before storage; videos are stored in their verified container.
  */
+
+/**
+ * Moments paused (scope reduction).
+ *
+ * UI hiding is not enforcement: these actions are reachable directly, so the
+ * MUTATIONS re-check the flag server-side. Deliberately scoped to Moments'
+ * own actions -- the shared media pipeline (validation, processing,
+ * media_assets, retention) is untouched, because chat, Events and profile
+ * media all depend on it.
+ *
+ * Reads are intentionally NOT gated: the surfaces that call them are already
+ * hidden, and leaving reads alone keeps existing Moments retrievable the
+ * moment the flag returns.
+ */
+async function momentsPausedState(
+  admin: ReturnType<typeof createSupabaseAdminClient>
+): Promise<MomentActionState | null> {
+  if (await isMomentsEnabled(admin)) return null;
+  return { ok: false, message: "Moments isn't available right now." };
+}
+
 export async function uploadMomentMediaAction(formData: FormData): Promise<MomentActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
@@ -115,6 +136,9 @@ export async function uploadMomentMediaAction(formData: FormData): Promise<Momen
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
   const admin = createSupabaseAdminClient();
+
+  const paused = await momentsPausedState(admin);
+  if (paused) return paused;
 
   // Kill switch + account restrictions, before any bytes are read or stored.
   const guard = await guardAction(admin, { userId, surface: "moments", control: "media_uploads" });
@@ -350,6 +374,8 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
   const admin = createSupabaseAdminClient();
+  const paused = await momentsPausedState(admin);
+  if (paused) return paused;
 
   const guard = await guardAction(admin, { userId, surface: "moments" });
   if (!guard.allowed) return { ok: false, message: guard.message };
@@ -645,6 +671,8 @@ export async function reactToMomentAction(
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
   const admin = createSupabaseAdminClient();
+  const paused = await momentsPausedState(admin);
+  if (paused) return paused;
   // Re-check visibility: you can only react to something you may actually see.
   if (!(await canViewMoment(admin, userId, momentId))) {
     return { ok: false, message: "That Moment isn't available." };
@@ -686,6 +714,8 @@ export async function removeMomentReactionAction(momentId: string): Promise<Mome
   if (!userId) return { ok: false, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
+  const paused = await momentsPausedState(admin);
+  if (paused) return paused;
   await admin.from("moment_reactions").delete().eq("moment_id", momentId).eq("user_id", userId);
   return { ok: true, message: "Reaction removed." };
 }
@@ -826,6 +856,8 @@ export async function recordMomentViewAction(momentId: string): Promise<MomentAc
   if (!userId) return { ok: false, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
+  const paused = await momentsPausedState(admin);
+  if (paused) return paused;
   if (!(await canViewMoment(admin, userId, momentId))) {
     return { ok: false, message: "That Moment isn't available." };
   }

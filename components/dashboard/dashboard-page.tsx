@@ -171,6 +171,8 @@ type DashboardPageContentProps = {
    * and renders nothing rather than a placeholder.
    */
   topEvents?: RankedEvent[];
+  /** Moments (paused). Server-resolved; hides every Home Moments surface. */
+  momentsEnabled?: boolean;
   // currentUsername / currentAvatarUrl / buddyScoreLevelLabel used to be
   // passed here for Home's own copy of the menu sheet. That sheet now lives
   // in AppShell and gets its identity from the layout, so Home no longer
@@ -264,6 +266,7 @@ export function DashboardPageContent({
   air = [],
   isFirstTimeUser = false,
   topEvents = [],
+  momentsEnabled = false,
   incomingRequestCount = 0
 }: DashboardPageContentProps) {
   const reducedMotion = useReducedMotion();
@@ -697,7 +700,7 @@ export function DashboardPageContent({
 
         {/* Quick actions: first-time activation set, or the returning-user set. */}
         {isFirstTimeUser ? (
-          <FirstTimeQuickActions />
+          <FirstTimeQuickActions hiddenHrefs={hiddenQuickActionHrefs} />
         ) : (
           <QuickActionsHome primary={primaryActions} secondary={moreActions} />
         )}
@@ -705,7 +708,11 @@ export function DashboardPageContent({
         {/* Moments preview. Renders the branded onboarding when the viewer has
             none, and the rail once any exist — so the onboarding is never
             shown again after a first Moment. */}
-        <MomentsPreview moments={moments} air={air} />
+        {/* Moments paused: the section disappears entirely rather than
+            leaving its onboarding card, which would be a creation affordance
+            for a feature that is switched off. Home's remaining sections
+            simply close up -- no filler was added in its place. */}
+        {momentsEnabled ? <MomentsPreview moments={moments} air={air} /> : null}
 
         {/* Compact profile-completion banner (real state, dismissible). */}
         {profileReminder ? (
@@ -1070,14 +1077,18 @@ const FIRST_TIME_ACTIONS: QuickAction[] = [
   { href: "/help", label: "Learn Mad Buddy", description: "See how Mad Buddy works.", suggestion: "See how everything works.", tone: "blue", icon: GraduationCap, featureIcon: "focus", accent: "text-sky-500 dark:text-sky-400" }
 ];
 
-function FirstTimeQuickActions() {
+function FirstTimeQuickActions({ hiddenHrefs = [] }: { hiddenHrefs?: string[] }) {
+  // Same hidden-href list the returning-user rail already honours. Without
+  // this, a paused feature keeps a first-run CTA pointing at it -- which is
+  // the one rail every brand-new account sees.
+  const actions = FIRST_TIME_ACTIONS.filter((action) => !hiddenHrefs.includes(action.href));
   return (
     <section aria-labelledby="home-actions-heading" data-tour-id={TOUR_TARGET_IDS.HOME_QUICK_ACTIONS}>
       {/* No action: the first-time set is the whole set, so there is nothing
           more to see. */}
       <PageSectionHeader id="home-actions-heading" title="Suggestions for you" />
       <div className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6">
-        {FIRST_TIME_ACTIONS.map((action) => (
+        {actions.map((action) => (
           <SuggestionCard key={action.href} action={action} />
         ))}
       </div>

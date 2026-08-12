@@ -47,6 +47,11 @@ type ProfilePageContentProps = {
   initialAvatarUrl: string | null;
   initialVisibilityStatus: VisibilityStatus;
   identitySummary: ProfileIdentitySummary | null;
+  /**
+   * Moments (paused). Server-resolved and passed down rather than looked up
+   * here, so this component adds no database round trip of its own.
+   */
+  momentsEnabled?: boolean;
   journey: JourneyData | null;
   /** The owner's own gallery — every photo, including only_me. */
   photos?: ProfilePhoto[];
@@ -92,6 +97,7 @@ export function ProfilePageContent({
   initialAvatarUrl,
   initialVisibilityStatus,
   identitySummary,
+  momentsEnabled = false,
   journey,
   photos = [],
   trustedSince = null,
@@ -594,7 +600,12 @@ export function ProfilePageContent({
                 <h3 id="profile-activity-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Activity</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <ActivityStat icon={UsersRound} value={identitySummary.activity.muddyCount} label="Muddies" href="/friends" />
-                  <ActivityStat icon={Images} value={identitySummary.activity.momentCount} label="Moments" href="/moments" />
+                  {/* Paused: the stat would link into a redirecting route
+                      and advertise a feature that is switched off. The count
+                      itself is untouched in the database. */}
+                  {momentsEnabled ? (
+                    <ActivityStat icon={Images} value={identitySummary.activity.momentCount} label="Moments" href="/moments" />
+                  ) : null}
                   <ActivityStat icon={CalendarCheck2} value={identitySummary.activity.completedPlanCount} label="Plans completed" href="/plans" />
                   <ActivityStat icon={ShieldCheck} value={identitySummary.activity.completedSafeArrivalCount} label="Safe Arrivals" href="/safe-arrival" />
                 </div>

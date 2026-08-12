@@ -8,7 +8,7 @@ import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { isSocializeEnabled } from "@/lib/features/feature-flags";
+import { isMomentsEnabled, isSocializeEnabled } from "@/lib/features/feature-flags";
 import { countIncomingRequests } from "@/lib/friends/service";
 import { loadJourney } from "@/lib/journey/journey-service";
 import { isFirstTimeJourneyState } from "@/lib/journey/journey";
@@ -35,7 +35,7 @@ export default async function DashboardPage() {
   // this page's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
   const admin = createSupabaseAdminClient();
-  const [access, profile, statusResult, upcoming, agendaItems, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents] = user
+  const [access, profile, statusResult, upcoming, agendaItems, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -58,6 +58,7 @@ export default async function DashboardPage() {
         loadSafeArrivalJourneys(admin, user.id),
         loadFriendGlowColors(admin, user.id),
         isSocializeEnabled(admin),
+        isMomentsEnabled(admin),
         loadJourney(admin, user.id),
         // The Buddy Score LEVEL load that used to sit here is gone: the
         // authed layout now resolves it once for the shared menu sheet, so
@@ -85,7 +86,7 @@ export default async function DashboardPage() {
         // the two agree on rank without Home paying for 100 rows.
         getRankedUpcomingEvents(user.id, { limit: HOME_RANKED_EVENTS_LIMIT })
       ])
-    : [null, null, null, { plans: [], hasMore: false }, [], null, null, {}, false, null, 0, null, null, [], [], []];
+    : [null, null, null, { plans: [], hasMore: false }, [], null, null, {}, false, false, null, 0, null, null, [], [], []];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -168,7 +169,11 @@ export default async function DashboardPage() {
           ? { userId: user.id, missingItems: missingProfileItems }
           : null
       }
-      hiddenQuickActionHrefs={socializeEnabled ? [] : ["/discover"]}
+      hiddenQuickActionHrefs={[
+        ...(socializeEnabled ? [] : ["/discover"]),
+        ...(momentsEnabled ? [] : ["/moments"])
+      ]}
+      momentsEnabled={Boolean(momentsEnabled)}
       smartCard={smartCard}
       // Preview only — the rail shows a handful, /moments owns the full feed.
       moments={(moments ?? []).slice(0, HOME_MOMENTS_LIMIT)}

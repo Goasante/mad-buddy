@@ -3,6 +3,7 @@ import { resolveApiUser } from "@/lib/api/auth";
 import { preflightResponse, withCors } from "@/lib/api/cors";
 import { buildMomentFeed, buildSpotlightFeed } from "@/lib/content/service";
 import { createTextMoment, deleteMoment } from "@/lib/content/moment-mobile";
+import { isMomentsEnabled } from "@/lib/features/feature-flags";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export function OPTIONS(request: Request) {
@@ -31,6 +32,15 @@ export async function POST(request: Request) {
   const auth = await resolveApiUser(request);
   if (!auth) {
     return withCors(NextResponse.json({ error: "Authentication required." }, { status: 401 }), request);
+  }
+
+  // Moments paused: the mobile API is a second write path and must be
+  // blocked too, or the UI gate is bypassable with a single request.
+  if (!(await isMomentsEnabled(createSupabaseAdminClient()))) {
+    return withCors(
+      NextResponse.json({ ok: false, message: "Moments isn't available right now." }, { status: 403 }),
+      request
+    );
   }
 
   const input = await request.json().catch(() => null);

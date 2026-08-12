@@ -221,6 +221,12 @@ export type AppShellProps = {
   currentUserId?: string | null;
   hiddenNavigationHrefs?: string[];
   /**
+   * Mad Cam (paused). Resolved server-side by the layout; when false the
+   * camera launcher and its lazy chunk never mount. The camera implementation
+   * itself is untouched and returns as soon as the flag is on.
+   */
+  madCamEnabled?: boolean;
+  /**
    * Identity for the app-wide menu sheet, resolved once by the layout.
    *
    * The sheet is mounted here rather than per screen, so any page's header
@@ -266,6 +272,7 @@ function AppShellInner({
   currentAvatarUrl = null,
   currentUserId = null,
   hiddenNavigationHrefs = [],
+  madCamEnabled = false,
   currentDisplayName = "",
   subscriptionPlan = null,
   buddyScoreLevelLabel = null,
@@ -283,8 +290,11 @@ function AppShellInner({
   useEffect(() => bindCachesToSession(), []);
   const pathname = usePathname();
   const openCameraFromHome = useCallback(() => {
+    // Mad Cam paused: the home-tab reselect gesture does nothing rather than
+    // opening a feature that is switched off.
+    if (!madCamEnabled) return;
     if (pathname === ORB_HOME_HREF) setCameraOpen(true);
-  }, [pathname]);
+  }, [madCamEnabled, pathname]);
   const closeCamera = useCallback(() => setCameraOpen(false), []);
 
   useEffect(() => {
@@ -461,7 +471,7 @@ function AppShellInner({
         // the two entry points can never disagree about who is staff.
         showAdminLink={showAdminLink}
       />
-      {cameraOpen ? <LazyCameraComposer onClose={closeCamera} /> : null}
+      {madCamEnabled && cameraOpen ? <LazyCameraComposer onClose={closeCamera} /> : null}
     </div>
   );
 }
