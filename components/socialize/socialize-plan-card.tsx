@@ -4,7 +4,6 @@ import type { Route } from "next";
 import Link from "next/link";
 import { Check, MapPin, Users } from "lucide-react";
 import { memo, type CSSProperties, type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { resolvePlanCover } from "@/lib/plans/plan-covers";
 import {
@@ -15,6 +14,7 @@ import {
   planUrgency
 } from "@/lib/plans/discovery";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
+import { GlareHover } from "@/components/ui/glare-hover";
 import { cn } from "@/lib/utils";
 
 /**
@@ -57,7 +57,7 @@ function PlanCard({ plan, onJoin, pending = false, slots }: SocializePlanCardPro
     <article
       aria-label={`${plan.title}${urgency.label ? `, ${urgency.label}` : ""}${time ? ` at ${time}` : ""}`}
       className={cn(
-        "linkr-plan",
+        "group linkr-plan",
         // The nearest plan carries a slightly brighter edge. One card lifted,
         // never a row of competing highlights.
         urgency.imminent && "linkr-plan-imminent"
@@ -89,6 +89,31 @@ function PlanCard({ plan, onJoin, pending = false, slots }: SocializePlanCardPro
           already dark enough to carry white text, and layering a scrim on them
           just muddies the colour. */}
       {cover.source === "upload" ? <span aria-hidden="true" className="linkr-plan-scrim" /> : null}
+
+      {/* Decorative sheen only. It sits ABOVE the cover and BELOW the body, so
+          it can never dim the text, and it is pointer-transparent so it cannot
+          swallow a tap on the card. Remove this element entirely and the card
+          still works exactly as before. */}
+      <GlareHover
+        width="100%"
+        height="100%"
+        background="transparent"
+        borderRadius="inherit"
+        borderColor="transparent"
+        glareOpacity={0.1}
+        glareAngle={-30}
+        glareSize={280}
+        transitionDuration={800}
+        triggerOnParent
+        autoOnTouch
+        autoDelay={2600}
+        autoInterval={9500}
+        // z-0, not z-1: .linkr-plan-body is `position: relative` with no
+        // z-index of its own, so it paints in the default layer. A positive
+        // z-index here would lift the sheen ABOVE the title and CTA and wash
+        // them out. This keeps it over the cover art and under the content.
+        className="pointer-events-none absolute inset-0 z-0"
+      />
 
       <div className="linkr-plan-body">
         {/* THE DATE, as an object rather than a line of text. It is the first

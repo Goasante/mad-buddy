@@ -1,0 +1,95 @@
+.glareHover {
+  width: var(--gh-width);
+  height: var(--gh-height);
+  background: var(--gh-bg);
+  border: 1px solid var(--gh-border);
+  border-radius: var(--gh-br);
+  overflow: hidden;
+  position: relative;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+}
+
+.glareHover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    var(--gh-angle),
+    transparent 60%,
+    var(--gh-rgba) 70%,
+    transparent 82%,
+    transparent 100%
+  );
+  background-size: var(--gh-size) var(--gh-size);
+  background-repeat: no-repeat;
+  background-position: -100% -100%;
+  transition: background-position var(--gh-duration) ease-in-out;
+}
+
+/* Compositing hint ONLY while the sweep can actually run.
+   A permanent `will-change` on every glare layer would keep a promoted layer
+   alive for each card in a scrolling rail -- real memory cost on a phone, for
+   an effect that is idle almost all of the time. Hinting on hover/focus (and
+   on the touch sweep below) gives the same smoothness with none of the
+   standing cost. */
+.glareHover:hover::before,
+:global(.group):hover .parentTrigger::before,
+:global(.group):focus-within .parentTrigger::before {
+  will-change: background-position;
+}
+
+.glareHover:hover::before,
+:global(.group):hover .parentTrigger::before,
+:global(.group):focus-within .parentTrigger::before {
+  background-position: 100% 100%;
+}
+
+.playOnce::before {
+  transition: none;
+}
+
+.playOnce:hover::before,
+:global(.group):hover .playOnce.parentTrigger::before,
+:global(.group):focus-within .playOnce.parentTrigger::before {
+  transition: background-position var(--gh-duration) ease-in-out;
+  background-position: 100% 100%;
+}
+
+/* Touch screens have no dependable hover state. The glare crosses briefly,
+   then remains out of view for most of the cycle so it feels alive without
+   becoming a continuous distraction. */
+@keyframes glareAutoSweep {
+  0%,
+  24% {
+    background-position: -100% -100%;
+  }
+  42%,
+  100% {
+    background-position: 100% 100%;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .autoOnTouch::before {
+    animation: glareAutoSweep var(--gh-auto-duration) ease-in-out var(--gh-auto-delay) infinite;
+    will-change: background-position;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glareHover::before,
+  .playOnce:hover::before,
+  :global(.group):hover .parentTrigger::before,
+  :global(.group):focus-within .parentTrigger::before {
+    transition: none;
+    background-position: -100% -100%;
+  }
+
+  .autoOnTouch::before {
+    animation: none;
+  }
+}

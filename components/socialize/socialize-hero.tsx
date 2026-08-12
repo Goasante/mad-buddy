@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Loader2, Radar } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { GlareHover } from "@/components/ui/glare-hover";
 import { cn } from "@/lib/utils";
 
 /**
@@ -62,10 +63,26 @@ export function SocializeHero({
     <section
       aria-labelledby="socialize-hero-heading"
       className={cn(
-        "relative isolate flex min-h-[16.5rem] flex-col justify-end overflow-hidden rounded-[1.75rem]",
+        "group relative isolate flex min-h-[16.5rem] flex-col justify-end overflow-hidden rounded-[1.75rem]",
         "border border-border/60 p-6 sm:min-h-[18rem] sm:p-8"
       )}
     >
+      <GlareHover
+        width="100%"
+        height="100%"
+        background="transparent"
+        borderRadius="inherit"
+        borderColor="transparent"
+        glareOpacity={0.14}
+        glareAngle={-30}
+        glareSize={300}
+        transitionDuration={800}
+        triggerOnParent
+        autoOnTouch
+        autoDelay={2200}
+        autoInterval={9000}
+        className="pointer-events-none absolute inset-0 z-[5]"
+      />
       {/* Brand artwork. Decorative and aria-hidden: it carries atmosphere, not
           information, so a screen reader must not announce it.
 
