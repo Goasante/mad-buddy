@@ -1180,7 +1180,7 @@ const quickActions: QuickAction[] = [
   { href: "/discover", label: "Linkr", description: "Find people who are open to connecting.", suggestion: "Meet people open to connecting.", tone: "lavender", icon: Compass, featureIcon: "socialize", accent: "text-violet-500 dark:text-violet-400" },
   { href: "/safe-arrival", label: "Safe Arrival", description: "Let trusted Muddies know when you arrive safely.", suggestion: "Let your circle know you got there.", tone: "blue", icon: ShieldCheck, featureIcon: "safeArrival", accent: "text-sky-500 dark:text-sky-400" },
   { href: "/moments", label: "Moments", description: "Share a moment before it disappears.", suggestion: "Share something before it’s gone.", tone: "blush", icon: Sparkles, featureIcon: "moments", accent: "text-primary" },
-  { href: "/groups", label: "Groups", description: "Open your groups and invitations.", suggestion: "Catch up with your groups.", tone: "green", icon: Users2, featureIcon: "groups", accent: "text-sky-500 dark:text-sky-400" },
+  { href: "/groups", label: "Circles", description: "Open your Circles and invitations.", suggestion: "Catch up with your Circles.", tone: "green", icon: Users2, featureIcon: "groups", accent: "text-sky-500 dark:text-sky-400" },
   { href: "/reminders", label: "Reminders", description: "Reminders for plans and connections.", suggestion: "Stay on top of what’s next.", tone: "orange", icon: Bell, featureIcon: "reminders", accent: "text-amber-500 dark:text-amber-400" },
   { href: "/settings/engagement", label: "Focus", description: "Manage Focus Mode and notification limits.", suggestion: "Quieten things down for a while.", tone: "blush", icon: Moon, featureIcon: "focus", accent: "text-pink-500 dark:text-pink-400" }
 ];

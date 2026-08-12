@@ -6312,3 +6312,305 @@ select {
     opacity: 1;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Voice recording composer (Slice 3)
+   --------------------------------------------------------------------------- */
+
+/* The dot is decoration beside the word "Recording", never the state itself. */
+.voice-recording-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: hsl(var(--destructive));
+  animation: voice-recording-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes voice-recording-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+/* Live microphone levels. Fixed bar count, so the row cannot grow. */
+.voice-live-waveform {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 2px;
+  height: 1.5rem;
+  min-width: 0;
+  /* Clipped rather than scrolled: a waveform must never introduce a
+     horizontal scrollbar into the composer on a narrow phone. */
+  overflow: hidden;
+}
+
+.voice-live-bar {
+  flex: 1 1 0;
+  min-width: 2px;
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-recording-dot {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Message composer
+
+   One row, the shape every messaging app settled on: a rounded field with
+   its tools inside it, and a single circular action button beside it that is
+   the microphone until there is something to send.
+   --------------------------------------------------------------------------- */
+
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  /* Clears the home indicator on iOS and the gesture bar on Android. */
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+}
+
+.composer-bubble {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: flex-end;
+  gap: 0.125rem;
+  border-radius: 1.5rem;
+  background: hsl(var(--secondary) / 0.7);
+  padding: 0.125rem 0.25rem;
+  transition: background-color 160ms ease;
+}
+
+.composer-bubble:focus-within {
+  background: hsl(var(--secondary));
+}
+
+.composer-field {
+  min-width: 0;
+  flex: 1 1 auto;
+  /* Height is driven from scrollHeight in JS; this is the resting size. */
+  min-height: 2.75rem;
+  max-height: 148px;
+  resize: none;
+  border: 0;
+  background: transparent;
+  padding: 0.75rem 0.25rem;
+  color: inherit;
+  font: inherit;
+  line-height: 1.4;
+  outline: none;
+}
+
+.composer-field::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.composer-field:disabled {
+  opacity: 0.6;
+}
+
+.composer-tool {
+  display: grid;
+  /* 44px touch target, not merely a large-enough glyph. */
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+
+.composer-tool:hover:not(:disabled) {
+  color: hsl(var(--foreground));
+}
+
+.composer-tool:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.composer-action {
+  display: grid;
+  width: 2.875rem;
+  height: 2.875rem;
+  flex-shrink: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.composer-action.is-send {
+  background: var(--color-brand-orange);
+  color: #fff;
+}
+
+.composer-action:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.composer-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+   Voice recording bar
+
+   The composer TRANSFORMS into this row -- it is not a card above the
+   composer. Same height, same margins, same rounded surface, so the
+   transition reads as one control changing rather than two surfaces
+   swapping.
+   --------------------------------------------------------------------------- */
+
+.voice-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* Controls keep their size; only the waveform yields width. */
+.voice-bar-button {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.voice-bar-button:hover:not(:disabled) {
+  background: hsl(var(--secondary) / 0.75);
+}
+
+.voice-bar-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-bar-send {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-brand-orange);
+  color: #fff;
+  cursor: pointer;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.voice-bar-send:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.voice-bar-send:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.voice-bar-time {
+  flex-shrink: 0;
+  min-width: 2.5rem;
+  color: hsl(var(--foreground));
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The flexible region. Clipped, never scrolled: a waveform must not
+   introduce a horizontal scrollbar into the composer on a narrow phone. */
+.voice-wave {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 2px;
+  height: 1.75rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.voice-wave-bar {
+  flex: 1 1 0;
+  min-width: 2px;
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.45);
+}
+
+.voice-wave-bar.is-played {
+  background: var(--color-brand-orange);
+}
+
+/* One error line, never a stack of them. */
+.voice-bar-error {
+  margin: 0 0.75rem 0.5rem;
+  color: hsl(var(--destructive));
+  font-size: 0.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-bar-button,
+  .voice-bar-send {
+    transition: none;
+  }
+
+  .voice-bar-send:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* A sent voice message in the thread. A message, not a media player. */
+.voice-bubble {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 11rem;
+  max-width: 15rem;
+}
+
+.voice-bubble-play {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: hsl(var(--background) / 0.55);
+  color: inherit;
+  cursor: pointer;
+}
+
+.voice-bubble-play:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.voice-bubble-time {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}

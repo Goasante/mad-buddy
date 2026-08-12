@@ -68,7 +68,7 @@ export const FEATURE_ICON_SOURCES: Record<FeatureIconKey, FeatureIconSource> = {
   safeArrival: { icon: ShieldCheck, label: "Safe Arrival" },
   hangout: { icon: HangoutIcon, label: "Hangout" },
   events: { icon: CalendarCheck2, label: "Events" },
-  groups: { icon: Users2, label: "Groups" },
+  groups: { icon: Users2, label: "Circles" },
   socialize: { icon: LinkrIcon, label: "Linkr" },
   invites: { icon: UserPlus, label: "Invites" },
   reminders: { icon: Bell, label: "Reminders" },

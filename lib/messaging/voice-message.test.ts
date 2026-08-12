@@ -5,8 +5,8 @@ import { messagePreviewText, VOICE_MESSAGE_PREVIEW } from "@/lib/messaging/messa
 const read = (path: string) => readFileSync(path, "utf8");
 const service = read("lib/messaging/voice-message-service.ts");
 const send = read("lib/messaging/mobile.ts");
+const bubble = read("components/messaging/voice-message-bubble.tsx");
 const composer = read("components/messaging/message-composer.tsx");
-const player = read("components/messaging/voice-note-player.tsx");
 const dm = read("components/messages/messages-page.tsx");
 const group = read("components/groups/group-detail-page.tsx");
 const playback = read("lib/media/voice-playback-service.ts");
@@ -52,19 +52,25 @@ describe("Phase 4F canonical voice messages", () => {
   });
 
   it("sends ready voice through the normal composer and preserves typed text", () => {
-    expect(composer).toContain("preparedVoice?.mediaId ?? attachment?.mediaId");
-    expect(composer).toContain("text: preparedVoice ? undefined : text");
-    expect(composer).toContain('if (!preparedVoice) setDraft("")');
-    expect(composer).toContain("setVoiceSendFailed(Boolean(preparedVoice))");
-    expect(composer).toContain('"Retry voice message"');
-    expect(composer).toContain("if (attachment)");
+    // Voice is its own message with its own send path, rather than riding
+    // along with the text send. A typed draft is never consumed by it.
+    expect(composer).toContain("const sendVoice = useCallback(");
+    expect(composer).toContain("sendMessageAction({ conversationId, mediaId: prepared.mediaId, clientMessageId })");
+    // One upload, one message, however many times send is tapped.
+    expect(composer).toContain("if (sendingRef.current) return;");
+    expect(composer).toContain("sendingRef.current = true;");
+    // A photo and a voice note are different messages.
+    expect(composer).toContain("Remove the photo before recording a voice message.");
   });
 
   it("renders one player in DM, Plan-inherited Messages, and Group surfaces", () => {
-    expect(dm).toContain("<VoiceNotePlayer");
+    // The presentation was rebuilt (VoiceNotePlayer -> VoiceMessageBubble),
+    // but the rule is unchanged: exactly one player per message, on every
+    // conversation surface, rooted in the message id.
+    expect(dm).toContain("<VoiceMessageBubble");
     expect(dm).toContain("messageId={message.id}");
     expect(dm).toContain('id: "plans"');
-    expect(group).toContain("<VoiceNotePlayer");
+    expect(group).toContain("<VoiceMessageBubble");
     expect(group).toContain("senderName={message.isMine ? \"you\" : message.senderName}");
   });
 
@@ -72,8 +78,9 @@ describe("Phase 4F canonical voice messages", () => {
     expect(playback).toContain("projectVoiceMessages");
     expect(playback).toContain('.eq("id", input.messageId)');
     expect(playback).toContain('.eq("conversation_id", input.conversationId)');
-    expect(player).toContain("getMessageVoicePlaybackAction");
-    expect(player).toContain("voicePlaybackNeedsRefresh");
+    // Lazily minted on first play, through the per-message grant.
+    expect(bubble).toContain("getMessageVoicePlaybackAction");
+    expect(bubble).toContain("if (!src)");
     expect(service).not.toContain("storageKey:");
   });
 

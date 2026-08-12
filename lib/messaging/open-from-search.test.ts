@@ -267,3 +267,58 @@ describe("all message entry points", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// A Circle is not a direct chat
+// ---------------------------------------------------------------------------
+
+describe("opening a Circle conversation", () => {
+  /**
+   * THE ASHONGMAN BUDDIES BUG.
+   *
+   * "Ashongman Buddies" is a real multi-member Circle. Tapping it in the inbox
+   * opened the INLINE DIRECT-MESSAGE pane -- one peer, no member list, no
+   * Circle management -- so a shared multi-person space was presented as if it
+   * were a DM.
+   *
+   * The conversation's own type was never lost: the server projection sets
+   * `kind: conversation.conversation_type`, and the inbox row rendered the
+   * Circle name and avatar correctly. The client simply used `kind` for tab
+   * filtering only, and never for routing.
+   */
+  it("routes a Circle to its own page, not the direct-message pane", () => {
+    const open = page.slice(page.indexOf("function openConversation"), page.indexOf("function sendQuickAction"));
+    expect(open).toContain('conversation?.kind === "group"');
+    expect(open).toContain("/groups/${conversationId}");
+    // And returns, rather than also opening the DM pane underneath.
+    expect(open).toContain("return;");
+  });
+
+  it("still opens a direct conversation inline", () => {
+    // The fix must not send every conversation away to /groups.
+    const open = page.slice(page.indexOf("function openConversation"), page.indexOf("function sendQuickAction"));
+    expect(open).toContain("setSelectedId(conversationId)");
+    expect(open).toContain("void loadConversation(conversationId)");
+  });
+
+  it("classifies from the conversation's own kind, never from its contents", () => {
+    const open = page.slice(page.indexOf("function openConversation"), page.indexOf("function sendQuickAction"));
+    // Not member count, not the title, not whether a direct_key happens to
+    // exist, not the first sender.
+    for (const wrong of ["members.length", "title", "direct_key", "senderId"]) {
+      expect(open, wrong).not.toContain(wrong);
+    }
+  });
+
+  it("carries the canonical type from the server to the client", () => {
+    // The projection is the single source of truth for conversation identity.
+    expect(mobile).toContain("kind: conversation.conversation_type");
+  });
+
+  it("keeps the Circle's own name and avatar in the inbox row", () => {
+    // The row already rendered "Ashongman Buddies" correctly -- this pins the
+    // behaviour so a future change cannot regress to showing a member's name.
+    const projection = mobile.slice(mobile.indexOf('if (conversation.conversation_type === "direct" && conversation.direct_key)'));
+    expect(projection.slice(0, 700)).toContain("groupNameByConversation.get(conversation.id)");
+  });
+});

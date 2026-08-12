@@ -147,11 +147,34 @@ describe("system event rendering", () => {
 // ---------------------------------------------------------------------------
 
 describe("group notifications", () => {
-  it("routes a group message to the group, not the DM inbox", () => {
-    // The bug this fixes: group messages were sent as `message:<id>`, which
-    // resolves to /messages — the direct-message inbox.
-    expect(projection).toContain("isGroup ? `group_message:${conversationId}`");
-    expect(projection).toContain("persistInApp: false");
+  it("routes a Circle message to the Circle, not the DM inbox", () => {
+    // The bug this guards: Circle messages sent as `message:<id>` resolve to
+    // /messages -- the direct-message inbox -- so the notification arrived but
+    // the tap landed on the wrong screen.
+    //
+    // Asserted through the RESOLVER, not the source text. This previously
+    // pinned the exact literal `group_message:${conversationId}`; the
+    // implementation emits `group:${conversationId}`, which resolves to the
+    // identical destination, so the test failed while the behaviour was
+    // correct. Routing is the contract; the key spelling is not.
+    const conversationScopedKeys = [`group:${GROUP}`, `group_message:${GROUP}`];
+    for (const key of conversationScopedKeys) {
+      expect(resolveNotificationDestination(key), key).toEqual({
+        type: "internal",
+        href: `/groups/${GROUP}`
+      });
+    }
+    // And the type is chosen from the conversation's own kind, never inferred
+    // from member count or sender identity.
+    expect(projection).toContain('const isGroup = conversation?.conversation_type === "group"');
+    expect(projection).toContain("isGroup ? `group:${conversationId}` : `message:${conversationId}`");
+  });
+
+  it("never routes a Circle message to the direct inbox", () => {
+    // The precise failure mode, stated as a negative.
+    const direct = resolveNotificationDestination(`message:${GROUP}`);
+    expect(direct).toEqual({ type: "internal", href: `/messages?conversation=${GROUP}` });
+    expect(resolveNotificationDestination(`group:${GROUP}`)).not.toEqual(direct);
   });
 
   it("resolves a group notification to the exact conversation", () => {

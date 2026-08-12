@@ -128,7 +128,11 @@ function harness(overrides: Partial<VoiceRecordingRuntime> = {}) {
 }
 
 describe("voice recording capability", () => {
-  it("prefers WebM/Opus", () => {
+  it("prefers WebM/Opus, the format Chromium actually produces", () => {
+    // This previously asserted MP4-first, on the theory that some engines
+    // record webm but cannot decode it. The real failure is the opposite:
+    // Chromium reports isTypeSupported("audio/mp4") === true and then emits
+    // WebM bytes, so the pipeline was told one container and handed another.
     const h = harness({ isTypeSupported: () => true });
     expect(detectVoiceRecordingCapability(h.runtime)).toEqual({
       supported: true,
@@ -406,7 +410,12 @@ describe("Phase 4B boundaries and canonical limits", () => {
     expect(actions).toContain("resolveUserEntitlements");
     expect(actions).toContain("entitlements.max_voice_note_seconds");
     expect(composer).toContain('aria-label="Record voice message"');
-    expect(composer).toContain("voiceBlocksSend");
+    // The composer orchestrates the canonical recorder; it never uploads or
+    // records on its own.
+    expect(composer).toContain("useVoiceRecorder(");
+    expect(composer).toContain("useVoiceUpload(");
+    expect(composer).not.toContain("getUserMedia");
+    expect(composer).not.toContain("new MediaRecorder");
     expect(composer).not.toContain("uploadVoice");
     expect(composer).not.toContain("sendVoiceMessage");
     expect(composer).not.toContain('formData.append("voice"');

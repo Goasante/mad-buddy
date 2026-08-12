@@ -208,8 +208,8 @@ describe("upload lifecycle", () => {
     expect(success.indexOf("setAttachment(null)")).toBeGreaterThan(-1);
   });
 
-  it("blocks a send with neither text, photo nor prepared voice", () => {
-    expect(composer).toContain("if ((!text && !attachment && !preparedVoice) || uploadBusy || isPending) return;");
+  it("blocks a send with neither text nor photo", () => {
+    expect(composer).toContain("if ((!text && !attachment) || uploadBusy || isPending) return;");
   });
 
   it("keeps idempotency on the send", () => {

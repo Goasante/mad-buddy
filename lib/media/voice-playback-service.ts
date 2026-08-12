@@ -3,6 +3,7 @@ import "server-only";
 import { canSendMessage } from "@/lib/messaging/service";
 import { validateVoiceWaveform } from "@/lib/messaging/voice-waveform";
 import type { AuthorizedVoicePlayback } from "@/lib/messaging/voice-playback";
+import { isSupportedVoiceContentType } from "@/lib/media/audio-inspection";
 import { MEDIA_SIGNED_URL_TTL_SECONDS, mediaSignedUrlExpiresAt } from "@/lib/media/constants";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -33,7 +34,7 @@ export async function getPreparedVoicePlayback(
     .eq("moderation_status", "active")
     .is("deleted_at", null)
     .maybeSingle();
-  if (!asset || !asset.duration_ms || !["audio/webm", "audio/mp4"].includes(asset.content_type)) return null;
+  if (!asset || !asset.duration_ms || !isSupportedVoiceContentType(asset.content_type)) return null;
 
   const { data: queued } = await admin
     .from("media_deletion_queue")
@@ -94,7 +95,7 @@ export async function getMessageVoicePlayback(
     .eq("moderation_status", "active")
     .is("deleted_at", null)
     .maybeSingle();
-  if (!asset || !["audio/webm", "audio/mp4"].includes(asset.content_type)) return null;
+  if (!asset || !isSupportedVoiceContentType(asset.content_type)) return null;
   const { data: queued } = await admin.from("media_deletion_queue").select("id")
     .eq("media_asset_id", message.media_id).is("processed_at", null).limit(1).maybeSingle();
   if (queued) return null;

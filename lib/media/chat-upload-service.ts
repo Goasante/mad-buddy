@@ -110,7 +110,14 @@ export async function createChatUploadIntent(
 export async function finalizeChatUpload(
   admin: Admin,
   userId: string,
-  input: { conversationId: string; mediaId: string; expectedMediaKind: ChatMediaKind; waveform?: unknown }
+  input: {
+    conversationId: string;
+    mediaId: string;
+    expectedMediaKind: ChatMediaKind;
+    waveform?: unknown;
+    /** Fallback only, for containers that carry no duration. Bounded downstream. */
+    clientDurationMs?: number;
+  }
 ): Promise<ChatFinalizeResult> {
   const permission = await canSendMessage(admin, userId, input.conversationId);
   if (!permission.allowed) return { ok: false, message: "That conversation isn't available." };
@@ -171,7 +178,12 @@ export async function finalizeChatUpload(
       await removeFailedUpload();
       return { ok: false, message: "That voice preview data is invalid. Record it again." };
     }
-    const inspection = await inspectVoiceAudio(new Uint8Array(await raw.arrayBuffer()), asset.content_type);
+    const inspection = await inspectVoiceAudio(
+      new Uint8Array(await raw.arrayBuffer()),
+      asset.content_type,
+      undefined,
+      input.clientDurationMs
+    );
     if (!inspection.valid) {
       await removeFailedUpload();
       return { ok: false, message: voiceAudioInspectionMessage(inspection.reason) };

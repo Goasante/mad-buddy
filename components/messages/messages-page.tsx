@@ -3,6 +3,9 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
+import { MessageActionsMenu } from "@/components/messaging/message-actions-menu";
+import { LongPressActions } from "@/components/ui/long-press-actions";
+import type { MessageActionId } from "@/lib/messaging/message-actions";
 import { CalendarCheck2, ChevronLeft, Info, MessagesSquare, PenSquare, Plus, Search, Star, UsersRound, VolumeX, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
@@ -45,11 +48,11 @@ import {
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { MessageAttachmentImage } from "@/components/messaging/message-attachment-image";
-import { VoiceNotePlayer } from "@/components/messaging/voice-note-player";
 import { MessageComposer } from "@/components/messaging/message-composer";
+import { VoiceMessageBubble } from "@/components/messaging/voice-message-bubble";
+import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import { MessageMediaViewer } from "@/components/messaging/message-media-viewer";
 import type { AttachmentView } from "@/lib/messaging/attachments";
-import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import { MESSAGES_UPDATED_EVENT } from "@/hooks/use-unread-message-count";
 
 // "Groups" filters conversation_type === "group"; "Plans" filters
@@ -58,7 +61,7 @@ import { MESSAGES_UPDATED_EVENT } from "@/hooks/use-unread-message-count";
 const tabs: Array<{ id: "all" | "unread" | "groups" | "plans"; label: string; icon: LucideIcon | null }> = [
   { id: "all", label: "All", icon: null },
   { id: "unread", label: "Unread", icon: null },
-  { id: "groups", label: "Groups", icon: UsersRound },
+  { id: "groups", label: "Circles", icon: UsersRound },
   { id: "plans", label: "Plans", icon: CalendarCheck2 }
 ];
 
@@ -112,7 +115,7 @@ function messageFailure(error: unknown) {
 
 export function MessagesPageContent({
   initialConversations = [],
-  voiceRecorderConfig = { enabled: false, maxDurationSeconds: 0 }
+  voiceRecorderConfig = { enabled: false, maxDurationSeconds: 0 },
 }: {
   initialConversations?: ConversationView[];
   voiceRecorderConfig?: VoiceRecorderConfig;
@@ -148,6 +151,10 @@ export function MessagesPageContent({
   const [pinPickerOpen, setPinPickerOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const loadRequestIdRef = useRef(0);
+  /* Eligibility depends on message age, but reading Date.now() during render
+   * would make every keystroke recompute it. Sampled when the thread loads,
+   * which is accurate enough for a 10-minute edit and 1-hour delete window. */
+  const [actionsNowMs, setActionsNowMs] = useState(() => Date.now());
 
   const loadConversation = useCallback(async (conversationId: string) => {
     const requestId = ++loadRequestIdRef.current;
@@ -160,6 +167,7 @@ export function MessagesPageContent({
       });
       if (requestId !== loadRequestIdRef.current) return;
       setMessages(loaded);
+      setActionsNowMs(Date.now());
 
       const readResult = await withTimeout(markConversationReadAction(conversationId), {
         operation: "mark conversation read"
@@ -226,11 +234,17 @@ export function MessagesPageContent({
     });
   }
 
-  function remove(messageId: string) {
+  /**
+   * @param forEveryone true tombstones the message for every participant;
+   *   false hides only this person's copy. Never optimistic -- the thread is
+   *   re-read from the server, so a refused delete cannot leave a message
+   *   looking gone when it is not.
+   */
+  function remove(messageId: string, forEveryone = true) {
     if (!selectedId) return;
     startTransition(async () => {
       try {
-        const result = await withTimeout(deleteMessageAction(messageId, true), {
+        const result = await withTimeout(deleteMessageAction(messageId, forEveryone), {
           operation: "delete message"
         });
         if (!result.ok) setFeedback(result.message);
@@ -427,11 +441,52 @@ export function MessagesPageContent({
   /**
    * Opening a conversation is an event, not a render side effect, so the load
    * lives in the handler. Loads the thread, then marks it read.
+   *
+   * A CIRCLE IS NOT A DIRECT CHAT. This inline pane is the direct-message
+   * thread: one peer, no member list, no Circle management. Opening a Circle
+   * here presented a shared multi-person space as if it were a DM -- the
+   * conversation's own `kind` was carried all the way to the client and then
+   * used only for tab filtering, never for routing. Circles have a canonical
+   * page that knows about members and roles, so they go there.
    */
   function openConversation(conversationId: string) {
+    const conversation = uniqueConversations.find((row) => row.id === conversationId);
+    if (conversation?.kind === "group") {
+      router.push(`/groups/${conversationId}` as Route);
+      return;
+    }
     setSelectedId(conversationId);
     setMessages([]);
     void loadConversation(conversationId);
+  }
+
+  /**
+   * Dispatches a contextual action to the path that already implements it.
+   *
+   * Nothing new is invented here: Copy uses the clipboard, React and Edit open
+   * the controls that already exist, and both deletes call the canonical
+   * server action. Eligibility was decided by `messageActions`, and the server
+   * re-checks it regardless.
+   */
+  function runMessageAction(action: MessageActionId, message: ChatMessageView) {
+    switch (action) {
+      case "copy":
+        void navigator.clipboard?.writeText(message.text ?? "");
+        return;
+      case "react":
+        setReactingId(message.id);
+        return;
+      case "edit":
+        setEditingId(message.id);
+        setEditDraft(message.text ?? "");
+        return;
+      case "delete_for_me":
+        remove(message.id, false);
+        return;
+      case "delete_for_everyone":
+        remove(message.id, true);
+        return;
+    }
   }
 
   function sendQuickAction(quickActionType: string) {
@@ -467,18 +522,22 @@ export function MessagesPageContent({
     ));
   }, []);
 
-  function toggleMute() {
-    if (!selected) return;
+  /**
+   * @param target defaults to the open conversation, so the header control is
+   *   unchanged. Passing a row lets the inbox mute without opening it first.
+   */
+  function toggleMute(target: ConversationView | null = selected) {
+    if (!target) return;
     startTransition(async () => {
       try {
-        const result = await withTimeout(muteConversationAction(selected.id, selected.muted ? 0 : 8), {
+        const result = await withTimeout(muteConversationAction(target.id, target.muted ? 0 : 8), {
           operation: "update conversation mute"
         });
         setFeedback(result.message);
         if (result.ok) {
           setConversations((current) =>
             current.map((conversation) =>
-              conversation.id === selected.id ? { ...conversation, muted: !conversation.muted } : conversation
+              conversation.id === target.id ? { ...conversation, muted: !conversation.muted } : conversation
             )
           );
         }
@@ -723,6 +782,21 @@ export function MessagesPageContent({
                     conversation.otherUsername && duplicateTitles.has(conversation.title.trim().toLowerCase());
                   return (
                     <li key={conversation.id}>
+                      <LongPressActions
+                        label={`Actions for ${conversation.title}`}
+                        items={[
+                          {
+                            id: "mute",
+                            label: conversation.muted ? "Unmute" : "Mute",
+                            onSelect: () => toggleMute(conversation)
+                          },
+                          {
+                            id: "pin",
+                            label: conversation.pinned ? "Unpin" : "Pin",
+                            onSelect: () => togglePin(conversation.id, !conversation.pinned)
+                          }
+                        ]}
+                      >
                       <button
                         type="button"
                         onClick={() => openConversation(conversation.id)}
@@ -779,6 +853,7 @@ export function MessagesPageContent({
                           ) : null}
                         </span>
                       </button>
+                      </LongPressActions>
                     </li>
                   );
                 })}
@@ -856,7 +931,7 @@ export function MessagesPageContent({
                   </Popover.Root>
                   <button
                     type="button"
-                    onClick={toggleMute}
+                    onClick={() => toggleMute()}
                     disabled={isPending}
                     aria-label={selected.muted ? "Unmute conversation" : "Mute conversation"}
                     title={selected.muted ? "Unmute conversation" : "Mute conversation"}
@@ -910,6 +985,17 @@ export function MessagesPageContent({
                           )}
                         >
                           <div className={cn("max-w-[78%]", message.isMine && "flex flex-col items-end")}>
+                            <MessageActionsMenu
+                              subject={{
+                                isMine: message.isMine,
+                                messageType: message.messageType,
+                                isDeleted: Boolean(message.deleted),
+                                createdAtMs: Date.parse(message.createdAt),
+                                text: message.text ?? null
+                              }}
+                              nowMs={actionsNowMs}
+                              onAction={(action) => runMessageAction(action, message)}
+                            >
                             <div
                               className={cn(
                                 "px-3.5 py-2 text-[0.9375rem] leading-snug",
@@ -931,7 +1017,7 @@ export function MessagesPageContent({
                                 />
                               ) : null}
                               {!message.deleted && message.voice ? (
-                                <VoiceNotePlayer
+                                <VoiceMessageBubble
                                   conversationId={selected.id}
                                   messageId={message.id}
                                   senderName={message.isMine ? "you" : message.senderName}
@@ -986,6 +1072,7 @@ export function MessagesPageContent({
                                 </p>
                               ) : null}
                             </div>
+                            </MessageActionsMenu>
 
                             {message.myReaction ? (
                               <button

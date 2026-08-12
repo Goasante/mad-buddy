@@ -104,7 +104,24 @@ describe("orphan cleanup and send race", () => {
 
   it("only queues stale unattached chat assets and is idempotent", () => {
     expect(cleanup).toContain("asset.context_type = 'chat'");
-    expect(cleanup).toContain("not exists (\n        select 1 from public.messages message where message.media_id = asset.id");
+    // THE INVARIANT: an asset is only queued when NO message references it.
+    //
+    // This used to be asserted as one string containing a literal \n plus
+    // exact indentation, so it passed on an LF checkout and failed on a CRLF
+    // one -- a real defect that made a clean clone fail. The rule is about
+    // the SQL, not about how the line happens to be wrapped, so the guard and
+    // the lookup are asserted independently and the ordering between them is
+    // checked directly.
+    const notExistsIndex = cleanup.indexOf("not exists (");
+    const messageLookupIndex = cleanup.indexOf(
+      "select 1 from public.messages message where message.media_id = asset.id"
+    );
+    expect(notExistsIndex, "cleanup must guard on absence").toBeGreaterThan(-1);
+    expect(messageLookupIndex, "cleanup must look for an attached message").toBeGreaterThan(-1);
+    expect(
+      messageLookupIndex,
+      "the message lookup must sit inside the not-exists guard"
+    ).toBeGreaterThan(notExistsIndex);
     expect(cleanup).toContain("on conflict (media_asset_id) do nothing");
   });
 

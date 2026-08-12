@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { normalizeVoiceAudioMime } from "@/lib/media/audio-inspection";
 import {
   canDeleteForEveryone,
   canEditMessage,
@@ -400,7 +401,18 @@ export async function getVoiceRecorderConfigAction(): Promise<VoiceRecorderConfi
 
 const voiceIntentSchema = z.object({
   conversationId: z.string().uuid(),
-  contentType: z.enum(["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]),
+  /**
+   * Any string a real MediaRecorder reports, validated by the SAME normalizer
+   * the storage layer uses.
+   *
+   * This was a hardcoded enum of the three strings the client requests. But
+   * MediaRecorder reports what it actually produced, which legitimately
+   * differs -- `audio/x-matroska;codecs=opus` for a webm recording, or the
+   * same type with different spacing. A duplicated list of accepted formats
+   * drifts from the real one and rejects valid recordings; there is now one
+   * source of truth.
+   */
+  contentType: z.string().refine((value) => normalizeVoiceAudioMime(value) !== null),
   sizeBytes: z.number().int().positive()
 });
 
@@ -446,7 +458,10 @@ export async function finalizeVoiceMessageUploadAction(input: unknown): Promise<
   const parsed = z.object({
     conversationId: z.string().uuid(),
     mediaId: z.string().uuid(),
-    waveform: z.unknown().optional()
+    waveform: z.unknown().optional(),
+    // Fallback for containers that carry no duration (MediaRecorder webm).
+    // Constrained here at the trust boundary and bounded again downstream.
+    clientDurationMs: z.number().finite().positive().max(5 * 60 * 1000).optional()
   }).safeParse(input);
   if (!parsed.success) return { ok: false, message: "That voice upload isn't available." };
 

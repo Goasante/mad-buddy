@@ -1,5 +1,26 @@
 import { generateVoiceWaveform } from "@/lib/messaging/voice-waveform";
 
+/**
+ * Recording formats, in preference order.
+ *
+ * webm/opus FIRST.
+ *
+ * This was briefly reordered to put mp4/aac first, on the theory that some
+ * engines record webm but cannot decode it. That inverted the real failure:
+ * Chromium reports isTypeSupported("audio/mp4") === true, then produces WebM
+ * bytes anyway. The pipeline was told "mp4", the bytes said WebM, and the
+ * recording failed byte verification while also refusing to play back.
+ *
+ * isTypeSupported() answers "will I accept this string", NOT "will I emit
+ * this container". Only the recorder's own reported mimeType, read after
+ * construction, is authoritative -- which is why selectRecordingMime below
+ * verifies rather than trusts, and why the whole pipeline keys off
+ * blobMimeType rather than the requested type.
+ *
+ * Order reflects what Mad Buddy can record, verify, store AND play end to
+ * end: webm/opus on Chromium and Firefox, mp4/aac on WebKit, which cannot
+ * produce webm at all.
+ */
 export const VOICE_RECORDING_MIME_CANDIDATES = [
   "audio/webm;codecs=opus",
   "audio/webm",
@@ -137,6 +158,31 @@ export function detectVoiceRecordingCapability(
     : { supported: false, reason: "mime_unsupported" };
 }
 
+/**
+ * Whether the recorder will actually EMIT the container it was asked for.
+ *
+ * isTypeSupported() only reports whether a type string is accepted. Chromium
+ * returns true for "audio/mp4" and then emits WebM, so the requested type is
+ * a request, never a fact. `MediaRecorder.mimeType`, read after construction,
+ * is the browser stating what it is really going to produce.
+ *
+ * Returns the family both agree on, or null when they disagree -- in which
+ * case the caller must believe the recorder, not the request.
+ */
+export function agreedRecordingFamily(requested: string, reported: string): "webm" | "mp4" | null {
+  const family = (value: string): "webm" | "mp4" | null => {
+    const base = value.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+    if (base === "audio/webm" || base.includes("matroska")) return "webm";
+    if (base === "audio/mp4" || base === "audio/x-m4a" || base === "audio/aac") return "mp4";
+    return null;
+  };
+  const requestedFamily = family(requested);
+  const reportedFamily = reported ? family(reported) : requestedFamily;
+  // An empty reported type means the engine declined to say; the request
+  // stands. A stated disagreement means the request was a fiction.
+  return reportedFamily !== null && reportedFamily === requestedFamily ? requestedFamily : null;
+}
+
 export function recorderError(error: unknown): Pick<Extract<VoiceRecorderState, { kind: "failed" }>, "code" | "message"> {
   const name = error instanceof DOMException
     ? error.name
@@ -173,6 +219,21 @@ export class VoiceRecorderController {
   private readonly maxDurationSeconds: number;
   private readonly capability: VoiceRecordingCapability;
   private stream: MediaStream | null = null;
+
+  /**
+   * Read-only view of the live capture stream, for VISUAL analysis only.
+   *
+   * Deliberately a getter rather than a second getUserMedia call: the live
+   * waveform must observe the exact stream being recorded, and opening a
+   * second microphone capture would double the permission surface, the track
+   * count and the battery cost for a decoration.
+   *
+   * Callers may read from it (an AnalyserNode tap) but must never stop its
+   * tracks -- this controller owns the lifecycle and stops them itself.
+   */
+  get captureStream(): MediaStream | null {
+    return this.stream;
+  }
   private recorder: MediaRecorderLike | null = null;
   private chunks: Blob[] = [];
   private startedAtMs = 0;
@@ -273,6 +334,14 @@ export class VoiceRecorderController {
     let recorder: MediaRecorderLike;
     try {
       recorder = this.runtime.createMediaRecorder!(stream, { mimeType: capability.mimeType });
+      // isTypeSupported() can lie: Chromium accepts "audio/mp4" and then emits
+      // WebM. The recorder's own mimeType is the browser stating what it will
+      // really produce, so if the two disagree, re-create it letting the
+      // engine pick its native container -- exactly what a plain
+      // `new MediaRecorder(stream)` does, and what actually plays back.
+      if (agreedRecordingFamily(capability.mimeType, recorder.mimeType ?? "") === null) {
+        recorder = this.runtime.createMediaRecorder!(stream, {});
+      }
     } catch (error) {
       this.fail(error);
       return;

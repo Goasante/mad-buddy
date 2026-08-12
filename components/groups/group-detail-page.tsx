@@ -37,25 +37,26 @@ import {
   type MemberAction
 } from "@/lib/groups/member-presentation";
 import { AppMenu } from "@/components/ui/app-dropdown";
+import { LongPressActions } from "@/components/ui/long-press-actions";
 import { MessageAttachmentImage } from "@/components/messaging/message-attachment-image";
-import { VoiceNotePlayer } from "@/components/messaging/voice-note-player";
 import { MessageComposer } from "@/components/messaging/message-composer";
+import { VoiceMessageBubble } from "@/components/messaging/voice-message-bubble";
+import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import { MessageMediaViewer } from "@/components/messaging/message-media-viewer";
 import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { withTimeout } from "@/lib/network/resilience";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 
 type GroupTab = "chat" | "members" | "media";
 
 export function GroupDetailPage({
   group,
   initialMessages,
-  voiceRecorderConfig
+  voiceRecorderConfig = { enabled: false, maxDurationSeconds: 0 }
 }: {
   group: GroupDetailView;
   initialMessages: ChatMessageView[];
-  voiceRecorderConfig: VoiceRecorderConfig;
+  voiceRecorderConfig?: VoiceRecorderConfig;
 }) {
   const router = useRouter();
   const reducedMotion = useReducedMotion();
@@ -185,7 +186,7 @@ export function GroupDetailPage({
         });
         if (!disposed) setMessages(loaded);
       } catch {
-        if (!disposed) setFeedback("Group messages could not be refreshed.");
+        if (!disposed) setFeedback("Circle messages could not be refreshed.");
       } finally {
         refreshInFlight = false;
         if (refreshQueued && !disposed) {
@@ -249,8 +250,8 @@ export function GroupDetailPage({
               type="button"
               size="icon"
               variant="ghost"
-              aria-label="Leave group"
-              title="Leave group"
+              aria-label="Leave Circle"
+              title="Leave Circle"
               disabled={isPending}
               onClick={() => {
                 startTransition(async () => {
@@ -281,7 +282,7 @@ export function GroupDetailPage({
 
       {feedback ? <p className="rounded-xl bg-secondary/60 px-4 py-3 text-sm" role="status">{feedback}</p> : null}
 
-      <nav className="border-b border-border/70" aria-label="Group sections">
+      <nav className="border-b border-border/70" aria-label="Circle sections">
         <div className="flex gap-1">
           {(["chat", "members", "media"] as const).map((item) => (
             <button
@@ -442,7 +443,7 @@ export function GroupDetailPage({
                           />
                         ) : null}
                         {message.voice ? (
-                          <VoiceNotePlayer
+                          <VoiceMessageBubble
                             conversationId={group.id}
                             messageId={message.id}
                             senderName={message.isMine ? "you" : message.senderName}
@@ -476,14 +477,16 @@ export function GroupDetailPage({
                 icon={Users2}
                 className="!border-0 !bg-transparent !shadow-none"
                 title="Start the conversation"
-                description="Messages in this group are visible only to joined members."
+                description="Messages in this Circle are visible only to joined members."
               />
             )}
           </div>
           <MessageComposer
             conversationId={group.id}
             voiceRecorderConfig={voiceRecorderConfig}
-            placeholder="Message the group"
+            // A group is exactly where "who did you mean" is a real question.
+            isGroup
+            placeholder="Message the Circle"
             onFeedback={setFeedback}
             onSent={async () => {
               const loaded = await withTimeout(getMessagesAction(group.id), {
@@ -523,7 +526,7 @@ export function GroupDetailPage({
               icon={Users2}
               className="!border-0 !bg-transparent !shadow-none"
               title="No media yet"
-              description="Photos shared in this group will appear here."
+              description="Photos shared in this Circle will appear here."
             />
           )}
         </section>
@@ -557,8 +560,21 @@ export function GroupDetailPage({
                 const label = roleLabel(member.role);
                 const isSelf = member.userId === group.viewerId;
 
+                // Same actions the More button opens, reached by holding the
+                // row. The button stays: the hold is a shortcut, never the
+                // only route.
+                const menuItems = actions.map((action) => ({
+                  id: action,
+                  label: MEMBER_ACTION_LABELS[action],
+                  destructive: action === "remove_member" || action === "leave_group",
+                  disabled: isPending,
+                  onSelect: () => runMemberAction(action, member)
+                }));
+
                 return (
-                  <li key={member.userId} className="flex items-center gap-3 p-3">
+                  <li key={member.userId}>
+                  <LongPressActions items={menuItems} label={`Actions for ${member.displayName}`}>
+                  <span className="flex items-center gap-3 p-3">
                     <UserAvatar
                       src={member.avatarUrl}
                       name={member.displayName}
@@ -588,13 +604,7 @@ export function GroupDetailPage({
                     {actions.length > 0 ? (
                       <AppMenu
                         label={`Actions for ${member.displayName}`}
-                        items={actions.map((action) => ({
-                          id: action,
-                          label: MEMBER_ACTION_LABELS[action],
-                          destructive: action === "remove_member" || action === "leave_group",
-                          disabled: isPending,
-                          onSelect: () => runMemberAction(action, member)
-                        }))}
+                        items={menuItems}
                         trigger={
                           <button
                             type="button"
@@ -606,6 +616,8 @@ export function GroupDetailPage({
                         }
                       />
                     ) : null}
+                  </span>
+                  </LongPressActions>
                   </li>
                 );
               })}
@@ -761,7 +773,7 @@ export function GroupDetailPage({
           if (!next) setTransferTarget(null);
         }}
         title="Transfer ownership"
-        description="Choose who takes over this group."
+        description="Choose who takes over this Circle."
         variant="sheet"
       >
         {transferTarget ? (

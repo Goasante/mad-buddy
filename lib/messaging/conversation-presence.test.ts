@@ -197,19 +197,29 @@ describe("conversation screen", () => {
 describe("composer", () => {
   const composer = composerSource;
 
-  it("is one soft pill rather than a field plus a button", () => {
-    expect(composer).toContain("rounded-full bg-secondary/70");
-    expect(composer).toContain("focus-within:bg-secondary");
+  it("is one soft surface rather than a bare field plus a button", () => {
+    // The composer moved from a single rounded pill to a stacked card
+    // (Slice 3). The RULE is unchanged -- the field reads as one soft
+    // surface that responds to focus -- so this asserts that rather than the
+    // particular utility classes the old layout happened to use.
+    const css = read("app/globals.css");
+    // The rounded surface is now the bubble that wraps field and tools
+    // together, and focus is expressed on it.
+    const bubble = css.slice(css.indexOf(".composer-bubble {"), css.indexOf(".composer-bubble:focus-within"));
+    expect(bubble).toContain("border-radius");
+    expect(bubble).toContain("background: hsl(var(--secondary)");
+    expect(css).toContain(".composer-bubble:focus-within");
   });
 
   it("keeps send quiet until there is something to send", () => {
-    expect(composer).toContain("canSend && !uploadBusy && !isPending");
-    expect(composer).toContain("scale-90 bg-transparent");
+    // Send stays disabled until there is text or a photo, and while an
+    // attachment is still uploading.
+    expect(composer).toContain("const canSendText = Boolean(draft.trim() || attachment);");
+    expect(composer).toContain("disabled={!canSendText || uploadBusy || isPending}");
   });
 
   it("still labels the send action for assistive tech", () => {
-    expect(composer).toContain('preparedVoice ? "Send voice message" : "Send message"');
-    expect(composer).toContain('"Retry voice message"');
+    expect(composer).toContain('aria-label="Send message"');
     expect(composer).toContain('aria-label={attachment ? "Photo caption" : placeholder}');
   });
 });

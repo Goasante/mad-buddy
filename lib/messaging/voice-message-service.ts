@@ -1,6 +1,7 @@
 import "server-only";
 
 import { resolveUserEntitlements } from "@/lib/billing/service";
+import { isSupportedVoiceContentType } from "@/lib/media/audio-inspection";
 import { messageAttachmentCanBeSigned } from "@/lib/messaging/attachment-retention";
 import { canCreateDirectConversation, resolveConversationAccess } from "@/lib/messaging/service";
 import type { PreparedVoiceAsset } from "@/lib/messaging/voice-playback";
@@ -8,8 +9,6 @@ import { validateVoiceWaveform } from "@/lib/messaging/voice-waveform";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
-
-const VOICE_CONTENT_TYPES = ["audio/webm", "audio/mp4"] as const;
 
 export type SendableMessageMedia =
   | { kind: "image" }
@@ -41,7 +40,7 @@ export async function resolveSendableMessageMedia(
   if (asset.intended_media_kind === "image" && asset.content_type.startsWith("image/")) {
     resolved = { kind: "image" };
   } else {
-    if (asset.intended_media_kind !== "voice_note" || !VOICE_CONTENT_TYPES.includes(asset.content_type as typeof VOICE_CONTENT_TYPES[number])) {
+    if (asset.intended_media_kind !== "voice_note" || !isSupportedVoiceContentType(asset.content_type)) {
       return null;
     }
     if (!asset.duration_ms || asset.duration_ms <= 0) return null;
@@ -126,7 +125,7 @@ export async function projectVoiceMessages(
   ]);
   const queuedIds = new Set((queued ?? []).map((row) => row.media_asset_id));
   const assetById = new Map((assets ?? []).filter((asset) =>
-    !queuedIds.has(asset.id) && Boolean(asset.duration_ms) && VOICE_CONTENT_TYPES.includes(asset.content_type as typeof VOICE_CONTENT_TYPES[number])
+    !queuedIds.has(asset.id) && Boolean(asset.duration_ms) && isSupportedVoiceContentType(asset.content_type)
   ).map((asset) => [asset.id, asset]));
   for (const message of messages) {
     const asset = assetById.get(message.media_id!);
