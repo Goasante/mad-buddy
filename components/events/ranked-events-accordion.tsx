@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Crown, MapPin } from "lucide-react";
 import { fallbackGradient } from "@/lib/events/event-media";
+import { focalObjectPosition } from "@/lib/events/cover";
 import { arrangeForAccordion, activeIndexForAccordion } from "@/lib/events/ranking";
 import type { RankedEvent } from "@/lib/events/ranked-events";
 import { FINE_POINTER_QUERY, useMediaQuery } from "@/hooks/use-media-query";
@@ -214,6 +215,10 @@ export function RankedEventsAccordion({
                   alt=""
                   loading="lazy"
                   decoding="async"
+                  // The creator's focal point, so the tall panel crop keeps
+                  // the subject in frame instead of centre-cropping a face
+                  // out of the picture.
+                  style={{ objectPosition: focalObjectPosition(event.focalPoint.x, event.focalPoint.y) }}
                   className="h-full w-full object-cover"
                 />
               ) : null}

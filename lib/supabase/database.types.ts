@@ -1676,6 +1676,15 @@ export type Database = {
           checkin_opens_minutes_before: number;
           visibility: EventVisibility;
           status: EventStatus;
+          /**
+           * Cover artwork via the canonical media_assets stack (Stage F).
+           * NULL for drafts and for legacy events predating the published-cover
+           * rule; those render the deterministic generated fallback.
+           */
+          cover_media_id: string | null;
+          /** Focal point 0..1 for cropping one image across every surface. */
+          cover_focal_x: number;
+          cover_focal_y: number;
           created_at: string;
           updated_at: string;
         };
@@ -1690,6 +1699,9 @@ export type Database = {
           checkin_opens_minutes_before?: number;
           visibility?: EventVisibility;
           status?: EventStatus;
+          cover_media_id?: string | null;
+          cover_focal_x?: number;
+          cover_focal_y?: number;
           created_at?: string;
           updated_at?: string;
         };

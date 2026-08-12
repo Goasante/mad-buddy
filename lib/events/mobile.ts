@@ -58,7 +58,13 @@ export const createEventSchema = z.object({
   description: z.string().max(1000).optional(),
   venueLabel: z.string().max(160).optional(),
   startsAt: z.string().datetime({ offset: true }),
-  endsAt: z.string().datetime({ offset: true })
+  endsAt: z.string().datetime({ offset: true }),
+  /**
+   * Create as a draft (Stage F). Defaults TRUE: a new event has no cover yet,
+   * and the published-cover rule means an event cannot go public until one
+   * exists. Callers that genuinely want the old behaviour must ask for it.
+   */
+  draft: z.boolean().optional()
 });
 
 function hasServiceRoleEnv(): boolean {
@@ -74,13 +80,22 @@ export async function listEvents(userId: string): Promise<EventView[]> {
   const { data: events } = await admin
     .from("events")
     .select("id, host_id, name, description, venue_label, starts_at, ends_at, visibility, status")
-    .in("status", ["scheduled", "active"])
+    // Drafts included so a HOST can find their own unpublished event and
+    // finish it (Stage F): creation now produces a draft, so filtering them
+    // out here would hide the event from the only person who can publish it.
+    // The filter below drops other people's drafts.
+    .in("status", ["draft", "scheduled", "active"])
     .gte("ends_at", nowIso)
     .order("starts_at", { ascending: true })
     .limit(100);
   if (!events?.length) return [];
 
-  const visibilityFiltered = events.filter((event) => event.visibility !== "invite" || event.host_id === userId);
+  const visibilityFiltered = events.filter((event) => {
+    // A draft belongs to its host alone: never listed to anyone else, whatever
+    // its visibility says (Stage F).
+    if (event.status === "draft" && event.host_id !== userId) return false;
+    return event.visibility !== "invite" || event.host_id === userId;
+  });
   if (visibilityFiltered.length === 0) return [];
 
   // BLOCK GAP FIX (Plans + Events lifecycle, Stage C).
@@ -270,7 +285,16 @@ export async function createEvent(userId: string, input: unknown): Promise<Event
       starts_at: parsed.data.startsAt,
       ends_at: parsed.data.endsAt,
       visibility: "community",
-      status: "scheduled"
+      // DRAFT FIRST (Stage F UI). Events used to be born "scheduled", i.e.
+      // published the instant they were created -- which made the
+      // published-cover rule unenforceable, because there was no moment
+      // between "the event exists" (needed to attach a cover to it) and "the
+      // event is public". Creation now produces a draft; publishEventAction
+      // is the transition that checks the cover.
+      //
+      // Existing scheduled events are untouched: this changes what NEW rows
+      // start as, never what old ones are.
+      status: parsed.data.draft === false ? "scheduled" : "draft"
     })
     .select("id")
     .single();

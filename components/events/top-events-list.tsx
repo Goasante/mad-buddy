@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { Crown, MapPin } from "lucide-react";
 import { fallbackGradient } from "@/lib/events/event-media";
+import { focalObjectPosition } from "@/lib/events/cover";
 import type { RankedEvent } from "@/lib/events/ranked-events";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CalendarPlus } from "lucide-react";
@@ -86,6 +87,8 @@ export function TopEventsList({ events }: { events: RankedEvent[] }) {
                   alt=""
                   loading="lazy"
                   decoding="async"
+                  // Same focal point as the accordion: one image, many crops.
+                  style={{ objectPosition: focalObjectPosition(event.focalPoint.x, event.focalPoint.y) }}
                   className="h-full w-full object-cover"
                 />
               ) : null}

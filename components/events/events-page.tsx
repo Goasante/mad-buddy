@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarPlus, MapPin, Sparkles, Users } from "lucide-react";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   checkInToEventAction,
   checkOutAction,
@@ -20,6 +20,8 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/auth/form-field";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
+import { CheckInSuccessSheet } from "@/components/events/check-in-success-sheet";
+import { EventCoverField, type EventCoverValue } from "@/components/events/event-cover-field";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
@@ -82,7 +84,13 @@ export function EventsPageContent({
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(() => requestedEvent?.id ?? null);
   const [glowList, setGlowList] = useState<EventGlowMuddyList | null>(null);
+  // Set only by a server-confirmed check-in; drives the success sheet.
+  const [checkedInEvent, setCheckedInEvent] = useState<
+    { id: string; name: string; glowEnabled: boolean } | null
+  >(null);
   const [feedback, setFeedback] = useState("");
+  const [publishError, setPublishError] = useState("");
+  const [cover, setCover] = useState<EventCoverValue>({ url: null, focalX: 0.5, focalY: 0.5 });
   const [isPending, startTransition] = useTransition();
 
   const [nowMs, setNowMs] = useState(0);
@@ -147,7 +155,33 @@ export function EventsPageContent({
           )
         );
         setGlowList(await getEventGlowAction(event.id));
+        // ONLY after the server confirmed. Never optimistic: claiming
+        // "you're checked in" before the row exists would be a lie the user
+        // acts on (§14).
+        setCheckedInEvent({ id: event.id, name: event.name, glowEnabled: sharePresence });
       }
+    });
+  }
+
+  /**
+   * Publish a draft (§7).
+   *
+   * The server rule is authoritative: publishEventAction re-reads the asset
+   * and refuses without a valid one. This surfaces that refusal as the real
+   * message next to the cover control rather than as a generic error, and
+   * nothing the host typed is lost either way.
+   */
+  function publish(event: EventView) {
+    startTransition(async () => {
+      const { publishEventAction } = await import("@/app/(app)/event-cover-actions");
+      const result = await publishEventAction(event.id);
+      if (result.ok) {
+        setPublishError("");
+        setFeedback(result.message);
+        router.refresh();
+        return;
+      }
+      setPublishError(result.message);
     });
   }
 
@@ -208,6 +242,7 @@ export function EventsPageContent({
     endTime: string;
     venueLabel: string;
     description: string;
+    draft: boolean;
   }) {
     const startsAt = new Date(`${input.date}T${input.startTime}`);
     const endsAt = new Date(`${input.date}T${input.endTime}`);
@@ -217,7 +252,8 @@ export function EventsPageContent({
         description: input.description || undefined,
         venueLabel: input.venueLabel || undefined,
         startsAt: startsAt.toISOString(),
-        endsAt: endsAt.toISOString()
+        endsAt: endsAt.toISOString(),
+        draft: input.draft
       });
       setFeedback(result.message);
       if (result.ok) {
@@ -342,7 +378,30 @@ export function EventsPageContent({
         onCheckOut={() => selectedEvent && checkOut(selectedEvent)}
         onToggleGlow={() => selectedEvent && toggleGlow(selectedEvent)}
         onRsvpChange={(status) => selectedEvent && changeRsvp(selectedEvent, status)}
+        onPublish={() => selectedEvent && publish(selectedEvent)}
+        publishError={publishError}
+        cover={cover}
+        setCover={setCover}
+        setPublishError={setPublishError}
       />
+      {checkedInEvent ? (
+        <CheckInSuccessSheet
+          open
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) setCheckedInEvent(null);
+          }}
+          eventId={checkedInEvent.id}
+          eventName={checkedInEvent.name}
+          glowEnabled={checkedInEvent.glowEnabled}
+          onSeeMuddies={() => {
+            // Routes into the EXISTING Stage E presence list, which already
+            // lives in the details modal. No second attendee list.
+            const eventId = checkedInEvent.id;
+            setCheckedInEvent(null);
+            openDetails(eventId);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -426,6 +485,7 @@ function CreateEventModal({
     endTime: string;
     venueLabel: string;
     description: string;
+    draft: boolean;
   }) => void;
 }) {
   const [name, setName] = useState("");
@@ -434,8 +494,38 @@ function CreateEventModal({
   const [endTime, setEndTime] = useState("");
   const [venueLabel, setVenueLabel] = useState("");
   const [description, setDescription] = useState("");
+  const [cover, setCover] = useState<EventCoverValue>({ url: null, focalX: 0.5, focalY: 0.5 });
+  const [coverError, setCoverError] = useState("");
+  const coverRef = useRef<HTMLDivElement | null>(null);
 
   const complete = name.trim().length >= 2 && date && startTime && endTime;
+
+  /**
+   * Save draft / Publish (§7, §8).
+   *
+   * Publishing without a cover is caught HERE, before the request, so the
+   * creator gets the real message and keeps everything they typed rather than
+   * a generic server error. The server rule remains authoritative -- this is
+   * the graceful front door to it, not a replacement for it.
+   */
+  function submit(asDraft: boolean) {
+    if (!asDraft && !cover.url) {
+      setCoverError("Add an Event cover before publishing.");
+      coverRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    setCoverError("");
+    onCreate({
+      name: name.trim(),
+      date,
+      startTime,
+      endTime,
+      venueLabel: venueLabel.trim(),
+      description: description.trim(),
+      draft: asDraft
+    });
+    resetFields();
+  }
 
   function resetFields() {
     setName("");
@@ -484,27 +574,41 @@ function CreateEventModal({
             placeholder="What's this event about?"
           />
         </FormField>
+
+        {/* COVER step. The event row does not exist yet at this point, so the
+            upload target does too: a cover is attached from the Event's own
+            edit view once it has an id. Saving a draft first is therefore the
+            path to publishing, and the copy says so plainly rather than
+            offering a picker that could not work. */}
+        <div ref={coverRef} className="space-y-2 border-t border-border/70 pt-4">
+          <p className="text-sm font-medium">Event cover</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Use a portrait image. Keep important faces and text near the centre so it works across
+            Event cards. Save this as a draft first, then add the cover and publish.
+          </p>
+          {coverError ? (
+            <p role="alert" className="text-xs font-medium text-destructive">
+              {coverError}
+            </p>
+          ) : null}
+        </div>
       </div>
-      <div className="mt-5 flex justify-end gap-3">
-        <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+      <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
+        <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)}>
           Cancel
         </Button>
+        {/* Save draft stays available with no cover (§8). It is visually
+            distinct from Publish rather than a second primary button. */}
         <Button
           type="button"
+          variant="outline"
           disabled={!complete || pending}
-          onClick={() => {
-            onCreate({
-              name: name.trim(),
-              date,
-              startTime,
-              endTime,
-              venueLabel: venueLabel.trim(),
-              description: description.trim()
-            });
-            resetFields();
-          }}
+          onClick={() => submit(true)}
         >
-          Create Event
+          Save draft
+        </Button>
+        <Button type="button" disabled={!complete || pending} onClick={() => submit(false)}>
+          Publish event
         </Button>
       </div>
     </Modal>
@@ -519,7 +623,12 @@ function EventDetailsModal({
   onCheckIn,
   onCheckOut,
   onToggleGlow,
-  onRsvpChange
+  onRsvpChange,
+  onPublish,
+  publishError,
+  cover,
+  setCover,
+  setPublishError
 }: {
   event: EventView | null;
   glowList: EventGlowMuddyList | null;
@@ -529,6 +638,11 @@ function EventDetailsModal({
   onCheckOut: () => void;
   onToggleGlow: () => void;
   onRsvpChange: (status: EventRsvpStatus) => void;
+  onPublish: () => void;
+  publishError: string;
+  cover: EventCoverValue;
+  setCover: (next: EventCoverValue) => void;
+  setPublishError: (message: string) => void;
 }) {
   const reducedMotion = useReducedMotion();
   // Starts OFF every time the modal is opened for a different event: a person
@@ -650,6 +764,39 @@ function EventDetailsModal({
               </div>
             </div>
           )}
+
+          {/* HOST: cover + publish. Only here, because only here does the
+              event have an id to attach media to (§6, §7). */}
+          {event.isHost ? (
+            <div className="space-y-3 border-t border-border/70 pt-4">
+              <EventCoverField
+                eventId={event.id}
+                value={cover}
+                onChange={(next) => {
+                  setCover(next);
+                  if (next.url) setPublishError("");
+                }}
+                invalid={Boolean(publishError)}
+                disabled={pending}
+              />
+              {event.status === "draft" ? (
+                <div className="space-y-2">
+                  <Button type="button" disabled={pending} onClick={onPublish}>
+                    Publish event
+                  </Button>
+                  {publishError ? (
+                    <p role="alert" className="text-xs font-medium text-destructive">
+                      {publishError}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      This Event is a draft. Add a cover, then publish it.
+                    </p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap gap-2 border-t border-border/70 pt-4">
             {event.myCheckInId ? (

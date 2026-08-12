@@ -1,6 +1,11 @@
 import "server-only";
 
-import { rankEvents, HOME_RANKED_EVENTS_LIMIT, MAX_RANKED_EVENTS } from "@/lib/events/ranking";
+import {
+  rankEvents,
+  HOME_RANKED_EVENTS_LIMIT,
+  MAX_RANKED_EVENTS,
+  MOMENTUM_WINDOW_MS
+} from "@/lib/events/ranking";
 import { resolveEventMedia, type EventMedia } from "@/lib/events/event-media";
 import { batchBlockedIds } from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -33,6 +38,8 @@ export type RankedEvent = {
   endsAt: string;
   status: string;
   media: EventMedia;
+  /** Where the subject sits, so every crop keeps it in frame. */
+  focalPoint: { x: number; y: number };
   goingCount: number;
   interestedCount: number;
   /** The viewer's own RSVP. null covers "never RSVP'd" and "is the host". */
@@ -71,7 +78,9 @@ export async function getRankedUpcomingEvents(
   // Same eligibility gate listEvents uses: live statuses, not yet finished.
   const { data: events } = await admin
     .from("events")
-    .select("id, host_id, name, venue_label, starts_at, ends_at, visibility, status")
+    .select(
+      "id, host_id, name, venue_label, starts_at, ends_at, visibility, status, cover_media_id, cover_focal_x, cover_focal_y"
+    )
     .in("status", ["scheduled", "active"])
     .gte("ends_at", nowIso)
     .order("starts_at", { ascending: true })
@@ -95,24 +104,63 @@ export async function getRankedUpcomingEvents(
   const eventIds = visible.map((event) => event.id);
 
   // Two queries for the whole page, never one per event: every RSVP row for
-  // these events (counts), and the viewer's own rows (their state).
+  // these events (counts + momentum), and the viewer's own rows (their state).
+  //
+  // `updated_at` comes back on the same rows rather than in a second
+  // "recent RSVPs" query -- momentum is derived in memory from the rows the
+  // counts already needed, so adding it cost no extra round trip.
   const [{ data: rsvpRows }, { data: myRsvps }] = await Promise.all([
-    admin.from("event_rsvps").select("event_id, status").in("event_id", eventIds),
+    admin.from("event_rsvps").select("event_id, status, updated_at").in("event_id", eventIds),
     admin.from("event_rsvps").select("event_id, status").eq("user_id", userId).in("event_id", eventIds)
   ]);
 
   const goingByEvent = new Map<string, number>();
   const interestedByEvent = new Map<string, number>();
+  const recentGoingByEvent = new Map<string, number>();
+  const recentInterestedByEvent = new Map<string, number>();
+  const momentumFloorMs = nowMs - MOMENTUM_WINDOW_MS;
+
   for (const row of rsvpRows ?? []) {
-    // not_going is stored but is not a popularity signal -- counting it would
-    // rank an event higher for the people who declined it.
+    // ONE ROW PER USER PER EVENT is guaranteed by the (event_id, user_id)
+    // unique constraint, and status changes update that row rather than
+    // inserting another. So a user toggling Interested -> Going -> Interested
+    // contributes exactly one count, whichever status it currently holds --
+    // toggle spam cannot inflate a score (§31), and Interested -> Going is
+    // never counted twice.
+    //
+    // not_going is stored but deliberately not counted: it is a decision NOT
+    // to attend, and ranking an event higher for the people who declined it
+    // would be backwards.
+    const isRecent = Date.parse(row.updated_at) >= momentumFloorMs;
     if (row.status === "going") {
       goingByEvent.set(row.event_id, (goingByEvent.get(row.event_id) ?? 0) + 1);
+      if (isRecent) recentGoingByEvent.set(row.event_id, (recentGoingByEvent.get(row.event_id) ?? 0) + 1);
     } else if (row.status === "interested") {
       interestedByEvent.set(row.event_id, (interestedByEvent.get(row.event_id) ?? 0) + 1);
+      if (isRecent) {
+        recentInterestedByEvent.set(row.event_id, (recentInterestedByEvent.get(row.event_id) ?? 0) + 1);
+      }
     }
   }
   const myRsvpByEvent = new Map((myRsvps ?? []).map((row) => [row.event_id, row.status]));
+
+  // Cover artwork for the whole page (Stage F). Signed in parallel rather
+  // than one await per event, and only for events that actually have one --
+  // legacy events skip this entirely and fall through to the deterministic
+  // generated fallback below.
+  //
+  // signMediaForAsset is the canonical resolver: it already refuses deleted,
+  // removed and restricted assets, so a moderated cover degrades to the
+  // fallback instead of 404-ing on a public ranked card.
+  const coverIds = [...new Set(visible.map((event) => event.cover_media_id).filter(Boolean))] as string[];
+  const coverUrlById = new Map<string, string>();
+  if (coverIds.length > 0) {
+    const { signMediaForAsset } = await import("@/lib/content/service");
+    const signed = await Promise.all(
+      coverIds.map(async (id) => [id, await signMediaForAsset(admin, id, "feed")] as const)
+    );
+    for (const [id, url] of signed) if (url) coverUrlById.set(id, url);
+  }
 
   const rankable = visible.map((event) => ({
     id: event.id,
@@ -121,11 +169,16 @@ export async function getRankedUpcomingEvents(
     status: event.status,
     goingCount: goingByEvent.get(event.id) ?? 0,
     interestedCount: interestedByEvent.get(event.id) ?? 0,
+    recentGoingCount: recentGoingByEvent.get(event.id) ?? 0,
+    recentInterestedCount: recentInterestedByEvent.get(event.id) ?? 0,
     name: event.name,
     venueLabel: event.venue_label,
     startsAt: event.starts_at,
     endsAt: event.ends_at,
-    isHost: event.host_id === userId
+    isHost: event.host_id === userId,
+    coverUrl: event.cover_media_id ? coverUrlById.get(event.cover_media_id) ?? null : null,
+    focalX: event.cover_focal_x,
+    focalY: event.cover_focal_y
   }));
 
   return rankEvents(rankable, nowMs, boundedLimit).map((event) => ({
@@ -136,9 +189,12 @@ export async function getRankedUpcomingEvents(
     startsAt: event.startsAt,
     endsAt: event.endsAt,
     status: event.status,
-    // No image column exists yet, so this always resolves to the deterministic
-    // designed fallback. See lib/events/event-media.ts.
-    media: resolveEventMedia(event.id),
+    // The canonical cover when the event has one, the deterministic generated
+    // fallback when it does not (legacy events, and drafts). One resolver, so
+    // the accordion, the Top 100 and the detail surface cannot disagree about
+    // what an event looks like.
+    media: resolveEventMedia(event.id, event.coverUrl),
+    focalPoint: { x: event.focalX, y: event.focalY },
     goingCount: event.goingCount,
     interestedCount: event.interestedCount,
     myRsvp: (myRsvpByEvent.get(event.id) as EventRsvpStatus | undefined) ?? null,

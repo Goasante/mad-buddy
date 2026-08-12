@@ -20,6 +20,7 @@ import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { PeopleNearbySheet } from "@/components/socialize/people-nearby-sheet";
 import { DiscoveryFeed } from "@/components/socialize/discovery-feed";
 import { SocializeHero } from "@/components/socialize/socialize-hero";
+import { EventModeBanner } from "@/components/socialize/event-mode-banner";
 import type { GroupSummary } from "@/lib/groups/types";
 import { joinDiscoverableGroupAction } from "@/app/(app)/group-actions";
 import { rsvpAction } from "@/app/(app)/plans-actions";
@@ -173,7 +174,8 @@ export function SocializePage({
   hasActiveStatus = false,
   initialStatusAvailability,
   initialStatusActivity = null,
-  initialStatusNote = ""
+  initialStatusNote = "",
+  eventModeName = null
 }: {
   initialSession: SocializeSession | null;
   initialPeople: SocializePerson[];
@@ -188,6 +190,12 @@ export function SocializePage({
   hasActiveStatus?: boolean;
   initialStatusAvailability?: AvailabilityType;
   initialStatusActivity?: ActivityType | null;
+  /**
+   * Event Mode context (Stage F), already validated server-side against a
+   * live check-in. Presentation only: it explains why Linkr opened
+   * differently and changes no eligibility rule.
+   */
+  eventModeName?: string | null;
   initialStatusNote?: string;
 }) {
   const router = useRouter();
@@ -811,7 +819,13 @@ export function SocializePage({
     // Reserved once here and cleared once in the header — never doubled.
     <div className="mx-auto flex w-full max-w-[900px] flex-col pt-[calc(env(safe-area-inset-top,0px)+4.25rem)]">
 
-
+      {/* Event Mode context (Stage F). Subtle strip above the ordinary feed --
+          Linkr is still Linkr, it just says why it opened this way. */}
+      {eventModeName !== null ? (
+        <div className="px-4 sm:px-6">
+          <EventModeBanner eventName={eventModeName} />
+        </div>
+      ) : null}
 
       {/* THE DISCOVERY FEED.
           Replaces the radar: one vertical scroll rather than an orbit. The

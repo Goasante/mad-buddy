@@ -7,11 +7,14 @@ import {
   ACCORDION_RANK_ORDER,
   HOME_RANKED_EVENTS_LIMIT,
   MAX_RANKED_EVENTS,
+  MOMENTUM_WINDOW_MS,
+  START_PROXIMITY_BUCKETS,
   activeIndexForAccordion,
   arrangeForAccordion,
   isRankableEvent,
   rankEvents,
   scoreEvent,
+  startProximityBoost,
   type RankableEvent
 } from "@/lib/events/ranking";
 import { EVENT_FALLBACK_TREATMENTS, resolveEventMedia } from "@/lib/events/event-media";
@@ -31,11 +34,15 @@ const NOW = Date.parse("2026-08-11T12:00:00.000Z");
 
 function makeEvent(overrides: Partial<RankableEvent> & { id: string }): RankableEvent {
   return {
-    startsAtMs: NOW + 24 * HOUR,
-    endsAtMs: NOW + 27 * HOUR,
+    // Far enough out to sit in the no-boost band, so a test that says nothing
+    // about timing is not silently also testing the start-proximity boost.
+    startsAtMs: NOW + 30 * 24 * HOUR,
+    endsAtMs: NOW + 30 * 24 * HOUR + 3 * HOUR,
     status: "scheduled",
     goingCount: 0,
     interestedCount: 0,
+    recentGoingCount: 0,
+    recentInterestedCount: 0,
     ...overrides
   };
 }
@@ -48,15 +55,130 @@ describe("scoreEvent", () => {
   it("weights going above interested", () => {
     const going = makeEvent({ id: "a", goingCount: 1 });
     const interested = makeEvent({ id: "b", interestedCount: 1 });
-    expect(scoreEvent(going)).toBeGreaterThan(scoreEvent(interested));
+    expect(scoreEvent(going, NOW)).toBeGreaterThan(scoreEvent(interested, NOW));
   });
 
   it("still counts interest, so a new event can surface", () => {
-    expect(scoreEvent(makeEvent({ id: "a", interestedCount: 3 }))).toBeGreaterThan(0);
+    expect(scoreEvent(makeEvent({ id: "a", interestedCount: 3 }), NOW)).toBeGreaterThan(0);
   });
 
   it("scores an event with no RSVPs at zero rather than inventing a number", () => {
-    expect(scoreEvent(makeEvent({ id: "a" }))).toBe(0);
+    expect(scoreEvent(makeEvent({ id: "a" }), NOW)).toBe(0);
+  });
+
+  it("does not let going dominate so completely that nothing else matters", () => {
+    // Going is stronger, but a lone Going must not outweigh a wave of real
+    // interest -- that would make Interested decorative.
+    const oneGoing = makeEvent({ id: "a", goingCount: 1 });
+    const manyInterested = makeEvent({ id: "b", interestedCount: 40 });
+    expect(scoreEvent(manyInterested, NOW)).toBeGreaterThan(scoreEvent(oneGoing, NOW));
+  });
+});
+
+describe("size fairness", () => {
+  it("gives diminishing returns to raw popularity", () => {
+    // 10 -> 60 is a real signal; 2000 -> 2050 is noise. Under linear counts
+    // the second gap dwarfed the first, which is how one huge event owned
+    // rank 1 permanently.
+    const smallGain =
+      scoreEvent(makeEvent({ id: "a", goingCount: 60 }), NOW) -
+      scoreEvent(makeEvent({ id: "a", goingCount: 10 }), NOW);
+    const largeGain =
+      scoreEvent(makeEvent({ id: "b", goingCount: 2050 }), NOW) -
+      scoreEvent(makeEvent({ id: "b", goingCount: 2000 }), NOW);
+    expect(smallGain).toBeGreaterThan(largeGain);
+  });
+
+  it("still ranks a genuinely bigger event above a smaller one, all else equal", () => {
+    // Diminishing returns must not become no returns.
+    expect(scoreEvent(makeEvent({ id: "a", goingCount: 500 }), NOW)).toBeGreaterThan(
+      scoreEvent(makeEvent({ id: "b", goingCount: 50 }), NOW)
+    );
+  });
+});
+
+describe("momentum", () => {
+  it("lets a fast-rising event outrank a larger stale one", () => {
+    // The exact failure the hardening targets: an older event with a bigger
+    // lifetime total, against a newer one whose demand is happening now.
+    const stale = makeEvent({ id: "stale", goingCount: 120, interestedCount: 200 });
+    const rising = makeEvent({
+      id: "rising",
+      goingCount: 40,
+      interestedCount: 60,
+      recentGoingCount: 40,
+      recentInterestedCount: 60
+    });
+    expect(scoreEvent(rising, NOW)).toBeGreaterThan(scoreEvent(stale, NOW));
+  });
+
+  it("does not let momentum alone beat a far more popular event", () => {
+    // A handful of recent RSVPs must not vault a tiny event over a genuinely
+    // in-demand one, or the ranking becomes a recency feed.
+    const huge = makeEvent({ id: "huge", goingCount: 4000, interestedCount: 6000 });
+    const tinyButRecent = makeEvent({
+      id: "tiny",
+      goingCount: 3,
+      interestedCount: 2,
+      recentGoingCount: 3,
+      recentInterestedCount: 2
+    });
+    expect(scoreEvent(huge, NOW)).toBeGreaterThan(scoreEvent(tinyButRecent, NOW));
+  });
+
+  it("counts recent going above recent interested", () => {
+    const recentGoing = makeEvent({ id: "a", goingCount: 5, recentGoingCount: 5 });
+    const recentInterested = makeEvent({ id: "b", interestedCount: 5, recentInterestedCount: 5 });
+    expect(scoreEvent(recentGoing, NOW)).toBeGreaterThan(scoreEvent(recentInterested, NOW));
+  });
+
+  it("uses a bounded window rather than all history", () => {
+    expect(MOMENTUM_WINDOW_MS).toBe(24 * HOUR);
+  });
+});
+
+describe("start proximity", () => {
+  it("prefers the event happening tonight over the identical one months away", () => {
+    const tonight = makeEvent({
+      id: "tonight",
+      goingCount: 30,
+      startsAtMs: NOW + 3 * HOUR,
+      endsAtMs: NOW + 6 * HOUR
+    });
+    const distant = makeEvent({ id: "distant", goingCount: 30 });
+    expect(scoreEvent(tonight, NOW)).toBeGreaterThan(scoreEvent(distant, NOW));
+  });
+
+  it("boosts an event already under way", () => {
+    const live = makeEvent({
+      id: "live",
+      goingCount: 10,
+      startsAtMs: NOW - HOUR,
+      endsAtMs: NOW + HOUR
+    });
+    expect(startProximityBoost(live, NOW)).toBe(START_PROXIMITY_BUCKETS[0].boost);
+  });
+
+  it("never penalises a distant event below its own demand", () => {
+    // The boost is a multiplier >= 1: far-off events are not punished, they
+    // simply do not get the lift.
+    expect(startProximityBoost(makeEvent({ id: "a" }), NOW)).toBe(1);
+  });
+
+  it("cannot rescue an empty event", () => {
+    // Imminence re-weights demand; it does not manufacture it.
+    const imminentEmpty = makeEvent({
+      id: "empty",
+      startsAtMs: NOW + HOUR,
+      endsAtMs: NOW + 2 * HOUR
+    });
+    expect(scoreEvent(imminentEmpty, NOW)).toBe(0);
+  });
+
+  it("moves in steps, not continuously, so the order does not flicker", () => {
+    // Two loads a second apart must produce the same boost.
+    const event = makeEvent({ id: "a", startsAtMs: NOW + 10 * HOUR, endsAtMs: NOW + 12 * HOUR });
+    expect(startProximityBoost(event, NOW)).toBe(startProximityBoost(event, NOW + 1000));
   });
 });
 
@@ -400,6 +522,64 @@ describe("accordion interaction contract", () => {
   });
 });
 
+describe("Home and the full list cannot disagree", () => {
+  const events = Array.from({ length: 12 }, (_, index) =>
+    makeEvent({
+      id: `e${index}`,
+      goingCount: index * 3,
+      interestedCount: (12 - index) * 2,
+      recentGoingCount: index % 4
+    })
+  );
+
+  it("gives an event the same rank in the top 5 as in the top 100", () => {
+    const home = rankEvents(events, NOW, HOME_RANKED_EVENTS_LIMIT);
+    const full = rankEvents(events, NOW, MAX_RANKED_EVENTS);
+    for (const homeEvent of home) {
+      const fullEvent = full.find((candidate) => candidate.id === homeEvent.id);
+      expect(fullEvent?.rank, `rank drift for ${homeEvent.id}`).toBe(homeEvent.rank);
+    }
+  });
+
+  it("makes the Home five exactly the first five of the full list", () => {
+    expect(rankEvents(events, NOW, HOME_RANKED_EVENTS_LIMIT).map((e) => e.id)).toEqual(
+      rankEvents(events, NOW, MAX_RANKED_EVENTS).slice(0, 5).map((e) => e.id)
+    );
+  });
+});
+
+describe("anti-manipulation", () => {
+  it("counts a user once, so toggling cannot inflate a score", () => {
+    // One row per user per event is a database constraint, so a status flip
+    // moves the row between buckets rather than adding one. The projection
+    // must therefore branch on the CURRENT status and never accumulate.
+    expect(projection).toContain('row.status === "going"');
+    expect(projection).toContain('row.status === "interested"');
+    expect(projection).not.toMatch(/not_going/);
+    // The unique constraint that makes the above true.
+    const rsvpMigration = read("supabase/migrations/20260811130000_event_rsvps.sql");
+    expect(rsvpMigration).toContain("unique (event_id, user_id)");
+  });
+
+  it("excludes cancelled and past events from any ranking", () => {
+    const ranked = rankEvents(
+      [
+        makeEvent({ id: "cancelled", goingCount: 900, status: "cancelled" }),
+        makeEvent({ id: "past", goingCount: 900, startsAtMs: NOW - 5 * HOUR, endsAtMs: NOW - HOUR }),
+        makeEvent({ id: "real", goingCount: 1 })
+      ],
+      NOW
+    );
+    expect(ranked.map((event) => event.id)).toEqual(["real"]);
+  });
+
+  it("ranks events, never people", () => {
+    for (const [name, source] of [["ranking", rankingSource], ["projection", projection]] as const) {
+      expect(source, name).not.toMatch(/rankUsers|userRank|leaderboard/i);
+    }
+  });
+});
+
 describe("ranking engine boundary", () => {
   it("keeps scoring pure and free of database access", () => {
     expect(rankingSource).not.toContain("supabase");
@@ -408,10 +588,45 @@ describe("ranking engine boundary", () => {
   });
 
   it("names future signals without pretending to compute them", () => {
-    expect(rankingSource).toContain("RankingSignals");
-    // Declared as optional and unused; scoreEvent must not read them.
-    const scorer = rankingSource.slice(rankingSource.indexOf("export function scoreEvent"));
-    expect(scorer.slice(0, 200)).not.toContain("momentumScore");
-    expect(scorer.slice(0, 200)).not.toContain("qualityScore");
+    // Quality and anti-manipulation scores are NOT in RankableEvent and NOT
+    // in the score. A field multiplied by a zero weight would be a fake
+    // signal wearing a real field's name.
+    expect(rankingSource).toContain("FutureRankingSignals");
+    const scorer = rankingSource.slice(
+      rankingSource.indexOf("export function scoreEvent"),
+      rankingSource.indexOf("export function isRankableEvent")
+    );
+    expect(scorer).not.toContain("qualityScore");
+    expect(scorer).not.toContain("manipulationPenalty");
+  });
+
+  it("makes momentum a required input rather than a silent zero", () => {
+    // Optional momentum would read as 0 for any caller that forgot it, which
+    // is indistinguishable from "this event has no recent demand".
+    const shape = rankingSource.slice(
+      rankingSource.indexOf("export type RankableEvent"),
+      rankingSource.indexOf("export type FutureRankingSignals")
+    );
+    expect(shape).toContain("recentGoingCount: number;");
+    expect(shape).toContain("recentInterestedCount: number;");
+    expect(shape).not.toContain("recentGoingCount?:");
+  });
+});
+
+describe("ranking performance", () => {
+  it("derives momentum from the rows the counts already read", () => {
+    // No second "recent RSVPs" query, and no per-event count query.
+    expect(projection).toContain('.select("event_id, status, updated_at")');
+    expect((projection.match(/from\("event_rsvps"\)/g) ?? []).length).toBe(2);
+  });
+
+  it("scores each event once rather than inside the comparator", () => {
+    expect(rankingSource).toContain("scoreEvent(event, nowMs)");
+    const comparator = rankingSource.slice(rankingSource.indexOf("const ordered = scored.sort"));
+    expect(comparator.slice(0, 300)).not.toContain("scoreEvent(");
+  });
+
+  it("keeps the candidate window bounded", () => {
+    expect(projection).toContain("limit(MAX_RANKED_EVENTS)");
   });
 });
