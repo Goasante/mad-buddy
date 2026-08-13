@@ -60,9 +60,17 @@ export const createEventSchema = z.object({
   startsAt: z.string().datetime({ offset: true }),
   endsAt: z.string().datetime({ offset: true }),
   /**
-   * Create as a draft (Stage F). Defaults TRUE: a new event has no cover yet,
-   * and the published-cover rule means an event cannot go public until one
-   * exists. Callers that genuinely want the old behaviour must ask for it.
+   * Accepted and ignored.
+   *
+   * Creation ALWAYS produces a draft. This used to accept `false` to create a
+   * scheduled event directly, which was a hole straight through the
+   * published-cover rule: an event created that way went public without ever
+   * passing publishEventAction, the only place the cover is verified. A rule
+   * with a documented bypass is a convention, not a rule.
+   *
+   * Kept in the schema so an older client sending it still succeeds rather
+   * than failing validation -- it simply no longer changes the outcome.
+   * publishEventAction is now the only transition to `scheduled`.
    */
   draft: z.boolean().optional()
 });
@@ -285,16 +293,21 @@ export async function createEvent(userId: string, input: unknown): Promise<Event
       starts_at: parsed.data.startsAt,
       ends_at: parsed.data.endsAt,
       visibility: "community",
-      // DRAFT FIRST (Stage F UI). Events used to be born "scheduled", i.e.
-      // published the instant they were created -- which made the
-      // published-cover rule unenforceable, because there was no moment
-      // between "the event exists" (needed to attach a cover to it) and "the
-      // event is public". Creation now produces a draft; publishEventAction
-      // is the transition that checks the cover.
+      // ALWAYS A DRAFT. Events used to be born "scheduled", i.e. published the
+      // instant they were created -- which made the published-cover rule
+      // unenforceable, because there was no moment between "the event exists"
+      // (needed to attach a cover to it) and "the event is public".
+      //
+      // `draft: false` previously opted back into that and bypassed
+      // publishEventAction entirely, so an event could reach discovery with no
+      // cover and no server check. There is now no path from creation to
+      // `scheduled`: publishEventAction is the only transition, and it
+      // re-reads the asset's owner, context, processing and moderation state
+      // before allowing it.
       //
       // Existing scheduled events are untouched: this changes what NEW rows
       // start as, never what old ones are.
-      status: parsed.data.draft === false ? "scheduled" : "draft"
+      status: "draft"
     })
     .select("id")
     .single();

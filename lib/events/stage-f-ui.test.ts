@@ -109,7 +109,22 @@ describe("focal positioning is touch-first", () => {
 
 describe("draft versus publish", () => {
   it("creates events as drafts so a cover can be attached", () => {
-    expect(eventsMobile).toContain('parsed.data.draft === false ? "scheduled" : "draft"');
+    // ALWAYS a draft now. This previously read
+    //   parsed.data.draft === false ? "scheduled" : "draft"
+    // which let a caller create a scheduled event directly and skip
+    // publishEventAction -- the only place the cover is verified. A rule with
+    // a documented bypass is a convention, not a rule.
+    expect(eventsMobile).toContain('status: "draft"');
+    expect(eventsMobile).not.toContain('? "scheduled" : "draft"');
+  });
+
+  it("has no path from creation straight to scheduled", () => {
+    // publishEventAction is the only transition, and it re-reads the asset.
+    const createBlock = eventsMobile.slice(
+      eventsMobile.indexOf("export async function createEvent"),
+      eventsMobile.indexOf("event_host")
+    );
+    expect(createBlock).not.toContain('"scheduled"');
   });
 
   it("offers Save draft and Publish as distinct actions", () => {

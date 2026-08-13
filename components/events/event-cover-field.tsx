@@ -40,7 +40,8 @@ export function EventCoverField({
   value,
   onChange,
   invalid = false,
-  disabled = false
+  disabled = false,
+  onPendingFile
 }: {
   /** Null while the event does not exist yet (create flow, pre-save). */
   eventId: string | null;
@@ -49,6 +50,13 @@ export function EventCoverField({
   /** True after a publish attempt failed for a missing cover (§7). */
   invalid?: boolean;
   disabled?: boolean;
+  /**
+   * Receives a chosen file while no event exists yet.
+   *
+   * Present only in the create flow. The caller holds it until a provisional
+   * draft exists, then uploads it through the canonical pipeline.
+   */
+  onPendingFile?: (file: File) => void;
 }) {
   const inputId = useId();
   const [busy, setBusy] = useState(false);
@@ -74,8 +82,30 @@ export function EventCoverField({
 
   const upload = useCallback(
     async (file: File) => {
+      // NO EVENT YET: hold the file and show it immediately.
+      //
+      // The upload pipeline needs an event id to attach the asset to, but
+      // that is an implementation detail and used to surface as "Save the
+      // Event first, then add a cover" -- which made the cover unreachable
+      // from the create form and turned one action into two round trips.
+      //
+      // The chosen file is kept locally and previewed; the caller uploads it
+      // through the same canonical pipeline the moment a provisional draft
+      // exists, so the person experiences one continuous Publish.
       if (!eventId) {
-        setError("Save the Event first, then add a cover.");
+        if (onPendingFile) {
+          const compressed = await compressImageForUpload(file);
+          if (!compressed.ok) {
+            setError(compressed.reason);
+            return;
+          }
+          if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+          const preview = URL.createObjectURL(compressed.file);
+          objectUrlRef.current = preview;
+          setError("");
+          onPendingFile(compressed.file);
+          onChange({ url: preview, focalX: value.focalX, focalY: value.focalY });
+        }
         return;
       }
       // Duplicate-tap protection (§6): one upload in flight at a time.
@@ -113,7 +143,7 @@ export function EventCoverField({
       objectUrlRef.current = previewUrl;
       onChange({ url: previewUrl, focalX: 0.5, focalY: 0.5 });
     },
-    [busy, eventId, onChange]
+    [busy, eventId, onChange, onPendingFile, value.focalX, value.focalY]
   );
 
   const moveFocal = useCallback(

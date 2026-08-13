@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarPlus, MapPin, Sparkles, Users } from "lucide-react";
+import { CalendarPlus, Loader2, MapPin, Sparkles, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   checkInToEventAction,
@@ -18,12 +18,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FormField } from "@/components/auth/form-field";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { CheckInSuccessSheet } from "@/components/events/check-in-success-sheet";
 import { EventCoverField, type EventCoverValue } from "@/components/events/event-cover-field";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
-import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -82,6 +80,14 @@ export function EventsPageContent({
   const [events, setEvents] = useState<EventView[]>(initialEvents);
   const [activeTab, setActiveTab] = useState<EventTab>(() => requestedEvent?.isHost ? "mine" : "upcoming");
   const [createOpen, setCreateOpen] = useState(false);
+  /* Bumped each time Create opens. Used as the modal's key so it remounts
+     with empty state -- the parent closes it directly after a successful
+     publish, which would otherwise leave the next Create pre-filled. */
+  const [createSession, setCreateSession] = useState(0);
+  const openCreate = () => {
+    setCreateSession((n) => n + 1);
+    setCreateOpen(true);
+  };
   const [selectedId, setSelectedId] = useState<string | null>(() => requestedEvent?.id ?? null);
   const [glowList, setGlowList] = useState<EventGlowMuddyList | null>(null);
   // Set only by a server-confirmed check-in; drives the success sheet.
@@ -243,6 +249,10 @@ export function EventsPageContent({
     venueLabel: string;
     description: string;
     draft: boolean;
+    /** Held in the form until an event id exists to attach it to. */
+    coverFile: File | null;
+    focalX: number;
+    focalY: number;
   }) {
     const startsAt = new Date(`${input.date}T${input.startTime}`);
     const endsAt = new Date(`${input.date}T${input.endTime}`);
@@ -252,10 +262,59 @@ export function EventsPageContent({
         description: input.description || undefined,
         venueLabel: input.venueLabel || undefined,
         startsAt: startsAt.toISOString(),
-        endsAt: endsAt.toISOString(),
-        draft: input.draft
+        endsAt: endsAt.toISOString()
       });
-      setFeedback(result.message);
+
+      /**
+       * ONE PUBLISH, THREE SERVER STEPS.
+       *
+       * Creation always yields a draft, so publishing means: upload the held
+       * cover against the new id, then ask the server to publish -- which
+       * re-reads the asset's owner, context, processing and moderation state
+       * before allowing it.
+       *
+       * A failure at any step leaves the event as an unpublished draft and
+       * the form intact, so nothing half-made reaches discovery and nothing
+       * the creator typed is lost.
+       */
+      if (result.ok && result.eventId && !input.draft) {
+        const eventId = result.eventId;
+        if (input.coverFile) {
+          const formData = new FormData();
+          formData.append("eventId", eventId);
+          formData.append("media", input.coverFile);
+          const { uploadEventCoverAction, setEventCoverFocalAction, publishEventAction } = await import(
+            "@/app/(app)/event-cover-actions"
+          );
+          const uploaded = await uploadEventCoverAction(formData);
+          if (!uploaded.ok) {
+            // One message, not a stack of technical ones. The draft exists and
+            // is private, so retrying costs nothing.
+            //
+            // The draft is real and listed under Hosting, so the sheet closes
+            // and the message explains where the Event went. Returning here
+            // WITHOUT closing left the sheet open with its button stuck on
+            // "Publishing…" and no way forward.
+            setFeedback("Couldn't upload that cover. Your Event was saved as a draft — add a cover and publish it.");
+            setCreateOpen(false);
+            setActiveTab("mine");
+            router.refresh();
+            return;
+          }
+          if (input.focalX !== 0.5 || input.focalY !== 0.5) {
+            await setEventCoverFocalAction({ eventId, focalX: input.focalX, focalY: input.focalY });
+          }
+          const published = await publishEventAction(eventId);
+          setFeedback(
+            published.ok
+              ? published.message
+              : "Your Event was saved as a draft. Check the details and publish again."
+          );
+        }
+      }
+
+      if (!result.ok || input.draft || !input.coverFile) setFeedback(result.message);
+
       if (result.ok) {
         setCreateOpen(false);
         setActiveTab("mine");
@@ -269,7 +328,7 @@ export function EventsPageContent({
               venueLabel: input.venueLabel || null,
               startsAt: startsAt.toISOString(),
               endsAt: endsAt.toISOString(),
-              status: "scheduled",
+              status: input.draft || !input.coverFile ? "draft" : "scheduled",
               hostName: "You",
               hostPlan: currentUserPlan,
               isHost: true,
@@ -299,7 +358,7 @@ export function EventsPageContent({
             Check in to see which Muddies are at the same event. Venue names only, never exact location.
           </p>
         </div>
-        <Button type="button" onClick={() => setCreateOpen(true)} data-tour-id={TOUR_TARGET_IDS.EVENTS_CREATE}>
+        <Button type="button" onClick={openCreate} data-tour-id={TOUR_TARGET_IDS.EVENTS_CREATE}>
           <CalendarPlus className="h-4 w-4" aria-hidden="true" />
           Create Event
         </Button>
@@ -357,7 +416,7 @@ export function EventsPageContent({
             title={activeTab === "mine" ? "You're not hosting anything yet" : "No events here yet"}
             description="Create an event and Muddies who check in can find each other there."
             action={
-              <Button type="button" onClick={() => setCreateOpen(true)}>
+              <Button type="button" onClick={openCreate}>
                 <CalendarPlus className="h-4 w-4" aria-hidden="true" />
                 Create Event
               </Button>
@@ -366,7 +425,7 @@ export function EventsPageContent({
         </div>
       )}
 
-      <CreateEventModal open={createOpen} onOpenChange={setCreateOpen} pending={isPending} onCreate={createEvent} />
+      <CreateEventModal key={createSession} open={createOpen} onOpenChange={setCreateOpen} pending={isPending} onCreate={createEvent} />
       <EventDetailsModal
         event={selectedEvent}
         glowList={glowList}
@@ -486,6 +545,9 @@ function CreateEventModal({
     venueLabel: string;
     description: string;
     draft: boolean;
+    coverFile: File | null;
+    focalX: number;
+    focalY: number;
   }) => void;
 }) {
   const [name, setName] = useState("");
@@ -496,9 +558,23 @@ function CreateEventModal({
   const [description, setDescription] = useState("");
   const [cover, setCover] = useState<EventCoverValue>({ url: null, focalX: 0.5, focalY: 0.5 });
   const [coverError, setCoverError] = useState("");
+  /**
+   * The chosen cover, held locally until an event id exists.
+   *
+   * The upload pipeline attaches assets to an event, so nothing can be
+   * uploaded before one exists. Rather than making the creator save first and
+   * come back, the file waits here and is uploaded during Publish.
+   */
+  const [pendingCover, setPendingCover] = useState<File | null>(null);
   const coverRef = useRef<HTMLDivElement | null>(null);
 
-  const complete = name.trim().length >= 2 && date && startTime && endTime;
+  /**
+   * End-after-start, checked here so the creator sees it while typing rather
+   * than after a round trip. createEvent enforces the same rule server-side
+   * and remains authoritative.
+   */
+  const scheduleInvalid = Boolean(date && startTime && endTime && endTime <= startTime);
+  const complete = name.trim().length >= 2 && date && startTime && endTime && !scheduleInvalid;
 
   /**
    * Save draft / Publish (§7, §8).
@@ -509,6 +585,8 @@ function CreateEventModal({
    * the graceful front door to it, not a replacement for it.
    */
   function submit(asDraft: boolean) {
+    // One publish at a time, whatever the button is tapped twice.
+    if (pending) return;
     if (!asDraft && !cover.url) {
       setCoverError("Add an Event cover before publishing.");
       coverRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -522,9 +600,11 @@ function CreateEventModal({
       endTime,
       venueLabel: venueLabel.trim(),
       description: description.trim(),
-      draft: asDraft
+      draft: asDraft,
+      coverFile: pendingCover,
+      focalX: cover.focalX,
+      focalY: cover.focalY
     });
-    resetFields();
   }
 
   function resetFields() {
@@ -534,8 +614,22 @@ function CreateEventModal({
     setEndTime("");
     setVenueLabel("");
     setDescription("");
+    // The cover is part of the draft too: leaving it behind would show the
+    // previous Event's artwork the next time this opens.
+    setCover({ url: null, focalX: 0.5, focalY: 0.5 });
+    setPendingCover(null);
+    setCoverError("");
   }
 
+  /**
+   * Cleared when the sheet is dismissed, and again as it opens.
+   *
+   * Resetting only on dismissal was not enough: the parent closes this
+   * directly after a successful publish without routing through here, so the
+   * next Create opened pre-filled with the previous Event. Clearing on open
+   * covers every path, and deliberately leaves a FAILED publish untouched --
+   * that sheet stays open and everything typed must survive.
+   */
   function handleOpenChange(next: boolean) {
     onOpenChange(next);
     if (!next) resetFields();
@@ -548,68 +642,163 @@ function CreateEventModal({
       title="Create Event"
       description="Visible to the community. Use a venue name, not an address."
     >
-      <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
-        <FormField htmlFor="event-name" label="Event name">
-          <Input id="event-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Sunday Brunch" />
-        </FormField>
-        <FormField htmlFor="event-date" label="Date">
-          <Input id="event-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-        </FormField>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField htmlFor="event-start" label="Starts">
-            <Input id="event-start" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
-          </FormField>
-          <FormField htmlFor="event-end" label="Ends">
-            <Input id="event-end" type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
-          </FormField>
-        </div>
-        <FormField htmlFor="event-venue" label="Venue (label only)">
-          <Input id="event-venue" value={venueLabel} onChange={(event) => setVenueLabel(event.target.value)} placeholder="e.g. Impact Hub, Accra" />
-        </FormField>
-        <FormField htmlFor="event-description" label="Description">
-          <Textarea
-            id="event-description"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="What's this event about?"
+      {/* One continuous sheet, not a stack of bordered cards.
+          Every field used to sit in its own FormField box with its own label,
+          which made creating an Event read as an admin form. Hierarchy now
+          comes from type scale, spacing and two hairline dividers; the
+          artwork carries the personality. */}
+      <div className="-mx-1 max-h-[70vh] space-y-5 overflow-y-auto px-1 pb-1">
+        {/* COVER, first and large.
+            The upload needs an event id, but that is an implementation
+            detail: the picker takes the image here, holds it, and uploads it
+            during Publish once a provisional draft exists. */}
+        <div ref={coverRef}>
+          <EventCoverField
+            eventId={null}
+            value={cover}
+            onChange={(next) => {
+              setCover(next);
+              if (next.url) setCoverError("");
+            }}
+            onPendingFile={setPendingCover}
+            invalid={Boolean(coverError)}
+            disabled={pending}
           />
-        </FormField>
-
-        {/* COVER step. The event row does not exist yet at this point, so the
-            upload target does too: a cover is attached from the Event's own
-            edit view once it has an id. Saving a draft first is therefore the
-            path to publishing, and the copy says so plainly rather than
-            offering a picker that could not work. */}
-        <div ref={coverRef} className="space-y-2 border-t border-border/70 pt-4">
-          <p className="text-sm font-medium">Event cover</p>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            Use a portrait image. Keep important faces and text near the centre so it works across
-            Event cards. Save this as a draft first, then add the cover and publish.
-          </p>
           {coverError ? (
-            <p role="alert" className="text-xs font-medium text-destructive">
+            <p role="alert" className="mt-1.5 text-xs font-medium text-destructive">
               {coverError}
             </p>
           ) : null}
         </div>
+
+        {/* NAME + DESCRIPTION as writing, not inputs. Borderless so the
+            creator sees their words at the size they will be read. */}
+        <div className="space-y-1">
+          <input
+            id="event-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Event name"
+            aria-label="Event name"
+            className="w-full bg-transparent text-xl font-semibold leading-tight outline-none placeholder:text-muted-foreground/60 focus-visible:outline-none"
+          />
+          <Textarea
+            id="event-description"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="Add a description"
+            aria-label="Description"
+            rows={2}
+            className="min-h-0 resize-none border-0 bg-transparent px-0 text-sm leading-relaxed shadow-none focus-visible:ring-0"
+          />
+        </div>
+
+        {/* WHEN: one section, three tappable values.
+            This was a full-width Date box plus a two-column grid of Starts
+            and Ends -- three separate bordered inputs for one idea. The
+            native pickers still sit underneath, so timezone handling and
+            validation are untouched; only the presentation changed. */}
+        <div className="border-t border-border/60 pt-4">
+          <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">When</p>
+          <div className="mt-2 space-y-2">
+            <label className="flex min-h-11 items-center justify-between gap-3" htmlFor="event-date">
+              <span className="text-sm text-muted-foreground">Date</span>
+              <input
+                id="event-date"
+                type="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+                className="min-w-0 bg-transparent text-right text-[0.9375rem] font-medium outline-none"
+              />
+            </label>
+            <div className="flex items-center justify-between gap-3">
+              <label className="flex min-h-11 flex-1 items-center gap-2" htmlFor="event-start">
+                <span className="text-sm text-muted-foreground">Starts</span>
+                <input
+                  id="event-start"
+                  type="time"
+                  value={startTime}
+                  onChange={(event) => setStartTime(event.target.value)}
+                  className="min-w-0 flex-1 bg-transparent text-right text-[0.9375rem] font-medium outline-none"
+                />
+              </label>
+              <span aria-hidden="true" className="shrink-0 text-muted-foreground/60">
+                →
+              </span>
+              <label className="flex min-h-11 flex-1 items-center gap-2" htmlFor="event-end">
+                <span className="sr-only">Ends</span>
+                <input
+                  id="event-end"
+                  type="time"
+                  value={endTime}
+                  onChange={(event) => setEndTime(event.target.value)}
+                  className="min-w-0 flex-1 bg-transparent text-right text-[0.9375rem] font-medium outline-none"
+                />
+              </label>
+            </div>
+            {/* End-after-start, stated before the server has to refuse it.
+                The server rule remains authoritative. */}
+            {scheduleInvalid ? (
+              <p role="alert" className="text-xs font-medium text-destructive">
+                The Event must end after it starts.
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        {/* WHERE: one row. Long venue names wrap rather than overflow. */}
+        <div className="border-t border-border/60 pt-4">
+          <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Where</p>
+          <input
+            id="event-venue"
+            value={venueLabel}
+            onChange={(event) => setVenueLabel(event.target.value)}
+            placeholder="Add location"
+            aria-label="Location"
+            className="mt-1 min-h-11 w-full bg-transparent text-[0.9375rem] outline-none placeholder:text-muted-foreground/60"
+          />
+          <p className="text-xs text-muted-foreground">A venue name, not a street address.</p>
+        </div>
       </div>
-      <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)}>
-          Cancel
-        </Button>
-        {/* Save draft stays available with no cover (§8). It is visually
-            distinct from Publish rather than a second primary button. */}
+      {/* ONE primary action.
+          Cancel, Save draft and Publish previously sat in a row as three
+          similar buttons, which made saving a draft look like a required
+          step. Publish is now full-width and alone; Save draft is a quiet
+          text link beneath it, and Cancel is the sheet's own dismiss. */}
+      <div className="mt-5 space-y-3 pb-[max(0px,env(safe-area-inset-bottom))]">
         <Button
           type="button"
-          variant="outline"
+          className="h-12 w-full text-base"
           disabled={!complete || pending}
-          onClick={() => submit(true)}
+          onClick={() => submit(false)}
         >
-          Save draft
+          {pending ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              Publishing…
+            </>
+          ) : (
+            "Publish event"
+          )}
         </Button>
-        <Button type="button" disabled={!complete || pending} onClick={() => submit(false)}>
-          Publish event
-        </Button>
+        <div className="flex items-center justify-center gap-4 text-sm">
+          <button
+            type="button"
+            onClick={() => submit(true)}
+            disabled={!complete || pending}
+            className="focus-ring rounded px-2 py-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            Save draft
+          </button>
+          <button
+            type="button"
+            onClick={() => handleOpenChange(false)}
+            disabled={pending}
+            className="focus-ring rounded px-2 py-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     </Modal>
   );
