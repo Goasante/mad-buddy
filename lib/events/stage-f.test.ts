@@ -167,6 +167,51 @@ describe("focal point", () => {
     expect(coverDimensionError(400, 500)).not.toBeNull();
     expect(coverDimensionError(1200, 1500)).toBeNull();
   });
+
+  /**
+   * THE BUG THIS GUARDS. The rule was `width >= 600 && height >= 750`, which
+   * demands each edge independently -- and because 750 > 600 it quietly
+   * required a PORTRAIT image. A 1600x720 screenshot is 1.15 megapixels and
+   * was refused as "too small to look sharp". Nothing was small about it.
+   */
+  it("accepts real photographs whatever their orientation", () => {
+    for (const [width, height, label] of [
+      [4032, 3024, "landscape phone"],
+      [3024, 4032, "portrait phone"],
+      [1920, 1080, "16:9"],
+      [1080, 1920, "9:16"],
+      [1080, 1080, "square"],
+      [1600, 720, "wide screenshot"]
+    ] as Array<[number, number, string]>) {
+      expect(coverDimensionError(width, height), `${label} ${width}x${height}`).toBeNull();
+    }
+  });
+
+  it("still refuses images that genuinely cannot render sharply", () => {
+    // Below the area floor, whatever their shape.
+    expect(coverDimensionError(800, 600)).not.toBeNull();
+    expect(coverDimensionError(1024, 640)).not.toBeNull();
+  });
+
+  it("refuses a long thin sliver even when its area passes", () => {
+    // 4000x500 is 2 MEGAPIXELS -- comfortably past the area floor -- but its
+    // 500px short edge cannot fill a card. Only the short-edge rule catches
+    // this, so it must be tested with a shape the area rule would allow.
+    expect(coverDimensionError(4000, 500)).not.toBeNull();
+    expect(coverDimensionError(500, 4000)).not.toBeNull();
+  });
+
+  it("treats unreadable dimensions as a read failure, not a size failure", () => {
+    for (const [width, height] of [[0, 1000], [-5, 900], [Number.NaN, 900]]) {
+      expect(coverDimensionError(width, height)).toContain("couldn't be read");
+    }
+  });
+
+  it("does not decide by orientation", () => {
+    // The same pixel count must pass or fail identically either way round.
+    expect(coverDimensionError(1600, 720)).toBe(coverDimensionError(720, 1600));
+    expect(coverDimensionError(800, 600)).toBe(coverDimensionError(600, 800));
+  });
 });
 
 // ---------------------------------------------------------------------------

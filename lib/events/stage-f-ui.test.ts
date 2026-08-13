@@ -94,7 +94,19 @@ describe("focal positioning is touch-first", () => {
   it("writes the existing focal columns rather than a new crop", () => {
     expect(coverField).toContain("focalX");
     expect(coverField).toContain("focalY");
-    expect(coverField).not.toContain("crop");
+    // The invariant is that the ORIGINAL PIXELS SURVIVE: a cover is stored
+    // whole and re-cropped per surface by object-position, so one upload can
+    // serve the accordion, the list and the detail header.
+    //
+    // Asserting on the bare word "crop" could not express that. It matched the
+    // user-facing sentence "crops well across Event cards" -- prose describing
+    // what CSS does -- and would have forced the copy to avoid an ordinary
+    // English word to keep a test green. These match the act of destroying
+    // pixels instead: canvas extraction and the crop libraries.
+    expect(coverField).not.toContain("drawImage");
+    expect(coverField).not.toContain("toBlob");
+    expect(coverField).not.toContain("react-easy-crop");
+    expect(coverField).not.toContain("cropperjs");
   });
 
   it("clamps whatever the drag produces", () => {

@@ -73,7 +73,9 @@ export async function loadUpcomingAgenda(
       : (async () => {
           const { data: events } = await admin
             .from("events")
-            .select("id, host_id, name, venue_label, starts_at, ends_at, status, visibility")
+            .select(
+              "id, host_id, name, venue_label, starts_at, ends_at, status, visibility, cover_media_id, cover_focal_x, cover_focal_y"
+            )
             .in("id", eventIds)
             .in("status", ["scheduled", "active"])
             .gte("ends_at", nowIso)
@@ -86,6 +88,26 @@ export async function loadUpcomingAgenda(
           const blockedHostIds = await batchBlockedIds(admin, userId, hostIdsToCheck);
           const accessible = rows.filter((event) => event.host_id === userId || !blockedHostIds.has(event.host_id));
           if (accessible.length === 0) return [];
+
+          /**
+           * Covers signed in one batch for the whole stack.
+           *
+           * signMediaForAsset already refuses assets that are not READY, are
+           * deleted, or have been moderated, so an unusable cover simply
+           * resolves to null here and the card falls back -- no broken image,
+           * no per-card query.
+           */
+          const coverIds = [
+            ...new Set(accessible.map((event) => event.cover_media_id).filter(Boolean))
+          ] as string[];
+          const coverUrlById = new Map<string, string>();
+          if (coverIds.length > 0) {
+            const { signMediaForAsset } = await import("@/lib/content/service");
+            const signed = await Promise.all(
+              coverIds.map(async (id) => [id, await signMediaForAsset(admin, id, "feed")] as const)
+            );
+            for (const [id, url] of signed) if (url) coverUrlById.set(id, url);
+          }
 
           const hostIds = [...new Set(accessible.map((event) => event.host_id))];
           const [{ data: hosts }, { data: currentRsvps }] = await Promise.all([
@@ -123,7 +145,10 @@ export async function loadUpcomingAgenda(
               isHost: event.host_id === userId,
               myRsvp:
                 event.host_id === userId ? null : ((rsvpByEvent.get(event.id) as EventRsvpStatus | undefined) ?? null),
-              hostName: event.host_id === userId ? "You" : hostNames.get(event.host_id)?.trim() || "A Muddy"
+              hostName: event.host_id === userId ? "You" : hostNames.get(event.host_id)?.trim() || "A Muddy",
+              coverUrl: event.cover_media_id ? coverUrlById.get(event.cover_media_id) ?? null : null,
+              coverFocalX: event.cover_focal_x,
+              coverFocalY: event.cover_focal_y
             }));
         })();
 

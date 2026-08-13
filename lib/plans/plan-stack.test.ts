@@ -226,3 +226,86 @@ describe("Plan and Event cards are the same size", () => {
     expect(eventCard).toContain("linkr-plan-body");
   });
 });
+
+// ---------------------------------------------------------------------------
+// The card must not crush its own content
+// ---------------------------------------------------------------------------
+
+describe("the information column keeps its width", () => {
+  const declarations = (selector: string) => {
+    const at = css.indexOf(selector);
+    return at === -1 ? "" : css.slice(at, css.indexOf("}", at));
+  };
+
+  /**
+   * THE ROOT CAUSE.
+   *
+   * .linkr-plan-actions was flex-shrink:0 holding two stacked children, so
+   * the column's width was set by the WIDER of them -- an unbounded, wrapping
+   * "This weekend" badge -- and it never gave any of that width back. The
+   * detail column absorbed the entire shortfall: at 320px it was left roughly
+   * 70px, which is why the title rendered as "b." and the venue as "Ho".
+   */
+  /**
+   * THE ACTUAL ROOT CAUSE.
+   *
+   * GlareHover renders a div whose own module class sets width/height and
+   * `position: relative`. The card overlays it with `absolute inset-0`, but a
+   * CSS Module class and a Tailwind utility have equal specificity, so which
+   * won depended on stylesheet source order. When the module won, the sheen
+   * stayed IN FLOW -- and .linkr-plan is a flex row, so it became a second
+   * column taking roughly half the card and crushing the content beside it.
+   *
+   * The Event card renders no sheen, which is why it always looked correct
+   * while the Plan card collapsed.
+   */
+  it("keeps the decorative sheen out of the layout", () => {
+    expect(css).toContain('.linkr-plan > [class*="glareHover"]');
+    const overlay = declarations('.linkr-plan > [class*="glareHover"] {');
+    expect(overlay).toContain("position: absolute");
+    expect(overlay).toContain("width: auto");
+  });
+
+  it("lets the controls column size to its own content", () => {
+    // No cap needed once the sheen is out of flow: the row has its full
+    // width back, exactly like the Event card's.
+    const actions = declarations(".linkr-plan-actions {");
+    expect(actions).toContain("flex: 0 0 auto");
+  });
+
+  it("stops the status badge from widening that column", () => {
+    const urgency = declarations(".linkr-plan-urgency {");
+    expect(urgency).toContain("white-space: nowrap");
+    expect(urgency).toContain("max-width: 100%");
+    expect(urgency).toContain("text-overflow: ellipsis");
+  });
+
+  it("gives the information column the remaining width", () => {
+    const detail = declarations(".linkr-plan-detail {");
+    expect(detail).toContain("flex: 1 1 auto");
+    // Without min-width:0 a flex item cannot shrink below min-content, so the
+    // title pushes the row wider instead of ellipsing.
+    expect(detail).toContain("min-width: 0");
+  });
+
+  it("keeps short atomic values on one line", () => {
+    // "7:55 AM" split across two lines is damage, not information.
+    expect(css).toContain(".linkr-plan-going > span {");
+  });
+
+  it("never lets the date tile be compressed", () => {
+    const date = declarations(".linkr-plan-date {");
+    expect(date).toContain("flex-shrink: 0");
+    expect(date).toContain("flex-basis:");
+  });
+
+  it("recomposes rather than squeezing at the narrowest widths", () => {
+    // Below 22rem the controls take their own row, instead of every column
+    // shrinking until the title is a single character.
+    const at = css.lastIndexOf("@media (max-width: 22rem)");
+    const narrow = css.slice(at, at + 700);
+    expect(narrow).toContain("linkr-plan-actions");
+    expect(narrow).toContain("flex-wrap: wrap");
+    expect(narrow).toContain("flex-basis: 100%");
+  });
+});

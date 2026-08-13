@@ -8,6 +8,7 @@ import { useCallback, useState, type CSSProperties } from "react";
 import { SocializePlanCard } from "@/components/socialize/socialize-plan-card";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import type { EventAgendaItem } from "@/lib/social/upcoming-agenda";
+import { focalObjectPosition } from "@/lib/events/cover";
 import { planDateParts, planTimeLabel } from "@/lib/plans/discovery";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
@@ -187,6 +188,33 @@ function EventAgendaCard({ event }: { event: EventAgendaItem }) {
       }
       aria-label={`Event: ${event.title}${time ? ` at ${time}` : ""}, ${state}`}
     >
+      {/* THE EVENT'S OWN COVER IS THE CARD.
+          Signed once, server-side, in the same batched pass the projection
+          uses -- the card never signs its own. When there is no cover, or it
+          is not READY, moderated or unsignable, coverUrl is simply null and
+          the indigo gradient below shows through, so a card can never break.
+
+          object-fit: cover with the stored focal point as object-position:
+          the photograph is cropped proportionally, never stretched, and every
+          surface crops the same image the same way. */}
+      {event.coverUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- signed cover URL, not a static asset
+        <img
+          src={event.coverUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="linkr-plan-image"
+          style={{
+            objectPosition: focalObjectPosition(event.coverFocalX ?? 0.5, event.coverFocalY ?? 0.5)
+          }}
+        />
+      ) : null}
+
+      {/* A scrim only over photography, matching the Plan card. The generated
+          gradient is already dark enough to carry white text. */}
+      {event.coverUrl ? <span aria-hidden="true" className="linkr-plan-scrim" /> : null}
+
       <div className="linkr-plan-body">
         {date ? (
           <span className="linkr-plan-date" aria-hidden="true">

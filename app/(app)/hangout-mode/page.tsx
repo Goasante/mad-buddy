@@ -28,7 +28,7 @@ export default async function HangoutModeRoute() {
   // alongside the feed rather than after it, so the extra section costs no
   // extra wait.
   const plansPromise = user
-    ? loadUpcomingPlans(user.id, 3)
+    ? loadUpcomingPlans(user.id, 8)
     : Promise.resolve({ plans: [], hasMore: false });
 
   if (user && env.url && env.serviceRoleKey) {

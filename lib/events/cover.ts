@@ -126,13 +126,38 @@ export const COVER_GUIDANCE = {
   aspectRatioLabel: "4:5",
   suggestedWidth: 1200,
   suggestedHeight: 1500,
-  minWidth: 600,
-  minHeight: 750
+  /**
+   * Enough pixels to look sharp on a high-DPI phone, measured as AREA rather
+   * than per-edge.
+   *
+   * THE BUG THIS REPLACES. The rule was `width >= 600 && height >= 750`, which
+   * requires each edge independently -- and since 750 > 600 it quietly demanded
+   * a portrait-shaped image. A 1600x720 screenshot is 1.15 megapixels and was
+   * rejected as "too small to look sharp"; so was 1024x640. Nothing was small
+   * about them, they were simply landscape.
+   *
+   * Area plus a modest floor on the shorter edge accepts real photographs of
+   * any orientation while still refusing images that genuinely cannot render
+   * sharply. The focal point decides how each shape is cropped per surface.
+   */
+  minPixels: 750_000,
+  minShortEdge: 600
 } as const;
 
 export function coverDimensionError(width: number, height: number): string | null {
-  if (width < COVER_GUIDANCE.minWidth || height < COVER_GUIDANCE.minHeight) {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return "That image couldn't be read. Try another one.";
+  }
+
+  // A very long, very thin image can clear the area bar while being unusable
+  // in a card, so the short edge carries its own floor.
+  if (Math.min(width, height) < COVER_GUIDANCE.minShortEdge) {
     return "That image is too small to look sharp. Choose a larger one.";
   }
+
+  if (width * height < COVER_GUIDANCE.minPixels) {
+    return "That image is too small to look sharp. Choose a larger one.";
+  }
+
   return null;
 }

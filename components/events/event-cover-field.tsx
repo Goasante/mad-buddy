@@ -99,12 +99,19 @@ export function EventCoverField({
             setError(compressed.reason);
             return;
           }
-          if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
           const preview = URL.createObjectURL(compressed.file);
+          // REVOKE THE OLD ONE ONLY AFTER THE NEW ONE EXISTS, and never the
+          // URL that is currently on screen. Revoking first meant a preview
+          // could be torn down while React was still rendering it, which is
+          // what produced a broken-image icon instead of the photo.
+          const previous = objectUrlRef.current;
           objectUrlRef.current = preview;
+          if (previous && previous !== preview) URL.revokeObjectURL(previous);
           setError("");
           onPendingFile(compressed.file);
-          onChange({ url: preview, focalX: value.focalX, focalY: value.focalY });
+          // Recentre the focal point for a newly chosen image rather than
+          // inheriting the previous one's position.
+          onChange({ url: preview, focalX: 0.5, focalY: 0.5 });
         }
         return;
       }
@@ -143,7 +150,10 @@ export function EventCoverField({
       objectUrlRef.current = previewUrl;
       onChange({ url: previewUrl, focalX: 0.5, focalY: 0.5 });
     },
-    [busy, eventId, onChange, onPendingFile, value.focalX, value.focalY]
+    // value.focalX/focalY deliberately absent: they change on every drag, and
+    // including them recreated this callback mid-gesture. A newly chosen
+    // image always recentres, so the current focal point is not read here.
+    [busy, eventId, onChange, onPendingFile]
   );
 
   const moveFocal = useCallback(
@@ -234,11 +244,14 @@ export function EventCoverField({
         ) : null}
       </div>
 
+      {/* Portrait is a preference, not a requirement -- the validator accepts any
+          orientation now, so telling people to "use a portrait image" would
+          describe a rule that no longer exists. */}
       <p className="text-xs leading-relaxed text-muted-foreground">
-        Use a portrait image. Keep important faces and text near the centre so it works across Event
-        cards. {COVER_GUIDANCE.aspectRatioLabel} works best (about {COVER_GUIDANCE.suggestedWidth}
+        Any photo works. Drag to keep faces near the centre so it crops well across Event cards.
+        Portrait ({COVER_GUIDANCE.aspectRatioLabel}, about {COVER_GUIDANCE.suggestedWidth}
         {" x "}
-        {COVER_GUIDANCE.suggestedHeight}).
+        {COVER_GUIDANCE.suggestedHeight}) fills the card best.
       </p>
       {hasCover ? (
         <p className="text-xs text-muted-foreground">This is how your Event may appear in discovery.</p>

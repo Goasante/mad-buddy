@@ -20,6 +20,18 @@ export type EventAgendaItem = {
   isHost: boolean;
   myRsvp: EventRsvpStatus | null;
   hostName: string;
+  /**
+   * Signed URL of the Event's cover, or null when it has none, is not READY,
+   * has been moderated, or could not be signed.
+   *
+   * Signed on the SERVER in one batched pass, exactly as ranked discovery
+   * does it -- a card must never sign its own cover, or a stack of five
+   * Events becomes five round trips.
+   */
+  coverUrl: string | null;
+  /** Stored focal point, so every surface crops the same photo consistently. */
+  coverFocalX: number | null;
+  coverFocalY: number | null;
 };
 
 export type UpcomingAgendaItem = PlanAgendaItem | EventAgendaItem;

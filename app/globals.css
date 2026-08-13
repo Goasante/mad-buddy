@@ -2644,6 +2644,24 @@ select {
   background: linear-gradient(105deg, hsl(var(--shadow) / 0.85), hsl(var(--shadow) / 0.45));
 }
 
+/* THE DECORATIVE SHEEN MUST NOT BE A COLUMN.
+   GlareHover renders a div whose own module class sets width/height from its
+   props and `position: relative`. The card overlays it with `absolute
+   inset-0`, but a CSS Module class and a Tailwind utility have equal
+   specificity, so which one won depended on stylesheet source order. When the
+   module won, the sheen stayed in flow -- and .linkr-plan is a flex ROW, so it
+   became a real second column taking roughly half the card and crushing the
+   content beside it. That is why the Plan card collapsed while the Event
+   card, which renders no sheen at all, always looked correct.
+
+   Two selectors deep, so it outranks the module without depending on order. */
+.linkr-plan > [class*="glareHover"] {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+}
+
 .linkr-plan-body {
   position: relative;
   display: flex;
@@ -2669,6 +2687,7 @@ select {
 .linkr-plan-date {
   display: grid;
   width: 3.25rem;
+  flex-basis: 3.25rem;
   align-self: flex-start;
   flex-shrink: 0;
   place-items: center;
@@ -2735,9 +2754,20 @@ select {
 .linkr-plan-meta {
   flex-wrap: wrap;
   gap: 0.25rem 0.875rem;
-  /* Slightly quieter than the host line so the hierarchy reads
-     title -> when/where -> who. */
   color: rgb(255 255 255 / 0.9);
+}
+
+/* Short atomic values that must never break mid-value. */
+.linkr-plan-meta > span,
+.linkr-plan-going > span {
+  white-space: nowrap;
+}
+
+/* The venue is the one meta value allowed to give up width, because it is
+   the only one that can be long. It ellipses instead of wrapping. */
+.linkr-plan-meta > span:has(svg) {
+  min-width: 0;
+  white-space: normal;
 }
 
 .linkr-plan-host {
@@ -2761,19 +2791,24 @@ select {
 /* ----------------------------- Actions ------------------------------- */
 .linkr-plan-actions {
   display: flex;
-  flex-shrink: 0;
+  /* Intrinsic width. It holds one control, like the Event card's. */
+  flex: 0 0 auto;
   flex-direction: column;
   align-items: flex-end;
   gap: 0.375rem;
 }
 
 .linkr-plan-urgency {
+  max-width: 100%;
+  overflow: hidden;
   border-radius: 999px;
   background: rgb(255 255 255 / 0.22);
   padding: 0.1875rem 0.5rem;
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .linkr-plan-cta {
@@ -2822,10 +2857,36 @@ select {
   }
   .linkr-plan-date {
     width: 3rem;
+    flex-basis: 3rem;
   }
   .linkr-plan-cta {
     min-height: 2.375rem;
     padding-inline: 0.625rem;
+  }
+}
+
+/* RECOMPOSE, rather than squeeze further.
+   Below ~22rem a three-column row cannot hold a date tile, readable event
+   information AND two controls. The controls drop to their own row under the
+   copy, where they have full width, instead of every column shrinking until
+   the title is one character. */
+@media (max-width: 22rem) {
+  .linkr-plan-body {
+    flex-wrap: wrap;
+  }
+  .linkr-plan-detail {
+    /* Takes the rest of the row beside the date tile. */
+    flex: 1 1 60%;
+  }
+  .linkr-plan-actions {
+    /* Full width on its own line, controls trailing. */
+    width: 100%;
+    max-width: none;
+    flex-basis: 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
   }
 }
 

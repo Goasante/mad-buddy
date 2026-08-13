@@ -133,6 +133,7 @@ function PlanCard({ plan, onJoin, pending = false, slots }: SocializePlanCardPro
 
           <div className="linkr-plan-meta">
             {time ? <span>{time}</span> : null}
+            {urgency.label ? <span className="linkr-plan-urgency">{urgency.label}</span> : null}
             {plan.placeText ? (
               <span className="inline-flex min-w-0 items-center gap-1">
                 <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -170,10 +171,14 @@ function PlanCard({ plan, onJoin, pending = false, slots }: SocializePlanCardPro
           {slots?.afterMeta}
         </div>
 
-        {/* The RSVP, as a pill on the cover. Urgency, when real, sits beside
-            it rather than in a corner badge competing with the date. */}
+        {/* The RSVP, as a pill on the cover.
+            ONE control here, matching the Event card. Urgency used to stack
+            ABOVE the button in this column, and a flex column is as wide as
+            its widest child -- so a long label like "This weekend" set the
+            column's width and the event information gave up everything it
+            took. The badge now sits inline with the meta, where it wraps
+            with the rest of the copy instead of stealing the row. */}
         <div className="linkr-plan-actions">
-          {urgency.label ? <span className="linkr-plan-urgency">{urgency.label}</span> : null}
           <button
             type="button"
             className={cn("linkr-plan-cta", join.kind === "going" && "linkr-plan-cta-going")}
