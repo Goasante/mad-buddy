@@ -72,6 +72,7 @@ describe("assertPrivacySafeResponse", () => {
           username: "ama",
           avatar_url: null,
           proximity_level: "near",
+          proximity_band: "nearby",
           glow_strength: 60,
           status_text: "Glowing nearby",
           last_active_estimate: "Active recently",
@@ -314,6 +315,35 @@ describe("buildSafeNearbyFriends", () => {
 
     expect(result[0].proximity_level).toBe("close");
     expect(result[0].confidence).toBe("low");
+    // THE PRECISION GATE, end to end. These two are at effectively the same
+    // spot, but the reading is weak -- so it may not claim "Right here". A
+    // band hardcoded to high confidence, or one that ignored the pair
+    // confidence entirely, would publish the tightest label here.
+    expect(result[0].proximity_band).toBe("close_by");
+  });
+
+  it("lets a confident same-place reading say Right here", () => {
+    // The other half of the gate: precision is allowed when it is earned.
+    const result = build({
+      viewer: { latitude: 5.6037, longitude: -0.187, confidence: "high" },
+      friendIds: ["sharp"],
+      locationByUserId: new Map([["sharp", location("sharp", { confidence: "high" })]]),
+      profileByUserId: new Map([["sharp", profile("sharp")]])
+    });
+
+    expect(result[0].proximity_band).toBe("right_here");
+  });
+
+  it("takes the weaker of the two readings, never the viewer's alone", () => {
+    // A confident viewer must not make someone else's soft fix look precise.
+    const result = build({
+      viewer: { latitude: 5.6037, longitude: -0.187, confidence: "high" },
+      friendIds: ["soft"],
+      locationByUserId: new Map([["soft", location("soft", { confidence: "medium" })]]),
+      profileByUserId: new Map([["soft", profile("soft")]])
+    });
+
+    expect(result[0].proximity_band).toBe("around_you");
   });
 
   it("attaches an active Muddy Status and passes the privacy assertion", () => {

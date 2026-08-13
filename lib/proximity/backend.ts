@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getFreshnessState } from "@/lib/proximity/freshness";
 import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
+import { resolveProximityBand } from "@/lib/proximity/bands";
 
 export const locationUpdateRequestSchema = z.object({
   latitude: z.number().min(-90).max(90),
@@ -17,6 +18,18 @@ export const safeNearbyFriendSchema = z.object({
   username: z.string(),
   avatar_url: z.string().nullable(),
   proximity_level: z.enum(["close", "near", "far", "hidden"]),
+  // Presentation band: a finer read of the SAME measured distance, capped by
+  // the reading's own confidence so a soft fix cannot claim a tight band.
+  // An identifier, never a distance.
+  proximity_band: z.enum([
+    "right_here",
+    "around_you",
+    "close_by",
+    "nearby",
+    "around_town",
+    "further_away",
+    "outside_range"
+  ]),
   glow_strength: z.number().int().min(0).max(100),
   status_text: z.string(),
   last_active_estimate: z.string(),
@@ -284,6 +297,7 @@ export function buildSafeNearbyFriends(input: {
           username: profile.username,
           avatar_url: profile.avatar_url,
           proximity_level: "hidden" as const,
+          proximity_band: "outside_range" as const,
           glow_strength: 0,
           status_text: "Last seen a while ago",
           last_active_estimate: "Last seen a while ago",
@@ -316,6 +330,8 @@ export function buildSafeNearbyFriends(input: {
         username: profile.username,
         avatar_url: profile.avatar_url,
         proximity_level: proximityLevel,
+        // Same measured distance, same confidence the level already used.
+        proximity_band: resolveProximityBand(measuredDistance, pairConfidence),
         glow_strength: glowStrength,
         status_text: statusTextFor(proximityLevel, pairConfidence),
         last_active_estimate: lastActiveEstimate(location.last_updated),
