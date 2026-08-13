@@ -1,6 +1,6 @@
 /**
  * Generates the native (iOS/Android) splash images and the PWA
- * apple-touch-startup-image set directly from the launch hero photo
+ * apple-touch-startup-image set directly from the approved splash artwork
  * (public/brand/launch-hero.png), writing straight into the exact paths
  * Capacitor's native shells already reference.
  *
@@ -37,11 +37,22 @@ async function ensureDir(path) {
   await mkdir(path, { recursive: true });
 }
 
+async function splashBuffer(width, height) {
+  const iconSize = Math.max(96, Math.round(Math.min(width, height) * 0.28));
+  const icon = await sharp(SOURCE)
+    .resize({ width: iconSize, height: iconSize, fit: "contain" })
+    .png()
+    .toBuffer();
+  return sharp({
+    create: { width, height, channels: 3, background: "#111111" }
+  })
+    .composite([{ input: icon, gravity: "center" }])
+    .jpeg({ quality: 88, mozjpeg: true })
+    .toBuffer();
+}
+
 async function writeSplashJpeg(destPath, width, height) {
-  await sharp(SOURCE)
-    .resize({ width, height, fit: "cover", position: "attention" })
-    .jpeg({ quality: 82, mozjpeg: true })
-    .toFile(destPath);
+  await sharp(await splashBuffer(width, height)).toFile(destPath);
 }
 
 // Standard Android splash density buckets — Google's documented reference
@@ -70,8 +81,7 @@ async function buildAndroidSplash() {
       await writeSplashJpeg(`${lightDir}/splash.jpg`, width, height);
       count += 1;
 
-      // Dark: the photo is already a night scene, so dark reuses the same
-      // render rather than needing a second visual treatment.
+      // The approved splash is theme-neutral, so dark reuses the same render.
       const darkDir = `${resRoot}/drawable-${orientation}-night-${density}`;
       await ensureDir(darkDir);
       await writeSplashJpeg(`${darkDir}/splash.jpg`, width, height);
@@ -97,13 +107,8 @@ async function buildIosSplash() {
   await ensureDir(imagesetDir);
 
   // Stock Capacitor layout: one square source reused at all three scale slots
-  // (the storyboard's scaleAspectFill performs the actual on-device
-  // crop/scale to fill whatever the real screen size is). Light and dark are
-  // the same render, for the same reason as the Android dark variants above.
-  const square = await sharp(SOURCE)
-    .resize({ width: 2732, height: 2732, fit: "cover", position: "attention" })
-    .jpeg({ quality: 82, mozjpeg: true })
-    .toBuffer();
+  // (the storyboard's scaleAspectFill performs the actual on-device sizing).
+  const square = await splashBuffer(2732, 2732);
 
   const filenames = ["splash-2732x2732.jpg", "splash-2732x2732-1.jpg", "splash-2732x2732-2.jpg"];
   for (const filename of filenames) {
@@ -138,10 +143,7 @@ async function buildPwaStartupImages() {
 
   await ensureDir("public/splash");
   for (const target of targets) {
-    await sharp(SOURCE)
-      .resize({ width: target.width, height: target.height, fit: "cover", position: "attention" })
-      .jpeg({ quality: 82, mozjpeg: true })
-      .toFile(`public/splash/${target.name}.jpg`);
+    await sharp(await splashBuffer(target.width, target.height)).toFile(`public/splash/${target.name}.jpg`);
   }
   console.log(`pwa: ${targets.length} startup images written to public/splash/`);
 }

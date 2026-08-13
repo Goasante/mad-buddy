@@ -86,7 +86,7 @@ export const metadata: Metadata = {
     // Manifest's `icons` array; it only reads these apple-touch-startup-image
     // link tags, matched by exact device media query. Generated from
     // public/brand/launch-hero.png via scripts/generate-splash-assets.mjs,
-    // same source photo as the native (Capacitor) splash screen.
+    // from the approved native/PWA splash artwork.
     startupImage: APPLE_STARTUP_IMAGES,
   },
   formatDetection: { telephone: false },

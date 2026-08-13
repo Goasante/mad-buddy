@@ -1,7 +1,7 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { brandLogo, brandSymbol } from "@/lib/brand/assets";
+import { brandLogo, brandNavigationIcons, brandSymbol } from "@/lib/brand/assets";
 import { stripComments } from "@/lib/content/strip-comments";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
@@ -15,6 +15,7 @@ function pngSize(absolutePath: string): { width: number; height: number } {
 
 const appShell = read("components/app-shell/app-shell.tsx");
 const brandMark = read("components/brand/brand-mark.tsx");
+const brandNavigationIcon = read("components/brand/brand-navigation-icon.tsx");
 
 // ---------------------------------------------------------------------------
 // One canonical source of truth
@@ -26,7 +27,8 @@ describe("brand assets are referenced through one module", () => {
       brandLogo.light.src,
       brandLogo.dark.src,
       brandSymbol.light.src,
-      brandSymbol.dark.src
+      brandSymbol.dark.src,
+      ...Object.values(brandNavigationIcons).flatMap((states) => [states.active.src, states.inactive.src])
     ];
     for (const src of every) {
       expect(existsSync(publicFile(src)), src).toBe(true);
@@ -35,7 +37,13 @@ describe("brand assets are referenced through one module", () => {
 
   it("declares the real intrinsic size of each logo", () => {
     // Wrong numbers here are how next/image stretches a wordmark.
-    for (const asset of [brandLogo.light, brandLogo.dark, brandSymbol.light, brandSymbol.dark]) {
+    for (const asset of [
+      brandLogo.light,
+      brandLogo.dark,
+      brandSymbol.light,
+      brandSymbol.dark,
+      ...Object.values(brandNavigationIcons).flatMap((states) => [states.active, states.inactive])
+    ]) {
       const actual = pngSize(publicFile(asset.src));
       expect(actual, asset.src).toEqual({ width: asset.width, height: asset.height });
     }
@@ -53,14 +61,12 @@ describe("brand assets are referenced through one module", () => {
 // ---------------------------------------------------------------------------
 
 describe("unrelated navigation is untouched", () => {
-  it("keeps the stroke-drawn icons in the navigation", () => {
-    // The supplied Linkr/UpFor artwork is dense (33-49% inked) next to
-    // lucide's thin 2px strokes (~14%), so matching box sizes made those two
-    // tabs read smaller and heavier than their neighbours. The nav keeps its
-    // SVG icons, which match visually and inherit theme colour natively.
-    expect(appShell).toContain("import { HangoutIcon, LinkrIcon }");
-    expect(appShell).not.toContain("brandIcon");
-    expect(appShell).not.toContain("BrandNavIcon");
+  it("maps Linkr and UpFor to the approved active/inactive artwork", () => {
+    expect(appShell).toContain('brandIcon: "linkr"');
+    expect(appShell).toContain('brandIcon: "upfor"');
+    expect(appShell).toContain("<BrandNavigationIcon");
+    expect(brandNavigationIcon).toContain('active ? "active" : "inactive"');
+    expect(brandNavigationIcon).not.toMatch(/filter|invert|opacity/);
   });
 
   it("still uses the approved logo everywhere else", () => {
@@ -73,6 +79,13 @@ describe("unrelated navigation is untouched", () => {
     expect(appShell).toContain('{ href: "/hangout-mode", label: "UpFor"');
     expect(appShell).toContain('{ href: "/friends", label: "Muddies", icon: Users }');
     expect(appShell).toContain('{ href: "/messages", label: "Messages", icon: MessageCircle }');
+  });
+
+  it("keeps the supplied raster out of unrelated tabs", () => {
+    expect(appShell).toContain('{ href: "/friends", label: "Muddies", icon: Users }');
+    expect(appShell).toContain('{ href: "/messages", label: "Messages", icon: MessageCircle }');
+    expect(appShell).not.toContain('{ href: "/friends", label: "Muddies", icon: Users, brandIcon:');
+    expect(appShell).not.toContain('{ href: "/messages", label: "Messages", icon: MessageCircle, brandIcon:');
   });
 
   it("leaves the unread badges on their tabs", () => {

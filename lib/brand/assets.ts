@@ -35,34 +35,24 @@ export const brandLogo = {
 /**
  * The standalone symbol, for square and tight spaces.
  *
- * RECOLOURED TO MAD BUDDY ORANGE. The supplied marks are pure black -- their
- * "light"/"dark" names describe the background they were drawn for, not their
- * own colour -- which rendered as a near-invisible smudge on the dark chrome
- * and as an unbranded black blob elsewhere. Recoloured by replacing RGB and
- * keeping alpha, so the drawing is untouched.
- *
- * Square, so a caller sizes it with one height and width pair.
+ * These are the real supplied black/white variants. No CSS filter or colour
+ * replacement is used. Square output keeps sizing predictable.
  */
 export const brandSymbol = {
   light: { src: "/brand/mad-buddy-mark-light.png", width: 512, height: 512 },
   dark: { src: "/brand/mad-buddy-mark-dark.png", width: 512, height: 512 }
 } as const satisfies Record<string, BrandAsset>;
 
-/**
- * NAVIGATION ICONS ARE NOT PART OF THIS LAYER, deliberately.
- *
- * The pack supplies Linkr and UpFor as active/inactive PNGs, and they were
- * wired in and then reverted. Measured, they are DENSE drawings -- 33-49% of
- * their box is inked -- while the lucide icons beside them are thin 2px
- * strokes at roughly 14%. Matching bounding boxes therefore made them read
- * smaller and heavier than their neighbours, because the eye compares drawn
- * mass rather than boxes, and scaling only partly hid the mismatch.
- *
- * The nav keeps its stroke-drawn SVG icons, which sit at the same visual
- * weight as every other tab and inherit --primary / --muted-foreground in
- * both themes natively. The supplied artwork remains the source of truth for
- * the logo, favicon, PWA, app icon, splash and social image above.
- *
- * The originals are preserved in brand-assets-source/navigation-icons/ should
- * stroke-weight versions ever be supplied.
- */
+export type BrandNavigationIconName = "linkr" | "upfor";
+
+/** Approved state-specific navigation artwork. Never tinted or filtered. */
+export const brandNavigationIcons = {
+  linkr: {
+    active: { src: "/icons/navigation/linkr-active.png", width: 64, height: 64 },
+    inactive: { src: "/icons/navigation/linkr-inactive.png", width: 64, height: 64 }
+  },
+  upfor: {
+    active: { src: "/icons/navigation/upfor-active.png", width: 64, height: 64 },
+    inactive: { src: "/icons/navigation/upfor-inactive.png", width: 64, height: 64 }
+  }
+} as const satisfies Record<BrandNavigationIconName, Record<"active" | "inactive", BrandAsset>>;

@@ -46,10 +46,11 @@ import { bindCachesToSession } from "@/lib/cache/session-binding";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import type { ResolvedWallpaper } from "@/lib/wallpapers/catalog";
 import { BrandMark } from "@/components/brand/brand-mark";
-import { HangoutIcon, LinkrIcon } from "@/components/brand/brand-icons";
+import { BrandNavigationIcon } from "@/components/brand/brand-navigation-icon";
+import type { BrandNavigationIconName } from "@/lib/brand/assets";
 import { useUnreadNotificationCount } from "@/hooks/use-unread-notification-count";
 import { useIncomingRequestCount } from "@/hooks/use-incoming-request-count";
-  import { useUnreadMessageCount } from "@/hooks/use-unread-message-count";
+import { useUnreadMessageCount } from "@/hooks/use-unread-message-count";
 import { UnreadNotificationProvider } from "@/hooks/unread-notification-context";
 import { AppMenuProvider } from "@/hooks/app-menu-context";
 import { HomeSettingsSheet } from "@/components/dashboard/home-settings-sheet";
@@ -111,6 +112,8 @@ const navigationItems: Array<{
   icon: LucideIcon;
   /** Owner-selected feature icon; overrides the lucide fallback when present. */
   featureIcon?: FeatureIconKey;
+  /** Approved state-specific raster artwork for the supplied nav destinations. */
+  brandIcon?: BrandNavigationIconName;
 }> = [
   { href: "/dashboard", label: "Home", icon: Home },
   { href: "/friends", label: "Muddies", icon: UsersRound },
@@ -120,7 +123,7 @@ const navigationItems: Array<{
   { href: "/moments", label: "Moments", icon: Sparkles, featureIcon: "moments" },
   { href: "/events", label: "Events", icon: PartyPopper, featureIcon: "events" },
   { href: "/groups", label: "Circles", icon: Users2, featureIcon: "groups" },
-  { href: "/discover", label: "Linkr", icon: Compass, featureIcon: "socialize" },
+  { href: "/discover", label: "Linkr", icon: Compass, brandIcon: "linkr" },
   { href: "/profile", label: "Profile", icon: UserRound },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/billing", label: "Membership", icon: CircleDollarSign }
@@ -656,6 +659,9 @@ function NavItemIcon({
   isActive: boolean;
   fillActive?: boolean;
 }) {
+  if (item.brandIcon) {
+    return <BrandNavigationIcon name={item.brandIcon} active={isActive} size={size} className={lucideClass} />;
+  }
   if (item.featureIcon) {
     return <FeatureIcon feature={item.featureIcon} size={size} active={isActive} decorative />;
   }
@@ -1154,14 +1160,15 @@ const createActions: Array<{
 type MobileTab = {
   href: Route;
   label: string;
-  icon: LucideIcon | typeof LinkrIcon;
+  icon: LucideIcon;
+  brandIcon?: BrandNavigationIconName;
 };
 
 const MOBILE_TABS: MobileTab[] = [
   { href: "/messages", label: "Messages", icon: MessageCircle },
   { href: "/friends", label: "Muddies", icon: Users },
-  { href: "/discover", label: "Linkr", icon: LinkrIcon },
-  { href: "/hangout-mode", label: "UpFor", icon: HangoutIcon }
+  { href: "/discover", label: "Linkr", icon: Compass, brandIcon: "linkr" },
+  { href: "/hangout-mode", label: "UpFor", icon: Hand, brandIcon: "upfor" }
 ];
 
 function MobileNav({
@@ -1275,11 +1282,15 @@ function MobileNavTab({
             isActive ? "bg-primary/12 text-primary" : "text-muted-foreground"
           )}
         >
-          <Icon
-            className="h-[26px] w-[26px]"
-            strokeWidth={isActive ? 2.25 : 1.75}
-            aria-hidden="true"
-          />
+          {tab.brandIcon ? (
+            <BrandNavigationIcon name={tab.brandIcon} active={isActive} size={26} />
+          ) : (
+            <Icon
+              className="h-[26px] w-[26px]"
+              strokeWidth={isActive ? 2.25 : 1.75}
+              aria-hidden="true"
+            />
+          )}
           {tab.href === "/messages" && messageUnreadCount > 0 ? <UnreadBadge count={messageUnreadCount} /> : null}
           {tab.href === "/friends" && muddyRequestCount > 0 ? <UnreadBadge count={muddyRequestCount} /> : null}
         </span>

@@ -110,11 +110,10 @@ describe("Linkr branding", () => {
   });
 
   it("leaves internal identifiers alone", () => {
-    // Route paths, feature-flag keys and icon keys are identifiers, not copy.
-    // Renaming them would break links, flags and tour targets for a cosmetic
-    // change.
+    // The route remains canonical while presentation uses the approved Linkr
+    // active/inactive artwork instead of the former feature-icon fallback.
     const shell = stripComments(read("components/app-shell/app-shell.tsx"));
     expect(shell).toContain('href: "/discover"');
-    expect(shell).toContain('featureIcon: "socialize"');
+    expect(shell).toContain('brandIcon: "linkr"');
   });
 });

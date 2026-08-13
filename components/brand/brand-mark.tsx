@@ -13,8 +13,8 @@ type BrandMarkProps = {
  * BOTH APPROVED VARIANTS ARE RENDERED, and CSS shows the one that suits the
  * background. The alternative -- picking in JS from the theme -- needs the
  * theme resolved before first paint, which means either a flash of the wrong
- * logo or a client-only component. Two <img> tags at ~40KB each cost less
- * than either, and neither is filtered, inverted or tinted: the pack supplies
+ * logo or a client-only component. The alternate image remains lazily handled
+ * by Next.js, and neither is filtered, inverted or tinted: the pack supplies
  * real light and dark drawings, so the artwork is used as drawn.
  *
  * Intrinsic ratio is preserved by passing the derivative's real width/height

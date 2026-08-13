@@ -27,6 +27,16 @@ export type AuthActionState = {
   redirectTo?: string;
 };
 
+const AUTH_TRANSPORT_RETRY_DELAY_MS = 250;
+
+function isRetryableAuthTransportError(error: { name?: string } | null): boolean {
+  return error?.name === "AuthRetryableFetchError";
+}
+
+async function waitForAuthTransportRetry(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, AUTH_TRANSPORT_RETRY_DELAY_MS));
+}
+
 const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -337,20 +347,32 @@ export async function loginAction(input: unknown): Promise<AuthActionState> {
   }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword({
-    email: parsed.data.email,
-    password: parsed.data.password
-  });
+  let error = null;
+
+  // A brief network interruption must not make a correct password look
+  // invalid. Retry only the provider's explicit transport error, once. Auth
+  // rejections are final and are never retried.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const result = await supabase.auth.signInWithPassword({
+      email: parsed.data.email,
+      password: parsed.data.password
+    });
+    error = result.error;
+
+    if (!isRetryableAuthTransportError(error) || attempt === 1) break;
+    await waitForAuthTransportRetry();
+  }
 
   if (error) {
+    const transportFailure = isRetryableAuthTransportError(error);
     logBackendEvent("warn", {
       requestId,
       action: "auth.login",
-      statusCode: 401,
+      statusCode: transportFailure ? 503 : 401,
       latencyMs: Date.now() - startedAt,
       errorType: errorType(error)
     });
-    if (error.name === "AuthRetryableFetchError") {
+    if (transportFailure) {
       return {
         ok: false,
         message: "Mad Buddy could not reach the login service. Check your connection and try again."

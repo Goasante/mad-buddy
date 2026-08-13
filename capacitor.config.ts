@@ -24,7 +24,7 @@ const config: CapacitorConfig = {
       // public/brand/launch-hero.png via scripts/generate-splash-assets.mjs)
       // never drops to a blank/white frame before the webview paints.
       launchAutoHide: false,
-      backgroundColor: "#070918",
+      backgroundColor: "#111111",
       androidScaleType: "CENTER_CROP",
       splashFullScreen: true,
       splashImmersive: true
