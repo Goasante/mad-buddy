@@ -9,7 +9,7 @@ import {
   type UsernameCheckState
 } from "@/app/(onboarding)/onboarding/actions";
 import { FormField } from "@/components/auth/form-field";
-import { BrandMark } from "@/components/brand/brand-mark";
+import { BrandSymbol } from "@/components/brand/brand-symbol";
 import { MoodStatusSelector, type MoodStatus } from "@/components/onboarding/mood-status-selector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -172,7 +172,7 @@ export function OnboardingFlow({
       <div className="mx-auto w-full max-w-xl">
         <header className="flex items-center justify-between">
           <Link href="/" className="focus-ring flex items-center gap-2 rounded-lg font-semibold" aria-label="Mad Buddy home">
-            <BrandMark className="h-8 w-8" priority />
+            <BrandSymbol className="h-8 w-8" priority />
             <span>Mad Buddy</span>
           </Link>
           <span className="text-sm text-muted-foreground">

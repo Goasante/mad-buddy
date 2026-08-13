@@ -4,7 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
-import { BrandMark } from "@/components/brand/brand-mark";
+import { BrandSymbol } from "@/components/brand/brand-symbol";
 
 export type SignInCardProps = {
   title: string;
@@ -45,7 +45,7 @@ export function SignInCard({ title, description, children, footer }: SignInCardP
           hidden on mobile (where it overlaps the centred card) and kept on
           larger screens. */}
       <Link href="/" className="absolute left-4 top-4 z-20 hidden items-center gap-2.5 text-sm font-semibold text-white sm:left-6 sm:top-6 sm:flex">
-        <BrandMark className="h-9 w-9" priority />
+        <BrandSymbol className="h-9 w-9" priority />
         Mad Buddy
       </Link>
       <motion.section
@@ -82,7 +82,7 @@ export function SignInCard({ title, description, children, footer }: SignInCardP
           <div className="relative">
             <div className="mb-6 text-center">
               <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-                <BrandMark className="h-8 w-8" />
+                <BrandSymbol className="h-8 w-8" />
               </div>
               <h1 id="sign-in-title" className="text-2xl font-semibold tracking-tight">{title}</h1>
               {description ? <p className="mt-2 text-sm leading-6 text-white/55">{description}</p> : null}

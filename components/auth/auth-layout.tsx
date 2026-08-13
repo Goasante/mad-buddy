@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Eye, MapPinOff, ShieldCheck, ToggleRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { BrandMark } from "@/components/brand/brand-mark";
+import { BrandSymbol } from "@/components/brand/brand-symbol";
 
 export type AuthLayoutProps = {
   title: string;
@@ -28,9 +28,16 @@ export function AuthLayout({ title, description, children, footer, compact = fal
           aria-hidden="true"
         />
         <div className="relative w-full max-w-md">
-          <Link href="/" className="focus-ring mx-auto mb-6 flex w-fit items-center gap-2.5 rounded-lg font-semibold">
-            <BrandMark className="h-9 w-9" priority />
-            <span>Mad Buddy</span>
+          {/* Symbol only, and large. This was the horizontal lockup at h-9
+              beside a "Mad Buddy" span -- the name twice over, shrunk into a
+              badge. The heading below already says who this is, so the mark
+              can simply be the mark. */}
+          <Link
+            href="/"
+            className="focus-ring mx-auto mb-7 flex w-fit rounded-lg"
+            aria-label="Mad Buddy home"
+          >
+            <BrandSymbol className="h-20 w-20" priority />
           </Link>
           <section className="rounded-2xl border border-border/70 bg-card p-5 shadow-xl shadow-black/10 sm:p-7">
             <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
@@ -52,7 +59,7 @@ export function AuthLayout({ title, description, children, footer, compact = fal
           aria-hidden="true"
         />
         <Link href="/" className="focus-ring relative flex w-fit items-center gap-3 rounded-lg font-semibold text-white">
-          <BrandMark className="h-9 w-9" priority />
+          <BrandSymbol className="h-10 w-10" priority />
           <span>Mad Buddy</span>
         </Link>
 
@@ -84,7 +91,7 @@ export function AuthLayout({ title, description, children, footer, compact = fal
       <section className="flex items-center justify-center px-5 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-[max(2.5rem,env(safe-area-inset-top))] sm:px-8">
         <div className="w-full max-w-lg">
           <Link href="/" className="mb-8 inline-flex items-center gap-2.5 text-lg font-semibold lg:hidden">
-            <BrandMark className="h-8 w-8" priority />
+            <BrandSymbol className="h-9 w-9" priority />
             Mad Buddy
           </Link>
           <div className="glass-panel rounded-2xl p-6 sm:p-7">

@@ -28,7 +28,7 @@ import {
   X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BrandMark } from "@/components/brand/brand-mark";
+import { BrandSymbol } from "@/components/brand/brand-symbol";
 import { LandingNav, useLandingActiveSection } from "@/components/landing/landing-nav";
 import { cn } from "@/lib/utils";
 
@@ -609,7 +609,7 @@ function Footer() {
         <div className="grid gap-10 lg:grid-cols-[1.7fr_0.8fr_0.8fr_0.8fr] lg:gap-12">
           <div className="max-w-sm">
             <Link href="#hero" className="inline-flex items-center gap-3" aria-label="Mad Buddy home" title="Mad Buddy home">
-              <BrandMark className="h-9 w-9" />
+              <BrandSymbol className="h-9 w-9" />
               <span className="text-base font-semibold text-foreground">Mad Buddy</span>
             </Link>
             <p className="mt-4 text-sm leading-6 text-muted-foreground">

@@ -3,7 +3,7 @@ import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PlanComparisonTable } from "@/components/premium/plan-comparison-table";
-import { BrandMark } from "@/components/brand/brand-mark";
+import { BrandSymbol } from "@/components/brand/brand-symbol";
 import { PricingCard } from "@/components/premium/pricing-card";
 import { pricingPlans } from "@/components/premium/plans";
 import { PricingViewTracker } from "@/components/premium/pricing-view-tracker";
@@ -53,7 +53,7 @@ function PricingHeader() {
     <header className="fixed inset-x-0 top-[calc(0.75rem+env(safe-area-inset-top))] z-50 px-3 sm:top-[calc(1rem+env(safe-area-inset-top))]">
       <nav className="glass-panel mx-auto flex h-14 max-w-6xl items-center justify-between rounded-full px-3 sm:px-5" aria-label="Pricing navigation">
         <Link href="/" className="flex items-center gap-3 font-semibold">
-          <BrandMark className="h-9 w-9" priority />
+          <BrandSymbol className="h-9 w-9" priority />
           <span>Mad Buddy</span>
         </Link>
         <div className="hidden items-center gap-7 text-sm font-medium text-muted-foreground md:flex">

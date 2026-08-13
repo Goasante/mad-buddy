@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowUp, Check, Printer } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { BrandMark } from "@/components/brand/brand-mark";
+import { BrandSymbol } from "@/components/brand/brand-symbol";
 import { Button } from "@/components/ui/button";
 import {
   PRIVACY_POLICY_EFFECTIVE_DATE,
@@ -121,7 +121,7 @@ export function PrivacyPolicyPage() {
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 px-4 py-3 backdrop-blur-xl print:hidden">
         <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4" aria-label="Privacy policy navigation">
           <Link href="/" className="flex items-center gap-2 font-semibold">
-            <BrandMark className="h-9 w-9" priority />
+            <BrandSymbol className="h-9 w-9" priority />
             Mad Buddy
           </Link>
           <div className="flex items-center gap-2">

@@ -14,13 +14,13 @@ export const metadata: Metadata = {
     title: "Mad Buddy | When your Muddies are close, they glow",
     description,
     url: "/",
-    images: [{ url: "/brand/mad-buddy-logo-414.png", width: 414, height: 414, alt: "Mad Buddy" }]
+    images: [{ url: "/brand/mad-buddy-social-share.jpg", width: 1200, height: 630, alt: "Mad Buddy" }]
   },
   twitter: {
     card: "summary_large_image",
     title: "Mad Buddy | When your Muddies are close, they glow",
     description,
-    images: ["/brand/mad-buddy-logo-414.png"]
+    images: ["/brand/mad-buddy-social-share.jpg"]
   }
 };
 
@@ -34,7 +34,7 @@ export default async function HomePage() {
         "@id": `${absoluteUrl("/")}#organization`,
         name: "Mad Buddy",
         url: absoluteUrl("/"),
-        logo: absoluteUrl("/brand/mad-buddy-logo-414.png")
+        logo: absoluteUrl("/brand/mad-buddy-mark-light.png")
       },
       {
         "@type": "WebSite",

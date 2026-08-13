@@ -29,7 +29,7 @@ import {
 import type { ReactNode } from "react";
 import type { AdminPermission } from "@/lib/admin/governance";
 import type { AdminAccessRole } from "@/lib/admin/access";
-import { BrandMark } from "@/components/brand/brand-mark";
+import { BrandSymbol } from "@/components/brand/brand-symbol";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -125,7 +125,7 @@ export function AdminShell({ children, email, isDevelopmentFallback, permissions
     <div className="min-h-screen bg-[#0d0e10] text-foreground">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[252px] border-r border-white/[0.08] bg-[#0a0b0d] lg:flex lg:flex-col">
         <div className="flex h-16 shrink-0 items-center gap-3 border-b border-white/[0.08] px-5">
-          <BrandMark className="h-9 w-9" priority />
+          <BrandSymbol className="h-9 w-9" priority />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">Mad Buddy</p>
             <p className="text-[11px] text-muted-foreground">Admin operations</p>

@@ -1151,7 +1151,11 @@ const createActions: Array<{
  * same props contract, so the tab renderer needs no branch.
  */
 /** A Lucide icon or a brand mark: both take className and render an svg. */
-type MobileTab = { href: Route; label: string; icon: LucideIcon | typeof LinkrIcon };
+type MobileTab = {
+  href: Route;
+  label: string;
+  icon: LucideIcon | typeof LinkrIcon;
+};
 
 const MOBILE_TABS: MobileTab[] = [
   { href: "/messages", label: "Messages", icon: MessageCircle },

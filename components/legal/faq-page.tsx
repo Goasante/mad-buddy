@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { BrandMark } from "@/components/brand/brand-mark";
+import { BrandSymbol } from "@/components/brand/brand-symbol";
 import { Button } from "@/components/ui/button";
 
 const faqItems = [
@@ -55,7 +55,7 @@ export function FaqPage() {
       <header className="border-b border-border/70 px-4 py-4 sm:px-6">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <Link href="/" className="focus-ring flex items-center gap-3 font-semibold" aria-label="Mad Buddy home">
-            <BrandMark className="h-9 w-9" priority />
+            <BrandSymbol className="h-9 w-9" priority />
             Mad Buddy
           </Link>
           <Button type="button" variant="outline" size="sm" asChild>

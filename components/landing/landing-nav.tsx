@@ -81,8 +81,11 @@ export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) 
           title="Mad Buddy home"
           onClick={() => onSectionChange(null)}
         >
-          <BrandMark className="h-9 w-9" priority />
-          <span>Mad Buddy</span>
+          {/* The horizontal lockup, which carries the wordmark itself. It used
+              to sit beside a "Mad Buddy" <span>, printing the name twice; the
+              span is gone and the artwork supplies the name. Larger than the
+              old h-9 so it reads as the brand rather than a favicon. */}
+          <BrandMark className="h-11" priority />
         </Link>
 
         <div className="hidden items-center gap-1 text-sm font-medium text-muted-foreground md:flex">
