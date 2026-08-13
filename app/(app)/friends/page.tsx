@@ -13,11 +13,23 @@ import {
   type MutualSummary
 } from "@/lib/friends/mutual-muddies";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
+import { hasVerifiedAccountStatus } from "@/lib/trust/verified-account";
+import { getPhoneIdentity } from "@/lib/contacts/phone-identity";
+import { loadReminderState } from "@/lib/contacts/reminder-store";
+import {
+  shouldContactDiscoveryReminderShow,
+  type ContactReminderKind
+} from "@/lib/contacts/reminder-eligibility";
 
 export const dynamic = "force-dynamic";
 
 export default async function FriendsPage() {
-  const { users, circles, closeFriendIds, glowColorByFriendId } = await loadFriendNetwork();
+  const [{ users, circles, closeFriendIds, glowColorByFriendId }, reminder] = await Promise.all([
+    loadFriendNetwork(),
+    // Decided on the SERVER, so no prompt state reaches a client that could
+    // be talked out of it, and no flash of a card that should not have shown.
+    loadContactReminder()
+  ]);
 
   return (
     <FriendsPageContent
@@ -25,8 +37,40 @@ export default async function FriendsPage() {
       initialCircles={circles}
       initialCloseFriendIds={closeFriendIds}
       glowColorByFriendId={glowColorByFriendId}
+      contactReminderKind={reminder}
     />
   );
+}
+
+/**
+ * Whether to offer Contact Discovery here, and which prompt.
+ *
+ * Muddies is the strongest contextual surface for this: somebody looking at
+ * their people is already thinking about who they know. The eligibility rules
+ * live in one pure service; this only gathers what that service needs.
+ */
+async function loadContactReminder(): Promise<ContactReminderKind | null> {
+  const user = await getCurrentUser();
+  if (!user) return null;
+
+  const admin = createSupabaseAdminClient();
+  const [identity, state] = await Promise.all([
+    getPhoneIdentity(admin, user.id),
+    loadReminderState(admin, user.id)
+  ]);
+
+  const decision = shouldContactDiscoveryReminderShow({
+    hasPhone: Boolean(identity),
+    discoveryEnabled: identity?.discoveryEnabled ?? false,
+    state,
+    // The route is known: this only ever runs on /friends, which is not
+    // excluded. Transient activity is a client concern and is re-checked
+    // there before anything renders.
+    pathname: "/friends",
+    accountCreatedAt: user.created_at ?? null
+  });
+
+  return decision.show ? decision.kind : null;
 }
 
 async function loadFriendNetwork(): Promise<{
@@ -86,8 +130,17 @@ async function loadFriendNetwork(): Promise<{
     .from("profiles")
     .select("user_id, full_name, username, avatar_url, trusted_member_since")
     .in("user_id", [...profileIds]);
+  const { data: verificationRows } = await admin
+    .from("account_verifications")
+    .select("user_id, status")
+    .in("user_id", [...profileIds]);
   const plans = await loadEffectivePlansForUsers(admin, [...profileIds]);
   const profilesById = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
+  const verifiedByUserId = new Map<string, boolean>();
+  for (const row of verificationRows ?? []) {
+    const current = verifiedByUserId.get(row.user_id) ?? false;
+    verifiedByUserId.set(row.user_id, current || row.status === "verified");
+  }
   // Fallback for users whose profiles row hasn't synced yet. The auth admin
   // API has no bulk lookup, so this is inherently per-id, bounded to keep a
   // pathological backlog from fanning out into unbounded admin calls
@@ -226,7 +279,8 @@ async function loadFriendNetwork(): Promise<{
         status: "blocked",
         note: "Blocked user",
         plan: plans.get(profile.user_id) ?? "free",
-        trustedSince: profile.trusted_member_since ?? null
+        trustedSince: profile.trusted_member_since ?? null,
+        isVerifiedAccount: verifiedByUserId.get(profile.user_id) ?? false
       });
     }
   });

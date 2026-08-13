@@ -93,6 +93,10 @@ describe("messaging identity carries the mark without N+1", () => {
     expect(senderLine.slice(0, 700)).toContain("message.senderRole");
   });
 
+  it("renders the verified-account badge beside the sender identity", () => {
+    expect(groupPage).toContain("<VerifiedAccountMark isVerifiedAccount={message.senderIsVerifiedAccount} compact />");
+  });
+
   it("uses the compact mark, so a name and three signals fit one line", () => {
     expect(groupPage).toContain(
       "<TrustedMemberMark trustedSince={message.senderTrustedSince} compact />"
@@ -129,6 +133,10 @@ describe("direct messages carry the mark at the identity surface", () => {
   it("shows the same standing in the conversation list", () => {
     const row = dm.slice(dm.indexOf('<span className="truncate text-sm font-semibold">{conversation.title}</span>'));
     expect(row.slice(0, 400)).toContain("<TrustedMemberMark");
+  });
+
+  it("renders the verified-account badge in the conversation list and header", () => {
+    expect(dm).toContain("<VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact />");
   });
 
   it("keeps premium and standing as separate marks", () => {

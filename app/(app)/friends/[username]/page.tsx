@@ -9,6 +9,7 @@ import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permi
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { loadProfileIdentitySummary } from "@/lib/profile/identity-service";
+import { hasVerifiedAccountStatus } from "@/lib/trust/verified-account";
 
 export default async function MuddyProfileRoute({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
@@ -41,6 +42,11 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
     user && user.id !== profile.user_id
       ? await getPublicTrustSummary(admin, user.id, profile.user_id)
       : null;
+
+  const { data: verificationRows } = await admin
+    .from("account_verifications")
+    .select("status")
+    .eq("user_id", profile.user_id);
 
   // Per-field privacy (batch 9 §12): hidden fields never leave the server.
   const relationship = user ? await resolveViewerRelationship(admin, user.id, profile.user_id) : "stranger";
@@ -95,7 +101,8 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
         moodStatus: areFriends ? (profile.mood_status ?? "") : "",
         mutualMuddies: trust?.mutualCount ?? 0,
         plan: profilePlan,
-        trustedSince: profile.trusted_member_since ?? null
+        trustedSince: profile.trusted_member_since ?? null,
+        isVerifiedAccount: hasVerifiedAccountStatus(verificationRows ?? [])
       }}
       photos={photos}
       trust={trust}
