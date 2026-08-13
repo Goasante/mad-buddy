@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-
 import { stripComments } from "@/lib/content/strip-comments";
 
 /**
@@ -177,9 +176,31 @@ describe("Plan and Event cards are the same size", () => {
     expect(eventCard).not.toContain("height:");
   });
 
-  it("lets the Event body fill the shared height", () => {
-    const body = css.slice(css.indexOf(".linkr-plan-body {"), css.indexOf(".linkr-plan-date {"));
-    expect(body).toContain("flex: 1 1 auto");
+  /**
+   * THE REGRESSION THIS GUARDS.
+   *
+   * `.linkr-plan` is a flex ROW, so making the body growable let it shrink
+   * below its own content width: the date tile drifted into the middle of
+   * the card, the title clipped to one character, and the copy wrapped
+   * letter by letter. The previous version of this test asserted the very
+   * rule that caused it, so it passed while the card was visibly broken.
+   */
+  it("never lets the card body shrink below its content", () => {
+    // Comments stripped first: the note explaining this regression names the
+    // very declaration it forbids.
+    const body = stripComments(css).slice(
+      stripComments(css).indexOf(".linkr-plan-body {"),
+      stripComments(css).indexOf(".linkr-plan-date {")
+    );
+    expect(body).not.toContain("flex: 1 1 auto");
+    // Full row width, top-aligned children.
+    expect(body).toContain("width: 100%");
+    expect(body).toContain("align-items: flex-start");
+  });
+
+  it("keeps the date tile at the top rather than stretched", () => {
+    const tile = css.slice(css.indexOf(".linkr-plan-date {"), css.indexOf(".linkr-plan-date-weekday"));
+    expect(tile).toContain("align-self: flex-start");
   });
 
   it("keeps both kinds on the one card shell", () => {

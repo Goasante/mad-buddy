@@ -2656,13 +2656,12 @@ select {
   display: flex;
   min-width: 0;
   width: 100%;
-  /* Centred within the shared card height. A Plan fills that height with
-     attendee avatars and a CTA; an Event has less to say, so its column sits
-     in the middle of the space rather than pinned to the top with all the
-     air collected underneath. */
-  align-items: center;
-  /* Fills the shared min-height so the centring has room to work. */
-  flex: 1 1 auto;
+  /* Top-aligned. `align-items: center` plus `flex: 1 1 auto` broke this
+     badly: .linkr-plan is a flex ROW, so a growable body could shrink below
+     its content width -- the date tile drifted into the middle, the title
+     clipped to a single character and the copy wrapped letter by letter.
+     The body owns the full row and its children align to the top. */
+  align-items: flex-start;
   gap: 0.875rem;
   padding: 1.05rem 1rem;
   color: #fff;
@@ -2677,6 +2676,7 @@ select {
 .linkr-plan-date {
   display: grid;
   width: 3.25rem;
+  align-self: flex-start;
   flex-shrink: 0;
   place-items: center;
   gap: 0.0625rem;
@@ -2772,9 +2772,6 @@ select {
   flex-direction: column;
   align-items: flex-end;
   gap: 0.375rem;
-  /* Pinned to the top edge so the state pill lines up with the card's first
-     line however tall the copy beside it grows. */
-  align-self: flex-start;
 }
 
 .linkr-plan-urgency {
