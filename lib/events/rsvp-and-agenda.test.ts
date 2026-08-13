@@ -167,54 +167,32 @@ describe("listEvents projects only the viewer's own RSVP", () => {
 // The personal upcoming agenda
 // ---------------------------------------------------------------------------
 
-describe("the agenda is a new projection, not a change to HomeUpcomingPlan", () => {
-  it("HomeUpcomingPlan itself is untouched by this module", () => {
-    expect(agenda).not.toContain("export type HomeUpcomingPlan");
-    // upcoming-plans.ts is read by five unrelated consumers per the audit;
-    // this file must not import it as anything but a type it re-derives from
-    // scratch, so a future edit to loadUpcomingPlans cannot silently change
-    // the agenda's own query.
-    expect(agenda).not.toContain('from "@/lib/social/upcoming-plans"');
+describe("the unified personal agenda", () => {
+  it("reuses the canonical Home Plan loader rather than querying Plans twice", () => {
+    expect(agenda).toContain("loadUpcomingPlans(userId, limit + 1)");
+    expect(agenda).not.toContain('from("plan_participants")');
   });
 
-  it("defines a genuine discriminated union", () => {
-    expect(agenda).toContain('export type UpcomingAgendaItem = PlanAgendaItem | EventAgendaItem;');
-    expect(agenda).toContain('kind: "plan"');
-    expect(agenda).toContain('kind: "event"');
-  });
-
-  it("reuses isUpcomingPlan rather than re-deriving Plan lifecycle logic", () => {
-    expect(agenda).toContain('from "@/lib/social/plans"');
-    expect(agenda).toContain("isUpcomingPlan(");
-    // No independent start_at/end_at comparison for Plans anywhere in this
-    // file -- that would be exactly the duplicated-lifecycle regression
-    // Stage A+B exists to prevent.
-    expect(agenda).not.toMatch(/plan\.start_at.*<=.*nowMs/);
-  });
-
-  it("includes a Going event", () => {
-    expect(agenda).toContain('.eq("status", "going")');
+  it("includes existing Interested and Going event intent", () => {
+    expect(agenda).toContain('.in("status", ["interested", "going"])');
   });
 
   it("includes a hosted event without requiring an RSVP row", () => {
     expect(agenda).toContain('from("events").select("id").eq("host_id", userId)');
     const filter = agenda.slice(agenda.indexOf(".filter((event) => {"));
-    expect(filter.slice(0, 400)).toContain("if (isHost) return true;");
+    expect(filter.slice(0, 400)).toContain("if (event.host_id === userId) return true;");
   });
 
-  it("excludes Interested-only and Not Going from the primary agenda", () => {
-    // The inclusion query only ever reads status = 'going'; interested and
-    // not_going rows are never part of goingEventIds at all.
-    expect(agenda).not.toContain('.eq("status", "interested")');
-    const goingQuery = agenda.slice(agenda.indexOf('.eq("status", "going")') - 50, agenda.indexOf('.eq("status", "going")') + 30);
-    expect(goingQuery).toContain('"going"');
+  it("never includes Not Going intent", () => {
+    const inclusion = agenda.slice(agenda.indexOf('.in("status", ["interested", "going"])'));
+    expect(inclusion.slice(0, 80)).not.toContain("not_going");
   });
 
   it("re-checks RSVP status at read time rather than trusting the seed list", () => {
     // A Going -> Not Going change since goingEventIds was read must not
     // leave a stale entry in this request's agenda.
     const filter = agenda.slice(agenda.indexOf(".filter((event) => {"));
-    expect(filter.slice(0, 500)).toContain('rsvp === "going"');
+    expect(filter.slice(0, 600)).toContain('rsvp === "interested" || rsvp === "going"');
   });
 
   it("keeps a currently-live event in the agenda, not only strictly-upcoming", () => {
@@ -239,24 +217,8 @@ describe("the agenda is a new projection, not a change to HomeUpcomingPlan", () 
     expect(filter.slice(0, 150)).toContain("event.host_id === userId ||");
   });
 
-  it("merges Plans and Events THEN performs one canonical sort", () => {
-    // Not sort-then-concatenate: the merge must happen before the only sort
-    // call in the file, or a soonest Event could land after a later Plan.
-    const mergeAt = agenda.indexOf("const merged: UpcomingAgendaItem[]");
-    const sortAt = agenda.indexOf(".sort(");
-    expect(mergeAt).toBeGreaterThan(-1);
-    expect(sortAt).toBeGreaterThan(mergeAt);
-    // Exactly one sort call in the whole module.
-    expect((agenda.match(/\.sort\(/g) ?? []).length).toBe(1);
-  });
-
-  it("sorts purely chronologically by start time", () => {
-    const sortCall = agenda.slice(agenda.indexOf(".sort("));
-    expect(sortCall.slice(0, 150)).toContain("Date.parse(a.startsAt) - Date.parse(b.startsAt)");
-  });
-
-  it("bounds the result rather than returning an unbounded list", () => {
-    expect(agenda).toContain("merged.slice(0, limit)");
+  it("hands both domains to the pure chronological projection", () => {
+    expect(agenda).toContain("projectUpcomingAgenda(merged, nowMs, limit)");
   });
 });
 

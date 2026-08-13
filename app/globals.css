@@ -2608,6 +2608,13 @@ select {
   position: relative;
   display: flex;
   height: 100%;
+  /* ONE HEIGHT FOR BOTH KINDS.
+     A Plan card carries two rows an Event card does not -- the attendee
+     avatars and the Going button -- so each sized to its own content and the
+     stack visibly changed shape as you swiped between them. Cards in one
+     stack are the same object at different moments, so they hold one height
+     and the shorter kind simply has more air. */
+  min-height: 9.25rem;
   overflow: hidden;
   border-radius: 1.5rem;
   background: linear-gradient(
@@ -2647,28 +2654,23 @@ select {
 .linkr-plan-body {
   position: relative;
   display: flex;
+  min-width: 0;
   width: 100%;
+  /* Centred within the shared card height. A Plan fills that height with
+     attendee avatars and a CTA; an Event has less to say, so its column sits
+     in the middle of the space rather than pinned to the top with all the
+     air collected underneath. */
   align-items: center;
+  /* Fills the shared min-height so the centring has room to work. */
+  flex: 1 1 auto;
   gap: 0.875rem;
-  padding: 1rem;
+  padding: 1.05rem 1rem;
   color: #fff;
 }
 
 /* Very narrow screens: the CTA drops under the copy rather than squeezing it.
    The date badge stays beside the text — it is small, fixed, and the first
    thing worth reading. */
-@media (max-width: 22rem) {
-  .linkr-plan-body {
-    flex-wrap: wrap;
-  }
-  .linkr-plan-actions {
-    width: 100%;
-    flex-direction: row-reverse;
-    justify-content: flex-start;
-    gap: 0.5rem;
-  }
-}
-
 /* ---------------------------- Date badge ----------------------------- */
 /* A light tile on the cover: the one element allowed to break the gradient,
    because the date is the first thing worth knowing. */
@@ -2710,7 +2712,8 @@ select {
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 0.1875rem;
+  /* 0.1875rem stacked title, meta and host almost touching. */
+  gap: 0.3125rem;
 }
 
 .linkr-plan-title {
@@ -2738,11 +2741,16 @@ select {
 
 .linkr-plan-meta {
   flex-wrap: wrap;
-  gap: 0.125rem 0.75rem;
+  gap: 0.25rem 0.875rem;
+  /* Slightly quieter than the host line so the hierarchy reads
+     title -> when/where -> who. */
+  color: rgb(255 255 255 / 0.9);
 }
 
 .linkr-plan-host {
   overflow: hidden;
+  font-size: 0.78125rem;
+  color: rgb(255 255 255 / 0.72);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2764,6 +2772,9 @@ select {
   flex-direction: column;
   align-items: flex-end;
   gap: 0.375rem;
+  /* Pinned to the top edge so the state pill lines up with the card's first
+     line however tall the copy beside it grows. */
+  align-self: flex-start;
 }
 
 .linkr-plan-urgency {
@@ -2809,6 +2820,23 @@ select {
 }
 .linkr-plan-cta:disabled {
   cursor: default;
+}
+
+@media (max-width: 26.875rem) {
+  .linkr-plan-body {
+    gap: 0.625rem;
+    padding: 0.875rem;
+  }
+  .linkr-plan-actions {
+    gap: 0.25rem;
+  }
+  .linkr-plan-date {
+    width: 3rem;
+  }
+  .linkr-plan-cta {
+    min-height: 2.375rem;
+    padding-inline: 0.625rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5583,6 +5611,66 @@ select {
   animation: camera-recording-breathe 1.4s ease-in-out infinite;
 }
 
+/* "Recording", in words. The dot is decoration; this is the actual state. */
+.camera-recording-label {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+}
+
+/* Capture mode strip (Slice 2). Two affordances over one recorder. */
+.camera-mode-strip {
+  margin: 0.75rem auto 0;
+  display: flex;
+  width: fit-content;
+  gap: 0.25rem;
+  border-radius: 999px;
+  background: rgb(8 7 6 / 0.55);
+  padding: 0.25rem;
+}
+
+.camera-mode-choice {
+  min-height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 0 1.1rem;
+  color: rgb(254 251 243 / 0.62);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.camera-mode-choice.is-active {
+  background: rgb(254 251 243 / 0.14);
+  color: #fefbf3;
+}
+
+/* Tool rail entry. Opens a tray rather than adding another permanent row. */
+.camera-tool-button {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  margin-inline: auto;
+  border: 1px solid rgb(254 251 243 / 0.16);
+  border-radius: 0.9rem;
+  background: rgb(8 7 6 / 0.55);
+  color: rgb(254 251 243 / 0.82);
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.camera-tool-button.is-active {
+  background: rgb(232 140 43 / 0.22);
+  border-color: rgb(232 140 43 / 0.55);
+  color: #fefbf3;
+}
+
 @keyframes camera-recording-breathe {
   0%, 100% { opacity: 0.68; transform: scale(0.9); }
   50% { opacity: 1; transform: scale(1); }
@@ -5591,8 +5679,14 @@ select {
 @media (prefers-reduced-motion: reduce) {
   .camera-primary-action,
   .camera-secondary-action,
-  .camera-shutter {
+  .camera-shutter,
+  .camera-mode-choice,
+  .camera-tool-button {
     transition: none;
+  }
+
+  .camera-recording-dot {
+    animation: none;
   }
 
   .camera-primary-action:active,
@@ -6588,6 +6682,42 @@ select {
   gap: 0.5rem;
   min-width: 11rem;
   max-width: 15rem;
+}
+
+/* An eyebrow, not a badge. As a filled pill it competed with the state chip
+   opposite it and with the title directly beneath -- three emphatic shapes
+   stacked in one corner. It now reads as a label above the name. */
+.home-agenda-type {
+  padding: 0;
+  background: none;
+  color: rgb(255 255 255 / 0.66);
+  font-size: 0.625rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.home-agenda-type,
+.home-agenda-rsvp {
+  display: inline-flex;
+  width: fit-content;
+  flex-shrink: 0;
+  align-items: center;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.18);
+  padding: 0.2rem 0.55rem;
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.home-agenda-rsvp {
+  border: 1px solid rgb(255 255 255 / 0.55);
+  background: rgb(255 255 255 / 0.14);
+  color: #fff;
+  /* Same tap size as any other control on a phone. */
+  min-height: 1.75rem;
+  padding-inline: 0.7rem;
 }
 
 .voice-bubble-play {

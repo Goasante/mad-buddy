@@ -125,11 +125,17 @@ describe("decoration never competes with safety", () => {
     // Safety state outranks visual effect: a sweep of light crossing a Safe
     // Arrival card is decoration on top of information someone may need to
     // read quickly.
-    expect(component).toContain("{prominent ? null : (");
+    // The guard now also excludes the card that renders the prism instead,
+    // so this asserts the INVARIANT -- a prominent card reaches no animated
+    // background at all -- rather than one literal spelling of the condition.
+    const guardIndex = component.indexOf("prominent");
     const glareIndex = component.indexOf("<GlareHover");
-    const guardIndex = component.indexOf("{prominent ? null : (");
     expect(guardIndex).toBeGreaterThan(-1);
     expect(glareIndex).toBeGreaterThan(guardIndex);
+    // Whatever the guard says, `prominent` must gate the glare...
+    expect(component).toMatch(/\{prominent[^}]*\? null : \(/);
+    // ...and must gate the prism too, so neither can reach a safety card.
+    expect(component).toContain('const PRISM_CARD_IDS = new Set<SmartCard["id"]>(["suggestions"]);');
   });
 
   it("keeps the glare decorative and non-interactive where it does render", () => {

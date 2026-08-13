@@ -25,7 +25,7 @@ export function TopEventsHome({ events }: { events: RankedEvent[] }) {
     <section aria-labelledby="home-top-events-heading">
       <PageSectionHeader
         id="home-top-events-heading"
-        title="What's Popping"
+        title="Trending"
         href="/events/top"
         actionAriaLabel="See top events"
       />

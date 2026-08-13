@@ -41,9 +41,9 @@ describe("Suggestions refactor", () => {
     expect(read("lib/tours/registry.ts")).toContain('HOME_QUICK_ACTIONS: "home-quick-actions"');
   });
 
-  it("keeps the More sheet for everything not on the rail", () => {
-    expect(rail).toContain("<Modal");
-    expect(rail).toContain("variant=\"sheet\"");
+  it("does not invent a See all destination", () => {
+    expect(rail).not.toContain("<Modal");
+    expect(rail).not.toContain("See all suggestions");
   });
 });
 
@@ -62,9 +62,8 @@ describe("Suggestions header", () => {
     expect(sectionHeader).toContain("text-base font-medium text-[var(--color-brand-orange)]");
   });
 
-  it("only offers See all when there is more to see", () => {
-    // The action is omitted when nothing else is available.
-    expect(rail).toContain("onAction={secondary.length > 0 ? () => setMoreOpen(true) : undefined}");
+  it("uses a title-only header because there is no suggestions destination", () => {
+    expect(rail).toContain('<PageSectionHeader id="home-actions-heading" title="Suggestions for you" />');
   });
 });
 
@@ -163,8 +162,7 @@ describe("Suggestion card content", () => {
   it("carries recommendation copy distinct from the feature description", () => {
     expect(home).toContain('suggestion: "See who is up for something."');
     expect(home).toContain('suggestion: "Grow your trusted circle."');
-    expect(home).toContain('suggestion: "Bring people together."');
-    expect(home).toContain("suggestion: \"See what’s happening nearby.\"");
+    expect(home).toContain('suggestion: "Find people you already know."');
   });
 });
 
@@ -183,9 +181,15 @@ describe("Suggestion rendering", () => {
 
   it("only recommends routes that already exist", () => {
     const actions = home.slice(home.indexOf("const quickActions"), home.indexOf("PRIMARY_ACTION_HREFS"));
-    for (const href of ["/hangout-mode", "/invites", "/plans?create=1", "/events"]) {
+    for (const href of ["/hangout-mode", "/invites", "/friends?tab=add"]) {
       expect(actions).toContain(`href: "${href}"`);
     }
+  });
+
+  it("keeps paused creation surfaces out of the suggestion set", () => {
+    const promoted = home.slice(home.indexOf("const PRIMARY_ACTION_HREFS"), home.indexOf("const SUGGESTION_COUNT"));
+    expect(promoted).not.toContain("/moments");
+    expect(promoted).not.toContain("camera");
   });
 
   it("still respects Owner feature flags", () => {

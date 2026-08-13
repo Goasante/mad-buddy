@@ -1,10 +1,14 @@
 "use client";
 
 import { motion, useMotionValue, useTransform } from "framer-motion";
-import { useCallback, useState } from "react";
+import Link from "next/link";
+import { CalendarDays, MapPin } from "lucide-react";
+import { useCallback, useState, type CSSProperties } from "react";
 
 import { SocializePlanCard } from "@/components/socialize/socialize-plan-card";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
+import type { EventAgendaItem } from "@/lib/social/upcoming-agenda";
+import { planDateParts, planTimeLabel } from "@/lib/plans/discovery";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +40,7 @@ export function PlanStack({
   onJoin,
   pending = false
 }: {
-  plans: readonly HomeUpcomingPlan[];
+  plans: readonly (HomeUpcomingPlan | EventAgendaItem)[];
   onJoin: (plan: HomeUpcomingPlan) => void;
   pending?: boolean;
 }) {
@@ -64,11 +68,11 @@ export function PlanStack({
 
   // One card needs no stack, no drag and no counter.
   if (count === 1) {
-    return <SocializePlanCard plan={plans[0]} onJoin={onJoin} pending={pending} />;
+    return <AgendaCard item={plans[0]} onJoin={onJoin} pending={pending} />;
   }
 
   const visible = Array.from({ length: Math.min(VISIBLE, count) }, (_, depth) => ({
-    plan: plans[(top + depth) % count],
+    item: plans[(top + depth) % count],
     depth
   }));
 
@@ -80,17 +84,17 @@ export function PlanStack({
         // without seeing the offsets.
         role="group"
         aria-roledescription="stack"
-        aria-label={`Upcoming plans, showing ${top + 1} of ${count}`}
+        aria-label={`Your plans, showing ${top + 1} of ${count}`}
       >
         {/* Painted back-to-front so the live card sits on top naturally. */}
         {visible
           .slice()
           .reverse()
-          .map(({ plan, depth }) => {
+          .map(({ item, depth }) => {
             const isTop = depth === 0;
             return (
               <motion.div
-                key={plan.id}
+                key={`${isEventAgendaItem(item) ? "event" : "plan"}:${item.id}`}
                 className={cn("plan-stack-card", isTop && "plan-stack-card-live")}
                 style={isTop ? { x, rotate, zIndex: VISIBLE } : { zIndex: VISIBLE - depth }}
                 animate={{
@@ -117,7 +121,7 @@ export function PlanStack({
                 }}
                 aria-hidden={!isTop}
               >
-                <SocializePlanCard plan={plan} onJoin={onJoin} pending={pending} />
+                <AgendaCard item={item} onJoin={onJoin} pending={pending} />
               </motion.div>
             );
           })}
@@ -146,5 +150,82 @@ export function PlanStack({
         </button>
       </div>
     </div>
+  );
+}
+
+function isEventAgendaItem(item: HomeUpcomingPlan | EventAgendaItem): item is EventAgendaItem {
+  return "kind" in item && item.kind === "event";
+}
+
+function AgendaCard({
+  item,
+  onJoin,
+  pending
+}: {
+  item: HomeUpcomingPlan | EventAgendaItem;
+  onJoin: (plan: HomeUpcomingPlan) => void;
+  pending: boolean;
+}) {
+  if (isEventAgendaItem(item)) return <EventAgendaCard event={item} />;
+  return <SocializePlanCard plan={item} onJoin={onJoin} pending={pending} />;
+}
+
+/** Event presentation using the Plan card's exact shell and spacing. */
+function EventAgendaCard({ event }: { event: EventAgendaItem }) {
+  const date = planDateParts(event.startsAt);
+  const time = planTimeLabel(event.startsAt);
+  const state = event.isHost ? "Hosting" : event.myRsvp === "interested" ? "Interested" : "Going";
+
+  return (
+    <article
+      className="linkr-plan home-agenda-event"
+      style={
+        {
+          "--linkr-plan-from": "#5b21b6",
+          "--linkr-plan-to": "#312e81"
+        } as CSSProperties
+      }
+      aria-label={`Event: ${event.title}${time ? ` at ${time}` : ""}, ${state}`}
+    >
+      <div className="linkr-plan-body">
+        {date ? (
+          <span className="linkr-plan-date" aria-hidden="true">
+            <span className="linkr-plan-date-weekday">{date.weekday}</span>
+            <span className="linkr-plan-date-day">{date.day}</span>
+            <span className="linkr-plan-date-month">{date.month}</span>
+          </span>
+        ) : null}
+
+        <div className="linkr-plan-detail">
+          {/* The label sits ABOVE the name rather than beside it. Inline, a
+              fixed-width badge took room from the one piece of copy that
+              actually varies, so a long Event name ellipsed early while
+              "Event" kept its full width. */}
+          <span className="home-agenda-type">Event</span>
+          <Link href={event.href} className="focus-ring linkr-plan-title min-w-0">
+            {event.title}
+          </Link>
+          <div className="linkr-plan-meta">
+            {time ? (
+              <span className="inline-flex items-center gap-1">
+                <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+                {time}
+              </span>
+            ) : null}
+            {event.locationLabel ? (
+              <span className="inline-flex min-w-0 items-center gap-1">
+                <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{event.locationLabel}</span>
+              </span>
+            ) : null}
+          </div>
+          <p className="linkr-plan-host">Hosted by {event.hostName}</p>
+        </div>
+
+        <div className="linkr-plan-actions">
+          <span className="home-agenda-rsvp">{state}</span>
+        </div>
+      </div>
+    </article>
   );
 }

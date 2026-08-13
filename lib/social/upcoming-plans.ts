@@ -23,6 +23,8 @@ export type HomeUpcomingPlan = {
   id: string;
   title: string;
   startAt: string;
+  /** Used by unified agenda projections to retain an in-progress Plan. */
+  endAt?: string | null;
   organiserName: string;
   myRsvp: string;
   invitedCount: number;
@@ -51,7 +53,7 @@ export type UpcomingPlansResult = {
 // PlanStatus value fails the type check here rather than silently slipping in.
 const ACTIVE_STATUSES = ["inviting", "polling", "confirmed"] as const;
 
-export async function loadUpcomingPlans(userId: string, limit = 3): Promise<UpcomingPlansResult> {
+export async function loadUpcomingPlans(userId: string, limit = 8): Promise<UpcomingPlansResult> {
   const env = getSupabaseServerEnv();
   if (!env.url || !env.serviceRoleKey) return { plans: [], hasMore: false };
 
@@ -164,6 +166,7 @@ export async function loadUpcomingPlans(userId: string, limit = 3): Promise<Upco
       id: plan.id,
       title: plan.title,
       startAt: plan.start_at as string,
+      endAt: plan.end_at,
       organiserName: plan.creator_id === userId ? "You" : creatorNameById.get(plan.creator_id) ?? "A Muddy",
       myRsvp: isHost ? "going" : myRow?.rsvp_status ?? "invited",
       invitedCount: invitedCountByPlan.get(plan.id) ?? 0,

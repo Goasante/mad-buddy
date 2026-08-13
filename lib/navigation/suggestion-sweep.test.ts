@@ -137,8 +137,9 @@ describe("pausing", () => {
     expect(hook).toContain("setBusy(false), 400");
   });
 
-  it("pauses while the More sheet is open", () => {
-    expect(home).toContain("paused: railBusy || moreOpen");
+  it("does not depend on a removed More sheet", () => {
+    expect(home).toContain("paused: railBusy");
+    expect(home).not.toContain("paused: railBusy || moreOpen");
   });
 
   it("pauses in a hidden tab", () => {

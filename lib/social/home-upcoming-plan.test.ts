@@ -29,19 +29,19 @@ describe("Home plan selection", () => {
     // Soonest first, decided by the query.
     expect(service).toContain('.order("start_at", { ascending: true })');
     // No client-side sort of the plan list on Home.
-    expect(home).not.toContain("upcomingPlans.sort");
-    expect(home).not.toContain("[...upcomingPlans]");
+    expect(home).not.toContain("agendaItems.sort");
+    expect(home).not.toContain("[...agendaItems]");
   });
 
   it("shows the whole stack rather than only the soonest plan", () => {
     // Home loads three; rendering one hid two the user already paid for.
-    expect(home).toContain("<PlanStack plans={upcomingPlans}");
-    expect(home).not.toContain("const plan = upcomingPlans[0];");
+    expect(home).toContain("<PlanStack plans={agendaItems}");
+    expect(home).not.toContain("const plan = agendaItems[0];");
   });
 
   it("renders the empty state instead of hiding the section", () => {
     expect(home).toContain("<UpcomingPlanEmpty />");
-    expect(home).toContain("upcomingPlans.length > 0 ?");
+    expect(home).toContain("agendaItems.length > 0 ?");
   });
 
   it("sits directly after Near and above Quick Actions", () => {
@@ -92,5 +92,11 @@ describe("one plan presentation, shared with Linkr", () => {
     // anyone. The stack itself carries no header.
     expect(stack).not.toContain("See all");
     expect(stack).not.toContain("PageSectionHeader");
+  });
+
+  it("uses the same stack shell for Events while preserving Event identity", () => {
+    expect(stack).toContain('className="linkr-plan home-agenda-event"');
+    expect(stack).toContain('event.myRsvp === "interested" ? "Interested" : "Going"');
+    expect(stack).toContain(">Event</span>");
   });
 });

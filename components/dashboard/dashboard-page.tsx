@@ -5,20 +5,18 @@ import type { Route } from "next";
 import {
   AlertTriangle,
   Bell,
-  CalendarPlus,
   CheckCircle2,
   ChevronRight,
   CalendarDays,
   CircleDollarSign,
   Compass,
   Ghost,
-  GraduationCap,
   Hand,
   MessageSquareText,
   Moon,
   PartyPopper,
+  Search,
   ShieldCheck,
-  Sparkles,
   UserPlus,
   Users,
   Users2,
@@ -57,13 +55,11 @@ import {
 import type { SafeArrivalJourney } from "@/lib/safety/safe-arrival-service";
 import { StatusComposer } from "@/components/social/status-composer";
 import { FeatureIcon } from "@/components/ui/feature-icon";
-import { Modal } from "@/components/ui/modal";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 import { formatMuddyStatusLabel } from "@/lib/social/rules";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
-import { UpcomingAgendaList } from "@/components/dashboard/upcoming-agenda-list";
 import type { UpcomingAgendaItem } from "@/lib/social/upcoming-agenda";
 import { type FreshnessState } from "@/lib/proximity/freshness";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
@@ -119,14 +115,7 @@ type DashboardPageContentProps = {
   initialStatusAvailability?: AvailabilityType;
   initialStatusActivity?: ActivityType | null;
   initialStatusNote?: string;
-  upcomingPlans?: HomeUpcomingPlan[];
-  hasMorePlans?: boolean;
-  /**
-   * "My Upcoming" (Plans + Events lifecycle, Stage C): Plans and Events
-   * merged, one canonical chronological sort. A SEPARATE prop from
-   * upcomingPlans above, not a replacement for it -- upcomingPlans still
-   * feeds the existing PlanStack section untouched.
-   */
+  /** Plans and qualifying Events in one chronological Home stack. */
   agendaItems?: UpcomingAgendaItem[];
   glowColorByFriendId?: Record<string, string>;
   profileReminder?: {
@@ -255,7 +244,6 @@ export function DashboardPageContent({
   initialStatusAvailability,
   initialStatusActivity = null,
   initialStatusNote = "",
-  upcomingPlans = [],
   agendaItems = [],
   glowColorByFriendId = {},
   profileReminder = null,
@@ -547,11 +535,6 @@ export function DashboardPageContent({
     () => splitQuickActions(hiddenQuickActionHrefs),
     [hiddenQuickActionHrefs]
   );
-  const [promotedCount, setPromotedCount] = useState(0);
-  const moreActions = useMemo(
-    () => secondaryActions.slice(promotedCount),
-    [secondaryActions, promotedCount]
-  );
 
   const hasSafeArrival =
     safeArrival !== null &&
@@ -652,6 +635,11 @@ export function DashboardPageContent({
             without burying personal or safety state to get there.
 
             Renders nothing when the ranking is empty. */}
+
+        {/* Trending Events sit ABOVE My Plans. What the wider community is
+            doing is discovery -- it earns the higher slot because it is the
+            thing you do not already know about. My Plans is a reminder of
+            commitments you made yourself, so it reads better after. */}
         <TopEventsHome events={topEvents} />
 
         {/* Upcoming Plans sits directly under Near: both answer "what is
@@ -663,7 +651,7 @@ export function DashboardPageContent({
             that looks different depending on which screen you found it on is
             a plan you have to re-read. "See all" stays here only — Linkr IS
             the discovery page, so it has nowhere to send you. */}
-        {upcomingPlans.length > 0 ? (
+        {agendaItems.length > 0 ? (
           <section aria-labelledby="home-plans-heading" data-tour-id={TOUR_TARGET_IDS.HOME_UPCOMING_PLAN}>
             <PageSectionHeader
               id="home-plans-heading"
@@ -671,38 +659,18 @@ export function DashboardPageContent({
               href="/plans"
               actionAriaLabel="See all plans"
             />
-            <PlanStack plans={upcomingPlans} onJoin={joinPlan} pending={isPending} />
+            <PlanStack plans={agendaItems} onJoin={joinPlan} pending={isPending} />
           </section>
         ) : (
           <UpcomingPlanEmpty />
         )}
 
-        {/*
-          "My Upcoming" (Plans + Events lifecycle, Stage C).
-
-          A SECOND section, not a replacement for the PlanStack above: that
-          stack is a distinct, deliberately-built interaction (drag, framer
-          spring, "join" affordance) shared with Linkr discovery, and folding
-          Events into it would have meant reworking a component built around
-          exactly one domain shape. This renders only when agendaItems
-          actually contains an Event -- a Plans-only viewer, which is most of
-          them, never sees a second, plainer list duplicating what the stack
-          above already shows richly. The moment an Event enters the mix
-          (Going, or hosting), this is where it -- and every Plan alongside it
-          in one chronological order -- becomes visible.
-        */}
-        {agendaItems.some((item) => item.kind === "event") ? (
-          <section aria-labelledby="home-agenda-heading">
-            <PageSectionHeader id="home-agenda-heading" title="My Upcoming" />
-            <UpcomingAgendaList items={agendaItems} />
-          </section>
-        ) : null}
 
         {/* Quick actions: first-time activation set, or the returning-user set. */}
         {isFirstTimeUser ? (
           <FirstTimeQuickActions hiddenHrefs={hiddenQuickActionHrefs} />
         ) : (
-          <QuickActionsHome primary={primaryActions} secondary={moreActions} />
+          <QuickActionsHome primary={primaryActions} />
         )}
 
         {/* Moments preview. Renders the branded onboarding when the viewer has
@@ -744,11 +712,10 @@ export function DashboardPageContent({
           </section>
         ) : null}
 
-        {/* Fills leftover space above the bottom nav with extra shortcuts; they
-            retract into "More" as soon as real content needs the room. Only for
-            the returning-user quick-actions set — the first-time set is fixed. */}
+        {/* Fills leftover space above the bottom nav with secondary shortcuts.
+            Only for the returning-user action set; the first-time set is fixed. */}
         {!isFirstTimeUser ? (
-          <HomeGapFillerActions pool={secondaryActions} onPromotedChange={setPromotedCount} />
+          <HomeGapFillerActions pool={secondaryActions} />
         ) : null}
       </div>
 
@@ -1071,10 +1038,9 @@ function NearbyHero({
  * systems — only the recommendations differ.
  */
 const FIRST_TIME_ACTIONS: QuickAction[] = [
-  { href: "/friends?tab=add", label: "Add a Muddy", description: "Find people you already know.", suggestion: "Start building your circle.", tone: "lavender", icon: UserPlus, featureIcon: "invites", accent: "text-violet-500 dark:text-violet-400" },
-  { href: "/plans?create=1", label: "Create a Plan", description: "Create a plan and bring people together.", suggestion: "Bring people together.", tone: "green", icon: CalendarPlus, featureIcon: "plans", accent: "text-emerald-500 dark:text-emerald-400" },
-  { href: "/moments", label: "Share a Moment", description: "Share a moment before it disappears.", suggestion: "Share something before it’s gone.", tone: "blush", icon: Sparkles, featureIcon: "moments", accent: "text-primary" },
-  { href: "/help", label: "Learn Mad Buddy", description: "See how Mad Buddy works.", suggestion: "See how everything works.", tone: "blue", icon: GraduationCap, featureIcon: "focus", accent: "text-sky-500 dark:text-sky-400" }
+  { href: "/hangout-mode", label: "UpFor", description: "Let your Muddies know you are free right now.", suggestion: "See who is up for something.", tone: "orange", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
+  { href: "/invites", label: "Invite Friends", description: "Invite people you already know.", suggestion: "Grow your trusted circle.", tone: "lavender", icon: UserPlus, featureIcon: "invites", accent: "text-violet-500 dark:text-violet-400" },
+  { href: "/friends?tab=add", label: "Find Muddies", description: "Search for people on Mad Buddy.", suggestion: "Find people you already know.", tone: "blue", icon: Search, featureIcon: "socialize", accent: "text-sky-500 dark:text-sky-400" }
 ];
 
 function FirstTimeQuickActions({ hiddenHrefs = [] }: { hiddenHrefs?: string[] }) {
@@ -1175,11 +1141,11 @@ const SUGGESTION_TONE: Record<
 const quickActions: QuickAction[] = [
   { href: "/hangout-mode", label: "UpFor", description: "Let your Muddies know you’re free right now.", suggestion: "See who is up for something.", tone: "orange", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
   { href: "/invites", label: "Invite Friends", description: "Review and send invitations.", suggestion: "Grow your trusted circle.", tone: "lavender", icon: UserPlus, featureIcon: "invites", accent: "text-emerald-500 dark:text-emerald-400" },
+  { href: "/friends?tab=add", label: "Find Muddies", description: "Search for people on Mad Buddy.", suggestion: "Find people you already know.", tone: "blue", icon: Search, featureIcon: "socialize", accent: "text-sky-500 dark:text-sky-400" },
   { href: "/plans?create=1", label: "Complete a Plan", description: "Create a plan and bring people together.", suggestion: "Bring people together.", tone: "green", icon: CalendarDays, featureIcon: "plans", accent: "text-emerald-500 dark:text-emerald-400" },
   { href: "/events", label: "Discover Events", description: "See what’s coming up.", suggestion: "See what’s happening nearby.", tone: "blue", icon: PartyPopper, featureIcon: "events", accent: "text-violet-500 dark:text-violet-400" },
   { href: "/discover", label: "Linkr", description: "Find people who are open to connecting.", suggestion: "Meet people open to connecting.", tone: "lavender", icon: Compass, featureIcon: "socialize", accent: "text-violet-500 dark:text-violet-400" },
   { href: "/safe-arrival", label: "Safe Arrival", description: "Let trusted Muddies know when you arrive safely.", suggestion: "Let your circle know you got there.", tone: "blue", icon: ShieldCheck, featureIcon: "safeArrival", accent: "text-sky-500 dark:text-sky-400" },
-  { href: "/moments", label: "Moments", description: "Share a moment before it disappears.", suggestion: "Share something before it’s gone.", tone: "blush", icon: Sparkles, featureIcon: "moments", accent: "text-primary" },
   { href: "/groups", label: "Circles", description: "Open your Circles and invitations.", suggestion: "Catch up with your Circles.", tone: "green", icon: Users2, featureIcon: "groups", accent: "text-sky-500 dark:text-sky-400" },
   { href: "/reminders", label: "Reminders", description: "Reminders for plans and connections.", suggestion: "Stay on top of what’s next.", tone: "orange", icon: Bell, featureIcon: "reminders", accent: "text-amber-500 dark:text-amber-400" },
   { href: "/settings/engagement", label: "Focus", description: "Manage Focus Mode and notification limits.", suggestion: "Quieten things down for a while.", tone: "blush", icon: Moon, featureIcon: "focus", accent: "text-pink-500 dark:text-pink-400" }
@@ -1189,10 +1155,10 @@ const quickActions: QuickAction[] = [
  * The suggestions surfaced on the Home rail, in order. The rest stay
  * available through "More to explore" lower down.
  */
-const PRIMARY_ACTION_HREFS = ["/hangout-mode", "/invites", "/plans?create=1", "/events"];
+const PRIMARY_ACTION_HREFS = ["/hangout-mode", "/invites", "/friends?tab=add"];
 
 /** How many suggestions the Home rail renders before the rest fall through. */
-const SUGGESTION_COUNT = 4;
+const SUGGESTION_COUNT = 3;
 
 /**
  * Splits the flag-filtered actions into the rail's suggestions and the rest.
@@ -1230,20 +1196,12 @@ function splitQuickActions(hiddenHrefs: string[]): { primary: QuickAction[]; sec
  * references `home-quick-actions`, so the id must keep resolving to a real,
  * visible element even though the section is no longer called Quick actions.
  */
-function QuickActionsHome({
-  primary,
-  secondary
-}: {
-  primary: QuickAction[];
-  secondary: QuickAction[];
-}) {
-  const [moreOpen, setMoreOpen] = useState(false);
+function QuickActionsHome({ primary }: { primary: QuickAction[] }) {
   const railRef = useRef<HTMLDivElement>(null);
   // One shared controller for the whole rail, not a timer per card. Pauses
-  // while the rail is being touched or scrolled, while the More sheet is
-  // open, and while the tab is hidden.
+  // while the rail is being touched or scrolled, or while the tab is hidden.
   const railBusy = useInteractionPause(railRef);
-  const sweepingIndex = useSequenceHighlight(primary.length, { paused: railBusy || moreOpen });
+  const sweepingIndex = useSequenceHighlight(primary.length, { paused: railBusy });
 
   // No suggestions available (every feature flagged off) — hide the section
   // rather than render an empty placeholder.
@@ -1251,14 +1209,8 @@ function QuickActionsHome({
 
   return (
     <section aria-labelledby="home-actions-heading" data-tour-id={TOUR_TARGET_IDS.HOME_QUICK_ACTIONS}>
-      {/* Canonical section header. "See all" opens the More sheet rather than
-          navigating, which is why this passes onAction instead of href. */}
-      <PageSectionHeader
-        id="home-actions-heading"
-        title="Suggestions for you"
-        onAction={secondary.length > 0 ? () => setMoreOpen(true) : undefined}
-        actionAriaLabel="See all suggestions"
-      />
+      {/* No See all action: there is no canonical Suggestions destination. */}
+      <PageSectionHeader id="home-actions-heading" title="Suggestions for you" />
 
       {/* Horizontal rail. Cards are a fixed width so roughly three fit on a
           standard phone with the fourth peeking, which is what signals the
@@ -1274,29 +1226,6 @@ function QuickActionsHome({
         ))}
       </div>
 
-      <Modal
-        open={moreOpen}
-        onOpenChange={setMoreOpen}
-        title="More suggestions"
-        description="Jump to another Mad Buddy feature."
-        variant="sheet"
-      >
-        {/* Same premium card language as the launcher row above. */}
-        <div className="grid grid-cols-3 gap-2.5 pt-1 sm:grid-cols-4">
-          {secondary.map((action) => (
-            <Link
-              key={action.href}
-              href={action.href}
-              onClick={() => setMoreOpen(false)}
-              aria-label={action.description}
-              className="focus-ring safe-motion glass-panel flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-[1.25rem] px-1 py-3 text-center transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
-            >
-              <FeatureIcon feature={action.featureIcon} size={30} decorative className={action.accent} />
-              <span className="line-clamp-2 w-full text-xs font-medium leading-tight">{action.label}</span>
-            </Link>
-          ))}
-        </div>
-      </Modal>
     </section>
   );
 }
@@ -1375,20 +1304,14 @@ const FILLER_PER_ROW = 4;
  * Measures the space left between where it sits and the bottom navigation, and
  * fills it with as many extra quick actions as cleanly fit. When real content
  * (an upcoming plan, Safe Arrival, more nearby Muddies…) grows into that space,
- * the count drops and those actions retract back into "More" — the parent
- * excludes whatever is promoted here, so nothing is ever listed twice.
+ * the count drops. Primary suggestions are excluded from this pool, so nothing
+ * is ever listed twice.
  *
  * The measurement uses this element's own document offset, which does NOT
  * depend on how many tiles it renders, so growing the filler can't feed back
  * into the measurement and oscillate.
  */
-function HomeGapFillerActions({
-  pool,
-  onPromotedChange
-}: {
-  pool: QuickAction[];
-  onPromotedChange: (count: number) => void;
-}) {
+function HomeGapFillerActions({ pool }: { pool: QuickAction[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [rows, setRows] = useState(0);
 
@@ -1432,10 +1355,6 @@ function HomeGapFillerActions({
   }, [pool.length]);
 
   const shown = useMemo(() => pool.slice(0, rows * FILLER_PER_ROW), [pool, rows]);
-
-  useEffect(() => {
-    onPromotedChange(shown.length);
-  }, [shown.length, onPromotedChange]);
 
   return (
     <div ref={containerRef}>

@@ -42,6 +42,7 @@
     "music-metadata": "^11.14.0",
     "next": "^16.2.10",
     "next-sitemap": "^4.2.3",
+    "ogl": "^1.0.11",
     "qrcode": "^1.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

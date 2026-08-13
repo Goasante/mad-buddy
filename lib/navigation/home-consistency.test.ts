@@ -17,12 +17,10 @@ const topEvents = read("components/events/top-events-home.tsx");
 
 describe("section headers", () => {
   it("uses the shared component everywhere", () => {
-    // Near, My Plans (+ empty), My Upcoming (Plans + Events lifecycle,
-    // Stage C -- conditional on an Event being present), Suggestions
-    // (+ first-time). "What's Popping" (Ranked Events Discovery) lives in
+    // Near, My Plans (+ empty), and Suggestions (+ first-time). Trending lives in
     // its own module component, counted below rather than here.
     const uses = home.match(/<PageSectionHeader/g) ?? [];
-    expect(uses.length).toBe(6);
+    expect(uses.length).toBe(5);
     expect(moments).toContain("<PageSectionHeader");
     expect(topEvents).toContain("<PageSectionHeader");
   });
@@ -47,25 +45,24 @@ describe("section headers", () => {
   });
 
   it("carries the approved titles", () => {
-    for (const title of ["Near", "My Plans", "My Upcoming", "Suggestions for you"]) {
+    for (const title of ["Near", "My Plans", "Suggestions for you"]) {
       expect(home, `missing section: ${title}`).toContain(`title="${title}"`);
     }
     expect(moments).toContain('title="Moments"');
-    expect(topEvents).toContain(`title="What's Popping"`);
+    expect(topEvents).toContain(`title="Trending"`);
   });
 
   it("never labels two Home sections as the same kind of upcoming", () => {
     // "Upcoming Plans" next to ranked "Upcoming Events" read as variants of
     // one another (Ranked Events Discovery). Personal commitments are now
-    // "My Plans"; discovery is "What's Popping".
+    // "My Plans"; discovery is "Trending".
     expect(home).not.toContain('title="Upcoming Plans"');
     expect(home).not.toContain('title="Upcoming Events"');
   });
 
-  it("shows My Upcoming only once an Event is actually in the agenda", () => {
-    // A Plans-only viewer, which is most of them, must not see a second
-    // plainer list duplicating what the PlanStack above already shows.
-    expect(home).toContain('agendaItems.some((item) => item.kind === "event")');
+  it("renders one personal agenda section", () => {
+    expect(home).not.toContain('title="My Upcoming"');
+    expect(home).toContain("<PlanStack plans={agendaItems}");
   });
 
   it("hides the action when there is nothing to see", () => {
@@ -148,7 +145,7 @@ describe("loading states", () => {
     // the HTML and therefore cannot flash.
     expect(home).toContain("loadNearbyFriends()");
     expect(home).toContain("animate-pulse");
-    for (const prop of ["smartCard={smartCard}", "upcomingPlans={", "moments={"]) {
+    for (const prop of ["smartCard={smartCard}", "agendaItems={", "moments={"]) {
       expect(page, `${prop} should be server-rendered`).toContain(prop);
     }
   });
@@ -275,5 +272,37 @@ describe("performance", () => {
     // One shared context, resolved once by AppShell.
     expect(home).toContain("useUnreadNotifications()");
     expect(home).not.toContain("/api/notifications/unread-count");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Home section order
+// ---------------------------------------------------------------------------
+
+describe("Trending sits above My Plans", () => {
+  const home = readFileSync(join(process.cwd(), "components/dashboard/dashboard-page.tsx"), "utf8");
+
+  /**
+   * Discovery outranks recall. Trending Events are the thing you do not
+   * already know about; My Plans is a reminder of commitments you made
+   * yourself, so it reads better underneath.
+   */
+  it("renders Top Events before the plan stack", () => {
+    const trendingAt = home.indexOf("<TopEventsHome events={topEvents} />");
+    const plansAt = home.indexOf("<PlanStack plans={agendaItems}");
+    expect(trendingAt).toBeGreaterThan(-1);
+    expect(plansAt).toBeGreaterThan(-1);
+    expect(trendingAt).toBeLessThan(plansAt);
+  });
+
+  it("keeps both sections on Home", () => {
+    // Reordering must not drop either one.
+    expect((home.match(/<TopEventsHome/g) ?? []).length).toBe(1);
+    expect((home.match(/<PlanStack/g) ?? []).length).toBe(1);
+  });
+
+  it("keeps the Smart Card above both", () => {
+    const heroAt = home.indexOf("<SmartCardHero card={smartCard} />");
+    expect(heroAt).toBeLessThan(home.indexOf("<TopEventsHome events={topEvents} />"));
   });
 });

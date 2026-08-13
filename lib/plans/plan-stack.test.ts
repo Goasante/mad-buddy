@@ -143,4 +143,49 @@ describe("the host name fits", () => {
     // line was losing.
     expect(cta.slice(0, 500)).toContain("padding-inline: 0.75rem");
   });
+
+  it("keeps one horizontal card geometry through 320 to 430px", () => {
+    expect(css).toContain("@media (max-width: 26.875rem)");
+    const compact = css.slice(css.indexOf("@media (max-width: 26.875rem)"));
+    expect(compact.slice(0, 500)).not.toContain("flex-wrap: wrap");
+    expect(compact.slice(0, 500)).toContain("padding: 0.875rem");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// One stack, one card shape
+// ---------------------------------------------------------------------------
+
+describe("Plan and Event cards are the same size", () => {
+  const css = readFileSync(join(process.cwd(), "app/globals.css"), "utf8");
+  const stack = readFileSync(join(process.cwd(), "components/socialize/plan-stack.tsx"), "utf8");
+
+  /**
+   * A Plan card carries two rows an Event card does not -- the attendee
+   * avatars and the Going button -- so each sized to its own content and the
+   * stack changed shape as you swiped between them.
+   */
+  it("holds one minimum height on the shared shell", () => {
+    const shell = css.slice(css.indexOf(".linkr-plan {"), css.indexOf(".linkr-plan:hover"));
+    expect(shell).toContain("min-height:");
+  });
+
+  it("does not give the Event card its own height", () => {
+    // The fix belongs on the shared shell, not on one variant.
+    const eventCard = stack.slice(stack.indexOf("function EventAgendaCard"));
+    expect(eventCard).not.toContain("min-h-");
+    expect(eventCard).not.toContain("height:");
+  });
+
+  it("lets the Event body fill the shared height", () => {
+    const body = css.slice(css.indexOf(".linkr-plan-body {"), css.indexOf(".linkr-plan-date {"));
+    expect(body).toContain("flex: 1 1 auto");
+  });
+
+  it("keeps both kinds on the one card shell", () => {
+    // Neither variant may fork into its own container.
+    expect(stack).toContain("linkr-plan-body");
+    const eventCard = stack.slice(stack.indexOf("function EventAgendaCard"));
+    expect(eventCard).toContain("linkr-plan-body");
+  });
 });

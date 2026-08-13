@@ -225,8 +225,19 @@ describe("plan card", () => {
     // Motion lives on the card's own classes, disabled wholesale in the
     // reduced-motion block rather than per-utility on the element.
     expect(card).toContain("linkr-plan");
-    const rules = css.slice(css.indexOf(".linkr-plan {"));
-    expect(rules.slice(0, 5200)).toContain("prefers-reduced-motion");
+    // Asserted by RELATIONSHIP, not by distance in characters: this used to
+    // slice a fixed 5200-char window after `.linkr-plan {`, so adding any
+    // rule to the card pushed the reduced-motion block out of range and
+    // failed a test about motion for reasons that had nothing to do with it.
+    const reducedMotionBlocks = [...css.matchAll(/@media \(prefers-reduced-motion: reduce\)[^{]*\{([\s\S]*?)\n\}/g)];
+    // The card's transition AND its hover transform must both be disabled --
+    // matching the block alone passed while either one was still live.
+    expect(
+      reducedMotionBlocks.some((block) => /\.linkr-plan[,\s{]/.test(block[1]) && block[1].includes("transition: none"))
+    ).toBe(true);
+    expect(
+      reducedMotionBlocks.some((block) => block[1].includes(".linkr-plan:hover") && block[1].includes("transform: none"))
+    ).toBe(true);
   });
 
   it("shows plans as a stack rather than a half-read horizontal card", () => {

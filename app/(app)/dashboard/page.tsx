@@ -4,7 +4,6 @@ import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
 import { loadSafeArrivalJourneys } from "@/lib/safety/safe-arrival-service";
 import { loadUpcomingAgenda } from "@/lib/social/upcoming-agenda";
-import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -35,7 +34,7 @@ export default async function DashboardPage() {
   // this page's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
   const admin = createSupabaseAdminClient();
-  const [access, profile, statusResult, upcoming, agendaItems, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents] = user
+  const [access, profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -44,11 +43,6 @@ export default async function DashboardPage() {
           .select("availability_type, activity_type, custom_text, expires_at")
           .eq("user_id", user.id)
           .maybeSingle(),
-        loadUpcomingPlans(user.id, 8),
-        // "My Upcoming" (Plans + Events lifecycle, Stage C): a SEPARATE load
-        // from loadUpcomingPlans above, not a replacement -- upcoming.plans
-        // still feeds weekendPlanCount below and the existing Plan-only
-        // section elsewhere on Home, both untouched.
         loadUpcomingAgenda(user.id, 8),
         supabase
           .from("profiles")
@@ -86,7 +80,7 @@ export default async function DashboardPage() {
         // the two agree on rank without Home paying for 100 rows.
         getRankedUpcomingEvents(user.id, { limit: HOME_RANKED_EVENTS_LIMIT })
       ])
-    : [null, null, null, { plans: [], hasMore: false }, [], null, null, {}, false, false, null, 0, null, null, [], [], []];
+    : [null, null, null, { items: [], hasMore: false }, null, null, {}, false, false, null, 0, null, null, [], [], []];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -123,7 +117,9 @@ export default async function DashboardPage() {
         // Plans already starting inside the weekend window, so the weekend
         // card can say "your weekend is filling up" rather than guessing.
         weekendPlanCount: isWeekendPlanningWindow(now)
-          ? (upcoming?.plans ?? []).filter((plan) => isWeekendPlanningWindow(new Date(plan.startAt))).length
+          ? (agenda?.items ?? []).filter(
+              (item) => item.kind === "plan" && isWeekendPlanningWindow(new Date(item.startAt))
+            ).length
           : 0,
         // Nearby is fetched client-side after mount, so the server cannot know
         // the live count. The nearby card therefore only claims a Muddy is
@@ -149,9 +145,7 @@ export default async function DashboardPage() {
       initialStatusAvailability={hasActiveStatus ? status?.availability_type : undefined}
       initialStatusActivity={hasActiveStatus ? status?.activity_type ?? null : null}
       initialStatusNote={hasActiveStatus ? status?.custom_text ?? "" : ""}
-      upcomingPlans={upcoming?.plans ?? []}
-      hasMorePlans={upcoming?.hasMore ?? false}
-      agendaItems={agendaItems ?? []}
+      agendaItems={agenda?.items ?? []}
       glowColorByFriendId={glowColorByFriendId}
       safeArrival={
         safeArrival
