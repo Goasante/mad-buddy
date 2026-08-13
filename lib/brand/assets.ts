@@ -49,10 +49,10 @@ export type BrandNavigationIconName = "linkr" | "upfor";
 export const brandNavigationIcons = {
   linkr: {
     active: { src: "/icons/navigation/linkr-active.png", width: 64, height: 64 },
-    inactive: { src: "/icons/navigation/linkr-inactive.png", width: 64, height: 64 }
+    inactive: { src: "/icons/navigation/linkr-inactive.png", width: 62, height: 58 }
   },
   upfor: {
     active: { src: "/icons/navigation/upfor-active.png", width: 64, height: 64 },
-    inactive: { src: "/icons/navigation/upfor-inactive.png", width: 64, height: 64 }
+    inactive: { src: "/icons/navigation/upfor-inactive.png", width: 61, height: 62 }
   }
 } as const satisfies Record<BrandNavigationIconName, Record<"active" | "inactive", BrandAsset>>;
