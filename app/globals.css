@@ -2608,13 +2608,6 @@ select {
   position: relative;
   display: flex;
   height: 100%;
-  /* ONE HEIGHT FOR BOTH KINDS.
-     A Plan card carries two rows an Event card does not -- the attendee
-     avatars and the Going button -- so each sized to its own content and the
-     stack visibly changed shape as you swiped between them. Cards in one
-     stack are the same object at different moments, so they hold one height
-     and the shorter kind simply has more air. */
-  min-height: 9.25rem;
   overflow: hidden;
   border-radius: 1.5rem;
   background: linear-gradient(
@@ -2962,7 +2955,12 @@ select {
   position: relative;
   /* The cards are absolutely positioned so they overlap, which takes them out
      of flow — the container carries the height. */
-  min-height: 8.5rem;
+  /* ONE HEIGHT FOR BOTH KINDS: a Plan card has two rows an Event card does
+     not (attendee faces and the Going button), so sizing to content made the
+     stack change shape as you swiped. The height lives HERE, not on the card:
+     a min-height on the card made it taller than the box holding it, so it
+     overflowed and its own row was squeezed instead. */
+  min-height: 10.5rem;
   touch-action: pan-y;
 }
 

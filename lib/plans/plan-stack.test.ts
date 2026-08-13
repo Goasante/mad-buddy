@@ -164,9 +164,25 @@ describe("Plan and Event cards are the same size", () => {
    * avatars and the Going button -- so each sized to its own content and the
    * stack changed shape as you swiped between them.
    */
-  it("holds one minimum height on the shared shell", () => {
-    const shell = css.slice(css.indexOf(".linkr-plan {"), css.indexOf(".linkr-plan:hover"));
-    expect(shell).toContain("min-height:");
+  it("holds one minimum height on the stack container", () => {
+    // The cards are absolutely positioned, so the CONTAINER owns the height.
+    // Putting it on the card made the card taller than the box holding it:
+    // it overflowed, and its own row was squeezed to fit.
+    const container = stripComments(css).slice(
+      stripComments(css).indexOf(".plan-stack {"),
+      stripComments(css).indexOf(".plan-stack-card {")
+    );
+    expect(container).toContain("min-height:");
+  });
+
+  it("does not put a competing height on the card itself", () => {
+    const shell = stripComments(css).slice(
+      stripComments(css).indexOf(".linkr-plan {"),
+      stripComments(css).indexOf(".linkr-plan:hover")
+    );
+    expect(shell).not.toContain("min-height:");
+    // The card still fills whatever the container gives it.
+    expect(shell).toContain("height: 100%");
   });
 
   it("does not give the Event card its own height", () => {
