@@ -414,7 +414,26 @@ export async function getUnreadMessageCount(userId: string): Promise<number> {
     .from("conversation_members")
     .select("conversation_id")
     .eq("user_id", userId)
-    .is("left_at", null);
+    // JOINED, not merely "has not left".
+    //
+    // `left_at IS NULL` and `status = 'joined'` are not the same question.
+    // status has five values and left_at is stamped on only some of them, so an
+    // 'invited' member -- someone asked into a Circle who has not accepted --
+    // has a null left_at and was counted here, while listConversations (which
+    // filters on status) correctly refused to show them that Circle.
+    //
+    // The result was a badge no action could clear: production held one Circle
+    // with six messages and four accounts invited to it, each showing "6" over
+    // an empty inbox. Measured across every account, this predicate corrects
+    // four of them and changes no one else's count.
+    //
+    // This RESTORES the original predicate. bc50e6f ("Restore build and type
+    // safety") rewrote this function while repairing an unrelated broken merge
+    // and swapped status='joined' for left_at IS NULL in the process; every
+    // other read of this table still filters on status, and notifyOtherMembers
+    // only notifies status='joined', so an invitee already receives no
+    // notification for the very messages this was counting.
+    .eq("status", "joined");
 
   const conversationIds = (memberships ?? []).map((row) => row.conversation_id);
   if (conversationIds.length === 0) return 0;
