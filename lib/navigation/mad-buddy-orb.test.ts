@@ -81,7 +81,14 @@ describe("floating create menu removal", () => {
 
   it("keeps the desktop header create menu, which was not in scope", () => {
     // The brief replaced the CENTRE navigation architecture only.
-    expect(shell).toContain("const createActions");
+    //
+    // Asserts the menu still EXISTS rather than one variable spelling. The
+    // list was renamed to createActionDefinitions when the shell began
+    // filtering it against the paused-feature list -- the menu is intact, and
+    // pinning the old identifier would have made a rename look like a
+    // regression while a genuine deletion still passed.
+    expect(shell).toMatch(/createActionDefinitions|const createActions/);
+    expect(shell).toContain("visibleCreateActions.map((action)");
   });
 
   it("retires the nav-create tour target", () => {

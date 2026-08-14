@@ -331,6 +331,18 @@ function AppShellInner({
   const visibleNavigationItems = showAdminLink
     ? [...enabledNavigationItems, { href: "/admin" as const, label: "Admin", icon: Gauge }]
     : enabledNavigationItems;
+  /**
+   * The Create menu obeys the same pause list as the navigation.
+   *
+   * A paused feature was removed from the nav but kept its entry here, so with
+   * Moments off the Create menu still offered "Share a Moment" -- a CTA whose
+   * only outcome is /moments redirecting straight back out. Filtering both
+   * from one list means pausing a feature closes every door to it, not just
+   * the one in the sidebar.
+   */
+  const visibleCreateActions = createActionDefinitions.filter(
+    (action) => !hiddenNavigationHrefs.some((href) => String(action.href).startsWith(href))
+  );
   // Whether the shared AppHeader renders for this route — decides how much
   // top offset <main> reserves below. Kept in sync with AppHeader's own check
   // via the shared PAGES_WITH_OWN_HEADER list (see hasOwnHeader above), so the
@@ -400,6 +412,7 @@ function AppShellInner({
           currentUsername={currentUsername}
           currentAvatarUrl={currentAvatarUrl}
           showAdminLink={showAdminLink}
+          createActions={visibleCreateActions}
         />
           <main
           id="app-main-content"
@@ -865,11 +878,20 @@ function AccountMenuItem({
 function AppHeader({
   currentUsername,
   currentAvatarUrl,
-  showAdminLink
+  showAdminLink,
+  createActions: visibleCreateActions
 }: {
   currentUsername: string | null;
   currentAvatarUrl: string | null;
   showAdminLink: boolean;
+  /**
+   * Already filtered by the shell's pause list, so a paused feature cannot be
+   * offered here. Passed in rather than read from the module constant: the
+   * flags live on the shell, and a second copy of that logic in this component
+   * is exactly how the nav and the Create menu drifted apart in the first
+   * place.
+   */
+  createActions: typeof createActionDefinitions;
 }) {
   const pathname = usePathname();
   // NO useDismissOnBack here either — same reason as MobileAccountMenu below:
@@ -929,7 +951,7 @@ function AppHeader({
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
               <DropdownMenu.Content side="bottom" align="end" sideOffset={8} collisionPadding={8} className={FLYOUT_CONTENT_CLASSNAME}>
-                {createActions.map((action) => (
+                {visibleCreateActions.map((action) => (
                   <DropdownMenu.Item
                     key={action.title}
                     asChild
@@ -1091,7 +1113,7 @@ function AccountAvatar({ src, initial }: { src: string | null; initial: string }
   return <UserAvatar src={resolvedSrc} name={initial} size="sm" decorative className="h-full w-full" />;
 }
 
-const createActions: Array<{
+const createActionDefinitions: Array<{
   href: ComponentProps<typeof Link>["href"];
   title: string;
   description: string;

@@ -26,6 +26,7 @@ import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { startsNewDay, startsNewRun } from "@/lib/messaging/conversation-presence";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { useTransientFeedback } from "@/hooks/use-transient-feedback";
 import type { GroupDetailView, GroupInviteCandidate, GroupMemberView } from "@/lib/groups/types";
 import {
   MEMBER_ACTION_LABELS,
@@ -65,7 +66,9 @@ export function GroupDetailPage({
   // Which message's photo is open full-screen. The id (not the object) so a
   // realtime refresh cannot leave a stale copy of the message on screen.
   const [viewerMessageId, setViewerMessageId] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState("");
+  /* Same rule as the direct inbox: "Sent", "Joined" and the like clear
+     themselves, while a failure stays until something replaces it. */
+  const [feedback, setFeedback] = useTransientFeedback();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [candidates, setCandidates] = useState(group.inviteCandidates);
   const [isPending, startTransition] = useTransition();
@@ -208,20 +211,49 @@ export function GroupDetailPage({
         scheduleRefresh
       );
 
+    /**
+     * A dropped socket replays nothing, so reaching SUBSCRIBED again is the
+     * only signal that messages may have been missed.
+     *
+     * Without this a Circle chat went quietly stale: the phone sleeps, the
+     * WebSocket dies without ever reporting CLOSED, and the thread keeps
+     * showing whatever it had when the screen went off. Reopening the app was
+     * the only cure -- the same restart-to-see-your-messages problem the direct
+     * inbox had. The first SUBSCRIBED is the normal start of a fresh
+     * subscription and needs no refresh; every one after it is a reconnect.
+     */
+    let hasSubscribedOnce = false;
+
     // Authenticate the socket before subscribing: this filter is on an
     // RLS-protected table, and a socket carrying only the publishable key sees
     // nothing through RLS and is closed with CHANNEL_ERROR.
     void authenticateRealtime(supabase).then(() => {
       if (disposed) return;
-      channel.subscribe();
+      channel.subscribe((status) => {
+        if (disposed || status !== "SUBSCRIBED") return;
+        if (hasSubscribedOnce) scheduleRefresh();
+        hasSubscribedOnce = true;
+      });
     });
+
+    /* The correctness net for what Realtime cannot see: a phone that slept
+       through a message, or a restrictive network that drops the socket
+       without surfacing an error. Only fires on a real resume, never on a
+       timer, so it costs nothing while the app sits idle. */
+    const resumeRefresh = () => {
+      if (document.visibilityState === "visible") scheduleRefresh();
+    };
+    document.addEventListener("visibilitychange", resumeRefresh);
+    window.addEventListener("focus", resumeRefresh);
 
     return () => {
       disposed = true;
       if (refreshTimer) clearTimeout(refreshTimer);
+      document.removeEventListener("visibilitychange", resumeRefresh);
+      window.removeEventListener("focus", resumeRefresh);
       void supabase.removeChannel(channel);
     };
-  }, [group.id]);
+  }, [group.id, setFeedback]);
 
   function invite(candidate: GroupInviteCandidate) {
     startTransition(async () => {
