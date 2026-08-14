@@ -11,6 +11,8 @@ import {
   planPhase,
   planTierLimitsFor,
   resolvePollWinner,
+  PLAN_DEFAULT_ACTIVE_MS,
+  PLAN_NEAR_START_MS,
   resolveRsvp,
   unscheduledDeadlineMs,
   UNSCHEDULED_PLAN_GRACE_DAYS,
@@ -127,18 +129,59 @@ describe("plan lifecycle: dated plans", () => {
     expect(isUpcomingPlan({ status: "confirmed", startAt: iso(NOW + DAY) }, NOW)).toBe(true);
   });
 
-  it("is past once it has started, when it has no end time", () => {
+  it("is happening, not past, just after it starts with no end time", () => {
     // The production shape: every dated plan has a null end_at.
-    expect(planPhase({ status: "confirmed", startAt: iso(NOW - 1) }, NOW)).toBe("past");
-    expect(isPastPlan({ status: "confirmed", startAt: iso(NOW - 1) }, NOW)).toBe(true);
+    //
+    // This previously expected "past" immediately, on the reasoning that
+    // inventing a duration is a guess. That made "is this plan on right now"
+    // unanswerable -- and a plan that is on is exactly when its people need to
+    // say they have arrived. It is now active for PLAN_DEFAULT_ACTIVE_MS.
+    // The invariant that matters is unchanged and asserted below: it has not
+    // finished, so it does not leave Home.
+    const plan = { status: "confirmed" as const, startAt: iso(NOW - 1) };
+    expect(planPhase(plan, NOW)).toBe("active");
+    expect(isPastPlan(plan, NOW)).toBe(false);
+    expect(isUpcomingPlan(plan, NOW)).toBe(true);
   });
 
-  it("stays upcoming mid-way through when it HAS an end time", () => {
+  it("is past once the fallback window has elapsed, with no end time", () => {
+    const plan = { status: "confirmed" as const, startAt: iso(NOW - PLAN_DEFAULT_ACTIVE_MS - 1) };
+    expect(planPhase(plan, NOW)).toBe("past");
+    expect(isPastPlan(plan, NOW)).toBe(true);
+  });
+
+  it("is still on mid-way through when it HAS an end time", () => {
     // A plan running 7-11pm is still on at 8. The old helper called it past
     // the moment it began, which took it off Home while people were at it.
+    // THE INVARIANT, not the label: not past, and still on Home.
     const plan = { status: "confirmed" as const, startAt: iso(NOW - DAY), endAt: iso(NOW + DAY) };
-    expect(planPhase(plan, NOW)).toBe("upcoming");
+    expect(planPhase(plan, NOW)).toBe("active");
     expect(isPastPlan(plan, NOW)).toBe(false);
+    expect(isUpcomingPlan(plan, NOW)).toBe(true);
+  });
+
+  it("an explicit end time always beats the fallback", () => {
+    // A long plan must not be cut short at three hours.
+    const longPlan = { status: "confirmed" as const, startAt: iso(NOW - 5 * 60 * 60 * 1000), endAt: iso(NOW + DAY) };
+    expect(planPhase(longPlan, NOW)).toBe("active");
+    // ...and a deliberately short one must not be kept alive to three hours.
+    const shortPlan = { status: "confirmed" as const, startAt: iso(NOW - 60 * 60 * 1000), endAt: iso(NOW - 1) };
+    expect(planPhase(shortPlan, NOW)).toBe("past");
+  });
+
+  it("becomes near_start exactly 45 minutes before it begins", () => {
+    const at = (offset: number) => planPhase({ status: "confirmed", startAt: iso(NOW + offset) }, NOW);
+    expect(at(PLAN_NEAR_START_MS)).toBe("near_start");
+    expect(at(PLAN_NEAR_START_MS + 1)).toBe("upcoming");
+    expect(at(60_000)).toBe("near_start");
+  });
+
+  it("keeps a near-start or active plan on Home", () => {
+    // Narrowing isUpcomingPlan to phase === "upcoming" would have made a plan
+    // disappear 45 minutes before it started and stay gone while it was
+    // happening -- the moments it matters most.
+    expect(isUpcomingPlan({ status: "confirmed", startAt: iso(NOW + 60_000) }, NOW)).toBe(true);
+    expect(isUpcomingPlan({ status: "confirmed", startAt: iso(NOW - 60_000) }, NOW)).toBe(true);
   });
 
   it("is past once the end time passes", () => {
@@ -153,9 +196,15 @@ describe("plan lifecycle: dated plans", () => {
   });
 
   it("is exact at the boundary", () => {
-    // At exactly the start, with no end, the plan has begun.
-    expect(planPhase({ status: "confirmed", startAt: iso(NOW) }, NOW)).toBe("past");
-    expect(planPhase({ status: "confirmed", startAt: iso(NOW + 1) }, NOW)).toBe("upcoming");
+    // At exactly the start the plan has begun -- which the old assertion
+    // called "past" while its own comment said "has begun". Begun is now
+    // active, and the comment and the expectation finally agree.
+    expect(planPhase({ status: "confirmed", startAt: iso(NOW) }, NOW)).toBe("active");
+    // One millisecond before the start it has not begun. It is inside the
+    // 45-minute travel window, so near_start rather than upcoming.
+    expect(planPhase({ status: "confirmed", startAt: iso(NOW + 1) }, NOW)).toBe("near_start");
+    // Comfortably outside that window it is simply upcoming.
+    expect(planPhase({ status: "confirmed", startAt: iso(NOW + PLAN_NEAR_START_MS + 1) }, NOW)).toBe("upcoming");
   });
 });
 

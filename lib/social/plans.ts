@@ -147,6 +147,25 @@ export function isTerminalPlanStatus(status: PlanStatus): boolean {
  */
 export const UNSCHEDULED_PLAN_GRACE_DAYS = 14;
 
+/**
+ * How long before a plan starts that travel talk becomes reasonable.
+ *
+ * THE canonical window -- 45 minutes, matching ARRIVAL_SNOOZE_MS in the Events
+ * arrival system so the two features do not disagree about what "nearly time"
+ * means. Every surface reads this constant; nobody re-types the number.
+ */
+export const PLAN_NEAR_START_MS = 45 * 60 * 1000;
+
+/**
+ * How long a plan with no stated end time is treated as happening.
+ *
+ * A FALLBACK, never a preference: a plan carrying a real end time is governed
+ * by that end time. This exists only so "is it on right now" has an answer for
+ * the many plans that state a start and nothing else. Three hours covers an
+ * ordinary evening without leaving a plan "active" the next morning.
+ */
+export const PLAN_DEFAULT_ACTIVE_MS = 3 * 60 * 60 * 1000;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -159,8 +178,18 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * one place and past in another.
  */
 export type PlanPhase =
-  /** Dated, still to happen. */
+  /** Dated, still to happen, and not yet close enough to travel to. */
   | "upcoming"
+  /**
+   * Within PLAN_NEAR_START_MS of the start. Close enough that "on my way" and
+   * "running late" are real things to say, but the plan has not begun.
+   */
+  | "near_start"
+  /**
+   * Happening now: between the start and the end (or the fallback duration for
+   * a plan that never stated an end).
+   */
+  | "active"
   /** Dated and finished, or terminal by status. */
   | "past"
   /** No date yet, still inside the grace window. */
@@ -213,14 +242,26 @@ export function planPhase(plan: PlanTiming, nowMs = Date.now()): PlanPhase {
   // END TIME WINS WHERE THERE IS ONE. A plan running 7pm-11pm is still on at
   // 8pm, and treating it as past the moment it starts is what made a plan
   // vanish from Upcoming while people were at it.
-  const endMs = parseMs(plan.endAt);
-  if (endMs !== null) return nowMs >= endMs ? "past" : "upcoming";
-
-  // No end time -- which is every dated plan in production today. Falls back
-  // to the start, so it becomes past once it has begun. Deliberately no grace
-  // period: a start-only plan carries no information about how long it runs,
-  // and inventing a duration would be a guess applied to every plan alike.
-  return nowMs >= startMs ? "past" : "upcoming";
+  /* THE FALLBACK DURATION, and why it now exists.
+   *
+   * This used to return "past" the moment a start-only plan began, on the
+   * reasoning that inventing a duration is a guess. That reasoning holds for
+   * deciding when a plan has FINISHED -- and it is preserved: a plan with a
+   * real end time is governed by that end time, always.
+   *
+   * But it made "is this plan happening right now" unanswerable, and a plan
+   * that is happening is exactly when its people need to say "I'm here". The
+   * old behaviour meant a plan was never active for even one second, so
+   * arrival language could never legitimately appear.
+   *
+   * So the guess is confined to the one question it must answer, using the
+   * same window the messaging layer already documented, and an explicit end
+   * time always wins over it. */
+  const endMs = parseMs(plan.endAt) ?? startMs + PLAN_DEFAULT_ACTIVE_MS;
+  if (nowMs >= endMs) return "past";
+  if (nowMs >= startMs) return "active";
+  if (startMs - nowMs <= PLAN_NEAR_START_MS) return "near_start";
+  return "upcoming";
 }
 
 /**
@@ -244,7 +285,17 @@ export function isPastPlan(plan: PlanTiming, nowMs = Date.now()): boolean {
  * answer to it.
  */
 export function isUpcomingPlan(plan: PlanTiming, nowMs = Date.now()): boolean {
-  return planPhase(plan, nowMs) === "upcoming";
+  /* STILL TO COME, which now spans three phases rather than one.
+   *
+   * Widening PlanPhase split what used to be a single "upcoming" into
+   * upcoming / near_start / active. This boolean must keep its ORIGINAL
+   * meaning -- "a dated plan that has not finished" -- because Home's My Plans
+   * is built from it. Narrowing it to phase === "upcoming" would have made a
+   * plan vanish from Home 45 minutes before it started and stay gone while it
+   * was happening: precisely the moments it matters most.
+   */
+  const phase = planPhase(plan, nowMs);
+  return phase === "upcoming" || phase === "near_start" || phase === "active";
 }
 
 /** Undated and still inside its grace window. */

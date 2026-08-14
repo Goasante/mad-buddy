@@ -30,8 +30,14 @@ describe("single-row composer", () => {
 
   it("does not show the sender their own avatar", () => {
     // You know who you are; the row needs that width for the message.
+    //
+    // Scoped to the COMPOSER ROW. The rule is about the input row's width, not
+    // a ban on the component: the mention picker shows member avatars, which
+    // is how you tell two people with similar names apart. Asserting against
+    // the whole file failed for that unrelated and correct usage.
     expect(composer).not.toContain("composer-avatar");
-    expect(composer).not.toContain("<UserAvatar");
+    const row = composer.slice(composer.indexOf('<form'), composer.indexOf("</form>"));
+    expect(row).not.toContain("<UserAvatar");
   });
 
   it("keeps the row clear of the device's bottom inset", () => {
@@ -58,10 +64,12 @@ describe("the field is genuinely multi-line", () => {
   });
 
   it("sends on Enter and breaks the line on Shift+Enter", () => {
-    const handler = composer.slice(
-      composer.indexOf("function handleKeyDown"),
-      composer.indexOf("function handleKeyDown") + 400
-    );
+    // The whole handler, not its first 400 characters: the mention picker
+    // claims Enter/Arrow/Escape first (so Enter chooses a person rather than
+    // sending a half-typed "@am"), which pushed the send branch past that
+    // arbitrary window. The send behaviour itself is unchanged.
+    const start = composer.indexOf("function handleKeyDown");
+    const handler = composer.slice(start, composer.indexOf("\n  }", composer.indexOf("sendText();", start)));
     expect(handler).toContain('event.key !== "Enter" || event.shiftKey');
     expect(handler).toContain("event.preventDefault()");
     expect(handler).toContain("sendText()");
@@ -95,8 +103,13 @@ describe("tool rail", () => {
   it("offers mentions only in group conversations", () => {
     // A DM has nobody to disambiguate, so the control is absent there
     // rather than present and inert.
-    expect(composer).toContain("{isGroup ? (");
-    const mentionBlock = composer.slice(composer.indexOf("{isGroup ? ("));
+    //
+    // The condition gained a second clause when mentions became real: a Circle
+    // with no other members has nobody to offer either, so the control needs
+    // candidates as well as isGroup. Asserting the invariant rather than the
+    // old exact spelling.
+    expect(composer).toContain("isGroup && mentionCandidates.length > 0");
+    const mentionBlock = composer.slice(composer.indexOf("isGroup && mentionCandidates.length > 0"));
     expect(mentionBlock).toContain('aria-label="Mention someone"');
   });
 

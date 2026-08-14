@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowUp, AtSign, Loader2, Mic, Pause, Play, Send, Square, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { sendMessageAction } from "@/app/(app)/messaging-actions";
 import {
   AttachmentPicker,
@@ -16,6 +16,17 @@ import { useVoiceUpload } from "@/hooks/use-voice-upload";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 import { cn } from "@/lib/utils";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import {
+  applyMentionSelection,
+  filterMentionCandidates,
+  findMentionTrigger,
+  mentionUserIdsForSend,
+  reconcileMentions,
+  type MentionCandidate,
+  type MentionTrigger,
+  type StructuredMention
+} from "@/lib/messaging/mentions";
 
 type MessageComposerProps = {
   conversationId: string;
@@ -29,6 +40,15 @@ type MessageComposerProps = {
    * affordance is offered: a DM has nobody to disambiguate.
    */
   isGroup?: boolean;
+  /**
+   * Who may be mentioned here, from the Circle's own canonical member list.
+   *
+   * Passed in rather than fetched: the Circle page has already loaded and
+   * authorised its members, and a second membership query in the composer
+   * would be a second authority that could disagree with the first. Empty or
+   * absent simply means no picker -- which is the correct state for a DM.
+   */
+  mentionCandidates?: readonly MentionCandidate[];
 };
 
 /** Tallest the field grows before it scrolls internally (about six lines). */
@@ -54,9 +74,24 @@ export function MessageComposer({
   onSent,
   voiceRecorderConfig,
   className,
-  isGroup = false
+  isGroup = false,
+  mentionCandidates = []
 }: MessageComposerProps) {
   const [draft, setDraft] = useState("");
+  /**
+   * Mentions chosen from the picker, as ids.
+   *
+   * THE IDENTITY, held apart from the text. The draft contains "@Ama" because
+   * that is what a person reads; this list contains her user id because that
+   * is who she is. Sending posts the ids -- a rename between typing and
+   * sending cannot redirect the mention, and two people called Ama are never
+   * ambiguous.
+   */
+  const [mentions, setMentions] = useState<StructuredMention[]>([]);
+  /** Live `@` trigger at the caret, or null when the picker should be shut. */
+  const [trigger, setTrigger] = useState<MentionTrigger | null>(null);
+  /** Keyboard highlight within the suggestion list. */
+  const [activeMention, setActiveMention] = useState(0);
   const [attachment, setAttachment] = useState<SelectedAttachment | null>(null);
   const [uploadState, setUploadState] = useState<AttachmentUploadLifecycle>("idle");
   const [isPending, startTransition] = useTransition();
@@ -80,6 +115,25 @@ export function MessageComposer({
    * value, which is exactly how a double tap becomes two voice messages.
    */
   const sendingRef = useRef(false);
+
+  /**
+   * True while the preview is being torn down on purpose.
+   *
+   * THE BUG THIS FIXES. Sending or discarding a take calls voice.cancel(),
+   * which revokes the preview's object URL. The <audio> element is still
+   * mounted with src pointing at that URL for the remainder of the render, and
+   * revoking a URL out from under a live media element makes the browser fire
+   * an `error` event on it. That reached onError and reported "That recording
+   * could not be played back on this device."
+   *
+   * So the message appeared on a SUCCESSFUL send, describing a decode failure
+   * that never happened -- which is exactly why the same recording played
+   * perfectly once it had been uploaded. The recording was always fine.
+   *
+   * A ref rather than state: the error event arrives in the same commit as the
+   * teardown, before any re-render could deliver a new state value.
+   */
+  const tearingDownPreviewRef = useRef(false);
 
   /**
    * Set when Send is pressed DURING recording.
@@ -126,7 +180,80 @@ export function MessageComposer({
 
   const busySending = isPending || voiceUpload.state.kind === "uploading" || voiceUpload.state.kind === "finalizing";
 
+  /** Candidates for the live trigger. Empty when the picker is shut. */
+  const mentionSuggestions = useMemo(
+    () => (trigger ? filterMentionCandidates(mentionCandidates, trigger.query) : []),
+    [mentionCandidates, trigger]
+  );
+  const mentionPickerOpen = Boolean(trigger) && mentionCandidates.length > 0;
+
+  /**
+   * Re-read the trigger and reconcile mentions on every keystroke.
+   *
+   * Reconciling here is what keeps structured state honest: deleting the
+   * characters of "@Ama" removes her id, so a name that is no longer in the
+   * message cannot notify anybody. It only ever REMOVES -- a mention is never
+   * inferred from text, because that is the name-matching this design avoids.
+   */
+  function handleDraftChange(event: React.ChangeEvent<HTMLTextAreaElement>) {
+    const value = event.target.value;
+    setDraft(value);
+    setMentions((current) => reconcileMentions(value, current));
+    if (!isGroup || mentionCandidates.length === 0) return;
+    const next = findMentionTrigger(value, event.target.selectionStart ?? value.length);
+    setTrigger(next);
+    setActiveMention(0);
+  }
+
+  /** Insert the chosen member and remember who they actually are. */
+  function chooseMention(candidate: MentionCandidate) {
+    if (!trigger) return;
+    const { text, caret } = applyMentionSelection(draft, trigger, candidate);
+    setDraft(text);
+    setMentions((current) => [
+      ...current.filter((mention) => mention.userId !== candidate.userId),
+      { userId: candidate.userId, displayName: candidate.displayName }
+    ]);
+    setTrigger(null);
+    setActiveMention(0);
+    // Put the caret after the inserted name rather than leaving it where the
+    // half-typed query was.
+    requestAnimationFrame(() => {
+      const field = textareaRef.current;
+      if (!field) return;
+      field.focus();
+      field.setSelectionRange(caret, caret);
+    });
+  }
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // The picker owns these keys while it is open, so Enter chooses a person
+    // rather than sending a half-typed "@am".
+    if (mentionPickerOpen && mentionSuggestions.length > 0) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setActiveMention((index) => (index + 1) % mentionSuggestions.length);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setActiveMention((index) => (index - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+        return;
+      }
+      if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+        event.preventDefault();
+        chooseMention(mentionSuggestions[activeMention] ?? mentionSuggestions[0]);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        // Closes the picker only. The typed text stays, so Escape never
+        // costs somebody the sentence they were writing.
+        setTrigger(null);
+        return;
+      }
+    }
+
     if (event.key !== "Enter" || event.shiftKey) return;
     // Enter commits a candidate word in Japanese/Chinese/Korean input;
     // sending there would truncate the sentence being written.
@@ -146,7 +273,17 @@ export function MessageComposer({
     startTransition(async () => {
       try {
         const result = await withTimeout(
-          sendMessageAction({ conversationId, text, mediaId: attachment?.mediaId, clientMessageId }),
+          sendMessageAction({
+            conversationId,
+            text,
+            mediaId: attachment?.mediaId,
+            // Reconciled against the final text one last time, so a mention
+            // whose name was edited out between typing and sending is not
+            // posted. The server re-checks every id regardless -- this is
+            // hygiene, not authorization.
+            mentionUserIds: mentionUserIdsForSend(reconcileMentions(text, mentions), ""),
+            clientMessageId
+          }),
           { operation: "send message" }
         );
         onFeedback(result.message);
@@ -155,6 +292,8 @@ export function MessageComposer({
           return;
         }
         setDraft("");
+        setMentions([]);
+        setTrigger(null);
         setAttachment(null);
         setUploadState("idle");
         clientMessageIdRef.current = null;
@@ -170,16 +309,35 @@ export function MessageComposer({
     });
   }
 
-  const resetVoice = useCallback(() => {
-    audioRef.current?.pause();
+  /**
+   * Detach the preview element from its object URL before that URL dies.
+   *
+   * Order matters and is the whole fix: pause, drop the source, call load() so
+   * the element actually lets go, and only then let the controller revoke.
+   * Skipping this is what turned a successful send into a playback error.
+   */
+  const releasePreviewElement = useCallback(() => {
+    tearingDownPreviewRef.current = true;
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+      // Without load() the element keeps its old resource selection and can
+      // still raise an error for the URL that is about to be revoked.
+      audio.load();
+    }
     setPlaying(false);
     setPlayedSeconds(0);
+  }, []);
+
+  const resetVoice = useCallback(() => {
+    releasePreviewElement();
     // Cancelling must also cancel a pending send-on-stop, or discarding a
     // recording mid-finalization would send the thing you just discarded.
     sendOnNextTakeRef.current = false;
     voiceUpload.reset();
     voice.cancel();
-  }, [voice, voiceUpload]);
+  }, [releasePreviewElement, voice, voiceUpload]);
 
   /**
    * Uploads the take, then sends it as a message.
@@ -192,6 +350,19 @@ export function MessageComposer({
     async (recordingToSend: Parameters<typeof voiceUpload.upload>[0]) => {
       if (sendingRef.current) return;
       sendingRef.current = true;
+      /* Stop reviewing the moment sending starts.
+       *
+       * The take itself is deliberately kept until the server confirms -- a
+       * network failure must never cost someone the thing they just said -- but
+       * playback and its progress belong to reviewing, not sending. Leaving
+       * them running meant the bar carried on looking like a player, with a
+       * moving position, for the whole upload round trip. The object URL is
+       * untouched here: only the send's success path revokes it. */
+      audioRef.current?.pause();
+      setPlaying(false);
+      // Any error from the previous attempt is about a take that is now on its
+      // way; keeping it beside a spinner reads as a live failure.
+      onFeedback("");
       try {
         const prepared = (voiceUpload.state.kind === "ready"
           ? voiceUpload.state.attachment
@@ -209,11 +380,16 @@ export function MessageComposer({
           return;
         }
         clientMessageIdRef.current = null;
-        audioRef.current?.pause();
-        setPlaying(false);
-        setPlayedSeconds(0);
+        /* Clear the review UI at the success boundary, in the order that keeps
+         * the browser quiet: detach the <audio> from the object URL first, then
+         * let voice.cancel() revoke it. Reversing these two is what produced a
+         * playback error on a send that had just succeeded. */
+        releasePreviewElement();
         voiceUpload.reset();
         voice.cancel();
+        // A failed playback attempt on the previous take must not outlive the
+        // take itself.
+        onFeedback("");
         await onSent();
       } catch (error) {
         onFeedback(
@@ -225,7 +401,7 @@ export function MessageComposer({
         sendingRef.current = false;
       }
     },
-    [conversationId, onFeedback, onSent, voice, voiceUpload]
+    [conversationId, onFeedback, onSent, releasePreviewElement, voice, voiceUpload]
   );
 
   /**
@@ -235,6 +411,19 @@ export function MessageComposer({
    * waveform: decoding is presentation-only and resolves to null on failure,
    * so waiting for it would mean a decode error silently swallows the send.
    */
+  /**
+   * A fresh take re-arms error reporting.
+   *
+   * Without this the teardown flag would stay true after the first send and a
+   * genuinely undecodable later recording would fail silently -- trading a
+   * false alarm for a missing one.
+   */
+  useEffect(() => {
+    if (voice.state.kind === "preview") {
+      tearingDownPreviewRef.current = false;
+    }
+  }, [voice.state.kind]);
+
   useEffect(() => {
     if (!sendOnNextTakeRef.current) return;
     if (voice.state.kind !== "preview") return;
@@ -334,8 +523,15 @@ export function MessageComposer({
             onPause={() => setPlaying(false)}
             // Without this a decode failure is completely silent: the button
             // does nothing and reports nothing.
+            //
+            // But an error event is NOT proof of a bad recording. Tearing the
+            // preview down -- on send or on discard -- revokes the object URL,
+            // and the browser reports that as an error on the still-mounted
+            // element. Reporting it told people their recording was unplayable
+            // at the exact moment it had been sent successfully.
             onError={() => {
               setPlaying(false);
+              if (tearingDownPreviewRef.current) return;
               onFeedback("That recording could not be played back on this device.");
             }}
           />
@@ -399,7 +595,48 @@ export function MessageComposer({
   // IDLE: attachment, field, mention (groups), mic or send
   // ---------------------------------------------------------------------
   return (
-    <div className={cn("border-t border-border/70 bg-background/80", className)}>
+    <div className={cn("relative border-t border-border/70 bg-background/80", className)}>
+      {/* Mention picker.
+          Anchored directly above the composer and only as tall as it needs to
+          be -- not a modal, not a sheet, and never covering the conversation.
+          onMouseDown rather than onClick: the textarea's blur would close the
+          list before a click could land. */}
+      {mentionPickerOpen ? (
+        <div
+          role="listbox"
+          aria-label="Mention a member"
+          className="absolute inset-x-2 bottom-full z-30 mb-1 max-h-56 overflow-y-auto overscroll-contain rounded-xl border border-border/70 bg-card p-1 shadow-[0_12px_40px_hsl(var(--shadow)/0.28)]"
+        >
+          {mentionSuggestions.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-muted-foreground">No members match that name.</p>
+          ) : (
+            mentionSuggestions.map((candidate, index) => (
+              <button
+                key={candidate.userId}
+                type="button"
+                role="option"
+                aria-selected={index === activeMention}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  chooseMention(candidate);
+                }}
+                onMouseEnter={() => setActiveMention(index)}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left",
+                  index === activeMention ? "bg-secondary" : "hover:bg-secondary/60"
+                )}
+              >
+                <UserAvatar src={candidate.avatarUrl} name={candidate.displayName} size="sm" decorative />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">{candidate.displayName}</span>
+                  <span className="block truncate text-xs text-muted-foreground">@{candidate.username}</span>
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+
       <AttachmentPreview
         attachment={attachment}
         onRemove={() => {
@@ -425,8 +662,9 @@ export function MessageComposer({
           <textarea
             ref={textareaRef}
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={handleDraftChange}
             onKeyDown={handleKeyDown}
+            onBlur={() => setTrigger(null)}
             rows={1}
             placeholder={attachment ? "Add a caption" : placeholder}
             aria-label={attachment ? "Photo caption" : placeholder}
@@ -434,10 +672,21 @@ export function MessageComposer({
             disabled={isPending}
             className="composer-field"
           />
-          {isGroup ? (
+          {isGroup && mentionCandidates.length > 0 ? (
             <button
               type="button"
-              onClick={() => onFeedback("Mentions are coming to group chats soon.")}
+              onClick={() => {
+                // Types the trigger for the person rather than explaining it.
+                const field = textareaRef.current;
+                const next = `${draft}${draft.endsWith(" ") || draft === "" ? "" : " "}@`;
+                setDraft(next);
+                setTrigger(findMentionTrigger(next, next.length));
+                setActiveMention(0);
+                requestAnimationFrame(() => {
+                  field?.focus();
+                  field?.setSelectionRange(next.length, next.length);
+                });
+              }}
               disabled={isPending}
               aria-label="Mention someone"
               className="composer-tool"

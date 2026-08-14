@@ -30,7 +30,9 @@ import {
   listMessageableFriends,
   markConversationRead,
   openDirectConversation,
+  persistMentions,
   sendMessage,
+  setConversationHidden,
   setConversationPinned,
   type ChatMessageView,
   type ConversationView,
@@ -160,11 +162,45 @@ export async function setConversationPinnedAction(
   return setConversationPinned(userId, conversationId, pinned);
 }
 
+/**
+ * Hide a conversation from your own inbox, or restore it.
+ *
+ * Deliberately NOT called "delete": a direct conversation is shared, and the
+ * other participant keeps theirs untouched. The conversation returns by itself
+ * when somebody sends a real message.
+ */
+export async function setConversationHiddenAction(
+  conversationId: string,
+  hidden: boolean
+): Promise<MessagingActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  if (!uuidSchema.safeParse(conversationId).success) return { ok: false, message: "Not found." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  return setConversationHidden(userId, conversationId, hidden);
+}
+
 // ---------------------------------------------------------------------------
 // Edit / delete / react (spec §13, §14, §15)
 // ---------------------------------------------------------------------------
 
-export async function editMessageAction(messageId: string, text: string): Promise<MessagingActionState> {
+export async function editMessageAction(
+  messageId: string,
+  text: string,
+  /**
+   * Mentions as they stand after the edit, as ids.
+   *
+   * The COMPLETE set, not a delta: the caller sends who the message names
+   * now, and this reconciles the stored rows to match. Absent (the default)
+   * means "no structured mentions were supplied", which is how every existing
+   * caller keeps working -- their messages simply lose any mention whose name
+   * they edited away, and gain none.
+   */
+  mentionUserIds: readonly string[] = []
+): Promise<MessagingActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
   if (!uuidSchema.safeParse(messageId).success) return { ok: false, message: "Message not found." };
@@ -195,12 +231,65 @@ export async function editMessageAction(messageId: string, text: string): Promis
     return { ok: false, message: "This message can't be edited anymore." };
   }
 
+  const nextText = text.trim();
   const { error } = await admin
     .from("messages")
-    .update({ text_content: text.trim(), edited_at: new Date().toISOString() })
+    .update({ text_content: nextText, edited_at: new Date().toISOString() })
     .eq("id", messageId)
     .eq("sender_id", userId);
   if (error) return { ok: false, message: "Couldn't edit that message." };
+
+  /* Reconcile who this message names, in BOTH directions.
+   *
+   * Mentions are structural, so editing the text does not by itself change
+   * them: deleting "@Ama" would leave Ama mentioned in a message that no
+   * longer names her, and adding "@Kwame" would highlight nobody.
+   *
+   * The caller supplies the ids the message names NOW -- chosen from the
+   * picker, exactly as when sending -- and this makes the stored rows match.
+   * Identity still never comes from the text: an id the caller did not send is
+   * removed, and an id it did send is validated from scratch.
+   *
+   * SAME AUTHORIZATION AS SENDING. persistMentions re-checks every id against
+   * current joined membership, so an edit cannot mention somebody a send could
+   * not, and cannot smuggle in a member who has left since the message was
+   * written. Its composite PK makes re-adding an unchanged mention a no-op. */
+  const { data: current } = await admin
+    .from("messages")
+    .select("conversation_id")
+    .eq("id", messageId)
+    .maybeSingle();
+
+  if (current?.conversation_id) {
+    const kept = await persistMentions(
+      admin,
+      current.conversation_id,
+      messageId,
+      userId,
+      mentionUserIds
+    );
+
+    // Anything stored but no longer named is removed. Deleting by difference
+    // rather than clearing and re-inserting keeps the untouched rows -- and
+    // their created_at -- exactly as they were.
+    const { data: existing } = await admin
+      .from("message_mentions")
+      .select("mentioned_user_id")
+      .eq("message_id", messageId);
+
+    const stale = (existing ?? [])
+      .map((row) => row.mentioned_user_id)
+      .filter((id) => !kept.includes(id));
+
+    if (stale.length > 0) {
+      await admin
+        .from("message_mentions")
+        .delete()
+        .eq("message_id", messageId)
+        .in("mentioned_user_id", stale);
+    }
+  }
+
   return { ok: true, message: "Message edited." };
 }
 

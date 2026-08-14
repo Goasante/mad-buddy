@@ -14,6 +14,7 @@ import {
   READY_CHAT_ORPHAN_AGE_MS
 } from "@/lib/media/constants";
 import { deliverBirthdayNotifications } from "@/lib/profile/birthday-service";
+import { PLAN_DEFAULT_ACTIVE_MS } from "@/lib/social/plans";
 
 /**
  * Job handlers (feature architecture batch 14). Each returns a count of work
@@ -422,13 +423,25 @@ export const handleExpireAdminAssignments: JobHandler = async (admin) => {
  */
 export const handleCompletePastPlans: JobHandler = async (admin) => {
   const nowIso = new Date().toISOString();
+  // A start-only plan is finished once the fallback window has elapsed, so the
+  // cutoff for those is that far in the past. Read from the shared constant --
+  // the number is never re-typed here.
+  const startOnlyCutoffIso = new Date(Date.now() - PLAN_DEFAULT_ACTIVE_MS).toISOString();
   // MATCHES THE READ-TIME RULE IN lib/social/plans.ts (planPhase): a plan is
-  // over once its end time passes, or once its start passes when it has no
-  // end. The filter used to be `.lt("end_at", nowIso)` alone, and almost no
-  // plan carries an end time -- every dated plan in production has a null
-  // one -- so this job completed nothing and those plans sat at `inviting`
-  // indefinitely while the UI had already moved them to Past. Two rules for
-  // one question is what let the database and the screen disagree.
+  // over once its end time passes, or once PLAN_DEFAULT_ACTIVE_MS has elapsed
+  // since its start when it has no end. The filter used to be
+  // `.lt("end_at", nowIso)` alone, and almost no plan carries an end time --
+  // every dated plan in production has a null one -- so this job completed
+  // nothing and those plans sat at `inviting` indefinitely while the UI had
+  // already moved them to Past. Two rules for one question is what let the
+  // database and the screen disagree.
+  //
+  // THE FALLBACK MUST BE APPLIED HERE TOO. planPhase now keeps a start-only
+  // plan `active` for PLAN_DEFAULT_ACTIVE_MS so that "is it happening right
+  // now" has an answer. Completing it at `start_at` would set a terminal
+  // status, and terminal status wins in planPhase -- so the job would age a
+  // plan to Past while people were still at it, re-creating the exact
+  // disagreement this comment exists to prevent.
   //
   // Undated plans are deliberately NOT touched here. They are set aside by
   // the grace window at read time, which needs no write and can be undone by
@@ -436,7 +449,7 @@ export const handleCompletePastPlans: JobHandler = async (admin) => {
   const { data: completed, error } = await admin
     .from("plans")
     .update({ status: "completed", updated_at: nowIso })
-    .or(`end_at.lt.${nowIso},and(end_at.is.null,start_at.lt.${nowIso})`)
+    .or(`end_at.lt.${nowIso},and(end_at.is.null,start_at.lt.${startOnlyCutoffIso})`)
     .in("status", ["inviting", "confirmed"])
     .select("id, creator_id");
   if (error) throw new JobError("DATABASE_TIMEOUT", error.message);

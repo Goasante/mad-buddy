@@ -2343,6 +2343,12 @@ export type Database = {
           last_read_message_id: string | null;
           read_receipts_enabled: boolean;
           history_visible_from: string;
+          /**
+           * When this member hid the conversation from their own inbox.
+           * Null means visible. Per-member: the other participant is
+           * unaffected, and nothing is deleted.
+           */
+          hidden_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -2358,6 +2364,7 @@ export type Database = {
           last_read_message_id?: string | null;
           read_receipts_enabled?: boolean;
           history_visible_from?: string;
+          hidden_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -2430,6 +2437,25 @@ export type Database = {
           deleted_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
+        Relationships: [];
+      };
+      /**
+       * Structured @mentions. Identity is the user id, so a display-name
+       * change cannot break or misdirect a mention. No conversation_id: it is
+       * derivable from the message, and storing it twice could drift.
+       */
+      message_mentions: {
+        Row: {
+          message_id: string;
+          mentioned_user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          message_id: string;
+          mentioned_user_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["message_mentions"]["Insert"]>;
         Relationships: [];
       };
       message_reactions: {
@@ -4335,6 +4361,13 @@ export type Database = {
           last_message_type: string | null;
           last_created_at: string | null;
           unread_count: number;
+          /**
+           * Newest NON-SYSTEM message, or null when a conversation holds only
+           * system events. The authority for un-hiding a conversation --
+           * deliberately distinct from conversations.last_message_at, which
+           * system events also advance.
+           */
+          last_user_message_at: string | null;
         }>;
       };
     };

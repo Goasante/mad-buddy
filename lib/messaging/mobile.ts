@@ -19,6 +19,9 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import type { ConversationRole, QuickActionType, SubscriptionPlan } from "@/lib/supabase/database.types";
 import { hasVerifiedAccountStatus, type VerificationRow } from "@/lib/trust/verified-account";
+import { isConversationVisible } from "@/lib/messaging/conversation-visibility";
+import { planPhase, type PlanPhase } from "@/lib/social/plans";
+import type { PlanStatus } from "@/lib/supabase/database.types";
 
 /**
  * Transport-agnostic messaging read/send logic. Takes an already-authenticated
@@ -64,6 +67,15 @@ export type ChatMessageView = {
   senderIsVerifiedAccount: boolean;
   /** Deleted, deactivated or otherwise unavailable — never says which. */
   senderUnavailable: boolean;
+  /**
+   * Who this message names, as ids the SERVER stored.
+   *
+   * The renderer highlights only these, so text that merely looks like
+   * "@someone" stays plain and what is emphasised always matches what was
+   * persisted. Display names travel with them purely to locate the token in
+   * the text; identity is the id.
+   */
+  mentions: Array<{ userId: string; displayName: string }>;
   /** Group role, for the subtle Owner/Admin indicator. Null in direct chats. */
   senderRole: ConversationRole | null;
   /**
@@ -104,6 +116,17 @@ export type ConversationView = {
   otherTrustedSince: string | null;
   /** Server-authoritative identity verification. Separate from plan and Trusted Member. */
   otherIsVerifiedAccount: boolean;
+  /**
+   * Where this conversation's Plan sits in its own lifecycle, or null when the
+   * conversation is not a Plan Chat.
+   *
+   * The PHASE, not the timestamps. Sending start/end times would let the
+   * client re-derive time with its own thresholds, which is how two answers to
+   * one question start existing; sending the resolved phase means the server's
+   * planPhase() is the only clock that matters. Null for direct chats, Circles
+   * and Events, so nothing else can be mistaken for a Plan.
+   */
+  planPhase: PlanPhase | null;
 };
 
 export type MessageableFriend = {
@@ -129,6 +152,17 @@ export const sendMessageSchema = z.object({
    * rather than each surface growing its own send path.
    */
   mediaId: uuidSchema.optional(),
+  /**
+   * Users the sender chose to mention, as ids.
+   *
+   * The client's picker is a convenience, NEVER an authorization: every id
+   * here is re-checked server-side against current joined membership of this
+   * exact conversation before a single row is written. A forged id, a removed
+   * member or somebody from another Circle is silently dropped rather than
+   * failing the send -- the message is what the person wanted to say, and one
+   * bad id should not swallow it.
+   */
+  mentionUserIds: z.array(uuidSchema).max(20).optional(),
   clientMessageId: z.string().min(1).max(64)
 });
 
@@ -175,6 +209,25 @@ export async function openDirectConversation(userId: string, recipientId: string
   if (!result.conversationId) {
     return { ok: false, message: eligibilityMessage(result.error ?? "") };
   }
+
+  /* Deliberately opening a conversation you hid un-hides it.
+   *
+   * Choosing that person from New Message is an unambiguous statement that you
+   * want this chat back, so waiting for the reappearance rule (a newer user
+   * message) would leave you typing into a conversation still missing from
+   * your own inbox.
+   *
+   * Idempotency is untouched: getOrCreateDirectConversation resolves the
+   * canonical row by direct_key, so this clears the flag on the EXISTING
+   * conversation and can never produce a second one. Scoped to this member's
+   * row, so the other participant's hidden state is their own business. */
+  await admin
+    .from("conversation_members")
+    .update({ hidden_at: null, updated_at: new Date().toISOString() })
+    .eq("conversation_id", result.conversationId)
+    .eq("user_id", userId)
+    .not("hidden_at", "is", null);
+
   return { ok: true, message: "Conversation ready.", conversationId: result.conversationId };
 }
 
@@ -285,12 +338,110 @@ export async function sendMessage(userId: string, input: unknown): Promise<Messa
     .update({ last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq("id", parsed.data.conversationId);
 
-  await notifyOtherMembers(admin, parsed.data.conversationId, userId, messagePreviewText(messageType, parsed.data.text) ?? "");
+  /* Speaking in a chat you hid brings it back for you.
+   *
+   * The reappearance rule (last_user_message_at > hidden_at) already covers
+   * the RECIPIENTS of this message. It does not cover the sender, whose
+   * hidden_at is newer than every message that existed when they hid it --
+   * without this, you could message someone and still not see the
+   * conversation in your own inbox. Scoped to the sender's row only. */
+  await admin
+    .from("conversation_members")
+    .update({ hidden_at: null, updated_at: new Date().toISOString() })
+    .eq("conversation_id", parsed.data.conversationId)
+    .eq("user_id", userId)
+    .not("hidden_at", "is", null);
+
+  /* Mentions are stored only now, against a message that definitely exists,
+   * so a failed send can never leave orphan rows. persistMentions re-checks
+   * every id against current joined membership and returns the ones it kept,
+   * which is exactly the set the notification step marks -- one source of
+   * truth for "who was mentioned". */
+  const mentionedUserIds = await persistMentions(
+    admin,
+    parsed.data.conversationId,
+    message.id,
+    userId,
+    parsed.data.mentionUserIds ?? []
+  );
+
+  await notifyOtherMembers(
+    admin,
+    parsed.data.conversationId,
+    userId,
+    messagePreviewText(messageType, parsed.data.text) ?? "",
+    mentionedUserIds
+  );
   return { ok: true, message: "Sent.", messageId: message.id };
 }
 
+/**
+ * Persist mentions for a message that already exists, keeping only real ones.
+ *
+ * AUTHORIZATION LIVES HERE, not in the composer. Each id must belong to a
+ * CURRENTLY JOINED member of this conversation, which in one check covers a
+ * forged id, someone removed since the picker rendered, an invited-but-not-
+ * joined member, and anyone from a different Circle entirely.
+ *
+ * Returns the ids actually stored so the notification step can address exactly
+ * those people -- there is no second source deciding who was mentioned.
+ *
+ * Called only AFTER the message row is confirmed, so a failed send cannot
+ * leave orphan mentions; the cascade on message_id removes them if the message
+ * is later deleted.
+ */
+export async function persistMentions(
+  admin: Admin,
+  conversationId: string,
+  messageId: string,
+  senderId: string,
+  requestedUserIds: readonly string[]
+): Promise<string[]> {
+  // Never the sender: mentioning yourself is fine in a sentence and must not
+  // notify you, so the row is not worth storing.
+  const unique = [...new Set(requestedUserIds)].filter((id) => id !== senderId);
+  if (unique.length === 0) return [];
+
+  const { data: eligible } = await admin
+    .from("conversation_members")
+    .select("user_id")
+    .eq("conversation_id", conversationId)
+    .eq("status", "joined")
+    .in("user_id", unique);
+
+  const allowed = (eligible ?? []).map((row) => row.user_id);
+  if (allowed.length === 0) return [];
+
+  const { error } = await admin
+    .from("message_mentions")
+    .upsert(
+      allowed.map((userId) => ({ message_id: messageId, mentioned_user_id: userId })),
+      { onConflict: "message_id,mentioned_user_id", ignoreDuplicates: true }
+    );
+  // A mention that fails to store must not fail the message: the thing the
+  // person said is worth more than the highlight on a name.
+  if (error) return [];
+  return allowed;
+}
+
 /** Notifies members, honoring each recipient's preview privacy. */
-async function notifyOtherMembers(admin: Admin, conversationId: string, senderId: string, text: string) {
+async function notifyOtherMembers(
+  admin: Admin,
+  conversationId: string,
+  senderId: string,
+  text: string,
+  /**
+   * Who this message mentions, already validated and stored.
+   *
+   * ONE NOTIFICATION, NOT TWO. Every joined member already receives exactly
+   * one notification for a message, so a separate "you were mentioned" push
+   * would mean two buzzes for one sentence. A mention therefore changes the
+   * TITLE of the notification that was going out anyway -- more prominent,
+   * still singular. Dedupe is inherent: this is a set, and each recipient is
+   * visited once.
+   */
+  mentionedUserIds: readonly string[] = []
+) {
   const nowIso = new Date().toISOString();
   const [{ data: members }, { data: conversation }] = await Promise.all([
     admin
@@ -346,7 +497,18 @@ async function notifyOtherMembers(admin: Admin, conversationId: string, senderId
         // The group name is context, never content: it is appended to the
         // TITLE, so a recipient whose preview preference hides message text
         // still sees who and where, and never what.
-        title: isGroup && groupSettings?.name ? `${preview.title} · ${groupSettings.name}` : preview.title,
+        //
+        // A mention marks that same title rather than sending a second
+        // notification. It says only that they were named -- no extra content
+        // leaks past their preview preference, because the body is still
+        // whatever buildNotificationPreview allowed.
+        title: mentionedUserIds.includes(member.user_id)
+          ? isGroup && groupSettings?.name
+            ? `${preview.title} mentioned you · ${groupSettings.name}`
+            : `${preview.title} mentioned you`
+          : isGroup && groupSettings?.name
+            ? `${preview.title} · ${groupSettings.name}`
+            : preview.title,
         message: preview.body
       });
     })
@@ -452,7 +614,7 @@ export async function listConversations(userId: string): Promise<ConversationVie
   const admin = createSupabaseAdminClient();
   const { data: memberships } = await admin
     .from("conversation_members")
-    .select("conversation_id, muted_until, last_read_message_id")
+    .select("conversation_id, muted_until, last_read_message_id, hidden_at")
     .eq("user_id", userId)
     .eq("status", "joined");
 
@@ -461,7 +623,7 @@ export async function listConversations(userId: string): Promise<ConversationVie
 
   const { data: conversations } = await admin
     .from("conversations")
-    .select("id, conversation_type, context_type, direct_key, last_message_at, status")
+    .select("id, conversation_type, context_type, context_id, direct_key, last_message_at, status")
     .in("id", conversationIds)
     .neq("status", "deleted")
     .order("last_message_at", { ascending: false, nullsFirst: false });
@@ -486,13 +648,32 @@ export async function listConversations(userId: string): Promise<ConversationVie
     .filter((conversation) => conversation.conversation_type !== "direct")
     .map((conversation) => conversation.id);
 
+  /* Plan Chats, and only Plan Chats.
+   *
+   * Keyed on context_type === "plan", which is the STORED authority for what a
+   * conversation is about -- not a guess from whether some date happens to be
+   * nearby. An Event, a Circle or a direct chat can never be mistaken for a
+   * Plan here, however many timestamps they carry.
+   *
+   * One batched .in() for the whole page, matching how profiles, group names
+   * and previews are already fetched. No per-row query, and nothing at all
+   * when the inbox contains no Plan Chats. */
+  const planContextIds = [
+    ...new Set(
+      (conversations ?? [])
+        .filter((conversation) => conversation.context_type === "plan" && conversation.context_id)
+        .map((conversation) => conversation.context_id as string)
+    )
+  ];
+
   const [
     { data: pins },
     { data: otherProfiles },
     { data: verifications },
     { data: groupSettings },
     { data: previews },
-    plans
+    plans,
+    { data: planTimings }
   ] = await Promise.all([
     admin.from("conversation_pins").select("conversation_id").eq("user_id", userId).in("conversation_id", conversationIds),
     otherIds.length > 0
@@ -507,7 +688,12 @@ export async function listConversations(userId: string): Promise<ConversationVie
       ? admin.from("group_settings").select("conversation_id, name").in("conversation_id", groupConversationIds)
       : Promise.resolve({ data: [] }),
     admin.rpc("conversation_previews", { p_user_id: userId, p_conversation_ids: conversationIds }),
-    loadEffectivePlansForUsers(admin, otherIds)
+    loadEffectivePlansForUsers(admin, otherIds),
+    // Timing for Plan Chats only. Enough to answer "is this plan on right
+    // now" and nothing more -- no title, no place, no participants.
+    planContextIds.length > 0
+      ? admin.from("plans").select("id, status, start_at, end_at").in("id", planContextIds)
+      : Promise.resolve({ data: [] })
   ]);
 
   const pinnedIds = new Set((pins ?? []).map((row) => row.conversation_id));
@@ -522,6 +708,18 @@ export async function listConversations(userId: string): Promise<ConversationVie
   }
   const groupNameByConversation = new Map((groupSettings ?? []).map((row) => [row.conversation_id, row.name]));
   const previewByConversation = new Map((previews ?? []).map((row) => [row.conversation_id, row]));
+  // Resolved ONCE per page against one clock, so every Plan Chat in this
+  // response is judged at the same instant.
+  const planNowMs = Date.now();
+  const planPhaseByPlanId = new Map(
+    (planTimings ?? []).map((plan) => [
+      plan.id,
+      planPhase(
+        { status: plan.status as PlanStatus, startAt: plan.start_at, endAt: plan.end_at },
+        planNowMs
+      )
+    ])
+  );
   const nowIso = new Date().toISOString();
   const views: ConversationView[] = [];
 
@@ -543,6 +741,20 @@ export async function listConversations(userId: string): Promise<ConversationVie
 
     const membership = membershipById.get(conversation.id);
     const preview = previewByConversation.get(conversation.id);
+
+    /* Hidden by this member, and nobody has spoken since.
+     *
+     * Decided per member and per request, never stored on the conversation, so
+     * the other participant's inbox is unaffected. A system event cannot lift
+     * this: last_user_message_at counts non-system messages only. */
+    if (
+      !isConversationVisible({
+        hiddenAt: membership?.hidden_at ?? null,
+        lastUserMessageAt: preview?.last_user_message_at ?? null
+      })
+    ) {
+      continue;
+    }
 
     views.push({
       id: conversation.id,
@@ -574,7 +786,13 @@ export async function listConversations(userId: string): Promise<ConversationVie
       otherIsVerifiedAccount:
         conversation.conversation_type === "direct"
           ? hasVerifiedAccountStatus(verificationByUserId.get(otherIdByConversation.get(conversation.id) ?? "") ?? [])
-          : false
+          : false,
+      // Null unless this conversation is genuinely a Plan Chat, so no other
+      // conversation type can inherit a Plan's coordination affordances.
+      planPhase:
+        conversation.context_type === "plan" && conversation.context_id
+          ? planPhaseByPlanId.get(conversation.context_id) ?? null
+          : null
     });
   }
 
@@ -605,9 +823,15 @@ export async function listMessages(userId: string, conversationId: string): Prom
   const rows = (messages ?? []).reverse();
   if (rows.length === 0) return [];
 
-  const [{ data: hides }, { data: reactions }] = await Promise.all([
+  const [{ data: hides }, { data: reactions }, { data: mentionRows }] = await Promise.all([
     admin.from("message_hides").select("message_id").eq("user_id", userId),
-    admin.from("message_reactions").select("message_id, reaction_type").eq("user_id", userId)
+    admin.from("message_reactions").select("message_id, reaction_type").eq("user_id", userId),
+    // One query for every mention on the page, matching how hides and
+    // reactions are already fetched. Never one per message.
+    admin
+      .from("message_mentions")
+      .select("message_id, mentioned_user_id")
+      .in("message_id", rows.map((row) => row.id))
   ]);
   const hiddenIds = new Set((hides ?? []).map((row) => row.message_id));
   const myReactions = new Map((reactions ?? []).map((row) => [row.message_id, row.reaction_type]));
@@ -668,6 +892,37 @@ export async function listMessages(userId: string, conversationId: string): Prom
     plansBySender = plans;
   }
 
+  /* Names for everyone mentioned on this page.
+   *
+   * A mentioned person is not necessarily a SENDER here -- being named in
+   * somebody else's message is the common case -- so their display names come
+   * from their own batched lookup rather than the sender projection. Only
+   * full_name is read: enough to locate "@Ama" in the text and nothing more.
+   *
+   * The name is presentation. If it has changed since the message was sent the
+   * token may no longer match, and that mention simply renders as ordinary
+   * text -- the stored id, and therefore who was notified, is unaffected. */
+  const mentionedIds = [...new Set((mentionRows ?? []).map((row) => row.mentioned_user_id))];
+  const mentionNameById = new Map<string, string>();
+  if (mentionedIds.length > 0) {
+    const { data: mentionProfiles } = await admin
+      .from("profiles")
+      .select("user_id, full_name")
+      .in("user_id", mentionedIds);
+    for (const profile of mentionProfiles ?? []) {
+      const name = profile.full_name?.trim();
+      if (name) mentionNameById.set(profile.user_id, name);
+    }
+  }
+  const mentionsByMessage = new Map<string, Array<{ userId: string; displayName: string }>>();
+  for (const row of mentionRows ?? []) {
+    const displayName = mentionNameById.get(row.mentioned_user_id);
+    if (!displayName) continue;
+    const list = mentionsByMessage.get(row.message_id) ?? [];
+    list.push({ userId: row.mentioned_user_id, displayName });
+    mentionsByMessage.set(row.message_id, list);
+  }
+
   // Attachments, signed ONCE for the whole page and deduped by media id.
   // Signing per message (or worse, per render) would mint dozens of storage
   // URLs for one thread and change their identity on every pass, defeating
@@ -695,6 +950,15 @@ export async function listMessages(userId: string, conversationId: string): Prom
       senderPlan: row.sender_id ? plansBySender.get(row.sender_id) ?? null : null,
       senderTrustedSince: row.sender_id ? senderById.get(row.sender_id)?.trustedSince ?? null : null,
       senderIsVerifiedAccount: row.sender_id ? senderById.get(row.sender_id)?.isVerifiedAccount ?? false : false,
+      /* A tombstoned message mentions nobody.
+       *
+       * Deleting sets deleted_at and nulls text_content but KEEPS the row, so
+       * the mention rows survive by design (the cascade only fires on a real
+       * delete, which never happens here). Serving them anyway would leave a
+       * message that says nothing still naming someone -- and any surface that
+       * later counts "messages mentioning me" would count a deleted one.
+       * Dropped at the projection so no consumer has to remember this. */
+      mentions: row.deleted_at ? [] : mentionsByMessage.get(row.id) ?? [],
       /**
        * ONE fallback for every "we cannot show this person" case.
        *
@@ -801,4 +1065,49 @@ export async function setConversationPinned(
     .eq("conversation_id", conversationId);
   if (error) return { ok: false, message: "Could not unpin this chat. Try again." };
   return { ok: true, message: "Unpinned." };
+}
+
+/**
+ * Hide a conversation from THIS member's inbox, or restore it.
+ *
+ * Scoped to one membership row by construction: the update is keyed on both
+ * the conversation and this user, so it cannot reach the other participant's
+ * row. Nothing is deleted -- not the conversation, not a single message, not
+ * the membership -- and `status` is untouched, so hiding is not leaving and a
+ * Circle's roster is unaffected.
+ *
+ * The conversation returns on its own when somebody sends a real message
+ * (see isConversationVisible); this action exists for hiding, and for undoing
+ * a hide immediately if it was a mistake.
+ */
+export async function setConversationHidden(
+  userId: string,
+  conversationId: string,
+  hidden: boolean
+): Promise<MessagingResult> {
+  const envMessage = serviceRoleEnvMessage();
+  if (envMessage) return { ok: false, message: envMessage };
+  if (!uuidSchema.safeParse(conversationId).success) return { ok: false, message: "Not found." };
+
+  const admin = createSupabaseAdminClient();
+  // Same guard every other per-member action uses: someone who cannot view the
+  // conversation cannot change their membership of it either.
+  const access = await resolveConversationAccess(admin, userId, conversationId);
+  if (!access.canView) return { ok: false, message: "Not found." };
+
+  const { error } = await admin
+    .from("conversation_members")
+    .update({ hidden_at: hidden ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
+    .eq("conversation_id", conversationId)
+    .eq("user_id", userId);
+
+  if (error) {
+    return {
+      ok: false,
+      message: hidden ? "Could not hide this chat. Try again." : "Could not restore this chat. Try again."
+    };
+  }
+  // "Hidden", not "Deleted": the copy has to match what actually happened, or
+  // someone will expect the other person to have lost the conversation too.
+  return { ok: true, message: hidden ? "Chat hidden." : "Chat restored." };
 }

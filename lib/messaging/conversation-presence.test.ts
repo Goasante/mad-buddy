@@ -41,6 +41,8 @@ function conversation(overrides: Partial<ConversationView> = {}): ConversationVi
     otherPlan: null,
   otherTrustedSince: null,
   otherIsVerifiedAccount: false,
+    // Not a Plan Chat by default: a direct conversation has no Plan lifecycle.
+    planPhase: null,
     ...overrides
   };
 }

@@ -41,6 +41,7 @@ import { AppMenu } from "@/components/ui/app-dropdown";
 import { LongPressActions } from "@/components/ui/long-press-actions";
 import { MessageAttachmentImage } from "@/components/messaging/message-attachment-image";
 import { MessageComposer } from "@/components/messaging/message-composer";
+import { MessageText } from "@/components/messaging/message-text";
 import { VoiceMessageBubble } from "@/components/messaging/voice-message-bubble";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import { MessageMediaViewer } from "@/components/messaging/message-media-viewer";
@@ -84,6 +85,28 @@ export function GroupDetailPage({
     [messages]
   );
   const orderedMembers = useMemo(() => orderGroupMembers(group.members), [group.members]);
+  /**
+   * Who can be mentioned: this Circle's current members.
+   *
+   * INCLUDING YOURSELF. "@me" reads naturally in a sentence -- "I'll bring it,
+   * @Ama and I are driving" -- and excluding it would make the picker
+   * disagree with the text people actually write. It notifies nobody: the
+   * server drops the sender before storing a row, so a self-mention renders
+   * and never buzzes.
+   *
+   * These members have already passed this page's own authorisation, and the
+   * server re-validates every id on send regardless.
+   */
+  const mentionCandidates = useMemo(
+    () =>
+      orderedMembers.map((member) => ({
+        userId: member.userId,
+        displayName: member.displayName,
+        username: member.username,
+        avatarUrl: member.avatarUrl
+      })),
+    [orderedMembers]
+  );
   const ownershipOptions = useMemo(
     () => ownershipCandidates(group.members, group.viewerId),
     [group.members, group.viewerId]
@@ -157,6 +180,22 @@ export function GroupDetailPage({
     });
   }
   const mountedRef = useRef(true);
+
+  /**
+   * Was this page reached from somewhere else in the app?
+   *
+   * Read ONCE on mount: history.length grows as the person moves around, so
+   * checking it later would answer a different question than "how did I get
+   * here". A fresh tab opened straight onto this URL has a length of 1 and no
+   * in-app referrer, and that is the only case that needs a fallback
+   * destination -- everything else has a real place to go back to.
+   */
+  const [cameFromInsideApp] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const sameOriginReferrer =
+      Boolean(document.referrer) && document.referrer.startsWith(window.location.origin);
+    return window.history.length > 1 || sameOriginReferrer;
+  });
 
   useEffect(() => {
     mountedRef.current = true;
@@ -266,10 +305,30 @@ export function GroupDetailPage({
   return (
     <div className="mx-auto max-w-[1000px] space-y-5 pt-6">
       <div className="flex items-center justify-between gap-3">
-        <Link href="/groups" className="focus-ring safe-motion inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        {/* Back goes where the person actually came from.
+            This was a hardcoded link to /groups, so opening a Circle from the
+            Messages inbox and pressing Back dropped you on the Circles list --
+            a place you had not been -- and the label still said "Groups", the
+            pre-rename word. A Circle chat is reachable from Messages, from the
+            Circles list, from a notification and from a deep link; only one of
+            those wants /groups.
+
+            router.back() when this page was pushed from somewhere inside the
+            app, which is the same history-first convention the direct thread
+            uses. A cold deep link has no in-app entry to return to, so it
+            falls back to the canonical Circles list rather than leaving the
+            browser. */}
+        <button
+          type="button"
+          onClick={() => {
+            if (cameFromInsideApp) router.back();
+            else router.push("/groups");
+          }}
+          className="focus-ring safe-motion inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-          Groups
-        </Link>
+          Back
+        </button>
         <div className="flex items-center gap-2">
           {group.canManageMembers ? (
             <Button type="button" size="sm" variant="outline" onClick={() => setInviteOpen(true)}>
@@ -486,7 +545,9 @@ export function GroupDetailPage({
                             complete message, so no placeholder text is
                             invented for it. */}
                         {message.text ? (
-                          <p>{message.text}</p>
+                          <p>
+                            <MessageText text={message.text} mentions={message.mentions} />
+                          </p>
                         ) : message.attachment || message.voice ? null : (
                           <p>Message</p>
                         )}
@@ -518,6 +579,10 @@ export function GroupDetailPage({
             voiceRecorderConfig={voiceRecorderConfig}
             // A group is exactly where "who did you mean" is a real question.
             isGroup
+            /* The Circle's own member list, already loaded and authorised by
+               this page. Not a second query, and not a second authority --
+               the server re-validates every mentioned id on send regardless. */
+            mentionCandidates={mentionCandidates}
             placeholder="Message the Circle"
             onFeedback={setFeedback}
             onSent={async () => {

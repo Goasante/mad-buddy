@@ -21,10 +21,16 @@ import {
   openDirectConversationAction,
   reactToMessageAction,
   sendMessageAction,
+  setConversationHiddenAction,
   setConversationPinnedAction
 } from "@/app/(app)/messaging-actions";
 import type { ChatMessageView, ConversationView, MessageableFriend } from "@/lib/messaging/mobile";
 import { mergeConversations } from "@/lib/messaging/conversation-sync";
+import {
+  eligibleQuickActions,
+  type ConversationContext,
+  type MeetingPhase
+} from "@/lib/messaging/quick-action-eligibility";
 import { isTransientConfirmation, useTransientFeedback } from "@/hooks/use-transient-feedback";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
@@ -232,9 +238,22 @@ export function MessagesPageContent({
     if (!selectedId || !editDraft.trim()) return;
     startTransition(async () => {
       try {
-        const result = await withTimeout(editMessageAction(messageId, editDraft.trim()), {
-          operation: "edit message"
-        });
+        /* Mentions carried through unchanged.
+         *
+         * This pane only ever opens DIRECT conversations -- a Circle routes to
+         * its own page -- so these messages have no mentions to reconcile.
+         * Passing what the message already names, rather than the empty
+         * default, means the edit cannot silently un-mention anyone if a
+         * Circle thread is ever opened here. */
+        const existingMentions = messages.find((message) => message.id === messageId)?.mentions ?? [];
+        const result = await withTimeout(
+          editMessageAction(
+            messageId,
+            editDraft.trim(),
+            existingMentions.map((mention) => mention.userId)
+          ),
+          { operation: "edit message" }
+        );
         if (!result.ok) setFeedback(result.message);
         setEditingId(null);
         await refreshMessages(selectedId);
@@ -328,6 +347,54 @@ export function MessagesPageContent({
   }, [uniqueConversations]);
 
   const selected = uniqueConversations.find((conversation) => conversation.id === selectedId) ?? null;
+
+  /**
+   * Coordination actions for the open conversation, or none.
+   *
+   * contextBadge is the projection's existing answer to "is this conversation
+   * about a dated thing" -- "Plan", "Event", "Safe Arrival", or null for an
+   * ordinary chat. Reused rather than adding a parallel signal.
+   */
+  const visibleQuickActions = useMemo(() => {
+    const context: ConversationContext =
+      selected?.contextBadge === "Plan"
+        ? "plan"
+        : selected?.contextBadge === "Event"
+          ? "event"
+          : selected?.contextBadge === "Safe Arrival"
+            ? "safe_arrival"
+            : "none";
+    /* REAL TIMING, no placeholder.
+     *
+     * The server resolves planPhase() against the Plan's own start and end and
+     * sends the answer; this maps it onto the coordination vocabulary. A
+     * conversation with no Plan behind it has a null phase -- an Event or a
+     * Circle carries its own context and is treated as ongoing coordination
+     * rather than borrowing a Plan's lifecycle. */
+    const phase: MeetingPhase =
+      selected?.planPhase === "upcoming"
+        ? "upcoming"
+        : selected?.planPhase === "near_start"
+          ? "near_start"
+          : selected?.planPhase === "active"
+            ? "active"
+            : selected?.planPhase === "past" || selected?.planPhase === "archived_unscheduled"
+              ? "ended"
+              : selected?.planPhase === "unscheduled"
+                ? "undated"
+                : // Not a Plan Chat: Events and Safe Arrival threads coordinate
+                  // for as long as they exist, and a DM is excluded by context.
+                  "active";
+
+    const allowed = new Set(
+      eligibleQuickActions({
+        context,
+        phase,
+        actionIds: QUICK_ACTIONS.map((action) => action.id)
+      })
+    );
+    return QUICK_ACTIONS.filter((action) => allowed.has(action.id)).slice(0, 3);
+  }, [selected]);
 
   // Conversation Mode: a conversation owns the whole screen, so the global
   // bottom navigation steps aside while one is open. Mobile only in effect —
@@ -631,6 +698,38 @@ export function MessagesPageContent({
     });
   }
 
+  /**
+   * Hide a conversation from this inbox.
+   *
+   * Optimistic: the row disappears immediately, because the server is only
+   * being told what the person already decided. On failure it comes back and
+   * says why -- losing a conversation silently would be far worse than a
+   * moment's delay.
+   */
+  function hideConversation(conversationId: string) {
+    const previous = conversations;
+    setConversations((current) => current.filter((row) => row.id !== conversationId));
+    // Hiding the conversation you are reading has to close it too, or the
+    // thread stays open on a row that is no longer in the list.
+    if (selectedId === conversationId) dismissConversation();
+    startTransition(async () => {
+      try {
+        const result = await withTimeout(setConversationHiddenAction(conversationId, true), {
+          operation: "hide conversation"
+        });
+        if (!result.ok) {
+          setConversations(previous);
+          setFeedback(result.message);
+          return;
+        }
+        setFeedback(result.message);
+      } catch (error) {
+        setConversations(previous);
+        setFeedback(messageFailure(error));
+      }
+    });
+  }
+
   function togglePin(conversationId: string, next: boolean) {
     // Optimistic; revert on failure.
     setConversations((current) =>
@@ -898,6 +997,19 @@ export function MessagesPageContent({
                     conversation.otherUsername && duplicateTitles.has(conversation.title.trim().toLowerCase());
                   return (
                     <li key={conversation.id}>
+                      {/* Type-aware, because a Circle and a direct chat do not
+                          offer the same things. A Circle opens its own page,
+                          which owns members and roles; a direct chat offers the
+                          other person's profile.
+
+                          NO DELETE HERE, deliberately. Nothing in the codebase
+                          implements deleting, hiding or archiving a
+                          conversation for one participant -- conversations.status
+                          has 'archived' and 'deleted' values, but no action ever
+                          writes them. A "Delete chat" item would either do
+                          nothing or destroy a row shared with somebody else, so
+                          the menu offers only what the backend genuinely
+                          supports. */}
                       <LongPressActions
                         label={`Actions for ${conversation.title}`}
                         items={[
@@ -910,7 +1022,38 @@ export function MessagesPageContent({
                             id: "pin",
                             label: conversation.pinned ? "Unpin" : "Pin",
                             onSelect: () => togglePin(conversation.id, !conversation.pinned)
-                          }
+                          },
+                          ...(conversation.kind === "group"
+                            ? [
+                                {
+                                  id: "open-circle",
+                                  label: "View Circle",
+                                  onSelect: () => router.push(`/groups/${conversation.id}` as Route)
+                                }
+                              ]
+                            : [
+                                ...(conversation.otherUsername
+                                  ? [
+                                      {
+                                        id: "view-profile",
+                                        label: "View profile",
+                                        onSelect: () =>
+                                          router.push(`/friends/${conversation.otherUsername}` as Route)
+                                      }
+                                    ]
+                                  : []),
+                                /* DIRECT CHATS ONLY, and it is not a delete.
+                                   The conversation is shared: this hides it
+                                   from your inbox and leaves the other
+                                   person's untouched. A Circle offers Leave
+                                   Circle instead, which is a different act
+                                   with consequences for other people. */
+                                {
+                                  id: "hide",
+                                  label: "Hide chat",
+                                  onSelect: () => hideConversation(conversation.id)
+                                }
+                              ])
                         ]}
                       >
                       <button
@@ -1292,12 +1435,28 @@ export function MessagesPageContent({
                   )}
                 </div>
 
-                {/* Quick coordination actions (spec §39), no location attached. */}
+                {/* Quick coordination actions (spec §39), no location attached.
+                  *
+                  * ONLY WHERE THERE IS SOMETHING TO COORDINATE. This used to
+                  * render QUICK_ACTIONS.slice(0, 3) unconditionally, so every
+                  * ordinary direct message offered "I'm on my way", "I'm here"
+                  * and "Running late" -- arrival language for a meeting that
+                  * did not exist. They now appear only in conversations that
+                  * are ABOUT a dated thing: a Plan Chat, an Event, an Event
+                  * Circle or a Safe Arrival thread.
+                  *
+                  * KNOWN LIMITATION, deliberately not faked: the conversation
+                  * projection carries no start time, so this cannot yet tell
+                  * "hours away" from "happening now" and passes "active" for a
+                  * coordination context. Phase-accurate gating needs
+                  * ConversationView to carry the plan/event timing;
+                  * meetingPhase() in quick-action-eligibility.ts is written and
+                  * tested for the moment it does. */}
                 <div
                   data-tour-id={TOUR_TARGET_IDS.MESSAGES_QUICK_REPLIES}
                   className="flex shrink-0 flex-wrap gap-1.5 px-4 pb-1 pt-2"
                 >
-                  {QUICK_ACTIONS.slice(0, 3).map((action) => (
+                  {visibleQuickActions.map((action) => (
                     <button
                       key={action.id}
                       type="button"
