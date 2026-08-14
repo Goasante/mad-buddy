@@ -6,13 +6,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { MessageActionsMenu } from "@/components/messaging/message-actions-menu";
 import { LongPressActions } from "@/components/ui/long-press-actions";
 import type { MessageActionId } from "@/lib/messaging/message-actions";
-import { CalendarCheck2, ChevronLeft, Info, MessagesSquare, PenSquare, Plus, Search, Star, UsersRound, VolumeX, X } from "lucide-react";
+import { CalendarCheck2, ChevronLeft, Info, Loader2, MessagesSquare, PenSquare, Plus, Search, Star, UsersRound, VolumeX, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   deleteMessageAction,
   editMessageAction,
+  getConversationsAction,
   getMessageableFriendsAction,
   getMessagesAction,
   markConversationReadAction,
@@ -23,6 +24,8 @@ import {
   setConversationPinnedAction
 } from "@/app/(app)/messaging-actions";
 import type { ChatMessageView, ConversationView, MessageableFriend } from "@/lib/messaging/mobile";
+import { mergeConversations } from "@/lib/messaging/conversation-sync";
+import { isTransientConfirmation, useTransientFeedback } from "@/hooks/use-transient-feedback";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
@@ -140,7 +143,10 @@ export function MessagesPageContent({
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [viewerMessageId, setViewerMessageId] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState("");
+  /* Confirmations clear themselves; failures stay until something replaces
+     them. "Sent" used to sit above the inbox indefinitely, surviving both
+     navigation and reload. */
+  const [feedback, setFeedback] = useTransientFeedback();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [reactingId, setReactingId] = useState<string | null>(null);
@@ -174,6 +180,10 @@ export function MessagesPageContent({
       });
       if (requestId !== loadRequestIdRef.current) return;
       if (!readResult.ok) setFeedback(readResult.message);
+      // Remember the read locally: a list fetch already in flight carries the
+      // pre-read count, and without this the badge would clear and then flick
+      // straight back when that older response landed.
+      locallyReadIds.current.add(conversationId);
       setConversations((current) =>
         current.map((conversation) =>
           conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation
@@ -189,7 +199,7 @@ export function MessagesPageContent({
         setLoadingMessages(false);
       }
     }
-  }, []);
+  }, [setFeedback]);
 
   const refreshMessages = useCallback(async (conversationId: string) => {
     try {
@@ -200,7 +210,7 @@ export function MessagesPageContent({
     } catch (error) {
       setFeedback(messageFailure(error));
     }
-  }, []);
+  }, [setFeedback]);
 
   function react(messageId: string, reaction: string) {
     if (!selectedId) return;
@@ -254,6 +264,46 @@ export function MessagesPageContent({
       }
     });
   }
+
+  /**
+   * Conversations this client has marked read, and ones it created moments ago.
+   *
+   * Both are refs rather than state: they exist only to tell a merge which
+   * local facts outrank an older server response, and changing them must never
+   * itself trigger a render.
+   */
+  const locallyReadIds = useRef<Set<string>>(new Set());
+  const pendingConversationIds = useRef<Set<string>>(new Set());
+
+  /**
+   * Pull the canonical list and merge it into local state.
+   *
+   * THE FIX FOR THE RESTART-TO-SEE-YOUR-MESSAGES BUG. `conversations` was
+   * seeded once by useState, which ignores later props, and every writer was a
+   * `.map()` over existing rows -- so a newly created conversation had no way
+   * into the list and only a fresh page load could show it.
+   *
+   * getConversationsAction is the SAME server read that produced
+   * initialConversations, so this introduces no second source of truth: it
+   * re-reads the canonical one and reconciles field-by-field.
+   */
+  const syncConversations = useCallback(async () => {
+    try {
+      const server = await withTimeout(getConversationsAction(), { operation: "refresh conversations" });
+      setConversations((current) =>
+        mergeConversations(current, server, {
+          locallyReadIds: locallyReadIds.current,
+          pendingIds: pendingConversationIds.current
+        })
+      );
+      // Rows the server has now confirmed are no longer "too new to know
+      // about", so they stop being exempt from removal.
+      for (const row of server) pendingConversationIds.current.delete(row.id);
+    } catch {
+      // A failed refresh must never empty the inbox: keeping the list the user
+      // can already see is strictly better than replacing it with nothing.
+    }
+  }, []);
 
   // Defensive de-dup by conversation id, a row should never render twice
   // for the same real conversation, whatever produced the raw list.
@@ -330,6 +380,31 @@ export function MessagesPageContent({
     dismissConversation();
   }, [dismissConversation]);
 
+  /**
+   * Re-sync when the app comes back to the foreground.
+   *
+   * A phone suspends the tab: sockets die quietly and any message that arrived
+   * meanwhile is simply missed, because a realtime subscription replays
+   * nothing. Returning to a stale inbox is what made "close and reopen the app"
+   * feel like the fix -- the reopen was doing this fetch by hand.
+   *
+   * Both events are needed and they are not redundant: visibilitychange covers
+   * tab switches and the phone being unlocked, focus covers returning from
+   * another window on desktop where visibility never changed.
+   */
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const resync = () => {
+      if (document.visibilityState === "visible") void syncConversations();
+    };
+    document.addEventListener("visibilitychange", resync);
+    window.addEventListener("focus", resync);
+    return () => {
+      document.removeEventListener("visibilitychange", resync);
+      window.removeEventListener("focus", resync);
+    };
+  }, [syncConversations]);
+
   useEffect(() => {
     if (openedRequestedConversation.current || !isLikelyConversationId(requestedConversationId)) {
       return;
@@ -338,7 +413,12 @@ export function MessagesPageContent({
     setSelectedId(requestedConversationId);
     setMessages([]);
     void loadConversation(requestedConversationId);
-  }, [loadConversation, requestedConversationId]);
+    /* A deep link can name a conversation this page's list does not contain --
+     * one created moments ago on another surface, or simply newer than the
+     * server render. Without this the row never arrived and the fullscreen pane
+     * had no title, no avatar and no way back. */
+    void syncConversations();
+  }, [loadConversation, requestedConversationId, syncConversations]);
 
   // Realtime (spec §64): subscribe to the open thread's messages instead of
   // only reloading after our own sends. Authorization is server-side, RLS on
@@ -412,7 +492,7 @@ export function MessagesPageContent({
       if (refreshTimer) clearTimeout(refreshTimer);
       void supabase.removeChannel(channel);
     };
-  }, [selectedId]);
+  }, [selectedId, setFeedback]);
 
   const visible = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -509,7 +589,11 @@ export function MessagesPageContent({
           return;
         }
         await refreshMessages(selectedId);
+        // router.refresh() re-renders the server component but cannot reach
+        // this client list, so the inbox row kept its old preview and position
+        // until a full page load. Sync explicitly.
         router.refresh();
+        void syncConversations();
       } catch (error) {
         setFeedback(messageFailure(error));
       }
@@ -592,8 +676,26 @@ export function MessagesPageContent({
           setFeedback(result.message);
           return;
         }
-        router.refresh();
-        openConversation(result.conversationId);
+        const conversationId = result.conversationId;
+
+        /* THE DEAD END THIS REPLACES. This used to call router.refresh() and
+         * then open the conversation immediately. refresh() does not block, and
+         * `conversations` was seeded by a useState initialiser that ignores the
+         * refreshed props anyway -- so the row was never in the list. The thread
+         * pane went fullscreen on mobile (it keys off selectedId) while
+         * `selected` stayed null, rendering "Select a conversation. Choose a
+         * Muddy to view your conversation." over a hidden inbox. The person had
+         * just chosen a Muddy, and was now stuck being asked to choose one.
+         *
+         * So the conversation is made part of client state BEFORE the thread
+         * opens. It is marked pending first, so a list fetch already in flight
+         * -- which cannot know about a conversation created a moment ago --
+         * cannot delete it on arrival. */
+        pendingConversationIds.current.add(conversationId);
+        openConversation(conversationId);
+        // Canonical row, same server read the page was seeded from. Awaited so
+        // an existing conversation is reconciled rather than duplicated.
+        await syncConversations();
       } catch (error) {
         setFeedback(messageFailure(error));
       }
@@ -636,10 +738,24 @@ export function MessagesPageContent({
         </Button>
       </header>
 
+      {/* A confirmation and a failure are not the same event, so they do not
+          get the same furniture. "Sent" is a quiet line that removes itself;
+          a failure keeps the bordered panel, because it has to be noticed and
+          it stays until something replaces it. Both are role="status" so a
+          screen reader hears them without stealing focus. */}
       {feedback ? (
-        <div className="mb-4 rounded-[1rem] border border-orange-400/20 bg-orange-400/10 p-3 text-sm text-orange-800 dark:text-orange-50" role="status">
-          {feedback}
-        </div>
+        isTransientConfirmation(feedback) ? (
+          <p className="mb-3 text-sm text-muted-foreground" role="status">
+            {feedback}
+          </p>
+        ) : (
+          <div
+            className="mb-4 rounded-[1rem] border border-orange-400/20 bg-orange-400/10 p-3 text-sm text-orange-800 dark:text-orange-50"
+            role="status"
+          >
+            {feedback}
+          </div>
+        )
       ) : null}
 
       {!hasAnyConversations ? (
@@ -873,13 +989,41 @@ export function MessagesPageContent({
             )}
           >
             {!selected ? (
-              // Centred directly in the panel, no oversized empty-state card.
+              /* Two different states used to render the same copy, and one of
+                 them was a trap. With no selectedId this pane is the desktop
+                 resting state and "Select a conversation" is right. But when a
+                 selectedId IS set and its row has not arrived yet, this pane is
+                 FULLSCREEN on mobile (see the fixed inset-0 above) and the
+                 inbox behind it is hidden -- so telling the person to choose a
+                 Muddy, right after they chose one, left them with nothing to
+                 tap and no way back. That case now shows progress and, always,
+                 a way out. */
               <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-                <span className="grid h-12 w-12 place-items-center rounded-full bg-secondary text-muted-foreground">
-                  <MessagesSquare className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <p className="mt-3 text-sm font-semibold">Select a conversation</p>
-                <p className="mt-1 text-sm text-muted-foreground">Choose a Muddy to view your conversation.</p>
+                {selectedId ? (
+                  <>
+                    <Loader2
+                      className="h-5 w-5 animate-spin text-muted-foreground motion-reduce:animate-none"
+                      aria-hidden="true"
+                    />
+                    <p className="mt-3 text-sm font-semibold">Opening conversation…</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      This should only take a moment.
+                    </p>
+                    {/* The escape hatch. Present even while loading, because a
+                        fullscreen pane with no exit is the dead end itself. */}
+                    <Button type="button" size="sm" variant="outline" className="mt-4" onClick={closeConversation}>
+                      Back to conversations
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="grid h-12 w-12 place-items-center rounded-full bg-secondary text-muted-foreground">
+                      <MessagesSquare className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <p className="mt-3 text-sm font-semibold">Select a conversation</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Choose a Muddy to view your conversation.</p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="flex min-h-0 flex-1 flex-col">
@@ -1178,7 +1322,21 @@ export function MessagesPageContent({
                     onFeedback={setFeedback}
                     onSent={async () => {
                       await refreshMessages(selected.id);
+                      /* THE STALE-INBOX FIX. This used to call only
+                       * refreshMessages + router.refresh(), so the open thread
+                       * showed the new message while the inbox row kept its old
+                       * preview, its old timestamp and its old position -- a
+                       * conversation last used five days ago still read "5 days
+                       * ago" and stayed down the list after you had just
+                       * replied to it.
+                       *
+                       * router.refresh() re-renders the server component but
+                       * cannot write this client list. syncConversations()
+                       * re-reads the canonical projection, where the server has
+                       * already advanced last_message_at and ordered by it, so
+                       * preview, time and position all move together. */
                       router.refresh();
+                      await syncConversations();
                     }}
                     className="w-full border-0 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:pb-0"
                   />

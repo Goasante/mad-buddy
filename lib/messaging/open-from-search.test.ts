@@ -36,7 +36,20 @@ describe("the stale-list guard that broke the flow", () => {
 
   it("keeps the open effect independent of the conversation list", () => {
     // Depending on uniqueConversations is what tied opening to a stale list.
-    expect(page).toContain("}, [loadConversation, requestedConversationId]);");
+    //
+    // This asserts the INVARIANT rather than one exact dependency array. The
+    // previous spelling pinned the literal "[loadConversation,
+    // requestedConversationId]", which also failed when the effect gained
+    // syncConversations -- a stable useCallback with no dependencies, and the
+    // very thing that fetches the missing row. Naming the forbidden
+    // dependencies keeps the guard honest without freezing the line.
+    const openEffect = page.slice(
+      page.indexOf("if (openedRequestedConversation.current"),
+      page.indexOf("// Realtime (spec §64)")
+    );
+    expect(openEffect).not.toContain("uniqueConversations");
+    expect(openEffect).not.toContain("initialConversations");
+    expect(openEffect).not.toContain("conversations]");
   });
 });
 
