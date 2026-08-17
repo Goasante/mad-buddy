@@ -25,6 +25,7 @@ import {
   type NearbyProfileRow
 } from "@/lib/proximity/backend";
 import { guardAction } from "@/lib/admin/enforcement";
+import { convertHangoutToPlan } from "@/lib/plans/service";
 import {
   canTransitionHangout,
   isHangoutJoinable,
@@ -1018,89 +1019,12 @@ export async function convertHangoutToPlanAction(
   hangoutId: string,
   title?: string
 ): Promise<HangoutActionState> {
-  const missing = missingEnvState();
-  if (missing) return missing;
   if (!uuidSchema.safeParse(hangoutId).success) return { ok: false, message: "UpFor not found." };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
-  const admin = createSupabaseAdminClient();
-  const { data: session } = await admin
-    .from("hangout_sessions")
-    .select("id, owner_id, status, activity_type, message, converted_plan_id")
-    .eq("id", hangoutId)
-    .maybeSingle();
-  if (!session) return { ok: false, message: "UpFor not found." };
-  if (session.owner_id !== userId) return { ok: false, message: "This isn't your UpFor." };
-  if (session.converted_plan_id) {
-    return { ok: false, message: "This UpFor already became a plan." };
-  }
-  if (!canTransitionHangout(session.status, "converted_to_plan")) {
-    return { ok: false, message: "This UpFor can't be turned into a plan." };
-  }
-
-  const { data: accepted } = await admin
-    .from("hangout_requests")
-    .select("requester_id")
-    .eq("hangout_session_id", hangoutId)
-    .eq("status", "accepted");
-  const participantIds = (accepted ?? []).map((request) => request.requester_id);
-
-  const planTitle = (title?.trim() || `${session.activity_type} hangout`).slice(0, 80);
-  const { data: plan, error } = await admin
-    .from("plans")
-    .insert({
-      creator_id: userId,
-      title: planTitle,
-      description: session.message,
-      plan_type: "quick",
-      status: "inviting",
-      place_type: "decide_in_chat",
-      max_participants: 10,
-      source_hangout_id: hangoutId
-    })
-    .select("id")
-    .single();
-  if (error || !plan) return { ok: false, message: "Couldn't create the plan." };
-
-  const rows = [
-    { plan_id: plan.id, user_id: userId, role: "host" as const, rsvp_status: "going" as const },
-    ...participantIds.map((participantId) => ({
-      plan_id: plan.id,
-      user_id: participantId,
-      role: "participant" as const,
-      rsvp_status: "going" as const,
-      invited_by: userId
-    }))
-  ];
-  await admin.from("plan_participants").insert(rows);
-
-  await admin
-    .from("hangout_sessions")
-    .update({
-      status: "converted_to_plan",
-      converted_plan_id: plan.id,
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", hangoutId)
-    .eq("owner_id", userId);
-
-  const name = await displayName(admin, userId);
-  await Promise.all(
-    participantIds.map((participantId) =>
-      deliverNotification(admin, {
-        userId: participantId,
-        senderId: userId,
-        category: "plans",
-        type: `plan:${plan.id}`,
-        title: "Your hangout became a plan",
-        message: `${name} created "${planTitle}".`
-      })
-    )
-  );
-
-  return { ok: true, message: "Plan created from your hangout.", planId: plan.id };
+  return convertHangoutToPlan(userId, hangoutId, title);
 }
 
 // ---------------------------------------------------------------------------

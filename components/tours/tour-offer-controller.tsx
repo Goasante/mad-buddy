@@ -66,6 +66,34 @@ export function TourOfferController({ tours }: { tours: ContextualTourOffer[] })
   const [activeTourId, setActiveTourId] = useState<string | null>(null);
   const suppressedPathRef = useRef<string | null>(null);
 
+  /* A GUIDE MUST NEVER SIT ON TOP OF A TASK ALREADY UNDERWAY.
+   *
+   * `blockingInterfaceIsOpen` already refuses to OFFER a tour while a dialog is
+   * open, but the check only ran before one was chosen: navigating to
+   * /plans?create=1 mounts the page and the composer together, the 350ms
+   * inspect fired first, and once `activeTourId` was set the effect returned
+   * early and never looked again. The result was the Plans guide explaining
+   * "create social plans with your Muddies" over the composer of somebody who
+   * had just tapped Make a Plan.
+   *
+   * Withdrawing the offer when a dialog appears keeps one rule in one place --
+   * the same predicate decides both whether to offer and whether to stay. */
+  useEffect(() => {
+    if (!activeTourId) return;
+    const withdrawIfBlocked = () => {
+      if (blockingInterfaceIsOpen()) setActiveTourId(null);
+    };
+    const observer = new MutationObserver(withdrawIfBlocked);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["aria-modal", "role"]
+    });
+    withdrawIfBlocked();
+    return () => observer.disconnect();
+  }, [activeTourId]);
+
   useEffect(() => {
     if (activeTourId) return;
     let timer: number | null = null;
