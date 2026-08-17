@@ -107,8 +107,15 @@ describe("a Circle conversation stays a Circle", () => {
   });
 
   it("shows the Circle's own name, not a member's", () => {
-    const titling = mobile.slice(mobile.indexOf('let title = "Conversation"'));
-    expect(titling.slice(0, 800)).toContain("groupNameByConversation.get(conversation.id)");
+    /* Bounded by the end of the titling block rather than a fixed 800
+     * characters: the Plan Chat branch grew between the two, and the old
+     * window started failing while the rule it guards -- a named Circle keeps
+     * its own name -- never changed. */
+    const titling = mobile.slice(
+      mobile.indexOf('let title = "Conversation"'),
+      mobile.indexOf("const membership = membershipById.get(conversation.id)")
+    );
+    expect(titling).toContain("groupNameByConversation.get(conversation.id)");
   });
 
   it("routes Circle notifications to the Circle, not the DM inbox", () => {

@@ -329,9 +329,19 @@ describe("opening a Circle conversation", () => {
   });
 
   it("keeps the Circle's own name and avatar in the inbox row", () => {
-    // The row already rendered "Ashongman Buddies" correctly -- this pins the
-    // behaviour so a future change cannot regress to showing a member's name.
-    const projection = mobile.slice(mobile.indexOf('if (conversation.conversation_type === "direct" && conversation.direct_key)'));
-    expect(projection.slice(0, 700)).toContain("groupNameByConversation.get(conversation.id)");
+    /* The row already rendered "Ashongman Buddies" correctly -- this pins the
+     * behaviour so a future change cannot regress to showing a member's name.
+     *
+     * Scoped to the title branch rather than a fixed byte window: the previous
+     * 700-character slice broke the moment the Plan branch grew, even though
+     * the rule it protects never changed. It now ends where the title
+     * assignment ends, so it measures the behaviour and not the prose. */
+    const projection = mobile.slice(
+      mobile.indexOf('if (conversation.conversation_type === "direct" && conversation.direct_key)'),
+      mobile.indexOf("const membership = membershipById.get(conversation.id)")
+    );
+    // A named Circle keeps its own name in BOTH group-ish branches (Plan Chat
+    // and plain group), so a Circle can never fall back to a member's name.
+    expect(projection.split("groupNameByConversation.get(conversation.id)").length - 1).toBe(2);
   });
 });

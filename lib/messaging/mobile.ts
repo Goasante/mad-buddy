@@ -21,7 +21,7 @@ import type { ConversationRole, QuickActionType, SubscriptionPlan } from "@/lib/
 import { hasVerifiedAccountStatus, type VerificationRow } from "@/lib/trust/verified-account";
 import { isConversationVisible } from "@/lib/messaging/conversation-visibility";
 import { planPhase, type PlanPhase } from "@/lib/social/plans";
-import type { PlanStatus } from "@/lib/supabase/database.types";
+import type { PlanCategory, PlanStatus } from "@/lib/supabase/database.types";
 
 /**
  * Transport-agnostic messaging read/send logic. Takes an already-authenticated
@@ -108,6 +108,18 @@ export type ConversationView = {
   muted: boolean;
   pinned: boolean;
   contextBadge: string | null;
+  /**
+   * The Plan this conversation belongs to, or null when it is not a Plan Chat.
+   *
+   * Presentation and navigation only: it drives the cover treatment and the
+   * route back to the Plan. It is NEVER authorization — a client holding a
+   * planId still reaches this conversation only through membership.
+   */
+  planId: string | null;
+  /** Canonical category for the Plan cover. Null falls back to the branded cover. */
+  planCategory: PlanCategory | null;
+  /** When the Plan starts, ISO. Null for an undated Plan or a non-Plan chat. */
+  planStartAt: string | null;
   otherPlan: SubscriptionPlan | null;
   /**
    * The other person's Trusted Member approval, or null. Direct chats only —
@@ -763,10 +775,17 @@ export async function listConversations(userId: string): Promise<ConversationVie
       : Promise.resolve({ data: [] }),
     admin.rpc("conversation_previews", { p_user_id: userId, p_conversation_ids: conversationIds }),
     loadEffectivePlansForUsers(admin, otherIds),
-    // Timing for Plan Chats only. Enough to answer "is this plan on right
-    // now" and nothing more -- no title, no place, no participants.
+    /* Identity and timing for Plan Chats. The title is what the Plan Chat is
+     * FOR: without it every Plan conversation was called "Plan chat", so
+     * someone with three active Plans could not tell which one they had opened.
+     * Category comes along for the canonical cover treatment.
+     *
+     * Still no place text, no participants, no notes -- the meeting location a
+     * Plan may carry stays inside the Plan, which has its own audience rules.
+     * One batched query keyed by plan id, so a hundred Plan Chats cost the
+     * same single round trip as one. */
     planContextIds.length > 0
-      ? admin.from("plans").select("id, status, start_at, end_at").in("id", planContextIds)
+      ? admin.from("plans").select("id, title, category, status, start_at, end_at").in("id", planContextIds)
       : Promise.resolve({ data: [] })
   ]);
 
@@ -785,6 +804,16 @@ export async function listConversations(userId: string): Promise<ConversationVie
   // Resolved ONCE per page against one clock, so every Plan Chat in this
   // response is judged at the same instant.
   const planNowMs = Date.now();
+  /* Canonical Plan identity, read straight from plans and never copied onto the
+   * conversation row. A renamed Plan therefore renames its chat with no
+   * synchronisation step and no migration debt -- and a title is presentation
+   * only, so it can never stand in for membership. */
+  const planIdentityByPlanId = new Map(
+    (planTimings ?? []).map((plan) => [
+      plan.id,
+      { title: plan.title?.trim() || null, category: plan.category ?? null, startAt: plan.start_at ?? null }
+    ])
+  );
   const planPhaseByPlanId = new Map(
     (planTimings ?? []).map((plan) => [
       plan.id,
@@ -807,10 +836,24 @@ export async function listConversations(userId: string): Promise<ConversationVie
       title = profile?.full_name?.trim() || "A Muddy";
       otherUsername = profile?.username ?? null;
       avatarUrl = profile?.avatar_url ?? null;
-    } else {
+    } else if (conversation.conversation_type === "plan") {
+      /* THE PLAN'S OWN NAME, EXACTLY AS ITS CREATOR TYPED IT.
+       *
+       * Every Plan Chat used to be called "Plan chat", which names the type
+       * and not the thing -- opening one told you nothing about which Plan you
+       * were in. The Plan title is the identity people already recognise, so
+       * it is used verbatim: no title-casing, no rewriting. A Plan called
+       * "swim" reads "swim".
+       *
+       * "Plan chat" survives only as the fallback for a conversation whose
+       * Plan row is unreadable, which is better than an empty header. */
+      const planId = conversation.context_type === "plan" ? conversation.context_id : null;
       title =
         groupNameByConversation.get(conversation.id) ??
-        (conversation.conversation_type === "plan" ? "Plan chat" : "Group");
+        (planId ? planIdentityByPlanId.get(planId)?.title : null) ??
+        "Plan chat";
+    } else {
+      title = groupNameByConversation.get(conversation.id) ?? "Group";
     }
 
     const membership = membershipById.get(conversation.id);
@@ -866,8 +909,25 @@ export async function listConversations(userId: string): Promise<ConversationVie
       planPhase:
         conversation.context_type === "plan" && conversation.context_id
           ? planPhaseByPlanId.get(conversation.context_id) ?? null
-          : null
-    });
+          : null,
+      /* The Plan this chat belongs to, for the cover treatment and the way
+       * back to the Plan itself. Identity only -- authorization is still the
+       * membership check that got the conversation into this list at all. */
+      planId:
+        conversation.context_type === "plan" && conversation.context_id
+          ? conversation.context_id
+          : null,
+      planCategory:
+        conversation.context_type === "plan" && conversation.context_id
+          ? planIdentityByPlanId.get(conversation.context_id)?.category ?? null
+          : null,
+      /* When the Plan happens, for the header's context line. The raw
+       * timestamp, formatted in the viewer's own locale and zone by the client
+       * -- the same treatment the Plans surfaces already give it. */
+      planStartAt:
+        conversation.context_type === "plan" && conversation.context_id
+          ? planIdentityByPlanId.get(conversation.context_id)?.startAt ?? null
+          : null    });
   }
 
   return views;

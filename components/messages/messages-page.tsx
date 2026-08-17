@@ -39,6 +39,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
@@ -404,6 +405,10 @@ export function MessagesPageContent({
   // Why this conversation exists, derived from what the server already sent.
 
   const context = selected ? conversationContext(selected) : { subtitle: null, shared: false };
+  /* More than two people can speak here, so a message needs to say who sent
+   * it. Keyed on the conversation KIND rather than a head-count, so the answer
+   * cannot flip as members come and go mid-thread. */
+  const hasMultipleSpeakers = Boolean(selected && selected.kind !== "direct");
 
   const dismissConversation = useCallback(() => {
     openedRequestedConversation.current = true;
@@ -822,7 +827,13 @@ export function MessagesPageContent({
             <MessagesSquare className="h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
             Messages
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">Chat privately with your approved Muddies.</p>
+          {/* This page holds Circles and Plan Chats as well as direct
+              messages, so "privately with your approved Muddies" was making a
+              promise the group rooms below it do not keep. It now names what
+              is actually here. */}
+          <p className="mt-1 text-sm text-muted-foreground">
+            Your conversations with Muddies, Circles and Plans.
+          </p>
         </div>
         <Button
           type="button"
@@ -1272,6 +1283,36 @@ export function MessagesPageContent({
                           )}
                         >
                           <div className={cn("max-w-[78%]", message.isMine && "flex flex-col items-end")}>
+                            {/* WHO SAID IT, ONCE PER RUN.
+                              *
+                              * A direct chat needs no name: "not mine" already
+                              * identifies the only other person. A Plan Chat
+                              * with three people does -- without this, two
+                              * Muddies' messages were visually identical, and
+                              * the thread said what was decided without saying
+                              * who decided it.
+                              *
+                              * Shown only at the top of an incoming run, so a
+                              * burst from one person stays one block. Never on
+                              * your own messages: you know who you are, and
+                              * repeating it wastes the row. UserAvatar, not
+                              * GlowAvatar -- who is speaking in a Plan has
+                              * nothing to do with who is nearby. */}
+                            {!message.isMine &&
+                            hasMultipleSpeakers &&
+                            startsNewRun(message, messages[messageIndex - 1]) ? (
+                              <div className="mb-1 flex items-center gap-1.5">
+                                <UserAvatar
+                                  src={message.senderAvatarUrl}
+                                  name={message.senderName}
+                                  size="xs"
+                                  decorative
+                                />
+                                <span className="text-xs font-medium text-muted-foreground">
+                                  {message.senderName}
+                                </span>
+                              </div>
+                            ) : null}
                             <MessageActionsMenu
                               subject={{
                                 isMine: message.isMine,

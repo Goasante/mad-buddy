@@ -41,8 +41,12 @@ function conversation(overrides: Partial<ConversationView> = {}): ConversationVi
     otherPlan: null,
   otherTrustedSince: null,
   otherIsVerifiedAccount: false,
-    // Not a Plan Chat by default: a direct conversation has no Plan lifecycle.
+    // Not a Plan Chat by default: a direct conversation has no Plan lifecycle,
+    // no Plan identity and no RSVP of its own.
     planPhase: null,
+    planId: null,
+    planCategory: null,
+    planStartAt: null,
     ...overrides
   };
 }
@@ -53,8 +57,11 @@ function conversation(overrides: Partial<ConversationView> = {}): ConversationVi
 
 describe("conversation context", () => {
   it("leads with the shared thing that created the conversation", () => {
+    /* A Plan Chat now says WHICH plan and WHEN. "From a shared plan" only
+     * restated the badge beside it; with no date on the fixture the honest
+     * answer is that the Plan has none yet. */
     expect(conversationContext(conversation({ contextBadge: "Plan" }))).toEqual({
-      subtitle: "From a shared plan",
+      subtitle: "Plan · No date yet",
       shared: true
     });
     expect(conversationContext(conversation({ contextBadge: "Event" })).subtitle).toBe("From an event");
@@ -65,7 +72,7 @@ describe("conversation context", () => {
 
   it("prefers shared context over the handle", () => {
     const result = conversationContext(conversation({ contextBadge: "Plan", otherUsername: "okoro" }));
-    expect(result.subtitle).toBe("From a shared plan");
+    expect(result.subtitle).toBe("Plan · No date yet");
     expect(result.shared).toBe(true);
   });
 

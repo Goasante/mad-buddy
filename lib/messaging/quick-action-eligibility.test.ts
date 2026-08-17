@@ -100,7 +100,9 @@ describe("arrival language waits for the meeting", () => {
     // Something must remain, or an upcoming Plan Chat loses its quick actions.
     const upcoming = actionsFor("plan", "upcoming");
     expect(upcoming).toContain("where_to_meet");
-    expect(upcoming).toContain("cant_make_it");
+    // No decline here: a Plan carries a canonical RSVP, and this chip only
+    // sends a sentence. Attendance language lives on the Plan itself.
+    expect(upcoming).not.toContain("cant_make_it");
   });
 
   it("offers travel intent once the meeting is close", () => {

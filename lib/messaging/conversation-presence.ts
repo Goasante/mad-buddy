@@ -28,8 +28,19 @@ export type ConversationContext = {
  * kind of room it is.
  */
 export function conversationContext(conversation: ConversationView): ConversationContext {
+  /* A Plan Chat says WHICH plan and WHEN, not merely that a plan exists.
+   *
+   * "From a shared plan" restated the badge sitting next to it and told the
+   * reader nothing they could act on. The title already names the Plan, so the
+   * line underneath is the useful half: the type, then the date.
+   *
+   * planPhase is the server's answer about time, so a finished or cancelled
+   * Plan says so instead of advertising a date that has passed. */
+  if (conversation.contextBadge === "Plan") {
+    return { subtitle: planContextLine(conversation), shared: true };
+  }
   if (conversation.contextBadge) {
-    // "Plan" / "Event" / "Safe Arrival" — the reason the two of you are talking.
+    // "Event" / "Safe Arrival" — the reason the two of you are talking.
     return { subtitle: contextSubtitle(conversation.contextBadge), shared: true };
   }
   if (conversation.otherUsername) {
@@ -39,6 +50,31 @@ export function conversationContext(conversation: ConversationView): Conversatio
     return { subtitle: "Group conversation", shared: false };
   }
   return { subtitle: null, shared: false };
+}
+
+/**
+ * "Plan · Tue, Aug 18 · 12:38 PM" — the Plan's own context line.
+ *
+ * Every branch is derived from what the server already sent. A Plan that has
+ * finished, been cancelled or expired never advertises a date as though it were
+ * still coming; an undated Plan says so plainly rather than inventing a time.
+ */
+function planContextLine(conversation: ConversationView): string {
+  const phase = conversation.planPhase;
+  /* planPhase folds cancelled, completed and expired into "past" -- status wins
+   * over the clock there -- so one branch covers every Plan that is over. */
+  if (phase === "past") return "Plan · Finished";
+  if (phase === "unscheduled" || phase === "archived_unscheduled" || !conversation.planStartAt) {
+    return "Plan · No date yet";
+  }
+
+  const startsAt = new Date(conversation.planStartAt);
+  if (Number.isNaN(startsAt.getTime())) return "Plan";
+
+  // The viewer's own locale and zone, matching how Plans renders the same date.
+  const day = startsAt.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  const time = startsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return `Plan · ${day} · ${time}`;
 }
 
 function contextSubtitle(badge: string): string {

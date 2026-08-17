@@ -137,6 +137,29 @@ export function eligibleQuickActions(input: {
     // An unknown action is withheld rather than shown: a new id added to the
     // list without a rule here should not silently inherit "always visible".
     if (!phases) return false;
-    return phases.includes(input.phase);
+    if (!phases.includes(input.phase)) return false;
+
+    /* A MESSAGE CHIP MUST NOT IMPERSONATE AN RSVP.
+     *
+     * A Plan is the one coordination context that carries a canonical
+     * attendance answer, and "I can't make it" states the opposite of every
+     * value that answer can hold. Tapping it sends a sentence; it does not
+     * touch the RSVP. So the chat ends up saying one thing while the Plan says
+     * another -- Kofi's messages read "I can't make it" while his roster entry
+     * still reads Maybe, and the two disagree in the place people are least
+     * able to check.
+     *
+     * An earlier pass withheld it only from Going, which fixed the loudest
+     * case and left the same contradiction available to everyone else. The
+     * honest rule is simpler: a Plan Chat does not offer attendance language
+     * at all. Declining is a decision, and it belongs to the Plan's own RSVP
+     * controls where it actually changes something.
+     *
+     * Deliberately scoped to Plans. An Event, an Event Circle and a Safe
+     * Arrival thread have no RSVP for this message to contradict, so they keep
+     * it -- there, saying you cannot make it IS just a message. */
+    if (id === "cant_make_it" && input.context === "plan") return false;
+
+    return true;
   });
 }

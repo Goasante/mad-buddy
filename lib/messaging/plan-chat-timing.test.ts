@@ -46,7 +46,9 @@ describe("Plan Chat, upcoming", () => {
   });
 
   it("offers logistics only", () => {
-    expect(actions("plan", "upcoming").sort()).toEqual(["cant_make_it", "where_to_meet"]);
+    // "cant_make_it" is withheld from Plan Chats: it would contradict the
+    // RSVP it cannot change.
+    expect(actions("plan", "upcoming").sort()).toEqual(["where_to_meet"]);
   });
 
   it("does NOT offer 'I'm here'", () => {
@@ -71,7 +73,7 @@ describe("Plan Chat, near start", () => {
     expect(near).toContain("running_late");
     expect(near).toContain("start_without_me");
     expect(near).toContain("where_to_meet");
-    expect(near).toContain("cant_make_it");
+    expect(near).not.toContain("cant_make_it");
   });
 
   it("still withholds 'I'm here' until it starts", () => {
