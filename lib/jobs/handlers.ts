@@ -37,6 +37,115 @@ export class JobError extends Error {
 
 export type JobHandler = (admin: Admin, payload: Record<string, unknown>) => Promise<number>;
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Delivers the durable, after-commit work queued by the canonical Plans RPCs.
+ * The database transaction is the authority for recipients; the payload is
+ * narrowed and then checked against the current Plan/participant rows before
+ * a notification is attempted.
+ */
+export const handlePlanLifecycleSideEffect: JobHandler = async (admin, payload) => {
+  const kind = typeof payload.kind === "string" ? payload.kind : "";
+  const actorId = typeof payload.actorId === "string" ? payload.actorId : "";
+  const planId = typeof payload.planId === "string" ? payload.planId : "";
+  const recipientId = typeof payload.recipientId === "string" ? payload.recipientId : "";
+
+  if (!UUID_PATTERN.test(actorId) || !UUID_PATTERN.test(planId)) {
+    throw new JobError("VALIDATION_FAILED", "Invalid Plan lifecycle job identifiers.");
+  }
+
+  const { data: plan } = await admin
+    .from("plans")
+    .select("creator_id, title")
+    .eq("id", planId)
+    .maybeSingle();
+  if (!plan || plan.creator_id !== actorId) {
+    throw new JobError("CONTEXT_INVALID", "Plan lifecycle context is no longer valid.");
+  }
+
+  if (kind === "first_plan_milestone") {
+    const { recordMilestone } = await import("@/lib/onboarding/service");
+    await recordMilestone(admin, actorId, "first_plan_created");
+    return 1;
+  }
+
+  if (
+    !(["plan_invitation", "upfor_converted"] as const).includes(
+      kind as "plan_invitation" | "upfor_converted"
+    ) ||
+    !UUID_PATTERN.test(recipientId)
+  ) {
+    throw new JobError("VALIDATION_FAILED", "Invalid Plan lifecycle job kind.");
+  }
+
+  const [{ data: participant }, { data: actor }] = await Promise.all([
+    admin
+      .from("plan_participants")
+      .select("rsvp_status")
+      .eq("plan_id", planId)
+      .eq("user_id", recipientId)
+      .maybeSingle(),
+    admin.from("profiles").select("full_name").eq("user_id", actorId).maybeSingle()
+  ]);
+
+  if (!participant || participant.rsvp_status === "removed") {
+    throw new JobError("CONTEXT_INVALID", "Plan lifecycle context is no longer valid.");
+  }
+
+  /* CLAIM BEFORE DELIVERING, so a retry cannot notify twice.
+   *
+   * THE WINDOW THIS CLOSES. The job row is uniquely keyed, so the same logical
+   * invitation can only ever be enqueued once -- but that is job idempotency,
+   * not effect idempotency. A worker that delivered the notification and then
+   * died before recording completion left the job retryable, and
+   * deliverNotification inserts, so the invitee would be told twice about one
+   * invitation.
+   *
+   * The latch is the job row itself: it carries the deterministic key
+   * `plan-invite:<planId>:<recipientId>`, it is never deleted, and it already
+   * exists exactly once per logical invitation. Stamping `delivered` into its
+   * payload before calling deliverNotification is the same technique Safe
+   * Arrival uses for its unconfirmed alert -- set the latch first, filter on it
+   * after -- and needs no schema change.
+   *
+   * ORDERING IS THE POINT. Claiming first means the worst case is a
+   * notification that is never sent (crash between claim and delivery), rather
+   * than one sent twice. For an invitation that is the right way round: a
+   * missing invite is visible in the Plan itself, while a duplicate is a
+   * notification the person cannot explain or undo.
+   *
+   * A FAILED CLAIM IS NOT AN ERROR. It means another attempt already delivered
+   * this invitation, so the correct outcome is to report success and let the
+   * job complete -- retrying forever against a delivered invitation would
+   * dead-letter work that actually succeeded. */
+  const inviteJobKey = `plan-invite:${planId}:${recipientId}`;
+  const { data: claimed } = await admin
+    .from("jobs")
+    .update({ payload: { kind, planId, actorId, recipientId, delivered: true } })
+    .eq("idempotency_key", inviteJobKey)
+    .is("payload->>delivered", null)
+    .select("id");
+
+  // No row claimed: either already delivered by an earlier attempt, or the
+  // job row is gone. Either way this invitation must not be sent again.
+  if (!claimed || claimed.length === 0) return 0;
+
+  const name = actor?.full_name?.trim() || "A Muddy";
+  await deliverNotification(admin, {
+    userId: recipientId,
+    senderId: actorId,
+    category: "plans",
+    type: `plan:${planId}`,
+    title: kind === "upfor_converted" ? "Your hangout became a plan" : "New plan invite",
+    message:
+      kind === "upfor_converted"
+        ? `${name} created "${plan.title}".`
+        : `${name} invited you to "${plan.title}".`
+  });
+  return 1;
+};
+
 // ---------------------------------------------------------------------------
 // Safe Arrival unconfirmed alert (batch 5 §9), the safety-critical one.
 // ---------------------------------------------------------------------------
@@ -723,6 +832,7 @@ export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
 // ---------------------------------------------------------------------------
 
 export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
+  "plans.lifecycle_side_effect": handlePlanLifecycleSideEffect,
   "safe_arrival.unconfirmed_alert": handleSafeArrivalUnconfirmedAlert,
   "media.cleanup_orphan_chat": handleCleanupOrphanChatMedia,
   "media.delete_queued": handleMediaDeleteQueued,

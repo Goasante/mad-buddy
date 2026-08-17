@@ -32,6 +32,7 @@ export type JobType =
   | "streaks.close_expired_periods"
   | "birthdays.notify"
   | "rewards.earned_premium"
+  | "plans.lifecycle_side_effect"
   // Expiry sweeps (spec §31).
   | "expiry.plans"
   | "expiry.statuses"
