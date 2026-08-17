@@ -1,7 +1,11 @@
 import "server-only";
 
 import { z } from "zod";
-import { getFreshnessState } from "@/lib/proximity/freshness";
+import {
+  getFreshnessState,
+  isLocationFreshForProximity,
+  PROXIMITY_FRESH_MS
+} from "@/lib/proximity/freshness";
 import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 import { resolveProximityBand } from "@/lib/proximity/bands";
@@ -223,7 +227,14 @@ export type NearbyProfileRow = {
   visibility_status: "visible" | "ghost" | "app_open_only";
 };
 
-export const NEARBY_STALE_AFTER_MS = 30 * 60 * 1000;
+/**
+ * The canonical proximity freshness rule, kept at its established name.
+ *
+ * Defined once in `freshness.ts` and re-exported here: activation asks the same
+ * question about the viewer's own fix that this asks about a Muddy's, and two
+ * literals would eventually disagree.
+ */
+export const NEARBY_STALE_AFTER_MS = PROXIMITY_FRESH_MS;
 
 /**
  * Core privacy filter for the nearby-friends response, extracted from the
@@ -232,6 +243,13 @@ export const NEARBY_STALE_AFTER_MS = 30 * 60 * 1000;
  * appear; users without a location or profile never appear; stale signals
  * degrade to "hidden" with zero glow; friends beyond MAX_NEARBY_METERS
  * (15km) never appear at all; coordinates never leave this function.
+ *
+ * FRESHNESS IS SYMMETRIC. A distance has two ends, and an old coordinate
+ * corrupts it from either one. This checked only the far end: a Muddy who had
+ * gone quiet was hidden, but the VIEWER's own position was trusted at any age,
+ * so a fix from yesterday still produced confident bands -- reporting somebody
+ * "right here" who had long since left, or putting somebody standing next to
+ * you outside range. Both ends are now held to the same rule.
  */
 export type MuddyStatusSummary = {
   availability_type: string;
@@ -241,7 +259,16 @@ export type MuddyStatusSummary = {
 };
 
 export function buildSafeNearbyFriends(input: {
-  viewer: Pick<NearbyLocationRow, "latitude" | "longitude" | "confidence">;
+  /**
+   * `last_updated` is REQUIRED, and deliberately not optional.
+   *
+   * It was absent from this type, which made the pure layer structurally
+   * incapable of judging its own viewer -- the defect could not have been
+   * fixed here without widening it. Optional would have re-opened the hole
+   * silently at any call site that forgot; required makes the compiler name
+   * every one of them.
+   */
+  viewer: Pick<NearbyLocationRow, "latitude" | "longitude" | "confidence" | "last_updated">;
   friendIds: string[];
   blockedIds: ReadonlySet<string>;
   premiumUserIds: ReadonlySet<string>;
@@ -257,6 +284,22 @@ export function buildSafeNearbyFriends(input: {
   now?: number;
 }): SafeNearbyFriend[] {
   const now = input.now ?? Date.now();
+
+  /* THE VIEWER'S OWN FIX IS CHECKED FIRST, BEFORE ANY DISTANCE EXISTS.
+   *
+   * Returning an empty list is the honest answer: with no current position for
+   * the viewer, there is no proximity relationship to describe, and every
+   * caller already handles "nobody to show". Degrading each Muddy to "hidden"
+   * instead would say something subtly false -- that these specific people were
+   * evaluated and found unavailable -- when nothing about them was in doubt.
+   *
+   * This leaks nothing. The absence is identical to having no Muddies nearby,
+   * so nobody else can learn that this viewer's location went quiet. The viewer
+   * learns it from their own activation state, which is theirs to know. */
+  if (!isLocationFreshForProximity(Date.parse(input.viewer.last_updated), now)) {
+    return [];
+  }
+
   // Absent tier means free. Never derived from premiumUserIds.
   const tierFor = (friendId: string): PublicMembershipTier =>
     input.membershipTierByUserId?.get(friendId) ?? "free";

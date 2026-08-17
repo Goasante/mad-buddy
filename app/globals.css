@@ -6122,13 +6122,27 @@ select {
  * exact failure this ordering prevents.
  * ------------------------------------------------------------------------ */
 
+/* ONE SOURCE FOR THE PILL'S GEOMETRY.
+ *
+ * The launcher is positioned from these, and <main> reserves its footprint
+ * from the same values via --quick-actions-reserve below. Two literals would
+ * drift, and the drift is invisible until a button ends up under the pill. */
+:root {
+  --quick-actions-gap: 0.75rem;
+  --quick-actions-size: 3.75rem;
+  /* What a scrolling page must clear so its last control does not terminate
+     beneath the fixed pill: the gap under it, its own height, and a breathing
+     margin above the nav. Consumed by the app shell, never by a page. */
+  --quick-actions-reserve: calc(var(--quick-actions-gap) + var(--quick-actions-size) + 0.5rem);
+}
+
 .quick-actions {
   position: fixed;
-  right: 0.75rem;
+  right: var(--quick-actions-gap);
   /* Clears the nav's own height AND the device safe area, so the pill never
      lands on the home indicator or behind the bar. The nav pads itself by the
      same inset internally, hence adding it once here rather than twice. */
-  bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px) + 0.75rem);
+  bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px) + var(--quick-actions-gap));
   z-index: 40;
   /* The container spans only its contents; the page beneath stays fully
      interactive everywhere else. */
@@ -6141,6 +6155,13 @@ select {
        floating oddly high. */
     bottom: calc(env(safe-area-inset-bottom, 0px) + 1.25rem);
     right: 1.25rem;
+  }
+
+  /* Desktop scrolls in its own column with room to spare, and the pill sits
+     clear of it. Reserving the mobile footprint here would leave a dead strip
+     at the foot of every page. */
+  :root {
+    --quick-actions-reserve: 1.25rem;
   }
 }
 
@@ -6164,7 +6185,9 @@ select {
   justify-content: center;
   gap: 0.15rem;
   width: 2.75rem;
-  height: 3.75rem;
+  /* The shell reserves this exact height; taking both from one token means a
+     resize cannot silently start covering page content. */
+  height: var(--quick-actions-size);
   border: 1px solid hsl(var(--border) / 0.9);
   border-radius: 1.25rem;
   background: hsl(var(--card) / 0.82);
@@ -6799,4 +6822,33 @@ select {
   font-size: 0.6875rem;
   font-variant-numeric: tabular-nums;
   opacity: 0.75;
+}
+
+/* The activation Glow mark's slow breath.
+   Opacity only -- no transform, so it cannot shift layout or blur the brand
+   symbol sitting on top of it. Deliberately slow and shallow: this is a first
+   impression of "presence", not an attention-grabbing pulse competing with
+   the words beside it. Disabled entirely under prefers-reduced-motion by the
+   motion-reduce:animate-none utility at the call site. */
+@keyframes activation-glow {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.7; }
+}
+
+/* Plans tab strip: a trailing fade that says the tabs keep going.
+ *
+ * The strip has always scrolled, but `.no-scrollbar` removes the only native
+ * cue that it does, so on a narrow phone the last tab simply looked chopped.
+ * The mask fades the final few pixels instead of cutting them, which reads as
+ * "swipe" rather than "broken". Removed at `sm`, where the whole strip fits. */
+.plans-tab-strip {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent 100%);
+}
+
+@media (min-width: 640px) {
+  .plans-tab-strip {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
 }

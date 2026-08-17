@@ -17,10 +17,10 @@ const topEvents = read("components/events/top-events-home.tsx");
 
 describe("section headers", () => {
   it("uses the shared component everywhere", () => {
-    // Near, My Plans (+ empty), and Suggestions (+ first-time). Trending lives in
-    // its own module component, counted below rather than here.
+    // Near, My Plans (+ empty), Suggestions (+ first-time), and "Next for you".
+    // Trending lives in its own module component, counted below rather than here.
     const uses = home.match(/<PageSectionHeader/g) ?? [];
-    expect(uses.length).toBe(5);
+    expect(uses.length).toBe(6);
     expect(moments).toContain("<PageSectionHeader");
     expect(topEvents).toContain("<PageSectionHeader");
   });
@@ -151,13 +151,27 @@ describe("loading states", () => {
   });
 
   it("matches the real column footprint so nothing resizes", () => {
-    const skeleton = home.slice(home.indexOf("!loaded && total === 0"), home.indexOf("A bare horizontal rail"));
+    /* Anchored to the skeleton BLOCK, not the exact condition text. The
+     * condition gained a server-count clause when Home stopped claiming an
+     * empty room over the server's own answer; the footprint rule it protects
+     * is unchanged. */
+    const skeleton = home.slice(
+      home.indexOf("Lightweight skeletons matching the real column footprint"),
+      home.indexOf("A bare horizontal rail")
+    );
     expect(skeleton).toContain("w-[4.75rem] shrink-0");
     expect(skeleton).toContain("h-16 w-16");
   });
 
   it("uses no large spinner", () => {
-    const skeleton = home.slice(home.indexOf("!loaded && total === 0"), home.indexOf("A bare horizontal rail"));
+    /* Anchored to the skeleton BLOCK, not the exact condition text. The
+     * condition gained a server-count clause when Home stopped claiming an
+     * empty room over the server's own answer; the footprint rule it protects
+     * is unchanged. */
+    const skeleton = home.slice(
+      home.indexOf("Lightweight skeletons matching the real column footprint"),
+      home.indexOf("A bare horizontal rail")
+    );
     expect(skeleton).not.toContain("Loader2");
     expect(skeleton).not.toContain("animate-spin");
   });

@@ -41,9 +41,11 @@ describe("Near section header", () => {
     expect(sectionHeader).toContain('actionLabel = "See all"');
   });
 
-  it("hides See all when nobody is nearby", () => {
-    // No href when the count is zero, so the header renders title-only.
-    expect(nearSection).toContain('href={total > 0 ? "/friends" : undefined}');
+  it("hides See all unless somebody is genuinely hidden", () => {
+    /* Was `total > 0`, then `total > 1` -- both still offered to expand people
+     * who were already on screen. Only a real hidden remainder earns the link;
+     * the zero case is covered because hiddenCount is 0 there too. */
+    expect(nearSection).toContain('href={hiddenCount > 0 ? "/friends" : undefined}');
   });
 });
 
@@ -275,7 +277,38 @@ describe("Near section loading", () => {
   });
 
   it("only shows before the first fetch settles, never on refresh", () => {
-    expect(nearSection).toContain("!loaded && total === 0");
+    /* Both skeleton reasons require an EMPTY client list, so a refresh that
+     * already has friends can never fall back into skeletons -- which is the
+     * rule this protects.
+     *
+     * The second reason was added because the client fetch settling empty (or
+     * failing) made Near claim "No trusted Muddies nearby" over the server's
+     * own answer that somebody WAS nearby. Waiting is honest there; asserting
+     * an empty room is not. */
+    /* The guard is back to "empty AND unknown".
+     *
+     * It briefly also waited on `serverNearbyCount > 0`, which had no exit:
+     * once the client list settled empty the skeleton was permanent. The rule
+     * that guard existed for -- never claim an empty room over the server's
+     * answer -- is now met by SEEDING the client list with the server's own
+     * safe result, so there is nothing to contradict. */
+    expect(nearSection).toContain("total === 0 && !loaded");
+    expect(home).toContain("setNearbyLoaded(true)");
+    expect(home).toContain("serverNearby.map(toDashboardFriend)");
+  });
+
+  it("cannot re-enter the skeleton once friends are on screen", () => {
+    // total === 0 gates it, so a populated rail stays populated.
+    const skeleton = nearSection.slice(nearSection.indexOf("total === 0 && !loaded"));
+    expect(skeleton.slice(0, 80)).toContain("total === 0");
+  });
+
+  it("has no state in which the skeleton cannot clear", () => {
+    /* The deadlock: a second clause stayed true forever whenever the client
+     * list settled empty while the server had people. The condition now
+     * depends only on `loaded`, which the fetch always sets. */
+    const guard = nearSection.slice(nearSection.indexOf("{total === 0 &&"));
+    expect(guard.slice(0, 60)).toContain("total === 0 && !loaded ?");
     expect(home).toContain("setNearbyLoaded(true)");
   });
 });

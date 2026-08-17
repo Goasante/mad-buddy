@@ -23,10 +23,17 @@ describe("Home SplitText welcome", () => {
     expect(component).toContain('type SplitTag = "h1"');
   });
 
-  it("animates only the fixed Home welcome heading", () => {
+  it("animates exactly one Home heading", () => {
+    /* The INVARIANT is "one animated h1 on Home", not which words it holds.
+     *
+     * This used to pin the literal "Welcome", which was a fixed title sitting
+     * directly above the time-of-day greeting -- Home greeted the same person
+     * twice. The title is gone and the greeting is now the heading, so the
+     * assertion moves to the property that actually matters: still one
+     * SplitText, still the h1. */
     expect(home).toContain("<SplitText");
     expect(home).toContain('tag="h1"');
-    expect(home).toContain('text="Welcome"');
+    expect(home).toContain("greetingSubtitle(displayName || null, new Date())");
     expect((home.match(/<SplitText/g) ?? []).length).toBe(1);
   });
 });

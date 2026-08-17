@@ -1,4 +1,5 @@
 import { DashboardPageContent } from "@/components/dashboard/dashboard-page";
+import { loadActivationProjection } from "@/lib/activation/projection";
 import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
@@ -34,7 +35,7 @@ export default async function DashboardPage() {
   // this page's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
   const admin = createSupabaseAdminClient();
-  const [access, profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents] = user
+  const [access, profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents, activation] = user
     ? await Promise.all([
         getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
@@ -78,9 +79,12 @@ export default async function DashboardPage() {
         // Top 5 ONLY (Ranked Events Discovery). Home never loads the full
         // ranking: the ranked page asks the same loader for up to 100, so
         // the two agree on rank without Home paying for 100 rows.
-        getRankedUpcomingEvents(user.id, { limit: HOME_RANKED_EVENTS_LIMIT })
+        getRankedUpcomingEvents(user.id, { limit: HOME_RANKED_EVENTS_LIMIT }),
+        // What this person needs next, derived from their real situation.
+        // Batched with everything else, so Home costs no extra round trip.
+        loadActivationProjection(user.id)
       ])
-    : [null, null, null, { items: [], hasMore: false }, null, null, {}, false, false, null, 0, null, null, [], [], []];
+    : [null, null, null, { items: [], hasMore: false }, null, null, {}, false, false, null, 0, null, null, [], [], [], null];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -137,6 +141,15 @@ export default async function DashboardPage() {
 
   return (
     <DashboardPageContent
+      activationState={activation?.state ?? null}
+      firstMuddy={activation?.acknowledgeFirstMuddy ? activation.firstMuddy : null}
+      firstMuddyNeedsLocation={activation ? !activation.locationGranted : false}
+      activationMilestones={activation?.milestones ?? []}
+      relationshipFocus={activation?.relationshipFocus ?? null}
+      twoSidedConversationCount={activation?.twoSidedConversationCount ?? 0}
+      planParticipationCount={activation?.planParticipationCount ?? 0}
+      muddyCount={activation?.muddyCount ?? 0}
+      serverNearby={activation?.nearby ?? []}
       subscriptionPlan={access?.plan}
       hasPremium={access?.hasPremium}
       initialVisibilityStatus={profile?.visibility_status ?? "visible"}

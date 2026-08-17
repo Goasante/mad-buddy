@@ -38,7 +38,13 @@ describe("Journey integrations", () => {
     // Journey still reaches Home — via the engine — rather than pinning a
     // variant that the Smart Card replaced.
     const home = readFileSync("components/dashboard/dashboard-page.tsx", "utf8");
-    expect(home).toContain("<SmartCardHero card={smartCard} />");
+    /* One hero, asserted by COUNT rather than by its exact JSX spelling.
+     * The element gained a `deferred` prop and wrapped onto several lines, so
+     * matching the single-line form failed while the invariant -- exactly one
+     * Smart Card on Home, never a list -- was untouched. */
+    expect(home).toContain("<SmartCardHero");
+    expect(home).toContain("card={smartCard}");
+    expect((home.match(/<SmartCardHero/g) ?? []).length).toBe(1);
 
     const providers = readFileSync("lib/smart-card/providers.ts", "utf8");
     expect(providers).toContain("journey.currentStep.title");

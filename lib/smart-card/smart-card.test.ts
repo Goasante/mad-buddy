@@ -386,7 +386,13 @@ describe("smart card architecture", () => {
 
   it("renders exactly one card on Home — no list, no carousel", () => {
     const home = read("components/dashboard/dashboard-page.tsx");
-    expect(home).toContain("<SmartCardHero card={smartCard} />");
+    /* One hero, asserted by COUNT rather than by its exact JSX spelling.
+     * The element gained a `deferred` prop and wrapped onto several lines, so
+     * matching the single-line form failed while the invariant -- exactly one
+     * Smart Card on Home, never a list -- was untouched. */
+    expect(home).toContain("<SmartCardHero");
+    expect(home).toContain("card={smartCard}");
+    expect((home.match(/<SmartCardHero/g) ?? []).length).toBe(1);
     expect(home).not.toContain("smartCards");
     expect(home).not.toContain(".map((card");
   });

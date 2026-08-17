@@ -155,7 +155,16 @@ export async function sendWaveV2Action(
     Date.now()
   );
   if (cooldownRemaining > 0) {
-    return { ok: true, message: "You already waved recently. Give them a little time." };
+    /* NOT A SUCCESS. No wave was written.
+     *
+     * This returned ok:true, so the sender saw a success toast for something
+     * that never happened -- and any caller branching on `ok` would treat a
+     * refusal as a send. The distinction that matters is "did a wave exist
+     * afterwards", and here it did not.
+     *
+     * The copy stays deliberately soft and carries no countdown: how long is
+     * left is Mad Buddy's bookkeeping, not something to make somebody watch. */
+    return { ok: false, message: "You already waved recently. Give them a little time." };
   }
 
   // Global anti-spam windows (spec §20: 20/hour, 50/day).

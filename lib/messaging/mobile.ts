@@ -372,7 +372,81 @@ export async function sendMessage(userId: string, input: unknown): Promise<Messa
     messagePreviewText(messageType, parsed.data.text) ?? "",
     mentionedUserIds
   );
+
+  await recordFirstDirectMessageMilestone(admin, userId, parsed.data.conversationId);
+
   return { ok: true, message: "Sent.", messageId: message.id };
+}
+
+/**
+ * Activation evidence: this person has actually said something to someone.
+ *
+ * SENDING IS THE EVIDENCE, NOT OPENING. Activation could already see a Wave, a
+ * Plan and a status, but not the most ordinary way somebody starts -- so a
+ * person who said hello and got a reply still counted as not having arrived.
+ * Opening a conversation deliberately records nothing: a thread somebody
+ * opened and left is not an interaction.
+ *
+ * DIRECT ONLY, FOR NOW. Plan and Circle chat are user-authored too, but they
+ * arrive in a conversation the Plan lifecycle created, so counting them would
+ * let "first social value" be reached by replying to logistics. The
+ * conversation_type check is what enforces that, and it is a deliberate scope
+ * decision rather than a limitation.
+ *
+ * NEVER FAILS THE SEND. The message is already persisted and the caller is
+ * about to be told it worked -- which is true. Activation bookkeeping is a
+ * side effect, and telling somebody their message failed because a milestone
+ * row did not write would be a lie about the thing they actually care about.
+ * The next message records it instead; `recordMilestone` is idempotent.
+ *
+ * NO CONTENT. Only that it happened, for this sender. No text, no media id, no
+ * recipient, no conversation reference is copied into the milestone.
+ */
+async function recordFirstDirectMessageMilestone(
+  admin: Admin,
+  senderId: string,
+  conversationId: string
+): Promise<void> {
+  try {
+    const { data: conversation } = await admin
+      .from("conversations")
+      .select("conversation_type")
+      .eq("id", conversationId)
+      .maybeSingle();
+    if (conversation?.conversation_type !== "direct") return;
+
+    /* Written HERE rather than through recordMilestone, to see the error.
+     *
+     * recordMilestone awaits the upsert and discards its error object, so it
+     * cannot throw and a try/catch around it observes nothing -- which is why
+     * a constraint rejection was invisible. The upsert is character-for-
+     * character the one it performs, including the conflict target, so
+     * idempotency still comes from UNIQUE (user_id, milestone) and this
+     * introduces no second dedupe mechanism. */
+    const { error: upsertError } = await admin
+      .from("activation_milestones")
+      .upsert(
+        { user_id: senderId, milestone: "first_message_sent" },
+        { onConflict: "user_id,milestone", ignoreDuplicates: true }
+      );
+    if (upsertError) throw new Error(upsertError.message);
+  } catch (error) {
+    /* Swallowed for the USER, visible to the SERVER.
+     *
+     * The send is already durable and the caller is about to be told it
+     * worked, which is true -- so this must never surface. But silence cost a
+     * real investigation: the milestone was failing against an environment
+     * whose CHECK constraint predates the new name, and nothing anywhere said
+     * so. One server-side line makes that answerable without a database probe.
+     *
+     * The sender id and the error only. No text, no media, no recipient, no
+     * conversation id -- diagnosing bookkeeping must not become a log of who
+     * messaged whom. */
+    console.warn("[activation] first_message_sent not recorded", {
+      senderId,
+      reason: error instanceof Error ? error.message : String(error)
+    });
+  }
 }
 
 /**

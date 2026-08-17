@@ -17,13 +17,14 @@ import {
   PartyPopper,
   Search,
   ShieldCheck,
+  MessageCircle,
   UserPlus,
   Users,
   Users2,
   X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
@@ -34,6 +35,7 @@ import { useRouter } from "next/navigation";
 import { PageSectionHeader } from "@/components/app-shell/page-section-header";
 import { PlanStack } from "@/components/socialize/plan-stack";
 import { rsvpAction } from "@/app/(app)/plans-actions";
+import { sendWaveV2Action } from "@/app/(app)/social-actions";
 import type { VisibleMoment } from "@/lib/content/service";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { usePullRefreshListener } from "@/components/ui/pull-to-refresh";
@@ -67,6 +69,19 @@ import type { ActivityType, AvailabilityType, SubscriptionPlan } from "@/lib/sup
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { SmartCardHero } from "@/components/journey/smart-card";
+import { ActivationCard } from "@/components/activation/activation-card";
+import { FirstMuddyCard } from "@/components/activation/first-muddy-card";
+import type { ActivationAction, ActivationState } from "@/lib/activation/state";
+import { planActionsForMuddy } from "@/lib/activation/state";
+import { Button } from "@/components/ui/button";
+import type { RelationshipFocus } from "@/lib/activation/relationship-focus";
+import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
+import { conversationHref } from "@/lib/messaging/open-conversation";
+import {
+  composeHome,
+  earlyActivationHiddenActionHrefs,
+  type NextBestAction
+} from "@/lib/activation/home-composition";
 import { TopEventsHome } from "@/components/events/top-events-home";
 import type { RankedEvent } from "@/lib/events/ranked-events";
 import type { SmartCard } from "@/lib/smart-card/smart-card";
@@ -140,6 +155,52 @@ type DashboardPageContentProps = {
    */
   smartCard?: SmartCard | null;
   /**
+   * What this person needs next, derived server-side from their real
+   * situation. Null once they are activated, or when logged out.
+   */
+  activationState?: ActivationState | null;
+  /**
+   * The Muddy to acknowledge, or null once the moment has passed.
+   * Server-derived from milestone recency -- never a client flag.
+   */
+  firstMuddy?: { displayName: string; avatarUrl: string | null } | null;
+  firstMuddyNeedsLocation?: boolean;
+  /**
+   * Milestones this person has ever reached.
+   *
+   * Composition asks whether somebody has arrived somewhere, not how many
+   * Muddies they have -- a long-standing user with a small circle must keep
+   * their ordinary Home.
+   */
+  activationMilestones?: readonly string[];
+  /**
+   * The relationship Home should name, with its chosen actions.
+   *
+   * Server-derived from canonical projections. Identity only -- no proximity.
+   */
+  relationshipFocus?: RelationshipFocus | null;
+  /** Direct conversations where both people have written. Maturity evidence. */
+  twoSidedConversationCount?: number;
+  /** Plans this person is on. Maturity evidence. */
+  planParticipationCount?: number;
+  /** Live, mutual Muddies. */
+  muddyCount?: number;
+  /**
+   * Muddies the SERVER resolved as nearby at render time.
+   *
+   * Home's own nearby list is fetched after mount, so between render and that
+   * response the section has no data. Without the server's answer it cannot
+   * tell "still loading" from "genuinely nobody", and showed the empty state
+   * to somebody the server had already found a Muddy for.
+   */
+  /**
+   * The privacy-safe nearby people the server already resolved.
+   *
+   * Rendered immediately so Home never starts from zero and never shows
+   * placeholders for people it already knows. Bands only -- no coordinates.
+   */
+  serverNearby?: NearbyFriendApiItem[];
+  /**
    * A capped slice of the canonical Moments feed, already authorised by
    * buildMomentFeed. Home previews it; /moments owns the real experience.
    */
@@ -189,6 +250,11 @@ const PROXIMITY_ORDER: Record<ProximityLevel, number> = {
  * "See all" meaningful for a large circle.
  */
 const NEARBY_MAX_POSITIONS = 8;
+/* How many nearby Muddies appear BENEATH the focused one.
+ *
+ * Small on purpose: Home surfaces the moment, /friends is the directory. Three
+ * keeps a phone screen calm while still saying "several people are around". */
+const NEARBY_SUPPORTING_LIMIT = 3;
 
 function capitalize(name: string) {
   return name ? name.charAt(0).toUpperCase() + name.slice(1) : name;
@@ -250,6 +316,15 @@ export function DashboardPageContent({
   safeArrival = null,
   hiddenQuickActionHrefs = [],
   smartCard = null,
+  activationState = null,
+  firstMuddy = null,
+  firstMuddyNeedsLocation = false,
+  activationMilestones = [],
+  relationshipFocus = null,
+  twoSidedConversationCount = 0,
+  planParticipationCount = 0,
+  muddyCount = 0,
+  serverNearby = [],
   moments = [],
   air = [],
   isFirstTimeUser = false,
@@ -259,12 +334,48 @@ export function DashboardPageContent({
 }: DashboardPageContentProps) {
   const reducedMotion = useReducedMotion();
   const [ghostMode, setGhostMode] = useState(initialVisibilityStatus === "ghost");
-  const [friends, setFriends] = useState<DashboardFriend[]>([]);
+  /* SEEDED FROM THE SERVER, not from nothing.
+   *
+   * This started empty, so a screen the server could render complete began at
+   * zero and asked the browser to fetch the same people again -- and when that
+   * fetch settled empty, Home showed anonymous placeholders for people it
+   * already knew about. The client refresh now reconciles known truth instead
+   * of discovering it. */
+  const [friends, setFriends] = useState<DashboardFriend[]>(() =>
+    serverNearby.map(toDashboardFriend)
+  );
   const [statusMessage, setStatusMessage] = useState("");
   const [isCheckingNearby, setIsCheckingNearby] = useState(false);
   const [promptFeedback, setPromptFeedback] = useState<{ title?: string; message: string; error: boolean } | null>(
     null
   );
+  /* Muddies waved at during THIS session.
+
+   *
+
+   * Not a cooldown of our own: the server owns eligibility. This only stops
+
+   * Home re-offering a Wave it has just been told was accepted, until the next
+
+   * projection read supplies the authoritative answer again. */
+
+  /* The Muddy a wave is in flight for, or null.
+
+
+   *
+
+
+   * Separate from the shared `isPending`: only this button should say
+
+
+   * "Waving…", and Say hi beside it must stay usable. */
+
+
+  const [wavingMuddyId, setWavingMuddyId] = useState<string | null>(null);
+
+
+  const [wavedMuddyIds, setWavedMuddyIds] = useState<ReadonlySet<string>>(() => new Set());
+
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const router = useRouter();
   const [quickControlsOpen, setQuickControlsOpen] = useState(false);
@@ -276,7 +387,9 @@ export function DashboardPageContent({
   const [isPending, startTransition] = useTransition();
   // Nearby is fetched client-side after mount, so there is a real window with
   // no data yet. Distinguishes "still loading" from "genuinely nobody nearby".
-  const [nearbyLoaded, setNearbyLoaded] = useState(false);
+  /* Unknown only when the server had nothing either. With server-hydrated
+     people there is no initial-unknown phase to show a skeleton for. */
+  const [nearbyLoaded, setNearbyLoaded] = useState(serverNearby.length > 0);
   const locationUpdateInFlightRef = useRef(false);
   const promptFeedbackTimerRef = useRef<number | null>(null);
 
@@ -436,6 +549,11 @@ export function DashboardPageContent({
           }
 
           loadNearbyFriends();
+          /* The ACTIVATION state is server-derived, so a new fix has to reach
+             the projection or Home would keep asking for a location it now
+             has. Nearby is client-fetched above; this is what moves somebody
+             from "Turn on Glow" to "Glow is ready" without a manual reload. */
+          router.refresh();
         } catch {
           setStatusMessage("Could not update your private proximity signal.");
         } finally {
@@ -512,6 +630,171 @@ export function DashboardPageContent({
   }
 
   /**
+   * Turn Glow on, from the card that asked.
+   *
+   * THE CANONICAL PATH, NOT A SECOND ONE. `updatePrivateLocation` is the same
+   * callback Quick Controls and pull-to-refresh already use -- it raises the
+   * OS prompt and posts to /api/location/update -- and the visibility change
+   * goes through `updateVisibilityStatusAction`, which authorises server-side
+   * exactly as Settings does. Nothing about the privacy rules is re-decided
+   * here; Home only chooses WHEN to ask.
+   *
+   * router.refresh() so the next state comes from the server projection. The
+   * alternative -- guessing the new activation state locally -- is how a
+   * screen ends up disagreeing with the account behind it.
+   */
+  function enableVisibilityFromActivation() {
+    if (isPending) return;
+    startTransition(async () => {
+      const result = await updateVisibilityStatusAction("visible");
+      showPromptFeedback(
+        result.ok ? "Glow is on. Your Muddies can see when you're close by." : result.message,
+        !result.ok
+      );
+      if (result.ok) router.refresh();
+    });
+  }
+
+  /**
+   * The activation card's primary action, for the states Home can complete.
+   *
+   * Returns undefined elsewhere, so those keep their ordinary link -- the card
+   * decides nothing about which states these are.
+   */
+  /**
+   * The engine's action names, in the words a person would use.
+   *
+   * One place, so the button and any later guidance describe the same thing.
+   */
+  const ACTION_LABEL: Record<ActivationAction, string> = {
+    say_hi: "Say hi",
+    message: "Message",
+    wave: "Wave",
+    make_plan: "Make a Plan",
+    view_plan: "Open Plan",
+    find_muddies: "Find Muddies",
+    enable_location: "Turn on Glow",
+    refresh_location: "Refresh Glow",
+    enable_visibility: "Turn on visibility"
+  };
+
+  /* Only the quiet-evening state names a person.
+   *
+   * Nearby has its own payoff surface, and the setup states are about the
+   * viewer's own account rather than any relationship. */
+  const focusedRelationship =
+    activationState === "no_one_nearby" ? relationshipFocus ?? null : null;
+
+  /* A STALE FIX BLOCKS PROXIMITY CLAIMS, NOT THE RELATIONSHIP.
+   *
+   * The recovery card replaced the whole relationship section, so somebody
+   * whose location had merely gone quiet lost Message and Make a Plan too --
+   * neither of which depends on knowing where anybody is. Refreshing stays the
+   * primary action, because it is what unblocks Glow; the person they were
+   * talking to returns as the quiet secondary rather than disappearing. */
+  const staleRelationship =
+    activationState === "location_stale" ? relationshipFocus ?? null : null;
+
+  const activationPrimaryAction =
+    activationState === "muddies_no_location" || activationState === "location_stale"
+      ? updatePrivateLocation
+      : activationState === "visibility_off"
+        ? enableVisibilityFromActivation
+        : undefined;
+
+  /**
+   * The contextual first action, run against a real relationship.
+   *
+   * CANONICAL PATHS ONLY. Say hi resolves the direct conversation through
+   * `openDirectConversationAction` — the same entry New Message uses — and
+   * then opens it so the person writes their own words. Nothing is auto-sent:
+   * a message the app composed and signed with somebody's name is not a
+   * greeting, it is the product talking to itself.
+   */
+  function runRelationshipAction(action: ActivationAction, muddyId: string) {
+    if (isPending) return;
+
+    if (action === "make_plan") {
+      /* CARRIES THE PERSON, NOT A PLACE.
+       *
+       * The composer opened with nobody selected, so somebody who tapped
+       * "Make a Plan" on Kofi had to search for Kofi again -- the product
+       * forgetting what they had just done. Only the Muddy id travels: no
+       * coordinates, no band, no proximity of any kind. Nearby is the social
+       * context that led here, not a location payload. */
+      router.push(`/plans?create=1&with=${encodeURIComponent(muddyId)}` as Route);
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await openDirectConversationAction(muddyId);
+      if (!result.ok || !result.conversationId) {
+        // Stay on Home and say what happened. Never fake a success.
+        showPromptFeedback(result.message, true);
+        return;
+      }
+      /* The CANONICAL destination helper, not a hand-built path.
+       *
+       * This used to interpolate `/messages/${id}`, which matches no route --
+       * there is no [id] segment under /messages, only a page that reads
+       * ?conversation= -- so every Say hi landed on the 404. Three other
+       * surfaces already went through conversationHref; Home was the one
+       * spelling the URL itself, which is exactly how it got a different
+       * answer from the rest of the product. */
+      router.push(conversationHref(result.conversationId));
+    });
+  }
+
+  /**
+   * A wave, from the nearby payoff.
+   *
+   * THE CANONICAL ACTION, unchanged: sendWaveV2Action owns authorisation, the
+   * pair cooldown, block state and the notification. Home only chooses when to
+   * offer it, and the engine has already refused to offer it when the server
+   * would bounce it.
+   */
+  async function waveAtMuddy(muddyId: string) {
+    if (isPending || wavingMuddyId) return;
+
+    /* THE CONFIRMATION IS URGENT; THE RECONCILIATION IS NOT.
+     *
+     * This whole handler used to sit inside startTransition, so the "Wave
+     * sent" toast was a non-urgent update batched with the re-render that
+     * dropped the Wave button. React painted them together and the sender saw
+     * only the button change -- a wave that had genuinely been delivered
+     * looked like nothing had happened.
+     *
+     * Awaiting the action directly keeps the toast an ordinary urgent update,
+     * so it paints on its own. Only the action-list reconciliation goes into a
+     * transition afterwards. */
+    setWavingMuddyId(muddyId);
+    let result: Awaited<ReturnType<typeof sendWaveV2Action>>;
+    try {
+      result = await sendWaveV2Action(muddyId);
+    } catch {
+      setWavingMuddyId(null);
+      showPromptFeedback("Wave couldn't be sent right now.", true);
+      return;
+    }
+    setWavingMuddyId(null);
+    showPromptFeedback(result.message, !result.ok);
+
+    /* REFLECTS the server's answer; never decides eligibility.
+     *
+     * A successful wave starts the canonical pair cooldown, so continuing to
+     * offer Wave would leave a button the server will predictably refuse.
+     * Recording who was waved at lets the decision engine drop it on the
+     * next render -- the client is not running a timer, it is remembering an
+     * outcome the server already committed. Cleared by any reload, where the
+     * projection's own cooldown read takes over again. */
+    if (result.ok) {
+      startTransition(() => {
+        setWavedMuddyIds((waved) => new Set(waved).add(muddyId));
+      });
+    }
+  }
+
+  /**
    * RSVP from the Home plan stack.
    *
    * The canonical action, unchanged — the card decides only what to OFFER,
@@ -539,6 +822,117 @@ export function DashboardPageContent({
   const hasSafeArrival =
     safeArrival !== null &&
     (safeArrival.travelling.length > 0 || safeArrival.checkingOn.length > 0 || safeArrival.invitations.length > 0);
+
+  /* WHO OWNS THE SCREEN. Decided once, from state, so no section has to guess.
+   *
+   * Home was giving a first-time user three proximity instructions at once:
+   * the activation card asking for Glow, the Near module below it saying
+   * visibility was paused, and Trending offering events. Activation is the
+   * authority while it is still teaching; the rest wait their turn. */
+  const compositionInputs = useMemo(
+    () => ({
+      activationState,
+      acknowledgingFirstMuddy: firstMuddy !== null,
+      milestones: new Set(activationMilestones),
+      hasSafetyCard: hasSafeArrival,
+      upcomingPlanCount: agendaItems.length,
+      twoSidedConversationCount,
+      planParticipationCount,
+      muddyCount,
+      nextUnspokenMuddy: relationshipFocus?.nextUnspokenMuddy ?? null,
+      heroPrimaryAction: relationshipFocus?.plan.primary,
+      missingProfileItems: profileReminder?.missingItems ?? []
+    }),
+    [
+      activationState,
+      firstMuddy,
+      activationMilestones,
+      hasSafeArrival,
+      agendaItems.length,
+      twoSidedConversationCount,
+      planParticipationCount,
+      muddyCount,
+      profileReminder,
+      relationshipFocus
+    ]
+  );
+  const composition = useMemo(() => composeHome(compositionInputs), [compositionInputs]);
+
+  /* THE PAYOFF'S ACTIONS, from the one engine.
+   *
+   * Only when exactly one Muddy is nearby and the projection's focused
+   * relationship is that same person -- otherwise the pair would describe
+   * somebody who is not on screen. `isNearby: true` is the whole point: it is
+   * what turns a Plan suggestion into a Wave. */
+  const soloNearbyMuddy =
+    nearbyFriends.find((friend) => friend.friendId === relationshipFocus?.muddy.id) ?? null;
+  const soloNearbyPlan =
+    soloNearbyMuddy && relationshipFocus?.muddy.id === soloNearbyMuddy.friendId
+      ? planActionsForMuddy({
+          hasSharedUpcomingPlan: relationshipFocus.plan.reason === "shared_plan",
+          hasExistingConversation: relationshipFocus.plan.primary !== "say_hi",
+          conversationState: relationshipFocus.plan.primary === "say_hi" ? "none" : "started",
+          isNearby: true,
+          /* The server's own answer, minus anybody waved at just now.
+             Offering a Wave the cooldown will refuse is a dead button, and
+             `true` here meant Wave survived its own success. */
+          waveAvailable:
+            relationshipFocus.waveAvailable && !wavedMuddyIds.has(soloNearbyMuddy.friendId)
+        })
+      : null;
+
+  // Narrowed once so both the label and the handler are typed.
+  const soloSecondary = soloNearbyPlan?.secondary ?? null;
+  const soloNearbyActions =
+    soloNearbyMuddy && soloNearbyPlan ? (
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+        <Button
+          size="lg"
+          className="min-w-[11rem]"
+          /* Blocks a second tap of THIS action without freezing the other:
+             a wave in flight must not make Say hi unusable. */
+          disabled={isPending || wavingMuddyId !== null}
+          data-home-action={soloNearbyPlan.primary}
+          onClick={() =>
+            soloNearbyPlan.primary === "wave"
+              ? waveAtMuddy(soloNearbyMuddy.friendId)
+              : runRelationshipAction(soloNearbyPlan.primary, soloNearbyMuddy.friendId)
+          }
+        >
+          {/* The pending phase, on this button only: Say hi beside it stays
+              usable, and the label change is what makes the tap feel received. */}
+          {soloNearbyPlan.primary === "wave" && wavingMuddyId === soloNearbyMuddy.friendId
+            ? "Waving…"
+            : ACTION_LABEL[soloNearbyPlan.primary]}
+        </Button>
+        {soloSecondary ? (
+          <button
+            type="button"
+            disabled={isPending || wavingMuddyId !== null}
+            onClick={() =>
+              soloNearbyPlan.secondary === "wave"
+                ? waveAtMuddy(soloNearbyMuddy.friendId)
+                : runRelationshipAction(soloNearbyPlan.secondary!, soloNearbyMuddy.friendId)
+            }
+            className="focus-ring rounded-lg px-1 py-1.5 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-60"
+          >
+            {soloSecondary === "wave" && wavingMuddyId === soloNearbyMuddy.friendId
+              ? "Waving…"
+              : ACTION_LABEL[soloSecondary]}
+          </button>
+        ) : null}
+      </div>
+    ) : null;
+
+  /* Resolved once, against the real person. Null when the chosen action cannot
+     be spoken concretely -- Home then simply ends. */
+  const nextStep = useMemo(
+    () =>
+      composition.nextBestAction
+        ? resolveNextStep(composition.nextBestAction, relationshipFocus?.nextUnspokenMuddy ?? null)
+        : null,
+    [composition.nextBestAction, relationshipFocus]
+  );
 
   return (
     <>
@@ -580,14 +974,16 @@ export function DashboardPageContent({
         <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
         <PendingInvitePrompt />
 
-        {/* Greeting — the page's title. A fixed "Welcome" rather than a
-            time-of-day + name line; the subtitle below is state-derived,
-            never a fixed line, so it always answers "what should I do, and
-            why" — that's where the personality/personalisation lives now. */}
+        {/* ONE greeting, not two.
+            A fixed "Welcome" heading sat directly above a time-of-day line, so
+            Home opened by greeting the same person twice in two type sizes and
+            spent its most valuable vertical space saying nothing. The
+            time-of-day line already carries who and when, so it becomes the
+            heading and the redundant title is gone. */}
         <div className="min-w-0">
           <SplitText
             tag="h1"
-            text="Welcome"
+            text={greetingSubtitle(displayName || null, new Date())}
             splitType="chars"
             delay={45}
             duration={0.55}
@@ -597,11 +993,6 @@ export function DashboardPageContent({
             textAlign="left"
             className="truncate text-2xl font-bold leading-tight tracking-tight"
           />
-          {/* Deliberately a step smaller than the body scale so the greeting
-              itself stays clearly dominant. */}
-          <p className="mt-1 text-[0.8125rem] leading-[1.45] text-muted-foreground">
-            {greetingSubtitle(displayName || null, new Date())}
-          </p>
         </div>
 
         {/* HERO: the Smart Card — Home's single canonical card and its main
@@ -610,18 +1001,97 @@ export function DashboardPageContent({
             applicable card from the ordered provider list, and only the
             content changes. profileReminder (below, near the visibility card)
             is a smaller secondary nudge, not a replacement. */}
-        {smartCard ? <SmartCardHero card={smartCard} /> : null}
+        {/* The relationship first, the capability second. While this is showing it
+            REPLACES the generic activation card -- two cards asking for the same
+            thing is the app repeating itself at the moment it should be warm. */}
+        {firstMuddy ? (
+          <FirstMuddyCard muddy={firstMuddy} needsLocation={firstMuddyNeedsLocation} className="mb-4" />
+        ) : activationState ? (
+          <ActivationCard
+            state={activationState}
+            className="mb-4"
+            /* The quiet-evening card speaks about a real relationship; every
+               other state keeps its own action. `focusedRelationship` is null
+               unless this is that state, so one check gates all of it. */
+            onPrimaryAction={
+              focusedRelationship
+                ? () =>
+                    runRelationshipAction(
+                      focusedRelationship.plan.primary,
+                      focusedRelationship.muddy.id
+                    )
+                : activationPrimaryAction
+            }
+            pending={isPending || isCheckingNearby}
+            pendingLabel="Working…"
+            /* The stale card keeps the person visible; refreshing stays its
+               primary action, so the relationship rides as the secondary. */
+            relationship={(focusedRelationship ?? staleRelationship)?.muddy ?? null}
+            primaryLabel={
+              focusedRelationship ? ACTION_LABEL[focusedRelationship.plan.primary] : undefined
+            }
+            primaryActionId={focusedRelationship?.plan.primary}
+            secondaryLabel={
+              focusedRelationship?.plan.secondary
+                ? ACTION_LABEL[focusedRelationship.plan.secondary]
+                : staleRelationship
+                  ? ACTION_LABEL[staleRelationship.plan.primary]
+                  : undefined
+            }
+            onSecondaryAction={
+              focusedRelationship?.plan.secondary
+                ? () =>
+                    runRelationshipAction(
+                      focusedRelationship.plan.secondary!,
+                      focusedRelationship.muddy.id
+                    )
+                : staleRelationship
+                  ? () =>
+                      runRelationshipAction(
+                        staleRelationship.plan.primary,
+                        staleRelationship.muddy.id
+                      )
+                  : undefined
+            }
+          />
+        ) : null}
+        {/* SAFETY ALWAYS; A SECOND ACTIVATION GUIDE NEVER.
+            safe_arrival is a live journey somebody is on -- it outranks
+            activation and keeps its full treatment. The `journey` card is
+            Mad Buddy's OTHER activation system, and its "Turn On Visibility"
+            step repeats this screen's instruction with a different
+            destination, so it stands down rather than merely dimming. */}
+        {smartCard && (smartCard.id === "safe_arrival" || composition.showJourneyCard) ? (
+          <SmartCardHero
+            card={smartCard}
+            deferred={Boolean(activationState) && smartCard.id !== "safe_arrival"}
+          />
+        ) : null}
 
-        {/* HERO: Nearby Muddies */}
-        <NearbyHero
-          friends={nearbyFriends}
-          total={nearbyTotal}
-          ghostMode={ghostMode}
-          glowColorByFriendId={glowColorByFriendId}
-          reducedMotion={reducedMotion}
-          loaded={nearbyLoaded}
-          onSelect={setSelectedFriendId}
-        />
+        {/* HERO: Nearby Muddies.
+
+            Stands down while activation is teaching. Its empty state gives the
+            same instruction the activation card is already giving -- "Turn
+            visibility back on" under a card saying "Turn on Glow" -- and two
+            surfaces disagreeing about the next step is worse than either. It
+            returns the moment activation recedes, which includes the payoff
+            state where somebody is actually nearby. */}
+        {composition.showNearby ? (
+          <NearbyHero
+            friends={nearbyFriends}
+            total={nearbyTotal}
+            ghostMode={ghostMode}
+            glowColorByFriendId={glowColorByFriendId}
+            reducedMotion={reducedMotion}
+            loaded={nearbyLoaded}
+            /* The server already resolved this. While the client list is still
+               empty and the server found somebody, the section waits rather
+               than claiming the room is empty. */
+            soloActions={soloNearbyActions}
+            focusedId={relationshipFocus?.muddy.id ?? null}
+            onSelect={setSelectedFriendId}
+          />
+        ) : null}
 
         {/* Top Events (Ranked Events Discovery).
 
@@ -640,7 +1110,10 @@ export function DashboardPageContent({
             doing is discovery -- it earns the higher slot because it is the
             thing you do not already know about. My Plans is a reminder of
             commitments you made yourself, so it reads better after. */}
-        <TopEventsHome events={topEvents} />
+        {/* Discovery does not outrank a first relationship. Somebody who has
+            just added their first Muddy is pointed at the core loop, not at
+            what the wider community is doing. */}
+        {composition.showTrending ? <TopEventsHome events={topEvents} /> : null}
 
         {/* Upcoming Plans sits directly under Near: both answer "what is
             happening with my people", so they belong together, above the
@@ -661,17 +1134,44 @@ export function DashboardPageContent({
             />
             <PlanStack plans={agendaItems} onJoin={joinPlan} pending={isPending} />
           </section>
-        ) : (
+        ) : composition.showPlansEmpty ? (
+          /* REAL PLANS ALWAYS SHOW; only the placeholder yields.
+           *
+           * The branch above is untouched on purpose -- being new is not a
+           * reason to forget something you agreed to, and hiding a commitment
+           * to tidy a screen would destroy information somebody is relying on.
+           * "No plans yet" is an absence dressed as a module, and it has no
+           * business competing with the one thing activation is asking for. */
           <UpcomingPlanEmpty />
-        )}
+        ) : null}
 
 
-        {/* Quick actions: first-time activation set, or the returning-user set. */}
+        {/* ONE next step, not a feature catalogue.
+            "Suggestions for you" showed UpFor, Invite Friends and Find Muddies
+            at equal weight, which reads as "here are three features" rather
+            than "here is what would help". While somebody is still finding
+            their feet, exactly one appears — and null is a legitimate answer:
+            whitespace beats a filler card. */}
+        {nextStep ? <NextForYou step={nextStep} /> : null}
+
+        {/* Quick actions: first-time activation set, or the returning-user set.
+
+            The first-time set (UpFor, Invite, Find Muddies) is KEPT during
+            activation -- it points at the same goal the card does, so it
+            reinforces rather than competes. Only the generic returning-user
+            rail stands down, because "Suggestions for you" alongside a single
+            clear next step is the screen offering two answers at once. */}
         {isFirstTimeUser ? (
-          <FirstTimeQuickActions hiddenHrefs={hiddenQuickActionHrefs} />
-        ) : (
+          /* UpFor is filtered out until Glow has happened -- it describes
+             letting Muddies know you are free, which needs somebody able to
+             see you. Invite and Find Muddies remain: they grow the circle,
+             which points the same way as the card above. */
+          <FirstTimeQuickActions
+            hiddenHrefs={[...hiddenQuickActionHrefs, ...earlyActivationHiddenActionHrefs(compositionInputs)]}
+          />
+        ) : composition.showSuggestions ? (
           <QuickActionsHome primary={primaryActions} />
-        )}
+        ) : null}
 
         {/* Moments preview. Renders the branded onboarding when the viewer has
             none, and the rail once any exist — so the onboarding is never
@@ -680,10 +1180,16 @@ export function DashboardPageContent({
             leaving its onboarding card, which would be a creation affordance
             for a feature that is switched off. Home's remaining sections
             simply close up -- no filler was added in its place. */}
-        {momentsEnabled ? <MomentsPreview moments={moments} air={air} /> : null}
+        {momentsEnabled && composition.showMoments ? (
+          <MomentsPreview moments={moments} air={air} />
+        ) : null}
 
-        {/* Compact profile-completion banner (real state, dismissible). */}
-        {profileReminder ? (
+        {/* Compact profile-completion banner (real state, dismissible).
+
+            Filling in a profile is setup, not value. While activation is asking
+            for one specific thing, a second ask for something different is the
+            screen changing its mind. */}
+        {profileReminder && composition.showProfileReminder ? (
           <ProfileCompletionReminder userId={profileReminder.userId} missingItems={profileReminder.missingItems} />
         ) : null}
 
@@ -714,7 +1220,7 @@ export function DashboardPageContent({
 
         {/* Fills leftover space above the bottom nav with secondary shortcuts.
             Only for the returning-user action set; the first-time set is fixed. */}
-        {!isFirstTimeUser ? (
+        {!isFirstTimeUser && composition.showSuggestions ? (
           <HomeGapFillerActions pool={secondaryActions} />
         ) : null}
       </div>
@@ -846,6 +1352,8 @@ function NearbyHero({
   glowColorByFriendId,
   reducedMotion,
   loaded = true,
+  soloActions,
+  focusedId = null,
   onSelect
 }: {
   friends: DashboardFriend[];
@@ -855,12 +1363,54 @@ function NearbyHero({
   reducedMotion: boolean;
   /** False until the first nearby fetch settles; drives the skeleton. */
   loaded?: boolean;
+  /**
+   * What the SERVER found at render time.
+   *
+   * The nearby list is fetched after mount, so a failed or slow response left
+   * this section unable to tell "not answered yet" from "genuinely nobody" --
+   * and it chose the second, telling somebody the room was empty while the
+   * server had already found a Muddy in it.
+   */
+  /**
+   * Contextual actions for the single-nearby hero, supplied by Home.
+   *
+   * Rendered rather than decided here: the deterministic engine already owns
+   * what to offer, and a second opinion inside JSX is how two surfaces start
+   * disagreeing about the same relationship.
+   */
+  soloActions?: ReactNode;
+  /**
+   * Which nearby Muddy leads, from the canonical relationship selector.
+   *
+   * Home does not rank people here: it asks the same selector every other
+   * surface asks, so the hero is the relationship the product already
+   * considers most relevant.
+   */
+  focusedId?: string | null;
   onSelect: (friendId: string) => void;
 }) {
   // Over the cap, keep the three strongest and give the 4th slot to "+N".
   const overflow = total > NEARBY_MAX_POSITIONS;
   const shown = overflow ? friends.slice(0, NEARBY_MAX_POSITIONS - 1) : friends.slice(0, NEARBY_MAX_POSITIONS);
   const remaining = total - shown.length;
+  /* ONE PERSON LEADS, WHATEVER THE COUNT.
+   *
+   * With two nearby Muddies the rail gave both identical 76px cells and no
+   * action, so a live social moment read as a directory. Home picks the same
+   * relationship the rest of the product already focuses on -- `focusedId`
+   * comes from the canonical selector -- and the others stay visible beneath
+   * at lower weight rather than competing for the same attention.
+   *
+   * Falls back to the first result only when the selector has no opinion, so
+   * the hero can never be empty while somebody is genuinely nearby. */
+  const heroFriend = friends.length > 0 ? friends.find((f) => f.friendId === focusedId) ?? friends[0] : null;
+  /* Everyone else, capped. Home is not the nearby directory -- /friends is. */
+  const supporting = heroFriend
+    ? friends.filter((f) => f.friendId !== heroFriend.friendId).slice(0, NEARBY_SUPPORTING_LIMIT)
+    : [];
+  /* Genuinely hidden people, not merely "more than one". Two visible Muddies
+     beside a "See all" was an offer to expand what was already expanded. */
+  const hiddenCount = total - (heroFriend ? 1 : 0) - supporting.length;
 
   return (
     // data-tour-id is the guided tour's stable targeting contract; the tour
@@ -871,11 +1421,21 @@ function NearbyHero({
       <PageSectionHeader
         id="home-nearby-heading"
         title="Near"
-        href={total > 0 ? "/friends" : undefined}
+        /* "See all" only when somebody is genuinely HIDDEN.
+           `total > 1` still offered to expand two people who were both already
+           on screen -- a link to what you are looking at. */
+        href={hiddenCount > 0 ? "/friends" : undefined}
         actionAriaLabel={`See all ${total} nearby Muddies`}
       />
 
-      {!loaded && total === 0 ? (
+      {/* Skeletons ONLY while the state is genuinely unknown.
+          The previous guard also waited on `serverNearbyCount > 0`, which had
+          no exit: once the client list settled empty the skeleton was
+          permanent, and Home showed anonymous placeholders forever. The real
+          answer was to stop starting from zero -- `friends` is now seeded with
+          the server's own safe result, so "empty and not yet loaded" means
+          nobody knew anything, which is the only honest reason to wait. */}
+      {total === 0 && !loaded ? (
         // Lightweight skeletons matching the real column footprint exactly, so
         // the row does not resize when data arrives. No large loading card.
         // gap-4 matches the real rail below: a different gap here would shift
@@ -888,6 +1448,101 @@ function NearbyHero({
               <span className="h-2.5 w-9 animate-pulse rounded bg-secondary/50 motion-reduce:animate-none" />
             </div>
           ))}
+        </div>
+      ) : heroFriend ? (
+        /* ONE PERSON IS THE EVENT, NOT A LIST ITEM.
+         *
+         * A genuine nearby Muddy is the moment the whole product exists for,
+         * and it was rendering as a 76px cell in a scroll rail with a "See
+         * all" beside it -- the same treatment four people get, so one person
+         * read as a list that had mostly failed to load.
+         *
+         * Same components, same tokens, more room: the Glow does the talking,
+         * the name is legible, and the action is right there instead of behind
+         * a tap into a modal. */
+        <div className="flex flex-col items-center gap-3 py-2 text-center">
+          <button
+            type="button"
+            onClick={() => onSelect(heroFriend.friendId)}
+            className="focus-ring safe-motion rounded-[1.5rem] p-1 transition-transform active:scale-[0.99] motion-reduce:active:scale-100"
+            aria-label={`${capitalize(firstName(heroFriend.displayName || heroFriend.username))}, ${proximityLabels[heroFriend.proximityLevel]}. Open profile`}
+          >
+            <span className="relative grid place-items-center">
+              <GlowAvatar
+                name={heroFriend.displayName || heroFriend.username}
+                src={heroFriend.avatarUrl}
+                proximityLevel={heroFriend.proximityLevel}
+                glowStrength={heroFriend.glowStrength}
+                confidence={heroFriend.confidence}
+                glowColorId={glowColorByFriendId[heroFriend.friendId] ?? null}
+                membershipTier={heroFriend.membershipTier}
+                /* The one size difference. Proximity, strength and confidence
+                   are untouched, so the band this renders is the band the
+                   server resolved -- only the stage is bigger. */
+                size="lg"
+                reducedMotion={reducedMotion}
+              />
+            </span>
+          </button>
+
+          <span className="flex flex-col items-center gap-1">
+            <span className="text-lg font-semibold leading-tight">
+              {capitalize(firstName(heroFriend.displayName || heroFriend.username))}
+            </span>
+            {/* Canonical wording, never a measurement. The dot repeats what the
+                label already says, so the label carries it alone here. */}
+            <span className="text-sm font-medium text-muted-foreground">
+              {proximityLabels[heroFriend.proximityLevel]}
+            </span>
+          </span>
+
+          {soloActions}
+
+          {/* ALSO CLOSE — present, deliberately quieter.
+              Relationship vocabulary, not discovery: these are Muddies, so
+              never "people nearby" or "other users". Each row carries the same
+              canonical proximity label and opens the same profile the hero
+              does; no second Say hi is offered, because asking somebody to
+              greet two new people at once is homework, not a moment. */}
+          {supporting.length > 0 ? (
+            <div className="mt-4 w-full">
+              <p className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Also close
+              </p>
+              <ul className="mt-2 flex flex-col gap-1">
+                {supporting.map((friend) => {
+                  const name = capitalize(firstName(friend.displayName || friend.username));
+                  return (
+                    <li key={friend.friendId}>
+                      <button
+                        type="button"
+                        onClick={() => onSelect(friend.friendId)}
+                        className="focus-ring safe-motion flex w-full items-center gap-3 rounded-2xl px-1 py-1.5 text-left transition-transform active:scale-[0.99] motion-reduce:active:scale-100"
+                        aria-label={`${name}, ${proximityLabels[friend.proximityLevel]}. Open profile`}
+                      >
+                        <GlowAvatar
+                          name={friend.displayName || friend.username}
+                          src={friend.avatarUrl}
+                          proximityLevel={friend.proximityLevel}
+                          glowStrength={friend.glowStrength}
+                          confidence={friend.confidence}
+                          glowColorId={glowColorByFriendId[friend.friendId] ?? null}
+                          membershipTier={friend.membershipTier}
+                          size="sm"
+                          reducedMotion={reducedMotion}
+                          intensity={NEAR_GLOW_INTENSITY}
+                        />
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
+                        <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                          {proximityLabels[friend.proximityLevel]}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
         </div>
       ) : total > 0 ? (
         // A bare horizontal rail, not a panel — the avatars themselves are the
@@ -1234,6 +1889,108 @@ function QuickActionsHome({ primary }: { primary: QuickAction[] }) {
  * One suggestion. A calm pastel surface, a small rounded icon chip, a title
  * and one short sentence — closer to a widget than a shortcut button.
  */
+/**
+ * The single next step, for somebody still finding their feet.
+ *
+ * REUSES THE EXISTING CARD, deliberately. A bespoke card here would be a
+ * second visual language for the same job, and the rail's own card already
+ * carries the tone, icon and touch target this needs. Only the count changes:
+ * one, chosen by rule, instead of three shown together.
+ *
+ * The heading says "Next for you" rather than "Suggestions for you" because a
+ * single deliberate step is not a list of suggestions to browse.
+ */
+/**
+ * The one next step, resolved against real state.
+ *
+ * Say hi carries a REAL NAME, so it cannot live in a static table: "Say hi to
+ * Ama" is the whole point -- naming the person is what makes it a relationship
+ * action rather than a feature suggestion.
+ */
+type NextStepView = {
+  href: Route;
+  label: string;
+  description: string;
+  icon: typeof UserPlus;
+  /** Stable identity for the future Contextual Guidance System. */
+  actionId: string;
+};
+
+function resolveNextStep(
+  action: Exclude<NextBestAction, null>,
+  muddy: { displayName: string } | null
+): NextStepView | null {
+  if (action === "say_hi_to_muddy") {
+    // No name, no card: never "Say hi to your Muddy".
+    if (!muddy) return null;
+    return {
+      href: "/friends" as Route,
+      label: `Say hi to ${muddy.displayName}`,
+      description: "You haven't chatted yet.",
+      icon: MessageCircle,
+      actionId: "say_hi_to_muddy"
+    };
+  }
+  /* SPECIFIC, so it does not restate the header.
+     The header's person-plus goes to /friends?tab=requests -- a generic "Add
+     Muddy" entry that also carries the pending-request badge. This is the
+     narrower job: bringing somebody who is not on Mad Buddy yet. */
+  return {
+    href: "/invites" as Route,
+    label: "Invite another Muddy",
+    description: "Grow your circle with someone you already know.",
+    icon: UserPlus,
+    actionId: "invite_muddy"
+  };
+}
+
+function NextForYou({ step }: { step: NextStepView }) {
+  const Icon = step.icon;
+
+  return (
+    <section aria-labelledby="home-next-heading">
+      {/* "Next step", not "Next for you".
+          The second reads as recommendation-feed language -- the vocabulary of
+          things picked FOR you to browse. This is one deliberate step to
+          continue with, so it is named as a step. */}
+      <PageSectionHeader id="home-next-heading" title="Next step" />
+
+      {/* A ROW, NOT A LONELY TILE.
+          SuggestionCard is a fixed 7.75rem rail card, sized so three fit with a
+          fourth peeking. Rendering one left two thirds of the row empty, which
+          read as "two cards failed to load" rather than "this is the step".
+          Full width, compact height, one line of support, one chevron. */}
+      <Link
+        href={step.href}
+        aria-label={`${step.label}. ${step.description}`}
+        // Stable identity for the future Contextual Guidance System to
+        // spotlight. No tooltip today -- just something durable to point at.
+        data-home-action={step.actionId}
+        className="focus-ring safe-motion mt-2 flex items-center gap-3.5 rounded-[1.25rem] border border-border/70 bg-card/60 px-4 py-3.5 transition-[transform,box-shadow] active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100"
+      >
+        {/* Restrained accent: the orange relationship CTA above stays the
+            strongest thing on the screen. */}
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-secondary/70 text-primary">
+          <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold leading-tight">{step.label}</span>
+          {/* One line. Wraps rather than truncating, so the meaning survives
+              large text instead of disappearing behind an ellipsis. */}
+          <span className="mt-0.5 block text-[0.8125rem] leading-snug text-muted-foreground">
+            {step.description}
+          </span>
+        </span>
+        <ChevronRight
+          className="h-4 w-4 shrink-0 text-muted-foreground"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
+      </Link>
+    </section>
+  );
+}
+
 function SuggestionCard({ action, sweeping = false }: { action: QuickAction; sweeping?: boolean }) {
   const tone = SUGGESTION_TONE[action.tone];
   const Icon = action.icon;
@@ -1431,7 +2188,9 @@ function UpcomingPlanEmpty() {
 function greetingSubtitle(name: string | null, now: Date): string {
   const hour = now.getHours();
   const partOfDay = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  return name ? `${partOfDay}, ${name}.` : `${partOfDay}.`;
+  // No trailing full stop: this is now the page heading rather than a
+  // sentence under one, and headings do not end in punctuation.
+  return name ? `${partOfDay}, ${name}` : partOfDay;
 }
 
 function toDashboardFriend(friend: NearbyFriendApiItem): DashboardFriend {

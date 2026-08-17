@@ -334,56 +334,10 @@ export async function createConversationForPlan(
   admin: Admin,
   planId: string
 ): Promise<string | null> {
-  const { data: existing } = await admin
-    .from("conversations")
-    .select("id")
-    .eq("context_type", "plan")
-    .eq("context_id", planId)
-    .maybeSingle();
-  if (existing) return existing.id;
-
-  const { data: plan } = await admin.from("plans").select("id, creator_id, title").eq("id", planId).maybeSingle();
-  if (!plan) return null;
-
-  const { data: created, error } = await admin
-    .from("conversations")
-    .insert({
-      conversation_type: "plan",
-      created_by: plan.creator_id,
-      context_type: "plan",
-      context_id: planId,
-      status: "active"
-    })
-    .select("id")
-    .single();
-  if (error || !created) {
-    const { data: raced } = await admin
-      .from("conversations")
-      .select("id")
-      .eq("context_type", "plan")
-      .eq("context_id", planId)
-      .maybeSingle();
-    return raced?.id ?? null;
-  }
-
-  const { data: participants } = await admin
-    .from("plan_participants")
-    .select("user_id, role")
-    .eq("plan_id", planId)
-    .in("rsvp_status", ["invited", "viewed", "going", "maybe", "waitlisted"]);
-
-  const rows = (participants ?? []).map((participant) => ({
-    conversation_id: created.id,
-    user_id: participant.user_id,
-    role: (participant.role === "host" ? "owner" : "member") as ConversationRole,
-    status: "joined" as const,
-    // Plan Chat shows full history to participants, it's a shared context.
-    history_visible_from: new Date(0).toISOString()
-  }));
-  if (rows.length > 0) await admin.from("conversation_members").insert(rows);
-
-  await publishSystemMessage(admin, created.id, "conversation_created");
-  return created.id;
+  const { data, error } = await admin.rpc("reconcile_plan_conversation_members", {
+    p_plan_id: planId
+  });
+  return error ? null : data;
 }
 
 /**

@@ -229,7 +229,9 @@ function profile(userId: string, overrides: Partial<NearbyProfileRow> = {}): Nea
 
 function build(input: Partial<Parameters<typeof buildSafeNearbyFriends>[0]> = {}) {
   return buildSafeNearbyFriends({
-    viewer: { latitude: 5.6037, longitude: -0.187, confidence: "high" },
+    // A fresh viewer by default, from the same helper the friends use: the
+    // engine now holds both ends of a distance to one freshness rule.
+    viewer: location("viewer"),
     friendIds: [],
     blockedIds: new Set(),
     premiumUserIds: new Set(),
@@ -307,7 +309,7 @@ describe("buildSafeNearbyFriends", () => {
 
   it("keeps same-place readings very close while preserving weak confidence", () => {
     const result = build({
-      viewer: { latitude: 5.6037, longitude: -0.187, confidence: "high" },
+      viewer: location("viewer", { confidence: "high" }),
       friendIds: ["fuzzy"],
       locationByUserId: new Map([["fuzzy", location("fuzzy", { confidence: "low" })]]),
       profileByUserId: new Map([["fuzzy", profile("fuzzy")]])
@@ -325,7 +327,7 @@ describe("buildSafeNearbyFriends", () => {
   it("lets a confident same-place reading say Right here", () => {
     // The other half of the gate: precision is allowed when it is earned.
     const result = build({
-      viewer: { latitude: 5.6037, longitude: -0.187, confidence: "high" },
+      viewer: location("viewer", { confidence: "high" }),
       friendIds: ["sharp"],
       locationByUserId: new Map([["sharp", location("sharp", { confidence: "high" })]]),
       profileByUserId: new Map([["sharp", profile("sharp")]])
@@ -337,7 +339,7 @@ describe("buildSafeNearbyFriends", () => {
   it("takes the weaker of the two readings, never the viewer's alone", () => {
     // A confident viewer must not make someone else's soft fix look precise.
     const result = build({
-      viewer: { latitude: 5.6037, longitude: -0.187, confidence: "high" },
+      viewer: location("viewer", { confidence: "high" }),
       friendIds: ["soft"],
       locationByUserId: new Map([["soft", location("soft", { confidence: "medium" })]]),
       profileByUserId: new Map([["soft", profile("soft")]])
