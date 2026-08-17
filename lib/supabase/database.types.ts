@@ -4122,6 +4122,46 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      create_plan_lifecycle: {
+        Args: {
+          p_actor_id: string;
+          p_request_key: string;
+          p_title: string;
+          p_description: string | null;
+          p_plan_type: string;
+          p_start_at: string | null;
+          p_end_at: string | null;
+          p_timezone: string;
+          p_rsvp_deadline: string | null;
+          p_place_type: string;
+          p_custom_place_text: string | null;
+          p_reminder_minutes: number | null;
+          p_category: string | null;
+          p_invitee_ids: string[];
+          p_initial_going_ids: string[];
+          p_source_hangout_id: string | null;
+          p_effective_max_active_plans: number;
+          p_effective_max_participants: number;
+        };
+        Returns: Array<{ plan_id: string; conversation_id: string; created: boolean }>;
+      };
+      set_plan_participant_rsvp: {
+        Args: { p_actor_id: string; p_plan_id: string; p_status: string };
+        Returns: Array<{ rsvp_status: string; conversation_id: string }>;
+      };
+      add_plan_participants: {
+        Args: {
+          p_actor_id: string;
+          p_plan_id: string;
+          p_participant_ids: string[];
+          p_effective_max_participants: number;
+        };
+        Returns: Array<{ added_count: number; conversation_id: string }>;
+      };
+      reconcile_plan_conversation_members: {
+        Args: { p_plan_id: string };
+        Returns: string;
+      };
       queue_stale_unattached_chat_media: {
         Args: {
           p_ready_before: string;
@@ -4720,7 +4760,14 @@ export type MilestoneName =
   | "first_status_created"
   | "first_wave_sent"
   | "first_glow_enabled"
-  | "first_plan_created";
+  | "first_plan_created"
+  /**
+   * One successful user-authored DIRECT message.
+   *
+   * Added by 20260816120000_first_message_sent_milestone. Direct only: Plan and
+   * Circle chat have their own lifecycle semantics and are a separate decision.
+   */
+  | "first_message_sent";
 
 export type ProfileFieldName =
   | "bio"
