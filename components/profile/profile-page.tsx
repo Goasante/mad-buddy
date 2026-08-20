@@ -223,6 +223,8 @@ export function ProfilePageContent({
   }
 
   function saveProfile() {
+    if (saving) return;
+
     const nextProfile = {
       displayName: displayName.trim(),
       username: username.trim().toLowerCase(),
@@ -261,39 +263,44 @@ export function ProfilePageContent({
      * as plain async work with its own pending flag. */
     void (async () => {
       setSaving(true);
-      const result = await updateProfileAction({
-        fullName: nextProfile.displayName,
-        username: nextProfile.username,
-        bio: nextProfile.bio,
-        moodStatus: nextProfile.moodStatus,
-        dateOfBirth: nextProfile.dateOfBirth,
-        birthdayVisibility: nextProfile.birthdayVisibility,
-        ageVisibility: nextProfile.ageVisibility,
-        zodiacVisibility: nextProfile.zodiacVisibility
-      });
-      setSaving(false);
-      setFeedback(result.message);
+      try {
+        const result = await updateProfileAction({
+          fullName: nextProfile.displayName,
+          username: nextProfile.username,
+          bio: nextProfile.bio,
+          moodStatus: nextProfile.moodStatus,
+          dateOfBirth: nextProfile.dateOfBirth,
+          birthdayVisibility: nextProfile.birthdayVisibility,
+          ageVisibility: nextProfile.ageVisibility,
+          zodiacVisibility: nextProfile.zodiacVisibility
+        });
+        setFeedback(result.message);
 
-      if (result.ok) {
-        setSavedProfile(nextProfile);
-        setDisplayName(nextProfile.displayName);
-        setUsername(nextProfile.username);
-        setBio(nextProfile.bio);
-        setMoodStatus(nextProfile.moodStatus);
-        setDateOfBirth(nextProfile.dateOfBirth);
-        setBirthdayVisibility(nextProfile.birthdayVisibility);
-        setAgeVisibility(nextProfile.ageVisibility);
-        setZodiacVisibility(nextProfile.zodiacVisibility);
-        if (result.dateOfBirthCanCorrect !== undefined) {
-          setDateOfBirthCanCorrect(result.dateOfBirthCanCorrect);
+        if (result.ok) {
+          setSavedProfile(nextProfile);
+          setDisplayName(nextProfile.displayName);
+          setUsername(nextProfile.username);
+          setBio(nextProfile.bio);
+          setMoodStatus(nextProfile.moodStatus);
+          setDateOfBirth(nextProfile.dateOfBirth);
+          setBirthdayVisibility(nextProfile.birthdayVisibility);
+          setAgeVisibility(nextProfile.ageVisibility);
+          setZodiacVisibility(nextProfile.zodiacVisibility);
+          if (result.dateOfBirthCanCorrect !== undefined) {
+            setDateOfBirthCanCorrect(result.dateOfBirthCanCorrect);
+          }
+          setCorrectingDateOfBirth(false);
+          setEditing(false);
+          if (returnTo && nextProfile.dateOfBirth && avatarUrl) {
+            router.push(returnTo as Route);
+          } else {
+            router.refresh();
+          }
         }
-        setCorrectingDateOfBirth(false);
-        setEditing(false);
-        if (returnTo && nextProfile.dateOfBirth && avatarUrl) {
-          router.push(returnTo as Route);
-        } else {
-          router.refresh();
-        }
+      } catch {
+        setFeedback("Your profile could not be saved. Check your connection and try again.");
+      } finally {
+        setSaving(false);
       }
       /* A REFUSAL STAYS IN THE EDITOR. setEditing(false) is inside the success
        * branch, so a rejected username or an invalid date leaves every field
@@ -327,7 +334,7 @@ export function ProfilePageContent({
   }
 
   function saveAvatar() {
-    if (!selectedAvatarFile) return;
+    if (!selectedAvatarFile || avatarUploading) return;
 
     const formData = new FormData();
     formData.append("avatar", selectedAvatarFile);
@@ -339,26 +346,27 @@ export function ProfilePageContent({
      * picture had changed when the server never received it. */
     void (async () => {
       setAvatarUploading(true);
-      const result = await uploadAvatarAction(formData).catch(() => ({
-        ok: false as const,
-        message: "That photo could not be uploaded. Check your connection and try again.",
-        avatarUrl: undefined
-      }));
-      setAvatarUploading(false);
-      setFeedback(result.message);
+      try {
+        const result = await uploadAvatarAction(formData);
+        setFeedback(result.message);
 
-      if (result.ok && result.avatarUrl) {
-        setAvatarUrl(result.avatarUrl);
-        setAvatarRevision(Date.now());
-        setAvatarLoadFailed(false);
-        setAvatarPreviewUrl(null);
-        setSelectedAvatarFile(null);
-        window.dispatchEvent(new CustomEvent("madbuddy:avatar-updated", { detail: result.avatarUrl }));
-        if (returnTo && savedProfile.dateOfBirth) {
-          router.push(returnTo as Route);
-        } else {
-          router.refresh();
+        if (result.ok && result.avatarUrl) {
+          setAvatarUrl(result.avatarUrl);
+          setAvatarRevision(Date.now());
+          setAvatarLoadFailed(false);
+          setAvatarPreviewUrl(null);
+          setSelectedAvatarFile(null);
+          window.dispatchEvent(new CustomEvent("madbuddy:avatar-updated", { detail: result.avatarUrl }));
+          if (returnTo && savedProfile.dateOfBirth) {
+            router.push(returnTo as Route);
+          } else {
+            router.refresh();
+          }
         }
+      } catch {
+        setFeedback("That photo could not be uploaded. Check your connection and try again.");
+      } finally {
+        setAvatarUploading(false);
       }
       /* On failure the preview and the chosen file are deliberately KEPT, so
        * Save is still there to press again without re-picking the photo. */

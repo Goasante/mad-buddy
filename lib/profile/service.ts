@@ -269,17 +269,23 @@ export async function updateProfile(
     }
     if (analytics.length) {
       const admin = createSupabaseAdminClient();
-      await Promise.all(
-        analytics.map((event) =>
-          recordProductEvent(admin, {
-            eventName: event.eventName,
-            actorId: userId,
-            resourceType: "profile_birth_settings",
-            resourceId: event.resourceId,
-            featureKey: "profile"
-          })
-        )
-      );
+      try {
+        await Promise.all(
+          analytics.map((event) =>
+            recordProductEvent(admin, {
+              eventName: event.eventName,
+              actorId: userId,
+              resourceType: "profile_birth_settings",
+              resourceId: event.resourceId,
+              featureKey: "profile"
+            })
+          )
+        );
+      } catch {
+        // Analytics is compensating work. The profile, DOB and privacy rows
+        // above are authoritative and a telemetry outage must not turn their
+        // successful commit into an apparent save failure or correction retry.
+      }
     }
   }
 

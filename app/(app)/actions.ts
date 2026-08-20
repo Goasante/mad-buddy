@@ -7,7 +7,6 @@ import { emitLifeEvent } from "@/lib/life/emit";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { sniffImageKind, uploadValidationMessage, validateImageUpload } from "@/lib/media/validation";
-import { optimizeProfileAvatar, toStorageArrayBuffer } from "@/lib/media/processing";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -84,22 +83,37 @@ function orderedPair(userId: string, friendId: string) {
 }
 
 export async function updateProfileAction(input: unknown): Promise<IntegrationActionState> {
-  const userId = await getAuthedUserId();
+  const requestId = createRequestId();
+  let userId: string | null = null;
 
-  if (!userId) {
-    return { ok: false, message: "Log in before updating your profile." };
+  try {
+    userId = await getAuthedUserId();
+
+    if (!userId) {
+      return { ok: false, message: "Log in before updating your profile." };
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const result = await updateProfile(supabase, userId, input);
+
+    if (result.ok) {
+      revalidatePath("/profile");
+      revalidatePath("/dashboard");
+      revalidatePath("/friends");
+    }
+
+    return result;
+  } catch (error) {
+    logBackendEvent("error", {
+      requestId,
+      route: "/profile",
+      action: "update_profile",
+      statusCode: 500,
+      userId,
+      errorType: errorType(error)
+    });
+    return { ok: false, message: "Your profile could not be saved. Please try again." };
   }
-
-  const supabase = await createSupabaseServerClient();
-  const result = await updateProfile(supabase, userId, input);
-
-  if (result.ok) {
-    revalidatePath("/profile");
-    revalidatePath("/dashboard");
-    revalidatePath("/friends");
-  }
-
-  return result;
 }
 
 export async function uploadAvatarAction(formData: FormData): Promise<IntegrationActionState> {
@@ -159,24 +173,35 @@ export async function uploadAvatarAction(formData: FormData): Promise<Integratio
   // re-encode (drops GPS and all metadata) and cap the dimensions.
   let avatarBuffer: Buffer;
   try {
+    // Keep the native image dependency out of the shared Server Action module
+    // until this upload action actually needs it. A profile/DOB save must not
+    // fail merely because the deployment cannot load Sharp's native runtime.
+    const { optimizeProfileAvatar, toStorageArrayBuffer } = await import("@/lib/media/processing");
     avatarBuffer = await optimizeProfileAvatar(Buffer.from(await file.arrayBuffer()));
-  } catch {
+    const { error } = await admin.storage.from("avatars").upload(path, toStorageArrayBuffer(avatarBuffer), {
+      contentType: "image/webp",
+      cacheControl: "31536000",
+      upsert: false
+    });
+
+    if (error) {
+      return { ok: false, message: "Profile photo upload failed. Please try again." };
+    }
+  } catch (error) {
+    logBackendEvent("error", {
+      requestId: createRequestId(),
+      route: "/profile",
+      action: "upload_avatar_process",
+      statusCode: 500,
+      userId,
+      errorType: errorType(error)
+    });
     return {
       ok: false,
       message: validation.kind === "heic"
         ? "This HEIC photo could not be converted. Export it as JPG or PNG and try again."
         : "That image couldn't be processed. Try a different photo."
     };
-  }
-
-  const { error } = await admin.storage.from("avatars").upload(path, toStorageArrayBuffer(avatarBuffer), {
-    contentType: "image/webp",
-    cacheControl: "31536000",
-    upsert: false
-  });
-
-  if (error) {
-    return { ok: false, message: "Profile photo upload failed. Please try again." };
   }
 
   const { data: storedAvatar, error: verifyError } = await admin.storage.from("avatars").download(path);

@@ -17,6 +17,17 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd()
   },
+  // Server Actions load Sharp lazily, but its Linux binary and libvips must
+  // still be copied into Vercel's traced function output. Without these
+  // includes a production action can compile successfully and then fail at
+  // runtime with ERR_DLOPEN_FAILED when it processes an avatar.
+  outputFileTracingIncludes: {
+    "/*": [
+      "./node_modules/sharp/**/*",
+      "./node_modules/@img/sharp-linux-x64/**/*",
+      "./node_modules/@img/sharp-libvips-linux-x64/**/*"
+    ]
+  },
   typedRoutes: true,
   async headers() {
     const productionOnlyHeaders = process.env.NODE_ENV === "production"
