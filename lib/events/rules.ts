@@ -278,3 +278,126 @@ export function resolveJoinEventCircle(input: JoinCircleInput): JoinCircleResult
   }
   return { allowed: true, reason: "allowed" };
 }
+
+// ---------------------------------------------------------------------------
+// Audience: who may find an Event, and who may open one
+// ---------------------------------------------------------------------------
+
+/**
+ * What the viewer's relationship to an Event's audience is.
+ *
+ * Supplied by the service layer, which has already looked up the targets --
+ * these rules stay pure so the same answer can be reached from the web feed,
+ * the ranking query, the mobile API and a test, without four lookups.
+ */
+export type EventAudienceContext = {
+  visibility: string;
+  hostId: string;
+  /** The viewer is explicitly named on the Event's invite list. */
+  isInvited?: boolean;
+  /** The viewer belongs to a Circle this Event is targeted at. */
+  isCommunityMember?: boolean;
+  /** The Event carries at least one community target. */
+  hasCommunityTarget?: boolean;
+};
+
+/**
+ * BROWSING. Whether an Event may appear in a general discovery listing.
+ *
+ * The rule that matters here is that an unlisted Event which shows up in the
+ * feed is not unlisted. `link` is reachable by anyone holding the link and
+ * must never be browsable; `invite` is private however many people are going.
+ *
+ * LEGACY `community` IS DELIBERATELY DISCOVERABLE. Every Event created before
+ * the audience picker existed is `community` with no target attached, and
+ * those are findable today. Hiding them retroactively would remove Events
+ * people can currently see, so an untargeted `community` Event keeps behaving
+ * as it always has. Once a community target is attached, membership decides --
+ * which is what the audience was always supposed to mean.
+ *
+ * Fails closed: an audience this function does not recognise gets no
+ * discovery, rather than inheriting it by falling through a !== check.
+ */
+export function isDiscoverableInFeed(event: EventAudienceContext, viewerId: string): boolean {
+  if (event.hostId === viewerId) return true;
+  switch (event.visibility) {
+    case "public":
+    case "nearby":
+      return true;
+    case "community":
+      // Targeted: members only. Untargeted (legacy): as before.
+      return event.hasCommunityTarget ? Boolean(event.isCommunityMember) : true;
+    case "invite":
+    case "link":
+    default:
+      return false;
+  }
+}
+
+/**
+ * BROAD RANKING. Whether an Event may enter Top 100 / Home Top 5.
+ *
+ * Stricter than browsing on purpose. A community Event is legitimately
+ * discoverable by its members, but "trending across Mad Buddy" is a claim
+ * about the whole product, and an Event whose audience is one Circle has not
+ * earned it. Visibility precedes score: this is asked before any number is
+ * calculated, so a private wedding with five thousand Going can never rank.
+ */
+export function isBroadlyRankable(event: { visibility: string }): boolean {
+  return event.visibility === "public" || event.visibility === "nearby";
+}
+
+/**
+ * DIRECT ACCESS. Whether a viewer may open an Event they already hold the id
+ * for -- a deep link, a notification, a shared URL.
+ *
+ * Deliberately more permissive than browsing, and that gap is the entire point
+ * of an unlisted audience: holding the link IS the permission for `link`.
+ * `invite` asks a different question, answered by the invite list rather than
+ * by the audience value alone.
+ *
+ * A draft is never openable by anyone but its host, whatever its audience --
+ * an unpublished Event is not yet an Event as far as everyone else is
+ * concerned.
+ */
+export function canViewEvent(
+  event: EventAudienceContext & { status: string },
+  viewerId: string
+): boolean {
+  if (event.hostId === viewerId) return true;
+  if (event.status === "draft") return false;
+  switch (event.visibility) {
+    case "public":
+    case "nearby":
+    case "link":
+      return true;
+    case "community":
+      return event.hasCommunityTarget ? Boolean(event.isCommunityMember) : true;
+    case "invite":
+      return Boolean(event.isInvited);
+    default:
+      return false;
+  }
+}
+
+/**
+ * Whether this viewer may act as the Event's voice: publish Updates, manage
+ * details.
+ *
+ * The host always can. Admins are the delegation path, and they exist as their
+ * own table rather than as Event Circle membership because circle capacity is
+ * capped by the host's subscription -- a limit that must never decide who can
+ * announce a moved gate.
+ */
+export function canManageEvent(
+  event: { hostId: string },
+  viewerId: string,
+  isAdmin: boolean
+): boolean {
+  return event.hostId === viewerId || isAdmin;
+}
+
+/** Only the host: appointing admins, cancelling, changing the audience. */
+export function isEventOwner(event: { hostId: string }, viewerId: string): boolean {
+  return event.hostId === viewerId;
+}

@@ -38,6 +38,7 @@ export type DiscoveryFeedProps = {
   exploreSignal?: number;
   unreadCount?: number;
   hero?: React.ReactNode;
+  eventModeName?: string | null;
   onJoinGroup?: (group: GroupSummary) => void;
   onJoinPlan?: (plan: HomeUpcomingPlan) => void;
   groups?: readonly GroupSummary[];
@@ -69,6 +70,8 @@ export function DiscoveryFeed({
   unreadCount = 0,
   /** The hero, rendered between the chips and the rails. */
   hero,
+  /** Set when Linkr opened with valid Event context; renames the subtitle. */
+  eventModeName = null,
   /** Canonical join action, supplied by the page. */
   onJoinGroup,
   /** Canonical RSVP action, supplied by the page. */
@@ -145,8 +148,12 @@ export function DiscoveryFeed({
       >
         <div className="min-w-0">
           <h1 className="text-[1.75rem] font-bold leading-none tracking-tight">Linkr</h1>
+          {/* In Event Mode the shared event is why these people are here, so
+              leading with "nearby" describes the wrong product. */}
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Find people nearby who are open to connecting
+            {eventModeName
+              ? `People at ${eventModeName} who are open to connecting`
+              : "Find people nearby who are open to connecting"}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">

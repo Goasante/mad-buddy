@@ -18,6 +18,8 @@
  *   wss), avatar images from Storage (img-src), private Moment playback from
  *   signed Storage URLs (media-src).
  * - data: images: the sign-in card's inline SVG noise texture.
+ * - blob: images/media: local previews of a file the user just chose, shown
+ *   before upload (Event cover, avatar crop, Mad Cam, voice notes).
  * - style-src 'unsafe-inline': Tailwind/Next inject inline styles; style
  *   injection is far lower risk than script injection and nonce-ing every
  *   style is impractical, so this stays.
@@ -74,7 +76,20 @@ export function buildContentSecurityPolicy(options: {
     // gtm here too: gtag.js falls back to an <img> beacon (not fetch/sendBeacon)
     // in some browsers/ad-blocker configurations, requested from
     // googletagmanager.com itself, not just the google-analytics.com domains.
-    `img-src 'self' data:${supabase ? ` ${supabase}` : ""} ${gtm} ${ga}`,
+    /* `blob:` is REQUIRED, not a loosening.
+     *
+     * Every local preview in the product -- the Event cover picker, the
+     * profile avatar cropper, Mad Cam, voice notes -- shows the chosen file
+     * through URL.createObjectURL before anything is uploaded. Without blob:
+     * here the browser refuses to paint them, and the user sees a broken-image
+     * icon inside a correctly-sized container. That is exactly the Event cover
+     * bug this line fixes.
+     *
+     * It is low risk by construction: a blob: URL can only reference bytes
+     * this document already created in memory. It cannot name a remote host,
+     * so it grants no new exfiltration or injection surface the page did not
+     * already have. */
+    `img-src 'self' data: blob:${supabase ? ` ${supabase}` : ""} ${gtm} ${ga}`,
     // The Supabase origin is listed twice on purpose: once as https:// for
     // REST/auth, and once as wss:// for the Realtime socket. CSP scheme
     // matching does NOT let an https: source authorise a wss: connection, so
@@ -93,7 +108,9 @@ export function buildContentSecurityPolicy(options: {
     `base-uri 'self'`,
     `form-action 'self'`,
     `worker-src 'self'`,
-    `media-src 'self' data:${supabase ? ` ${supabase}` : ""}`,
+    // blob: for the same reason as img-src: recorded audio and video are
+    // played back from an object URL before they are ever uploaded.
+    `media-src 'self' data: blob:${supabase ? ` ${supabase}` : ""}`,
     `manifest-src 'self'`
   ];
 

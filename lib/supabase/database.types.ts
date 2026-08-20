@@ -1728,6 +1728,228 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["event_rsvps"]["Insert"]>;
         Relationships: [];
       };
+      linkr_profiles: {
+        Row: {
+          user_id: string;
+          enabled: boolean;
+          intent: LinkrIntentValue;
+          bio: string | null;
+          discovery_distance: LinkrDistanceValue;
+          require_photos: boolean;
+          only_active_now: boolean;
+          only_new_today: boolean;
+          event_mode_enabled: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          enabled?: boolean;
+          intent?: LinkrIntentValue;
+          bio?: string | null;
+          discovery_distance?: LinkrDistanceValue;
+          require_photos?: boolean;
+          only_active_now?: boolean;
+          only_new_today?: boolean;
+          event_mode_enabled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["linkr_profiles"]["Insert"]>;
+        Relationships: [];
+      };
+      linkr_actions: {
+        Row: {
+          id: string;
+          actor_id: string;
+          target_id: string;
+          action: "pass" | "connect";
+          event_id: string | null;
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          actor_id: string;
+          target_id: string;
+          action: "pass" | "connect";
+          event_id?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["linkr_actions"]["Insert"]>;
+        Relationships: [];
+      };
+      linkr_connections: {
+        Row: {
+          id: string;
+          user_low: string;
+          user_high: string;
+          event_id: string | null;
+          conversation_id: string | null;
+          connected_at: string;
+          ended_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_low: string;
+          user_high: string;
+          event_id?: string | null;
+          conversation_id?: string | null;
+          connected_at?: string;
+          ended_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["linkr_connections"]["Insert"]>;
+        Relationships: [];
+      };
+      linkr_interests: {
+        Row: {
+          id: string;
+          user_id: string;
+          interest: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          interest: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["linkr_interests"]["Insert"]>;
+        Relationships: [];
+      };
+      event_audience_targets: {
+        Row: {
+          id: string;
+          event_id: string;
+          target_type: EventAudienceTargetType;
+          target_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          target_type: EventAudienceTargetType;
+          target_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_audience_targets"]["Insert"]>;
+        Relationships: [];
+      };
+      event_locations: {
+        Row: {
+          event_id: string;
+          latitude: number;
+          longitude: number;
+          locality: string | null;
+          region: string | null;
+          country_code: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          event_id: string;
+          latitude: number;
+          longitude: number;
+          locality?: string | null;
+          region?: string | null;
+          country_code?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_locations"]["Insert"]>;
+        Relationships: [];
+      };
+      event_admins: {
+        Row: {
+          id: string;
+          event_id: string;
+          user_id: string;
+          role: EventAdminRole;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          user_id: string;
+          role?: EventAdminRole;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_admins"]["Insert"]>;
+        Relationships: [];
+      };
+      event_updates: {
+        Row: {
+          id: string;
+          event_id: string;
+          author_id: string;
+          body: string;
+          priority: EventUpdatePriority;
+          edited_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          author_id: string;
+          body: string;
+          priority?: EventUpdatePriority;
+          edited_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_updates"]["Insert"]>;
+        Relationships: [];
+      };
+      event_update_reactions: {
+        Row: {
+          id: string;
+          event_update_id: string;
+          user_id: string;
+          reaction_type: EventUpdateReactionType;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_update_id: string;
+          user_id: string;
+          reaction_type: EventUpdateReactionType;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_update_reactions"]["Insert"]>;
+        Relationships: [];
+      };
+      event_linkr_opt_ins: {
+        Row: {
+          id: string;
+          event_id: string;
+          user_id: string;
+          enabled: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          user_id: string;
+          enabled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_linkr_opt_ins"]["Insert"]>;
+        Relationships: [];
+      };
       safe_arrival_sessions: {
         Row: {
           id: string;
@@ -2696,12 +2918,19 @@ export type Database = {
         Row: {
           user_id: string;
           date_of_birth: string;
+          /**
+           * When the single self-serve correction was spent. NULL means it is
+           * still available; a timestamp means further changes go through
+           * support. Added by 20260819120000_profile_owns_identity.sql.
+           */
+          correction_used_at: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           user_id: string;
           date_of_birth: string;
+          correction_used_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -4122,6 +4351,10 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      linkr_record_connect: {
+        Args: { p_actor: string; p_target: string; p_event_id?: string | null };
+        Returns: Array<{ matched: boolean; connection_id: string | null; created: boolean }>;
+      };
       create_plan_lifecycle: {
         Args: {
           p_actor_id: string;
@@ -4555,7 +4788,23 @@ export type HangoutRequestStatus = "pending" | "accepted" | "maybe" | "declined"
 
 // --- Batch 5: Safe Arrival, Check-ins, Event Glow, Event Circles ---
 
-export type EventVisibility = "invite" | "link" | "community";
+export type EventVisibility =
+  | "invite"
+  | "link"
+  | "community"
+  /** Eligible for geographic discovery from the published Event location. */
+  | "nearby"
+  /** Eligible for broad discovery and ranking. */
+  | "public";
+
+export type EventAudienceTargetType = "user" | "community";
+
+export type EventAdminRole = "admin";
+
+export type EventUpdatePriority = "normal" | "high";
+
+/** One active reaction per person per Update. */
+export type EventUpdateReactionType = "heart" | "fire" | "applause" | "wow";
 export type EventStatus = "draft" | "scheduled" | "active" | "ended" | "cancelled";
 export type EventRsvpStatus = "interested" | "going" | "not_going";
 
@@ -4805,3 +5054,7 @@ export type ModerationActionType =
   | "permanent_suspension"
   | "escalate"
   | "restore_content";
+
+export type LinkrIntentValue = "friends" | "dating" | "networking" | "anything";
+
+export type LinkrDistanceValue = "very_close" | "around_you" | "wider";

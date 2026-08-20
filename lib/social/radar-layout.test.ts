@@ -417,7 +417,18 @@ describe("centre clearance", () => {
 
 describe("ambient depth", () => {
   const css = read("app/globals.css");
-  const depthCss = stripComments(css.slice(css.indexOf("/* Socialize ambient depth")));
+  /**
+   * Bounded to the ambient-depth block itself.
+   *
+   * This previously sliced to the END OF THE FILE, so every rule appended to
+   * globals.css afterwards was scanned by an alpha ceiling written for faint
+   * background specks -- and any later block with an ordinary opaque colour
+   * failed a test about the radar. The block ends where the next top-level
+   * section comment begins.
+   */
+  const depthStart = css.indexOf("/* Socialize ambient depth");
+  const depthEnd = css.indexOf("/* ---", depthStart + 1);
+  const depthCss = stripComments(css.slice(depthStart, depthEnd === -1 ? undefined : depthEnd));
 
   it("adds faint specks rather than floating objects", () => {
     expect(depthCss).toContain("radial-gradient(1.5px 1.5px");

@@ -381,7 +381,15 @@ const rankingSource = stripComments(read("lib/events/ranking.ts"));
 
 describe("the projection reuses canonical eligibility", () => {
   it("applies the same visibility and block rules as listEvents", () => {
-    expect(projection).toContain('event.visibility !== "invite"');
+    /* Both surfaces now call the SAME rule rather than each carrying a copy of
+     * it. The duplicated `visibility !== "invite"` string this used to assert
+     * was the drift risk: it let `link` -- an unlisted audience -- into ranked
+     * discovery, and any future fix would have had to find both copies. */
+    /* Broad ranking is STRICTER than the feed, deliberately. Browsing may show
+     * a community Event to its members; "trending on Mad Buddy" is a claim
+     * about the whole product, so only public/nearby qualify. Both surfaces
+     * still share one owner -- they just ask it different questions. */
+    expect(projection).toContain("isBroadlyRankable");
     expect(projection).toContain("batchBlockedIds");
   });
 

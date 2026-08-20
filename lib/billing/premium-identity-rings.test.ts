@@ -251,7 +251,9 @@ describe("premium ring coverage across identity surfaces", () => {
     ["messages inbox and conversation header", "components/messages/messages-page.tsx", "conversation.otherPlan"],
     ["moments creator header", "components/content/moment-parts.tsx", "moment.authorPlan"],
     ["air creator header", "components/content/tuned-in-strip.tsx", "moment.authorPlan"],
-    ["events participants", "components/events/events-page.tsx", "muddy.plan"]
+    // The Event attendee roster moved into EventDetail in the Events 2.0
+    // visual rebuild. Same rule, new file.
+    ["events participants", "components/events/event-detail.tsx", "muddy.plan"]
   ];
 
   for (const [surface, path, planField] of surfaces) {

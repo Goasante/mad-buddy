@@ -110,10 +110,11 @@ describe("Linkr branding", () => {
   });
 
   it("leaves internal identifiers alone", () => {
-    // The route remains canonical while presentation uses the approved Linkr
-    // active/inactive artwork instead of the former feature-icon fallback.
+    // Presentation uses the approved Linkr active/inactive artwork rather than
+    // the former feature-icon fallback. Linkr 2.0 moved the destination to
+    // /linkr; the brandIcon identifier -- what this test guards -- is the same.
     const shell = stripComments(read("components/app-shell/app-shell.tsx"));
-    expect(shell).toContain('href: "/discover"');
+    expect(shell).toContain('href: "/linkr"');
     expect(shell).toContain('brandIcon: "linkr"');
   });
 });

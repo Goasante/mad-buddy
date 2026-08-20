@@ -33,6 +33,11 @@ export type RateLimitAction =
   | "safe_arrival.create"
   | "events.create"
   | "events.rsvp"
+  | "events.update"
+  | "events.reaction"
+  | "events.linkr_opt_in"
+  | "linkr.decide"
+  | "linkr.profile"
   | "checkins.create"
   | "event_circles.join"
   | "event_announcements.send"
@@ -100,6 +105,17 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   // Interested/Going/Not Going can all reasonably be tapped and changed a
   // few times while deciding; generous enough for that, not for scripting.
   "events.rsvp": { limit: 60, windowSeconds: 60 * 60 },
+  // An Event Update reaches every Going attendee, so posting is bounded far
+  // more tightly than reacting to one. Twenty an hour is comfortably more
+  // than a real programme needs and well short of a broadcast channel.
+  "events.update": { limit: 20, windowSeconds: 60 * 60 },
+  "events.reaction": { limit: 120, windowSeconds: 60 * 60 },
+  "events.linkr_opt_in": { limit: 30, windowSeconds: 60 * 60 },
+  // Linkr. Deciding is the fast, repetitive action -- a real session is a few
+  // dozen cards -- so the ceiling is high enough never to interrupt a person
+  // and low enough that a script cannot enumerate the pool.
+  "linkr.decide": { limit: 200, windowSeconds: 60 * 60 },
+  "linkr.profile": { limit: 30, windowSeconds: 60 * 60 },
   "checkins.create": { limit: 20, windowSeconds: 60 * 60 },
   "event_circles.join": { limit: 20, windowSeconds: 60 * 60 },
   "event_announcements.send": { limit: 10, windowSeconds: 60 * 60 },

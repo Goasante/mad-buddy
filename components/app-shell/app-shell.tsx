@@ -105,6 +105,10 @@ const navigationItems: Array<{
     | "/events"
     | "/groups"
     | "/discover"
+    // Linkr 2.0. `/discover` stays in this union: the old route still exists
+    // and still redirects, so a saved link or an Event Mode deep link keeps
+    // resolving rather than 404ing.
+    | "/linkr"
     | "/profile"
     | "/settings"
     | "/billing"
@@ -124,14 +128,14 @@ const navigationItems: Array<{
   { href: "/moments", label: "Moments", icon: Sparkles, featureIcon: "moments" },
   { href: "/events", label: "Events", icon: PartyPopper, featureIcon: "events" },
   { href: "/groups", label: "Circles", icon: Users2, featureIcon: "groups" },
-  { href: "/discover", label: "Linkr", icon: Compass, brandIcon: "linkr" },
+  { href: "/linkr", label: "Linkr", icon: Compass, brandIcon: "linkr" },
   { href: "/profile", label: "Profile", icon: UserRound },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/billing", label: "Membership", icon: CircleDollarSign }
 ];
 
 const PRIMARY_HREFS = ["/dashboard", "/friends", "/notifications", "/messages"] as const;
-const SECONDARY_HREFS = ["/plans", "/moments", "/events", "/groups", "/discover"] as const;
+const SECONDARY_HREFS = ["/plans", "/moments", "/events", "/groups", "/linkr"] as const;
 
 /**
  * Routes that render their own in-page title instead of the shared AppHeader
@@ -152,6 +156,7 @@ const PAGES_WITH_OWN_HEADER = [
   "/events",
   "/groups",
   "/discover",
+  "/linkr",
   "/meeting-pings",
   "/moments",
   "/billing",
@@ -192,7 +197,7 @@ const PAGES_WITH_OWN_HEADER = [
 // /hangout-mode joined when UpFor took an inline header carrying a subtitle
 // and its own actions. It was already in PAGES_WITH_OWN_HEADER but not here,
 // which is precisely the gap that produced the blank band above the title.
-const IMMERSIVE_HEADER_PAGES: readonly string[] = ["/discover", "/hangout-mode"];
+const IMMERSIVE_HEADER_PAGES: readonly string[] = ["/discover", "/linkr", "/hangout-mode"];
 
 function hasOwnHeader(pathname: string): boolean {
   return PAGES_WITH_OWN_HEADER.some((href) => pathname === href || pathname.startsWith(`${href}/`));
@@ -1229,7 +1234,7 @@ type MobileTab = {
 const MOBILE_TABS: MobileTab[] = [
   { href: "/messages", label: "Messages", icon: MessageCircle },
   { href: "/friends", label: "Muddies", icon: Users },
-  { href: "/discover", label: "Linkr", icon: Compass, brandIcon: "linkr" },
+  { href: "/linkr", label: "Linkr", icon: Compass, brandIcon: "linkr" },
   { href: "/hangout-mode", label: "UpFor", icon: Hand, brandIcon: "upfor" }
 ];
 

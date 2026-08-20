@@ -32,11 +32,17 @@ export const INVITE_MESSAGE = "Join me on Mad Buddy";
  * from. Reopening or copying behind their back would be the wrong response to
  * somebody deciding not to invite anyone.
  */
-export async function shareInvite(url?: string): Promise<InviteShareOutcome> {
+export async function shareInvite(
+  url?: string,
+  /* What the share sheet says. Defaults to the app invite, so every existing
+   * caller is unchanged -- an Event share passes its own line rather than
+   * telling somebody to "join Mad Buddy" when they are being sent an Event. */
+  message: string = INVITE_MESSAGE
+): Promise<InviteShareOutcome> {
   if (typeof window === "undefined") return "unavailable";
 
   const link = url ?? window.location.origin;
-  const text = INVITE_MESSAGE;
+  const text = message;
 
   if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
     try {

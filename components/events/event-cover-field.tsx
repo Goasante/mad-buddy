@@ -230,9 +230,14 @@ export function EventCoverField({
             className="h-full w-full select-none object-cover"
           />
         ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 px-3 text-center">
-            <ImagePlus className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
-            <span className="text-xs font-medium text-muted-foreground">No cover yet</span>
+          <div className="relative flex h-full w-full flex-col items-center justify-center gap-1.5 px-4 text-center">
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 bg-gradient-to-br from-primary/15 via-transparent to-primary/5"
+            />
+            <ImagePlus className="relative h-7 w-7 text-primary/70" aria-hidden="true" />
+            <span className="relative text-sm font-semibold">Add a cover</span>
+            <span className="relative text-xs text-muted-foreground">Make your Event stand out.</span>
           </div>
         )}
 
@@ -244,18 +249,18 @@ export function EventCoverField({
         ) : null}
       </div>
 
-      {/* Portrait is a preference, not a requirement -- the validator accepts any
-          orientation now, so telling people to "use a portrait image" would
-          describe a rule that no longer exists. */}
+      {/* SHORT (4J §37). The old paragraph explained crop behaviour, aspect
+          ratio and pixel dimensions before the person had chosen anything.
+          Portrait is a preference, not a requirement -- the validator accepts
+          any orientation -- so this says the one thing worth knowing up front,
+          and the positioning hint appears only once there is something to
+          position. "Drag" is honest here: the frame really is a focal
+          positioner, not decoration. */}
       <p className="text-xs leading-relaxed text-muted-foreground">
-        Any photo works. Drag to keep faces near the centre so it crops well across Event cards.
-        Portrait ({COVER_GUIDANCE.aspectRatioLabel}, about {COVER_GUIDANCE.suggestedWidth}
-        {" x "}
-        {COVER_GUIDANCE.suggestedHeight}) fills the card best.
+        {hasCover
+          ? "Drag the photo to keep faces near the centre. This is how your Event may appear in discovery."
+          : `Portrait photos work best (${COVER_GUIDANCE.aspectRatioLabel}). Keep important faces near the centre.`}
       </p>
-      {hasCover ? (
-        <p className="text-xs text-muted-foreground">This is how your Event may appear in discovery.</p>
-      ) : null}
 
       <Button asChild type="button" size="sm" variant="outline" disabled={disabled || busy}>
         <label htmlFor={inputId} className={cn(disabled || busy ? "pointer-events-none opacity-60" : "cursor-pointer")}>

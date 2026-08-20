@@ -6852,3 +6852,1501 @@ select {
     mask-image: none;
   }
 }
+
+/* ===========================================================================
+   LINKR 2.0
+   ---------------------------------------------------------------------------
+   Photo-first, dark, and quiet around the person. The card is the only bright
+   thing on the screen; every control near it is a hairline or a circle so
+   that nothing competes with a face.
+
+   Layout is constrained rather than fluid: the card holds a fixed maximum
+   width and centres, so a desktop viewport gets a focused card with space
+   around it instead of a phone layout stretched across a monitor.
+   =========================================================================== */
+
+.linkr-shell {
+  --linkr-card-max: 26rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  width: 100%;
+  max-width: var(--linkr-card-max);
+  margin-inline: auto;
+  padding: 0.75rem 1rem 1.5rem;
+  min-height: 100%;
+}
+
+/* --- Top bar --------------------------------------------------------------
+   Title and three icon buttons. Deliberately thin: the old Linkr spent a
+   third of the screen on discovery configuration before showing anybody. */
+.linkr-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.linkr-topbar__title {
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: hsl(var(--foreground));
+}
+
+.linkr-topbar__actions {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.linkr-topbar__actions button {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  color: hsl(var(--muted-foreground));
+  background: color-mix(in srgb, hsl(var(--foreground)) 6%, transparent);
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.linkr-topbar__actions button:hover {
+  color: hsl(var(--foreground));
+  background: color-mix(in srgb, hsl(var(--foreground)) 11%, transparent);
+}
+
+.linkr-topbar__actions svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+/* --- Chips ---------------------------------------------------------------- */
+.linkr-chips {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.linkr-chips::-webkit-scrollbar { display: none; }
+
+.linkr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  color: hsl(var(--muted-foreground));
+  background: color-mix(in srgb, hsl(var(--foreground)) 7%, transparent);
+}
+
+.linkr-chip--tab {
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.linkr-chip--tab.is-selected {
+  color: #fff;
+  background: var(--color-brand-orange);
+}
+
+.linkr-chip--live {
+  color: #fff;
+  background: color-mix(in srgb, #000 55%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.linkr-chip--live::before {
+  content: "";
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 999px;
+  background: #4ade80;
+}
+
+/* --- The candidate card ---------------------------------------------------
+   Aspect-ratio rather than a fixed height, capped by dvh so the action row is
+   never pushed off a short screen. */
+.linkr-card-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.linkr-card {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  max-height: min(62dvh, 34rem);
+  border-radius: 1.5rem;
+  overflow: hidden;
+  background: color-mix(in srgb, hsl(var(--foreground)) 8%, transparent);
+  touch-action: pan-y;
+  user-select: none;
+  cursor: grab;
+  will-change: transform;
+}
+
+.linkr-card.is-leaving { opacity: 0; transition: transform 180ms ease-in, opacity 180ms ease-in; }
+.linkr-card:active { cursor: grabbing; }
+
+.linkr-card__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.linkr-card__photo--empty {
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--color-brand-ember) 22%, transparent),
+    color-mix(in srgb, var(--color-brand-maroon) 40%, transparent));
+}
+
+/* The scrim exists so white text stays legible over an unknown photo. */
+.linkr-card__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top,
+    rgba(0, 0, 0, 0.88) 0%,
+    rgba(0, 0, 0, 0.55) 26%,
+    rgba(0, 0, 0, 0) 55%);
+  pointer-events: none;
+}
+
+.linkr-card__progress {
+  position: absolute;
+  top: 0.625rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.linkr-card__progress-seg {
+  flex: 1;
+  height: 0.1875rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.32);
+  transition: background-color 160ms ease;
+}
+
+.linkr-card__progress-seg.is-active { background: #fff; }
+
+.linkr-card__meta {
+  position: absolute;
+  top: 1.25rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.linkr-card__counter {
+  padding: 0.1875rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  background: color-mix(in srgb, #000 50%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+/* Decision feedback: appears only once a drag has clearly committed. */
+.linkr-card__verdict {
+  position: absolute;
+  top: 3.5rem;
+  padding: 0.375rem 0.875rem;
+  border-radius: 0.625rem;
+  border: 2px solid currentColor;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.linkr-card__verdict.is-pass { left: 1rem; color: #f87171; transform: rotate(-10deg); }
+.linkr-card__verdict.is-connect { right: 1rem; color: var(--color-brand-amber); transform: rotate(10deg); }
+
+.linkr-card__body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4375rem;
+  padding: 1rem 1.125rem 1.25rem;
+  color: #fff;
+  pointer-events: none;
+}
+
+.linkr-card__name {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.linkr-card__verified { width: 1.125rem; height: 1.125rem; color: #60a5fa; }
+
+.linkr-card__proximity {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-brand-amber);
+}
+
+.linkr-card__proximity-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.linkr-card__interests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.125rem;
+}
+
+.linkr-card__interests .linkr-chip {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(6px);
+}
+
+.linkr-card__bio {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+/* --- Actions --------------------------------------------------------------
+   Pass and Connect are the same size; Undo is visibly tertiary. Real buttons,
+   because swipe must never be the only route. */
+.linkr-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+.linkr-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+
+.linkr-action svg {
+  display: block;
+  padding: 0.75rem;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, hsl(var(--foreground)) 12%, transparent);
+  background: color-mix(in srgb, hsl(var(--foreground)) 5%, transparent);
+}
+
+.linkr-action:hover:not(:disabled) { transform: translateY(-2px); }
+.linkr-action:disabled { opacity: 0.4; }
+
+.linkr-action--pass svg { color: #f87171; }
+.linkr-action--connect svg {
+  color: #fff;
+  border-color: transparent;
+  background: var(--color-brand-orange);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-brand-orange) 34%, transparent);
+}
+
+.linkr-action--undo svg { width: 2.5rem; height: 2.5rem; padding: 0.5625rem; }
+
+/* Keyboard photo navigation. Visible, not a hidden affordance. */
+.linkr-photo-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.linkr-photo-nav button {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  font-size: 1.125rem;
+  background: color-mix(in srgb, hsl(var(--foreground)) 7%, transparent);
+}
+
+.linkr-photo-nav button:disabled { opacity: 0.35; }
+
+.linkr-safety {
+  display: flex;
+  justify-content: center;
+  gap: 1.25rem;
+}
+
+/* --- Buttons and links ---------------------------------------------------- */
+.linkr-primary {
+  width: 100%;
+  padding: 0.9375rem 1.25rem;
+  border-radius: 999px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-brand-orange);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--color-brand-orange) 30%, transparent);
+  transition: filter 140ms ease, transform 140ms ease;
+}
+
+.linkr-primary:hover:not(:disabled) { filter: brightness(1.06); }
+.linkr-primary:active:not(:disabled) { transform: translateY(1px); }
+
+.linkr-secondary {
+  width: 100%;
+  padding: 0.875rem 1.25rem;
+  border-radius: 999px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  background: color-mix(in srgb, hsl(var(--foreground)) 8%, transparent);
+}
+
+.linkr-danger {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.8125rem 1.25rem;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #f87171;
+  background: color-mix(in srgb, #f87171 12%, transparent);
+}
+
+.linkr-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.linkr-link svg { width: 0.875rem; height: 0.875rem; }
+
+.linkr-back {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  color: hsl(var(--foreground));
+  background: color-mix(in srgb, hsl(var(--foreground)) 7%, transparent);
+}
+
+.linkr-back svg { width: 1.125rem; height: 1.125rem; }
+
+/* --- Linkr off + activation ----------------------------------------------- */
+.linkr-off,
+.linkr-activate,
+.linkr-empty,
+.linkr-event-intro {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.875rem;
+  width: 100%;
+  max-width: 26rem;
+  margin-inline: auto;
+  padding: 1.5rem 1.25rem 2rem;
+  text-align: center;
+}
+
+.linkr-off { justify-content: center; min-height: 78dvh; }
+
+.linkr-off__title {
+  align-self: flex-start;
+  text-align: left;
+  font-size: 2rem;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.linkr-off__accent { color: var(--color-brand-orange); }
+
+.linkr-off__privacy {
+  align-self: flex-start;
+  text-align: left;
+  font-size: 0.8125rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.linkr-activate { justify-content: center; min-height: 78dvh; }
+.linkr-activate .linkr-back { position: absolute; top: 1rem; left: 1rem; }
+
+.linkr-activate__title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.linkr-activate__points {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+}
+
+.linkr-activate__points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: hsl(var(--muted-foreground));
+}
+
+.linkr-activate__points svg {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.1875rem;
+  color: var(--color-brand-orange);
+}
+
+/* Red is for FAILURES ONLY -- an unsupported file, an upload that did not
+   finish. A requirement the person has simply not met yet is not a failure,
+   and styling it like one tells somebody who has done nothing wrong that
+   something is broken. */
+.linkr-activate__error {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  text-align: left;
+  color: #fca5a5;
+  background: color-mix(in srgb, #f87171 12%, transparent);
+}
+
+/* Something the account cannot fix from this screen (no date of birth, under
+   18). Stated plainly in the ordinary muted voice. */
+.linkr-activate__notice {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  text-align: left;
+  color: hsl(var(--muted-foreground));
+  background: color-mix(in srgb, hsl(var(--foreground)) 6%, transparent);
+}
+
+/* Why Continue is inert. Nobody should have to guess. */
+.linkr-activate__hint {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.linkr-activate__footnote {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* --- Intent pills ---------------------------------------------------------- */
+.linkr-intent { width: 100%; border: 0; }
+
+.linkr-intent__legend {
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  text-align: left;
+}
+
+.linkr-intent__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.linkr-pill {
+  padding: 0.4375rem 0.9375rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  background: color-mix(in srgb, hsl(var(--foreground)) 7%, transparent);
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.linkr-pill.is-selected {
+  color: #fff;
+  background: var(--color-brand-orange);
+}
+
+/* --- Sheets: filters, settings, profile, education ------------------------- */
+.linkr-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  max-width: 26rem;
+  margin-inline: auto;
+  padding: 0.75rem 1rem 1.5rem;
+  min-height: 100%;
+}
+
+.linkr-sheet__head {
+  display: grid;
+  grid-template-columns: 2.25rem 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.linkr-sheet__head h1 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.linkr-sheet__reset {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-brand-orange);
+}
+
+.linkr-sheet__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  flex: 1;
+}
+
+.linkr-field { border: 0; display: flex; flex-direction: column; gap: 0.625rem; }
+
+.linkr-field__legend {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.linkr-field__legend svg { width: 0.875rem; height: 0.875rem; }
+.linkr-field__count { font-size: 0.75rem; color: hsl(var(--muted-foreground)); text-align: right; }
+.linkr-field__row { display: flex; gap: 0.5rem; }
+.linkr-field__row .linkr-secondary { width: auto; padding-inline: 1rem; }
+
+.linkr-input,
+.linkr-textarea {
+  width: 100%;
+  padding: 0.6875rem 0.875rem;
+  border-radius: 0.875rem;
+  font-size: 0.875rem;
+  color: hsl(var(--foreground));
+  background: color-mix(in srgb, hsl(var(--foreground)) 6%, transparent);
+  border: 1px solid color-mix(in srgb, hsl(var(--foreground)) 10%, transparent);
+  resize: none;
+}
+
+.linkr-radio-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.linkr-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 0.875rem;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, hsl(var(--foreground)) 10%, transparent);
+  background: color-mix(in srgb, hsl(var(--foreground)) 4%, transparent);
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.linkr-radio.is-selected {
+  border-color: var(--color-brand-orange);
+  background: color-mix(in srgb, var(--color-brand-orange) 10%, transparent);
+}
+
+.linkr-radio__icon { flex: none; width: 1.125rem; height: 1.125rem; color: var(--color-brand-orange); }
+.linkr-radio__text { flex: 1; display: flex; flex-direction: column; gap: 0.0625rem; }
+.linkr-radio__text strong { font-size: 0.875rem; font-weight: 600; }
+.linkr-radio__text small { font-size: 0.75rem; color: hsl(var(--muted-foreground)); }
+.linkr-radio__check { flex: none; width: 1.125rem; height: 1.125rem; color: var(--color-brand-orange); }
+
+.linkr-toggle-list { display: flex; flex-direction: column; gap: 0.25rem; }
+
+.linkr-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.25rem;
+  text-align: left;
+  width: 100%;
+}
+
+.linkr-toggle:disabled { opacity: 0.5; }
+.linkr-toggle__text { display: flex; flex-direction: column; gap: 0.0625rem; }
+.linkr-toggle__text strong { font-size: 0.875rem; font-weight: 600; }
+.linkr-toggle__text small { font-size: 0.75rem; color: hsl(var(--muted-foreground)); }
+
+.linkr-toggle__track {
+  flex: none;
+  position: relative;
+  width: 2.75rem;
+  height: 1.625rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, hsl(var(--foreground)) 16%, transparent);
+  transition: background-color 160ms ease;
+}
+
+.linkr-toggle__track.is-on { background: var(--color-brand-orange); }
+
+.linkr-toggle__thumb {
+  position: absolute;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: #fff;
+  transition: transform 160ms ease;
+}
+
+.linkr-toggle__track.is-on .linkr-toggle__thumb { transform: translateX(1.125rem); }
+
+.linkr-settings__group {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+  margin-top: 0.5rem;
+}
+
+.linkr-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8125rem 0.25rem;
+  width: 100%;
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.linkr-setting-row__value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.linkr-setting-row__value svg { width: 1rem; height: 1rem; }
+
+.linkr-settings__note {
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: hsl(var(--muted-foreground));
+}
+
+/* --- Profile editor -------------------------------------------------------- */
+.linkr-profile__identity { display: flex; flex-direction: column; align-items: center; gap: 0.625rem; }
+
+.linkr-profile__avatar {
+  position: relative;
+  width: 6.5rem;
+  height: 6.5rem;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 2px solid var(--color-brand-orange);
+}
+
+.linkr-profile__avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.linkr-profile__avatar-empty,
+.linkr-profile__avatar-badge {
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+
+.linkr-profile__avatar-empty {
+  width: 100%;
+  height: 100%;
+  background: color-mix(in srgb, hsl(var(--foreground)) 10%, transparent);
+}
+
+.linkr-profile__avatar-badge {
+  position: absolute;
+  right: 0.25rem;
+  bottom: 0.25rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: var(--color-brand-orange);
+}
+
+.linkr-profile__avatar-badge svg,
+.linkr-profile__avatar-empty svg { width: 1rem; height: 1rem; }
+
+.linkr-profile__name { font-size: 1.125rem; font-weight: 700; }
+
+.linkr-profile__blockers {
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--color-brand-amber);
+  background: color-mix(in srgb, var(--color-brand-orange) 12%, transparent);
+}
+
+.linkr-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.linkr-photo-slot {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border-radius: 1rem;
+  overflow: hidden;
+  background: color-mix(in srgb, hsl(var(--foreground)) 6%, transparent);
+  border: 1px solid color-mix(in srgb, hsl(var(--foreground)) 10%, transparent);
+}
+
+.linkr-photo-slot__label {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #fff;
+  background: color-mix(in srgb, #000 55%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.linkr-photo-slot__label svg { width: 0.75rem; height: 0.75rem; color: var(--color-brand-amber); }
+.linkr-photo-slot__img { width: 100%; height: 100%; object-fit: cover; }
+
+.linkr-photo-slot__actions {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  display: flex;
+  gap: 0.375rem;
+}
+
+.linkr-photo-slot__actions button {
+  display: grid;
+  place-items: center;
+  width: 1.875rem;
+  height: 1.875rem;
+  border-radius: 999px;
+  color: #fff;
+  background: color-mix(in srgb, #000 60%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.linkr-photo-slot__actions svg { width: 0.9375rem; height: 0.9375rem; }
+
+.linkr-photo-slot__add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  width: 100%;
+  height: 100%;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.linkr-photo-slot__add svg { width: 1.5rem; height: 1.5rem; }
+
+.linkr-photos__guidance {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: hsl(var(--muted-foreground));
+}
+
+/* --- Match ---------------------------------------------------------------- */
+.linkr-match {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  background: radial-gradient(120% 80% at 50% 20%,
+    color-mix(in srgb, var(--color-brand-ember) 30%, hsl(var(--background))),
+    hsl(var(--background)) 70%);
+  animation: linkr-match-in 260ms ease-out;
+}
+
+.linkr-match .linkr-primary,
+.linkr-match .linkr-secondary { max-width: 20rem; }
+
+.linkr-match__faces { position: relative; display: flex; align-items: center; gap: 0.75rem; }
+
+.linkr-match__face {
+  width: 6rem;
+  height: 6rem;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 3px solid var(--color-brand-orange);
+}
+
+.linkr-match__face--fallback {
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+  background: color-mix(in srgb, var(--color-brand-ember) 60%, transparent);
+}
+
+.linkr-match__heart {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--color-brand-orange);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--color-brand-orange) 45%, transparent);
+}
+
+.linkr-match__heart svg { width: 1.25rem; height: 1.25rem; fill: currentColor; }
+.linkr-match__title { font-size: 1.875rem; font-weight: 700; letter-spacing: -0.03em; }
+.linkr-match__body { font-size: 0.9375rem; color: hsl(var(--muted-foreground)); max-width: 18rem; }
+
+@keyframes linkr-match-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* --- Empty state ----------------------------------------------------------- */
+.linkr-empty { justify-content: center; min-height: 60dvh; }
+.linkr-empty__title { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+.linkr-empty__body { font-size: 0.875rem; color: hsl(var(--muted-foreground)); max-width: 18rem; }
+
+/* --- How Linkr works ------------------------------------------------------- */
+.linkr-how { display: flex; flex-direction: column; gap: 1.25rem; flex: 1; padding-top: 0.5rem; }
+
+.linkr-how__item { display: flex; align-items: flex-start; gap: 0.875rem; }
+
+.linkr-how__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.875rem;
+  color: var(--color-brand-orange);
+  background: color-mix(in srgb, var(--color-brand-orange) 12%, transparent);
+}
+
+.linkr-how__icon svg { width: 1.125rem; height: 1.125rem; }
+.linkr-how__item span:last-child { display: flex; flex-direction: column; gap: 0.1875rem; }
+.linkr-how__item strong { font-size: 0.9375rem; font-weight: 600; }
+.linkr-how__item small { font-size: 0.8125rem; line-height: 1.45; color: hsl(var(--muted-foreground)); }
+
+/* --- Event Mode ------------------------------------------------------------ */
+.linkr-event-intro { justify-content: center; min-height: 78dvh; }
+.linkr-event-intro .linkr-back { position: absolute; top: 1rem; left: 1rem; }
+
+.linkr-event-intro__banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100%;
+  padding: 1.75rem 1.25rem;
+  border-radius: 1.25rem;
+  color: #fff;
+  background: linear-gradient(150deg,
+    color-mix(in srgb, var(--color-brand-ember) 85%, #000),
+    var(--color-brand-maroon));
+}
+
+.linkr-event-intro__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: #dc2626;
+}
+
+.linkr-event-intro__dot { width: 0.375rem; height: 0.375rem; border-radius: 999px; background: #fff; }
+.linkr-event-intro__name { font-size: 1.375rem; font-weight: 700; letter-spacing: -0.02em; }
+.linkr-event-intro__when,
+.linkr-event-intro__venue { font-size: 0.8125rem; color: rgba(255, 255, 255, 0.82); }
+.linkr-event-intro__title { font-size: 1.375rem; font-weight: 700; letter-spacing: -0.02em; }
+.linkr-event-intro__body { font-size: 0.875rem; color: hsl(var(--muted-foreground)); max-width: 20rem; }
+
+/* The crowd line. Already resolved by the Events small-pool rule, so this only
+   renders whatever string that rule produced -- never a raw count. */
+.linkr-event-intro__pool { font-size: 0.8125rem; font-weight: 600; color: var(--color-brand-amber); }
+
+.linkr-event-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  align-self: flex-start;
+  padding: 0.3125rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-brand-amber);
+  background: color-mix(in srgb, var(--color-brand-orange) 12%, transparent);
+}
+
+.linkr-event-banner__dot {
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 999px;
+  background: #dc2626;
+}
+
+/* --- The artwork slot ------------------------------------------------------
+   A fixed box either way, so the final asset cannot shift the layout it lands
+   in. The placeholder is deliberately plain -- see linkr-orb.tsx. */
+.linkr-orb {
+  display: grid;
+  place-items: center;
+  width: min(15rem, 62vw);
+  aspect-ratio: 1;
+  margin-block: 0.5rem;
+}
+
+.linkr-orb__art { width: 100%; height: 100%; object-fit: contain; }
+
+/* A soft brand bloom with NO hard edge, so there is no rectangular image
+   boundary and nothing that reads as finished artwork. It holds the box while
+   the real asset is missing and disappears the moment one exists. */
+.linkr-orb__placeholder {
+  width: 78%;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 45%,
+      color-mix(in srgb, var(--color-brand-orange) 26%, transparent) 0%,
+      color-mix(in srgb, var(--color-brand-ember) 12%, transparent) 42%,
+      transparent 70%);
+}
+
+/* --- Notice ---------------------------------------------------------------- */
+.linkr-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 5.5rem;
+  transform: translateX(-50%);
+  z-index: 70;
+  padding: 0.625rem 1rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  color: hsl(var(--foreground));
+  background: color-mix(in srgb, hsl(var(--foreground)) 12%, hsl(var(--background)));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+  animation: linkr-notice 3.2s ease forwards;
+}
+
+@keyframes linkr-notice {
+  0% { opacity: 0; transform: translate(-50%, 8px); }
+  12%, 82% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 8px); }
+}
+
+/* --- Desktop --------------------------------------------------------------
+   The card stays the same width and gains air around it. Deliberately NOT a
+   wider card: a portrait stretched across a monitor stops being a person and
+   starts being a banner. */
+@media (min-width: 768px) {
+  .linkr-shell { padding-block: 1.5rem 2.5rem; }
+  .linkr-card { max-height: min(66dvh, 38rem); }
+}
+
+/* --- Reduced motion --------------------------------------------------------
+   The card still follows the finger, because that is the gesture rather than
+   an embellishment. Everything decorative stops. */
+@media (prefers-reduced-motion: reduce) {
+  .linkr-card,
+  .linkr-card.is-leaving,
+  .linkr-action,
+  .linkr-toggle__thumb,
+  .linkr-toggle__track,
+  .linkr-primary {
+    transition-duration: 0.01ms !important;
+  }
+
+  .linkr-match { animation: none; }
+  .linkr-notice { animation: linkr-notice-static 3.2s steps(1) forwards; }
+}
+
+@keyframes linkr-notice-static {
+  0%, 92% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ===========================================================================
+   LINKR 2.0 — ACTIVATION CORRECTIONS (L2)
+   ---------------------------------------------------------------------------
+   The main photo is a REQUIREMENT, not an error. Everything below keeps it in
+   the same calm dark surface language as the rest of activation, so a person
+   who has not yet added a photo is being asked for something rather than told
+   something failed.
+   =========================================================================== */
+
+/* --- The main-photo control ----------------------------------------------
+   The whole surface is the button, so there is no ambiguity about what is
+   tappable — the previous version gave no interactive affordance at all. */
+.linkr-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 1rem;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, hsl(var(--foreground)) 12%, transparent);
+  background: color-mix(in srgb, hsl(var(--foreground)) 5%, transparent);
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+button.linkr-photo-row:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-brand-orange) 45%, transparent);
+  background: color-mix(in srgb, var(--color-brand-orange) 7%, transparent);
+}
+
+button.linkr-photo-row:disabled { opacity: 0.6; }
+
+/* Satisfied: a brand hairline says the requirement is met, without shouting. */
+.linkr-photo-row.is-set {
+  border-color: color-mix(in srgb, var(--color-brand-orange) 40%, transparent);
+  background: color-mix(in srgb, var(--color-brand-orange) 8%, transparent);
+}
+
+/* The empty slot. Portrait-shaped, so it previews the shape a Linkr photo
+   actually takes rather than a square that then crops surprisingly. */
+.linkr-photo-row__slot {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 4.25rem;
+  border-radius: 0.75rem;
+  color: var(--color-brand-amber);
+  border: 1px dashed color-mix(in srgb, var(--color-brand-orange) 45%, transparent);
+  background: color-mix(in srgb, var(--color-brand-orange) 6%, transparent);
+}
+
+.linkr-photo-row__slot svg { width: 1.25rem; height: 1.25rem; }
+
+/* The real thumbnail. Same box as the empty slot, so adding a photo swaps the
+   contents without moving anything below it. */
+.linkr-photo-row__thumb {
+  flex: none;
+  width: 3.25rem;
+  height: 4.25rem;
+  border-radius: 0.75rem;
+  object-fit: cover;
+}
+
+.linkr-photo-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  min-width: 0;
+}
+
+.linkr-photo-row__text strong {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.linkr-photo-row__text small {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: hsl(var(--muted-foreground));
+}
+
+.linkr-photo-row__tick { width: 0.875rem; height: 0.875rem; color: var(--color-brand-amber); }
+
+.linkr-photo-row__actions {
+  display: flex;
+  gap: 0.875rem;
+  margin-top: 0.125rem;
+}
+
+.linkr-photo-row__actions button {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-brand-amber);
+}
+
+.linkr-photo-row__actions button:disabled { opacity: 0.5; }
+
+.linkr-photo-row__spinner {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--color-brand-orange) 30%, transparent);
+  border-top-color: var(--color-brand-orange);
+  animation: linkr-spin 700ms linear infinite;
+}
+
+@keyframes linkr-spin { to { transform: rotate(360deg); } }
+
+/* --- "Use my profile photo" ------------------------------------------------
+   Offered only when one exists. Shows the actual picture, so the choice is
+   obvious rather than an abstract promise. */
+.linkr-photo-reuse {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  background: color-mix(in srgb, hsl(var(--foreground)) 7%, transparent);
+  transition: background-color 140ms ease;
+}
+
+.linkr-photo-reuse:hover:not(:disabled) {
+  background: color-mix(in srgb, hsl(var(--foreground)) 12%, transparent);
+}
+
+.linkr-photo-reuse:disabled { opacity: 0.55; }
+
+.linkr-photo-reuse img {
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.linkr-photo-reuse span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.linkr-photo-reuse svg { width: 0.9375rem; height: 0.9375rem; color: hsl(var(--muted-foreground)); }
+
+/* --- Disabled primary button ----------------------------------------------
+   The old disabled state was the brand orange at reduced opacity, which read
+   as a slightly dim ACTIVE button — close enough to tap and wonder why
+   nothing happened. Disabled is now a flat neutral surface with no glow and
+   no brand colour, so the difference is a difference in kind rather than
+   brightness. Contrast is kept above the accessible floor. */
+.linkr-primary:disabled {
+  opacity: 1;
+  color: color-mix(in srgb, hsl(var(--muted-foreground)) 88%, transparent);
+  background: color-mix(in srgb, hsl(var(--foreground)) 10%, transparent);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* --- Activation composition ------------------------------------------------
+   The screen now carries a photo control as well, so the vertical rhythm is
+   tightened and the artwork capped: the CTA must not be pushed off a 390×844
+   viewport by decoration. */
+.linkr-activate {
+  gap: 0.75rem;
+  padding-top: 1rem;
+}
+
+.linkr-activate .linkr-orb {
+  /* ~220–280px on common phones, and never half the screen. */
+  width: min(13rem, 46vw);
+  max-height: 30vh;
+  margin-block: 0.25rem;
+}
+
+.linkr-activate .linkr-back { position: static; align-self: flex-start; }
+
+.linkr-activate__title { font-size: 1.375rem; }
+
+.linkr-activate__points { gap: 0.5rem; }
+
+.linkr-activate__points li { font-size: 0.8125rem; }
+
+.linkr-activate .linkr-intent { margin-top: 0.125rem; }
+
+/* Short viewports: shrink the decoration first, never the controls. */
+@media (max-height: 780px) {
+  .linkr-activate .linkr-orb { width: min(10rem, 38vw); max-height: 22vh; }
+  .linkr-activate { gap: 0.625rem; }
+  .linkr-activate__title { font-size: 1.25rem; }
+}
+
+/* Bottom-nav clearance for every Linkr surface that can grow past the fold.
+   The mobile nav is fixed, so a page whose content ends at the viewport floor
+   ends underneath it — the failure that hid Continue behind the nav as soon as
+   an upload error added a line. */
+/* Activation is the one Linkr surface that can outgrow the viewport (artwork +
+   three consent lines + intent + a photo control + a CTA + an error line), and
+   it was doing two things wrong at once:
+
+     - `min-height: 78dvh` with `justify-content: center` centred a column that
+       had become taller than its box, so it overflowed in BOTH directions;
+     - the shell's nav padding sits on an ANCESTOR, so once this section
+       scrolled to its own end the last control still finished underneath the
+       fixed bar with nothing left to scroll.
+
+   Height now follows content, the column starts at the top, and the section
+   carries its own bottom room so its final control clears the bar. */
+.linkr-activate {
+  min-height: auto;
+  justify-content: flex-start;
+  /* Room INSIDE the scrollable section, so its last control still clears the
+     fixed bar once the page has scrolled to its own end. The shell's padding
+     sits on an ancestor and cannot do this job. */
+  padding-bottom: calc(var(--mobile-nav-height, 5rem) + env(safe-area-inset-bottom, 0px));
+  scroll-padding-bottom: var(--mobile-nav-height, 5rem);
+}
+
+/* The match screen is a fixed full-viewport overlay above the nav, so it needs
+   no clearance — and adding it would push its buttons off-centre. */
+
+/* ===========================================================================
+   LINKR 2.0 — L3: DATE OF BIRTH, INTENT LAYOUT, ACTIVATION COMPOSITION
+   =========================================================================== */
+
+/* --- Intent choices: a deliberate 2x2, not wherever the text happens to wrap
+   ---------------------------------------------------------------------------
+   Four pills of unequal width ("Friends" vs "Networking") in a flex-wrap row
+   put three on one line and stranded "Anything" alone on a second, which read
+   as a layout accident. A two-column grid places them on purpose and gives
+   every option the same target size at 360, 390 and 430. */
+.linkr-activate .linkr-intent__options,
+.linkr-sheet .linkr-intent__options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.linkr-activate .linkr-pill,
+.linkr-sheet .linkr-pill {
+  width: 100%;
+  text-align: center;
+  padding-inline: 0.75rem;
+}
+
+/* Interests are free-form tags of wildly varying length, so they keep the
+   flowing row -- a grid would leave ragged gaps. */
+.linkr-sheet .linkr-intent__options:has(> li) {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* --- Date of birth ---------------------------------------------------------
+   Reuses the photo row's surface language: same height, same border, same
+   hover. The whole row is a <label> bound to the date input, so tapping
+   anywhere on it opens the platform picker. */
+label.linkr-photo-row { cursor: pointer; }
+
+label.linkr-photo-row:hover {
+  border-color: color-mix(in srgb, var(--color-brand-orange) 45%, transparent);
+  background: color-mix(in srgb, var(--color-brand-orange) 7%, transparent);
+}
+
+/* The calendar slot is square rather than portrait: it holds an icon, not a
+   picture, and a portrait box would imply a photo. */
+.linkr-photo-row__slot--date {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 0.875rem;
+}
+
+.linkr-photo-row__chevron {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-left: auto;
+  color: hsl(var(--muted-foreground));
+}
+
+/* The native date input.
+   Deliberately VISIBLE rather than sr-only: a visually hidden input cannot be
+   opened reliably by a click on every mobile browser, and this is the control
+   the entire activation depends on. It sits directly under its label as a
+   second, unambiguous way in. */
+.linkr-date-input {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.6875rem 0.875rem;
+  border-radius: 0.875rem;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  color: hsl(var(--foreground));
+  background: color-mix(in srgb, hsl(var(--foreground)) 6%, transparent);
+  border: 1px solid color-mix(in srgb, hsl(var(--foreground)) 12%, transparent);
+  color-scheme: dark;
+}
+
+.linkr-date-input:focus-visible {
+  outline: none;
+  border-color: var(--color-brand-orange);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand-orange) 18%, transparent);
+}
+
+.linkr-date-input:disabled { opacity: 0.6; }
+
+/* The picker indicator is nearly invisible on a dark field by default. */
+.linkr-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+/* --- Activation is a focused flow -----------------------------------------
+   While the bottom navigation is hidden (immersive), the section reclaims that
+   height rather than leaving a dead strip where the bar used to be. */
+.linkr-activate {
+  padding-bottom: 1.5rem;
+}
+
+/* --- Profile handoff -------------------------------------------------------
+   Shown when Linkr needs something Profile owns. Same calm surface language as
+   the rest of activation: this is a signpost, not a validation failure. */
+.linkr-handoff {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.875rem;
+  border-radius: 1rem;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, var(--color-brand-orange) 32%, transparent);
+  background: color-mix(in srgb, var(--color-brand-orange) 8%, transparent);
+}
+
+.linkr-handoff__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  color: var(--color-brand-amber);
+  background: color-mix(in srgb, var(--color-brand-orange) 14%, transparent);
+}
+
+.linkr-handoff__icon svg { width: 1.125rem; height: 1.125rem; }
+
+/* Column, so the heading and the message are separate lines rather than one
+   run-on sentence. */
+.linkr-handoff__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  min-width: 0;
+}
+
+.linkr-handoff__text strong {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.linkr-handoff__text small {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: hsl(var(--muted-foreground));
+}
+
+/* --- Your photos strip (Your Linkr Profile) --------------------------------
+   A read-only window onto Profile media: what candidates will actually see. */
+.linkr-photo-strip {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.linkr-photo-strip::-webkit-scrollbar { display: none; }
+
+.linkr-photo-strip__item {
+  position: relative;
+  flex: none;
+  width: 4.5rem;
+  aspect-ratio: 3 / 4;
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.linkr-photo-strip__item img { width: 100%; height: 100%; object-fit: cover; }
+
+.linkr-photo-strip__badge {
+  position: absolute;
+  left: 0.25rem;
+  bottom: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #fff;
+  background: color-mix(in srgb, #000 60%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.linkr-photo-strip__badge svg { width: 0.625rem; height: 0.625rem; color: var(--color-brand-amber); }
+
+.linkr-field__note {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: hsl(var(--muted-foreground));
+}

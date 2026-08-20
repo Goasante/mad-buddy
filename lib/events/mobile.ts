@@ -1,10 +1,14 @@
 import "server-only";
 
 import { z } from "zod";
-import { isPastEvent, resolveCheckInWindow } from "@/lib/events/rules";
+import { isDiscoverableInFeed, isPastEvent, resolveCheckInWindow } from "@/lib/events/rules";
 import { liveCheckIn } from "@/lib/events/service";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
-import { batchBlockedIds, isBlockedEitherDirection } from "@/lib/social/permissions";
+import {
+  batchBlockedIds,
+  batchEligibleMuddyIds,
+  isBlockedEitherDirection
+} from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import type { CheckInVisibility } from "@/lib/events/types";
@@ -45,6 +49,28 @@ export type EventView = {
   myGlowEnabled: boolean;
   /** null: never RSVP'd (includes the host, who needs none). */
   myRsvp: EventRsvpStatus | null;
+
+  /* PRESENTATION FACTS (Events 2.0 visual rebuild).
+   *
+   * The approved design leads with artwork and social proof rather than with a
+   * form field, so the projection has to carry them. All of it is batched into
+   * the round trips listEvents already made -- a hero card must never become a
+   * per-card request (see the cover and count blocks below).
+   *
+   * Deliberately absent: any attendee position or distance. A venue is
+   * programme information the host published; where a person is standing is
+   * not. attendance-surfacing.test.ts pins that boundary. */
+  coverUrl: string | null;
+  focalX: number;
+  focalY: number;
+  /** Published venue locality ("Osu, Accra"), never a viewer-relative distance. */
+  locality: string | null;
+  /** Audience the host chose. Drives the Hosting badge and the link/public copy. */
+  visibility: string;
+  goingCount: number;
+  interestedCount: number;
+  /** Whether this viewer was individually invited -- powers the Invited tab. */
+  isInvited: boolean;
 };
 
 export type EventResult = { ok: boolean; message: string; eventId?: string; checkInId?: string };
@@ -72,12 +98,118 @@ export const createEventSchema = z.object({
    * than failing validation -- it simply no longer changes the outcome.
    * publishEventAction is now the only transition to `scheduled`.
    */
-  draft: z.boolean().optional()
+  draft: z.boolean().optional(),
+  /* WHO SHOULD KNOW ABOUT THIS EVENT.
+   *
+   * Creation used to hardcode `community`, so the one decision that governs
+   * distribution was never asked. It defaults to `community` here ONLY so an
+   * older client that omits the field keeps its previous behaviour rather than
+   * failing validation -- new clients always send a deliberate choice. */
+  visibility: z.enum(["invite", "link", "community", "nearby", "public"]).optional(),
+  /** Muddies for an invited Event; Circle conversation ids for a community one. */
+  audienceTargetIds: z.array(z.string().uuid()).max(200).optional(),
+  /** Required to publish a Nearby Event -- see validateAudienceRequirements. */
+  location: z
+    .object({
+      latitude: z.number().min(-90).max(90),
+      longitude: z.number().min(-180).max(180),
+      locality: z.string().max(120).optional(),
+      region: z.string().max(120).optional()
+    })
+    .optional()
 });
+
+/**
+ * An audience is only real if the thing it points at exists.
+ *
+ * Enforced on the SERVER, never left to the form: a client that skips the
+ * picker must not be able to publish an "invited people" Event with nobody
+ * invited (which is private to nobody) or a Nearby Event with no geography
+ * (which cannot be found by anyone).
+ */
+export function validateAudienceRequirements(input: {
+  visibility: string;
+  targetCount: number;
+  hasLocation: boolean;
+}): { ok: true } | { ok: false; message: string } {
+  if (input.visibility === "invite" && input.targetCount === 0) {
+    return { ok: false, message: "Choose at least one person to invite." };
+  }
+  if (input.visibility === "community" && input.targetCount === 0) {
+    return { ok: false, message: "Choose the community to share this with." };
+  }
+  if (input.visibility === "nearby" && !input.hasLocation) {
+    return { ok: false, message: "Add where it's happening so people nearby can find it." };
+  }
+  return { ok: true };
+}
 
 function hasServiceRoleEnv(): boolean {
   const env = getSupabaseServerEnv();
   return Boolean(env.url && env.serviceRoleKey);
+}
+
+/**
+ * The viewer's relationship to a set of Events' audiences, in two queries.
+ *
+ * Kept out of the pure rules on purpose: rules decide, this fetches. Returns
+ * sets rather than rows because every caller only ever asks "is this Event in
+ * it?", and a set makes the N+1 shape impossible to write by accident.
+ */
+async function loadAudienceContext(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  userId: string,
+  eventIds: string[]
+): Promise<{
+  invitedEventIds: Set<string>;
+  communityTargetedEventIds: Set<string>;
+  memberCommunityEventIds: Set<string>;
+}> {
+  const empty = {
+    invitedEventIds: new Set<string>(),
+    communityTargetedEventIds: new Set<string>(),
+    memberCommunityEventIds: new Set<string>()
+  };
+  if (eventIds.length === 0) return empty;
+
+  const { data: targets } = await admin
+    .from("event_audience_targets")
+    .select("event_id, target_type, target_id")
+    .in("event_id", eventIds);
+  if (!targets?.length) return empty;
+
+  const invitedEventIds = new Set<string>();
+  const communityTargetedEventIds = new Set<string>();
+  const communityTargets: Array<{ eventId: string; conversationId: string }> = [];
+  for (const row of targets) {
+    if (row.target_type === "user") {
+      if (row.target_id === userId) invitedEventIds.add(row.event_id);
+    } else if (row.target_type === "community") {
+      communityTargetedEventIds.add(row.event_id);
+      communityTargets.push({ eventId: row.event_id, conversationId: row.target_id });
+    }
+  }
+
+  const memberCommunityEventIds = new Set<string>();
+  if (communityTargets.length > 0) {
+    // Circles are group conversations, so membership is conversation_members --
+    // there is no second community system to consult. Only `joined` counts: an
+    // invited-but-not-joined member has not accepted the Circle yet, and a
+    // removed one must lose the Event with it.
+    const conversationIds = [...new Set(communityTargets.map((target) => target.conversationId))];
+    const { data: memberships } = await admin
+      .from("conversation_members")
+      .select("conversation_id")
+      .eq("user_id", userId)
+      .eq("status", "joined")
+      .in("conversation_id", conversationIds);
+    const joined = new Set((memberships ?? []).map((row) => row.conversation_id));
+    for (const target of communityTargets) {
+      if (joined.has(target.conversationId)) memberCommunityEventIds.add(target.eventId);
+    }
+  }
+
+  return { invitedEventIds, communityTargetedEventIds, memberCommunityEventIds };
 }
 
 export async function listEvents(userId: string): Promise<EventView[]> {
@@ -87,7 +219,9 @@ export async function listEvents(userId: string): Promise<EventView[]> {
   const nowIso = new Date().toISOString();
   const { data: events } = await admin
     .from("events")
-    .select("id, host_id, name, description, venue_label, starts_at, ends_at, visibility, status")
+    .select(
+      "id, host_id, name, description, venue_label, starts_at, ends_at, visibility, status, cover_media_id, cover_focal_x, cover_focal_y"
+    )
     // Drafts included so a HOST can find their own unpublished event and
     // finish it (Stage F): creation now produces a draft, so filtering them
     // out here would hide the event from the only person who can publish it.
@@ -98,11 +232,33 @@ export async function listEvents(userId: string): Promise<EventView[]> {
     .limit(100);
   if (!events?.length) return [];
 
+  /* AUDIENCE CONTEXT, BATCHED.
+   *
+   * Two queries for the whole page, never one per Event: the targets attached
+   * to these Events, and the Circles this viewer belongs to. isDiscoverableInFeed
+   * is pure and needs the answers handed to it -- which is what lets the same
+   * rule serve the feed, the mobile API and a test without three lookups. */
+  const audience = await loadAudienceContext(
+    admin,
+    userId,
+    events.map((event) => event.id)
+  );
+
   const visibilityFiltered = events.filter((event) => {
     // A draft belongs to its host alone: never listed to anyone else, whatever
     // its visibility says (Stage F).
     if (event.status === "draft" && event.host_id !== userId) return false;
-    return event.visibility !== "invite" || event.host_id === userId;
+    // One owner for "may this be browsed" -- see isDiscoverableInFeed.
+    return isDiscoverableInFeed(
+      {
+        visibility: event.visibility,
+        hostId: event.host_id,
+        isInvited: audience.invitedEventIds.has(event.id),
+        hasCommunityTarget: audience.communityTargetedEventIds.has(event.id),
+        isCommunityMember: audience.memberCommunityEventIds.has(event.id)
+      },
+      userId
+    );
   });
   if (visibilityFiltered.length === 0) return [];
 
@@ -129,7 +285,9 @@ export async function listEvents(userId: string): Promise<EventView[]> {
   if (visible.length === 0) return [];
 
   const hostIds = [...new Set(visible.map((event) => event.host_id))];
-  const [{ data: checkIns }, { data: hosts }, hostPlans, { data: rsvps }] = await Promise.all([
+  const visibleIds = visible.map((event) => event.id);
+  const [{ data: checkIns }, { data: hosts }, hostPlans, { data: rsvps }, { data: locations }, { data: allRsvps }] =
+    await Promise.all([
     admin
       .from("check_ins")
       .select("id, context_id, event_glow_enabled")
@@ -155,12 +313,55 @@ export async function listEvents(userId: string): Promise<EventView[]> {
       .in(
         "event_id",
         visible.map((event) => event.id)
-      )
+      ),
+    /* PUBLISHED LOCALITY, not a viewer distance. event_locations holds the
+     * venue the host chose to publish; the coordinates in that table stay on
+     * the server and never enter EventView. */
+    admin.from("event_locations").select("event_id, locality, region").in("event_id", visibleIds),
+    /* SOCIAL PROOF, one query for the page. Every RSVP row for these Events,
+     * tallied in memory below -- the alternative (a count per card) is the
+     * N+1 the design brief explicitly forbids. Ids are never retained, only
+     * summed, so this reveals no individual's answer. */
+    admin.from("event_rsvps").select("event_id, status").in("event_id", visibleIds)
   ]);
 
   const checkInByEvent = new Map((checkIns ?? []).map((row) => [row.context_id, row]));
   const hostNames = new Map((hosts ?? []).map((row) => [row.user_id, row.full_name]));
   const rsvpByEvent = new Map((rsvps ?? []).map((row) => [row.event_id, row.status]));
+
+  /* LOCALITY LABEL. "Osu, Accra" reads as a place; "Osu" alone often does not,
+   * and region-only is meaningless. Region is appended only when it adds
+   * something the locality did not already say. */
+  const localityByEvent = new Map<string, string>();
+  for (const row of locations ?? []) {
+    const locality = row.locality?.trim() ?? "";
+    const region = row.region?.trim() ?? "";
+    const label = locality && region && region !== locality ? `${locality}, ${region}` : locality || region;
+    if (label) localityByEvent.set(row.event_id, label);
+  }
+
+  // Tallies, from the single RSVP sweep above.
+  const goingByEvent = new Map<string, number>();
+  const interestedByEvent = new Map<string, number>();
+  for (const row of allRsvps ?? []) {
+    const bucket = row.status === "going" ? goingByEvent : row.status === "interested" ? interestedByEvent : null;
+    if (bucket) bucket.set(row.event_id, (bucket.get(row.event_id) ?? 0) + 1);
+  }
+
+  /* COVER ART, batched and moderation-aware. signMediaForAsset is the
+   * canonical resolver -- it already refuses deleted, removed and restricted
+   * assets, so a moderated cover degrades to the branded fallback rather than
+   * rendering a broken image. Same pattern as ranked-events.ts, deliberately:
+   * one resolver, not a second copy of the rules. */
+  const coverIds = [...new Set(visible.map((event) => event.cover_media_id).filter(Boolean))] as string[];
+  const coverUrlById = new Map<string, string>();
+  if (coverIds.length > 0) {
+    const { signMediaForAsset } = await import("@/lib/content/service");
+    const signed = await Promise.all(
+      coverIds.map(async (id) => [id, await signMediaForAsset(admin, id, "feed")] as const)
+    );
+    for (const [id, url] of signed) if (url) coverUrlById.set(id, url);
+  }
 
   return visible.map((event) => {
     const checkIn = checkInByEvent.get(event.id);
@@ -178,7 +379,15 @@ export async function listEvents(userId: string): Promise<EventView[]> {
       isHost: event.host_id === userId,
       myCheckInId: checkIn?.id ?? null,
       myGlowEnabled: checkIn?.event_glow_enabled ?? false,
-      myRsvp: rsvpStatus && isEventRsvpStatus(rsvpStatus) ? rsvpStatus : null
+      myRsvp: rsvpStatus && isEventRsvpStatus(rsvpStatus) ? rsvpStatus : null,
+      coverUrl: event.cover_media_id ? coverUrlById.get(event.cover_media_id) ?? null : null,
+      focalX: event.cover_focal_x ?? 0.5,
+      focalY: event.cover_focal_y ?? 0.5,
+      locality: localityByEvent.get(event.id) ?? null,
+      visibility: event.visibility,
+      goingCount: goingByEvent.get(event.id) ?? 0,
+      interestedCount: interestedByEvent.get(event.id) ?? 0,
+      isInvited: audience.invitedEventIds.has(event.id)
     };
   });
 }
@@ -279,6 +488,18 @@ export async function createEvent(userId: string, input: unknown): Promise<Event
   const endsMs = Date.parse(parsed.data.endsAt);
   if (endsMs <= startsMs) return { ok: false, message: "The event must end after it starts." };
 
+  /* The audience has to point at something real, and the server is the only
+     place that can insist. A form that skips the picker must not be able to
+     publish an invited Event with nobody invited. */
+  const chosenVisibility = parsed.data.visibility ?? "community";
+  const targetIds = [...new Set(parsed.data.audienceTargetIds ?? [])];
+  const audienceCheck = validateAudienceRequirements({
+    visibility: chosenVisibility,
+    targetCount: targetIds.length,
+    hasLocation: Boolean(parsed.data.location)
+  });
+  if (!audienceCheck.ok) return { ok: false, message: audienceCheck.message };
+
   const rateLimit = await consumeRateLimit({ action: "events.create", userId });
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
@@ -292,7 +513,9 @@ export async function createEvent(userId: string, input: unknown): Promise<Event
       venue_label: parsed.data.venueLabel?.trim() || null,
       starts_at: parsed.data.startsAt,
       ends_at: parsed.data.endsAt,
-      visibility: "community",
+      // The creator's actual choice. `community` remains the fallback purely
+      // so an older client that sends no audience behaves exactly as before.
+      visibility: parsed.data.visibility ?? "community",
       // ALWAYS A DRAFT. Events used to be born "scheduled", i.e. published the
       // instant they were created -- which made the published-cover rule
       // unenforceable, because there was no moment between "the event exists"
@@ -312,6 +535,39 @@ export async function createEvent(userId: string, input: unknown): Promise<Event
     .select("id")
     .single();
   if (error || !event) return { ok: false, message: "Couldn't create the event." };
+
+  /* Targets are written only for the audiences that use them, and only after
+     the Event row exists to hang them off. An invited Event stores people; a
+     community Event stores the Circle. Nothing else needs a row. */
+  if (targetIds.length > 0 && (chosenVisibility === "invite" || chosenVisibility === "community")) {
+    const targetType = chosenVisibility === "invite" ? "user" : "community";
+    /* Invitees are filtered to real approved Muddies. A client-supplied id
+       list must never become a way to attach an Event to a stranger, or to
+       somebody on either side of a block. */
+    const allowedIds =
+      targetType === "user" ? [...(await batchEligibleMuddyIds(admin, userId, targetIds))] : targetIds;
+    if (allowedIds.length > 0) {
+      await admin.from("event_audience_targets").insert(
+        allowedIds.map((targetId) => ({
+          event_id: event.id,
+          target_type: targetType,
+          target_id: targetId
+        }))
+      );
+    }
+  }
+
+  if (parsed.data.location) {
+    // Published programme geography -- where the Event happens. Never a
+    // person's whereabouts, and never subject to user-location retention.
+    await admin.from("event_locations").insert({
+      event_id: event.id,
+      latitude: parsed.data.location.latitude,
+      longitude: parsed.data.location.longitude,
+      locality: parsed.data.location.locality ?? null,
+      region: parsed.data.location.region ?? null
+    });
+  }
 
   {
     const { grantAchievement } = await import("@/lib/engagement/achievements");
@@ -410,4 +666,306 @@ export async function checkOutEvent(userId: string, checkInId: string): Promise<
   if (error) return { ok: false, message: "Couldn't check you out." };
   if (!updated?.length) return { ok: false, message: "You're not checked in." };
   return { ok: true, message: "Checked out." };
+}
+
+/**
+ * ONE Event, by id, for a viewer who arrived with a direct link.
+ *
+ * WHY THIS EXISTS. The Events page resolved `?event=<id>` by searching the
+ * list it already had -- and that list comes from listEvents, which is
+ * DISCOVERY-filtered. An unlisted "anyone with the link" Event is never in it
+ * by definition, so a shared link silently opened nothing at all: no sheet, no
+ * error, no explanation. The same held for a past Event and for an invite-only
+ * Event the viewer had genuinely been invited to but had not loaded.
+ *
+ * Discovery and direct access are DIFFERENT QUESTIONS, and the codebase already
+ * had the right authority for the second one -- getEventForViewer, which checks
+ * blocks first, then canViewEvent, and returns a typed refusal. This function
+ * is the projection layer over it, so the client can render the same EventView
+ * it renders for a browsed Event.
+ *
+ * It deliberately does NOT widen what anybody may see: every refusal still
+ * comes from getEventForViewer, and a blocked or invisible Event returns null
+ * exactly as before.
+ */
+export async function getEventViewForViewer(userId: string, eventId: string): Promise<EventView | null> {
+  if (!hasServiceRoleEnv()) return null;
+
+  const { getEventForViewer } = await import("@/lib/events/access");
+  const access = await getEventForViewer(eventId, userId);
+  if (!access.ok) return null;
+
+  const admin = createSupabaseAdminClient();
+  const event = access.event;
+
+  /* Everything the card and the detail sheet need, in one round trip each --
+   * the same facts listEvents projects, scoped to this single Event. */
+  const [{ data: cover }, { data: host }, hostPlans, { data: myRsvp }, { data: checkIn }, { data: location }, { data: rsvps }, { data: invite }] =
+    await Promise.all([
+      admin.from("events").select("cover_media_id, cover_focal_x, cover_focal_y").eq("id", eventId).maybeSingle(),
+      admin.from("profiles").select("user_id, full_name").eq("user_id", event.host_id).maybeSingle(),
+      loadEffectivePlansForUsers(admin, [event.host_id]),
+      admin.from("event_rsvps").select("status").eq("event_id", eventId).eq("user_id", userId).maybeSingle(),
+      admin
+        .from("check_ins")
+        .select("id, event_glow_enabled")
+        .eq("user_id", userId)
+        .eq("context_type", "event")
+        .eq("context_id", eventId)
+        .eq("status", "checked_in")
+        .maybeSingle(),
+      admin.from("event_locations").select("locality, region").eq("event_id", eventId).maybeSingle(),
+      admin.from("event_rsvps").select("status").eq("event_id", eventId),
+      admin
+        .from("event_audience_targets")
+        .select("event_id")
+        .eq("event_id", eventId)
+        .eq("target_type", "user")
+        .eq("target_id", userId)
+        .maybeSingle()
+    ]);
+
+  let coverUrl: string | null = null;
+  if (cover?.cover_media_id) {
+    const { signMediaForAsset } = await import("@/lib/content/service");
+    coverUrl = await signMediaForAsset(admin, cover.cover_media_id, "feed");
+  }
+
+  const locality = location?.locality?.trim() ?? "";
+  const region = location?.region?.trim() ?? "";
+  const localityLabel =
+    locality && region && region !== locality ? `${locality}, ${region}` : locality || region;
+
+  let goingCount = 0;
+  let interestedCount = 0;
+  for (const row of rsvps ?? []) {
+    if (row.status === "going") goingCount += 1;
+    else if (row.status === "interested") interestedCount += 1;
+  }
+
+  const rsvpStatus = myRsvp?.status;
+  return {
+    id: event.id,
+    name: event.name,
+    description: event.description,
+    venueLabel: event.venue_label,
+    startsAt: event.starts_at,
+    endsAt: event.ends_at,
+    status: event.status,
+    hostName: access.isHost ? "You" : host?.full_name?.trim() || "A Muddy",
+    hostPlan: hostPlans.get(event.host_id) ?? "free",
+    isHost: access.isHost,
+    myCheckInId: checkIn?.id ?? null,
+    myGlowEnabled: checkIn?.event_glow_enabled ?? false,
+    myRsvp: rsvpStatus && isEventRsvpStatus(rsvpStatus) ? rsvpStatus : null,
+    coverUrl,
+    focalX: cover?.cover_focal_x ?? 0.5,
+    focalY: cover?.cover_focal_y ?? 0.5,
+    locality: localityLabel || null,
+    visibility: event.visibility,
+    goingCount,
+    interestedCount,
+    isInvited: Boolean(invite)
+  };
+}
+
+/** Everything the creation flow needs to resume an existing draft. */
+export type EventDraft = {
+  id: string;
+  name: string;
+  description: string;
+  /** Local-date and time parts, because that is what the form fields hold. */
+  date: string;
+  startTime: string;
+  endTime: string;
+  venueLabel: string;
+  visibility: string;
+  targetIds: string[];
+  hasLocation: boolean;
+  coverUrl: string | null;
+  focalX: number;
+  focalY: number;
+};
+
+/**
+ * One draft, loaded for its host to carry on editing.
+ *
+ * WHY THIS EXISTS. "Continue" on a draft used to open the Event DETAIL sheet,
+ * which is a different job entirely -- and for a draft with no cover it renders
+ * almost nothing, so the person saw a dimmed screen with an empty panel and no
+ * way to finish. Resuming needs the draft's actual VALUES, not a viewer's
+ * projection of it.
+ *
+ * HOST ONLY, and refused for anything already published: an Event that is live
+ * is edited through its own surfaces, not by reopening the creation flow.
+ * Returning null for every refusal keeps the client from having to reason about
+ * why.
+ */
+export async function getEventDraftForHost(userId: string, eventId: string): Promise<EventDraft | null> {
+  if (!hasServiceRoleEnv()) return null;
+
+  const admin = createSupabaseAdminClient();
+  const { data: event } = await admin
+    .from("events")
+    .select(
+      "id, host_id, name, description, venue_label, starts_at, ends_at, visibility, status, cover_media_id, cover_focal_x, cover_focal_y"
+    )
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event) return null;
+  if (event.host_id !== userId) return null;
+  if (event.status !== "draft") return null;
+
+  const [{ data: targets }, { data: location }] = await Promise.all([
+    admin.from("event_audience_targets").select("target_id").eq("event_id", eventId),
+    admin.from("event_locations").select("event_id").eq("event_id", eventId).maybeSingle()
+  ]);
+
+  let coverUrl: string | null = null;
+  if (event.cover_media_id) {
+    const { signMediaForAsset } = await import("@/lib/content/service");
+    coverUrl = await signMediaForAsset(admin, event.cover_media_id, "feed");
+  }
+
+  /* Split into the local parts the form binds to. The stored value is an
+   * instant; the form asks for a date and two times, so the conversion happens
+   * once here rather than in three places in the component. */
+  const starts = new Date(event.starts_at);
+  const ends = new Date(event.ends_at);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const dateOf = (value: Date) =>
+    `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+  const timeOf = (value: Date) => `${pad(value.getHours())}:${pad(value.getMinutes())}`;
+
+  return {
+    id: event.id,
+    name: event.name ?? "",
+    description: event.description ?? "",
+    date: Number.isFinite(starts.getTime()) ? dateOf(starts) : "",
+    startTime: Number.isFinite(starts.getTime()) ? timeOf(starts) : "",
+    endTime: Number.isFinite(ends.getTime()) ? timeOf(ends) : "",
+    venueLabel: event.venue_label ?? "",
+    visibility: event.visibility,
+    targetIds: (targets ?? []).map((row) => row.target_id),
+    hasLocation: Boolean(location),
+    coverUrl,
+    focalX: event.cover_focal_x ?? 0.5,
+    focalY: event.cover_focal_y ?? 0.5
+  };
+}
+
+/**
+ * Saves edits back onto an existing DRAFT.
+ *
+ * WHY THIS EXISTS. Resuming a draft and publishing it used to call createEvent
+ * again, which inserts a NEW row -- so the person got a second Event and the
+ * original stayed in Drafts forever. A resumed draft has an identity already;
+ * finishing it is an update, not a creation.
+ *
+ * Shares createEventSchema and validateAudienceRequirements with createEvent,
+ * so a draft cannot be saved into a state a new Event would be refused for --
+ * an invited Event with nobody invited, or a Nearby Event with no location.
+ *
+ * DRAFTS ONLY. A published Event is edited through its own surfaces; letting
+ * the creation flow rewrite a live Event would be a different feature with
+ * different rules (attendees have already answered based on what it said).
+ */
+export async function updateEventDraft(
+  userId: string,
+  eventId: string,
+  input: unknown
+): Promise<EventResult> {
+  if (!hasServiceRoleEnv()) {
+    return { ok: false, message: "This action needs the server database configuration." };
+  }
+
+  const parsed = createEventSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check the event details and try again." };
+
+  const startsMs = Date.parse(parsed.data.startsAt);
+  const endsMs = Date.parse(parsed.data.endsAt);
+  if (endsMs <= startsMs) return { ok: false, message: "The event must end after it starts." };
+
+  const chosenVisibility = parsed.data.visibility ?? "community";
+  const targetIds = [...new Set(parsed.data.audienceTargetIds ?? [])];
+
+  const admin = createSupabaseAdminClient();
+  const { data: existing } = await admin
+    .from("events")
+    .select("id, host_id, status")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!existing) return { ok: false, message: "Event not found." };
+  if (existing.host_id !== userId) return { ok: false, message: "Only the host can edit this event." };
+  if (existing.status !== "draft") {
+    return { ok: false, message: "This event is already published." };
+  }
+
+  /* A Nearby draft may already hold a location from an earlier session, so the
+   * requirement is satisfied by EITHER a fresh one in this payload or one
+   * already stored. Demanding it again would make a resumed Nearby draft
+   * impossible to publish without re-granting geolocation. */
+  const { data: storedLocation } = await admin
+    .from("event_locations")
+    .select("event_id")
+    .eq("event_id", eventId)
+    .maybeSingle();
+
+  const audienceCheck = validateAudienceRequirements({
+    visibility: chosenVisibility,
+    targetCount: targetIds.length,
+    hasLocation: Boolean(parsed.data.location) || Boolean(storedLocation)
+  });
+  if (!audienceCheck.ok) return { ok: false, message: audienceCheck.message };
+
+  const { error } = await admin
+    .from("events")
+    .update({
+      name: parsed.data.name.trim(),
+      description: parsed.data.description?.trim() || null,
+      venue_label: parsed.data.venueLabel?.trim() || null,
+      starts_at: parsed.data.startsAt,
+      ends_at: parsed.data.endsAt,
+      visibility: chosenVisibility,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", eventId)
+    .eq("host_id", userId);
+  if (error) return { ok: false, message: "Couldn't save your event. Try again." };
+
+  /* Targets are REPLACED, not merged: the audience picker shows the complete
+   * chosen set, so anything absent from it was deliberately removed. Merging
+   * would silently keep somebody the host had just taken off the list. */
+  if (chosenVisibility === "invite" || chosenVisibility === "community") {
+    await admin.from("event_audience_targets").delete().eq("event_id", eventId);
+    const eligible =
+      chosenVisibility === "invite"
+        ? await batchEligibleMuddyIds(admin, userId, targetIds)
+        : new Set(targetIds);
+    const rows = [...eligible].map((targetId) => ({
+      event_id: eventId,
+      // Literal union, not string: the column is constrained to these two.
+      target_type: (chosenVisibility === "invite" ? "user" : "community") as "user" | "community",
+      target_id: targetId
+    }));
+    if (rows.length > 0) await admin.from("event_audience_targets").insert(rows);
+  } else {
+    // Switching away from a targeted audience clears the targets with it.
+    await admin.from("event_audience_targets").delete().eq("event_id", eventId);
+  }
+
+  if (parsed.data.location) {
+    await admin.from("event_locations").upsert(
+      {
+        event_id: eventId,
+        latitude: parsed.data.location.latitude,
+        longitude: parsed.data.location.longitude,
+        locality: parsed.data.location.locality ?? null,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: "event_id" }
+    );
+  }
+
+  return { ok: true, message: "Draft saved.", eventId };
 }

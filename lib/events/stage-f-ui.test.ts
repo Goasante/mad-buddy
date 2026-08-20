@@ -20,6 +20,9 @@ const successSheet = stripComments(read("components/events/check-in-success-shee
 const arrivalPrompt = stripComments(read("components/events/arrival-prompt.tsx"));
 const banner = stripComments(read("components/socialize/event-mode-banner.tsx"));
 const discoverPage = stripComments(read("app/(app)/discover/page.tsx"));
+// Linkr 2.0: the Linkr product moved to /linkr and /discover became a
+// redirect. Event Mode resolution moved with it.
+const linkrPage = stripComments(read("app/(app)/linkr/page.tsx"));
 const eventsMobile = stripComments(read("lib/events/mobile.ts"));
 
 // ---------------------------------------------------------------------------
@@ -262,14 +265,32 @@ describe("the success sheet", () => {
 
 describe("Linkr Event Mode context", () => {
   it("is validated server-side against a live check-in", () => {
-    expect(discoverPage).toContain("canEnterEventMode");
-    expect(discoverPage).toContain('liveCheckIn(admin, userId, "event", eventId)');
-    expect(discoverPage).toContain("readEventModeContext");
+    /**
+     * LINKR 2.0 MOVED THIS CHECK, it did not remove it.
+     *
+     * /discover is now a redirect; the Linkr product lives at /linkr, and the
+     * server-side Event Mode resolution moved with it. The property this test
+     * guards -- that a hand-typed event id is re-authorised on the server and
+     * never trusted from the URL -- is asserted against the new page.
+     *
+     * The eligibility itself is delegated to the Events authority through
+     * lib/linkr/event-mode-adapter, which is what resolveViewerEventMode
+     * calls; lib/linkr/event-mode.test.ts covers the ladder in full.
+     */
+    expect(discoverPage).toContain("redirect");
+    expect(linkrPage).toContain("resolveViewerEventMode");
+    expect(linkrPage).toContain("UUID_PATTERN.test(params.eventId)");
   });
 
   it("shows why Linkr opened differently", () => {
-    expect(banner).toContain("At ${eventName}");
-    expect(banner).toContain("Finding people close by");
+    /* INTEGRATION (Events 2.0 + Linkr 2.0). Linkr moved this suite's subject to
+     * /linkr; Events separately rewrote the banner itself, because
+     * "At X / Finding people close by" described ordinary Linkr rather than
+     * the Event. Both changes are real, so this keeps Linkr's structure and
+     * Events' copy -- taking either file wholesale would assert a banner that
+     * no longer exists, or a route that no longer resolves. */
+    expect(banner).toContain("{eventName ?? \"This event\"}");
+    expect(banner).toContain("Meet people here");
   });
 
   it("leaves Event Mode by navigating, since nothing is stored", () => {
@@ -280,16 +301,18 @@ describe("Linkr Event Mode context", () => {
   });
 
   it("does not leak into an ordinary Linkr visit", () => {
-    // Plain /discover carries no params, so readEventModeContext returns null,
-    // so resolveEventModeName is handed a null eventId and returns null
-    // before touching the database. The banner cannot appear.
-    expect(discoverPage).toContain("requestedEventMode?.eventId ?? null");
-    expect(discoverPage).toContain("if (!eventId || !userId) return null;");
+    // Plain /linkr carries no eventId, so requestedEventId is null and the
+    // whole Event Mode branch is skipped before touching the database. The
+    // intro screen and the banner cannot appear.
+    expect(linkrPage).toContain("requestedEventId =");
+    expect(linkrPage).toContain("if (requestedEventId && profile?.enabled && profile.eventModeEnabled)");
   });
 
   it("does not widen Linkr eligibility", () => {
-    // The page passes a NAME for display. No discovery parameter is altered.
-    expect(discoverPage).not.toContain("discoveryScope");
-    expect(discoverPage).not.toContain("proximityLevel");
+    // The page passes a NAME for display. No discovery parameter is altered,
+    // and Event Mode is applied as an intersection over candidates that have
+    // already passed Linkr's own gate.
+    expect(linkrPage).not.toContain("discoveryScope");
+    expect(linkrPage).not.toContain("proximityLevel");
   });
 });

@@ -835,6 +835,7 @@ export function SocializePage({
       <div ref={radarRef} className="mt-5 w-full pb-6">
         <DiscoveryFeed
           feedRef={feedRef}
+          eventModeName={eventModeName}
           hero={
           /* Socializing status control — the entry point into the experience.
               Reflects the SERVER-authoritative session (see `isActive`, derived

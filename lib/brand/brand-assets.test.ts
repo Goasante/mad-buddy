@@ -75,7 +75,11 @@ describe("unrelated navigation is untouched", () => {
   });
 
   it("keeps every route and label as it was", () => {
-    expect(appShell).toContain('{ href: "/discover", label: "Linkr"');
+    // Linkr 2.0 moved the Linkr destination from /discover to /linkr: the old
+    // route now redirects, and the nav points at the rebuilt product. The
+    // label and brand artwork are what this test is actually guarding, and
+    // both are unchanged.
+    expect(appShell).toContain('{ href: "/linkr", label: "Linkr"');
     expect(appShell).toContain('{ href: "/hangout-mode", label: "UpFor"');
     expect(appShell).toContain('{ href: "/friends", label: "Muddies", icon: Users }');
     expect(appShell).toContain('{ href: "/messages", label: "Messages", icon: MessageCircle }');

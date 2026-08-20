@@ -33,6 +33,7 @@ export type JobType =
   | "birthdays.notify"
   | "rewards.earned_premium"
   | "plans.lifecycle_side_effect"
+  | "events.update_fanout"
   // Expiry sweeps (spec §31).
   | "expiry.plans"
   | "expiry.statuses"

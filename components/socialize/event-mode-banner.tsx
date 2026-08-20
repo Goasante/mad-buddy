@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { MapPin, X } from "lucide-react";
+import { Users, X } from "lucide-react";
 
 /**
  * Linkr Event Mode context banner (Stage F UI, Part C).
@@ -19,13 +19,22 @@ export function EventModeBanner({ eventName }: { eventName: string | null }) {
   const router = useRouter();
 
   return (
-    <div className="flex items-center gap-2 rounded-2xl border border-border/70 bg-muted/50 px-3 py-2">
-      <MapPin className="h-4 w-4 shrink-0 text-[var(--color-brand-orange)]" aria-hidden="true" />
+    <div className="flex items-center gap-2.5 rounded-2xl border border-primary/40 bg-primary/5 px-3 py-2.5">
+      <Users className="h-4 w-4 shrink-0 text-[var(--color-brand-orange)]" aria-hidden="true" />
+      {/* THE EVENT IS THE CONTEXT, NOT THE PROXIMITY.
+       *
+       * This said "Finding people close by", which describes ordinary Linkr --
+       * so opening Event Mode from AfroFuture Night looked identical to
+       * browsing whoever happens to be around. Sharing the event is the reason
+       * these people are shown; how close they are is secondary context on the
+       * cards themselves. */}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold leading-tight">
-          {eventName ? `At ${eventName}` : "At this event"}
+          {eventName ?? "This event"}
         </p>
-        <p className="text-xs text-muted-foreground">Finding people close by</p>
+        <p className="text-xs text-muted-foreground">
+          Meet people here &middot; open to connecting
+        </p>
       </div>
       <button
         type="button"

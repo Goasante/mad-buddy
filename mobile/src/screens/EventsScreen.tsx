@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Screen } from "../components/AppShell";
 import { Spinner } from "../components/Spinner";
 import { api } from "../lib/api";
+import { AudienceSelector, type AudienceValue } from "@/components/events/audience-selector";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 
@@ -22,12 +23,17 @@ type Event = {
   hostPlan: SubscriptionPlan;
   isHost: boolean;
   myCheckInId: string | null;
+  /** null covers both never-answered and the host, who needs none. */
+  myRsvp: "interested" | "going" | "not_going" | null;
 };
 
-type EventTab = "upcoming" | "live" | "mine";
+type EventTab = "upcoming" | "live" | "going" | "mine";
 const eventTabs: { id: EventTab; label: string }[] = [
   { id: "upcoming", label: "Upcoming" },
   { id: "live", label: "Happening now" },
+  // Answering yes has to lead somewhere on mobile too, or a committed Event is
+  // findable only by scrolling the same discovery feed it was found in.
+  { id: "going", label: "Going" },
   { id: "mine", label: "Hosting" }
 ];
 
@@ -50,6 +56,26 @@ export function EventsScreen() {
     void load();
   }, [load]);
 
+  /**
+   * RSVP through the canonical server authority.
+   *
+   * No optimistic paint: visibility, blocks, host-cannot-RSVP and cancelled or
+   * past Events are all decided server-side, so a refusal must never be shown
+   * as success. The list reloads from what the server actually stored.
+   */
+  async function setRsvp(event: Event, status: "interested" | "going" | "not_going") {
+    const result = await api.post<{ ok: boolean; message: string }>(
+      `/api/events/${event.id}/rsvp`,
+      { status }
+    );
+    if (!result.ok) {
+      setFeedback(result.error);
+      return;
+    }
+    setFeedback(result.data.message);
+    if (result.data.ok) void load();
+  }
+
   async function checkIn(event: Event) {
     const result = await api.post<{ ok: boolean; message: string }>(`/api/events/${event.id}/checkin`);
     setFeedback(result.ok ? result.data.message : result.error);
@@ -66,7 +92,15 @@ export function EventsScreen() {
   }
 
   const filteredEvents = events.filter((event) =>
-    tab === "mine" ? event.isHost : tab === "live" ? event.status === "active" : event.status === "scheduled"
+    tab === "mine"
+      ? event.isHost
+      : tab === "going"
+        ? // Interested belongs here too: a softer commitment, not a different
+          // subject. Declining is an answer, not a plan, so it is excluded.
+          !event.isHost && (event.myRsvp === "going" || event.myRsvp === "interested")
+        : tab === "live"
+          ? event.status === "active"
+          : event.status === "scheduled"
   );
 
   return (
@@ -114,7 +148,13 @@ export function EventsScreen() {
         </div>
       ) : filteredEvents.length === 0 ? (
         <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">
-          {tab === "mine" ? "You're not hosting any events." : tab === "live" ? "Nothing happening right now." : "No upcoming events. Create one with “New”."}
+          {tab === "mine"
+            ? "You're not hosting any events."
+            : tab === "going"
+              ? "You haven't said yes to anything yet."
+              : tab === "live"
+                ? "Nothing happening right now."
+                : "No upcoming events. Create one with “New”."}
         </p>
       ) : (
         <ul className="space-y-3">
@@ -139,6 +179,33 @@ export function EventsScreen() {
                 </p>
               ) : null}
               {event.description ? <p className="mt-2 text-sm text-muted-foreground">{event.description}</p> : null}
+
+              {/* RSVP first, check-in second. Going is a decision made in
+                  advance; checking in is a claim about being somewhere now, so
+                  they are separate controls rather than one escalating button.
+                  Selected state is carried by variant AND by aria-pressed, so
+                  it is not conveyed by colour alone. */}
+              {!event.isHost ? (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      { status: "interested", label: "Interested" },
+                      { status: "going", label: "Going" },
+                      { status: "not_going", label: "Can't go" }
+                    ] as const
+                  ).map((choice) => (
+                    <Button
+                      key={choice.status}
+                      size="sm"
+                      variant={event.myRsvp === choice.status ? "primary" : "outline"}
+                      aria-pressed={event.myRsvp === choice.status}
+                      onClick={() => void setRsvp(event, choice.status)}
+                    >
+                      {choice.label}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
 
               {!event.isHost ? (
                 event.myCheckInId ? (
@@ -169,6 +236,18 @@ function CreateEvent({ onCreated }: { onCreated: () => void }) {
   const [ends, setEnds] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  /* MOBILE ASKS THE SAME QUESTION AS WEB.
+   *
+   * Creation here previously sent no audience at all, so every mobile Event
+   * silently became the legacy default -- the one decision that governs who can
+   * find it was made for the creator and never shown. The selector is the SAME
+   * component the web form uses, so the two surfaces cannot drift into
+   * different audience semantics. */
+  const [audience, setAudience] = useState<AudienceValue>({
+    visibility: "public",
+    targetIds: [],
+    location: null
+  });
 
   async function create() {
     if (name.trim().length < 2) return setError("Give your event a name.");
@@ -180,7 +259,13 @@ function CreateEvent({ onCreated }: { onCreated: () => void }) {
       description: description.trim() || undefined,
       venueLabel: venue.trim() || undefined,
       startsAt: new Date(starts).toISOString(),
-      endsAt: new Date(ends).toISOString()
+      endsAt: new Date(ends).toISOString(),
+      // The server re-validates that the audience points at something real,
+      // so a client that skips the picker still cannot publish a private
+      // Event with nobody invited.
+      visibility: audience.visibility,
+      audienceTargetIds: audience.targetIds,
+      location: audience.location ?? undefined
     });
     setBusy(false);
     if (result.ok) onCreated();
@@ -200,6 +285,7 @@ function CreateEvent({ onCreated }: { onCreated: () => void }) {
         <label htmlFor="ends" className="text-xs font-medium text-muted-foreground">Ends</label>
         <Input id="ends" type="datetime-local" value={ends} onChange={(e) => setEnds(e.target.value)} />
       </div>
+      <AudienceSelector value={audience} onChange={setAudience} />
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <Button className="w-full" onClick={create} disabled={busy}>
         {busy ? "Creating…" : "Create event"}

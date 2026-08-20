@@ -26,8 +26,41 @@ import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createEvent, listEvents, setEventRsvp, type EventView } from "@/lib/events/mobile";
+import {
+  createEvent,
+  getEventDraftForHost,
+  updateEventDraft,
+  getEventViewForViewer,
+  listEvents,
+  setEventRsvp,
+  type EventDraft,
+  type EventView
+} from "@/lib/events/mobile";
 import type { CheckInVisibility, EventGlowMuddyList } from "@/lib/events/types";
+import {
+  addEventAdmin,
+  createEventUpdate,
+  editEventUpdate,
+  listEventAdmins,
+  listEventUpdates,
+  removeEventAdmin,
+  setUpdateReaction,
+  type EventAdminView,
+  type EventUpdateView
+} from "@/lib/events/updates";
+import {
+  describeEventLinkrPool,
+  eventLinkrCandidateIds,
+  hasEventLinkrConsent,
+  resolveEventLinkrEligibility,
+  setEventLinkrConsent
+} from "@/lib/events/linkr-consent";
+import {
+  listCommunityOptions,
+  listInviteeOptions,
+  type CommunityOption,
+  type InviteeOption
+} from "@/lib/events/audience-options";
 
 export type EventActionState = {
   ok: boolean;
@@ -516,4 +549,253 @@ export async function createEventCircleAction(input: unknown): Promise<EventActi
   });
 
   return { ok: true, message: `${parsed.data.name.trim()} created.`, circleId: circle.id };
+}
+
+// ---------------------------------------------------------------------------
+// Events 2.0: Updates, reactions, admins
+//
+// Thin wrappers. Every rule lives in lib/events/updates.ts so the web actions,
+// the mobile API and the tests all reach the same authority -- a permission
+// re-implemented per transport is a permission that will eventually disagree
+// with itself.
+// ---------------------------------------------------------------------------
+
+export async function listEventUpdatesAction(eventId: string): Promise<EventUpdateView[]> {
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+  return listEventUpdates(eventId, userId);
+}
+
+export async function postEventUpdateAction(input: unknown): Promise<EventActionState> {
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+  return createEventUpdate(userId, input);
+}
+
+export async function editEventUpdateAction(
+  updateId: string,
+  body: string
+): Promise<EventActionState> {
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+  return editEventUpdate(userId, updateId, body);
+}
+
+export async function setEventUpdateReactionAction(
+  updateId: string,
+  reaction: string | null
+): Promise<EventActionState> {
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+  return setUpdateReaction(userId, updateId, reaction);
+}
+
+export async function listEventAdminsAction(eventId: string): Promise<EventAdminView[]> {
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+  return listEventAdmins(eventId, userId);
+}
+
+export async function addEventAdminAction(
+  eventId: string,
+  targetUserId: string
+): Promise<EventActionState> {
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+  return addEventAdmin(userId, eventId, targetUserId);
+}
+
+export async function removeEventAdminAction(
+  eventId: string,
+  targetUserId: string
+): Promise<EventActionState> {
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+  return removeEventAdmin(userId, eventId, targetUserId);
+}
+
+/**
+ * Event Linkr consent. Separate action from check-in and from Event Glow,
+ * because they are separate permissions -- see lib/events/linkr-consent.ts.
+ */
+export async function setEventLinkrConsentAction(
+  eventId: string,
+  enabled: boolean
+): Promise<EventActionState> {
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+  if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
+  return setEventLinkrConsent(userId, eventId, enabled);
+}
+
+/**
+ * ONE Event, by id, for a viewer who followed a direct link.
+ *
+ * The page used to resolve `?event=<id>` against the already-loaded discovery
+ * list, so an unlisted "anyone with the link" Event -- which is never in that
+ * list, by design -- opened nothing at all. Silently: no sheet, no error.
+ *
+ * Direct access is its own question, and getEventForViewer already answers it
+ * (blocks first, then canViewEvent). Returning null for a refusal keeps the
+ * client honest: it cannot tell a blocked Event from a missing one, which is
+ * the same non-disclosure the rest of the surface maintains.
+ */
+export async function getEventByIdAction(eventId: string): Promise<EventView | null> {
+  const userId = await getAuthedUserId();
+  if (!userId) return null;
+  if (!uuidSchema.safeParse(eventId).success) return null;
+  return getEventViewForViewer(userId, eventId);
+}
+
+/**
+ * Which of these Events are genuinely near the viewer.
+ *
+ * Returns null when there is no fresh location, so the UI can say so honestly
+ * instead of showing a generic list under a heading that promises proximity.
+ * Ids only -- no distance crosses this boundary.
+ */
+export async function nearbyEventIdsAction(eventIds: string[]): Promise<string[] | null> {
+  const userId = await getAuthedUserId();
+  if (!userId) return null;
+  const safeIds = eventIds.filter((id) => uuidSchema.safeParse(id).success).slice(0, 200);
+  const { nearbyEventIdsForViewer } = await import("@/lib/events/nearby");
+  return nearbyEventIdsForViewer(userId, safeIds);
+}
+
+/** Whether the viewer may enter Event Mode right now, and why not if not. */
+export async function getEventLinkrStateAction(
+  eventId: string
+): Promise<{ eligible: boolean; reason: string; consented: boolean; poolLabel: string | null }> {
+  const userId = await getAuthedUserId();
+  if (!userId) return { eligible: false, reason: "not_checked_in", consented: false, poolLabel: null };
+  if (!uuidSchema.safeParse(eventId).success) {
+    return { eligible: false, reason: "event_not_found", consented: false, poolLabel: null };
+  }
+
+  const admin = createSupabaseAdminClient();
+  const [eligibility, consented] = await Promise.all([
+    resolveEventLinkrEligibility(admin, userId, eventId),
+    hasEventLinkrConsent(admin, userId, eventId)
+  ]);
+
+  /* The pool count is only computed for somebody already eligible. Showing a
+   * would-be joiner how many people are inside would let them learn the size
+   * of a private room without entering it. */
+  let poolLabel: string | null = null;
+  if (eligibility.eligible) {
+    const candidates = await eventLinkrCandidateIds(admin, userId, eventId);
+    poolLabel = describeEventLinkrPool(candidates.size);
+  }
+
+  return { eligible: eligibility.eligible, reason: eligibility.reason, consented, poolLabel };
+}
+
+/**
+ * One draft, for its host to carry on editing.
+ *
+ * Resuming is not viewing: the creation flow needs the draft's VALUES, and
+ * opening the Event detail instead is what produced a dimmed screen with no
+ * editor. Returns null for anything that is not this host's own draft.
+ */
+export async function getEventDraftAction(eventId: string): Promise<EventDraft | null> {
+  const userId = await getAuthedUserId();
+  if (!userId) return null;
+  if (!uuidSchema.safeParse(eventId).success) return null;
+  return getEventDraftForHost(userId, eventId);
+}
+
+/**
+ * Saves edits back onto an existing draft.
+ *
+ * Publishing a RESUMED draft must transition that same Event -- calling create
+ * again would insert a second row and strand the original in Drafts.
+ */
+export async function updateEventDraftAction(eventId: string, input: unknown): Promise<EventActionState> {
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+  if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
+  return updateEventDraft(userId, eventId, input);
+}
+
+/**
+ * Sends an Event's link into an existing conversation.
+ *
+ * REUSES CANONICAL MESSAGING, deliberately. Events does not get a second chat
+ * engine: this composes the message and hands it to sendMessage, which already
+ * owns membership checks, blocks, rate limiting and moderation. A structured
+ * Event attachment (its own message_type with a rendered card) would be the
+ * richer version and needs a migration plus a renderer; the link is the part
+ * that works today and it opens through the same access authority.
+ *
+ * SHARING IS TRANSPORT, NOT PERMISSION. The recipient still meets whatever
+ * canViewEvent says: forwarding an invite-only Event into a Circle does not
+ * invite the Circle. Only Events the SENDER may see can be shared, so this is
+ * not a way to discover an Event id either.
+ */
+export async function shareEventToConversationAction(
+  eventId: string,
+  conversationId: string
+): Promise<EventActionState> {
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+  if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
+  if (!uuidSchema.safeParse(conversationId).success) {
+    return { ok: false, message: "Conversation not found." };
+  }
+
+  /* The sender must be able to see the Event before they can pass it on. This
+   * is the same authority the recipient will face -- it just refuses earlier,
+   * so an id nobody may open cannot be posted into a chat. */
+  const view = await getEventViewForViewer(userId, eventId);
+  if (!view) return { ok: false, message: "Event not found." };
+  if (view.status === "draft") {
+    // A draft has no shareable identity yet; its link would refuse everybody.
+    return { ok: false, message: "Publish this event before sharing it." };
+  }
+
+  const origin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+  const link = `${origin}/events?event=${eventId}`;
+  const when = new Date(view.startsAt).toLocaleString([], {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+  const place = [view.venueLabel, view.locality].filter(Boolean).join(", ");
+
+  const { sendMessage } = await import("@/lib/messaging/mobile");
+  const result = await sendMessage(userId, {
+    conversationId,
+    text: [view.name, when, place, link].filter(Boolean).join("\n"),
+    /* REQUIRED by sendMessage, and its absence is why sharing into a chat
+     * silently wrote nothing: the schema rejected the whole call, so the person
+     * saw only "Check your message and try again." while no row was ever
+     * written. Nothing in the UI distinguished that from a real failure.
+     *
+     * Freshly generated per send rather than derived from (sender, event,
+     * conversation). A deterministic key would make the FIRST share permanent
+     * and every later one a silent no-op -- sharing the same Event into the
+     * same chat again next week is a legitimate thing to do, not a duplicate.
+     * A lost response still retries this exact id, which is the case dedupe is
+     * actually for. */
+    clientMessageId: crypto.randomUUID()
+  });
+  return result.ok
+    ? { ok: true, message: "Event shared." }
+    : { ok: false, message: result.message };
+}
+
+/** Eligible Muddies and Circles for the audience pickers. */
+export async function getAudienceOptionsAction(): Promise<{
+  invitees: InviteeOption[];
+  communities: CommunityOption[];
+}> {
+  const userId = await getAuthedUserId();
+  if (!userId) return { invitees: [], communities: [] };
+  const [invitees, communities] = await Promise.all([
+    listInviteeOptions(userId),
+    listCommunityOptions(userId)
+  ]);
+  return { invitees, communities };
 }

@@ -9,6 +9,37 @@ describe("supabaseOriginFromEnv", () => {
     );
   });
 
+describe("local previews are allowed to paint", () => {
+  /* REGRESSION, FOUND IN THE BROWSER.
+   *
+   * img-src listed 'self' and data: but not blob:, so every preview built with
+   * URL.createObjectURL was refused by the browser. The container rendered at
+   * full size with a broken-image icon inside it -- the Event cover picker, the
+   * avatar cropper, Mad Cam and voice notes were all affected in production.
+   *
+   * A source-level test could not have caught this on its own; what it CAN do
+   * is stop the directive being narrowed again. */
+  it("permits blob: images so a chosen file can be previewed before upload", () => {
+    const policy = buildContentSecurityPolicy({ supabaseOrigin: "https://abc123.supabase.co", mode: "enforce" });
+    const imgSrc = policy.split(";").find((part) => part.trim().startsWith("img-src")) ?? "";
+    expect(imgSrc).toContain("blob:");
+  });
+
+  it("permits blob: media so a recording can be played back before upload", () => {
+    const policy = buildContentSecurityPolicy({ supabaseOrigin: "https://abc123.supabase.co", mode: "enforce" });
+    const mediaSrc = policy.split(";").find((part) => part.trim().startsWith("media-src")) ?? "";
+    expect(mediaSrc).toContain("blob:");
+  });
+
+  it("does not extend blob: to script or connect", () => {
+    // blob: images are inert. A blob: SCRIPT source would let injected code
+    // build and run its own payload, so the relaxation stops at media.
+    const policy = buildContentSecurityPolicy({ supabaseOrigin: "https://abc123.supabase.co", mode: "enforce" });
+    const scriptSrc = policy.split(";").find((part) => part.trim().startsWith("script-src")) ?? "";
+    expect(scriptSrc).not.toContain("blob:");
+  });
+});
+
   it("returns null for missing or malformed URLs (secret-less CI builds)", () => {
     expect(supabaseOriginFromEnv(undefined)).toBeNull();
     expect(supabaseOriginFromEnv("")).toBeNull();
@@ -24,8 +55,8 @@ describe("buildContentSecurityPolicy", () => {
   const withoutSupabase = buildContentSecurityPolicy({ supabaseOrigin: null, mode: "report-only" });
 
   it("includes the Supabase origin only where the app needs it (image, media, and connect)", () => {
-    expect(withSupabase).toContain("img-src 'self' data: https://abc123.supabase.co");
-    expect(withSupabase).toContain("media-src 'self' data: https://abc123.supabase.co");
+    expect(withSupabase).toContain("img-src 'self' data: blob: https://abc123.supabase.co");
+    expect(withSupabase).toContain("media-src 'self' data: blob: https://abc123.supabase.co");
     expect(withSupabase).toContain("connect-src 'self' data: https://abc123.supabase.co");
     // Never in script-src, Supabase is data/auth, not a script host.
     expect(withSupabase).not.toContain("script-src 'self' 'unsafe-inline' https://abc123.supabase.co");
@@ -72,7 +103,7 @@ describe("buildContentSecurityPolicy", () => {
   });
 
   it("degrades safely when Supabase env is absent", () => {
-    expect(withoutSupabase).toContain("img-src 'self' data: https://www.googletagmanager.com https://www.google-analytics.com");
+    expect(withoutSupabase).toContain("img-src 'self' data: blob: https://www.googletagmanager.com https://www.google-analytics.com");
     expect(withoutSupabase).toContain("media-src 'self' data:");
     expect(withoutSupabase).toContain("connect-src 'self' data: https://www.googletagmanager.com");
   });

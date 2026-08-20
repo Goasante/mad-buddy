@@ -1,132 +1,37 @@
-import {
-  discoverSocializePeopleAction,
-  getCurrentSocializeAction
-} from "@/app/(app)/socialize-actions";
-import { SocializePage } from "@/components/socialize/socialize-page";
-import { loadGroupsPageDataAction } from "@/app/(app)/group-actions";
-import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
-import { isSocializeEnabled } from "@/lib/features/feature-flags";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser } from "@/lib/supabase/auth";
 import { redirect } from "next/navigation";
-import { canEnterEventMode, readEventModeContext } from "@/lib/social/event-mode";
-import { liveCheckIn } from "@/lib/events/service";
 
 export const dynamic = "force-dynamic";
 
-/** A status row exists until it expires; the column is the only authority. */
-function isStatusActiveAtRequestTime(expiresAt: string) {
-  return Date.parse(expiresAt) > Date.now();
-}
-
 /**
- * Linkr Event Mode (Stage F), resolved SERVER-SIDE.
+ * LINKR 2.0 -- this route is superseded by /linkr.
  *
- * The URL is a request, never an authorisation: canEnterEventMode is
- * re-checked here against a real live check-in row, so hand-typing the link
- * without having checked in gets ordinary Linkr rather than event context.
- * Returns only a NAME -- a label for the banner. No discovery parameter is
- * altered and nothing is stored, so leaving this URL leaves the mode.
+ * The old Socialize discovery surface that lived here is gone: the "Around
+ * You" dashboard, the Upcoming Social Plans rail, the Join a Group rail and
+ * the old candidate presentation were removed rather than relocated, which is
+ * the whole point of the rebuild. The people-first product now lives at
+ * /linkr.
+ *
+ * The route itself is KEPT as a redirect rather than deleted, because links to
+ * it exist in the wild -- saved pages, the Events "meet people here" action,
+ * push notifications -- and a 404 is a worse answer than the right screen.
+ *
+ * EVENT MODE PARAMS ARE CARRIED ACROSS, and carrying them grants nothing:
+ * /linkr re-resolves the event id server-side against the Events authority
+ * (live event, live check-in, explicit Event Linkr consent) before it affects
+ * anything. The URL is a request, never an authorisation.
+ *
+ * INTEGRATION NOTE for the Events 2.0 branch: that branch modifies the version
+ * of this file that this one replaces, adding a resolveEventLinkrEligibility
+ * check to the old in-place Event Mode path. That hardening is not lost by
+ * this change -- /linkr calls the same authority through
+ * lib/linkr/event-mode-adapter.ts. On merge, take this file and discard the
+ * old body; nothing else about the Events change needs to move.
  */
-async function resolveEventModeName(
-  admin: ReturnType<typeof createSupabaseAdminClient>,
-  userId: string | null,
-  eventId: string | null
-): Promise<string | null> {
-  if (!eventId || !userId) return null;
-
-  const [{ data: eventRow }, checkIn] = await Promise.all([
-    admin.from("events").select("id, name, status, ends_at").eq("id", eventId).maybeSingle(),
-    liveCheckIn(admin, userId, "event", eventId)
-  ]);
-
-  const eventActive = Boolean(
-    eventRow &&
-      eventRow.status !== "cancelled" &&
-      eventRow.status !== "draft" &&
-      Date.parse(eventRow.ends_at) > Date.now()
-  );
-  if (!canEnterEventMode({ viewerCheckedIn: Boolean(checkIn), eventActive, accessDenied: false })) {
-    return null;
-  }
-  return eventRow?.name ?? null;
-}
-
 export default async function DiscoverPage({
   searchParams
 }: {
   searchParams: Promise<{ eventMode?: string; eventId?: string }>;
 }) {
-  const admin = createSupabaseAdminClient();
-  if (!(await isSocializeEnabled(admin))) redirect("/dashboard");
-
-  const user = await getCurrentUser();
-
-  /**
-   * Linkr Event Mode (Stage F), resolved SERVER-SIDE.
-   *
-   * The URL is a request, never an authorisation: canEnterEventMode is
-   * re-checked here against a real live check-in row, so hand-typing the link
-   * without having checked in gets ordinary Linkr rather than event context.
-   * Nothing is stored -- leaving this URL leaves the mode.
-   */
   const params = await searchParams;
-  const requestedEventMode = readEventModeContext({
-    eventMode: params.eventMode ?? null,
-    eventId: params.eventId ?? null
-  });
-  const eventModeName = await resolveEventModeName(
-    admin,
-    user?.id ?? null,
-    requestedEventMode?.eventId ?? null
-  );
-  // Quick Controls needs the same own-profile and status rows Home reads, so
-  // the sheet opens on this page showing the user's real state rather than a
-  // default. Own rows only, read with the admin client exactly as Home does.
-  const [profileResult, statusResult, session] = await Promise.all([
-    user
-      ? admin
-          .from("profiles")
-          .select("full_name, avatar_url, visibility_status")
-          .eq("user_id", user.id)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    user
-      ? admin
-          .from("user_statuses")
-          .select("availability_type, activity_type, custom_text, expires_at")
-          .eq("user_id", user.id)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    getCurrentSocializeAction()
-  ]);
-
-  const status = statusResult?.data;
-  const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
-  const people = session ? await discoverSocializePeopleAction() : [];
-  // Groups and plans for the discovery rails. Both reuse EXISTING
-  // projections, loaded in parallel with each other rather than in series.
-  const [groupsData, plansData] = await Promise.all([
-    loadGroupsPageDataAction(),
-    user ? loadUpcomingPlans(user.id, 8) : Promise.resolve({ plans: [], hasMore: false })
-  ]);
-
-  return (
-    <SocializePage
-      // Context only: the banner explains why Linkr opened differently. It
-      // does not widen eligibility, and it is not persisted anywhere.
-      eventModeName={eventModeName}
-      initialSession={session}
-      initialPeople={people}
-      initialGroups={groupsData.discoverableGroups}
-      initialPlans={plansData.plans}
-      myAvatarUrl={profileResult.data?.avatar_url ?? null}
-      myName={profileResult.data?.full_name?.trim() ?? ""}
-      initialVisibilityStatus={profileResult.data?.visibility_status ?? "visible"}
-      hasActiveStatus={hasActiveStatus}
-      initialStatusAvailability={hasActiveStatus ? status?.availability_type : undefined}
-      initialStatusActivity={hasActiveStatus ? status?.activity_type ?? null : null}
-      initialStatusNote={hasActiveStatus ? status?.custom_text ?? "" : ""}
-    />
-  );
+  redirect(params?.eventId ? `/linkr?eventId=${encodeURIComponent(params.eventId)}` : "/linkr");
 }

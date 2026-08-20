@@ -23,6 +23,13 @@ const agenda = stripComments(read("lib/social/upcoming-agenda.ts"));
 const migration = read("supabase/migrations/20260811130000_event_rsvps.sql");
 const initialSchema = read("supabase/migrations/20260709100000_initial_schema.sql");
 const eventsPage = stripComments(read("components/events/events-page.tsx"));
+/* Events 2.0 visual rebuild: the page routes between four surfaces, each of
+ * which derives its own rows, and the Event itself renders in EventDetail.
+ * The rules below are unchanged -- only the file enforcing them. */
+const detail = stripComments(read("components/events/event-detail.tsx"));
+const presentation = stripComments(read("lib/events/presentation.ts"));
+const hosting = stripComments(read("components/events/events-hosting.tsx"));
+const yours = stripComments(read("components/events/events-yours.tsx"));
 
 // ---------------------------------------------------------------------------
 // The block gap: pre-existing, fixed in this stage
@@ -236,15 +243,22 @@ describe("the Events page Upcoming tab no longer includes Past", () => {
     expect(eventsPage).toContain("eventPhase(");
   });
 
-  it("Upcoming means phase === upcoming, not merely not-live", () => {
-    const upcomingBranch = eventsPage.slice(eventsPage.indexOf('activeTab === "live"'));
-    expect(upcomingBranch.slice(0, 400)).toContain('phaseOf(event, nowMs) === "upcoming"');
-    // The literal bug this replaces must not reappear.
-    expect(eventsPage).not.toContain("!isLive(event, nowMs)");
+  it("derives live and past from the canonical phase, never from not-live", () => {
+    /* One derivation, in presentation.ts, consumed by every surface. The bug
+     * this replaces treated "not currently live" as upcoming, which quietly
+     * swept finished Events into the Upcoming list. */
+    expect(presentation).toContain('isLive: phase === "live"');
+    expect(presentation).toContain('isPast: phase === "past"');
+    expect(presentation).toContain('from "@/lib/events/rules"');
+    expect(presentation).not.toContain("!isLive(");
   });
 
-  it("Live means phase === live", () => {
-    expect(eventsPage).toContain('phaseOf(event, nowMs) === "live"');
+  it("gives no surface its own private copy of that rule", () => {
+    // Each surface asks describeEvent rather than re-deriving from timestamps.
+    for (const [name, source] of [["hosting", hosting], ["yours", yours]] as const) {
+      expect(source, name).toContain("describeEvent(");
+      expect(source, name).not.toContain("Date.now()");
+    }
   });
 });
 
@@ -255,32 +269,51 @@ describe("the Events page Upcoming tab no longer includes Past", () => {
 describe("the Event detail RSVP controls", () => {
   it("offers Interested, Going and Not going, changeable in any direction", () => {
     for (const status of ['"interested"', '"going"', '"not_going"']) {
-      expect(eventsPage, status).toContain(`onRsvpChange(${status})`);
+      expect(detail, status).toContain(`status: ${status}`);
     }
+    // One handler for all three: there is no separate un-RSVP path.
+    expect(detail).toContain("onRsvp(choice.status)");
   });
 
-  it("shows the host their own state rather than an RSVP control", () => {
-    const modal = eventsPage.slice(eventsPage.indexOf("function EventDetailsModal"));
-    expect(modal).toContain("event.isHost ? (");
-    expect(modal).toContain("You&apos;re hosting this event.");
+  it("shows a host no RSVP control at all", () => {
+    /* Hosting is derived from isHost, never stored as intent to attend one's
+     * own Event -- and setEventRsvp refuses a host server-side, so offering the
+     * control would only ever produce a refusal. */
+    expect(detail).toContain("{event.isHost ? null : checkedIn ? (");
+    const hero = detail.slice(detail.indexOf('{[event.isHost ? "You are hosting"'));
+    expect(hero.slice(0, 200)).toContain("You are hosting");
   });
 
-  it("uses the same selected-state pattern the Plans RSVP buttons already use", () => {
-    // variant primary/outline, not a bespoke segmented control -- one visual
-    // language for RSVP across Plans and Events.
-    const rsvpBlock = eventsPage.slice(eventsPage.indexOf("Your RSVP"));
-    expect(rsvpBlock.slice(0, 800)).toContain('event.myRsvp === "interested" ? "primary" : "outline"');
-    expect(rsvpBlock.slice(0, 800)).toContain('event.myRsvp === "going" ? "primary" : "outline"');
+  it("marks the chosen RSVP as a real selection, not only a colour", () => {
+    /* SUPERSEDED DELIBERATELY (Events 2.0 visual rebuild). This asserted the
+     * Plans pattern of three primary/outline Buttons. The approved design uses
+     * one segmented control, which fits a single-choice answer better AND is a
+     * better accessibility story: three independent buttons cannot say which
+     * one is chosen, whereas a radiogroup does.
+     *
+     * The invariant that survives the restyle is the one that matters -- the
+     * selection is announced, not merely painted. */
+    const rsvpBlock = detail.slice(detail.indexOf('id="event-rsvp"'));
+    expect(rsvpBlock.slice(0, 1200)).toContain('role="radiogroup"');
+    expect(rsvpBlock.slice(0, 1600)).toContain('role="radio"');
+    expect(rsvpBlock.slice(0, 1600)).toContain("aria-checked={selected}");
+    expect(rsvpBlock.slice(0, 1600)).toContain("const selected = event.myRsvp === choice.status;");
   });
 
   it("does not invent a new haptic system", () => {
     expect(eventsPage).not.toContain("haptic(");
   });
 
-  it("Going/Hosting is shown as a badge without a premature Check-in CTA change", () => {
-    const card = eventsPage.slice(eventsPage.indexOf("function EventCard"));
-    expect(card.slice(0, 900)).toContain('event.myRsvp === "going"');
-    expect(card.slice(0, 900)).toContain("event.isHost");
+  it("shows Going as a state on personal lists rather than as a control", () => {
+    /* On Your Events the answer is already given, so three competing buttons
+     * per row would be noise. Changing it happens on the Event's own screen. */
+    /* The mark now depends on the RELATIONSHIP, because a host has one too --
+       and it must never read "Going". relationshipMark decides between
+       Hosting, Going and nothing. */
+    expect(yours).toContain("relationshipMark(event, tab)");
+    expect(yours).toContain('if (event.isHost) return <HostingMark />;');
+    expect(yours).toContain('event.myRsvp === "going" && tab !== "past"');
+    expect(yours).not.toContain('role="radiogroup"');
   });
 });
 

@@ -24,6 +24,16 @@ export type ModalProps = {
    * it) while staying a centred dialog from `sm` up.
    */
   variant?: "center" | "sheet";
+  /**
+   * Hides the title bar VISUALLY while keeping it for assistive technology.
+   *
+   * For panels whose content is its own headline -- an Event detail sheet opens
+   * on a full-bleed hero carrying the Event name, so a second text title above
+   * it is a duplicate. The Dialog.Title still renders (sr-only), because Radix
+   * requires one and a dialog announced with no name is worse than a redundant
+   * heading. The close button stays visible and keeps its position.
+   */
+  hideTitle?: boolean;
 };
 
 export function Modal({
@@ -35,7 +45,8 @@ export function Modal({
   footer,
   compact = false,
   widthClassName = "max-w-md",
-  variant = "center"
+  variant = "center",
+  hideTitle = false
 }: ModalProps) {
   // Sheets are dismissible with the hardware/browser Back button, like a native
   // mobile sheet. No-op for the centred variant.
@@ -79,20 +90,50 @@ export function Modal({
               : "modal-drop-panel fixed left-1/2 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] max-h-[calc(100svh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-1.5rem)] w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-2xl shadow-[0_18px_60px_hsl(var(--shadow)/0.24)] sm:top-16 sm:max-h-[calc(100svh-5rem)]",
             widthClassName,
             "max-w-[32rem]",
-            isSheet && "sm:w-[calc(100%-1.5rem)]"
+            isSheet && "sm:w-[calc(100%-1.5rem)]",
+            // A hidden-title panel is a content surface, so it may be wider
+            // than the 32rem form cap, and needs relative positioning for the
+            // floated close button.
+            hideTitle && "relative max-w-[36rem]"
           )}
         >
-          <div className="flex shrink-0 items-start justify-between gap-3">
+          <div
+            className={cn(
+              "flex shrink-0 items-start justify-between gap-3",
+              // Floated over the content it is hiding for, so the panel body
+              // can run edge-to-edge underneath the close button.
+              hideTitle && "pointer-events-none absolute inset-x-0 top-0 z-10 p-3"
+            )}
+          >
             <div className="space-y-1">
-              <Dialog.Title className="text-base font-semibold sm:text-lg">{title}</Dialog.Title>
+              <Dialog.Title className={cn("text-base font-semibold sm:text-lg", hideTitle && "sr-only")}>
+                {title}
+              </Dialog.Title>
               {description ? (
-                <Dialog.Description className="text-xs leading-5 text-muted-foreground sm:text-sm">
+                <Dialog.Description
+                  className={cn(
+                    "text-xs leading-5 text-muted-foreground sm:text-sm",
+                    hideTitle && "sr-only"
+                  )}
+                >
                   {description}
                 </Dialog.Description>
               ) : null}
             </div>
             <Dialog.Close asChild>
-              <Button type="button" variant="ghost" size="icon" className="shrink-0" aria-label="Close" title="Close">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "pointer-events-auto shrink-0",
+                  // Over artwork the ghost button has no contrast, so it gets
+                  // its own scrim rather than relying on the image behind it.
+                  hideTitle && "bg-black/40 text-white hover:bg-black/60"
+                )}
+                aria-label="Close"
+                title="Close"
+              >
                 <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </Dialog.Close>
@@ -100,7 +141,12 @@ export function Modal({
           {/* Only this middle section scrolls, header and footer stay put,
               so a tall form never hides its own action buttons or clips the
               last invitee row behind them. */}
-          <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain", compact ? "mt-2.5" : "mt-4")}>
+          <div
+            className={cn(
+              "min-h-0 flex-1 overflow-y-auto overscroll-contain",
+              hideTitle ? "mt-0" : compact ? "mt-2.5" : "mt-4"
+            )}
+          >
             {children}
           </div>
           {footer ? (

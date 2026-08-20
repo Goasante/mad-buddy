@@ -1,6 +1,7 @@
 import "server-only";
 
 import { deliverNotification } from "@/lib/notifications/server";
+import { batchBlockedIds } from "@/lib/social/permissions";
 import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 import {
   gracePeriodEndMs,
@@ -831,8 +832,103 @@ export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
 // Registry
 // ---------------------------------------------------------------------------
 
+/**
+ * Event Update fanout.
+ *
+ * A publish writes one row and queues one job; this delivers it. Doing that
+ * work inside the request would mean a host with thirty thousand Going
+ * attendees waits for thirty thousand notification writes, and a single
+ * failure anywhere would look to them like their Update never posted.
+ *
+ * RE-CHECKED AT DELIVERY, NOT AT ENQUEUE. Someone who tapped Going yesterday
+ * may have tapped Not Going an hour ago; the Event itself may have been
+ * cancelled. Membership resolved when the job was created would be a snapshot
+ * of a moment that has passed, so recipients are resolved here.
+ *
+ * IDEMPOTENT BY LATCH. deliverNotification inserts, so a retry after a partial
+ * batch would notify some people twice. The job payload carries a cursor of
+ * how far delivery got; a retry resumes rather than restarts. This is the same
+ * claim-before-acting shape the Plan invitation handler uses, for the same
+ * reason -- a duplicate notification is something the recipient cannot undo.
+ */
+export const handleEventUpdateFanout: JobHandler = async (admin, payload) => {
+  const eventId = typeof payload.eventId === "string" ? payload.eventId : "";
+  const updateId = typeof payload.updateId === "string" ? payload.updateId : "";
+  if (!UUID_PATTERN.test(eventId) || !UUID_PATTERN.test(updateId)) {
+    throw new JobError("VALIDATION_FAILED", "Invalid Event Update fanout identifiers.");
+  }
+
+  const [{ data: update }, { data: event }] = await Promise.all([
+    admin.from("event_updates").select("id, body, author_id, priority").eq("id", updateId).maybeSingle(),
+    admin.from("events").select("id, name, host_id, status").eq("id", eventId).maybeSingle()
+  ]);
+  // A deleted Update or Event is not a failure to retry forever -- there is
+  // simply nothing left to deliver.
+  if (!update || !event) return 0;
+  if (event.status === "cancelled") return 0;
+
+  /* GOING ONLY.
+   *
+   * Interested is a weaker signal: those people can read Updates on the Event
+   * whenever they look, but pushing every normal Update to everyone who ever
+   * tapped Interested is how a useful channel becomes one people mute. */
+  const { data: rsvps } = await admin
+    .from("event_rsvps")
+    .select("user_id")
+    .eq("event_id", eventId)
+    .eq("status", "going");
+  if (!rsvps?.length) return 0;
+
+  // The author never notifies themselves about their own announcement.
+  const recipients = rsvps.map((r) => r.user_id).filter((id) => id !== update.author_id);
+  if (recipients.length === 0) return 0;
+
+  // Resume point, so a retry after a partial batch does not re-notify anyone.
+  const deliveredSoFar = typeof payload.deliveredCount === "number" ? payload.deliveredCount : 0;
+  const remaining = recipients.slice(deliveredSoFar);
+  if (remaining.length === 0) return 0;
+
+  // Bounded per tick. A large Event is delivered across several claims rather
+  // than one unbounded burst that could exceed the worker time limit.
+  const BATCH = 200;
+  const batch = remaining.slice(0, BATCH);
+
+  const blocked = await batchBlockedIds(admin, event.host_id, batch);
+  const title = update.priority === "high" ? `Update: ${event.name}` : event.name;
+  let delivered = 0;
+  for (const userId of batch) {
+    if (blocked.has(userId)) continue;
+    await deliverNotification(admin, {
+      userId,
+      senderId: update.author_id,
+      category: "plans",
+      type: `event:${eventId}`,
+      title,
+      message: update.body.slice(0, 140)
+    });
+    delivered += 1;
+  }
+
+  const nextCursor = deliveredSoFar + batch.length;
+  if (nextCursor < recipients.length) {
+    // More to do: advance the cursor and let the job run again rather than
+    // holding one claim open across the whole audience.
+    await admin
+      .from("jobs")
+      .update({ payload: { eventId, updateId, deliveredCount: nextCursor } })
+      .eq("idempotency_key", `event-update-fanout:${updateId}`);
+    // RATE_LIMITED is the transient code: the worker backs off and claims this
+    // job again, resuming from the cursor. A permanent code would dead-letter a
+    // fanout that is simply not finished yet.
+    throw new JobError("RATE_LIMITED", "Event Update fanout continues.");
+  }
+
+  return delivered;
+};
+
 export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
   "plans.lifecycle_side_effect": handlePlanLifecycleSideEffect,
+  "events.update_fanout": handleEventUpdateFanout,
   "safe_arrival.unconfirmed_alert": handleSafeArrivalUnconfirmedAlert,
   "media.cleanup_orphan_chat": handleCleanupOrphanChatMedia,
   "media.delete_queued": handleMediaDeleteQueued,

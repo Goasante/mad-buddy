@@ -6,6 +6,7 @@ import {
   MAX_RANKED_EVENTS,
   MOMENTUM_WINDOW_MS
 } from "@/lib/events/ranking";
+import { isBroadlyRankable } from "@/lib/events/rules";
 import { resolveEventMedia, type EventMedia } from "@/lib/events/event-media";
 import { batchBlockedIds } from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -89,9 +90,13 @@ export async function getRankedUpcomingEvents(
 
   // Invite-only events belong to their host alone; ranking must not become a
   // side channel that lists them to everyone.
-  const visibilityFiltered = events.filter(
-    (event) => event.visibility !== "invite" || event.host_id === userId
-  );
+  /* VISIBILITY PRECEDES SCORE, and broad ranking is stricter than browsing.
+     "Trending on Mad Buddy" is a claim about the whole product: a private
+     wedding with five thousand Going must never make it, and neither should a
+     community Event whose audience is one Circle -- discoverable to its
+     members is not the same as trending for everyone. The host's own Events
+     are not exempt; ranking is not a personal shelf. */
+  const visibilityFiltered = events.filter((event) => isBroadlyRankable(event));
   if (visibilityFiltered.length === 0) return [];
 
   // Blocks, batched -- one query for every host rather than one per event,

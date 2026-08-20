@@ -24,6 +24,10 @@ const actions = stripComments(read("app/(app)/event-actions.ts"));
 const checkinRoute = stripComments(read("app/api/events/[id]/checkin/route.ts"));
 const scanActions = stripComments(read("app/(app)/scan-actions.ts"));
 const eventsPage = stripComments(read("components/events/events-page.tsx"));
+/* The check-in UI moved out of events-page.tsx in the Events 2.0 visual
+ * rebuild: the page routes between surfaces now, and EventDetail renders the
+ * Event itself. The privacy rules below are unchanged -- only their address. */
+const eventDetail = stripComments(read("components/events/event-detail.tsx"));
 const permissions = stripComments(read("lib/social/permissions.ts"));
 const migration = read("supabase/migrations/20260811140000_event_presence_privacy.sql");
 
@@ -87,22 +91,37 @@ describe("the check-in UI asks before sharing presence", () => {
     expect(eventsPage).toMatch(/myGlowEnabled:\s*sharePresence/);
   });
 
-  it("starts the opt-in unticked and resets it per event", () => {
-    expect(eventsPage).toMatch(/const \[sharePresence, setSharePresence\] = useState\(false\)/);
-    // Consent must not survive from one event to the next: when the modal's
-    // event id changes, the tick is cleared before anything renders.
-    expect(eventsPage).toMatch(
-      /if \(presenceEventId !== \(event\?\.id \?\? null\)\) \{[\s\S]*?setSharePresence\(false\);/
-    );
+  it("starts the opt-in unticked", () => {
+    // useState(false), explicitly. An empty useState() would leave the tick
+    // undefined, which reads as unchecked but submits as falsy-by-accident
+    // rather than by decision.
+    expect(eventDetail).toMatch(/const \[sharePresence, setSharePresence\] = useState\(false\)/);
+  });
+
+  it("cannot carry one Event's answer into the next", () => {
+    /* GUARANTEE, NOT MECHANISM. The old modal tracked presenceEventId and
+     * cleared the tick whenever it changed. EventDetail instead owns the state
+     * and is unmounted whenever the sheet closes, so every Event mounts a fresh
+     * `false`.
+     *
+     * What must hold either way: the tick is component-local and initialised
+     * false, never lifted into the page where it would outlive the Event it was
+     * answered for. */
+    expect(eventDetail).toMatch(/const \[sharePresence, setSharePresence\] = useState\(false\)/);
+    expect(eventsPage).not.toContain("setSharePresence");
+    // And the sheet is genuinely conditional, so closing it really unmounts.
+    expect(eventsPage).toMatch(/\{selectedEvent \? \(\s*<EventDetail/);
   });
 
   it("labels the control in the words the product promises", () => {
-    expect(eventsPage).toContain("Let my Muddies see I");
-    expect(eventsPage).toContain("Off by default.");
+    expect(eventDetail).toContain("Let my Muddies see I am here");
+    // Names the audience, so "see I am here" cannot be read as "everyone".
+    expect(eventDetail).toContain("Only Muddies who are also checked in");
   });
 
-  it("checks in privately from the card, where no choice was offered", () => {
-    expect(eventsPage).toContain("checkIn(event, false)");
+  it("passes the person's actual answer to check-in, never a hardcoded true", () => {
+    expect(eventDetail).toContain("onCheckIn(sharePresence)");
+    expect(eventDetail).not.toContain("onCheckIn(true)");
   });
 });
 

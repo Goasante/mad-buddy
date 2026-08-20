@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { stripFormatting } from "@/lib/content/strip-comments";
 import { FINALIZE_RECOVERABLE_MESSAGE } from "@/lib/onboarding/finalize";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
@@ -74,7 +75,10 @@ describe("idempotence", () => {
   });
 
   it("updates the profile flag rather than inserting a second row", () => {
-    expect(finalize).toContain('.from("profiles")\n      .update(');
+    /* Whitespace-insensitive. The literal "\n" here fails on a CRLF checkout,
+     * which is a fact about the developer's line endings and not about whether
+     * the profile flag is updated instead of re-inserted. */
+    expect(stripFormatting(finalize)).toContain('.from("profiles") .update(');
     expect(finalize).toContain('.eq("user_id", userId)');
   });
 
