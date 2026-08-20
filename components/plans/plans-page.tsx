@@ -208,7 +208,22 @@ export function PlansPageContent({
     }
   }
   const [feedback, setFeedback] = useState("");
+  /**
+   * A refusal the composer can actually show.
+   *
+   * `feedback` renders on the PAGE, and the composer is a modal layered over
+   * it -- so a refused Plan explained itself on a surface hidden behind the
+   * open sheet. The person saw the form simply not submit, with no reason
+   * given. This is the same message, rendered where they are looking.
+   */
+  const [createError, setCreateError] = useState("");
   const [isPending, startTransition] = useTransition();
+  /**
+   * Creating a Plan is a MUTATION, so it does not run inside a transition.
+   * React abandons transition work by design, which kills the Server Action
+   * mid-flight and leaves the person unable to tell whether the Plan was made.
+   */
+  const [isCreating, setIsCreating] = useState(false);
 
   const visiblePlans = useMemo(
     () => plans.filter((plan) => bucketFor(plan) === activeBucket),
@@ -319,7 +334,9 @@ export function PlansPageContent({
     category: PlanCategory | null;
     participantIds: string[];
   }) {
-    startTransition(async () => {
+    void (async () => {
+      setIsCreating(true);
+      setCreateError("");
       const result = await createPlanAction({
         requestKey:
           createRequestKeyRef.current ?? (createRequestKeyRef.current = crypto.randomUUID()),
@@ -334,9 +351,18 @@ export function PlansPageContent({
         category: input.category,
         participantIds: input.participantIds
       });
+      setIsCreating(false);
       setFeedback(result.message);
-      if (result.ok) {
+      if (!result.ok) {
+        /* STAY IN THE COMPOSER. A refused Plan keeps everything typed and says
+         * why, right here -- navigating or closing would discard the work and
+         * leave the person guessing what was wrong. */
+        setCreateError(result.message);
+        return;
+      }
+      {
         createRequestKeyRef.current = null;
+        setCreateError("");
         setCreateOpen(false);
         setActiveBucket("hosting");
         /* LAND ON THE PLAN, NOT ON A LIST CONTAINING IT.
@@ -349,7 +375,7 @@ export function PlansPageContent({
         if (result.planId) setSelectedPlanId(result.planId);
         router.refresh();
       }
-    });
+    })();
   }
 
   const inviteCount = useMemo(() => plans.filter((plan) => bucketFor(plan) === "invites").length, [plans]);
@@ -472,7 +498,8 @@ export function PlansPageContent({
         open={createOpen}
         contextMuddyId={contextMuddyId}
         invitees={invitees}
-        pending={isPending}
+        pending={isPending || isCreating}
+        error={createError}
         onOpenChange={(next) => {
           if (!next) createRequestKeyRef.current = null;
           setCreateOpen(next);
@@ -700,6 +727,7 @@ function CreatePlanModal({
   open,
   invitees,
   pending,
+  error,
   contextMuddyId,
   onOpenChange,
   onCreate
@@ -707,6 +735,14 @@ function CreatePlanModal({
   open: boolean;
   invitees: PlanInvitee[];
   pending: boolean;
+  /**
+   * Why the last attempt was refused, shown INSIDE this sheet.
+   *
+   * The page-level feedback banner sits underneath this modal, so a refusal
+   * rendered there was invisible: the form just did not submit and said
+   * nothing. A refusal has to appear where the person is looking.
+   */
+  error?: string;
   /**
    * The Muddy this Plan started from, if the user arrived from a relationship.
    *
@@ -842,6 +878,18 @@ function CreatePlanModal({
         </>
       }
     >
+      {/* THE REFUSAL, WHERE THE PERSON IS LOOKING (§16, §21).
+          role="alert" so it is announced rather than only seen, and placed at
+          the top of the body so it is not below the fold of a scrolled form.
+          Everything typed stays exactly where it was. */}
+      {error ? (
+        <p
+          role="alert"
+          className="mb-3 rounded-[0.75rem] border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          {error}
+        </p>
+      ) : null}
       <div className="space-y-5 pb-1 pr-1">
         {/* WHO THIS STARTED WITH, stated before anything is asked.
             Somebody who tapped "Make a Plan" on Kofi should see Kofi here

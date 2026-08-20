@@ -27,6 +27,14 @@ import {
 import type { ChatMessageView, ConversationView, MessageableFriend } from "@/lib/messaging/mobile";
 import { mergeConversations } from "@/lib/messaging/conversation-sync";
 import {
+  discardOptimistic,
+  markFailed,
+  markRetrying,
+  pruneConfirmed,
+  type OptimisticMessage
+} from "@/lib/messaging/optimistic-messages";
+import type { OptimisticSendDraft } from "@/components/messaging/message-composer";
+import {
   eligibleQuickActions,
   type ConversationContext,
   type MeetingPhase
@@ -148,6 +156,17 @@ export function MessagesPageContent({
   const openedRequestedConversation = useRef(false);
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
+  /**
+   * Messages drawn before the server has them (spec R2 §8).
+   *
+   * Held next to `messages` rather than merged into it, so the canonical list
+   * stays exactly what the server returned. Reconciliation is a render-time
+   * decision, which means a refetch can never overwrite a pending row and a
+   * pending row can never masquerade as server truth.
+   */
+  const [optimistic, setOptimistic] = useState<OptimisticMessage[]>([]);
+  /** The last draft for each pending key, so Retry can resend it unchanged. */
+  const retryDraftsRef = useRef<Map<string, OptimisticSendDraft>>(new Map());
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [viewerMessageId, setViewerMessageId] = useState<string | null>(null);
   /* Confirmations clear themselves; failures stay until something replaces
@@ -218,6 +237,90 @@ export function MessagesPageContent({
       setFeedback(messageFailure(error));
     }
   }, [setFeedback]);
+
+  /** Draws a message the instant Send is pressed, before any request. */
+  const addOptimistic = useCallback((draft: OptimisticSendDraft) => {
+    retryDraftsRef.current.set(draft.clientMessageId, draft);
+    setOptimistic((current) => [
+      ...current.filter((message) => message.clientMessageId !== draft.clientMessageId),
+      {
+        clientMessageId: draft.clientMessageId,
+        text: draft.text,
+        kind: draft.kind,
+        durationSeconds: draft.durationSeconds,
+        /* The moment Send was pressed. This is what orders a burst of
+         * messages, so acknowledgement order never reaches the screen. */
+        createdAt: new Date().toISOString(),
+        status: "pending"
+      }
+    ]);
+  }, []);
+
+  /**
+   * Resolves a pending row.
+   *
+   * A confirmed row is NOT removed here: it is removed at render time once the
+   * canonical message carrying its key arrives, so the bubble never blinks out
+   * in the gap between the response and the refetch that follows it.
+   */
+  const settleOptimistic = useCallback((clientMessageId: string, outcome: "sent" | "failed") => {
+    if (outcome === "failed") {
+      setOptimistic((current) => markFailed(current, clientMessageId));
+      return;
+    }
+    setOptimistic((current) => markRetrying(current, clientMessageId));
+  }, []);
+
+  /**
+   * Resends a failed message under its ORIGINAL key (spec R2 §18).
+   *
+   * Reusing the key is the whole point: the server dedupes on
+   * (sender_id, client_message_id), so a retry that races a send which
+   * actually succeeded returns the first message instead of creating a second.
+   */
+  const retryOptimistic = useCallback((clientMessageId: string) => {
+    const draft = retryDraftsRef.current.get(clientMessageId);
+    if (!draft || !selectedId) return;
+    /* Voice retries belong to the composer, which still holds the recording;
+     * only text can be replayed from here. */
+    if (draft.kind !== "text") return;
+    setOptimistic((current) => markRetrying(current, clientMessageId));
+    startTransition(async () => {
+      try {
+        const result = await withTimeout(
+          sendMessageAction({ conversationId: selectedId, text: draft.text ?? "", clientMessageId }),
+          { operation: "send message" }
+        );
+        if (!result.ok) {
+          setOptimistic((current) => markFailed(current, clientMessageId));
+          setFeedback(result.message);
+          return;
+        }
+        /* The thread is the surface the person is looking at, so it is the
+         * one refreshed here. The inbox row follows on the next ordinary
+         * send or sync -- a retry is a recovery path, not a reason to re-read
+         * the whole conversation list. */
+        await refreshMessages(selectedId);
+      } catch (error) {
+        setOptimistic((current) => markFailed(current, clientMessageId));
+        setFeedback(messageFailure(error));
+      }
+    });
+  }, [refreshMessages, selectedId, setFeedback]);
+
+  /** Drops a failed message the person chose not to send. */
+  const removeOptimistic = useCallback((clientMessageId: string) => {
+    retryDraftsRef.current.delete(clientMessageId);
+    setOptimistic((current) => discardOptimistic(current, clientMessageId));
+  }, []);
+
+  /**
+   * What is still genuinely pending, given what the server has returned.
+   *
+   * Computed at render rather than stored, so there is one rule and no state
+   * to fall out of step with the canonical list.
+   */
+  const pendingMessages = useMemo(() => pruneConfirmed(optimistic, messages), [optimistic, messages]);
 
   function react(messageId: string, reaction: string) {
     if (!selectedId) return;
@@ -609,6 +712,10 @@ export function MessagesPageContent({
     }
     setSelectedId(conversationId);
     setMessages([]);
+    /* Pending rows belong to the thread they were composed in. Carrying them
+     * across would draw one conversation's unsent message inside another. */
+    setOptimistic([]);
+    retryDraftsRef.current.clear();
     void loadConversation(conversationId);
   }
 
@@ -1474,6 +1581,68 @@ export function MessagesPageContent({
                       </Fragment>
                     ))
                   )}
+
+                  {/* PENDING AND FAILED MESSAGES (spec R2 §8-§10, §17).
+                    *
+                    * Rendered after the canonical list because they are the
+                    * newest thing in the conversation, and rendered SEPARATELY
+                    * because they are not server truth -- they carry no id, no
+                    * reactions and no actions. Each disappears from here the
+                    * moment the canonical message bearing its key arrives.
+                    *
+                    * Deliberately plain: the same bubble geometry as a sent
+                    * message so nothing jumps when it is confirmed, with only
+                    * the status line distinguishing it. */}
+                  {pendingMessages.map((message) => (
+                    <div key={message.clientMessageId} className="flex flex-col items-end">
+                      <div
+                        className={cn(
+                          "max-w-[78%] rounded-2xl rounded-br-md px-3 py-2 text-[0.9375rem] leading-relaxed",
+                          "bg-primary text-primary-foreground",
+                          // Pending is quietly de-emphasised; failed is not,
+                          // because it needs to be noticed and acted on.
+                          message.status === "pending" ? "opacity-70" : "opacity-100"
+                        )}
+                      >
+                        {message.kind === "voice" ? (
+                          <span className="flex items-center gap-2">
+                            <MessagesSquare className="h-4 w-4" aria-hidden="true" />
+                            {message.durationSeconds
+                              ? `Voice message · 0:${String(Math.round(message.durationSeconds)).padStart(2, "0")}`
+                              : "Voice message"}
+                          </span>
+                        ) : (
+                          message.text
+                        )}
+                      </div>
+                      {message.status === "failed" ? (
+                        <p className="mt-1 flex items-center gap-2 text-[0.625rem] font-medium text-destructive">
+                          <span>Not sent</span>
+                          <button
+                            type="button"
+                            onClick={() => retryOptimistic(message.clientMessageId)}
+                            className="focus-ring rounded px-1 underline hover:text-foreground"
+                          >
+                            Retry
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeOptimistic(message.clientMessageId)}
+                            className="focus-ring rounded px-1 underline hover:text-foreground"
+                          >
+                            Delete
+                          </button>
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-[0.625rem] font-medium text-muted-foreground/80">
+                          {/* Accessible name carries the real state; the glyph
+                            * alone would tell a screen reader nothing (§29). */}
+                          <span aria-hidden="true">◷</span>
+                          <span className="sr-only">Sending</span>
+                        </p>
+                      )}
+                    </div>
+                  ))}
                 </div>
 
                 {/* Quick coordination actions (spec §39), no location attached.
@@ -1520,6 +1689,8 @@ export function MessagesPageContent({
                     voiceRecorderConfig={voiceRecorderConfig}
                     placeholder={`Message ${selected.title}`}
                     onFeedback={setFeedback}
+                    onOptimisticSend={addOptimistic}
+                    onOptimisticSettled={settleOptimistic}
                     onSent={async () => {
                       await refreshMessages(selected.id);
                       /* THE STALE-INBOX FIX. This used to call only

@@ -306,7 +306,22 @@ export async function searchUsers(userId: string, query: string): Promise<Search
 
   return {
     ok: true,
-    message: `${otherProfiles.length} users found.`,
+    /* A COUNT IS NOT AN ANSWER when the count is zero.
+     *
+     * "0 users found." is technically true and practically useless: the person
+     * typed a name, got a number back, and is left to work out whether they
+     * mistyped it, whether the person is on Mad Buddy at all, or whether
+     * something broke. A person not found is not a missing page -- and it is
+     * not a statistic either.
+     *
+     * Deliberately says nothing about WHY there is no match. Distinguishing
+     * "no such account" from "they blocked you" or "their profile is private"
+     * would confirm an account exists to anyone who can type a username, so
+     * every empty result reads the same way. */
+    message:
+      otherProfiles.length === 0
+        ? "We couldn't find that person. Check the spelling, or try their full name."
+        : `${otherProfiles.length} users found.`,
     users: otherProfiles.map((profile) => ({
       id: profile.user_id,
       displayName: profile.full_name,

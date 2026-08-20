@@ -12,10 +12,15 @@ import {
 import {
   MAX_PROFILE_PHOTOS,
   PHOTO_VISIBILITY_OPTIONS,
+  batchOutcomeMessage,
   canAddPhoto,
+  remainingPhotoSlots,
+  selectPhotoBatch,
+  type BatchItemStatus,
   type PhotoVisibility,
   type ProfilePhoto
 } from "@/lib/profile/profile-photos";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -47,6 +52,14 @@ export function ProfilePhotoCarousel({
 }) {
   const [index, setIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
+  /**
+   * The chosen-but-not-yet-uploaded tray.
+   *
+   * Exists so a batch is one interaction: pick up to the remaining slots, see
+   * what you picked, then upload. Going through the phone picker once per
+   * photo was the reported complaint.
+   */
+  const [queue, setQueue] = useState<{ file: File; url: string; status: BatchItemStatus }[]>([]);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -54,6 +67,8 @@ export function ProfilePhotoCarousel({
   // Clamped during render: deleting the last photo would otherwise leave the
   // index past the end and blank the viewer.
   const active = count === 0 ? 0 : Math.min(index, count - 1);
+  // How many more will fit, so the control can say it before the picker opens.
+  const remaining = remainingPhotoSlots(photos);
 
   const go = useCallback(
     (delta: number) => {
@@ -63,24 +78,89 @@ export function ProfilePhotoCarousel({
     [count]
   );
 
-  function upload(file: File) {
-    setUploading(true);
-    setFeedback("");
-    startTransition(async () => {
-      const { compressImageForUpload } = await import("@/lib/media/client-compress");
-      // Downscaled first: a phone photo is routinely several megabytes and
-      // would bounce off the request cap before the server could read it.
-      const compressed = await compressImageForUpload(file).catch(() => null);
-      const prepared = compressed?.ok ? compressed.file : file;
+  /**
+   * Upload one file. Returns whether it landed, so the batch can count.
+   *
+   * NOT inside startTransition. A transition is interruptible by design and
+   * React really does abandon the work it wraps -- for a read that is merely
+   * wasteful, but for an upload it means the request is killed mid-flight and
+   * the person cannot tell whether their photo was saved. Uploads run as plain
+   * async work with their own pending flag.
+   */
+  const uploadOne = useCallback(async (file: File): Promise<boolean> => {
+    const { compressImageForUpload } = await import("@/lib/media/client-compress");
+    // Downscaled first: a phone photo is routinely several megabytes and
+    // would bounce off the request cap before the server could read it.
+    const compressed = await compressImageForUpload(file).catch(() => null);
+    const prepared = compressed?.ok ? compressed.file : file;
 
-      const form = new FormData();
-      form.append("media", prepared);
-      const result = await addProfilePhotoAction(form);
+    const form = new FormData();
+    form.append("media", prepared);
+    const result = await addProfilePhotoAction(form);
+    if (!result.ok) setFeedback(result.message);
+    return result.ok;
+  }, []);
+
+  /**
+   * Upload a whole selection, one request at a time.
+   *
+   * SEQUENTIAL on purpose: three phone photos in parallel is three large
+   * multipart bodies competing on a mobile uplink, and the server processes
+   * them individually anyway. What matters to the person is that the batch is
+   * one action with one outcome.
+   *
+   * A FAILURE DOES NOT DISCARD THE SUCCESSES. Each file's result is recorded
+   * on its own, the ones that landed stay landed, and the ones that did not
+   * remain in the tray so they can be retried without re-picking everything.
+   */
+  const uploadBatch = useCallback(
+    async (files: File[]) => {
+      setUploading(true);
+      setFeedback("");
+      let succeeded = 0;
+      let failed = 0;
+
+      for (const file of files) {
+        setQueue((current) =>
+          current.map((item) => (item.file === file ? { ...item, status: "uploading" } : item))
+        );
+        // Never let one rejected file abandon the rest of the batch.
+        const ok = await uploadOne(file).catch(() => false);
+        if (ok) succeeded += 1;
+        else failed += 1;
+        setQueue((current) =>
+          current.map((item) =>
+            item.file === file ? { ...item, status: ok ? "done" : "failed" } : item
+          )
+        );
+      }
+
       setUploading(false);
-      setFeedback(result.message);
-      if (result.ok) onChanged?.();
-    });
-  }
+      setFeedback(batchOutcomeMessage(succeeded, failed));
+      // Keep only what still needs attention; the rest has served its purpose.
+      setQueue((current) => current.filter((item) => item.status === "failed"));
+      if (succeeded > 0) onChanged?.();
+    },
+    [onChanged, uploadOne]
+  );
+
+  /** Turn a picker selection into a tray, saying so when it did not all fit. */
+  const chooseFiles = useCallback(
+    (chosen: FileList | null) => {
+      if (!chosen || chosen.length === 0) return;
+      const decision = selectPhotoBatch(Array.from(chosen), photos);
+      setFeedback(decision.message ?? "");
+      if (decision.accepted.length === 0) return;
+      setQueue(
+        decision.accepted.map((file) => ({
+          file,
+          url: URL.createObjectURL(file),
+          status: "pending" as BatchItemStatus
+        }))
+      );
+    },
+    [photos]
+  );
 
   function setVisibility(photoId: string, visibility: PhotoVisibility) {
     startTransition(async () => {
@@ -259,20 +339,83 @@ export function ProfilePhotoCarousel({
           ) : (
             <ImagePlus className="h-4 w-4" aria-hidden="true" />
           )}
-          {count === 0 ? "Add a photo" : "Add another"}
+          {count === 0 ? "Add photos" : `Add ${remaining} more`}
+          {/* MULTIPLE, so one trip through the phone picker can fill every
+              remaining slot. Selecting one photo at a time -- three separate
+              journeys into the camera roll to fill three slots -- was the
+              reported complaint. Over-selection is reported rather than
+              silently trimmed; see selectPhotoBatch. */}
           <input
             type="file"
             accept="image/*"
+            multiple
             className="sr-only"
             disabled={uploading || isPending}
             onChange={(event) => {
-              const file = event.target.files?.[0];
-              // Cleared so choosing the same file twice still fires.
+              const chosen = event.target.files;
+              // Cleared so choosing the same files twice still fires.
+              const files = chosen ? Array.from(chosen) : [];
               event.target.value = "";
-              if (file) upload(file);
+              if (files.length > 0) {
+                const list = new DataTransfer();
+                files.forEach((file) => list.items.add(file));
+                chooseFiles(list.files);
+              }
             }}
           />
         </label>
+      ) : null}
+
+      {/* THE TRAY. What was picked, before it is sent -- so the batch is one
+          reviewable action rather than a series of surprises. */}
+      {queue.length > 0 ? (
+        <div className="profile-photos-tray">
+          <ul className="profile-photos-tray-list">
+            {queue.map((item) => (
+              <li key={item.url} className="profile-photos-tray-item" data-status={item.status}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={item.url} alt="" className="profile-photos-tray-thumb" />
+                {item.status === "uploading" ? (
+                  <span className="profile-photos-tray-badge">
+                    <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                  </span>
+                ) : item.status === "failed" ? (
+                  <span className="profile-photos-tray-badge" data-failed="true">
+                    !
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          <div className="profile-photos-tray-actions">
+            <Button
+              type="button"
+              size="sm"
+              disabled={uploading}
+              onClick={() => void uploadBatch(queue.map((item) => item.file))}
+            >
+              {uploading
+                ? "Adding…"
+                : queue.some((item) => item.status === "failed")
+                  ? "Retry"
+                  : `Add ${queue.length === 1 ? "photo" : `${queue.length} photos`}`}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={uploading}
+              onClick={() => {
+                // Release the object URLs rather than leaking them.
+                queue.forEach((item) => URL.revokeObjectURL(item.url));
+                setQueue([]);
+                setFeedback("");
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
       ) : null}
 
       {feedback ? <p className="profile-photos-feedback">{feedback}</p> : null}

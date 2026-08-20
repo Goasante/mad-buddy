@@ -10,13 +10,26 @@ import { loadProfileIdentitySummary } from "@/lib/profile/identity-service";
 import { loadVisibleProfilePhotosFor } from "@/lib/profile/photo-service";
 import { getTrustedMemberStandingAction } from "@/app/(app)/trusted-member-actions";
 import { loadJourney } from "@/lib/journey/journey-service";
+import { isProfileSection, isSafeReturnPath } from "@/lib/navigation/handoff";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage({
   searchParams
 }: {
-  searchParams?: Promise<{ birthdayPreview?: string; birthdayPrivacyDisabled?: string }>;
+  /* HANDOFF PARAMETERS (§7, §8).
+   *
+   * `section` and `returnTo` were being SENT by Linkr and read by nobody: this
+   * page's params type listed only the two birthday preview flags, so the deep
+   * link resolved to an ordinary Profile page with no way back to whatever the
+   * person was in the middle of. */
+  searchParams?: Promise<{
+    birthdayPreview?: string;
+    birthdayPrivacyDisabled?: string;
+    section?: string;
+    returnTo?: string;
+    from?: string;
+  }>;
 }) {
   const previewParams = await searchParams;
   const birthdayPreview = process.env.NODE_ENV !== "production" && previewParams?.birthdayPreview === "1";
@@ -57,8 +70,19 @@ export default async function ProfilePage({
       ])
     : ["free" as const, null, null, null, null, [], null, false];
 
+  /* Validated HERE, on the server, rather than passed through to the client.
+   * returnTo arrives in a URL and is attacker-supplied regardless of who
+   * wrote the link, so an unsafe one becomes null and the page simply renders
+   * without a return control -- never an error, never an open redirect. */
+  const section = isProfileSection(previewParams?.section) ? previewParams.section : null;
+  const returnTo = isSafeReturnPath(previewParams?.returnTo) ? previewParams.returnTo : null;
+  const handoffOrigin = returnTo ? (previewParams?.from ?? null) : null;
+
   return (
     <ProfilePageContent
+      section={section}
+      returnTo={returnTo}
+      handoffOrigin={handoffOrigin}
       initialDisplayName={profile?.full_name ?? user?.user_metadata?.full_name ?? "Your name"}
       initialUsername={profile?.username ?? user?.user_metadata?.username ?? "username"}
       initialBio={profile?.bio ?? ""}

@@ -34,3 +34,11 @@ ios/App/App/GoogleService-Info.plist
 assets/*.exe
 assets/*.dmg
 assets/*.zip
+
+# Local QA reproduction harness. Scripts that drive the running app against a
+# local Supabase stack, plus the cached session tokens they reuse. Never part
+# of a build, and .qa-auth-cache.json holds real access tokens.
+qa-*.mjs
+qa-*.json
+qa-shots/
+.qa-auth-cache.json

@@ -44,6 +44,12 @@ describe("direct message eligibility (spec §3, §54)", () => {
   function eligibility(overrides: Partial<DirectMessageEligibilityInput> = {}): DirectMessageEligibilityInput {
     return {
       areApprovedMuddies: true,
+      /* Linkr 2.0 added this as a REQUIRED input: a mutual Linkr connection is
+       * an independent basis for messaging, so the gate has to be told about
+       * it either way. Defaulted to false here so every existing case still
+       * describes a pair with no Linkr connection, which is what they were
+       * written to test. */
+      hasActiveLinkrConnection: false,
       isBlockedEitherDirection: false,
       recipientPermission: "all_muddies",
       senderIsCloseFriendOfRecipient: false,

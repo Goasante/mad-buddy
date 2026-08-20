@@ -8350,3 +8350,116 @@ label.linkr-photo-row:hover {
   line-height: 1.45;
   color: hsl(var(--muted-foreground));
 }
+
+/* ---------------------------------------------------------------------------
+   Cross-feature handoff return (§7, §8)
+
+   Shown when another feature sent somebody here to fill in a field Profile
+   owns. It sits above the page heading because for that person it is the most
+   important thing on screen -- they did not come to browse their profile.
+   --------------------------------------------------------------------------- */
+.profile-handoff-return {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.25rem;
+  border-radius: var(--radius);
+  background: hsl(var(--secondary) / 0.5);
+  border: 1px solid hsl(var(--border) / 0.6);
+}
+
+.profile-handoff-return-text {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: hsl(var(--muted-foreground));
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Showcase photo batch tray (§10, §11)
+
+   What was picked, before it is sent. A failed item keeps its place with a
+   marker rather than vanishing, so a partial batch can be retried without
+   going back through the picker.
+   --------------------------------------------------------------------------- */
+.profile-photos-tray {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.profile-photos-tray-list {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.profile-photos-tray-item {
+  position: relative;
+  width: 3rem;
+  height: 3rem;
+  border-radius: calc(var(--radius) - 2px);
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+}
+
+.profile-photos-tray-item[data-status="done"] {
+  opacity: 0.45;
+}
+
+.profile-photos-tray-item[data-status="failed"] {
+  border-color: hsl(var(--destructive));
+}
+
+.profile-photos-tray-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.profile-photos-tray-badge {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(var(--background) / 0.6);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.profile-photos-tray-badge[data-failed="true"] {
+  color: hsl(var(--destructive));
+}
+
+.profile-photos-tray-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Sheet grabber (§13)
+
+   Marks a bottom-anchored panel as a sheet. Decorative on purpose: the sheet
+   does not drag, so this must not look like a control -- it is the shell cue
+   that distinguishes "a sheet came up" from "the page moved".
+   --------------------------------------------------------------------------- */
+.modal-sheet-grabber {
+  width: 2.25rem;
+  height: 0.25rem;
+  margin: -0.25rem auto 0.5rem;
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.35);
+  flex-shrink: 0;
+}

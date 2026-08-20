@@ -296,7 +296,12 @@ describe("composer wiring", () => {
   });
 
   it("sends ids, not names", () => {
-    expect(composer).toContain("mentionUserIds: mentionUserIdsForSend(");
+    /* The ids are now resolved into `mentionIds` BEFORE the request, because
+     * optimistic send resets the draft the moment Send is pressed -- reading
+     * the mention state inside the async call would read it after the reset.
+     * What matters is unchanged: what goes on the wire is ids. */
+    expect(composer).toContain("mentionUserIdsForSend(reconcileMentions(text, mentions)");
+    expect(composer).toContain("mentionUserIds: mentionIds");
   });
 
   it("supports keyboard navigation and Escape", () => {

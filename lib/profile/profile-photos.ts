@@ -83,3 +83,84 @@ export function nextPhotoSlot(photos: readonly ProfilePhoto[]): number | null {
 export function canAddPhoto(photos: readonly ProfilePhoto[]): boolean {
   return nextPhotoSlot(photos) !== null;
 }
+
+// ---------------------------------------------------------------------------
+// Adding several photos in one go (§10, §11)
+// ---------------------------------------------------------------------------
+
+/**
+ * How many more photos this person may add.
+ *
+ * The picker needs this BEFORE the file dialog opens, because the honest
+ * moment to say "you can add two more" is while choosing, not after.
+ */
+export function remainingPhotoSlots(photos: readonly ProfilePhoto[]): number {
+  return Math.max(0, MAX_PROFILE_PHOTOS - photos.length);
+}
+
+/** What a batch selection means: what we will take, and what to say about it. */
+export type BatchSelection = {
+  /** The files that fit, in the order chosen. */
+  accepted: File[];
+  /** The files that did not fit. Never silently dropped -- always reported. */
+  rejected: File[];
+  /** Null when everything fit. */
+  message: string | null;
+};
+
+/**
+ * Decide what happens when somebody picks several files at once.
+ *
+ * OVER-SELECTION IS NOT SILENTLY TRIMMED. Taking the first N and discarding
+ * the rest without a word means the person believes they added five photos and
+ * finds three -- with no way to know which two are missing or why. The excess
+ * is reported, and the message names the real limit rather than the remainder,
+ * because "you can add up to 3" is the rule they need to understand.
+ */
+export function selectPhotoBatch(
+  chosen: readonly File[],
+  existing: readonly ProfilePhoto[]
+): BatchSelection {
+  const room = remainingPhotoSlots(existing);
+
+  if (room === 0) {
+    return {
+      accepted: [],
+      rejected: [...chosen],
+      message: `You can add up to ${MAX_PROFILE_PHOTOS} showcase photos. Remove one first.`
+    };
+  }
+
+  if (chosen.length <= room) {
+    return { accepted: [...chosen], rejected: [], message: null };
+  }
+
+  return {
+    accepted: chosen.slice(0, room),
+    rejected: chosen.slice(room),
+    message:
+      `You can add up to ${MAX_PROFILE_PHOTOS} showcase photos. ` +
+      `There is room for ${room} more, so ${chosen.length - room} were not included.`
+  };
+}
+
+/** One file's progress through a batch upload. */
+export type BatchItemStatus = "pending" | "uploading" | "done" | "failed";
+
+/**
+ * What to tell somebody once a batch finishes.
+ *
+ * A PARTIAL BATCH IS A SUCCESS PLUS A FAILURE, never a single verdict. Two of
+ * three landing must not read as failure -- the two are really there -- and it
+ * must not read as plain success either, because one is genuinely missing and
+ * they need to know which.
+ */
+export function batchOutcomeMessage(succeeded: number, failed: number): string {
+  if (failed === 0) {
+    return succeeded === 1 ? "Photo added." : `${succeeded} photos added.`;
+  }
+  if (succeeded === 0) {
+    return failed === 1 ? "That photo could not be added." : `${failed} photos could not be added.`;
+  }
+  return `${succeeded} added. ${failed} could not be added — you can retry ${failed === 1 ? "it" : "them"}.`;
+}

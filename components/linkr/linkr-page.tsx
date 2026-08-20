@@ -29,6 +29,7 @@ import { LinkrSettings } from "@/components/linkr/linkr-settings";
 import type { LinkrCandidate } from "@/lib/linkr/candidate-service";
 import type { LinkrOwnProfile } from "@/lib/linkr/profile-service";
 import type { LinkrIntent } from "@/lib/linkr/intent";
+import { profileHandoffHref } from "@/lib/navigation/handoff";
 import { LINKR_DISTANCE_OPTIONS, type LinkrDistancePreference } from "@/lib/linkr/rules";
 
 /**
@@ -200,10 +201,25 @@ export function LinkrPage({
    * a date picker, or the handlers that fed them.
    */
   const goToProfile = useCallback(() => {
-    // Deep-links to the identity section rather than the top of Profile, so
-    // somebody sent here to add a photo is not made to hunt for the field.
-    router.push("/profile?section=identity" as Route);
-  }, [router]);
+    /* THE HANDOFF, as an actual contract.
+     *
+     * This used to push "/profile?section=identity" and stop. Profile never
+     * read `section`, there was no return parameter at all, and the person
+     * landed on a generic Profile page with no route back -- mid-way through
+     * enabling Linkr, with nothing telling them how to finish. The comment
+     * here claimed a deep link that the destination did not implement.
+     *
+     * profileHandoffHref builds all three parts: which section to open, where
+     * to come back to, and who sent them (for the wording of the return
+     * control). The return path carries the Event context so somebody who
+     * started in Event Mode comes back to that Event's Linkr rather than the
+     * general one -- and it is validated at both ends, because a returnTo in a
+     * URL is an attacker-supplied string no matter who wrote the link. */
+    const returnTo = eventId ? `/linkr?eventId=${encodeURIComponent(eventId)}` : "/linkr";
+    router.push(
+      profileHandoffHref({ section: "identity", returnTo, origin: "linkr" }) as Route
+    );
+  }, [router, eventId]);
 
 
   const handleEnable = useCallback(

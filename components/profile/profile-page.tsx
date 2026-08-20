@@ -27,6 +27,7 @@ import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
 import { useAppMenu } from "@/hooks/app-menu-context";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { deriveBirthProfile } from "@/lib/profile/birth-date";
+import { returnLabel, type ProfileSection } from "@/lib/navigation/handoff";
 import { BirthdayAccent } from "@/components/profile/birthday-accent";
 import { profileCompletion, type ProfileIdentitySummary } from "@/lib/profile/identity";
 import { JourneyProgress } from "@/components/journey/journey-progress";
@@ -74,6 +75,14 @@ type ProfilePageContentProps = {
   serverBirthdayDayKey: string;
   birthdayPreview?: boolean;
   birthdayPrivacyDisabledPreview?: boolean;
+  /**
+   * Cross-feature handoff (§7, §8). Server-validated before it reaches here:
+   * `returnTo` is already known-safe or null, so this component never has to
+   * decide whether a URL is trustworthy.
+   */
+  section?: ProfileSection | null;
+  returnTo?: string | null;
+  handoffOrigin?: string | null;
 };
 
 const TOTAL_PROFILE_STEPS = 3;
@@ -109,7 +118,10 @@ export function ProfilePageContent({
   initialZodiacVisibility,
   serverBirthdayDayKey,
   birthdayPreview = false,
-  birthdayPrivacyDisabledPreview = false
+  birthdayPrivacyDisabledPreview = false,
+  section = null,
+  returnTo = null,
+  handoffOrigin = null
 }: ProfilePageContentProps) {
   const router = useRouter();
   const initialProfile: SavedProfile = {
@@ -339,6 +351,33 @@ export function ProfilePageContent({
         showQuickControls={false}
         unreadNotificationCount={unreadNotificationCount}
       />
+
+      {/* THE WAY BACK (§7, §8).
+          Somebody sent here from Linkr to add a date of birth was previously
+          stranded: they finished the field and had no route to the thing they
+          were half-way through. This is rendered first, before the page's own
+          heading, because it is the most important thing on screen for a
+          person who did not come here to browse their profile.
+
+          returnTo was validated on the server, so this is a known-internal
+          path by the time it reaches the DOM. */}
+      {returnTo ? (
+        <div className="profile-handoff-return">
+          <p className="profile-handoff-return-text">
+            {section === "identity"
+              ? "Add your date of birth and photo, then head back."
+              : "Finish here, then head back."}
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => router.push(returnTo as Route)}
+          >
+            {returnLabel(handoffOrigin)}
+          </Button>
+        </div>
+      ) : null}
 
       <header className="flex items-start justify-between gap-4 pt-1 md:pt-0">
         <div className="min-w-0">

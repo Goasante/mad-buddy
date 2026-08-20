@@ -33,6 +33,16 @@ type MessageComposerProps = {
   placeholder: string;
   onFeedback: (message: string) => void;
   onSent: () => void | Promise<void>;
+  /**
+   * Draw this message NOW, before the network is consulted (spec R2 §8).
+   *
+   * The composer announces what was sent and carries on; the conversation
+   * decides how to show it. Optional so every existing caller -- Circles, Plan
+   * Chat -- keeps working unchanged and simply does not paint optimistically.
+   */
+  onOptimisticSend?: (message: OptimisticSendDraft) => void;
+  /** The send resolved: confirmed, or failed and left on screen to retry. */
+  onOptimisticSettled?: (clientMessageId: string, outcome: "sent" | "failed") => void;
   voiceRecorderConfig: VoiceRecorderConfig;
   className?: string;
   /**
@@ -52,6 +62,14 @@ type MessageComposerProps = {
 };
 
 /** Tallest the field grows before it scrolls internally (about six lines). */
+/** What the composer hands upward the instant Send is pressed. */
+export type OptimisticSendDraft = {
+  clientMessageId: string;
+  text: string | null;
+  kind: "text" | "voice";
+  durationSeconds: number | null;
+};
+
 const COMPOSER_MAX_FIELD_PX = 148;
 
 function formatDuration(seconds: number): string {
@@ -75,7 +93,9 @@ export function MessageComposer({
   voiceRecorderConfig,
   className,
   isGroup = false,
-  mentionCandidates = []
+  mentionCandidates = [],
+  onOptimisticSend,
+  onOptimisticSettled
 }: MessageComposerProps) {
   const [draft, setDraft] = useState("");
   /**
@@ -264,42 +284,62 @@ export function MessageComposer({
 
   function sendText() {
     const text = draft.trim();
-    if ((!text && !attachment) || uploadBusy || isPending) return;
+    /* `isPending` is deliberately NOT a guard any more.
+     *
+     * It used to be, which is what made the composer feel locked: the second
+     * message could not be typed-and-sent until the first round trip had
+     * finished. Concurrent sends are safe because each carries its own
+     * idempotency key, and the conversation orders them by when Send was
+     * pressed rather than by which acknowledgement lands first. */
+    if ((!text && !attachment) || uploadBusy) return;
 
     const clientMessageId = clientMessageIdRef.current ?? crypto.randomUUID();
     clientMessageIdRef.current = clientMessageId;
-    setUploadState("sending");
+    const mentionIds = mentionUserIdsForSend(reconcileMentions(text, mentions), "");
+    const mediaId = attachment?.mediaId;
+
+    /* DRAW IT FIRST. The message exists on screen before the request is even
+     * made; everything after this only changes its status. */
+    onOptimisticSend?.({ clientMessageId, text: text || null, kind: "text", durationSeconds: null });
+
+    /* Reset the composer immediately, so the next message can be typed while
+     * this one is still in flight (§23). The draft is already captured above,
+     * so clearing it here cannot lose anything. */
+    setDraft("");
+    setMentions([]);
+    setTrigger(null);
+    setAttachment(null);
+    setUploadState("idle");
+    clientMessageIdRef.current = null;
     onFeedback("");
+
     startTransition(async () => {
       try {
         const result = await withTimeout(
           sendMessageAction({
             conversationId,
             text,
-            mediaId: attachment?.mediaId,
+            mediaId,
             // Reconciled against the final text one last time, so a mention
             // whose name was edited out between typing and sending is not
             // posted. The server re-checks every id regardless -- this is
             // hygiene, not authorization.
-            mentionUserIds: mentionUserIdsForSend(reconcileMentions(text, mentions), ""),
+            mentionUserIds: mentionIds,
             clientMessageId
           }),
           { operation: "send message" }
         );
-        onFeedback(result.message);
         if (!result.ok) {
-          setUploadState(attachment ? "ready" : "idle");
+          /* The bubble STAYS, marked failed and retryable. Reporting the
+           * server's wording as well would say the same thing twice. */
+          onOptimisticSettled?.(clientMessageId, "failed");
+          onFeedback(result.message);
           return;
         }
-        setDraft("");
-        setMentions([]);
-        setTrigger(null);
-        setAttachment(null);
-        setUploadState("idle");
-        clientMessageIdRef.current = null;
+        onOptimisticSettled?.(clientMessageId, "sent");
         await onSent();
       } catch (error) {
-        setUploadState(attachment ? "ready" : "idle");
+        onOptimisticSettled?.(clientMessageId, "failed");
         onFeedback(
           isRequestTimeoutError(error)
             ? "Sending took too long. Your message was kept so you can try again."
@@ -363,22 +403,47 @@ export function MessageComposer({
       // Any error from the previous attempt is about a take that is now on its
       // way; keeping it beside a spinner reads as a live failure.
       onFeedback("");
+
+      /* The key is minted BEFORE the upload, not after it.
+       *
+       * It has to be: the bubble is drawn now, and the same key must still
+       * identify this message when the upload finishes minutes later on a bad
+       * connection. Minting it after the upload would leave the drawn bubble
+       * with nothing to reconcile against. */
+      const clientMessageId = clientMessageIdRef.current ?? crypto.randomUUID();
+      clientMessageIdRef.current = clientMessageId;
+
+      /* DRAW THE VOICE BUBBLE NOW (§10), carrying the take's own duration so
+       * it renders as a real voice message rather than an empty placeholder.
+       * The composer is released immediately; the upload continues behind it. */
+      onOptimisticSend?.({
+        clientMessageId,
+        text: null,
+        kind: "voice",
+        durationSeconds: recordingToSend.durationSeconds
+      });
+
       try {
         const prepared = (voiceUpload.state.kind === "ready"
           ? voiceUpload.state.attachment
           : null) ?? (await voiceUpload.upload(recordingToSend));
-        if (!prepared) return;
-
-        const clientMessageId = clientMessageIdRef.current ?? crypto.randomUUID();
-        clientMessageIdRef.current = clientMessageId;
+        if (!prepared) {
+          /* The upload failed and useVoiceUpload has already said why. The
+           * RECORDING is still in the review bar, so the person can retry
+           * from there -- but the drawn bubble must not linger as pending. */
+          onOptimisticSettled?.(clientMessageId, "failed");
+          return;
+        }
         const result = await withTimeout(
           sendMessageAction({ conversationId, mediaId: prepared.mediaId, clientMessageId }),
           { operation: "send voice message" }
         );
         if (!result.ok) {
+          onOptimisticSettled?.(clientMessageId, "failed");
           onFeedback(result.message);
           return;
         }
+        onOptimisticSettled?.(clientMessageId, "sent");
         clientMessageIdRef.current = null;
         /* Clear the review UI at the success boundary, in the order that keeps
          * the browser quiet: detach the <audio> from the object URL first, then
@@ -392,6 +457,7 @@ export function MessageComposer({
         onFeedback("");
         await onSent();
       } catch (error) {
+        onOptimisticSettled?.(clientMessageId, "failed");
         onFeedback(
           isRequestTimeoutError(error)
             ? "Sending took too long. Your recording was kept so you can try again."
@@ -401,7 +467,7 @@ export function MessageComposer({
         sendingRef.current = false;
       }
     },
-    [conversationId, onFeedback, onSent, releasePreviewElement, voice, voiceUpload]
+    [conversationId, onFeedback, onOptimisticSend, onOptimisticSettled, onSent, releasePreviewElement, voice, voiceUpload]
   );
 
   /**

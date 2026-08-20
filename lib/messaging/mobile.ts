@@ -86,6 +86,8 @@ export type ChatMessageView = {
   /** Trusted, URL-free voice metadata. Playback is authorized lazily by message. */
   voice: PreparedVoiceAsset | null;
   isMine: boolean;
+  /** The viewer's own idempotency key, for reconciling an optimistic bubble. Null on others' messages. */
+  clientMessageId: string | null;
   messageType: string;
   text: string | null;
   quickActionType: string | null;
@@ -948,7 +950,7 @@ export async function listMessages(userId: string, conversationId: string): Prom
   // appearing here, forever, because the same oldest slice kept winning.
   const { data: messages } = await admin
     .from("messages")
-    .select("id, sender_id, message_type, text_content, quick_action_type, media_id, status, created_at, edited_at, deleted_at")
+    .select("id, sender_id, message_type, text_content, quick_action_type, media_id, status, client_message_id, created_at, edited_at, deleted_at")
     .eq("conversation_id", conversationId)
     .gte("created_at", access.historyVisibleFrom ?? new Date(0).toISOString())
     .order("created_at", { ascending: false })
@@ -1114,6 +1116,19 @@ export async function listMessages(userId: string, conversationId: string): Prom
       attachment: row.deleted_at ? null : attachmentsById.get(row.media_id ?? "") ?? null,
       voice: row.deleted_at ? null : voicesByMessageId.get(row.id) ?? null,
       isMine: row.sender_id === userId,
+      /**
+       * The sender's own idempotency key, echoed back so the client can match
+       * this canonical message to the optimistic bubble it already drew.
+       *
+       * Without it a send produces TWO rows on screen -- the local one and the
+       * server's -- because nothing connects them: ids differ, and text is not
+       * an identity (the same person may legitimately send "Hi" twice).
+       *
+       * Only ever the viewer's OWN key. Another member's idempotency key is
+       * not something this viewer needs or should see, and it never reaches
+       * a client that could not already replay it.
+       */
+      clientMessageId: row.sender_id === userId ? row.client_message_id : null,
       messageType: row.message_type,
       text: row.deleted_at ? null : row.text_content,
       quickActionType: row.quick_action_type,

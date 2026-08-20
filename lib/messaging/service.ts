@@ -7,7 +7,12 @@ import {
   systemMessageText,
   type MessagePermission
 } from "@/lib/messaging/rules";
-import { areApprovedMuddies, isBlockedEitherDirection, isCloseFriend } from "@/lib/social/permissions";
+import {
+  areApprovedMuddies,
+  hasActiveLinkrConnection,
+  isBlockedEitherDirection,
+  isCloseFriend
+} from "@/lib/social/permissions";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
   ConversationRole,
@@ -98,8 +103,9 @@ export async function canCreateDirectConversation(
 ): Promise<{ allowed: boolean; reason: string }> {
   if (senderId === recipientId) return { allowed: false, reason: "self" };
 
-  const [mutual, blocked, prefs, closeFriend] = await Promise.all([
+  const [mutual, linkrConnected, blocked, prefs, closeFriend] = await Promise.all([
     areApprovedMuddies(admin, senderId, recipientId),
+    hasActiveLinkrConnection(admin, senderId, recipientId),
     isBlockedEitherDirection(admin, senderId, recipientId),
     loadCommunicationPreferences(admin, recipientId),
     isCloseFriend(admin, recipientId, senderId)
@@ -122,6 +128,7 @@ export async function canCreateDirectConversation(
 
   return resolveDirectMessageEligibility({
     areApprovedMuddies: mutual,
+    hasActiveLinkrConnection: linkrConnected,
     isBlockedEitherDirection: blocked,
     recipientPermission: prefs.messagePermission,
     senderIsCloseFriendOfRecipient: closeFriend,

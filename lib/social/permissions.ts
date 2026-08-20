@@ -27,6 +27,30 @@ export async function areApprovedMuddies(admin: Admin, userA: string, userB: str
   return Boolean(data?.length);
 }
 
+/**
+ * Whether an active Linkr connection joins the pair.
+ *
+ * The Linkr counterpart to `areApprovedMuddies`, and deliberately shaped like
+ * it: same signature, same "active only" rule. `ended_at IS NULL` is the
+ * canonical definition of a live connection -- ended rows are KEPT so the pair
+ * is not immediately re-suggested, so filtering on them is what separates a
+ * current connection from an abandoned one.
+ *
+ * The table stores each pair once, ordered (user_low < user_high), so the ids
+ * are sorted here rather than queried in both directions.
+ */
+export async function hasActiveLinkrConnection(admin: Admin, userA: string, userB: string): Promise<boolean> {
+  const [low, high] = [userA, userB].sort();
+  const { data } = await admin
+    .from("linkr_connections")
+    .select("id")
+    .eq("user_low", low)
+    .eq("user_high", high)
+    .is("ended_at", null)
+    .limit(1);
+  return Boolean(data?.length);
+}
+
 export async function isBlockedEitherDirection(admin: Admin, userA: string, userB: string): Promise<boolean> {
   const { data } = await admin
     .from("blocked_users")

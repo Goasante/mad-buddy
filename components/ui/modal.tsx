@@ -97,6 +97,17 @@ export function Modal({
             hideTitle && "relative max-w-[36rem]"
           )}
         >
+          {/* THE SHEET SHELL MARKER (§13).
+              A bottom-anchored panel with no grabber reads as the page having
+              slid up rather than as a dismissible sheet -- which is why a
+              phone user reaches for the form and expects the whole surface to
+              move. This is deliberately decorative: the sheet dismisses via
+              the close button, Back and the overlay, and it does NOT drag, so
+              a control implying a drag gesture would promise something that
+              does not happen. Phone only; from sm up this is a centred panel. */}
+          {isSheet ? (
+            <div className="modal-sheet-grabber sm:hidden" aria-hidden="true" />
+          ) : null}
           <div
             className={cn(
               "flex shrink-0 items-start justify-between gap-3",

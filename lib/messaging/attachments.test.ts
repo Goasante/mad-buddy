@@ -209,7 +209,16 @@ describe("upload lifecycle", () => {
   });
 
   it("blocks a send with neither text nor photo", () => {
-    expect(composer).toContain("if ((!text && !attachment) || uploadBusy || isPending) return;");
+    /* `isPending` is deliberately NOT part of this guard any more: it is what
+     * locked the composer until the previous round trip finished. Concurrent
+     * sends are safe because each carries its own idempotency key. An empty
+     * send, and a send during an attachment upload, are still refused. */
+    expect(composer).toContain("if ((!text && !attachment) || uploadBusy) return;");
+  });
+
+  it("no longer blocks a second send on the first one's round trip", () => {
+    // The regression this guards: re-adding isPending would restore the freeze.
+    expect(composer).not.toContain("|| uploadBusy || isPending) return;");
   });
 
   it("keeps idempotency on the send", () => {

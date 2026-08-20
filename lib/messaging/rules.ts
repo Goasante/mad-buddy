@@ -54,6 +54,21 @@ export type MessagePermission = "all_muddies" | "close_friends" | "selected_circ
 
 export type DirectMessageEligibilityInput = {
   areApprovedMuddies: boolean;
+  /**
+   * An active Linkr connection between the pair.
+   *
+   * A SECOND, independent basis for messaging -- not a weaker form of
+   * friendship. Linkr exists precisely so two people who are NOT Muddies can
+   * choose each other, and both sides had to Connect for the pair to exist at
+   * all. That mutual choice is the consent this gate is testing for, so it
+   * satisfies the same requirement a friendship does.
+   *
+   * Kept as its own field rather than folded into `areApprovedMuddies` by the
+   * caller, because the two facts stay distinguishable: a connection can end
+   * without a friendship existing, and the reason a send was refused should
+   * still say which relationship was missing.
+   */
+  hasActiveLinkrConnection: boolean;
   isBlockedEitherDirection: boolean;
   recipientPermission: MessagePermission;
   senderIsCloseFriendOfRecipient: boolean;
@@ -83,8 +98,20 @@ export function resolveDirectMessageEligibility(
   input: DirectMessageEligibilityInput
 ): DirectMessageEligibility {
   if (input.isBlockedEitherDirection) return { allowed: false, reason: "blocked" };
-  if (!input.areApprovedMuddies) return { allowed: false, reason: "not_muddies" };
+  /* Either relationship opens the door. Blocking is still checked FIRST and
+   * still wins: a block ends a Linkr connection's privileges exactly as it
+   * ends a friendship's. */
+  const connected = input.areApprovedMuddies || input.hasActiveLinkrConnection;
+  if (!connected) return { allowed: false, reason: "not_muddies" };
   if (input.recipientSuspended || input.senderSuspended) return { allowed: false, reason: "suspended" };
+
+  /* A Linkr connection is a direct, mutual choice by these two people, so it
+   * is not filtered by the recipient's audience preference the way an ordinary
+   * Muddy is. Those preferences answer "which of my Muddies may reach me";
+   * they were never asked about a person the recipient personally Connected
+   * with, and applying them here would silently void a connection the
+   * recipient had just made. A block, above, still overrides this. */
+  if (input.hasActiveLinkrConnection) return { allowed: true, reason: "allowed" };
 
   switch (input.recipientPermission) {
     case "nobody":

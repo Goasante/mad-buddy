@@ -92,7 +92,30 @@ describe("missing identity hands off to Profile", () => {
   });
 
   it("deep-links into the identity section, not the top of Profile", () => {
-    expect(page).toMatch(/router\.push\("\/profile\?section=identity"/);
+    /* THIS TEST USED TO PASS AGAINST A BROKEN HANDOFF.
+     *
+     * It asserted the literal string "/profile?section=identity" -- which
+     * Linkr really did push, and which Profile ignored completely: that page
+     * read only its two birthday preview flags, so `section` did nothing and
+     * there was no return parameter at all. The person arrived on a generic
+     * Profile page with no route back to the activation they were half-way
+     * through, and this test called that a deep link.
+     *
+     * Asserting on the shared builder instead ties the test to the contract
+     * both ends implement, so the destination cannot quietly stop honouring
+     * it. lib/navigation/handoff.test.ts covers the validation itself. */
+    expect(page).toContain("profileHandoffHref({");
+    expect(page).toContain('section: "identity"');
+    expect(page).toContain('origin: "linkr"');
+    // And the return path must be carried, not left to chance.
+    expect(page).toContain("returnTo");
+  });
+
+  it("returns to the Event's Linkr when the trip started in Event Mode", () => {
+    /* Somebody sent to Profile from Event Mode must come back to THAT Event's
+     * Linkr, not the general one -- returning to a different context is its
+     * own way of losing what they were doing. */
+    expect(page).toContain("eventId ? `/linkr?eventId=${encodeURIComponent(eventId)}` : \"/linkr\"");
   });
 
   it("keeps the chosen intent across the Profile round trip", () => {
