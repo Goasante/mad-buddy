@@ -64,6 +64,8 @@ export type LinkrPageProps = {
     venueLabel: string | null;
     poolLabel: string | null;
   } | null;
+  /** Unsaved activation choice restored after a Profile handoff. */
+  pendingIntent?: LinkrIntent | null;
 };
 
 type View = "discover" | "filters" | "profile" | "settings" | "how" | "event-intro";
@@ -73,7 +75,8 @@ export function LinkrPage({
   initialCandidates,
   me,
   blockedCount,
-  eventContext
+  eventContext,
+  pendingIntent = null
 }: LinkrPageProps) {
   const router = useRouter();
   const [profile, setProfile] = useState(initialProfile);
@@ -90,6 +93,15 @@ export function LinkrPage({
   const [canUndo, setCanUndo] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  /**
+   * Writes that must finish.
+   *
+   * Undo, settings and preference changes are mutations, and a transition may
+   * be abandoned -- which would leave the deck and the server disagreeing
+   * about a decision the person believes they made. Combined with `pending`
+   * wherever the UI only needs to know something is in flight.
+   */
+  const [writing, setWriting] = useState(false);
   /**
    * Deck refills run in their OWN transition.
    *
@@ -183,15 +195,23 @@ export function LinkrPage({
   }, [current, advance, eventId]);
 
   const handleUndo = useCallback(() => {
-    startTransition(async () => {
-      const result = await undoLinkrActionAction();
-      if (result.ok) {
-        setIndex((current) => Math.max(0, current - 1));
-        setCanUndo(false);
-      } else {
-        setNotice(result.message);
+    /* Undo REVERSES A RECORDED DECISION, so the write must finish: an
+     * abandoned request leaves the deck showing the person again while the
+     * server still holds the Pass. Plain async work with its own flag. */
+    void (async () => {
+      setWriting(true);
+      try {
+        const result = await undoLinkrActionAction();
+        if (result.ok) {
+          setIndex((current) => Math.max(0, current - 1));
+          setCanUndo(false);
+        } else {
+          setNotice(result.message);
+        }
+      } finally {
+        setWriting(false);
       }
-    });
+    })();
   }, []);
   /**
    * Identity handlers are GONE.
@@ -200,7 +220,7 @@ export function LinkrPage({
    * sends people there and re-reads the result; it no longer holds an uploader,
    * a date picker, or the handlers that fed them.
    */
-  const goToProfile = useCallback(() => {
+  const goToProfile = useCallback((intent?: LinkrIntent) => {
     /* THE HANDOFF, as an actual contract.
      *
      * This used to push "/profile?section=identity" and stop. Profile never
@@ -215,7 +235,10 @@ export function LinkrPage({
      * started in Event Mode comes back to that Event's Linkr rather than the
      * general one -- and it is validated at both ends, because a returnTo in a
      * URL is an attacker-supplied string no matter who wrote the link. */
-    const returnTo = eventId ? `/linkr?eventId=${encodeURIComponent(eventId)}` : "/linkr";
+    const returnParams = new URLSearchParams();
+    if (eventId) returnParams.set("eventId", eventId);
+    if (intent) returnParams.set("intent", intent);
+    const returnTo = returnParams.size ? `/linkr?${returnParams.toString()}` : "/linkr";
     router.push(
       profileHandoffHref({ section: "identity", returnTo, origin: "linkr" }) as Route
     );
@@ -253,7 +276,7 @@ export function LinkrPage({
       <LinkrOffScreen
         onEnable={handleEnable}
         onHowItWorks={() => setView("how")}
-        busy={pending}
+        busy={pending || writing}
         error={notice}
         onCompleteProfile={goToProfile}
         /**
@@ -263,7 +286,7 @@ export function LinkrPage({
          */
         age={profile?.age ?? null}
         hasProfilePhoto={(profile?.photos.length ?? 0) > 0}
-        initialIntent={profile?.intent ?? "friends"}
+        initialIntent={pendingIntent ?? profile?.intent ?? "friends"}
       />
     );
   }
@@ -287,19 +310,36 @@ export function LinkrPage({
     return (
       <LinkrFilters
         value={filterValues}
-        busy={pending}
+        busy={pending || writing}
         onClose={() => setView("discover")}
         onApply={(next) => {
-          startTransition(async () => {
-            await updateLinkrSettingsAction({
+          void (async () => {
+            setWriting(true);
+            /* THE RESULT WAS BEING DISCARDED. Both writes were fired and the
+             * local state updated regardless, so a refused settings change --
+             * rate limited, say -- left the UI showing preferences the server
+             * had rejected, and the next deck refresh silently contradicted
+             * them. A refusal now says so and the panel stays open. */
+            const saved = await updateLinkrSettingsAction({
               discoveryDistance: next.discoveryDistance,
               onlyActiveNow: next.onlyActiveNow,
               onlyNewToday: next.onlyNewToday,
               requirePhotos: next.requirePhotos
             });
-            if (next.intent !== profile.intent) {
-              await updateLinkrProfileAction({ intent: next.intent });
+            if (!saved.ok) {
+              setNotice(saved.message);
+              setWriting(false);
+              return;
             }
+            if (next.intent !== profile.intent) {
+              const intentSaved = await updateLinkrProfileAction({ intent: next.intent });
+              if (!intentSaved.ok) {
+                setNotice(intentSaved.message);
+                setWriting(false);
+                return;
+              }
+            }
+            setWriting(false);
             setProfile((current) =>
               current
                 ? {
@@ -314,7 +354,7 @@ export function LinkrPage({
             );
             setView("discover");
             refreshDeck(next.discoveryDistance);
-          });
+          })();
         }}
       />
     );
@@ -324,7 +364,7 @@ export function LinkrPage({
     return (
       <LinkrProfileEditor
         profile={profile}
-        busy={pending}
+        busy={pending || writing}
         onBack={() => setView("discover")}
         onPreview={() => setNotice("Your card is what other people see on the left.")}
         onSave={async (input) => {
@@ -345,7 +385,7 @@ export function LinkrPage({
       <LinkrSettings
         profile={profile}
         hiddenCount={blockedCount}
-        busy={pending}
+        busy={pending || writing}
         onBack={() => setView("discover")}
         onOpenFilters={() => setView("filters")}
         onOpenBlocked={() => router.push("/safety-center")}
@@ -398,10 +438,22 @@ export function LinkrPage({
                 setProfile((current) =>
                   current ? { ...current, discoveryDistance: option.id } : current
                 );
-                startTransition(async () => {
-                  await updateLinkrSettingsAction({ discoveryDistance: option.id });
+                /* Optimistic BY DESIGN -- the chip highlights immediately --
+                 * but the write still has to complete, and a refusal must roll
+                 * the chip back rather than leave it showing a distance the
+                 * server never accepted. */
+                void (async () => {
+                  const previous = distance;
+                  const saved = await updateLinkrSettingsAction({ discoveryDistance: option.id });
+                  if (!saved.ok) {
+                    setProfile((current) =>
+                      current ? { ...current, discoveryDistance: previous } : current
+                    );
+                    setNotice(saved.message);
+                    return;
+                  }
                   refreshDeck(option.id);
-                });
+                })();
               }}
             >
               {option.label}
@@ -419,18 +471,26 @@ export function LinkrPage({
             onConnect={handleConnect}
             onUndo={handleUndo}
             canUndo={canUndo}
-            busy={pending}
+            busy={pending || writing}
           />
           <div className="linkr-safety">
             <button
               type="button"
               className="linkr-link"
               onClick={() => {
-                startTransition(async () => {
-                  await passCandidateAction({ targetId: current.userId, permanent: true, eventId });
+                /* A PERMANENT Pass. The message promises they will not appear
+                 * again, so the write cannot be abandoned -- and the promise
+                 * is only made once the server has actually recorded it. */
+                void (async () => {
+                  const targetId = current.userId;
                   advance();
-                  setNotice("You won't see them again.");
-                });
+                  const result = await passCandidateAction({ targetId, permanent: true, eventId });
+                  setNotice(
+                    result.ok
+                      ? "You won't see them again."
+                      : "That didn't save. They may appear again."
+                  );
+                })();
               }}
             >
               <MoreHorizontal aria-hidden /> Don&apos;t show me again
@@ -451,11 +511,20 @@ export function LinkrPage({
           canWiden={canWiden}
           onWiden={() => {
             const next: LinkrDistancePreference = distance === "very_close" ? "around_you" : "wider";
+            const previous = distance;
             setProfile((current) => (current ? { ...current, discoveryDistance: next } : current));
-            startTransition(async () => {
-              await updateLinkrSettingsAction({ discoveryDistance: next });
+            void (async () => {
+              const saved = await updateLinkrSettingsAction({ discoveryDistance: next });
+              if (!saved.ok) {
+                // Put the preference back rather than claim a wider search.
+                setProfile((current) =>
+                  current ? { ...current, discoveryDistance: previous } : current
+                );
+                setNotice(saved.message);
+                return;
+              }
               refreshDeck(next);
-            });
+            })();
           }}
         />
       )}

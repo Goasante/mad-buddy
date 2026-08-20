@@ -12,7 +12,7 @@ import {
   type LinkrProximityTier
 } from "@/lib/linkr/rules";
 import { resolveAges, signMediaUrls } from "@/lib/linkr/profile-service";
-import { loadLinkrMedia } from "@/lib/linkr/media-projection";
+import { loadLinkrMedia, hasProfilePicture, type LinkrMediaRow } from "@/lib/linkr/media-projection";
 import { presenceStateFor } from "@/lib/presence/freshness";
 import {
   buildSafeNearbyFriends,
@@ -22,6 +22,7 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { ConfidenceLevel } from "@/lib/proximity";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
+import { guardAction } from "@/lib/admin/enforcement";
 
 /**
  * THE CANDIDATE AUTHORITY. The server decides who may be seen; the client
@@ -101,6 +102,7 @@ export async function discoverLinkrCandidates(
   if (!serverReady()) return [];
   const admin = createSupabaseAdminClient();
   const nowMs = Date.now();
+  if (!(await guardAction(admin, { userId: viewerId, surface: "linkr" })).allowed) return [];
 
   // --- The viewer's own state. Nothing proceeds without it. ----------------
   const { data: viewer } = await admin
@@ -115,6 +117,9 @@ export async function discoverLinkrCandidates(
 
   const viewerAge = (await resolveAges(admin, [viewerId])).get(viewerId) ?? null;
   if (viewerAge === null || viewerAge < 18) return [];
+  // Reciprocity includes identity readiness: removing the Profile avatar
+  // makes somebody unable to browse while they are no longer discoverable.
+  if (!(await hasProfilePicture(admin, viewerId))) return [];
 
   const viewerIntent: LinkrIntent = isLinkrIntent(viewer.intent) ? viewer.intent : "friends";
   const distance = (options.distanceOverride ??
@@ -173,7 +178,8 @@ export async function discoverLinkrCandidates(
     { data: interestRows },
     { data: verifications },
     ages,
-    viewerInterestRows
+    viewerInterestRows,
+    { data: restrictions }
   ] = await Promise.all([
     admin
       .from("blocked_users")
@@ -206,7 +212,13 @@ export async function discoverLinkrCandidates(
     admin.from("linkr_interests").select("user_id, interest").in("user_id", candidateIds),
     admin.from("account_verifications").select("user_id, status").in("user_id", candidateIds),
     resolveAges(admin, candidateIds),
-    admin.from("linkr_interests").select("interest").eq("user_id", viewerId)
+    admin.from("linkr_interests").select("interest").eq("user_id", viewerId),
+    admin
+      .from("user_restrictions")
+      .select("user_id, restriction_type, ends_at")
+      .in("user_id", candidateIds)
+      .in("restriction_type", ["suspended_temporary", "suspended_permanent"])
+      .is("lifted_at", null)
   ]);
 
   const blockedIds = new Set(
@@ -229,6 +241,11 @@ export async function discoverLinkrCandidates(
   );
   const verifiedIds = new Set(
     (verifications ?? []).filter((row) => row.status === "verified").map((row) => row.user_id)
+  );
+  const restrictedIds = new Set(
+    (restrictions ?? [])
+      .filter((row) => !row.ends_at || Date.parse(row.ends_at) > nowMs)
+      .map((row) => row.user_id)
   );
 
   const interestsByUser = new Map<string, string[]>();
@@ -266,7 +283,7 @@ export async function discoverLinkrCandidates(
   const dayAgoMs = nowMs - 24 * 60 * 60 * 1000;
 
   // --- Eligibility, then ranking. -----------------------------------------
-  const scored: Array<{ candidate: LinkrCandidate; score: number; assetIds: string[] }> = [];
+  const scored: Array<{ candidate: LinkrCandidate; score: number; media: LinkrMediaRow }> = [];
 
   for (const id of candidateIds) {
     const row = poolByUserId.get(id);
@@ -284,7 +301,9 @@ export async function discoverLinkrCandidates(
      * "has a profile picture" -- the projection omits everything for anybody
      * without one, so Linkr never has to define its own idea of having a photo.
      */
-    const photos = photosByUser.get(id) ?? [];
+    const media = photosByUser.get(id);
+    const hasPrimaryPhoto = Boolean(media?.primaryUrl || media?.primaryAssetId);
+    const photoCount = hasPrimaryPhoto ? 1 + (media?.showcaseAssetIds.length ?? 0) : 0;
     const age = ages.get(id) ?? null;
     const location = locationByUserId.get(id);
     const presence = presenceStateFor(location?.last_updated ?? null, nowMs);
@@ -293,9 +312,9 @@ export async function discoverLinkrCandidates(
     const discoverability = resolveDiscoverability({
       linkrEnabled: true,
       age,
-      hasPrimaryPhoto: photos.length > 0,
+      hasPrimaryPhoto,
       accountVisible: profile.visibility_status !== "ghost",
-      restricted: false,
+      restricted: restrictedIds.has(id),
       deleted: Boolean(profile.deleted_at)
     });
 
@@ -311,7 +330,7 @@ export async function discoverLinkrCandidates(
       alreadyConnected: connectedIds.has(id),
       presenceExpired: presence === "expired",
       requirePhotos: Boolean(viewer.require_photos),
-      candidateHasShowcasePhotos: photos.length > 1,
+      candidateHasShowcasePhotos: (media?.showcaseAssetIds.length ?? 0) > 0,
       onlyActiveNow: Boolean(viewer.only_active_now),
       candidateActiveNow: presence === "fresh",
       onlyNewToday: Boolean(viewer.only_new_today),
@@ -329,13 +348,14 @@ export async function discoverLinkrCandidates(
     const interests = interestsByUser.get(id) ?? [];
     const shared = interests.filter((interest) => viewerInterests.has(interest)).length;
 
+    if (!media) continue;
     scored.push({
-      assetIds: photos,
+      media,
       score: rankCandidate({
         tier: tier as LinkrProximityTier,
         sharedInterests: shared,
         intentExactMatch: candidateIntent === viewerIntent,
-        photoCount: photos.length,
+        photoCount,
         hasBio: Boolean(row.bio),
         activeNow: presence === "fresh",
         joinedRecently: Date.parse(row.created_at) > dayAgoMs
@@ -361,10 +381,17 @@ export async function discoverLinkrCandidates(
 
   // Photos are signed LAST, for the page only. Signing the whole batch would
   // mint URLs for people the viewer will never be shown.
-  const urls = await signMediaUrls(admin, page.flatMap((entry) => entry.assetIds));
+  const urls = await signMediaUrls(
+    admin,
+    page.flatMap((entry) => [entry.media.primaryAssetId, ...entry.media.showcaseAssetIds])
+      .filter((id): id is string => Boolean(id))
+  );
   return page.map((entry) => ({
     ...entry.candidate,
-    photos: entry.assetIds.map((assetId) => urls.get(assetId)).filter((url): url is string => Boolean(url))
+    photos: [
+      entry.media.primaryUrl ?? (entry.media.primaryAssetId ? urls.get(entry.media.primaryAssetId) : null),
+      ...entry.media.showcaseAssetIds.map((assetId) => urls.get(assetId))
+    ].filter((url): url is string => Boolean(url))
   }));
 }
 

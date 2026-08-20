@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
  * uploads during activation -- so it was a duplicate answer to "what does this
  * person look like", and it would drift the first time somebody changed their
  * avatar. It is gone, replaced by a read-only projection over the canonical
- * `profiles.profile_media_id` + `profile_photos`.
+ * `profiles.avatar_url` (with a legacy media fallback) + `profile_photos`.
  */
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
@@ -84,14 +84,16 @@ describe("the projection is stranger-safe", () => {
   });
 
   it("puts the profile picture first, always", () => {
-    expect(projection).toMatch(/profile\.profile_media_id \? \[profile\.profile_media_id\] : \[\]/);
+    expect(projection).toContain("const avatarUrl = canonicalAvatarUrl(profile.user_id, profile.avatar_url)");
+    expect(projection).toContain("primaryUrl: avatarUrl");
+    expect(projection).toContain("primaryAssetId: avatarUrl ? null");
     // A stray showcase cannot become somebody's primary image.
-    expect(projection).toMatch(/if \(!list \|\| list\.length === 0\) continue;/);
+    expect(projection).toMatch(/if \(!media \|\| \(!media\.primaryUrl && !media\.primaryAssetId\)\) continue;/);
   });
 
   it("caps the gallery at four", () => {
     expect(projection).toContain("MAX_LINKR_CARD_PHOTOS = 4");
-    expect(projection).toMatch(/list\.length >= MAX_LINKR_CARD_PHOTOS\) continue/);
+    expect(projection).toMatch(/showcaseAssetIds\.length >= MAX_LINKR_CARD_PHOTOS - 1/);
   });
 
   it("orders showcases by their Profile slot", () => {
@@ -109,11 +111,18 @@ describe("having a photo means having a PROFILE picture", () => {
   it("derives eligibility from the projection rather than a Linkr rule", () => {
     // Index 0 exists only when the person has a profile picture, so "has a
     // photo" has one definition rather than two.
-    expect(candidate).toMatch(/hasPrimaryPhoto: photos\.length > 0/);
+    expect(candidate).toContain("const hasPrimaryPhoto = Boolean(media?.primaryUrl || media?.primaryAssetId)");
   });
 
   it("reads the canonical profile picture for the check", () => {
-    expect(projection).toMatch(/hasProfilePicture[\s\S]{0,220}profile_media_id/);
+    expect(projection).toMatch(/hasProfilePicture[\s\S]{0,260}avatar_url, profile_media_id/);
+    expect(projection).toContain("canonicalAvatarUrl(userId, data?.avatar_url ?? null)");
+  });
+
+  it("refuses an owner-written cross-origin avatar URL", () => {
+    expect(projection).toContain("source.origin === storageOrigin");
+    expect(projection).toContain("/storage/v1/object/public/avatars/${userId}/");
+    expect(projection).toContain("canonicalAvatarUrl(userId, data?.avatar_url ?? null)");
   });
 });
 

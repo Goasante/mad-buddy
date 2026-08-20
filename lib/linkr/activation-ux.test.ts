@@ -115,12 +115,14 @@ describe("missing identity hands off to Profile", () => {
     /* Somebody sent to Profile from Event Mode must come back to THAT Event's
      * Linkr, not the general one -- returning to a different context is its
      * own way of losing what they were doing. */
-    expect(page).toContain("eventId ? `/linkr?eventId=${encodeURIComponent(eventId)}` : \"/linkr\"");
+    expect(page).toContain('if (eventId) returnParams.set("eventId", eventId)');
   });
 
   it("keeps the chosen intent across the Profile round trip", () => {
     expect(activation).toContain("initialIntent");
-    expect(page).toContain("initialIntent={profile?.intent");
+    expect(activation).toContain("onCompleteProfile(intent)");
+    expect(page).toContain('if (intent) returnParams.set("intent", intent)');
+    expect(page).toContain("initialIntent={pendingIntent ?? profile?.intent");
   });
 
   it("still treats the photo as genuinely required by the SERVER", () => {

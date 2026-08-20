@@ -15,6 +15,9 @@ import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { normalizeUsername, validateUsername } from "@/lib/profile/rules";
 import { validateDateOfBirth } from "@/lib/profile/birth-date";
 import { recordProductEvent } from "@/lib/analytics/track";
+import { saveDateOfBirth } from "@/lib/profile/date-of-birth-service";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 
 /**
  * Transport-agnostic onboarding services. Each takes an already-authenticated
@@ -66,7 +69,11 @@ const visibilityMap = {
   ghost: "ghost"
 } as const;
 
-export async function completeOnboarding(userId: string, input: unknown): Promise<ServiceResult> {
+export async function completeOnboarding(
+  rlsClient: SupabaseClient<Database>,
+  userId: string,
+  input: unknown
+): Promise<ServiceResult> {
   const parsed = onboardingSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, message: "Check your onboarding details and try again." };
@@ -144,22 +151,18 @@ export async function completeOnboarding(userId: string, input: unknown): Promis
   }
 
   if (parsed.data.dateOfBirth) {
-    const [birthResult, privacyResult] = await Promise.all([
-      admin.from("profile_birth_details").upsert(
-        { user_id: userId, date_of_birth: parsed.data.dateOfBirth },
-        { onConflict: "user_id" }
-      ),
-      admin.from("profile_field_privacy").upsert(
-        ["birthday", "age", "zodiac"].map((fieldName) => ({
-          user_id: userId,
-          field_name: fieldName as "birthday" | "age" | "zodiac",
-          visibility: "only_me" as const,
-          updated_at: new Date().toISOString()
-        })),
-        { onConflict: "user_id,field_name" }
-      )
-    ]);
-    if (birthResult.error || privacyResult.error) {
+    const birthResult = await saveDateOfBirth(rlsClient, userId, parsed.data.dateOfBirth);
+    if (!birthResult.ok) return { ok: false, message: birthResult.message };
+    const privacyResult = await admin.from("profile_field_privacy").upsert(
+      ["birthday", "age", "zodiac"].map((fieldName) => ({
+        user_id: userId,
+        field_name: fieldName as "birthday" | "age" | "zodiac",
+        visibility: "only_me" as const,
+        updated_at: new Date().toISOString()
+      })),
+      { onConflict: "user_id,field_name" }
+    );
+    if (privacyResult.error) {
       return { ok: false, message: "Your date of birth could not be saved." };
     }
     await recordProductEvent(admin, {

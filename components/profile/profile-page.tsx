@@ -5,7 +5,7 @@ import type { Route } from "next";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Award, CakeSlice, CalendarCheck2, CalendarDays, Camera, ChevronRight, Edit3, Ghost, Images, Info, LifeBuoy, MessageSquareText, MonitorSmartphone, Palette, ShieldCheck, Smile, Sparkles, UserCog, UsersRound } from "lucide-react";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { updateProfileAction, uploadAvatarAction } from "@/app/(app)/actions";
 import { FormField } from "@/components/auth/form-field";
 import { Button } from "@/components/ui/button";
@@ -69,6 +69,7 @@ type ProfilePageContentProps = {
   } | null;
   initialPlan: SubscriptionPlan;
   initialDateOfBirth: string;
+  initialDateOfBirthCanCorrect: boolean;
   initialBirthdayVisibility: BirthVisibility;
   initialAgeVisibility: BirthVisibility;
   initialZodiacVisibility: BirthVisibility;
@@ -113,6 +114,7 @@ export function ProfilePageContent({
   trustedStanding = null,
   initialPlan,
   initialDateOfBirth,
+  initialDateOfBirthCanCorrect,
   initialBirthdayVisibility,
   initialAgeVisibility,
   initialZodiacVisibility,
@@ -138,12 +140,14 @@ export function ProfilePageContent({
   // Shared shell chrome: one menu sheet, one unread count.
   const openAppMenu = useAppMenu();
   const unreadNotificationCount = useUnreadNotifications();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(section === "identity");
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [username, setUsername] = useState(initialUsername);
   const [bio, setBio] = useState(initialBio);
   const [moodStatus, setMoodStatus] = useState(initialMoodStatus);
   const [dateOfBirth, setDateOfBirth] = useState(initialDateOfBirth);
+  const [dateOfBirthCanCorrect, setDateOfBirthCanCorrect] = useState(initialDateOfBirthCanCorrect);
+  const [correctingDateOfBirth, setCorrectingDateOfBirth] = useState(!initialDateOfBirth);
   const [birthdayVisibility, setBirthdayVisibility] = useState<BirthVisibility>(initialBirthdayVisibility);
   const [ageVisibility, setAgeVisibility] = useState<BirthVisibility>(initialAgeVisibility);
   const [zodiacVisibility, setZodiacVisibility] = useState<BirthVisibility>(initialZodiacVisibility);
@@ -153,9 +157,15 @@ export function ProfilePageContent({
   const [avatarRevision, setAvatarRevision] = useState(0);
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [isPending, startTransition] = useTransition();
-  const [isAvatarPending, startAvatarTransition] = useTransition();
+  /**
+   * Saving runs as plain async work, so there is no transition left to report.
+   * Keeping isPending would have meant a Save button that never disables and a
+   * label that never says "Saving...", because nothing sets it any more.
+   */
+  const [saving, setSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const identityEditorRef = useRef<HTMLDivElement>(null);
   const avatarSrc = avatarPreviewUrl ?? (
     avatarUrl && !avatarLoadFailed
       ? `/api/profile/avatar${avatarRevision ? `?v=${avatarRevision}` : ""}`
@@ -174,10 +184,15 @@ export function ProfilePageContent({
   // looks right" and the upload-in-progress notice — stay put instead, since
   // Cancel/Save are still on screen and the text is part of that decision.
   useEffect(() => {
-    if (!feedback || selectedAvatarFile || isAvatarPending) return;
+    if (!feedback || selectedAvatarFile || avatarUploading) return;
     const timer = window.setTimeout(() => setFeedback(""), 4000);
     return () => window.clearTimeout(timer);
-  }, [feedback, selectedAvatarFile, isAvatarPending]);
+  }, [feedback, selectedAvatarFile, avatarUploading]);
+
+  useEffect(() => {
+    if (section !== "identity" || !editing) return;
+    identityEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [section, editing]);
 
   function beginEditing() {
     setDisplayName(savedProfile.displayName);
@@ -188,6 +203,7 @@ export function ProfilePageContent({
     setBirthdayVisibility(savedProfile.birthdayVisibility);
     setAgeVisibility(savedProfile.ageVisibility);
     setZodiacVisibility(savedProfile.zodiacVisibility);
+    setCorrectingDateOfBirth(!savedProfile.dateOfBirth);
     setFeedback("");
     setEditing(true);
   }
@@ -201,6 +217,7 @@ export function ProfilePageContent({
     setBirthdayVisibility(savedProfile.birthdayVisibility);
     setAgeVisibility(savedProfile.ageVisibility);
     setZodiacVisibility(savedProfile.zodiacVisibility);
+    setCorrectingDateOfBirth(!savedProfile.dateOfBirth);
     setFeedback("");
     setEditing(false);
   }
@@ -237,7 +254,13 @@ export function ProfilePageContent({
       return;
     }
 
-    startTransition(async () => {
+    /* SAVING A PROFILE IS A MUTATION, and this one carries the date of birth --
+     * a field with a single self-serve correction budget. An abandoned
+     * transition here could spend that correction on a request that never
+     * completed, with the person unable to tell whether it counted. So it runs
+     * as plain async work with its own pending flag. */
+    void (async () => {
+      setSaving(true);
       const result = await updateProfileAction({
         fullName: nextProfile.displayName,
         username: nextProfile.username,
@@ -248,6 +271,7 @@ export function ProfilePageContent({
         ageVisibility: nextProfile.ageVisibility,
         zodiacVisibility: nextProfile.zodiacVisibility
       });
+      setSaving(false);
       setFeedback(result.message);
 
       if (result.ok) {
@@ -260,10 +284,21 @@ export function ProfilePageContent({
         setBirthdayVisibility(nextProfile.birthdayVisibility);
         setAgeVisibility(nextProfile.ageVisibility);
         setZodiacVisibility(nextProfile.zodiacVisibility);
+        if (result.dateOfBirthCanCorrect !== undefined) {
+          setDateOfBirthCanCorrect(result.dateOfBirthCanCorrect);
+        }
+        setCorrectingDateOfBirth(false);
         setEditing(false);
-        router.refresh();
+        if (returnTo && nextProfile.dateOfBirth && avatarUrl) {
+          router.push(returnTo as Route);
+        } else {
+          router.refresh();
+        }
       }
-    });
+      /* A REFUSAL STAYS IN THE EDITOR. setEditing(false) is inside the success
+       * branch, so a rejected username or an invalid date leaves every field
+       * exactly as typed with the reason above them. */
+    })();
   }
 
   function selectAvatar(file: File | null) {
@@ -298,8 +333,18 @@ export function ProfilePageContent({
     formData.append("avatar", selectedAvatarFile);
     setFeedback("Optimizing and uploading your profile photo...");
 
-    startAvatarTransition(async () => {
-      const result = await uploadAvatarAction(formData);
+    /* AN AVATAR UPLOAD IS A MUTATION that also consumes a chosen file. If the
+     * transition were abandoned the request would die mid-flight while the
+     * preview still showed the new photo -- the person would believe their
+     * picture had changed when the server never received it. */
+    void (async () => {
+      setAvatarUploading(true);
+      const result = await uploadAvatarAction(formData).catch(() => ({
+        ok: false as const,
+        message: "That photo could not be uploaded. Check your connection and try again.",
+        avatarUrl: undefined
+      }));
+      setAvatarUploading(false);
       setFeedback(result.message);
 
       if (result.ok && result.avatarUrl) {
@@ -309,9 +354,15 @@ export function ProfilePageContent({
         setAvatarPreviewUrl(null);
         setSelectedAvatarFile(null);
         window.dispatchEvent(new CustomEvent("madbuddy:avatar-updated", { detail: result.avatarUrl }));
-        router.refresh();
+        if (returnTo && savedProfile.dateOfBirth) {
+          router.push(returnTo as Route);
+        } else {
+          router.refresh();
+        }
       }
-    });
+      /* On failure the preview and the chosen file are deliberately KEPT, so
+       * Save is still there to press again without re-picking the photo. */
+    })();
   }
 
   const ghostOn = initialVisibilityStatus === "ghost";
@@ -416,6 +467,7 @@ export function ProfilePageContent({
       {editing ? (
         // Edit form (unchanged flow) — shown in place of the view.
         <Card className="p-5 sm:p-6">
+          <div ref={identityEditorRef} id="profile-identity" className="scroll-mt-6" />
           <div className="grid gap-4">
             {/* The owner's gallery, manageable in place. Sits above the edit
                 form because it is the part of a profile people actually
@@ -425,6 +477,32 @@ export function ProfilePageContent({
               isOwner
               onChanged={() => router.refresh()}
             />
+
+            {section === "identity" && !avatarUrl ? (
+              <div className="rounded-xl border border-border/70 bg-secondary/25 p-4">
+                <UserAvatar src={avatarSrc} name={displayName || "You"} size="lg" />
+                <p className="text-sm font-medium">Add your Profile photo</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Linkr uses your Profile photo. It does not keep a separate identity photo.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {avatarField}
+                  <Button type="button" variant="outline" onClick={() => avatarInputRef.current?.click()} disabled={avatarUploading}>
+                    Choose photo
+                  </Button>
+                  {selectedAvatarFile ? (
+                    <>
+                      <Button type="button" onClick={saveAvatar} disabled={avatarUploading}>
+                        {avatarUploading ? "Saving..." : "Save photo"}
+                      </Button>
+                      <Button type="button" variant="ghost" onClick={cancelAvatarPreview} disabled={avatarUploading}>
+                        Cancel
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             <TrustedMemberApplyCard standing={trustedStanding} trustedSince={trustedSince} />
 
@@ -442,18 +520,36 @@ export function ProfilePageContent({
             <FormField htmlFor="bio" label="Bio" hint={`${bio.length}/160`}>
               <Textarea id="bio" value={bio} maxLength={160} placeholder="Share a little about yourself" onChange={(event) => setBio(event.target.value)} />
             </FormField>
-            <FormField
-              htmlFor="dateOfBirth"
-              label="Date of birth"
-              hint="Your full date and birth year stay private."
-            >
-              <Input
-                id="dateOfBirth"
-                type="date"
-                value={dateOfBirth}
-                max={serverBirthdayDayKey}
-                onChange={(event) => setDateOfBirth(event.target.value)}
-              />
+            <FormField htmlFor="dateOfBirth" label="Date of birth" hint="Your full date and birth year stay private.">
+              {!savedProfile.dateOfBirth || correctingDateOfBirth ? (
+                <>
+                  <Input
+                    id="dateOfBirth"
+                    type="date"
+                    value={dateOfBirth}
+                    max={serverBirthdayDayKey}
+                    onChange={(event) => setDateOfBirth(event.target.value)}
+                  />
+                  {savedProfile.dateOfBirth ? (
+                    <p className="mt-2 text-xs leading-5 text-amber-700 dark:text-amber-300">
+                      You can correct your date of birth once. After that, you&apos;ll need support to change it.
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <div className="rounded-xl border border-border/70 bg-secondary/25 px-4 py-3">
+                  <p className="text-sm font-medium">{savedProfile.dateOfBirth}</p>
+                  {dateOfBirthCanCorrect ? (
+                    <Button type="button" size="sm" variant="ghost" className="mt-2" onClick={() => setCorrectingDateOfBirth(true)}>
+                      Correct date of birth
+                    </Button>
+                  ) : (
+                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                      Your self-serve correction has been used. <Link href="/help">Contact support</Link> to request another change.
+                    </p>
+                  )}
+                </div>
+              )}
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
                 Age, zodiac, and birthday status are calculated automatically. You choose what Muddies can see.
               </p>
@@ -484,11 +580,11 @@ export function ProfilePageContent({
               </div>
             ) : null}
             <div className="flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
-              <Button type="button" variant="outline" onClick={cancelEditing} disabled={isPending}>
+              <Button type="button" variant="outline" onClick={cancelEditing} disabled={saving}>
                 Cancel
               </Button>
-              <Button type="button" onClick={saveProfile} disabled={isPending}>
-                {isPending ? "Saving..." : "Save profile"}
+              <Button type="button" onClick={saveProfile} disabled={saving}>
+                {saving ? "Saving..." : "Save profile"}
               </Button>
             </div>
           </div>
@@ -529,7 +625,7 @@ export function ProfilePageContent({
                 <button
                   type="button"
                   onClick={() => avatarInputRef.current?.click()}
-                  disabled={isAvatarPending}
+                  disabled={avatarUploading}
                   aria-label={avatarUrl ? "Change profile photo" : "Add profile photo"}
                   title={avatarUrl ? "Change photo" : "Add photo"}
                   className="focus-ring safe-motion absolute bottom-1 right-1 grid h-10 w-10 place-items-center rounded-full border-2 border-background bg-secondary text-foreground hover:bg-secondary/80"
@@ -557,7 +653,7 @@ export function ProfilePageContent({
               <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
             </Link>
 
-            {isAvatarPending ? (
+            {avatarUploading ? (
               <div className="mt-4 w-full max-w-[220px]" role="progressbar" aria-label="Uploading profile photo">
                 <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
                   <span className="block h-full w-2/3 animate-pulse rounded-full bg-primary" />
@@ -567,10 +663,10 @@ export function ProfilePageContent({
             ) : null}
             {selectedAvatarFile ? (
               <div className="mt-4 grid w-full max-w-[260px] grid-cols-2 gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={cancelAvatarPreview} disabled={isAvatarPending}>
+                <Button type="button" variant="outline" size="sm" onClick={cancelAvatarPreview} disabled={avatarUploading}>
                   Cancel
                 </Button>
-                <Button type="button" size="sm" onClick={saveAvatar} disabled={isAvatarPending}>
+                <Button type="button" size="sm" onClick={saveAvatar} disabled={avatarUploading}>
                   Save photo
                 </Button>
               </div>

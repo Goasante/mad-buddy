@@ -24,6 +24,7 @@ export type IntegrationActionState = {
   ok: boolean;
   message: string;
   avatarUrl?: string;
+  dateOfBirthCanCorrect?: boolean;
   /**
    * A stable code for callers that must branch on WHY something failed.
    *

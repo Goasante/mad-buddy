@@ -11,7 +11,8 @@ import {
 } from "@/lib/profile/rules";
 import type { ViewerRelationship } from "@/lib/profile/rules";
 import type { Database } from "@/lib/supabase/database.types";
-import { dateKeyInTimeZone, deriveBirthProfile, projectDerivedBirthProfile, validateDateOfBirth } from "@/lib/profile/birth-date";
+import { dateKeyInTimeZone, deriveBirthProfile, projectDerivedBirthProfile } from "@/lib/profile/birth-date";
+import { saveDateOfBirth } from "@/lib/profile/date-of-birth-service";
 import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 import { recordProductEvent } from "@/lib/analytics/track";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -139,7 +140,11 @@ export async function getVisibleProfileFields(
 // Core profile edit (name / username / bio / mood)
 // ---------------------------------------------------------------------------
 
-export type ProfileUpdateResult = { ok: boolean; message: string };
+export type ProfileUpdateResult = {
+  ok: boolean;
+  message: string;
+  dateOfBirthCanCorrect?: boolean;
+};
 
 export const profileSchema = z.object({
   fullName: z.string().trim().min(2, "Display name is too short.").max(80),
@@ -173,11 +178,6 @@ export async function updateProfile(
   if (!parsed.success) {
     return { ok: false, message: "Check your profile fields and try again." };
   }
-  if (parsed.data.dateOfBirth) {
-    const birthError = validateDateOfBirth(parsed.data.dateOfBirth);
-    if (birthError) return { ok: false, message: birthError };
-  }
-
   const birthSettingsWereSubmitted = parsed.data.dateOfBirth !== undefined;
   const [previousBirthResult, previousPrivacyResult] = birthSettingsWereSubmitted
     ? await Promise.all([
@@ -221,19 +221,16 @@ export async function updateProfile(
     return { ok: false, message: "Couldn't update your profile. Try again." };
   }
 
+  let dateOfBirthCanCorrect: boolean | undefined;
   if (parsed.data.dateOfBirth !== undefined) {
     const dateOfBirth = parsed.data.dateOfBirth.trim();
+    if (!dateOfBirth && previousDateOfBirth) {
+      return { ok: false, message: "A saved date of birth can't be removed. Contact support if it is wrong." };
+    }
     if (dateOfBirth) {
-      const { error: birthSaveError } = await rlsClient
-        .from("profile_birth_details")
-        .upsert({ user_id: userId, date_of_birth: dateOfBirth }, { onConflict: "user_id" });
-      if (birthSaveError) return { ok: false, message: "Couldn't save your date of birth. Try again." };
-    } else {
-      const { error: birthDeleteError } = await rlsClient
-        .from("profile_birth_details")
-        .delete()
-        .eq("user_id", userId);
-      if (birthDeleteError) return { ok: false, message: "Couldn't remove your date of birth. Try again." };
+      const birthResult = await saveDateOfBirth(rlsClient, userId, dateOfBirth);
+      if (!birthResult.ok) return { ok: false, message: birthResult.message };
+      dateOfBirthCanCorrect = birthResult.canCorrect;
     }
 
     const visibilityRows = [
@@ -286,5 +283,5 @@ export async function updateProfile(
     }
   }
 
-  return { ok: true, message: "Profile updated." };
+  return { ok: true, message: "Profile updated.", dateOfBirthCanCorrect };
 }

@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { loadEffectivePlan } from "@/lib/billing/service";
 import { loadFieldPrivacy } from "@/lib/profile/service";
+import { loadDateOfBirthState } from "@/lib/profile/date-of-birth-service";
 import { dateKeyInTimeZone } from "@/lib/profile/birth-date";
 import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 import { loadProfileIdentitySummary } from "@/lib/profile/identity-service";
@@ -52,12 +53,7 @@ export default async function ProfilePage({
   const [effectivePlan, birthDetails, fieldPrivacy, identitySummary, journey, photos, trustedStanding, momentsEnabled] = user
     ? await Promise.all([
         loadEffectivePlan(admin, user.id),
-        admin
-          .from("profile_birth_details")
-          .select("date_of_birth")
-          .eq("user_id", user.id)
-          .maybeSingle()
-          .then((result) => result.data),
+        loadDateOfBirthState(user.id),
         loadFieldPrivacy(admin, user.id),
         loadProfileIdentitySummary(admin, user.id, "self"),
         loadJourney(admin, user.id),
@@ -96,7 +92,8 @@ export default async function ProfilePage({
       trustedSince={profile?.trusted_member_since ?? null}
       trustedStanding={trustedStanding}
       initialPlan={effectivePlan}
-      initialDateOfBirth={birthDetails?.date_of_birth ?? ""}
+      initialDateOfBirth={birthDetails?.dateOfBirth ?? ""}
+      initialDateOfBirthCanCorrect={birthDetails?.canCorrect ?? true}
       initialBirthdayVisibility={fieldPrivacy?.birthday === "approved_muddies" ? "approved_muddies" : "only_me"}
       initialAgeVisibility={fieldPrivacy?.age === "approved_muddies" ? "approved_muddies" : "only_me"}
       initialZodiacVisibility={fieldPrivacy?.zodiac === "approved_muddies" ? "approved_muddies" : "only_me"}

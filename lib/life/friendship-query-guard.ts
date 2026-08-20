@@ -51,7 +51,29 @@ export const HARD_DELETE_ANNOTATION = "LIFE-HARD-DELETE:";
 
 const SCAN_DIRECTORIES = ["app", "lib", "components"];
 const SCAN_EXTENSIONS = [".ts", ".tsx"];
-const SKIP_DIRECTORIES = new Set(["node_modules", ".next", "dist", "build", ".git"]);
+const SKIP_DIRECTORIES = new Set([
+  "node_modules",
+  ".next",
+  "dist",
+  "build",
+  ".git",
+  /* The guard's OWN fixtures.
+   *
+   * friendship-query-guard.test.ts writes throwaway source files -- including
+   * one containing a deliberate hard delete -- under os.tmpdir(). On a machine
+   * where the checkout itself lives beneath the temp directory (this repo is
+   * routinely worked on from a temp worktree) those fixtures land INSIDE the
+   * tree this scanner walks, and the deliberate delete is reported as a real
+   * lifecycle regression. Intermittent, because it only fails when the two
+   * suites overlap.
+   *
+   * Skipping the fixture prefix keeps the guard honest about product code and
+   * blind to files written to test the guard. */
+  "friendship-guard-fixtures"
+]);
+
+/** Fixture trees the guard writes for itself, matched by directory prefix. */
+const FIXTURE_PREFIXES = ["friendship-guard-"];
 
 /** Source files that participate in the guard. Tests are excluded. */
 export function collectSourceFiles(root: string): string[] {
@@ -66,6 +88,7 @@ export function collectSourceFiles(root: string): string[] {
     }
     for (const entry of entries) {
       if (SKIP_DIRECTORIES.has(entry.name)) continue;
+      if (FIXTURE_PREFIXES.some((prefix) => entry.name.startsWith(prefix))) continue;
       const full = join(directory, entry.name);
       if (entry.isDirectory()) {
         walk(full);

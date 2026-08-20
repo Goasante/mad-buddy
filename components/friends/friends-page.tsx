@@ -253,6 +253,16 @@ export function FriendsPageContent({
   const [newCircleName, setNewCircleName] = useState("");
   const [circleTargetUser, setCircleTargetUser] = useState<UserSummary | null>(null);
   const [isPending, startTransition] = useTransition();
+  /**
+   * Relationship writes that must finish.
+   *
+   * Requests, accepts, blocks and Circle changes are mutations: an abandoned
+   * one leaves the list showing a relationship the server does not have.
+   * Combined with `isPending` wherever the UI only needs "something is
+   * happening", so the remaining read transitions still show progress.
+   */
+  const [writing, setWriting] = useState(false);
+  const busy = isPending || writing;
 
   /**
    * The single place a tab changes, whether by tap, swipe or keyboard.
@@ -325,10 +335,19 @@ export function FriendsPageContent({
    */
   const openConversationWith = useCallback(
     (friendId: string) => {
-      // Guard the double tap: the server de-duplicates on direct_key anyway,
-      // but there is no reason to send a second request.
-      if (isPending) return;
-      startTransition(async () => {
+      /* Guard the double tap: the server de-duplicates on direct_key anyway,
+       * but there is no reason to send a second request.
+       *
+       * Checks `busy`, not `isPending`. This write no longer runs inside a
+       * transition, so isPending stays false throughout it -- the guard would
+       * have stopped guarding the very call it was written for. */
+      if (busy) return;
+              /* Opening a conversation CREATES one if the pair has none, so it is a
+         * mutation -- and it navigates on success, which must not happen for a
+         * request that was abandoned. */
+        void (async () => {
+          setWriting(true);
+          try {
         const result = await openDirectConversationAction(friendId);
         if (result.ok && result.conversationId) {
           router.push(conversationHref(result.conversationId));
@@ -337,9 +356,13 @@ export function FriendsPageContent({
         // Already-generalised server copy, never a raw error and never a
         // reason that would reveal a block.
         setFeedback(result.message);
-      });
+
+          } finally {
+            setWriting(false);
+          }
+        })();
     },
-    [isPending, router]
+    [busy, router]
   );
 
 
@@ -500,8 +523,18 @@ export function FriendsPageContent({
   }
 
   function runFriendAction(action: () => Promise<{ ok: boolean; message: string }>, onLocalSuccess: () => void) {
-    startTransition(async () => {
-      const result = await action();
+    /* THE SHARED FUNNEL for accept, decline, cancel, remove and block -- every
+     * one a relationship mutation, and every one previously tied to
+     * interruptible work. An abandoned transition here means the row
+     * disappears locally while the server still holds the old relationship,
+     * and the next refresh brings it back with no explanation. */
+    void (async () => {
+      setWriting(true);
+      const result = await action().catch(() => ({
+        ok: false,
+        message: "That didn't go through. Check your connection and try again."
+      }));
+      setWriting(false);
       setFeedback(result.message);
 
       if (result.ok) {
@@ -513,7 +546,10 @@ export function FriendsPageContent({
         announceMuddyRequestsUpdated();
         router.refresh();
       }
-    });
+      /* A REFUSAL CHANGES NOTHING LOCALLY. onLocalSuccess is inside the ok
+       * branch, so a blocked or already-removed relationship leaves the list
+       * exactly as it was, with the server's reason above it. */
+    })();
   }
 
   function searchUsers() {
@@ -549,13 +585,22 @@ export function FriendsPageContent({
     const wasMember = closeFriendIds.includes(user.id);
     // Optimistic; revert if the server rejects (e.g. tier limit reached).
     setCloseFriendMembership(user.id, !wasMember);
-    startTransition(async () => {
+    /* Optimistic by design -- the chip flips at once -- but the write must
+     * finish, and the revert below is what keeps a refusal honest. */
+    void (async () => {
+      setWriting(true);
+      try {
       const result = wasMember
         ? await removeCloseFriendAction(user.id)
         : await addCloseFriendAction(user.id);
       setFeedback(result.message);
       if (!result.ok) setCloseFriendMembership(user.id, wasMember);
-    });
+
+      } finally {
+        // Cleared on every path, refusal and rejection alike.
+        setWriting(false);
+      }
+    })();
   }
 
   function createCircle() {
@@ -565,7 +610,11 @@ export function FriendsPageContent({
     setNewCircleName("");
     setCreateCircleOpen(false);
     setCircleTargetUser(null);
-    startTransition(async () => {
+    /* Creating a Circle is a mutation; the sheet has already closed, so an
+     * abandoned request would leave no Circle and no explanation. */
+    void (async () => {
+      setWriting(true);
+      try {
       const result = await createCircleAction({
         name,
         memberIds: targetId ? [targetId] : []
@@ -577,7 +626,12 @@ export function FriendsPageContent({
           { id: result.circleId!, name, memberIds: targetId ? [targetId] : [] }
         ]);
       }
-    });
+
+      } finally {
+        // Cleared on every path, refusal and rejection alike.
+        setWriting(false);
+      }
+    })();
   }
 
   function addToCircle(user: UserSummary, circleId: string) {
@@ -591,7 +645,10 @@ export function FriendsPageContent({
       )
     );
     const circleName = circles.find((circle) => circle.id === circleId)?.name;
-    startTransition(async () => {
+        /* Adding somebody to a Circle changes who can reach them there. */
+    void (async () => {
+      setWriting(true);
+      try {
       const result = await addCircleMembersAction(circleId, [user.id]);
       setFeedback(result.ok ? `${user.displayName} added to ${circleName}.` : result.message);
       if (!result.ok) {
@@ -603,7 +660,11 @@ export function FriendsPageContent({
           )
         );
       }
-    });
+
+      } finally {
+        setWriting(false);
+      }
+    })();
   }
 
   // Shared row renderer so the "Active now" and "All Muddies" sections render
@@ -658,10 +719,18 @@ export function FriendsPageContent({
       circles={circles}
       onViewProfile={() => setProfileUser(user)}
       onWave={() => {
-        startTransition(async () => {
+                  /* A Wave is sent to another person; losing it silently is worse than
+           * failing loudly, because nothing on screen would differ. */
+          void (async () => {
+            setWriting(true);
+            try {
           const result = await sendWaveV2Action(user.id, "proximity_card");
           setFeedback(result.message);
-        });
+
+            } finally {
+              setWriting(false);
+            }
+          })();
       }}
       onMessage={() => openConversationWith(user.id)}
       onRemove={() =>
@@ -1275,10 +1344,17 @@ export function FriendsPageContent({
         }}
         onSendPing={(message) => {
           if (!profileUser) return;
-          startTransition(async () => {
+                      /* A meetup request is a real invitation to somebody else. */
+            void (async () => {
+              setWriting(true);
+              try {
             const result = await createMeetupRequestAction({ receiverId: profileUser.id, message });
             setFeedback(result.message);
-          });
+
+              } finally {
+                setWriting(false);
+              }
+            })();
         }}
       />
     </div>

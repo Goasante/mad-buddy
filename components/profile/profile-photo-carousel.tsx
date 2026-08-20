@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, ImagePlus, Loader2, Trash2 } from "lucide-react";
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useState } from "react";
 
 import {
   addProfilePhotoAction,
@@ -60,8 +60,23 @@ export function ProfilePhotoCarousel({
    * photo was the reported complaint.
    */
   const [queue, setQueue] = useState<{ file: File; url: string; status: BatchItemStatus }[]>([]);
+  /**
+   * Visibility, reorder and delete are MUTATIONS, so they do not run inside a
+   * transition -- React abandons transition work by design, which kills the
+   * request mid-flight and leaves the gallery showing something the server
+   * never agreed to. Distinct from `uploading` so a delete does not present
+   * itself as an upload.
+   */
+  const [mutating, setMutating] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [isPending, startTransition] = useTransition();
+  /**
+   * Every mutation in this component now runs as plain async work, so there is
+   * no transition left to report on. `busy` is the real answer to "is
+   * something in flight", and the controls below gate on it -- leaving the old
+   * isPending in place would have meant buttons that never disable, because
+   * nothing sets it any more.
+   */
+  const busy = uploading || mutating;
 
   const count = photos.length;
   // Clamped during render: deleting the last photo would otherwise leave the
@@ -163,11 +178,17 @@ export function ProfilePhotoCarousel({
   );
 
   function setVisibility(photoId: string, visibility: PhotoVisibility) {
-    startTransition(async () => {
-      const result = await setProfilePhotoVisibilityAction({ photoId, visibility });
-      setFeedback(result.message);
-      if (result.ok) onChanged?.();
-    });
+    void (async () => {
+      setMutating(true);
+      try {
+        const result = await setProfilePhotoVisibilityAction({ photoId, visibility });
+        setFeedback(result.message);
+        if (result.ok) onChanged?.();
+      } finally {
+        // Cleared on every path, including a rejected request.
+        setMutating(false);
+      }
+    })();
   }
 
   /**
@@ -181,24 +202,34 @@ export function ProfilePhotoCarousel({
   function move(photo: ProfilePhoto, delta: number) {
     const target = photo.position + delta;
     if (target < 0 || target >= MAX_PROFILE_PHOTOS) return;
-    startTransition(async () => {
-      const result = await reorderProfilePhotoAction({ photoId: photo.id, newPosition: target });
-      setFeedback(result.message);
-      if (result.ok) {
-        // Follow the photo, so the viewer stays on the picture they moved
-        // rather than on whatever slid into its old place.
-        setIndex(target);
-        onChanged?.();
+    void (async () => {
+      setMutating(true);
+      try {
+        const result = await reorderProfilePhotoAction({ photoId: photo.id, newPosition: target });
+        setFeedback(result.message);
+        if (result.ok) {
+          // Follow the photo, so the viewer stays on the picture they moved
+          // rather than on whatever slid into its old place.
+          setIndex(target);
+          onChanged?.();
+        }
+      } finally {
+        setMutating(false);
       }
-    });
+    })();
   }
 
   function remove(photoId: string) {
-    startTransition(async () => {
-      const result = await deleteProfilePhotoAction({ photoId });
-      setFeedback(result.message);
-      if (result.ok) onChanged?.();
-    });
+    void (async () => {
+      setMutating(true);
+      try {
+        const result = await deleteProfilePhotoAction({ photoId });
+        setFeedback(result.message);
+        if (result.ok) onChanged?.();
+      } finally {
+        setMutating(false);
+      }
+    })();
   }
 
   // A visitor looking at someone with no visible photos sees nothing at all,
@@ -285,7 +316,7 @@ export function ProfilePhotoCarousel({
                 aria-pressed={current.visibility === option.id}
                 title={option.hint}
                 onClick={() => setVisibility(current.id, option.id)}
-                disabled={isPending}
+                disabled={busy}
                 className={cn(
                   "profile-photos-chip",
                   current.visibility === option.id && "profile-photos-chip-on"
@@ -302,7 +333,7 @@ export function ProfilePhotoCarousel({
               <button
                 type="button"
                 onClick={() => move(current, -1)}
-                disabled={isPending || current.position === 0}
+                disabled={busy || current.position === 0}
                 aria-label={`Move photo ${active + 1} earlier`}
                 className="profile-photos-move-button"
               >
@@ -311,7 +342,7 @@ export function ProfilePhotoCarousel({
               <button
                 type="button"
                 onClick={() => move(current, 1)}
-                disabled={isPending || current.position >= count - 1}
+                disabled={busy || current.position >= count - 1}
                 aria-label={`Move photo ${active + 1} later`}
                 className="profile-photos-move-button"
               >
@@ -323,7 +354,7 @@ export function ProfilePhotoCarousel({
           <button
             type="button"
             onClick={() => remove(current.id)}
-            disabled={isPending}
+            disabled={busy}
             aria-label={`Remove photo ${active + 1}`}
             className="profile-photos-remove"
           >
@@ -350,7 +381,7 @@ export function ProfilePhotoCarousel({
             accept="image/*"
             multiple
             className="sr-only"
-            disabled={uploading || isPending}
+            disabled={busy}
             onChange={(event) => {
               const chosen = event.target.files;
               // Cleared so choosing the same files twice still fires.

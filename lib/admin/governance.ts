@@ -475,6 +475,7 @@ export const SUSPENSION_BLOCKS = [
   "waves",
   "pings",
   "plans",
+  "linkr",
   "moments",
   "drops",
   "communities",

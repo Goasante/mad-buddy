@@ -14,6 +14,7 @@ import { MEDIA_SIGNED_URL_TTL_SECONDS } from "@/lib/media/constants";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
+import { guardAction } from "@/lib/admin/enforcement";
 
 /**
  * The user's own Linkr profile: reading it, turning Linkr on and off, editing
@@ -173,7 +174,7 @@ export async function loadOwnLinkrProfile(userId: string): Promise<LinkrOwnProfi
   if (!serverReady()) return null;
   const admin = createSupabaseAdminClient();
 
-  const [{ data: linkr }, { data: profile }, { data: interests }, photos, age, { data: verifications }] =
+  const [{ data: linkr }, { data: profile }, { data: interests }, photos, age, { data: verifications }, guard] =
     await Promise.all([
       admin
         .from("linkr_profiles")
@@ -190,7 +191,8 @@ export async function loadOwnLinkrProfile(userId: string): Promise<LinkrOwnProfi
       admin.from("linkr_interests").select("interest").eq("user_id", userId).order("created_at"),
       loadLinkrPhotos(admin, userId),
       resolveAge(admin, userId),
-      admin.from("account_verifications").select("status").eq("user_id", userId)
+      admin.from("account_verifications").select("status").eq("user_id", userId),
+      guardAction(admin, { userId, surface: "linkr" })
     ]);
 
   const hasPrimaryPhoto = photos.some((photo) => photo.position === PRIMARY_SLOT);
@@ -204,7 +206,7 @@ export async function loadOwnLinkrProfile(userId: string): Promise<LinkrOwnProfi
     // engine already refuses to place. Linkr must agree with it, or someone in
     // Ghost Mode would be invisible on the map and visible on a card.
     accountVisible: profile?.visibility_status !== "ghost",
-    restricted: false,
+    restricted: !guard.allowed,
     deleted: Boolean(profile?.deleted_at)
   });
 
@@ -251,9 +253,15 @@ export async function enableLinkr(userId: string, input: unknown): Promise<Linkr
   }
 
   const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId, surface: "linkr" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
   const age = await resolveAge(admin, userId);
   if (age === null) return { ok: false, message: "Add your date of birth before turning on Linkr." };
   if (age < 18) return { ok: false, message: "Linkr is for people 18 and over." };
+  const { hasProfilePicture } = await import("@/lib/linkr/media-projection");
+  if (!(await hasProfilePicture(admin, userId))) {
+    return { ok: false, message: "Add a profile photo before turning on Linkr." };
+  }
 
   const { error } = await admin.from("linkr_profiles").upsert(
     {
@@ -279,7 +287,8 @@ export async function enableLinkr(userId: string, input: unknown): Promise<Linkr
  */
 export async function disableLinkr(userId: string): Promise<LinkrActionResult> {
   if (!serverReady()) return { ok: false, message: "This action needs the server database configuration." };
-  const { error } = await createSupabaseAdminClient()
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
     .from("linkr_profiles")
     .upsert(
       { user_id: userId, enabled: false, updated_at: new Date().toISOString() },
@@ -307,6 +316,8 @@ export async function updateLinkrProfile(userId: string, input: unknown): Promis
   }
 
   const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId, surface: "linkr" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
   const patch: LinkrProfileInsert = { user_id: userId, updated_at: new Date().toISOString() };
   if (parsed.data.intent !== undefined) patch.intent = parsed.data.intent;
   if (parsed.data.bio !== undefined) patch.bio = parsed.data.bio || null;
@@ -342,6 +353,10 @@ export async function updateLinkrSettings(userId: string, input: unknown): Promi
   const parsed = settingsSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Check the details and try again." };
 
+  const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId, surface: "linkr" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+
   const patch: LinkrProfileInsert = { user_id: userId, updated_at: new Date().toISOString() };
   if (parsed.data.discoveryDistance !== undefined) patch.discovery_distance = parsed.data.discoveryDistance;
   if (parsed.data.requirePhotos !== undefined) patch.require_photos = parsed.data.requirePhotos;
@@ -349,7 +364,7 @@ export async function updateLinkrSettings(userId: string, input: unknown): Promi
   if (parsed.data.onlyNewToday !== undefined) patch.only_new_today = parsed.data.onlyNewToday;
   if (parsed.data.eventModeEnabled !== undefined) patch.event_mode_enabled = parsed.data.eventModeEnabled;
 
-  const { error } = await createSupabaseAdminClient()
+  const { error } = await admin
     .from("linkr_profiles")
     .upsert(patch, { onConflict: "user_id" });
   if (error) return { ok: false, message: "Couldn't save that. Try again." };

@@ -9,6 +9,8 @@ import {
 } from "@/lib/profile/birth-date";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 
 /**
  * CANONICAL DATE OF BIRTH, and the only place it may be written.
@@ -56,6 +58,7 @@ export type DateOfBirthResult = {
   age?: number | null;
   /** True when the write consumed the single correction. */
   correctionUsed?: boolean;
+  canCorrect?: boolean;
 };
 
 const schema = z.string().trim().min(1, "Choose your date of birth.");
@@ -97,7 +100,11 @@ export async function loadDateOfBirthState(userId: string): Promise<DateOfBirthS
  * different one; the 18+ surfaces then refuse on the server, which is where an
  * age gate belongs.
  */
-export async function saveDateOfBirth(userId: string, value: unknown): Promise<DateOfBirthResult> {
+export async function saveDateOfBirth(
+  rlsClient: SupabaseClient<Database>,
+  userId: string,
+  value: unknown
+): Promise<DateOfBirthResult> {
   const parsed = schema.safeParse(value);
   if (!parsed.success) {
     return { ok: false, message: parsed.error.issues[0]?.message ?? "Choose your date of birth." };
@@ -109,41 +116,21 @@ export async function saveDateOfBirth(userId: string, value: unknown): Promise<D
   const limit = await consumeRateLimit({ action: "linkr.profile", userId });
   if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
 
-  const admin = createSupabaseAdminClient();
-  const { data: existing } = await admin
-    .from("profile_birth_details")
-    .select("date_of_birth, correction_used_at")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  const isCorrection = Boolean(existing?.date_of_birth);
-
-  if (isCorrection) {
-    if (existing?.correction_used_at) {
+  const { data, error } = await rlsClient.rpc("save_profile_date_of_birth", {
+    p_date: parsed.data
+  });
+  if (error) {
+    if (error.message.includes("profile_birth_details:correction_locked")) {
       return {
         ok: false,
         message: "You've already corrected your date of birth. Contact support to change it again."
       };
     }
-    // Re-saving the same date is not a correction, and must not spend the one
-    // budget somebody may need for a real mistake.
-    if (existing?.date_of_birth === parsed.data) {
-      return { ok: true, message: "No change.", correctionUsed: false };
-    }
+    return { ok: false, message: "Couldn't save that. Try again." };
   }
 
-  const { error } = await admin.from("profile_birth_details").upsert(
-    {
-      user_id: userId,
-      date_of_birth: parsed.data,
-      // Stamped only when this write CHANGED an existing date, so setting a
-      // date for the first time leaves the correction still available.
-      ...(isCorrection ? { correction_used_at: new Date().toISOString() } : {}),
-      updated_at: new Date().toISOString()
-    },
-    { onConflict: "user_id" }
-  );
-  if (error) return { ok: false, message: "Couldn't save that. Try again." };
+  const saved = Array.isArray(data) ? data[0] : data;
+  const outcome = saved?.outcome ?? "unchanged";
 
   let age: number | null = null;
   try {
@@ -154,8 +141,14 @@ export async function saveDateOfBirth(userId: string, value: unknown): Promise<D
 
   return {
     ok: true,
-    message: isCorrection ? "Date of birth corrected." : "Date of birth saved.",
+    message:
+      outcome === "corrected"
+        ? "Date of birth corrected."
+        : outcome === "created"
+          ? "Date of birth saved."
+          : "No change.",
     age,
-    correctionUsed: isCorrection
+    correctionUsed: outcome === "corrected",
+    canCorrect: saved?.can_correct ?? false
   };
 }

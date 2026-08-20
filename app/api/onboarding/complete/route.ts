@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   }
 
   const input = await request.json().catch(() => null);
-  const result = await completeOnboarding(auth.user.id, input);
+  const result = await completeOnboarding(auth.supabase, auth.user.id, input);
   if (!result.ok) {
     return withCors(NextResponse.json(result, { status: 400 }), request);
   }
