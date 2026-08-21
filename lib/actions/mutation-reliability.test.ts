@@ -75,13 +75,15 @@ describe("every converted mutation owns an explicit pending flag", () => {
     expect(source).toContain("const [saving, setSaving] = useState(false);");
     expect(source).toContain("const [avatarUploading, setAvatarUploading] = useState(false);");
     // A dead flag is worse than none: the control would never disable.
-    expect(source).not.toContain("useTransition()");
+    // A post-commit route transition is allowed; the mutation itself must not
+    // be started inside an interruptible transition.
+    expect(source).not.toContain("startTransition(async");
   });
 
   it("profile save clears its spinner after rejected requests and server errors", () => {
     const source = read("components/profile/profile-page.tsx");
     const save = source.slice(source.indexOf("function saveProfile"), source.indexOf("function selectAvatar"));
-    expect(save).toContain("if (saving) return;");
+    expect(save).toContain("if (saving || returningToLinkr) return;");
     expect(save).toContain("try {");
     expect(save).toContain("} catch {");
     expect(save).toContain("} finally {");
@@ -92,7 +94,7 @@ describe("every converted mutation owns an explicit pending flag", () => {
   it("avatar upload clears its spinner and preserves the selected file on failure", () => {
     const source = read("components/profile/profile-page.tsx");
     const upload = source.slice(source.indexOf("function saveAvatar"), source.indexOf("const ghostOn"));
-    expect(upload).toContain("if (!selectedAvatarFile || avatarUploading) return;");
+    expect(upload).toContain("if (!selectedAvatarFile || avatarUploading || returningToLinkr) return;");
     expect(upload).toMatch(/finally\s*{\s*setAvatarUploading\(false\)/);
     const successAt = upload.indexOf("if (result.ok && result.avatarUrl) {");
     expect(successAt).toBeGreaterThan(-1);
@@ -181,7 +183,7 @@ describe("navigation happens only after a confirmed success", () => {
     const source = read("components/profile/profile-page.tsx");
     const save = source.slice(source.indexOf("function saveProfile"), source.indexOf("function selectAvatar"));
     const successAt = save.indexOf("if (result.ok) {");
-    const returnAt = save.indexOf("router.push(returnTo as Route)");
+    const returnAt = save.indexOf("router.replace(returnTo as Route)");
     expect(successAt).toBeGreaterThan(-1);
     expect(returnAt).toBeGreaterThan(successAt);
     expect(save.slice(successAt, returnAt)).toContain("nextProfile.dateOfBirth && avatarUrl");

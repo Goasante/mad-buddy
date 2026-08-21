@@ -40,6 +40,11 @@ export type CandidateCardProps = {
 /** How far a drag must travel before it counts as a decision. */
 const COMMIT_PX = 110;
 
+/** One compositor-friendly transform for stationary, dragged and exiting cards. */
+export function linkrCardTransform(offset: number): string {
+  return `translate3d(${offset}px, 0, 0) rotate(${offset / 26}deg)`;
+}
+
 export function CandidateCard({
   candidate,
   onPass,
@@ -132,7 +137,6 @@ export function CandidateCard({
   };
 
   const offset = leaving === "pass" ? -520 : leaving === "connect" ? 520 : drag;
-  const tilt = offset / 26;
   const intent = drag <= -60 ? "pass" : drag >= 60 ? "connect" : null;
 
   return (
@@ -141,7 +145,7 @@ export function CandidateCard({
         ref={surfaceRef}
         className={cn("linkr-card", leaving && "is-leaving")}
         style={{
-          transform: `translateX(${offset}px) rotate(${tilt}deg)`,
+          transform: linkrCardTransform(offset),
           transition: dragging ? "none" : "transform 180ms ease-out"
         }}
         onPointerDown={handlePointerDown}

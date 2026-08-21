@@ -5,7 +5,7 @@ import type { Route } from "next";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Award, CakeSlice, CalendarCheck2, CalendarDays, Camera, ChevronRight, Edit3, Ghost, Images, Info, LifeBuoy, MessageSquareText, MonitorSmartphone, Palette, ShieldCheck, Smile, Sparkles, UserCog, UsersRound } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { updateProfileAction, uploadAvatarAction } from "@/app/(app)/actions";
 import { FormField } from "@/components/auth/form-field";
 import { Button } from "@/components/ui/button";
@@ -163,6 +163,10 @@ export function ProfilePageContent({
    * label that never says "Saving...", because nothing sets it any more.
    */
   const [saving, setSaving] = useState(false);
+  // Navigation is interruptible; the profile/DOB mutation above is not. This
+  // transition begins only after the server confirms the save and keeps the
+  // editor on screen until the fresh Linkr server render is ready to commit.
+  const [returningToLinkr, startLinkrReturn] = useTransition();
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const identityEditorRef = useRef<HTMLDivElement>(null);
@@ -223,7 +227,7 @@ export function ProfilePageContent({
   }
 
   function saveProfile() {
-    if (saving) return;
+    if (saving || returningToLinkr) return;
 
     const nextProfile = {
       displayName: displayName.trim(),
@@ -289,11 +293,12 @@ export function ProfilePageContent({
           if (result.dateOfBirthCanCorrect !== undefined) {
             setDateOfBirthCanCorrect(result.dateOfBirthCanCorrect);
           }
-          setCorrectingDateOfBirth(false);
-          setEditing(false);
           if (returnTo && nextProfile.dateOfBirth && avatarUrl) {
-            router.push(returnTo as Route);
+            setFeedback("Profile updated. Returning to Linkr…");
+            startLinkrReturn(() => router.replace(returnTo as Route));
           } else {
+            setCorrectingDateOfBirth(false);
+            setEditing(false);
             router.refresh();
           }
         }
@@ -334,7 +339,7 @@ export function ProfilePageContent({
   }
 
   function saveAvatar() {
-    if (!selectedAvatarFile || avatarUploading) return;
+    if (!selectedAvatarFile || avatarUploading || returningToLinkr) return;
 
     const formData = new FormData();
     formData.append("avatar", selectedAvatarFile);
@@ -358,7 +363,8 @@ export function ProfilePageContent({
           setSelectedAvatarFile(null);
           window.dispatchEvent(new CustomEvent("madbuddy:avatar-updated", { detail: result.avatarUrl }));
           if (returnTo && savedProfile.dateOfBirth) {
-            router.push(returnTo as Route);
+            setFeedback("Photo updated. Returning to Linkr…");
+            startLinkrReturn(() => router.replace(returnTo as Route));
           } else {
             router.refresh();
           }
@@ -495,15 +501,15 @@ export function ProfilePageContent({
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {avatarField}
-                  <Button type="button" variant="outline" onClick={() => avatarInputRef.current?.click()} disabled={avatarUploading}>
+                  <Button type="button" variant="outline" onClick={() => avatarInputRef.current?.click()} disabled={avatarUploading || returningToLinkr}>
                     Choose photo
                   </Button>
                   {selectedAvatarFile ? (
                     <>
-                      <Button type="button" onClick={saveAvatar} disabled={avatarUploading}>
-                        {avatarUploading ? "Saving..." : "Save photo"}
+                      <Button type="button" onClick={saveAvatar} disabled={avatarUploading || returningToLinkr}>
+                        {avatarUploading ? "Saving..." : returningToLinkr ? "Returning to Linkr…" : "Save photo"}
                       </Button>
-                      <Button type="button" variant="ghost" onClick={cancelAvatarPreview} disabled={avatarUploading}>
+                      <Button type="button" variant="ghost" onClick={cancelAvatarPreview} disabled={avatarUploading || returningToLinkr}>
                         Cancel
                       </Button>
                     </>
@@ -588,11 +594,11 @@ export function ProfilePageContent({
               </div>
             ) : null}
             <div className="flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
-              <Button type="button" variant="outline" onClick={cancelEditing} disabled={saving}>
+              <Button type="button" variant="outline" onClick={cancelEditing} disabled={saving || returningToLinkr}>
                 Cancel
               </Button>
-              <Button type="button" onClick={saveProfile} disabled={saving}>
-                {saving ? "Saving..." : "Save profile"}
+              <Button type="button" onClick={saveProfile} disabled={saving || returningToLinkr}>
+                {saving ? "Saving..." : returningToLinkr ? "Returning to Linkr…" : "Save profile"}
               </Button>
             </div>
           </div>
@@ -633,7 +639,7 @@ export function ProfilePageContent({
                 <button
                   type="button"
                   onClick={() => avatarInputRef.current?.click()}
-                  disabled={avatarUploading}
+                  disabled={avatarUploading || returningToLinkr}
                   aria-label={avatarUrl ? "Change profile photo" : "Add profile photo"}
                   title={avatarUrl ? "Change photo" : "Add photo"}
                   className="focus-ring safe-motion absolute bottom-1 right-1 grid h-10 w-10 place-items-center rounded-full border-2 border-background bg-secondary text-foreground hover:bg-secondary/80"
@@ -671,11 +677,11 @@ export function ProfilePageContent({
             ) : null}
             {selectedAvatarFile ? (
               <div className="mt-4 grid w-full max-w-[260px] grid-cols-2 gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={cancelAvatarPreview} disabled={avatarUploading}>
+                <Button type="button" variant="outline" size="sm" onClick={cancelAvatarPreview} disabled={avatarUploading || returningToLinkr}>
                   Cancel
                 </Button>
-                <Button type="button" size="sm" onClick={saveAvatar} disabled={avatarUploading}>
-                  Save photo
+                <Button type="button" size="sm" onClick={saveAvatar} disabled={avatarUploading || returningToLinkr}>
+                  {returningToLinkr ? "Returning to Linkr…" : "Save photo"}
                 </Button>
               </div>
             ) : null}

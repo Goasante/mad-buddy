@@ -71,6 +71,16 @@ export type LinkrPageProps = {
 type View = "discover" | "filters" | "profile" | "settings" | "how" | "event-intro";
 
 export function LinkrPage({
+  ...props
+}: LinkrPageProps) {
+  return (
+    <div className="linkr-safe-screen" data-linkr-safe-area>
+      <LinkrPageContent {...props} />
+    </div>
+  );
+}
+
+function LinkrPageContent({
   initialProfile,
   initialCandidates,
   me,
