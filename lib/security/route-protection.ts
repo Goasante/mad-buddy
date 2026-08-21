@@ -61,8 +61,16 @@ function matchesSubpathOnly(pathname: string, prefix: string) {
   return pathname.startsWith(`${prefix}/`) && pathname.length > prefix.length + 1;
 }
 
+/** Event share metadata must be reachable by social crawlers, while the Event
+ * application itself remains authenticated and server-authorized. Only a UUID
+ * share page and its preview image qualify; /events/top and every other child
+ * stay protected by default. */
+function isPublicEventSharePath(pathname: string) {
+  return /^\/events\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?:\/preview)?$/i.test(pathname);
+}
+
 export function isPublicPath(pathname: string) {
-  if (PUBLIC_EXACT_PATHS.has(pathname)) {
+  if (PUBLIC_EXACT_PATHS.has(pathname) || isPublicEventSharePath(pathname)) {
     return true;
   }
 

@@ -262,7 +262,8 @@ describe("rendering", () => {
 
   it("renders the caption without inventing placeholder text", () => {
     expect(groupPage).toContain("message.attachment || message.voice ? null : (");
-    expect(messagesPage).toContain('message.text ?? (message.attachment || message.voice ? null : "Message")');
+    expect(messagesPage).toContain('<SafeMessageText text={message.text} />');
+    expect(messagesPage).toContain('(message.attachment || message.voice ? null : "Message")');
   });
 
   it("deduplicates signed URL refreshes and fails closed", () => {

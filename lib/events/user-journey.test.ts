@@ -101,7 +101,7 @@ describe("anyone with the link can be given the link", () => {
      * canViewEvent already grants `link` Events direct access while keeping
      * them out of every discovery surface. A share-token table would add a
      * lookup and a revocation story for no security gain. */
-    expect(share).toContain("/events?event=${eventId}");
+    expect(share).toContain("/events/${eventId}");
     expect(share).not.toContain("share_token");
   });
 

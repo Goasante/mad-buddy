@@ -1363,7 +1363,7 @@ function CreateEventModal({
         Step {stageIndex + 1} of {STAGES.length}: {STAGE_TITLE[stage]}
       </p>
 
-      <div className="-mx-1 max-h-[62vh] space-y-5 overflow-y-auto px-1 pb-1">
+      <div className="-mx-1 min-w-0 max-w-[calc(100%+0.5rem)] space-y-5 overflow-x-hidden px-1 pb-1">
         {/* STAGE 1 -- AUDIENCE.
             First because it is the decision that changes what the rest of the
             flow means. Its sub-flow (invitees, community, location) renders

@@ -108,7 +108,7 @@ describe("every published Event can be shared", () => {
      * canViewEvent already governs direct access. A share-token table would add
      * a lookup and a revocation story for no security gain. */
     expect(share).toContain("export function eventShareUrl");
-    expect(share).toContain("/events?event=${eventId}");
+    expect(share).toContain("/events/${eventId}");
     expect(share).not.toContain("share_token");
   });
 

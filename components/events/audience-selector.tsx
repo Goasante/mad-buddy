@@ -159,13 +159,13 @@ export function AudienceSelector({
   );
 
   return (
-    <fieldset className="space-y-4">
+    <fieldset className="min-w-0 max-w-full space-y-4 overflow-x-hidden">
       <div className="space-y-1">
         <legend className="text-lg font-semibold leading-snug">Who should know about this event?</legend>
         <p className="text-sm text-muted-foreground">You can change this anytime before publishing.</p>
       </div>
 
-      <div role="radiogroup" aria-label="Event audience" className="space-y-2">
+      <div role="radiogroup" aria-label="Event audience" className="min-w-0 max-w-full space-y-2">
         {OPTIONS.map((option) => {
           const active = value.visibility === option.id;
           const Icon = option.icon;
@@ -180,7 +180,7 @@ export function AudienceSelector({
                 // py-2.5 and a smaller icon well: five options at py-3 pushed the last
                 // one below the fold on a 360px sheet, so the choice could not be
                 // scanned as a set. Still a comfortable target at 56px tall.
-                "flex w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition",
+                "flex w-full min-w-0 max-w-full items-center gap-3 overflow-hidden rounded-xl border px-3.5 py-2.5 text-left transition",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                 // The selected card earns the accent; the rest stay quiet, so
                 // which one is chosen is legible at a glance rather than needing
@@ -201,7 +201,7 @@ export function AudienceSelector({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-semibold leading-snug">{option.label}</span>
-                <span className="block text-xs leading-snug text-muted-foreground">{option.detail}</span>
+                <span className="block whitespace-normal break-words text-xs leading-snug text-muted-foreground [overflow-wrap:anywhere]">{option.detail}</span>
               </span>
               {/* A tick as well as the accent: selection must not be carried by
                   colour alone. */}
@@ -252,7 +252,7 @@ export function AudienceSelector({
       ) : null}
 
       {value.visibility === "nearby" ? (
-        <div className="space-y-3 rounded-xl border border-border/70 p-3.5">
+        <div className="min-w-0 max-w-full space-y-3 overflow-hidden rounded-xl border border-border/70 p-3.5">
           <div className="space-y-1">
             <p className="text-sm font-medium">Event location</p>
             {/* TWO SIDES OF ONE SYSTEM, SAID PLAINLY (4K §15).
@@ -261,7 +261,7 @@ export function AudienceSelector({
                 position against that published venue. The host is not being
                 asked to share where they are -- they are describing where the
                 Event is, which is programme information. */}
-            <p className="text-xs leading-relaxed text-muted-foreground">
+            <p className="whitespace-normal break-words text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
               This uses the venue you set for the Event &mdash; not your personal location. People around
               that venue can discover it.
             </p>
