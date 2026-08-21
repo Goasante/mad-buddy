@@ -173,7 +173,7 @@ describe("a refused mutation stays in context", () => {
 
   it("a permanent Pass only promises what the server recorded", () => {
     const source = read("components/linkr/linkr-page.tsx");
-    expect(source).toContain('result.ok\n                      ? "You won\'t see them again."');
+    expect(source).toMatch(/result\.ok\r?\n\s+\? "You won't see them again\."/);
     expect(source).toContain("They may appear again.");
   });
 });
