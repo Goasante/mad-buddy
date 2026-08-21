@@ -36,14 +36,22 @@ export function PlanCover({
       className={cn("relative block overflow-hidden bg-secondary", rounded, className)}
       data-cover-source={cover.source}
     >
-      {cover.source === "upload" ? (
-        // object-cover with a centred focal point: the crop keeps the middle
-        // of the image, which is where a plan photo's subject sits.
+      {cover.source === "upload" || cover.source === "artwork" ? (
+        /* object-cover with a centred focal point: the crop keeps the middle
+         * of the image, which is where a plan photo's subject sits.
+         *
+         * Lazy and async for BOTH cases. A card cover is never the thing a
+         * person opened the page for, and the box is already reserved by the
+         * wrapper's aspect ratio -- so a late-arriving photograph cannot shift
+         * anything around it. width/height are passed for the artwork tier so
+         * the intrinsic ratio is known without a network probe. */
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={cover.imageUrl}
           alt=""
           loading="lazy"
+          decoding="async"
+          {...(cover.source === "artwork" ? { width: cover.width, height: cover.height } : {})}
           className="absolute inset-0 h-full w-full object-cover object-center"
         />
       ) : (

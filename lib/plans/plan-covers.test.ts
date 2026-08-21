@@ -43,8 +43,13 @@ describe("resolvePlanCover priority", () => {
   });
 
   it("treats a blank or whitespace-only upload as absent", () => {
-    expect(resolvePlanCover({ category: "beach", coverImageUrl: "" }).source).toBe("canonical");
-    expect(resolvePlanCover({ category: "beach", coverImageUrl: "   " }).source).toBe("canonical");
+    /* The property is that a blank string is NOT an upload -- not which tier
+     * catches it afterwards. `beach` now has approved photography, so it falls
+     * through to "artwork"; asserting "canonical" here would have been pinning
+     * the tier rather than the behaviour under test. */
+    for (const blank of ["", "   "]) {
+      expect(resolvePlanCover({ category: "beach", coverImageUrl: blank }).source).not.toBe("upload");
+    }
     expect(resolvePlanCover({ coverImageUrl: "  " }).source).toBe("fallback");
   });
 

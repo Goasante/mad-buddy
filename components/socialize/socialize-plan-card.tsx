@@ -63,7 +63,7 @@ function PlanCard({ plan, onJoin, pending = false, slots }: SocializePlanCardPro
         urgency.imminent && "linkr-plan-imminent"
       )}
       style={
-        cover.source === "upload"
+        cover.source === "upload" || cover.source === "artwork"
           ? undefined
           : ({
               // The category's own gradient IS the card, rather than a strip
@@ -74,7 +74,7 @@ function PlanCard({ plan, onJoin, pending = false, slots }: SocializePlanCardPro
             } as CSSProperties)
       }
     >
-      {cover.source === "upload" ? (
+      {cover.source === "upload" || cover.source === "artwork" ? (
         // eslint-disable-next-line @next/next/no-img-element -- signed cover URL, not a static asset
         <img
           src={cover.imageUrl}

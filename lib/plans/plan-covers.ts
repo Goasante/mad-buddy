@@ -1,4 +1,5 @@
 import type { PlanCategory } from "@/lib/supabase/database.types";
+import { planActivityArt } from "@/lib/visuals/registry";
 
 /**
  * The canonical Plan Cover system.
@@ -52,6 +53,10 @@ export type PlanCoverMotif =
 
 export type ResolvedPlanCover =
   | { source: "upload"; imageUrl: string; art: null; label: string }
+  /* Approved photography for a category that has some. Carries its intrinsic
+   * size so a card can reserve the box before the file arrives -- artwork must
+   * not introduce the layout shift the CSS covers were free of. */
+  | { source: "artwork"; imageUrl: string; art: null; label: string; width: number; height: number }
   | { source: "canonical"; imageUrl: null; art: PlanCoverArt; label: string }
   | { source: "fallback"; imageUrl: null; art: PlanCoverArt; label: string };
 
@@ -142,6 +147,24 @@ export function resolvePlanCover(plan: {
 
   const category = plan.category ?? null;
   if (category && isPlanCategory(category)) {
+    /* APPROVED PHOTOGRAPHY FIRST, where the category has some.
+     *
+     * Only a subset of categories do: several candidate images carried visible
+     * trademarks or depicted the wrong activity, and those were rejected
+     * rather than mapped. A category with no approved photograph falls through
+     * to its canonical CSS cover below, which is a finished answer -- not a
+     * placeholder waiting for art. */
+    const art = planActivityArt(category);
+    if (art) {
+      return {
+        source: "artwork",
+        imageUrl: art.path,
+        art: null,
+        label: `${CATEGORY_LABEL[category]} plan`,
+        width: art.width,
+        height: art.height
+      };
+    }
     return {
       source: "canonical",
       imageUrl: null,

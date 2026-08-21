@@ -4,6 +4,7 @@ import { Check, Clock, MapPin, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { safeArrivalArtworkForTone } from "@/lib/visuals/registry";
 import {
   contactCoverageSummary,
   contactPeerSummary,
@@ -147,6 +148,13 @@ export function JourneyVisual({
   children?: ReactNode;
 }) {
   const reducedMotion = useReducedMotion();
+  /* Supporting artwork, where the state has any.
+   *
+   * Sits BEHIND everything at low opacity: the status, timing and controls in
+   * `children` remain the readable content, and the existing tone gradient
+   * still carries the meaning. `overdue` and `ended` resolve to null, so a
+   * not-yet-confirmed journey and a finished one look exactly as they did. */
+  const artwork = safeArrivalArtworkForTone(tone);
   return (
     <div
       className={cn(
@@ -155,6 +163,28 @@ export function JourneyVisual({
         className
       )}
     >
+      {artwork ? (
+        // eslint-disable-next-line @next/next/no-img-element -- static local asset
+        <img
+          src={artwork.path}
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
+          decoding="async"
+          width={artwork.width}
+          height={artwork.height}
+          /* NO mix-blend-luminosity.
+           *
+           * Luminosity discards the photograph's colour and keeps only its
+           * lightness, which drained the scene's warm orange gradient to grey
+           * and cost the dashed path and pin their contrast -- the artwork was
+           * fighting the design rather than supporting it. `soft-light` keeps
+           * the tone gradient dominant and lets the image add texture beneath
+           * it, at a low enough opacity that the mark stays the brightest
+           * thing in the frame. */
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.22] mix-blend-soft-light"
+        />
+      ) : null}
       <svg
         className="journey-scene-path pointer-events-none absolute inset-0 h-full w-full"
         viewBox="0 0 320 160"
