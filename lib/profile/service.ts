@@ -282,8 +282,9 @@ export async function updateProfile(
           )
         );
       } catch {
-        // Telemetry is compensating work. A telemetry outage must not turn
-        // authoritative profile/DOB commits into an apparent save failure.
+        // Analytics is compensating work. The profile, DOB and privacy rows
+        // above are authoritative and a telemetry outage must not turn their
+        // successful commit into an apparent save failure or correction retry.
       }
     }
   }

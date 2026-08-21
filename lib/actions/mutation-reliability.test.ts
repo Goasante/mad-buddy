@@ -75,16 +75,30 @@ describe("every converted mutation owns an explicit pending flag", () => {
     expect(source).toContain("const [saving, setSaving] = useState(false);");
     expect(source).toContain("const [avatarUploading, setAvatarUploading] = useState(false);");
     // A dead flag is worse than none: the control would never disable.
-    // A post-commit route transition is allowed; the mutation itself is not.
+    // A post-commit route transition is allowed; the mutation itself must not
+    // be started inside an interruptible transition.
     expect(source).not.toContain("startTransition(async");
   });
 
-  it("profile save always clears its spinner after a failure", () => {
+  it("profile save clears its spinner after rejected requests and server errors", () => {
     const source = read("components/profile/profile-page.tsx");
     const save = source.slice(source.indexOf("function saveProfile"), source.indexOf("function selectAvatar"));
     expect(save).toContain("if (saving || returningToLinkr) return;");
+    expect(save).toContain("try {");
+    expect(save).toContain("} catch {");
+    expect(save).toContain("} finally {");
     expect(save).toMatch(/finally\s*{\s*setSaving\(false\)/);
-    expect(save).toContain("Check your connection and try again");
+    expect(save).toContain("Your profile could not be saved. Check your connection and try again.");
+  });
+
+  it("avatar upload clears its spinner and preserves the selected file on failure", () => {
+    const source = read("components/profile/profile-page.tsx");
+    const upload = source.slice(source.indexOf("function saveAvatar"), source.indexOf("const ghostOn"));
+    expect(upload).toContain("if (!selectedAvatarFile || avatarUploading || returningToLinkr) return;");
+    expect(upload).toMatch(/finally\s*{\s*setAvatarUploading\(false\)/);
+    const successAt = upload.indexOf("if (result.ok && result.avatarUrl) {");
+    expect(successAt).toBeGreaterThan(-1);
+    expect(upload.slice(0, successAt)).not.toContain("setSelectedAvatarFile(null)");
   });
 
   it("Linkr writes report through their own flag", () => {
@@ -159,18 +173,22 @@ describe("a refused mutation stays in context", () => {
 
   it("a permanent Pass only promises what the server recorded", () => {
     const source = read("components/linkr/linkr-page.tsx");
-    expect(source).toContain('result.ok\n                      ? "You won\'t see them again."');
+    expect(source).toMatch(/result\.ok\r?\n\s+\? "You won't see them again\."/);
     expect(source).toContain("They may appear again.");
   });
 });
 
 describe("navigation happens only after a confirmed success", () => {
-  it("returns to the preserved Linkr intent only after a successful save", () => {
+  it("a completed profile save returns to the preserved Linkr intent", () => {
     const source = read("components/profile/profile-page.tsx");
     const save = source.slice(source.indexOf("function saveProfile"), source.indexOf("function selectAvatar"));
-    expect(save.indexOf("router.replace(returnTo as Route)")).toBeGreaterThan(save.indexOf("if (result.ok) {"));
-    expect(save).not.toContain("router.push(returnTo as Route)");
+    const successAt = save.indexOf("if (result.ok) {");
+    const returnAt = save.indexOf("router.replace(returnTo as Route)");
+    expect(successAt).toBeGreaterThan(-1);
+    expect(returnAt).toBeGreaterThan(successAt);
+    expect(save.slice(successAt, returnAt)).toContain("nextProfile.dateOfBirth && avatarUrl");
   });
+
   it("opening a conversation navigates inside the ok branch", () => {
     const source = read("components/friends/friends-page.tsx");
     const open = source.slice(
@@ -189,5 +207,34 @@ describe("navigation happens only after a confirmed success", () => {
     const source = read("components/friends/friends-page.tsx");
     const open = source.slice(source.indexOf("const openConversationWith"));
     expect(open.slice(0, 700)).toContain("if (busy) return;");
+  });
+});
+
+describe("profile actions isolate native avatar processing", () => {
+  it("does not load Sharp while saving profile fields or DOB", () => {
+    const actions = read("app/(app)/actions.ts");
+    const beforeUpload = actions.slice(0, actions.indexOf("export async function uploadAvatarAction"));
+    expect(beforeUpload).not.toContain("@/lib/media/processing");
+    const upload = actions.slice(actions.indexOf("export async function uploadAvatarAction"));
+    expect(upload).toContain('await import("@/lib/media/processing")');
+  });
+
+  it("traces Sharp and its Linux libvips runtime into production functions", () => {
+    const config = read("next.config.ts");
+    expect(config).toContain("outputFileTracingIncludes");
+    expect(config).toContain("./node_modules/sharp/**/*");
+    expect(config).toContain("./node_modules/@img/sharp-linux-x64/**/*");
+    expect(config).toContain("./node_modules/@img/sharp-libvips-linux-x64/**/*");
+  });
+
+  it("returns an expected profile-save failure instead of throwing to the app error boundary", () => {
+    const actions = read("app/(app)/actions.ts");
+    const update = actions.slice(
+      actions.indexOf("export async function updateProfileAction"),
+      actions.indexOf("export async function uploadAvatarAction")
+    );
+    expect(update).toContain("try {");
+    expect(update).toContain("} catch (error) {");
+    expect(update).toContain("Your profile could not be saved. Please try again.");
   });
 });

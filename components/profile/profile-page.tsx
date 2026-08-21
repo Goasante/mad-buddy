@@ -163,8 +163,9 @@ export function ProfilePageContent({
    * label that never says "Saving...", because nothing sets it any more.
    */
   const [saving, setSaving] = useState(false);
-  // Mutations finish before this transition begins. Keeping Profile mounted
-  // avoids a stale Linkr state flashing while the server refresh completes.
+  // Navigation is interruptible; the profile/DOB mutation above is not. This
+  // transition begins only after the server confirms the save and keeps the
+  // editor on screen until the fresh Linkr server render is ready to commit.
   const [returningToLinkr, startLinkrReturn] = useTransition();
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);

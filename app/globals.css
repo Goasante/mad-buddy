@@ -6877,9 +6877,9 @@ select {
   min-height: 100%;
 }
 
-/* Linkr owns an inline mobile header, so the application shell deliberately
-   contributes no top offset on this route. One four-sided safe-area owner
-   covers activation, education, discovery, filters, empty and Event Mode. */
+/* Linkr owns an inline mobile header, so AppShell deliberately contributes no
+   top offset on /linkr. This is the single replacement for that inset across
+   activation, education, discovery, sheets, empty and Event Mode surfaces. */
 .linkr-safe-screen {
   box-sizing: border-box;
   position: relative;

@@ -197,7 +197,9 @@ describe("artwork slot", () => {
 
 describe("mobile composition", () => {
   it("lets activation grow instead of clamping it to the viewport", () => {
-    const rule = css.slice(css.indexOf(".linkr-activate {\n  min-height: auto;"));
+    const ruleStart = css.search(/\.linkr-activate \{\r?\n\s+min-height: auto;/);
+    expect(ruleStart).toBeGreaterThanOrEqual(0);
+    const rule = css.slice(ruleStart);
     expect(rule).toMatch(/^\.linkr-activate \{[\s\S]*?min-height: auto/);
     expect(rule).toMatch(/^\.linkr-activate \{[\s\S]*?justify-content: flex-start/);
     expect(rule).toContain("scroll-padding-bottom: var(--mobile-nav-height");

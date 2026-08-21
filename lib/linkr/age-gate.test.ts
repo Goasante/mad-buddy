@@ -176,6 +176,11 @@ describe("Profile owns date-of-birth correction", () => {
 
   it("does not spend the correction when the date is unchanged", () => {
     expect(dobMigration).toMatch(/v_existing\.date_of_birth = p_date[\s\S]{0,140}'unchanged'/);
+    const unchangedBranch = dobMigration.slice(
+      dobMigration.indexOf("if v_existing.date_of_birth = p_date"),
+      dobMigration.indexOf("if v_existing.correction_used_at is not null")
+    );
+    expect(unchangedBranch).not.toContain("correction_used_at =");
   });
 
   it("stores an under-18 date honestly and lets the gate refuse", () => {

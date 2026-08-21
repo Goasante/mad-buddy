@@ -173,6 +173,9 @@ export async function uploadAvatarAction(formData: FormData): Promise<Integratio
   // re-encode (drops GPS and all metadata) and cap the dimensions.
   let avatarBuffer: Buffer;
   try {
+    // Keep the native image dependency out of the shared Server Action module
+    // until this upload action actually needs it. A profile/DOB save must not
+    // fail merely because the deployment cannot load Sharp's native runtime.
     const { optimizeProfileAvatar, toStorageArrayBuffer } = await import("@/lib/media/processing");
     avatarBuffer = await optimizeProfileAvatar(Buffer.from(await file.arrayBuffer()));
     const { error } = await admin.storage.from("avatars").upload(path, toStorageArrayBuffer(avatarBuffer), {
