@@ -754,7 +754,7 @@ export async function shareEventToConversationAction(
   }
 
   const origin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
-  const link = `${origin}/events?event=${eventId}`;
+  const link = `${origin}/events/${eventId}`;
   const when = new Date(view.startsAt).toLocaleString([], {
     weekday: "short",
     day: "numeric",

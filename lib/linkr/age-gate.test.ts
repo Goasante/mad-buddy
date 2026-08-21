@@ -24,6 +24,8 @@ const page = read("components/linkr/linkr-page.tsx");
 const service = read("lib/linkr/profile-service.ts");
 const candidate = read("lib/linkr/candidate-service.ts");
 const dobService = read("lib/profile/date-of-birth-service.ts");
+const dobMigration = read("supabase/migrations/20260820120000_atomic_profile_date_of_birth.sql");
+const profileService = read("lib/profile/service.ts");
 const actions = read("app/(app)/linkr-actions.ts");
 
 describe("Linkr does not own the date of birth", () => {
@@ -144,6 +146,16 @@ describe("the server is the age authority", () => {
     expect(schema).toMatch(/z\.object\(\{\s*intent:/);
     expect(schema).not.toMatch(/\bage\b|dateOfBirth|date_of_birth/);
   });
+
+  it("requires the canonical Profile photo at the server activation boundary", () => {
+    expect(service).toMatch(/export async function enableLinkr[\s\S]*?hasProfilePicture\(admin, userId\)/);
+  });
+
+  it("filters active suspensions in the batched candidate authority", () => {
+    expect(candidate).toContain('.from("user_restrictions")');
+    expect(candidate).toContain('"suspended_temporary", "suspended_permanent"');
+    expect(candidate).toContain("restricted: restrictedIds.has(id)");
+  });
 });
 
 describe("Profile owns date-of-birth correction", () => {
@@ -154,18 +166,16 @@ describe("Profile owns date-of-birth correction", () => {
      * date of birth is already set". One correction fixes an honest mistake;
      * unlimited edits would make the 18+ gate a formality.
      */
-    expect(dobService).toContain("correction_used_at");
+    expect(dobMigration).toContain("correction_used_at is not null");
     expect(dobService).toMatch(/already corrected your date of birth[\s\S]{0,80}support/);
   });
 
   it("does not spend the correction on a first-time save", () => {
-    expect(dobService).toMatch(/isCorrection \? \{ correction_used_at/);
+    expect(dobMigration).toContain("return query select 'created'::text, true");
   });
 
   it("does not spend the correction when the date is unchanged", () => {
-    expect(dobService).toMatch(
-      /existing\?\.date_of_birth === parsed\.data[\s\S]{0,140}correctionUsed: false/
-    );
+    expect(dobMigration).toMatch(/v_existing\.date_of_birth = p_date[\s\S]{0,140}'unchanged'/);
   });
 
   it("stores an under-18 date honestly and lets the gate refuse", () => {
@@ -174,7 +184,10 @@ describe("Profile owns date-of-birth correction", () => {
   });
 
   it("keeps the budget in server state, not the client", () => {
-    expect(dobService).toMatch(/from\("profile_birth_details"\)[\s\S]{0,140}correction_used_at/);
+    expect(dobService).toContain('.rpc("save_profile_date_of_birth"');
+    expect(dobMigration).toContain("for update");
+    expect(dobMigration).toContain('drop policy if exists "profile birth details owner update"');
+    expect(profileService).not.toMatch(/from\("profile_birth_details"\)[\s\S]{0,180}(upsert|delete)/);
   });
 });
 
@@ -220,7 +233,7 @@ describe("mutation tests -- these must bite", () => {
   });
 
   it("BITES: making the correction budget unlimited", () => {
-    expect(dobService).toContain("correction_used_at");
-    expect(dobService).toMatch(/if \(existing\?\.correction_used_at\)/);
+    expect(dobMigration).toContain("if v_existing.correction_used_at is not null");
+    expect(dobMigration).toContain("profile_birth_details:correction_locked");
   });
 });

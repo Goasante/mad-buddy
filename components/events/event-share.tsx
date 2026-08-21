@@ -24,7 +24,9 @@ import { cn } from "@/lib/utils";
  * not enumerable -- and canViewEvent already grants `link` Events direct access
  * while keeping them out of every discovery surface. A second "share token"
  * identity would add a table, a lookup and a revocation story for no security
- * gain, so this reuses /events?event=<id>.
+ * gain, so this uses the canonical /events/<id> share route. That route owns
+ * Event-specific social metadata and then hands an authenticated person into
+ * the existing Event sheet.
  *
  * IN-APP SHARING REUSES CANONICAL MESSAGING. The action hands the composed
  * message to sendMessage, which already owns membership, blocks, rate limiting
@@ -37,7 +39,7 @@ export function eventShareUrl(eventId: string): string {
    * device; a link built from the wrong one is worse than no link. */
   const origin =
     typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL ?? "";
-  return `${origin}/events?event=${eventId}`;
+  return `${origin}/events/${eventId}`;
 }
 
 type Outcome = "idle" | "copied" | "shared" | "sent" | "unavailable" | "failed";

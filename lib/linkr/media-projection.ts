@@ -2,6 +2,7 @@ import "server-only";
 
 import { signMediaUrls } from "@/lib/linkr/profile-service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
 
 /**
  * THE LINKR-SAFE MEDIA PROJECTION.
@@ -12,7 +13,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
  *
  * The shape, which is Profile's shape and not Linkr's:
  *
- *     profiles.profile_media_id   -> the profile picture, always first
+ *     profiles.avatar_url         -> the canonical profile picture, first
+ *     profiles.profile_media_id   -> legacy private-media fallback
  *     profile_photos (0, 1, 2)    -> up to three showcase photos, in order
  *
  * so a person can appear on a Linkr card with up to four images without ever
@@ -45,10 +47,26 @@ export const MAX_LINKR_CARD_PHOTOS = 4;
 /** Only this visibility is safe to show a stranger. */
 const STRANGER_SAFE = "everyone";
 
+/** Refuse an owner-written URL from becoming a cross-origin tracking image. */
+export function canonicalAvatarUrl(userId: string, value: string | null): string | null {
+  if (!value) return null;
+  const { url: supabaseUrl } = getSupabaseBrowserEnv();
+  if (!supabaseUrl) return null;
+  try {
+    const source = new URL(value);
+    const storageOrigin = new URL(supabaseUrl).origin;
+    const expectedPath = `/storage/v1/object/public/avatars/${userId}/`;
+    return source.origin === storageOrigin && source.pathname.startsWith(expectedPath) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export type LinkrMediaRow = {
   userId: string;
-  /** Media asset ids, profile picture first, then showcases in slot order. */
-  assetIds: string[];
+  primaryUrl: string | null;
+  primaryAssetId: string | null;
+  showcaseAssetIds: string[];
 };
 
 /**
@@ -61,12 +79,12 @@ export type LinkrMediaRow = {
 export async function loadLinkrMedia(
   admin: Admin,
   userIds: string[]
-): Promise<Map<string, string[]>> {
-  const byUser = new Map<string, string[]>();
+): Promise<Map<string, LinkrMediaRow>> {
+  const byUser = new Map<string, LinkrMediaRow>();
   if (userIds.length === 0) return byUser;
 
   const [{ data: profiles }, { data: showcases }] = await Promise.all([
-    admin.from("profiles").select("user_id, profile_media_id").in("user_id", userIds),
+    admin.from("profiles").select("user_id, avatar_url, profile_media_id").in("user_id", userIds),
     admin
       .from("profile_photos")
       .select("user_id, media_asset_id, position, visibility")
@@ -78,16 +96,24 @@ export async function loadLinkrMedia(
   for (const profile of profiles ?? []) {
     // The profile picture is always index 0. A card that opened on a landscape
     // photo would make the person the second thing you see.
-    byUser.set(profile.user_id, profile.profile_media_id ? [profile.profile_media_id] : []);
+    const avatarUrl = canonicalAvatarUrl(profile.user_id, profile.avatar_url);
+    byUser.set(profile.user_id, {
+      userId: profile.user_id,
+      primaryUrl: avatarUrl,
+      // Existing Linkr uploads were migrated here. Keep them as a fallback,
+      // but Profile's current avatar_url is the authority for new uploads.
+      primaryAssetId: avatarUrl ? null : (profile.profile_media_id ?? null),
+      showcaseAssetIds: []
+    });
   }
 
   for (const photo of showcases ?? []) {
-    const list = byUser.get(photo.user_id);
+    const media = byUser.get(photo.user_id);
     // No profile picture means no card at all, so a stray showcase must not
     // become somebody's primary image.
-    if (!list || list.length === 0) continue;
-    if (list.length >= MAX_LINKR_CARD_PHOTOS) continue;
-    list.push(photo.media_asset_id);
+    if (!media || (!media.primaryUrl && !media.primaryAssetId)) continue;
+    if (media.showcaseAssetIds.length >= MAX_LINKR_CARD_PHOTOS - 1) continue;
+    media.showcaseAssetIds.push(photo.media_asset_id);
   }
 
   return byUser;
@@ -95,12 +121,18 @@ export async function loadLinkrMedia(
 
 /** One person's Linkr-safe gallery, as signed URLs ready to render. */
 export async function loadLinkrGallery(admin: Admin, userId: string): Promise<string[]> {
-  const assetIds = (await loadLinkrMedia(admin, [userId])).get(userId) ?? [];
-  if (assetIds.length === 0) return [];
+  const media = (await loadLinkrMedia(admin, [userId])).get(userId);
+  if (!media || (!media.primaryUrl && !media.primaryAssetId)) return [];
+  const assetIds = [media.primaryAssetId, ...media.showcaseAssetIds].filter(
+    (id): id is string => Boolean(id)
+  );
   const urls = await signMediaUrls(admin, assetIds);
-  // Order is preserved from the projection; a missing/unprocessed asset simply
-  // drops out rather than leaving a gap in the carousel.
-  return assetIds.map((id) => urls.get(id)).filter((url): url is string => Boolean(url));
+  const primary = media.primaryUrl ?? (media.primaryAssetId ? urls.get(media.primaryAssetId) : null);
+  if (!primary) return [];
+  return [
+    primary,
+    ...media.showcaseAssetIds.map((id) => urls.get(id)).filter((url): url is string => Boolean(url))
+  ];
 }
 
 /**
@@ -112,8 +144,8 @@ export async function loadLinkrGallery(admin: Admin, userId: string): Promise<st
 export async function hasProfilePicture(admin: Admin, userId: string): Promise<boolean> {
   const { data } = await admin
     .from("profiles")
-    .select("profile_media_id")
+    .select("avatar_url, profile_media_id")
     .eq("user_id", userId)
     .maybeSingle();
-  return Boolean(data?.profile_media_id);
+  return Boolean(canonicalAvatarUrl(userId, data?.avatar_url ?? null) || data?.profile_media_id);
 }

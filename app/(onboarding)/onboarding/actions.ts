@@ -70,7 +70,7 @@ export async function completeOnboardingAction(input: unknown): Promise<Onboardi
     return { ok: false, message: "Log in before finishing onboarding." };
   }
 
-  return completeOnboarding(user.id, input);
+  return completeOnboarding(supabase, user.id, input);
 }
 
 /**
@@ -92,7 +92,7 @@ export async function finishOnboardingAction(
     return { ok: false, message: "Log in before finishing setup." };
   }
 
-  const profileResult = await completeOnboarding(user.id, input);
+  const profileResult = await completeOnboarding(supabase, user.id, input);
   if (!profileResult.ok) return profileResult;
 
   const admin = createSupabaseAdminClient();

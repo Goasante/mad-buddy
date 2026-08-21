@@ -23,6 +23,7 @@ export type GuardedSurface =
   | "waves"
   | "pings"
   | "plans"
+  | "linkr"
   | "moments"
   | "drops"
   | "communities"
@@ -40,6 +41,7 @@ export const GUARDED_SURFACES: readonly GuardedSurface[] = [
   "waves",
   "pings",
   "plans",
+  "linkr",
   "moments",
   "drops",
   "communities",
@@ -54,6 +56,7 @@ const SURFACE_RESTRICTIONS: Record<GuardedSurface, RestrictionType[]> = {
   waves: [],
   pings: [],
   plans: [],
+  linkr: [],
   moments: ["media_disabled"],
   drops: ["media_disabled"],
   communities: ["community_creation_disabled"],

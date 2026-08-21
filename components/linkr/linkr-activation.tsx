@@ -37,7 +37,7 @@ export type LinkrActivationProps = {
   onEnable: (intent: LinkrIntent) => Promise<void> | void;
   onHowItWorks: () => void;
   /** Sends the person to the canonical Profile editor to finish identity. */
-  onCompleteProfile: () => void;
+  onCompleteProfile: (intent: LinkrIntent) => void;
   busy?: boolean;
   error?: string | null;
   /**
@@ -147,7 +147,7 @@ export function LinkrOffScreen({
         ) : null}
 
         {requirements.profileMessage ? (
-          <button type="button" className="linkr-primary" onClick={onCompleteProfile}>
+          <button type="button" className="linkr-primary" onClick={() => onCompleteProfile(intent)}>
             {LINKR_PROFILE_HANDOFF_CTA}
           </button>
         ) : (

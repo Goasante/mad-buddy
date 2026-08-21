@@ -66,6 +66,7 @@ import {
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { MessageAttachmentImage } from "@/components/messaging/message-attachment-image";
+import { SafeMessageText } from "@/components/messages/safe-message-text";
 import { MessageComposer } from "@/components/messaging/message-composer";
 import { VoiceMessageBubble } from "@/components/messaging/voice-message-bubble";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
@@ -1488,7 +1489,9 @@ export function MessagesPageContent({
                                     ? DELETED_MESSAGE_PLACEHOLDER
                                     : message.quickActionType
                                       ? quickActionLabel(message.quickActionType)
-                                      : message.text ?? (message.attachment || message.voice ? null : "Message")}
+                                      : message.text
+                                        ? <SafeMessageText text={message.text} />
+                                        : (message.attachment || message.voice ? null : "Message")}
                                 </p>
                               )}
                               {/* One timestamp per run, on its last message:

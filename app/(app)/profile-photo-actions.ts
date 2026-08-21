@@ -32,6 +32,7 @@ const visibilitySchema = z.object({
 });
 
 const deleteSchema = z.object({ photoId: z.string().uuid() });
+const replaceSchema = z.string().uuid();
 
 async function getAuthedUserId(): Promise<string | null> {
   const supabase = await createSupabaseServerClient();
@@ -73,8 +74,21 @@ export async function addProfilePhotoAction(formData: FormData): Promise<ActionS
   // The cap is checked against what exists, not what the client claims.
   const { data: existing } = await admin
     .from("profile_photos")
-    .select("id, position, visibility")
+    .select("id, position, visibility, media_asset_id")
     .eq("user_id", userId);
+  const requestedReplacement = formData.get("replacePhotoId");
+  const replacementId = typeof requestedReplacement === "string"
+    ? replaceSchema.safeParse(requestedReplacement)
+    : null;
+  if (requestedReplacement && (!replacementId || !replacementId.success)) {
+    return { ok: false, message: "That photo is not available." };
+  }
+  const replacement = replacementId?.success
+    ? (existing ?? []).find((row) => row.id === replacementId.data) ?? null
+    : null;
+  if (replacementId?.success && !replacement) {
+    return { ok: false, message: "That photo is not available." };
+  }
   const slot = nextPhotoSlot(
     (existing ?? []).map((row) => ({
       id: row.id,
@@ -83,7 +97,8 @@ export async function addProfilePhotoAction(formData: FormData): Promise<ActionS
       visibility: row.visibility as "everyone" | "approved_muddies" | "only_me"
     }))
   );
-  if (slot === null) {
+  const targetSlot = replacement?.position ?? slot;
+  if (targetSlot === null) {
     return { ok: false, message: `You can add up to ${MAX_PROFILE_PHOTOS} photos. Remove one first.` };
   }
 
@@ -183,20 +198,38 @@ export async function addProfilePhotoAction(formData: FormData): Promise<ActionS
     return { ok: false, message: "Couldn't finish processing that photo. Try again." };
   }
 
-  const { error: photoError } = await admin.from("profile_photos").insert({
-    user_id: userId,
-    media_asset_id: asset.id,
-    position: slot
-    // visibility defaults to approved_muddies in the schema: the safer answer
-    // for someone who never opens the setting.
-  });
+  // Replacement swaps the canonical row only after the new asset is fully
+  // ready. Until this write succeeds, the old working image remains visible.
+  const { error: photoError } = replacement
+    ? await admin
+        .from("profile_photos")
+        .update({ media_asset_id: asset.id, updated_at: new Date().toISOString() })
+        .eq("id", replacement.id)
+        .eq("user_id", userId)
+    : await admin.from("profile_photos").insert({
+        user_id: userId,
+        media_asset_id: asset.id,
+        position: targetSlot
+        // visibility defaults to approved_muddies in the schema: the safer answer
+        // for someone who never opens the setting.
+      });
   if (photoError) {
     await removeFailedUpload([key, ...variantRows.map((row) => row.key)]);
     return { ok: false, message: "Couldn't add that photo. Try again." };
   }
 
+  // Retention cleanup happens after the canonical swap. Failure here cannot
+  // roll back or break the replacement the person has already confirmed.
+  if (replacement?.media_asset_id) {
+    await admin
+      .from("media_assets")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", replacement.media_asset_id)
+      .eq("owner_id", userId);
+  }
+
   revalidatePath("/profile");
-  return { ok: true, message: "Photo added." };
+  return { ok: true, message: replacement ? "Photo replaced." : "Photo added." };
 }
 
 /** Change who can see one photo. Scoped to the caller's own rows. */

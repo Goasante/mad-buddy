@@ -17,6 +17,13 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd()
   },
+  outputFileTracingIncludes: {
+    "/*": [
+      "./node_modules/sharp/**/*",
+      "./node_modules/@img/sharp-linux-x64/**/*",
+      "./node_modules/@img/sharp-libvips-linux-x64/**/*"
+    ]
+  },
   typedRoutes: true,
   async headers() {
     const productionOnlyHeaders = process.env.NODE_ENV === "production"

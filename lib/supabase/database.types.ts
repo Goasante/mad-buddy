@@ -4351,6 +4351,10 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      save_profile_date_of_birth: {
+        Args: { p_date: string };
+        Returns: Array<{ outcome: "created" | "unchanged" | "corrected"; can_correct: boolean }>;
+      };
       linkr_record_connect: {
         Args: { p_actor: string; p_target: string; p_event_id?: string | null };
         Returns: Array<{ matched: boolean; connection_id: string | null; created: boolean }>;

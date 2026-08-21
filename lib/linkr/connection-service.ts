@@ -6,6 +6,9 @@ import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { directConversationKey } from "@/lib/messaging/rules";
+import { guardAction } from "@/lib/admin/enforcement";
+import { resolveAge } from "@/lib/linkr/profile-service";
+import { hasProfilePicture } from "@/lib/linkr/media-projection";
 
 /**
  * Pass, Connect, Undo, and the mutual connection they can produce.
@@ -65,7 +68,10 @@ export async function passCandidate(
   const limit = await consumeRateLimit({ action: "linkr.decide", userId: viewerId });
   if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
 
-  const { error } = await createSupabaseAdminClient()
+  const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId: viewerId, surface: "linkr" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+  const { error } = await admin
     .from("linkr_actions")
     .upsert(
       {
@@ -103,11 +109,39 @@ export async function connectWithCandidate(
   if (!limit.allowed) return { ok: false, matched: false, message: rateLimitMessage(limit.resetAt) };
 
   const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId: viewerId, surface: "linkr" });
+  if (!guard.allowed) return { ok: false, matched: false, message: guard.message };
 
   // Blocks win, and they win before anything is written.
   if (await isBlockedEitherDirection(admin, viewerId, targetId)) {
     // Deliberately indistinguishable from an ordinary success. Telling the
     // caller "you are blocked" would turn Connect into a block detector.
+    return { ok: true, matched: false, message: "" };
+  }
+
+  // The card is a snapshot. Re-check non-negotiable eligibility immediately
+  // before recording interest so a disabled, hidden, deleted, underage, or
+  // photo-less account cannot be connected from a stale deck.
+  const [{ data: targetLinkr }, { data: targetProfile }, targetAge, targetHasPhoto, targetGuard] =
+    await Promise.all([
+      admin.from("linkr_profiles").select("enabled").eq("user_id", targetId).maybeSingle(),
+      admin.from("profiles").select("visibility_status, deleted_at").eq("user_id", targetId).maybeSingle(),
+      resolveAge(admin, targetId),
+      hasProfilePicture(admin, targetId),
+      guardAction(admin, { userId: targetId, surface: "linkr" })
+    ]);
+  if (
+    !targetLinkr?.enabled ||
+    !targetProfile ||
+    targetProfile.visibility_status === "ghost" ||
+    Boolean(targetProfile.deleted_at) ||
+    targetAge === null ||
+    targetAge < 18 ||
+    !targetHasPhoto ||
+    !targetGuard.allowed
+  ) {
+    // Indistinguishable from a normal private Connect. Eligibility changes
+    // must not become an account-status oracle.
     return { ok: true, matched: false, message: "" };
   }
 
@@ -306,6 +340,8 @@ export async function undoLastLinkrAction(
 ): Promise<{ ok: boolean; message: string; restoredUserId?: string }> {
   if (!serverReady()) return { ok: false, message: "This action needs the server database configuration." };
   const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId: viewerId, surface: "linkr" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
 
   const { data: last } = await admin
     .from("linkr_actions")
@@ -343,10 +379,11 @@ export async function endLinkrConnection(
   otherUserId: string
 ): Promise<{ ok: boolean; message: string }> {
   if (!serverReady()) return { ok: false, message: "This action needs the server database configuration." };
+  const admin = createSupabaseAdminClient();
   const low = viewerId < otherUserId ? viewerId : otherUserId;
   const high = viewerId < otherUserId ? otherUserId : viewerId;
 
-  const { error } = await createSupabaseAdminClient()
+  const { error } = await admin
     .from("linkr_connections")
     .update({ ended_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq("user_low", low)

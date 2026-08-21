@@ -11,6 +11,7 @@ import { countEventPool } from "@/lib/linkr/candidate-service";
 import { loadOwnLinkrProfile } from "@/lib/linkr/profile-service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/auth";
+import { isLinkrIntent } from "@/lib/linkr/intent";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 export default async function LinkrRoute({
   searchParams
 }: {
-  searchParams: Promise<{ eventId?: string }>;
+  searchParams: Promise<{ eventId?: string; intent?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
@@ -38,6 +39,7 @@ export default async function LinkrRoute({
   const params = await searchParams;
   const requestedEventId =
     params.eventId && UUID_PATTERN.test(params.eventId) ? params.eventId : null;
+  const pendingIntent = isLinkrIntent(params.intent) ? params.intent : null;
 
   const [profile, { data: myProfile }, { count: blockedCount }] = await Promise.all([
     loadOwnLinkrProfile(user.id),
@@ -107,6 +109,7 @@ export default async function LinkrRoute({
       initialCandidates={candidates}
       blockedCount={blockedCount ?? 0}
       eventContext={eventContext}
+      pendingIntent={pendingIntent}
       me={{
         displayName: myProfile?.full_name?.trim() || myProfile?.username || "You",
         photo: myPhoto
