@@ -3,6 +3,7 @@ import { POST_LOGIN_ROUTE } from "@/lib/routes";
 import {
   authenticatedRedirect,
   isApiPath,
+  isDevelopmentOnlyPath,
   isPublicPath,
   requiredLoginRedirect
 } from "@/lib/security/route-protection";
@@ -132,5 +133,80 @@ describe("route protection (deny-by-default, audit I-08)", () => {
     expect(isApiPath("/api/friends/nearby")).toBe(true);
     expect(requiredLoginRedirect("/api/friends/nearby")).toBeNull();
     expect(requiredLoginRedirect("/api/paystack/webhook")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The development-only /dev harness exemption
+// ---------------------------------------------------------------------------
+
+describe("the /dev design-harness exemption is local-only", () => {
+  /**
+   * NODE_ENV is read at call time by isDevelopmentOnlyPath, so these tests set
+   * it, assert, and restore. Vitest runs with NODE_ENV="test", which is neither
+   * "development" nor "production" -- and is itself a useful case: an
+   * unrecognised environment must behave like production, not like dev.
+   */
+  const env = process.env as Record<string, string | undefined>;
+  const withNodeEnv = (value: string, run: () => void) => {
+    const original = env.NODE_ENV;
+    env.NODE_ENV = value;
+    try {
+      run();
+    } finally {
+      env.NODE_ENV = original;
+    }
+  };
+
+  it("is closed in production", () => {
+    withNodeEnv("production", () => {
+      expect(isDevelopmentOnlyPath("/dev/proximity-glow")).toBe(false);
+      expect(requiredLoginRedirect("/dev/proximity-glow")).toBe("/login");
+      expect(requiredLoginRedirect("/dev")).toBe("/login");
+    });
+  });
+
+  it("is closed in any environment that is not literally development", () => {
+    // Fail closed: staging, preview, test or a typo must all behave like prod.
+    for (const candidate of ["test", "staging", "preview", "developement", ""]) {
+      withNodeEnv(candidate, () => {
+        expect(isDevelopmentOnlyPath("/dev/proximity-glow"), candidate).toBe(false);
+        expect(requiredLoginRedirect("/dev/proximity-glow"), candidate).toBe("/login");
+      });
+    }
+  });
+
+  it("is open only locally, and only for /dev", () => {
+    withNodeEnv("development", () => {
+      expect(requiredLoginRedirect("/dev/proximity-glow")).toBeNull();
+      expect(requiredLoginRedirect("/dev")).toBeNull();
+
+      // Every other protected route is untouched, even in development.
+      for (const path of ["/dashboard", "/messages", "/billing", "/settings/privacy"]) {
+        expect(requiredLoginRedirect(path), path).toBe("/login");
+      }
+      expect(requiredLoginRedirect("/admin/overview")).toBe("/admin/login");
+    });
+  });
+
+  it("cannot be widened by a lookalike prefix", () => {
+    // "/development", "/devious" and "/dev-tools" are NOT the /dev namespace.
+    withNodeEnv("development", () => {
+      for (const path of ["/development", "/devious/secrets", "/dev-tools", "/devs"]) {
+        expect(isDevelopmentOnlyPath(path), path).toBe(false);
+        expect(requiredLoginRedirect(path), path).toBe("/login");
+      }
+    });
+  });
+
+  it("never makes /dev a PUBLIC path, only an unredirected one", () => {
+    // isPublicPath governs things like the PWA boot files and share links. The
+    // harness must not join that set in any environment.
+    withNodeEnv("development", () => {
+      expect(isPublicPath("/dev/proximity-glow")).toBe(false);
+    });
+    withNodeEnv("production", () => {
+      expect(isPublicPath("/dev/proximity-glow")).toBe(false);
+    });
   });
 });

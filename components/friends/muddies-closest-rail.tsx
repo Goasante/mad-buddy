@@ -2,12 +2,12 @@
 
 import { Navigation } from "lucide-react";
 
-import { GlowAvatar } from "@/components/glow/glow-avatar";
+import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
 import { SWIPE_OPT_OUT_ATTRIBUTE } from "@/lib/navigation/swipe-tabs";
 import {
   isOnline,
   presenceLabel,
-  proximityRailLabels,
+  railDistanceLabel,
   railToneClass,
   type MuddyProximity
 } from "@/lib/friends/muddies-presentation";
@@ -72,29 +72,24 @@ export function MuddiesClosestRail({
                    from the rail). */
                 aria-label={[
                   person.displayName,
-                  proximityRailLabels[level].toLowerCase(),
+                  railDistanceLabel(proximity).toLowerCase(),
                   presence
                 ]
                   .filter(Boolean)
                   .join(", ")}
               >
-                {/* aria-hidden on the WRAPPER, not on GlowAvatar: that
-                    component has a closed prop type and no spread, so the
-                    attribute would be dropped and its GlowRing would keep
-                    announcing itself as an image with its own label. */}
+                {/* aria-hidden on the WRAPPER as well as on the avatar: the
+                    button above already announces name, distance and presence
+                    as one sentence, so nothing inside may speak again. */}
                 <span className={cn("muddies-rail-glow", railToneClass(level))} aria-hidden="true">
-                  <GlowAvatar
+                  <ProximityGlowAvatar
                     name={person.displayName}
                     src={person.avatarUrl}
-                    proximityLevel={level}
-                    glowStrength={proximity?.glowStrength ?? 0}
-                    confidence={proximity?.confidence ?? "low"}
+                    band={proximity?.proximityBand ?? null}
+                    decorative
                     glowColorId={glowColorByFriendId?.[person.id] ?? null}
                     reducedMotion={reducedMotion}
                     size="lg"
-                    // Raised deliberately: this rail exists to show distance,
-                    // so the aura reads at a glance rather than as a hairline.
-                    intensity={1.35}
                   />
                   {/* Presence dot, anchored to the avatar rather than the
                       aura so it keeps its place while the halo breathes. */}
@@ -110,7 +105,7 @@ export function MuddiesClosestRail({
                   {person.displayName}
                 </span>
                 <span className={cn("muddies-rail-distance", railToneClass(level))} aria-hidden="true">
-                  {proximityRailLabels[level]}
+                  {railDistanceLabel(proximity)}
                 </span>
                 {presence ? (
                   <span className="muddies-rail-presence" aria-hidden="true">

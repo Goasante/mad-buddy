@@ -8,7 +8,8 @@ import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
 import { conversationHref } from "@/lib/messaging/open-conversation";
 import { Button } from "@/components/ui/button";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
+import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
+import type { ProximityBand } from "@/lib/proximity/bands";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { Modal } from "@/components/ui/modal";
@@ -24,6 +25,8 @@ export type MuddyProfileSummary = {
   statusText?: string;
   mutualMuddies?: number;
   proximityLevel?: ProximityLevel;
+  /** Six-state presentation band from the API; drives the Glow and badge. */
+  proximityBand?: ProximityBand | null;
   glowStrength?: number;
   confidence?: ConfidenceLevel;
   glowColorId?: string | null;
@@ -102,12 +105,10 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
         <div className="space-y-3 pb-0.5">
           <section className="muddy-profile-preview flex items-center gap-2 rounded-xl bg-secondary/45 px-2 py-1.5 sm:gap-3 sm:px-3">
             <div className="grid shrink-0 place-items-center p-6 sm:p-7">
-              <GlowAvatar
+              <ProximityGlowAvatar
                 src={muddy.avatarUrl}
                 name={muddy.displayName}
-                proximityLevel={muddy.proximityLevel}
-                glowStrength={muddy.glowStrength}
-                confidence={muddy.confidence}
+                band={muddy.proximityBand ?? null}
                 glowColorId={muddy.glowColorId}
                 size="lg"
               />
@@ -115,7 +116,7 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <PremiumPlanBadge plan={muddy.plan} />
-                {muddy.proximityLevel ? <ProximityBadge proximityLevel={muddy.proximityLevel} /> : null}
+                <ProximityBadge band={muddy.proximityBand} proximityLevel={muddy.proximityLevel} />
                 {muddy.confidence ? (
                   <span className="text-xs capitalize text-muted-foreground">{muddy.confidence} confidence</span>
                 ) : null}

@@ -90,8 +90,39 @@ export function isApiPath(pathname: string) {
  * to, or null when the path needs no session (public page or self-guarding
  * API route).
  */
+/**
+ * Local-only design harnesses under /dev.
+ *
+ * WHY THIS EXISTS. Visual review of the Proximity Glow needs the REAL
+ * production component rendered in a real browser. A screenshot of a hand-built
+ * CSS imitation proves nothing about what ships, and the alternative -- signing
+ * in with a real account to view a design harness -- makes the review depend on
+ * live auth and live data neither of which the harness uses.
+ *
+ * WHY IT IS SAFE. Three independent gates, all of which must hold:
+ *
+ *  1. `process.env.NODE_ENV === "development"`. A production build has this
+ *     hard-coded to "production" by Next at compile time, so in a deployed
+ *     bundle the branch below is statically dead and the exemption cannot be
+ *     switched on by an environment variable, a header, or a request.
+ *  2. The page itself calls notFound() outside development, so even if this
+ *     function were somehow reached in production the route returns 404.
+ *  3. The scope is exactly "/dev" and paths beneath it -- a namespace that
+ *     contains only design harnesses and holds no user data, no mutations and
+ *     no API surface.
+ *
+ * WHAT IT DOES NOT DO. It does not weaken any other rule: every other path
+ * still resolves through isPublicPath / the /admin branch exactly as before,
+ * and no session, cookie or RLS behaviour changes anywhere. It only stops the
+ * proxy from redirecting a local reviewer away from a local-only page.
+ */
+export function isDevelopmentOnlyPath(pathname: string): boolean {
+  if (process.env.NODE_ENV !== "development") return false;
+  return pathname === "/dev" || matchesPrefix(pathname, "/dev");
+}
+
 export function requiredLoginRedirect(pathname: string): "/login" | "/admin/login" | null {
-  if (isApiPath(pathname) || isPublicPath(pathname)) {
+  if (isApiPath(pathname) || isPublicPath(pathname) || isDevelopmentOnlyPath(pathname)) {
     return null;
   }
 

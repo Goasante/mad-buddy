@@ -45,7 +45,9 @@ import { useAppMenu } from "@/hooks/app-menu-context";
 import { useInteractionPause, useSequenceHighlight } from "@/hooks/use-sequence-highlight";
 import { QuickControlsSheet } from "@/components/dashboard/quick-controls-sheet";
 import { SplitText } from "@/components/ui/split-text";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
+import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
+import type { ProximityBand } from "@/lib/proximity/bands";
+import { proximityBandLabel } from "@/lib/proximity/bands";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { PendingInvitePrompt } from "@/components/discovery/pending-invite-prompt";
 import { ProfileCompletionReminder } from "@/components/profile/profile-completion-reminder";
@@ -92,6 +94,8 @@ type DashboardFriend = {
   username: string;
   avatarUrl: string | null;
   proximityLevel: ProximityLevel;
+  /** Six-state presentation band from the API. Drives the Glow and its label. */
+  proximityBand: ProximityBand;
   glowStrength: number;
   statusText: string;
   lastActiveEstimate: string;
@@ -109,6 +113,7 @@ type NearbyFriendApiItem = {
   username: string;
   avatar_url: string | null;
   proximity_level: ProximityLevel;
+  proximity_band: ProximityBand;
   glow_strength: number;
   status_text: string;
   last_active_estimate: string;
@@ -1465,15 +1470,14 @@ function NearbyHero({
             type="button"
             onClick={() => onSelect(heroFriend.friendId)}
             className="focus-ring safe-motion rounded-[1.5rem] p-1 transition-transform active:scale-[0.99] motion-reduce:active:scale-100"
-            aria-label={`${capitalize(firstName(heroFriend.displayName || heroFriend.username))}, ${proximityLabels[heroFriend.proximityLevel]}. Open profile`}
+            aria-label={`${capitalize(firstName(heroFriend.displayName || heroFriend.username))}, ${proximityBandLabel(heroFriend.proximityBand)}. Open profile`}
           >
             <span className="relative grid place-items-center">
-              <GlowAvatar
+              <ProximityGlowAvatar
                 name={heroFriend.displayName || heroFriend.username}
                 src={heroFriend.avatarUrl}
-                proximityLevel={heroFriend.proximityLevel}
-                glowStrength={heroFriend.glowStrength}
-                confidence={heroFriend.confidence}
+                band={heroFriend.proximityBand}
+                decorative
                 glowColorId={glowColorByFriendId[heroFriend.friendId] ?? null}
                 membershipTier={heroFriend.membershipTier}
                 /* The one size difference. Proximity, strength and confidence
@@ -1492,7 +1496,7 @@ function NearbyHero({
             {/* Canonical wording, never a measurement. The dot repeats what the
                 label already says, so the label carries it alone here. */}
             <span className="text-sm font-medium text-muted-foreground">
-              {proximityLabels[heroFriend.proximityLevel]}
+              {proximityBandLabel(heroFriend.proximityBand)}
             </span>
           </span>
 
@@ -1518,14 +1522,13 @@ function NearbyHero({
                         type="button"
                         onClick={() => onSelect(friend.friendId)}
                         className="focus-ring safe-motion flex w-full items-center gap-3 rounded-2xl px-1 py-1.5 text-left transition-transform active:scale-[0.99] motion-reduce:active:scale-100"
-                        aria-label={`${name}, ${proximityLabels[friend.proximityLevel]}. Open profile`}
+                        aria-label={`${name}, ${proximityBandLabel(friend.proximityBand)}. Open profile`}
                       >
-                        <GlowAvatar
+                        <ProximityGlowAvatar
                           name={friend.displayName || friend.username}
                           src={friend.avatarUrl}
-                          proximityLevel={friend.proximityLevel}
-                          glowStrength={friend.glowStrength}
-                          confidence={friend.confidence}
+                          band={friend.proximityBand}
+                          decorative
                           glowColorId={glowColorByFriendId[friend.friendId] ?? null}
                           membershipTier={friend.membershipTier}
                           size="sm"
@@ -1534,7 +1537,7 @@ function NearbyHero({
                         />
                         <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
                         <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                          {proximityLabels[friend.proximityLevel]}
+                          {proximityBandLabel(friend.proximityBand)}
                         </span>
                       </button>
                     </li>
@@ -1568,29 +1571,27 @@ function NearbyHero({
                 // labels line up across the row regardless of name length.
                 // shrink-0 is what keeps the row from wrapping or squashing.
                 className="focus-ring safe-motion group flex w-[4.75rem] shrink-0 flex-col items-center gap-2.5 text-center transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
-                aria-label={`${capitalize(firstName(name))}, ${proximityLabels[friend.proximityLevel]}`}
+                aria-label={`${capitalize(firstName(name))}, ${proximityBandLabel(friend.proximityBand)}`}
               >
                 {/* Fixed-height avatar slot. The halo's padding varies with
                     proximity, so without a fixed box each column would be a
                     slightly different height and the names and distance labels
                     would sit at different baselines across the row. */}
                 <span className="relative grid h-[4.5rem] w-full place-items-center">
-                  <GlowAvatar
+                  <ProximityGlowAvatar
                     name={name}
                     src={friend.avatarUrl}
-                    proximityLevel={friend.proximityLevel}
-                    glowStrength={friend.glowStrength}
-                    confidence={friend.confidence}
+                    band={friend.proximityBand}
+                    decorative
                     glowColorId={glowColorByFriendId[friend.friendId] ?? null}
-                    // Identity, independent of the proximity props above:
-                    // GlowRing owns the distance aura, UserAvatar owns the
+                    // Identity, independent of the proximity prop above:
+                    // ProximityGlow owns the distance aura, UserAvatar owns the
                     // membership band. Neither reads the other's inputs.
                     membershipTier={friend.membershipTier}
-                    size="near"
+                    size="md"
                     reducedMotion={reducedMotion}
-                    // Presentation only: a calmer aura on Home. Proximity,
-                    // strength and confidence are untouched, so the
-                    // close/near/far ordering is preserved.
+                    // Presentation only: a calmer aura on Home. The band is
+                    // untouched, so the six-state ordering is preserved.
                     intensity={NEAR_GLOW_INTENSITY}
                   />
                   {/* Presence: a nearby Muddy with a live, just-updated signal.
@@ -1621,7 +1622,7 @@ function NearbyHero({
                     )}
                     aria-hidden="true"
                   />
-                  <span className="truncate">{proximityLabels[friend.proximityLevel]}</span>
+                  <span className="truncate">{proximityBandLabel(friend.proximityBand)}</span>
                 </span>
               </button>
             );
@@ -2200,6 +2201,9 @@ function toDashboardFriend(friend: NearbyFriendApiItem): DashboardFriend {
     username: friend.username,
     avatarUrl: friend.avatar_url,
     proximityLevel: friend.proximity_level,
+    // Presentation band, straight through. Never re-derived on the client:
+    // the client has no distance to derive it from, and must not.
+    proximityBand: friend.proximity_band ?? "outside_range",
     glowStrength: friend.glow_strength,
     statusText: friend.status_text,
     lastActiveEstimate: friend.last_active_estimate,

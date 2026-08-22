@@ -9,6 +9,8 @@ import {
 import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 import { resolveProximityBand } from "@/lib/proximity/bands";
+import type { ProximityBand } from "@/lib/proximity/bands";
+import { stabilizeBand } from "@/lib/proximity/band-stability";
 
 export const locationUpdateRequestSchema = z.object({
   latitude: z.number().min(-90).max(90),
@@ -281,6 +283,18 @@ export function buildSafeNearbyFriends(input: {
   locationByUserId: ReadonlyMap<string, NearbyLocationRow>;
   profileByUserId: ReadonlyMap<string, NearbyProfileRow>;
   statusByUserId?: ReadonlyMap<string, MuddyStatusSummary>;
+  /**
+   * The band each friend was last SHOWN in, when the caller tracks it.
+   *
+   * Enables hysteresis: without it every reading is judged in isolation and a
+   * stationary phone whose fix jitters across a boundary visibly flips between
+   * two Glow states. Optional because a caller with no history is not wrong,
+   * only unstabilised -- see lib/proximity/band-stability.ts.
+   *
+   * A band identifier in, a band identifier out. Nothing here can widen the
+   * 15km eligibility gate or tighten a band past its confidence cap.
+   */
+  previousBandByUserId?: ReadonlyMap<string, ProximityBand>;
   now?: number;
 }): SafeNearbyFriend[] {
   const now = input.now ?? Date.now();
@@ -373,8 +387,14 @@ export function buildSafeNearbyFriends(input: {
         username: profile.username,
         avatar_url: profile.avatar_url,
         proximity_level: proximityLevel,
-        // Same measured distance, same confidence the level already used.
-        proximity_band: resolveProximityBand(measuredDistance, pairConfidence),
+        // Same measured distance, same confidence the level already used,
+        // then damped against the band this friend was last shown in so a
+        // boundary-hugging reading holds still instead of flickering.
+        proximity_band: stabilizeBand(
+          resolveProximityBand(measuredDistance, pairConfidence),
+          measuredDistance,
+          input.previousBandByUserId?.get(friendId)
+        ),
         glow_strength: glowStrength,
         status_text: statusTextFor(proximityLevel, pairConfidence),
         last_active_estimate: lastActiveEstimate(location.last_updated),

@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const home = read("components/dashboard/dashboard-page.tsx");
 const css = read("app/globals.css");
-const glowRing = read("components/glow/glow-ring.tsx");
-const glowAvatar = read("components/glow/glow-avatar.tsx");
+const glowComponent = read("components/glow/proximity-glow.tsx");
+const glowAvatar = read("components/glow/proximity-glow-avatar.tsx");
 const userAvatar = read("components/ui/user-avatar.tsx");
 
 /** The Near section's own markup, isolated from the rest of Home. */
@@ -94,9 +94,12 @@ describe("Near section layout", () => {
 // ---------------------------------------------------------------------------
 
 describe("Near section avatar", () => {
-  it("uses the dedicated 64px near size", () => {
-    expect(nearSection).toContain('size="near"');
-    expect(userAvatar).toContain('near: "h-16 w-16');
+  it("uses the canonical md Glow size", () => {
+    // The Glow owns its own size scale now (sm/md/lg/hero), each mapped to a
+    // real UserAvatar size, so the section names a Glow size rather than
+    // reaching for an avatar class directly.
+    expect(nearSection).toContain('size="md"');
+    expect(userAvatar).toContain('md: "h-14 w-14');
   });
 
   it("keeps the premium ring thin rather than scaling it with the avatar", () => {
@@ -105,10 +108,10 @@ describe("Near section avatar", () => {
   });
 
   it("keeps the canonical layer order: glow outside, ring inside, avatar innermost", () => {
-    // GlowRing wraps UserAvatar, and UserAvatar owns the membership band.
-    expect(glowAvatar).toContain("<GlowRing");
+    // ProximityGlow wraps UserAvatar, and UserAvatar owns the membership band.
+    expect(glowAvatar).toContain("<ProximityGlow");
     expect(glowAvatar).toContain("<UserAvatar");
-    expect(glowAvatar.indexOf("<GlowRing")).toBeLessThan(glowAvatar.indexOf("<UserAvatar"));
+    expect(glowAvatar.indexOf("<ProximityGlow")).toBeLessThan(glowAvatar.indexOf("<UserAvatar"));
   });
 
   it("passes the tier through rather than restyling the ring on Home", () => {
@@ -127,50 +130,49 @@ describe("Near section avatar", () => {
 // ---------------------------------------------------------------------------
 
 describe("Near section glow", () => {
-  const scope = css.slice(css.indexOf(".near-strip .proximity-halo-very-close"), css.indexOf("/* NOTE:"));
-
-  it("scopes its restraint rather than editing the canonical glow classes", () => {
-    expect(scope).toContain(".near-strip .proximity-halo-very-close");
-    expect(scope).toContain(".near-strip .proximity-halo-nearby");
-    expect(scope).toContain(".near-strip .proximity-halo-around");
+  it("renders the canonical Glow rather than a second treatment", () => {
+    // One component, one config table. A page-local halo is exactly what this
+    // redesign replaced.
+    expect(nearSection).toContain("<ProximityGlowAvatar");
+    expect(nearSection).not.toContain("proximity-halo");
+    expect(nearSection).not.toContain("box-shadow");
   });
 
-  it("is the most restrained glow in the app", () => {
-    const blur = (block: string) => Number(/--halo-blur:\s*([\d.]+)px/.exec(block)?.[1]);
-    const near = blur(scope.slice(scope.indexOf("very-close")));
-    // The default very-close blur is 26px; the Nearby strip's is 16px.
-    expect(near).toBeLessThan(16);
-  });
-
-  it("makes closer mean tighter and further mean wider", () => {
-    const spread = (name: string) => {
-      const at = scope.indexOf(name);
-      return Number(/--halo-spread:\s*([\d.]+)px/.exec(scope.slice(at))?.[1]);
-    };
-    expect(spread("very-close")).toBeLessThan(spread("nearby"));
-    expect(spread("nearby")).toBeLessThan(spread("around"));
-  });
-
-  it("damps opacity through a GlowRing prop, since inline vars beat CSS", () => {
-    // A `.near-strip .proximity-halo { --halo-*-opacity }` rule would be
-    // silently ignored: GlowRing sets those inline.
-    expect(glowRing).toContain("intensity");
-    expect(glowRing).toContain("Math.max(0, intensity)");
+  it("damps the whole scale uniformly, never one state", () => {
+    // A per-state override on Home would let the section disagree with the
+    // rest of the app about what a state looks like. `intensity` multiplies
+    // the resolved strength, so every state calms by the same factor and the
+    // six-way ordering survives.
+    expect(glowComponent).toContain("config.strength * Math.max(0, intensity)");
     expect(nearSection).toContain("intensity={NEAR_GLOW_INTENSITY}");
     expect(home).toContain("const NEAR_GLOW_INTENSITY = 0.72");
   });
 
-  it("applies intensity last, so the close > near > far ordering is preserved", () => {
-    expect(glowRing).toContain(
-      "stateOpacity * confidenceMultiplier * strengthMultiplier * Math.max(0, intensity)"
+  it("takes its geometry from the shared config, not from the page", () => {
+    expect(glowComponent).toContain("resolveGlowGeometry(level, size)");
+    expect(nearSection).not.toMatch(/--glow-(ring|outer|blur|strength)/);
+  });
+
+  it("needs no Home-scoped Glow CSS at all", () => {
+    // The old halo needed `.near-strip .proximity-halo-*` overrides per state.
+    // A surface-scoped override is a second state authority by another name, so
+    // the redesign leaves none behind and must not grow new ones.
+    expect(css).not.toContain(".near-strip .proximity-glow");
+    expect(css).not.toMatch(/\.near-strip[^{]*\{[^}]*--glow-/);
+  });
+
+  it("clamps intensity so no surface can flatten the top of the scale", () => {
+    expect(glowComponent).toContain(
+      "Math.min(1, Math.max(0, config.strength * Math.max(0, intensity)))"
     );
   });
 
-  it("leaves proximity, strength and confidence untouched", () => {
-    // Presentation only: the section must not alter the backend signals.
-    expect(nearSection).toContain("proximityLevel={friend.proximityLevel}");
-    expect(nearSection).toContain("glowStrength={friend.glowStrength}");
-    expect(nearSection).toContain("confidence={friend.confidence}");
+  it("passes the server-resolved band straight through", () => {
+    // Presentation only: the section must not alter or re-derive the backend
+    // signal. The band is the whole proximity input now.
+    expect(nearSection).toContain("band={friend.proximityBand}");
+    expect(nearSection).not.toContain("bandForDistance");
+    expect(nearSection).not.toContain("resolveProximityBand");
   });
 });
 
@@ -228,7 +230,7 @@ describe("Near section interaction", () => {
 
   it("labels each avatar with the person and their proximity", () => {
     expect(nearSection).toContain(
-      "aria-label={`${capitalize(firstName(name))}, ${proximityLabels[friend.proximityLevel]}`}"
+      "aria-label={`${capitalize(firstName(name))}, ${proximityBandLabel(friend.proximityBand)}`}"
     );
   });
 

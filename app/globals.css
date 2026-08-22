@@ -5030,26 +5030,14 @@ select {
   }
 }
 
-/* Tightened bloom for the rail, the same technique .glow-strip and .near-strip
-   already use: scoped, unlayered overrides of the halo custom properties. The
-   default 26px blur + 8px spread reaches ~48px past the avatar, which would
-   need so much padding that neighbouring auras would overlap and the row would
-   scroll through a tall empty band. Blur and spread only — the OPACITY still
-   comes from GlowRing's inline `intensity`, so the raised strength survives. */
-.muddies-rail-glow .proximity-halo-very-close {
-  --halo-blur: 15px;
-  --halo-spread: 5px;
-}
-
-.muddies-rail-glow .proximity-halo-nearby {
-  --halo-blur: 12px;
-  --halo-spread: 4px;
-}
-
-.muddies-rail-glow .proximity-halo-around {
-  --halo-blur: 9px;
-  --halo-spread: 2px;
-}
+/* PROXIMITY GLOW V2 SIZES ITS OWN BOX. <ProximityGlow> sets width/height from
+   the widest layer in lib/proximity/glow-config.ts, so the bloom is contained
+   by the element instead of painting outside it into the scroll container's
+   clip. The per-state blur/spread overrides that used to live here existed only
+   to compensate for a halo that bled past its own box; they are DELETED rather
+   than retuned, because a surface that re-tunes one state is exactly how two
+   surfaces start disagreeing about what that state looks like. The track's
+   padding below still reserves the row's vertical room. */
 
 .muddies-rail-item {
   flex: 0 0 auto;
@@ -8534,4 +8522,288 @@ label.linkr-photo-row:hover {
   border-radius: 999px;
   background: hsl(var(--muted-foreground) / 0.35);
   flex-shrink: 0;
+}
+
+/* =========================================================================
+ * PROXIMITY GLOW V2
+ *
+ * A strict port of the approved executable prototype at
+ * `design-reference/proximity-glow-v1.html`. The prototype is
+ * the visual specification; where this differs from it, this is the bug.
+ *
+ * THE HIERARCHY LIVES IN LAYERS, NOT IN OPACITY. Six states separate because
+ * layers switch off as distance grows -- radial field, then sparks, then the
+ * expanding wave, then the outer ring -- not because one box-shadow fades. A
+ * single shadow at six opacities is exactly what this replaces.
+ *
+ * GEOMETRY COMES FROM THE COMPONENT. Every size below is a custom property
+ * that <ProximityGlow> sets inline from lib/proximity/glow-config.ts, so the
+ * six states have exactly one numeric source. This file owns the STRUCTURE;
+ * that module owns the NUMBERS.
+ *
+ * PERFORMANCE. Every animation here is transform/opacity/filter only --
+ * composited, never triggering layout. Layer counts are fixed per state (nine
+ * sparks at most, and only for the two closest states), so a list of many
+ * Muddies cannot spawn an uncontrolled number of animated nodes.
+ * ========================================================================= */
+
+/* LIGHT THEME COMPENSATION.
+ *
+ * The approved prototype is rendered on near-black (#0b0605), where a warm
+ * additive bloom reads strongly. Mad Buddy's DEFAULT theme is cream
+ * (--background: 41 71% 98%), and on that ground the same colours lose most of
+ * their contrast: the mid-states wash out and Across Town nearly disappears.
+ * Shipping the prototype's raw values would mean the six-state hierarchy only
+ * works for dark-mode users -- a minority of the product's surfaces.
+ *
+ * The fix deepens the PIGMENT on light backgrounds rather than raising opacity.
+ * A darker, more saturated orange has real contrast against cream, where a
+ * brighter one just blends into it. Every state shifts by the same amount, so
+ * the ratios that carry the hierarchy -- radius, strength, blur, pulse, layer
+ * count -- are completely untouched; only the hue the layers are painted in
+ * changes. Dark mode keeps the prototype's exact colours below. */
+.proximity-glow {
+  --glow-brand: 214 118 26;
+  --glow-highlight: 232 140 43;
+  --glow-ring: 154px;
+  --glow-outer: 205px;
+  --glow-core: 118px;
+  --glow-field: 220px;
+  --glow-blur: 31px;
+  --glow-strength: 1;
+  --glow-pulse: 1.15s;
+  --glow-ring-width: 2px;
+  --glow-ring-style: solid;
+  --glow-ring2-opacity: 0.65;
+  --glow-spark-opacity: 1;
+
+  position: relative;
+  display: grid;
+  place-items: center;
+  /* Own stacking context, so the layered decoration stays behind the avatar
+   * without escaping behind the surface the Glow sits on. */
+  isolation: isolate;
+  /* Explicit, because it is load-bearing rather than incidental: the element
+   * is sized to the AVATAR while the bloom reaches ~2.2x that, so the layers
+   * are meant to spill outside it. Setting overflow:hidden here would crop
+   * every state back to a disc. */
+  overflow: visible;
+}
+
+/* Opt-in for surfaces that want the bloom to occupy real layout space -- the
+ * comparison harness, where each state gets its own column and the full extent
+ * should be measurable. Product rows deliberately do NOT use this: there, the
+ * Glow overflows its slot instead of widening it. */
+.proximity-glow-reserve-bloom {
+  width: var(--glow-box);
+  height: var(--glow-box);
+}
+
+.proximity-glow__layer {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+/* The bright inner bloom. Present in every state -- it is the one layer that
+ * never switches off, because a state with no core would read as no Glow. */
+.proximity-glow__core {
+  width: var(--glow-core);
+  height: var(--glow-core);
+  border: 2px solid rgb(var(--glow-highlight) / 0.96);
+  box-shadow:
+    0 0 8px rgb(var(--glow-highlight) / 0.95),
+    0 0 var(--glow-blur) rgb(var(--glow-brand) / 0.75),
+    0 0 calc(var(--glow-blur) * 2.1) rgb(var(--glow-brand) / 0.34);
+  opacity: var(--glow-strength);
+  z-index: 12;
+}
+
+/* Across Town keeps a ring but loses the bloom: the faint remnant is what
+ * makes the weakest state read as present-but-far rather than as off. */
+.proximity-glow[data-core-bloom="faint"] .proximity-glow__core {
+  box-shadow: 0 0 7px rgb(var(--glow-brand) / 0.18);
+}
+
+.proximity-glow__ring {
+  width: var(--glow-ring);
+  height: var(--glow-ring);
+  border: var(--glow-ring-width) var(--glow-ring-style) rgb(var(--glow-highlight) / 0.55);
+  box-shadow: 0 0 22px rgb(var(--glow-brand) / 0.2);
+  opacity: calc(var(--glow-strength) * 0.8);
+  z-index: 10;
+}
+
+.proximity-glow__ring2 {
+  width: var(--glow-outer);
+  height: var(--glow-outer);
+  border: 1px solid rgb(var(--glow-highlight) / 0.22);
+  opacity: calc(var(--glow-strength) * var(--glow-ring2-opacity));
+  z-index: 8;
+}
+
+.proximity-glow__orbit {
+  width: var(--glow-outer);
+  height: var(--glow-outer);
+  border: 1px dashed rgb(var(--glow-highlight) / 0.28);
+  opacity: 0.28;
+  z-index: 7;
+}
+
+/* The radial field: Right Here only. This is the single most expensive layer
+ * (a masked conic gradient), which is why exactly one state draws it. */
+.proximity-glow__radial {
+  width: var(--glow-field);
+  height: var(--glow-field);
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgb(255 151 45 / 0.25) 0 1deg,
+    transparent 1deg 13deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 0 40%, #000 54%, transparent 76%);
+  mask: radial-gradient(circle, transparent 0 40%, #000 54%, transparent 76%);
+  opacity: 0.84;
+  z-index: 2;
+}
+
+.proximity-glow__sparks {
+  width: var(--glow-field);
+  height: var(--glow-field);
+  opacity: var(--glow-spark-opacity);
+  z-index: 4;
+}
+
+.proximity-glow__sparks i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgb(var(--glow-highlight) / 1);
+  box-shadow: 0 0 9px rgb(255 154 46 / 1);
+  transform: rotate(var(--spark-angle)) translateX(var(--spark-radius));
+}
+
+/* The avatar sits above every layer and is never touched by the animations --
+ * the Glow is runtime decoration around an image, never baked into it. */
+.proximity-glow__subject {
+  position: relative;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+}
+
+/* --- Animation, driven by data attributes the component sets -------------- */
+
+.proximity-glow[data-animate="true"] .proximity-glow__core {
+  animation: proximity-glow-breathe var(--glow-pulse) ease-in-out infinite;
+}
+
+.proximity-glow[data-animate="true"] .proximity-glow__radial {
+  animation: proximity-glow-spin 18s linear infinite;
+}
+
+.proximity-glow[data-animate="true"][data-spark-motion="reverse"] .proximity-glow__sparks {
+  animation: proximity-glow-spin-reverse 11s linear infinite;
+}
+
+.proximity-glow[data-animate="true"][data-spark-motion="forward"] .proximity-glow__sparks {
+  animation: proximity-glow-spin 16s linear infinite;
+}
+
+.proximity-glow[data-animate="true"][data-ring2="expanding"] .proximity-glow__ring2 {
+  animation: proximity-glow-expanding 1.7s ease-out infinite;
+}
+
+.proximity-glow[data-animate="true"][data-ring2="soft-pulse"] .proximity-glow__ring2 {
+  animation: proximity-glow-soft-pulse 2.6s ease-in-out infinite;
+}
+
+.proximity-glow[data-animate="true"][data-ring-spin="true"] .proximity-glow__ring {
+  animation: proximity-glow-spin 18s linear infinite;
+}
+
+.proximity-glow[data-animate="true"] .proximity-glow__orbit {
+  animation: proximity-glow-spin-reverse 24s linear infinite;
+}
+
+@keyframes proximity-glow-breathe {
+  0%,
+  100% {
+    transform: scale(0.96);
+    filter: brightness(0.95);
+  }
+  50% {
+    transform: scale(1.08);
+    filter: brightness(1.24);
+  }
+}
+
+@keyframes proximity-glow-expanding {
+  0% {
+    transform: scale(0.82);
+    opacity: 0.58;
+  }
+  100% {
+    transform: scale(1.13);
+    opacity: 0;
+  }
+}
+
+@keyframes proximity-glow-soft-pulse {
+  0%,
+  100% {
+    transform: scale(0.98);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+@keyframes proximity-glow-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes proximity-glow-spin-reverse {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+/* --- Reduced motion ------------------------------------------------------
+ *
+ * Motion stops; the HIERARCHY DOES NOT. Radius, luminous strength, layer count
+ * and ring treatment all still separate the six states, so a user who asks for
+ * reduced motion still sees who is closer -- they just see it held still
+ * rather than breathing. Collapsing the six into one appearance would be an
+ * accessibility regression dressed up as an accessibility feature.
+ *
+ * The expanding wave is the one layer with no meaningful still frame: it exists
+ * only as an outward sweep and animates to opacity 0, so it is restored to its
+ * static resting opacity rather than frozen mid-sweep at an arbitrary scale. */
+@media (prefers-reduced-motion: reduce) {
+  .proximity-glow .proximity-glow__core,
+  .proximity-glow .proximity-glow__radial,
+  .proximity-glow .proximity-glow__sparks,
+  .proximity-glow .proximity-glow__ring,
+  .proximity-glow .proximity-glow__ring2,
+  .proximity-glow .proximity-glow__orbit {
+    animation: none !important;
+  }
+
+  .proximity-glow[data-ring2="expanding"] .proximity-glow__ring2 {
+    opacity: calc(var(--glow-strength) * var(--glow-ring2-opacity));
+  }
+}
+
+/* Dark mode restores the prototype's exact palette: on a near-black ground the
+ * brighter, lighter warmth is what the approved reference actually specifies,
+ * and the light-theme deepening above would read as muddy there. */
+html.dark .proximity-glow {
+  --glow-brand: 232 140 43;
+  --glow-highlight: 255 176 78;
 }

@@ -15,7 +15,8 @@ import { HeroCard, HeroIdentity } from "@/components/hero/hero-card";
 import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
+import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
+import type { ProximityBand } from "@/lib/proximity/bands";
 import { ProximityBadge } from "@/components/glow/proximity-badge";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
@@ -41,6 +42,8 @@ export type MuddyProfileData = {
   moodStatus: string;
   mutualMuddies: number;
   proximityLevel?: ProximityLevel;
+  /** Six-state presentation band from the API; drives the Glow and badge. */
+  proximityBand?: ProximityBand | null;
   glowStrength?: number;
   confidence?: ConfidenceLevel;
   plan: SubscriptionPlan;
@@ -184,15 +187,13 @@ export function MuddyProfilePage({
           ) : (
             <div className="grid h-full w-full place-items-center bg-[linear-gradient(135deg,hsl(var(--primary)/0.5),hsl(24_90%_35%/0.9))]">
               <BirthdayAccent active={Boolean(fields?.birthdayToday)}>
-                <GlowAvatar
+                <ProximityGlowAvatar
                   name={muddy.displayName}
                   src={muddy.avatarUrl}
                   membershipTier={publicMembershipTier(muddy.plan)}
-                  proximityLevel={muddy.proximityLevel}
-                  glowStrength={muddy.glowStrength}
-                  confidence={muddy.confidence}
+                  band={muddy.proximityBand ?? null}
                   glowColorId={glowColorId}
-                  size="xl"
+                  size="hero"
                 />
               </BirthdayAccent>
             </div>
@@ -211,7 +212,7 @@ export function MuddyProfilePage({
             meta={
               <>
                 <span>@{muddy.username}</span>
-                {muddy.proximityLevel ? <ProximityBadge proximityLevel={muddy.proximityLevel} /> : null}
+                <ProximityBadge band={muddy.proximityBand} proximityLevel={muddy.proximityLevel} />
                 {/* Safe public trust signals only (batch 8 §57), never
                     internal risk data. */}
                 {trust?.badgeLabel ? (

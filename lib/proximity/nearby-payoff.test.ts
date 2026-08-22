@@ -52,28 +52,26 @@ describe("one nearby Muddy gets a hero, not a rail cell", () => {
 });
 
 describe("the Glow stays truthful", () => {
-  it("passes the canonical proximity inputs unchanged", () => {
-    for (const prop of [
-      "proximityLevel={heroFriend.proximityLevel}",
-      "glowStrength={heroFriend.glowStrength}",
-      "confidence={heroFriend.confidence}"
-    ]) {
-      expect(solo).toContain(prop);
-    }
+  it("passes the server-resolved band through unchanged", () => {
+    // The band IS the proximity input now: strength and confidence were folded
+    // into it server-side, so the hero has nothing left to re-weigh.
+    expect(solo).toContain("band={heroFriend.proximityBand}");
+    expect(solo).not.toContain("bandForDistance");
+    expect(solo).not.toContain("resolveProximityBand");
   });
 
   it("uses the canonical component rather than a second glow", () => {
-    expect(solo).toContain("<GlowAvatar");
+    expect(solo).toContain("<ProximityGlowAvatar");
   });
 
   it("invents no intensity for the focused Muddy", () => {
     /* Only the SIZE differs for the hero. Boosting intensity would overstate a
      * band the server resolved -- emphasis may increase, truth may not.
      *
-     * Scoped to the hero's own GlowAvatar: the supporting rows below reuse the
+     * Scoped to the hero's own Glow: the supporting rows below reuse the
      * rail's existing NEAR_GLOW_INTENSITY damping, which is a restraint rather
      * than an exaggeration. */
-    const heroGlow = solo.slice(solo.indexOf("<GlowAvatar"), solo.indexOf("</button>"));
+    const heroGlow = solo.slice(solo.indexOf("<ProximityGlowAvatar"), solo.indexOf("</button>"));
     expect(heroGlow).not.toContain("intensity={");
   });
 
@@ -90,7 +88,7 @@ describe("the Glow stays truthful", () => {
 
 describe("privacy survives the redesign", () => {
   it("shows the canonical label, never a measurement", () => {
-    expect(solo).toContain("proximityLabels[heroFriend.proximityLevel]");
+    expect(solo).toContain("proximityBandLabel(heroFriend.proximityBand)");
     for (const leak of [" km", "metres", "meters", "miles", "away", "coordinates", "street"]) {
       expect(solo).not.toContain(leak);
     }
@@ -116,7 +114,7 @@ describe("the proximity label carries its own meaning", () => {
   });
 
   it("announces person and proximity together for screen readers", () => {
-    expect(solo).toContain("proximityLabels[heroFriend.proximityLevel]}. Open profile");
+    expect(solo).toContain("proximityBandLabel(heroFriend.proximityBand)}. Open profile");
   });
 });
 
