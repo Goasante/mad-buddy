@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Award, CakeSlice, CalendarCheck2, CalendarDays, Camera, ChevronRight, Edit3, Ghost, Images, Info, LifeBuoy, MessageSquareText, MonitorSmartphone, Palette, ShieldCheck, Smile, Sparkles, UserCog, UsersRound } from "lucide-react";
+import { Award, CakeSlice, MapPin, CalendarCheck2, CalendarDays, Camera, ChevronRight, Edit3, Ghost, Images, Info, LifeBuoy, MessageSquareText, MonitorSmartphone, Palette, ShieldCheck, Smile, Sparkles, UserCog, UsersRound } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updateProfileAction, uploadAvatarAction } from "@/app/(app)/actions";
 import { FormField } from "@/components/auth/form-field";
@@ -30,6 +30,9 @@ import { deriveBirthProfile } from "@/lib/profile/birth-date";
 import { returnLabel, type ProfileSection } from "@/lib/navigation/handoff";
 import { BirthdayAccent } from "@/components/profile/birthday-accent";
 import { profileCompletion, type ProfileIdentitySummary } from "@/lib/profile/identity";
+import type { CompletionTask } from "@/lib/profile/rules";
+import { ProfileInterestsCard } from "@/components/profile/profile-interests-card";
+import { ProfileCompletionCard } from "@/components/profile/profile-completion-card";
 import { JourneyProgress } from "@/components/journey/journey-progress";
 import type { JourneyData } from "@/lib/journey/journey";
 
@@ -48,6 +51,21 @@ type ProfilePageContentProps = {
   initialAvatarUrl: string | null;
   initialVisibilityStatus: VisibilityStatus;
   identitySummary: ProfileIdentitySummary | null;
+  /** The owner's own interests, canonical and legacy alike. */
+  interests?: string[];
+  /**
+   * Real completion, from `remainingCompletionTasks` on the server.
+   *
+   * Passed in rather than derived here: the page cannot see institution or
+   * the Muddy count, so a client-side guess would disagree with the
+   * authority that the rest of the product uses.
+   */
+  completion?: { percent: number; tasks: CompletionTask[] } | null;
+  /**
+   * Self-reported area, never GPS. Already narrowed by
+   * `resolveFieldVisibility` before it reaches this component.
+   */
+  generalArea?: string | null;
   /**
    * Moments (paused). Server-resolved and passed down rather than looked up
    * here, so this component adds no database round trip of its own.
@@ -107,6 +125,9 @@ export function ProfilePageContent({
   initialAvatarUrl,
   initialVisibilityStatus,
   identitySummary,
+  interests = [],
+  completion = null,
+  generalArea = null,
   momentsEnabled = false,
   journey,
   photos = [],
@@ -168,6 +189,9 @@ export function ProfilePageContent({
   // editor on screen until the fresh Linkr server render is ready to commit.
   const [returningToLinkr, startLinkrReturn] = useTransition();
   const [avatarUploading, setAvatarUploading] = useState(false);
+  /* Lifted so the completion card's "Choose a few interests" can open the
+     picker directly, rather than pointing at a section and hoping. */
+  const [interestsEditorOpen, setInterestsEditorOpen] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const identityEditorRef = useRef<HTMLDivElement>(null);
   const avatarSrc = avatarPreviewUrl ?? (
@@ -384,10 +408,14 @@ export function ProfilePageContent({
     ? deriveBirthProfile(savedProfile.dateOfBirth, serverBirthdayDayKey)
     : null;
   const birthdayToday = !birthdayPrivacyDisabledPreview && (birthdayPreview || Boolean(birthProfile?.birthdayToday));
-  const completion = profileCompletion({ avatarUrl, bio: savedProfile.bio, moodStatus: savedProfile.moodStatus });
-  const completedSteps = completion.completed;
-  const missingSteps = completion.total - completion.completed;
-  const completionPercent = completion.percent;
+  /* The local heuristic (photo / bio / mood) still drives the small ring in
+   * the header, because it measures exactly the three things that header
+   * shows. The card below uses the server's `remainingCompletionTasks`,
+   * which also knows about institution, interests and the first Muddy. */
+  const headerCompletion = profileCompletion({ avatarUrl, bio: savedProfile.bio, moodStatus: savedProfile.moodStatus });
+  const completedSteps = headerCompletion.completed;
+  const missingSteps = headerCompletion.total - headerCompletion.completed;
+  const completionPercent = completion?.percent ?? headerCompletion.percent;
   const missingLabel = [
     !savedProfile.moodStatus.trim() ? "a mood" : null,
     !savedProfile.bio.trim() ? "bio" : null,
@@ -656,6 +684,16 @@ export function ProfilePageContent({
             </div>
             <p className="mt-0.5 text-sm text-muted-foreground">@{savedProfile.username}</p>
 
+            {/* Self-reported area, never GPS and never a live city. The
+                server has already applied `resolveFieldVisibility`, so this
+                is null for a viewer who may not see it. */}
+            {generalArea ? (
+              <p className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{generalArea}</span>
+              </p>
+            ) : null}
+
             <Link
               href="/settings/glow-visibility"
               className="focus-ring safe-motion mt-3 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/50 px-3.5 py-1.5 text-sm font-medium hover:bg-secondary/40"
@@ -698,6 +736,34 @@ export function ProfilePageContent({
               <Button type="button" variant="outline" size="sm" asChild><Link href="/buddy-score">My Progress</Link></Button>
             </div>
           </Card>
+
+          {/* MY SHOWCASE.
+              Previously reachable only from inside the edit form, which made
+              the gallery something you had to go looking for. It is the part
+              of a profile people actually revisit, so it sits directly under
+              the hero and is manageable in place. */}
+          <section aria-labelledby="profile-showcase-heading">
+            <h3 id="profile-showcase-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              My Showcase
+            </h3>
+            <ProfilePhotoCarousel photos={photos} isOwner onChanged={() => router.refresh()} />
+          </section>
+
+          {completion ? (
+            <ProfileCompletionCard
+              percent={completion.percent}
+              tasks={completion.tasks}
+              onEditProfile={beginEditing}
+              onEditInterests={() => setInterestsEditorOpen(true)}
+            />
+          ) : null}
+
+          <ProfileInterestsCard
+            interests={interests}
+            open={interestsEditorOpen}
+            onOpenChange={setInterestsEditorOpen}
+            onSaved={() => router.refresh()}
+          />
 
           {journey ? <JourneyProgress journey={journey} variant="profile" /> : null}
 

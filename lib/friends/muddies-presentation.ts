@@ -109,45 +109,66 @@ export function closestMuddies<T extends { id: string; displayName: string }>(
 }
 
 /**
- * Presence line under a name.
+ * PRESENCE IS NOT DERIVED FROM PROXIMITY.
  *
- * "Online" is reserved for a live signal. Everything else repeats the API's
- * own estimate, which is deliberately coarse — the server never sends an exact
- * last-seen time, so this cannot render one.
+ * This module used to export `presenceLabel` and `isOnline`, which turned a
+ * proximity reading into the words "Online" and a green live dot -- the label
+ * literally returned "Online" whenever `proximityLevel === "close"`.
+ *
+ * That was a presence claim the product has no authority to make. Mad Buddy has
+ * no canonical presence system for Muddies: `FreshnessState` describes how
+ * recent a LOCATION FIX is, which is a statement about the measurement, not
+ * about whether a person is at their phone. Someone can be Right Here and
+ * asleep; someone Across Town can be mid-conversation. Rendering "Online" from
+ * proximity told viewers something nobody had agreed to share, and it did so on
+ * the strength of location data.
+ *
+ * The Glow now carries proximity alone, in the six approved bands. Nothing on
+ * Muddies claims availability. If presence is ever wanted, it needs its own
+ * authority and its own privacy control -- not a re-reading of location.
  */
-export function presenceLabel(proximity: MuddyProximity | undefined): string | null {
-  if (!proximity) return null;
-  if (proximity.lastActiveEstimate) return proximity.lastActiveEstimate;
-  return proximity.proximityLevel === "close" ? "Online" : null;
-}
 
-/** True when the dot beside a name should read as live rather than idle. */
-export function isOnline(proximity: MuddyProximity | undefined): boolean {
-  return proximity?.lastActiveEstimate === "Active recently";
-}
-
-export type MuddiesFilterId = "all" | "very_close" | "nearby";
+export type MuddiesFilterId = "all" | "nearby";
 
 /**
- * The filter row.
+ * The proximity filter row.
  *
- * Distance only. Every entry answers from data the page already holds — a chip
- * that quietly returned the unfiltered list would be worse than no chip.
+ * TWO ENTRIES, NOT THREE. The old row offered "Very Close" and "Nearby" as
+ * separate chips, which was a THIRD proximity vocabulary competing with the
+ * stored level and the six canonical bands -- and both of those words now mean
+ * something specific and different in the approved language ("Just Around",
+ * "In Your Area"). Rather than rename two chips into words that would collide
+ * with real state names, the distinction collapses: a person either wants
+ * everyone, or wants the Muddies actually showing a proximity signal right now.
+ * The Glow on each row already communicates HOW close, far better than a chip.
  *
  * "New Here" is deliberately absent: nothing on this page knows when a Muddy
  * joined, so it could only ever have matched nobody or everybody.
  */
 export const MUDDIES_FILTERS: ReadonlyArray<{ id: MuddiesFilterId; label: string }> = [
   { id: "all", label: "All" },
-  { id: "very_close", label: "Very Close" },
   { id: "nearby", label: "Nearby" }
 ];
 
+/**
+ * Whether a Muddy passes the current proximity filter.
+ *
+ * "Nearby" means a live, in-range signal of ANY band -- Right Here through
+ * Across Town. It deliberately does not mean "close": someone across town is
+ * still showing you where they are, and hiding them behind a second threshold
+ * would make the chip lie about what it filters.
+ */
 export function matchesMuddiesFilter(
   filter: MuddiesFilterId,
   proximity: MuddyProximity | undefined
 ): boolean {
   if (filter === "all") return true;
-  if (filter === "very_close") return proximity?.proximityLevel === "close";
-  return proximity?.proximityLevel === "near";
+
+  const band = proximity?.proximityBand;
+  if (band) return band !== "outside_range";
+
+  // No band (a surface still mid-migration): fall back to the coarse level,
+  // which is less precise but never claims a signal that is not there.
+  const level = proximity?.proximityLevel;
+  return level === "close" || level === "near" || level === "far";
 }

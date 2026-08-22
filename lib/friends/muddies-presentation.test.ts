@@ -7,9 +7,7 @@ import {
   MUDDIES_FILTERS,
   MUDDIES_RAIL_LIMIT,
   closestMuddies,
-  isOnline,
   matchesMuddiesFilter,
-  presenceLabel,
   railDistanceLabel,
   railToneClass,
   type MuddyProximity
@@ -111,23 +109,39 @@ describe("distance wording matches the glow it sits under", () => {
 // Presence
 // ---------------------------------------------------------------------------
 
-describe("presence repeats the server's estimate and never invents one", () => {
-  it("shows the API's coarse string as-is", () => {
-    expect(presenceLabel(at("close", "Active recently"))).toBe("Active recently");
-    expect(presenceLabel(at("far", "Last seen a while ago"))).toBe("Last seen a while ago");
+describe("Muddies never derives presence from proximity", () => {
+  const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+
+  it("exports no presence helper at all", async () => {
+    // `presenceLabel` returned the literal string "Online" whenever
+    // proximityLevel was "close", and `isOnline` drove a green live dot. Both
+    // turned a LOCATION reading into an availability claim the product has no
+    // authority to make. They are gone, not renamed.
+    const presentation = await import("@/lib/friends/muddies-presentation");
+    expect(presentation).not.toHaveProperty("presenceLabel");
+    expect(presentation).not.toHaveProperty("isOnline");
   });
 
-  it("says nothing when there is no signal at all", () => {
-    expect(presenceLabel(undefined)).toBeNull();
-    expect(presenceLabel(at("near"))).toBeNull();
+  it("renders no online dot or presence copy on any Muddies surface", () => {
+    for (const path of [
+      "components/friends/muddies-grid.tsx",
+      "components/friends/muddies-closest-rail.tsx",
+      "components/friends/friends-page.tsx"
+    ]) {
+      const source = read(path);
+      expect(source, path).not.toContain("presenceLabel");
+      expect(source, path).not.toContain("isOnline");
+      expect(source, path).not.toContain("bg-emerald-500");
+      expect(source, path).not.toMatch(/["'>]Online["'<]/);
+    }
   });
 
-  it("treats only a live estimate as online", () => {
-    expect(isOnline(at("close", "Active recently"))).toBe(true);
-    // Close by distance is not the same as online: someone can be nearby and
-    // not have opened the app for an hour.
-    expect(isOnline(at("close", "Last seen a while ago"))).toBe(false);
-    expect(isOnline(undefined)).toBe(false);
+  it("keeps proximity freshness out of the Muddies presentation layer", () => {
+    // freshness_state describes how recent a location FIX is -- a statement
+    // about the measurement, not about whether someone is at their phone.
+    const source = read("lib/friends/muddies-presentation.ts");
+    expect(source).not.toContain("freshness");
+    expect(source).not.toContain("lastActiveEstimate ? ");
   });
 });
 
@@ -140,22 +154,39 @@ describe("every filter answers from data the page already holds", () => {
     expect(matchesMuddiesFilter("all", undefined)).toBe(true);
   });
 
-  it("separates the two distance bands", () => {
-    expect(matchesMuddiesFilter("very_close", at("close"))).toBe(true);
-    expect(matchesMuddiesFilter("very_close", at("near"))).toBe(false);
-    expect(matchesMuddiesFilter("nearby", at("near"))).toBe(true);
-    expect(matchesMuddiesFilter("nearby", at("close"))).toBe(false);
+  it("keeps every band with a live signal under Nearby", () => {
+    // Nearby means "showing a proximity signal", not "close". Someone across
+    // town is still telling you roughly where they are, and a second hidden
+    // threshold would make the chip lie about what it filters.
+    for (const band of ["right_here", "around_you", "close_by", "nearby", "around_town", "further_away"] as const) {
+      expect(matchesMuddiesFilter("nearby", { ...at("close"), proximityBand: band }), band).toBe(true);
+    }
+  });
+
+  it("excludes anyone outside range from Nearby", () => {
+    expect(
+      matchesMuddiesFilter("nearby", { ...at("close"), proximityBand: "outside_range" })
+    ).toBe(false);
   });
 
   it("excludes anyone with no signal from a distance filter", () => {
-    expect(matchesMuddiesFilter("very_close", undefined)).toBe(false);
     expect(matchesMuddiesFilter("nearby", undefined)).toBe(false);
   });
 
-  it("offers distance filters only", () => {
+  it("offers distance filters only, in the canonical vocabulary", () => {
     // Nothing on the page knows when a Muddy joined, so a "New Here" chip
     // could only ever have matched nobody or everybody.
-    expect(MUDDIES_FILTERS.map((filter) => filter.id)).toEqual(["all", "very_close", "nearby"]);
+    expect(MUDDIES_FILTERS.map((filter) => filter.id)).toEqual(["all", "nearby"]);
+  });
+
+  it("never labels a chip with a canonical band name", () => {
+    // "Very Close" and "Nearby" both now mean specific, different things in the
+    // approved six-state language. A chip wearing a state's name would read as
+    // a state filter that it is not.
+    const RESERVED = ["Right Here", "Just Around", "Close By", "In Your Area", "Around Town", "Across Town"];
+    for (const filter of MUDDIES_FILTERS) {
+      expect(RESERVED, filter.label).not.toContain(filter.label);
+    }
   });
 });
 

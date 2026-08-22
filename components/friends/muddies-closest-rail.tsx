@@ -5,8 +5,6 @@ import { Navigation } from "lucide-react";
 import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
 import { SWIPE_OPT_OUT_ATTRIBUTE } from "@/lib/navigation/swipe-tabs";
 import {
-  isOnline,
-  presenceLabel,
   railDistanceLabel,
   railToneClass,
   type MuddyProximity
@@ -54,8 +52,6 @@ export function MuddiesClosestRail({
         {people.map((person) => {
           const proximity = proximityByFriendId[person.id];
           const level = proximity?.proximityLevel ?? "far";
-          const presence = presenceLabel(proximity);
-          const online = isOnline(proximity);
 
           return (
             <li key={person.id} className="muddies-rail-item">
@@ -63,24 +59,17 @@ export function MuddiesClosestRail({
                 type="button"
                 onClick={() => onSelect(person.id)}
                 className="muddies-rail-button focus-ring"
-                /* ONE composed label for the whole card.
-                   The visible text below is marked aria-hidden and the avatar
-                   is passed no proximityLevel, so a screen reader hears this
-                   sentence once instead of "Ama, close. Ama. Very close." --
-                   the name twice, the distance twice, and in two different
-                   vocabularies ("Close" from proximityLabels vs "Very close"
-                   from the rail). */
-                aria-label={[
-                  person.displayName,
-                  railDistanceLabel(proximity).toLowerCase(),
-                  presence
-                ]
+                /* ONE composed label for the whole card. The visible text
+                   below is aria-hidden and the avatar is decorative, so a
+                   screen reader hears this sentence once rather than the name
+                   and the state twice over. */
+                aria-label={[person.displayName, railDistanceLabel(proximity).toLowerCase()]
                   .filter(Boolean)
                   .join(", ")}
               >
                 {/* aria-hidden on the WRAPPER as well as on the avatar: the
-                    button above already announces name, distance and presence
-                    as one sentence, so nothing inside may speak again. */}
+                    button above already announces name and proximity as one
+                    sentence, so nothing inside may speak again. */}
                 <span className={cn("muddies-rail-glow", railToneClass(level))} aria-hidden="true">
                   <ProximityGlowAvatar
                     name={person.displayName}
@@ -91,14 +80,6 @@ export function MuddiesClosestRail({
                     reducedMotion={reducedMotion}
                     size="lg"
                   />
-                  {/* Presence dot, anchored to the avatar rather than the
-                      aura so it keeps its place while the halo breathes. */}
-                  {presence ? (
-                    <span
-                      className={cn("muddies-rail-dot", online && "muddies-rail-dot-online")}
-                      aria-hidden="true"
-                    />
-                  ) : null}
                 </span>
 
                 <span className="muddies-rail-name" aria-hidden="true">
@@ -107,15 +88,6 @@ export function MuddiesClosestRail({
                 <span className={cn("muddies-rail-distance", railToneClass(level))} aria-hidden="true">
                   {railDistanceLabel(proximity)}
                 </span>
-                {presence ? (
-                  <span className="muddies-rail-presence" aria-hidden="true">
-                    <span
-                      className={cn("muddies-presence-dot", online && "muddies-presence-dot-online")}
-                      aria-hidden="true"
-                    />
-                    {presence}
-                  </span>
-                ) : null}
               </button>
             </li>
           );

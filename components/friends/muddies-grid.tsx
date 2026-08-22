@@ -12,7 +12,9 @@ import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
-import { isOnline, presenceLabel, type MuddyProximity } from "@/lib/friends/muddies-presentation";
+import { type MuddyProximity } from "@/lib/friends/muddies-presentation";
+import { proximityBandLabel } from "@/lib/proximity/bands";
+import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 
@@ -54,8 +56,12 @@ export function MuddiesGrid({
     <ul className="muddies-grid">
       {people.map((person) => {
         const proximity = proximityByFriendId[person.id];
-        const presence = presenceLabel(proximity);
-        const online = isOnline(proximity);
+        // Proximity only. No presence: see the note in muddies-presentation.ts.
+        const band =
+          proximity?.proximityBand && proximity.proximityBand !== "outside_range"
+            ? proximity.proximityBand
+            : null;
+        const proximityText = band ? proximityBandLabel(band) : null;
 
         return (
           <li key={person.id} className="muddies-card">
@@ -65,19 +71,14 @@ export function MuddiesGrid({
               actions={renderActions?.(person.id)}
             >
               <span className="muddies-card-avatar">
-                <UserAvatar
+                <ProximityGlowAvatar
                   src={person.avatarUrl}
                   name={person.displayName}
+                  band={band}
                   decorative
                   size="lg"
                   membershipTier={publicMembershipTier(person.plan)}
                 />
-                {presence ? (
-                  <span
-                    className={cn("muddies-card-dot", online && "muddies-card-dot-online")}
-                    aria-hidden="true"
-                  />
-                ) : null}
               </span>
 
               <span className="muddies-card-name-row">
@@ -87,14 +88,8 @@ export function MuddiesGrid({
                 <TrustedMemberMark trustedSince={person.trustedSince ?? null} compact />
               </span>
 
-              {presence ? (
-                <span className="muddies-card-presence">
-                  <span
-                    className={cn("muddies-presence-dot", online && "muddies-presence-dot-online")}
-                    aria-hidden="true"
-                  />
-                  {presence}
-                </span>
+              {proximityText ? (
+                <span className="muddies-card-presence">{proximityText}</span>
               ) : null}
             </MuddyCardIdentity>
 
@@ -121,6 +116,25 @@ export function MuddiesGrid({
  * A phone has no right-click and no hover, so press-and-hold is the only
  * gesture left for "more about this". Without it a card offered exactly one
  * action and no way to reach the rest.
+ *
+ * WHY THE CONTAINER IS NOT A BUTTON.
+ *
+ * It used to be, and the identity content it wraps includes the verified mark
+ * -- which is itself a real button (it opens a popover explaining what
+ * verification means). A <button> inside a <button> is invalid HTML: React
+ * reported a hydration error on every render of this page, and browsers are
+ * free to reparent the inner control, so the badge's own tap target was never
+ * guaranteed to survive.
+ *
+ * The fix separates the two roles rather than removing either. The container is
+ * a plain element that carries the press-and-hold gestures; navigation lives in
+ * ONE absolutely-positioned button stretched behind the content. The badge then
+ * sits ABOVE that button in the stacking order, so both targets are real,
+ * neither is nested, and the markup is valid.
+ *
+ * The navigation button is the card's accessible name, so a screen reader
+ * announces "Ama Boateng, open profile" once -- the visible identity text is
+ * decorative, exactly as it was before.
  */
 function MuddyCardIdentity({
   person,
@@ -139,15 +153,9 @@ function MuddyCardIdentity({
 
   return (
     <span className="relative block w-full">
-      <button
-        type="button"
-        onClick={(event) => {
-          // The hook swallows the click synthesised after a hold, so holding
-          // cannot also open the profile behind the menu that just opened.
-          handlers.onClick(event);
-          if (event.defaultPrevented) return;
-          onOpenProfile();
-        }}
+      {/* Gesture surface. Not focusable and not a control: the button below
+          owns activation, so this must not appear in the tab order twice. */}
+      <span
         onPointerDown={handlers.onPointerDown}
         onPointerMove={handlers.onPointerMove}
         onPointerUp={handlers.onPointerUp}
@@ -155,12 +163,36 @@ function MuddyCardIdentity({
         onPointerCancel={handlers.onPointerCancel}
         onContextMenu={handlers.onContextMenu}
         className={cn(
-          "muddies-card-identity focus-ring",
+          // `relative` only: the identity LAYOUT lives on the inner content
+          // wrapper below, because that is the element that actually holds the
+          // avatar, name and proximity line now.
+          "relative block w-full",
           pressing && "scale-95 transition-transform motion-reduce:transform-none"
         )}
       >
-        {children}
-      </button>
+        {/* Navigation target, stretched behind the identity content. z-0 keeps
+            it under the verified mark, which needs its own tap. */}
+        <button
+          type="button"
+          onClick={(event) => {
+            // The hook swallows the click synthesised after a hold, so holding
+            // cannot also open the profile behind the menu that just opened.
+            handlers.onClick(event);
+            if (event.defaultPrevented) return;
+            onOpenProfile();
+          }}
+          aria-label={`${person.displayName}, open profile`}
+          className="focus-ring absolute inset-0 z-0 block w-full rounded-[inherit]"
+        />
+
+        {/* Identity content sits above the navigation button, and carries the
+            card's column layout. `pointer-events-none` lets taps fall through
+            to that button, while any real control inside (the verified mark)
+            re-enables its own so its popover still opens. */}
+        <span className="muddies-card-identity pointer-events-none relative z-10 [&_button]:pointer-events-auto">
+          {children}
+        </span>
+      </span>
 
       {hasActions ? (
         <AppMenu

@@ -66,7 +66,10 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { Textarea } from "@/components/ui/textarea";
-import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
+import { type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
+import type { ProximityBand } from "@/lib/proximity/bands";
+import { proximityBandLabel } from "@/lib/proximity/bands";
+import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
 import { MuddiesClosestRail } from "@/components/friends/muddies-closest-rail";
 import { MuddiesGrid } from "@/components/friends/muddies-grid";
 import { MuddiesRequests } from "@/components/friends/muddies-requests";
@@ -105,6 +108,14 @@ export type UserSummary = {
 
 type ProximityInfo = {
   proximityLevel: ProximityLevel;
+  /**
+   * The six-state presentation band, straight from the API.
+   *
+   * This is the proximity signal Muddies renders. `proximityLevel` survives
+   * only for the coarse ordering/filtering helpers that still read it; nothing
+   * user-facing is derived from it any more.
+   */
+  proximityBand: ProximityBand;
   glowStrength: number;
   confidence: ConfidenceLevel;
   /**
@@ -134,6 +145,7 @@ const CLOSE_FRIENDS_CIRCLE_ID = "close-friends";
 type NearbyFriendApiItem = {
   friend_id: string;
   proximity_level: ProximityLevel;
+  proximity_band: ProximityBand;
   glow_strength: number;
   confidence: ConfidenceLevel;
   last_active_estimate?: string;
@@ -395,6 +407,8 @@ export function FriendsPageContent({
         data.friends.forEach((friend) => {
           next[friend.friend_id] = {
             proximityLevel: friend.proximity_level,
+            // Never re-derived on the client: the client has no distance.
+            proximityBand: friend.proximity_band ?? "outside_range",
             lastActiveEstimate: friend.last_active_estimate,
             glowStrength: friend.glow_strength,
             confidence: friend.confidence
@@ -1422,57 +1436,64 @@ type UserRowProps = {
   onCreateCircle: () => void;
 };
 
-/** Colour for the secondary proximity line — active states read as "alive",
- *  inactive/hidden stay muted. Never conveys distance, only the bucket. */
-const PROXIMITY_TEXT_CLASS: Partial<Record<ProximityLevel, string>> = {
-  close: "text-primary",
-  near: "text-violet-600 dark:text-violet-300",
-  far: "text-blue-600 dark:text-blue-300"
-};
+/**
+ * PROXIMITY PRESENTATION ON MUDDIES.
+ *
+ * The three-colour ring palette that used to live here (orange/violet/blue for
+ * close/near/far) is gone. It was a second proximity language competing with
+ * the canonical one: three states where the product has six, and hues that
+ * carried meaning nothing else in the app shared. Muddies now renders the
+ * production Glow V2 -- same component, same config table, same six states as
+ * Home and the Muddy profile.
+ *
+ * PRESENCE IS NOT PROXIMITY. The green "online" dot is also gone. Mad Buddy has
+ * no canonical presence authority, and proximity freshness is not one: a Muddy
+ * can carry a Glow without being online, and showing a live dot derived from a
+ * location fix would be inventing a presence signal the product never agreed to
+ * expose. The Glow says how close somebody is; nothing here claims they are
+ * available.
+ */
 
-/** Same palette, as a ring colour. On this page's compact rows the animated
- *  glow halo reads as noise against the row's own borders/dividers at this
- *  size, so avatars here use a plain solid outline in the proximity colour
- *  instead — same information, easier to read at a glance. */
-const PROXIMITY_RING_CLASS: Partial<Record<ProximityLevel, string>> = {
-  close: "ring-primary",
-  near: "ring-violet-500",
-  far: "ring-blue-500"
-};
+/** Muted styling for a Muddy with no active proximity signal. */
+const NO_SIGNAL_TEXT_CLASS = "text-muted-foreground";
 
 function isActiveLevel(level: ProximityLevel): boolean {
   return level === "close" || level === "near" || level === "far";
 }
 
-/** ring-2 + offset in the proximity colour when glowing; no ring otherwise. */
-function proximityRingClassName(level: ProximityLevel): string | undefined {
-  if (!isActiveLevel(level)) return undefined;
-  return cn("ring-2 ring-offset-2 ring-offset-background", PROXIMITY_RING_CLASS[level] ?? "ring-primary");
+/**
+ * The Glow a row renders, or null when there is no signal.
+ *
+ * Absent is not "far": a Muddy the proximity API said nothing about renders
+ * glow-free rather than wearing the weakest state.
+ */
+function bandFor(proximity: ProximityInfo | undefined): ProximityBand | null {
+  const band = proximity?.proximityBand;
+  if (!band || band === "outside_range") return null;
+  return band;
 }
 
-/** A small presence marker on the avatar: eye-off when hidden, a live dot when
- *  glowing, nothing when simply not glowing. Not colour-only — the icon/shape
- *  and the text label both carry the state. */
-function PresenceDot({ level }: { level: ProximityLevel }) {
-  if (level === "hidden") {
-    return (
-      <span
-        className="absolute -bottom-0.5 -right-0.5 z-[2] grid h-4 w-4 place-items-center rounded-full border-2 border-background bg-secondary text-muted-foreground"
-        aria-hidden="true"
-      >
-        <EyeOff className="h-2.5 w-2.5" />
-      </span>
-    );
-  }
-  if (isActiveLevel(level)) {
-    return (
-      <span
-        className="absolute bottom-0 right-0 z-[2] h-3 w-3 rounded-full border-2 border-background bg-emerald-500"
-        aria-hidden="true"
-      />
-    );
-  }
-  return null;
+/** The label a row shows, or null when there is nothing truthful to say. */
+function proximityTextFor(proximity: ProximityInfo | undefined): string | null {
+  const band = bandFor(proximity);
+  return band ? proximityBandLabel(band) : null;
+}
+
+/**
+ * A hidden Muddy is a deliberate state, not an absent one -- they have chosen
+ * not to share proximity, which is worth showing as its own marker rather than
+ * silently rendering as "no signal".
+ */
+function HiddenMarker({ level }: { level: ProximityLevel }) {
+  if (level !== "hidden") return null;
+  return (
+    <span
+      className="absolute -bottom-0.5 -right-0.5 z-[2] grid h-4 w-4 place-items-center rounded-full border-2 border-background bg-secondary text-muted-foreground"
+      aria-hidden="true"
+    >
+      <EyeOff className="h-2.5 w-2.5" />
+    </span>
+  );
 }
 
 function MuddyRow({
@@ -1495,7 +1516,8 @@ function MuddyRow({
   // 10–15km signal; absent data must remain inactive/hidden.
   const level = proximity?.proximityLevel ?? "hidden";
   const otherCircles = circles.filter((circle) => circle.id !== "close-friends");
-  const statusClass = PROXIMITY_TEXT_CLASS[level] ?? "text-muted-foreground";
+  const band = bandFor(proximity);
+  const proximityText = proximityTextFor(proximity);
 
   return (
     <li className="flex items-center gap-3 py-2.5">
@@ -1504,17 +1526,17 @@ function MuddyRow({
         data-tour-id={TOUR_TARGET_IDS.MUDDIES_PROFILE}
         onClick={onViewProfile}
         className="focus-ring safe-motion relative shrink-0 rounded-full"
-        aria-label={`${user.displayName}, ${proximityLabels[level]}`}
+        aria-label={[user.displayName, proximityText].filter(Boolean).join(", ")}
       >
-        <UserAvatar
+        <ProximityGlowAvatar
           name={user.displayName}
           src={user.avatarUrl}
-          size="sm"
+          band={band}
           decorative
+          size="sm"
           membershipTier={publicMembershipTier(user.plan)}
-          className={proximityRingClassName(level)}
         />
-        <PresenceDot level={level} />
+        <HiddenMarker level={level} />
       </button>
 
       <button type="button" onClick={onViewProfile} className="focus-ring min-w-0 flex-1 rounded text-left">
@@ -1523,7 +1545,9 @@ function MuddyRow({
           <PremiumPlanBadge plan={user.plan} compact />
         </span>
         <span className="mt-0.5 flex items-center gap-1.5 text-xs leading-tight">
-          <span className={cn("truncate", statusClass)}>{proximityLabels[level]}</span>
+          {proximityText ? (
+            <span className={cn("truncate", NO_SIGNAL_TEXT_CLASS)}>{proximityText}</span>
+          ) : null}
           {isCloseFriend ? (
             <span className="inline-flex shrink-0 items-center rounded-full bg-orange-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 dark:text-orange-200">
               Close Friend
@@ -1614,11 +1638,14 @@ function ActiveNowStrip({
   return (
     <section aria-labelledby="active-now-heading">
       <div className="mb-2 flex items-center gap-2">
+        {/* "Nearby Muddies", not "Active now": this strip is built from the
+            proximity signal, and "active" would claim a presence state the
+            product does not have. A Muddy with a Glow is near, not online. */}
         <h2 id="active-now-heading" className="text-sm font-semibold">
-          Active now
+          Nearby Muddies
         </h2>
         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-          {friends.length} active
+          {friends.length}
         </span>
       </div>
       {/* The avatar rail scrolls horizontally on its own, so it opts out of
@@ -1632,6 +1659,8 @@ function ActiveNowStrip({
         {friends.map((friend) => {
           const proximity = proximityByFriendId[friend.id];
           const level = proximity?.proximityLevel ?? "hidden";
+          const band = bandFor(proximity);
+          const proximityText = proximityTextFor(proximity);
           return (
             <li key={friend.id} className="shrink-0">
               <ActiveNowAvatar
@@ -1640,23 +1669,24 @@ function ActiveNowStrip({
                 onSelect={() => onSelect(friend)}
                 actions={renderActions(friend)}
                 className="focus-ring safe-motion flex w-[76px] flex-col items-center gap-1.5 rounded-xl text-center"
-                aria-label={`${friend.displayName}, ${proximityLabels[level]}`}
+                aria-label={[friend.displayName, proximityText].filter(Boolean).join(", ")}
               >
-                <span className="relative">
-                  <UserAvatar
-                    name={friend.displayName}
-                    src={friend.avatarUrl}
-                    size="md"
-                    decorative
-                    membershipTier={publicMembershipTier(friend.plan)}
-                    className={proximityRingClassName(level)}
-                  />
-                  <span className="absolute bottom-0.5 right-0.5 z-[2] h-3 w-3 rounded-full border-2 border-background bg-emerald-500" aria-hidden="true" />
-                </span>
+                {/* No presence dot: the Glow carries proximity, and Mad Buddy
+                    has no authority that could honestly say "online". */}
+                <ProximityGlowAvatar
+                  name={friend.displayName}
+                  src={friend.avatarUrl}
+                  band={band}
+                  decorative
+                  size="md"
+                  membershipTier={publicMembershipTier(friend.plan)}
+                />
                 <span className="w-full truncate text-xs font-medium">{friend.displayName}</span>
-                <span className={cn("w-full truncate text-[11px] font-semibold", PROXIMITY_TEXT_CLASS[level] ?? "text-primary")}>
-                  {proximityLabels[level]}
-                </span>
+                {proximityText ? (
+                  <span className="w-full truncate text-[11px] font-semibold text-primary">
+                    {proximityText}
+                  </span>
+                ) : null}
               </ActiveNowAvatar>
             </li>
           );
@@ -1728,7 +1758,6 @@ function ActiveNowAvatar({
         trigger={<span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 block h-0" />}
         items={actions}
       />
-      <span className="sr-only">{proximityLabels[level]}</span>
     </span>
   );
 }

@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { loadEffectivePlan } from "@/lib/billing/service";
 import { loadFieldPrivacy } from "@/lib/profile/service";
+import { profileCompletionPercent, remainingCompletionTasks } from "@/lib/profile/rules";
 import { loadDateOfBirthState } from "@/lib/profile/date-of-birth-service";
 import { dateKeyInTimeZone } from "@/lib/profile/birth-date";
 import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
@@ -44,13 +45,17 @@ export default async function ProfilePage({
   const { data: profile } = user
     ? await supabase
         .from("profiles")
-        .select("full_name, username, bio, mood_status, avatar_url, visibility_status, trusted_member_since")
+        // `institution` and `general_area` feed completion and the hero. Both
+        // are self-reported profile fields; general_area is NOT location.
+        .select(
+          "full_name, username, bio, mood_status, avatar_url, visibility_status, trusted_member_since, institution, general_area"
+        )
         .eq("user_id", user.id)
         .maybeSingle()
     : { data: null };
 
   const admin = createSupabaseAdminClient();
-  const [effectivePlan, birthDetails, fieldPrivacy, identitySummary, journey, photos, trustedStanding, momentsEnabled] = user
+  const [effectivePlan, birthDetails, fieldPrivacy, identitySummary, journey, photos, trustedStanding, momentsEnabled, interestRows] = user
     ? await Promise.all([
         loadEffectivePlan(admin, user.id),
         loadDateOfBirthState(user.id),
@@ -62,9 +67,32 @@ export default async function ProfilePage({
         // batch rather than as a follow-up request.
         loadVisibleProfilePhotosFor(admin, user.id, { isOwner: true, isApprovedMuddy: false }),
         getTrustedMemberStandingAction(),
-        isMomentsEnabled(admin)
+        isMomentsEnabled(admin),
+        // The owner's own interests: no privacy narrowing, you always see
+        // everything on your own profile.
+        admin.from("user_interests").select("interest").eq("user_id", user.id)
       ])
-    : ["free" as const, null, null, null, null, [], null, false];
+    : ["free" as const, null, null, null, null, [], null, false, null];
+
+  /* Completion comes from the shared authority in lib/profile/rules rather
+   * than being counted in the component, so this page and onboarding can
+   * never disagree about what "complete" means. */
+  const interests = (interestRows?.data ?? []).map((row) => row.interest);
+  const completionInput = {
+    hasDisplayName: Boolean(profile?.full_name?.trim()),
+    hasUsername: Boolean(profile?.username?.trim()),
+    hasPhoto: Boolean(profile?.avatar_url),
+    hasBio: Boolean(profile?.bio?.trim()),
+    hasInstitution: Boolean(profile?.institution?.trim()),
+    hasInterests: interests.length > 0,
+    hasFirstMuddy: (identitySummary?.activity?.muddyCount ?? 0) > 0
+  };
+  const completion = user
+    ? {
+        percent: profileCompletionPercent(completionInput),
+        tasks: remainingCompletionTasks(completionInput)
+      }
+    : null;
 
   /* Validated HERE, on the server, rather than passed through to the client.
    * returnTo arrives in a URL and is attacker-supplied regardless of who
@@ -86,6 +114,9 @@ export default async function ProfilePage({
       initialAvatarUrl={profile?.avatar_url ?? null}
       initialVisibilityStatus={profile?.visibility_status ?? "visible"}
       identitySummary={identitySummary}
+      interests={interests}
+      completion={completion}
+      generalArea={profile?.general_area ?? null}
       momentsEnabled={momentsEnabled}
       journey={journey}
       photos={photos}
