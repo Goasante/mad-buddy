@@ -153,7 +153,32 @@ export default async function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script id="theme-script" nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* suppressHydrationWarning is required here, and ONLY here, because of
+            CSP nonce-hiding — a browser behaviour, not an app bug.
+            The CSP spec requires a user agent to EMPTY the `nonce` content
+            attribute once the document has loaded, so a stylesheet cannot use
+            an attribute selector to exfiltrate the value. Chromium does exactly
+            that: after load `getAttribute("nonce")` is `""` while the real value
+            survives on the `.nonce` IDL property.
+            React hydrates AFTER that blanking has happened, compares its own
+            `nonce` prop against the emptied DOM attribute, and reports
+            `nonce="n2v8..."` (client) vs `nonce=""` (server). Because this
+            script lives in the ROOT layout, the warning appeared on every route
+            in the app — which is why it presented as an "app-wide hydration
+            warning confirmed on /settings" rather than as a bug in any one page.
+            Nothing is actually mismatched: proxy.ts mints the nonce, the
+            response header and the served HTML carry the SAME value (verified),
+            and the script executes under the enforced CSP. Suppressing the
+            comparison on this one element is the correct fix; removing the nonce
+            would break the CSP, and there is no way to stop the browser hiding
+            the attribute. Scoped to this element only, so genuine mismatches
+            anywhere else still surface. */}
+        <script
+          id="theme-script"
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: themeScript }}
+        />
       </head>
       <body suppressHydrationWarning>
         <ThemeProvider>

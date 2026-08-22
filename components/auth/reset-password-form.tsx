@@ -52,8 +52,12 @@ export function ResetPasswordForm() {
     });
   }
 
+  /* method="post" is a safety fallback for when the page's JavaScript has not
+   * run: a form with no method defaults to GET and would put every field in the
+   * URL (browser history, access logs, proxies). Submission normally goes
+   * through onSubmit. Full note in login-form.tsx. */
   return (
-    <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+    <form className="space-y-4" method="post" onSubmit={handleSubmit(onSubmit)}>
       <FormField htmlFor="password" label="New password" error={errors.password?.message}>
         <Input id="password" type="password" autoComplete="new-password" {...register("password")} />
       </FormField>

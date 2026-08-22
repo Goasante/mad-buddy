@@ -49,9 +49,16 @@ export default async function HomePage() {
 
   return (
     <>
+      {/* suppressHydrationWarning: CSP nonce-hiding, the same browser behaviour
+          documented on the theme script in app/layout.tsx. The user agent empties
+          the `nonce` content attribute once the document has loaded, so React's
+          hydration comparison sees `nonce=""` where the server sent a real value.
+          Nothing is mismatched; the attribute was deliberately hidden by the
+          browser. Scoped to this element so real mismatches still surface. */}
       <script
         type="application/ld+json"
         nonce={nonce}
+        suppressHydrationWarning
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
       />
       <LandingPage />

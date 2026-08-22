@@ -50,8 +50,12 @@ export function ForgotPasswordForm() {
     setTurnstileToken(token);
   }, []);
 
+  /* method="post" is a safety fallback for when the page's JavaScript has not
+   * run: a form with no method defaults to GET and would put every field in the
+   * URL (browser history, access logs, proxies). Submission normally goes
+   * through onSubmit. Full note in login-form.tsx. */
   return (
-    <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+    <form className="space-y-4" method="post" onSubmit={handleSubmit(onSubmit)}>
       <FormField htmlFor="email" label="Email" error={errors.email?.message}>
         <Input id="email" type="email" autoComplete="email" placeholder="you@example.com" {...register("email")} />
       </FormField>

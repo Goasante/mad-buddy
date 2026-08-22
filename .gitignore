@@ -42,3 +42,7 @@ qa-*.mjs
 qa-*.json
 qa-shots/
 .qa-auth-cache.json
+
+# Hardening program runtime artifacts (screenshots, captured auth state).
+# Never commit: .hardening/auth-*.json contains a real session token.
+.hardening/

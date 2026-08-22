@@ -249,6 +249,26 @@ const FROM_FRIENDSHIPS = /\.from\((["'])friendships\1\)/g;
 /** Every `.from("friendships")` site in one file. */
 export function analyzeFile(root: string, file: string): FriendshipQuerySite[] {
   const raw = readFileSync(file, "utf8");
+
+  /* Cheap reject before the expensive parse.
+   *
+   * blankComments() is a character-by-character scan of the whole file, and it
+   * dominates this guard's cost: profiled across the tree at walk=28ms vs
+   * parse=7336ms for 828 files (~5.9MB). Yet only about twenty files contain a
+   * friendships query at all, so the other ~800 were being parsed in full only
+   * to match nothing.
+   *
+   * A file that does not contain the substring `friendships` anywhere -- in
+   * code OR in a comment -- cannot produce a `.from("friendships")` site, so it
+   * can be rejected outright. indexOf here is a fast native substring search
+   * over the raw text.
+   *
+   * Deliberately checked against the RAW text, not the blanked text: the point
+   * is to skip work before blanking, and a false positive (the word appearing
+   * only in prose) merely costs one ordinary parse, which then finds nothing.
+   * No site can be missed, because every real site contains the substring. */
+  if (!raw.includes("friendships")) return [];
+
   // Prose is not a query. Comments are blanked (not removed) so line numbers
   // and offsets still line up with the real file — this guard's own
   // documentation quotes the very pattern it searches for, and a scanner that
@@ -283,9 +303,45 @@ export function analyzeFile(root: string, file: string): FriendshipQuerySite[] {
   return sites;
 }
 
+/**
+ * Memoised results, keyed by scan root.
+ *
+ * WHY. A full scan walks ~830 files and runs the character-by-character
+ * `blankComments` pass over ~6MB of source: 400-800ms on an idle machine, and
+ * SYNCHRONOUS throughout. Five call sites across three suites
+ * (relationship-lifecycle, friendship-query-guard, ended-friendship-
+ * authorization) each paid that cost independently.
+ *
+ * Under full-suite parallel load the cost inflated past vitest's 5s default,
+ * and because the work blocks the event loop it starved unrelated tests
+ * sharing the worker -- which is how a pure date-formatting assertion in
+ * conversation-presence.test.ts ("falls back to a short date further back")
+ * came to fail on a timeout despite doing no I/O at all. Both failures had
+ * one cause, and it was this.
+ *
+ * WHY MEMOISING IS CORRECT RATHER THAN A TIMEOUT BUMP. The scan is a pure
+ * function of the source tree, and the tree does not change while a test
+ * process runs. Raising the timeout would have hidden the starvation while
+ * leaving the suite slow and the innocent test still at risk.
+ *
+ * The cache is per-process, so watch mode re-scans on each fresh run, and
+ * `clearFriendshipQuerySiteCache()` exists for any test that writes fixture
+ * files into the scanned tree and needs a re-read within one process.
+ */
+const siteCache = new Map<string, FriendshipQuerySite[]>();
+
+/** Drops memoised scans. For tests that mutate the tree mid-process. */
+export function clearFriendshipQuerySiteCache(): void {
+  siteCache.clear();
+}
+
 /** Every site across the scanned tree. */
 export function collectFriendshipQuerySites(root: string): FriendshipQuerySite[] {
-  return collectSourceFiles(root).flatMap((file) => analyzeFile(root, file));
+  const cached = siteCache.get(root);
+  if (cached) return cached;
+  const sites = collectSourceFiles(root).flatMap((file) => analyzeFile(root, file));
+  siteCache.set(root, sites);
+  return sites;
 }
 
 /**

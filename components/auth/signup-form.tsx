@@ -81,8 +81,12 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
     setTurnstileToken(token);
   }, []);
 
+  /* method="post" is a safety fallback for when the page's JavaScript has not
+   * run: a form with no method defaults to GET and would put every field in the
+   * URL (browser history, access logs, proxies). Submission normally goes
+   * through onSubmit. Full note in login-form.tsx. */
   return (
-    <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
+    <form className="space-y-4" method="post" onSubmit={handleSubmit(onSubmit)} noValidate>
       <FormField htmlFor="email" label="Email address" error={errors.email?.message}>
         <Input
           id="email"

@@ -89,8 +89,22 @@ export function LoginForm({ initialError = null, nextDestination = POST_LOGIN_RO
     }
   }
 
+  /* method="post" on the form below is a SAFETY FALLBACK, not the submit path.
+   *
+   * Submission normally runs through the onSubmit handler and never reaches the
+   * browser's native form submission. But when the page's JavaScript has not run
+   * -- a failed or blocked chunk, a slow network that drops the bundle, an
+   * extension, or JS disabled outright -- the browser submits the form itself.
+   * A <form> with no method defaults to GET, which appends every field to the
+   * URL. Verified in a real browser: /login and /signup both produced
+   * `?email=...&password=...` in the address bar, and a URL like that is written
+   * to browser history, server access logs and any intermediate proxy.
+   *
+   * POST keeps the fields in the request body. Login still fails closed without
+   * JavaScript (there is no non-JS endpoint), so this changes nothing about what
+   * succeeds -- only about what leaks when it fails. */
   return (
-    <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+    <form className="space-y-4" method="post" onSubmit={handleSubmit(onSubmit)}>
       {/* OAuth first: the fastest, most-used path leads. */}
       <Button
         type="button"
