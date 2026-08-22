@@ -69,6 +69,66 @@ against the LOCAL Supabase Docker stack (never production).
 
 ---
 
+## Accepted findings — Mission 1 Advanced (owner-approved 2026-08-22)
+
+The three findings below were reviewed and **accepted**. They are recorded here in
+summary; full reproduction, root cause and verification detail follow in the
+Findings section.
+
+| ID | Severity | Summary | Status |
+| --- | --- | --- | --- |
+| MB-GOD-001 | P2 | Test-infrastructure event-loop starvation from repeated synchronous source-tree parsing. Fixed at source. Full suite **147s -> 72s**. | FIXED |
+| MB-GOD-002 | P1 | App-wide nonce hydration warning caused by browser nonce blanking required by CSP semantics. Root-layout handling corrected **without** hiding unrelated hydration warnings. | FIXED |
+| MB-GOD-003 | **P0** | **Credential leak.** Auth forms had no explicit `method` and could natively submit as **GET** before hydration, placing email/password in the URL. Fixed across all affected auth forms. | FIXED |
+
+**MB-GOD-003 remains a P0 discovered-and-fixed item in the final report.** It is
+not downgraded on account of being fixed: the severity records what the defect
+was, not what it is now.
+
+## Open / unclassified
+
+### MB-GOD-004 - `/linkr` did not respond within 240s
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Linkr |
+| **Route** | `/linkr` |
+| **Severity** | n/a |
+| **Status** | **CLASSIFIED: DEV TOOLING / TURBOPACK COLD-COMPILE ARTIFACT - closed** |
+
+**Resolution.** Tested against production output (`next build` + `next start`,
+port 3200) with a real authenticated session:
+
+```
+200   2567ms   14 controls   /linkr
+```
+
+The route loads normally and well within budget, so the earlier 240s event was a
+dev-mode cold-compile artifact under concurrent load, not a product defect. It
+was NOT waived on assumption -- it was retested on the faster, more
+representative target before being closed.
+
+For contrast, the same production server serves the public routes in **35-500ms**
+where dev took ~100s per cold route. That gap is why the remaining exhaustive
+passes run against built output.
+
+During the Mission 1 Advanced authenticated sweep, `/linkr` failed to reach
+`domcontentloaded` within 240s while the dev server was under concurrent load.
+Every other route in that sweep returned 200.
+
+**This is deliberately NOT yet called an environment artifact.** The classification
+rule for it:
+
+- If production output loads `/linkr` normally ->
+  **DEV TOOLING / TURBOPACK COLD-COMPILE ARTIFACT**, closed.
+- If production output also hangs or materially underperforms ->
+  **real product/performance defect**, root-caused before the program continues.
+  Inspection list: server query stalls, N+1 queries, recursive projection,
+  excessive data loading, client bundle size, suspense/deadlock, network timeout,
+  auth loop.
+
+It is not waived either way.
+
 ## Findings
 
 <!-- MB-GOD-NNN entries appended below as discovered. -->
@@ -295,13 +355,24 @@ exposure too.
   followed by navigation to `/friends`, confirming the normal path is unchanged.
 - `npx tsc --noEmit` passes.
 
-### MB-GOD-ENV-001 - Local Supabase stack missing DML grants (environment, not product)
+### MB-GOD-ENV-001 - Local Supabase stack missing DML grants
 
 | Field | Value |
 | --- | --- |
+| **Classification** | **ENVIRONMENT / LOCAL TOOLCHAIN** |
 | **Surface** | Local development environment |
-| **Severity** | n/a (blocks runtime verification; **not** a product defect) |
-| **Status** | **REPAIRED** |
+| **Severity** | n/a - blocks runtime verification; **not** a product defect |
+| **Status** | **REPAIRED LOCALLY (environment limitation remains visible)** |
+
+**Standing instruction (owner decision).** Do NOT patch the production schema on
+the strength of this local mismatch, and do NOT add blanket `GRANT` migrations
+merely to force local parity. The limitation stays recorded here rather than
+being engineered away.
+
+Evidence summary:
+- local Postgres = **17.6**
+- `supabase/config.toml` declares = **15**
+- production Supabase platform defaults supply the expected grants
 
 Every RLS-scoped read failed locally with `permission denied for table X`
 (Postgres 42501). In the browser this surfaced as `GET /api/notifications` -> 500
@@ -343,3 +414,268 @@ socket, because `lib/security/csp.ts` derives the websocket origin with
 `supabase.replace(/^https:/, "wss:")` - correct for production HTTPS, but it
 cannot convert a local `http://` origin to `ws://`. Console shows
 `realtime CHANNEL_ERROR; using poll fallback`. Production is unaffected.
+### MB-GOD-005 - Primary tab rows and CTAs below the 44px minimum touch target
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Muddies, UpFor, Events, Plans (cross-surface) |
+| **Route** | `/friends`, `/hangout-mode`, `/events`, `/plans` |
+| **Severity** | P2 |
+| **Category** | Mobile ergonomics / design-system consistency |
+| **Stage** | Mission 1 - Advanced (production runtime crawl) |
+| **Status** | **FIXED (runtime-verified)** |
+
+**Reproduction.** Crawl the authenticated surfaces at 393x852 and measure every
+visible control's bounding box.
+
+**Expected.** No interactive control below 44x44, the minimum the codebase
+already uses elsewhere.
+
+**Actual.** Every primary tab row in the product sat under the minimum, at three
+different heights - evidence of three independent implementations rather than one
+shared component:
+
+| Surface | Control | Measured |
+| --- | --- | --- |
+| Muddies | All / Circles / Close Friends / Requests / Blocked | 41px |
+| Muddies | "Message" (primary action on every Muddy card) | 40px |
+| UpFor | For You / Muddies / Around / Groups | 36px |
+| UpFor | "Start an UpFor" (the empty state's only action) | 38px |
+| UpFor | "Your exact location is never shared" (link to /safety-center) | 18px |
+| Events | Home / Discover / Yours / Hosting | 36px |
+| Plans | Upcoming / Invitations / Created by you / No date yet / Past | 42px |
+
+**Root cause.** Not a missing standard - the 44px convention already exists and
+is honoured in 11 components and many CSS rules (`min-h-11`, the dropdown rows,
+the camera controls, the quick-action column). The tab rows simply never adopted
+it: `.muddies-filter` and `.muddies-card-action` declared **no** `min-height` at
+all and inherited their size from padding, while `.upfor-tab` (2.25rem),
+`.upfor-empty__cta` (2.4rem) and the Events tabs (`min-h-[2.25rem]`) each picked
+their own smaller value. This is design-debt drift, and it is why the same defect
+appears on four surfaces at three different sizes.
+
+Notably these are not incidental controls: they are the primary filter
+navigation of four major surfaces, the main action on every Muddy card, and the
+single CTA a brand-new user meets in the UpFor empty state.
+
+**Fix.** Adopt the existing convention rather than inventing a new one - 44px
+(`min-h-11` / `2.75rem`) on each. The safety link took `padding-block` instead of
+`min-height`, because it is a centred line of text where a min-height would not
+enlarge the tappable area around the words.
+
+Files: `app/globals.css` (`.muddies-filter`, `.muddies-card-action`,
+`.upfor-tab`, `.upfor-empty__cta`, `.upfor-safety`),
+`components/events/events-page.tsx`, `components/plans/plans-page.tsx`.
+
+**Verification (production runtime, 393x852).**
+
+```
+before:  /friends small-target:8   /hangout-mode 6   /events 4   /plans 5
+after:   /friends clean            /hangout-mode 0   /events clean  /plans clean
+```
+
+**Detector correction.** The first crawl also reported a nested interactive
+element on Muddies and several 1x1 controls. Both were **false positives in my
+own harness**, not product defects:
+- the nesting check tested every node matching a broad selector (including
+  `[tabindex]` wrappers), so an ordinary `div` CONTAINING a button was reported.
+  A precise re-check found **0** genuine nestings across nine surfaces.
+- the 1x1 controls are the visually-hidden "Skip to content" link and hidden
+  file inputs, which are correct accessibility affordances.
+
+`crawl.mjs` was corrected for both so later passes are not misled.
+
+### MB-GOD-006 - Linkr orb assets 404 on every load (documented, not a regression)
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Linkr |
+| **Route** | `/linkr` |
+| **Severity** | P3 |
+| **Category** | Console noise / missing asset dependency |
+| **Stage** | Mission 1 - Advanced |
+| **Status** | OPEN - deliberately not "fixed" |
+
+`GET /linkr/orb-off.png` returns **404** on every `/linkr` load, producing a
+console error each time.
+
+This is **not** a regression and not an accident. `components/linkr/linkr-orb.tsx`
+probes for the artwork with an `Image()` and falls back to a branded placeholder,
+reserving the same box either way so the real art cannot shift the layout. There
+is an explicit test (`lib/visuals/registry.test.ts`) asserting the three orb
+assets are absent, so their absence is a tracked missing dependency:
+
+```
+FINAL LINKR ACTIVATION ASSET REQUIRED  -> /public/linkr/orb-off.png
+FINAL LINKR CONNECTION ASSET REQUIRED  -> /public/linkr/orb-activate.png
+FINAL LINKR EMPTY-STATE ASSET REQUIRED -> /public/linkr/orb-empty.png
+```
+
+Left as-is because the probe IS the mechanism - the `onerror` handler is how the
+component detects absence, and dropping a file at those paths switches it over
+with no code change. Substituting placeholder art to silence the 404 is exactly
+the failure the component's own documentation warns about ("gets shipped, and
+then never gets replaced because it is already done").
+
+**Carried forward:** the console error is real noise that will mask genuine
+errors in production logs. Revisit in Mission 6 (error hygiene) - either the art
+lands, or the probe moves to a method that fails quietly.
+
+### MB-GOD-007 - UpFor is served from the legacy route `/hangout-mode`
+
+| Field | Value |
+| --- | --- |
+| **Surface** | UpFor |
+| **Route** | `/hangout-mode` |
+| **Severity** | P2 |
+| **Category** | Information architecture / legacy vocabulary |
+| **Stage** | Mission 1 - Advanced (route inventory) |
+| **Status** | OPEN - deferred to Mission 4 |
+
+The bottom navigation labels the tab **UpFor**, and every product surface calls
+the concept UpFor, but the route is `/hangout-mode` - an older name for the
+feature. A user who shares the URL, bookmarks it, or simply reads the address bar
+meets engineering history the product otherwise never mentions.
+
+The program's standard is explicit that a user "should not encounter legacy
+vocabulary". Deferred rather than fixed here because renaming a route touches
+deep links, notification destinations, invite links and any shared URL already in
+circulation, so it belongs with the Mission 4 information-architecture pass where
+the redirect strategy can be decided as a whole.
+
+## Privacy verification (Mission 6, early evidence)
+
+Run against production output with a real authenticated session
+(`scripts/hardening/privacy-probe.mjs`).
+
+**The first run was a WEAK PASS and is recorded as such.** `/api/friends/nearby`
+returned `{"friends":[]}` - the fixture had no location data, so "no coordinates
+leaked" was true only because there was nothing to leak. A privacy test that
+cannot fail proves nothing.
+
+`scripts/hardening/seed-proximity.mjs` was added to give the test something real
+to catch: four users placed 120m-500m apart in Accra, with genuine latitude,
+longitude and accuracy rows in `public.user_locations`.
+
+**Re-run with real coordinates present - meaningful pass:**
+
+```json
+{ "friend_id": "...", "display_name": "Kofi Mensah", "username": "kofim",
+  "proximity_level": "close", "proximity_band": "around_you",
+  "glow_strength": 95, "status_text": "Close and glowing clearly",
+  "confidence": "high" }
+```
+
+- No `latitude`, `longitude`, `distance_m`, `metres`, `km` or `accuracy` in any
+  client payload, nor in the rendered `/friends` HTML.
+- Only **bands** are exposed (`close` / `around_you`), never a measurement.
+- `saao`, who has a location row but no relationship to the signed-in user, is
+  correctly **absent** - proximity is scoped to approved Muddies.
+- `glow_strength` was checked specifically as a possible distance proxy. It is
+  not: `glowStrengthForLevel` derives it from the BAND alone (close=90, near=64,
+  far=34) and adds +/-5 random jitter, so it carries no distance information and
+  cannot be correlated across polls.
+- IDOR attempts against another user's id return **404**.
+
+### MB-GOD-008 - Guided tour overlays every major surface on first visit
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Muddies, Home, Messages, Plans, Events, Linkr, UpFor, Profile, Settings, Notifications, Circles, Safe Arrival |
+| **Severity** | P3 (behaviour is intentional; recorded for Mission 3 review) |
+| **Category** | Onboarding / first-run experience |
+| **Stage** | Mission 1 - Advanced |
+| **Status** | OPEN - deferred to Mission 3 (flow) |
+
+Discovered because it broke an automated journey: clicking "Message" on
+`/friends` appeared to do nothing. The control was fine - a **"Muddies guide"
+tour dialog was open on top of it**, and the click landed on the overlay.
+
+Every one of the twelve surfaces above presents its own tour on first visit. That
+is a deliberate feature (`TourHost`, `recordTourStepEventAction`), not a defect,
+and each is individually dismissible with "Not now".
+
+Recorded because the CUMULATIVE effect is a Mission 3 question, not a Mission 1
+one: a brand-new user meeting a modal on twelve consecutive screens is a very
+different experience from meeting one on the two screens that genuinely need
+explaining. To be judged in the first-10-minutes simulation rather than fixed
+blind here.
+
+**Harness consequence** (worth stating, since it affects every later pass): an
+automated crawl that does not dismiss these is auditing the overlay rather than
+the page beneath it. `scripts/hardening/dismiss-tours.mjs` clears them for the QA
+account and re-saves auth state. Dismissing them immediately revealed real
+findings that had been hidden - including the Messages filter row's touch-target
+defect below.
+
+### MB-GOD-005 (extended) - the touch-target defect was wider than first measured
+
+The first pass fixed four tab rows. Dismissing the tour overlays and re-crawling
+exposed more of the same pattern, and the total is worth stating plainly because
+it is the clearest evidence of design-system drift found so far.
+
+**Every instance fixed, by surface:**
+
+| Surface | Control | Before | After |
+| --- | --- | --- | --- |
+| Muddies | 5 filter tabs | 41px | 44px |
+| Muddies | "Message" on each card | 40px | **149x44 (verified)** |
+| UpFor | 4 filter tabs | 36px | 44px |
+| UpFor | "Start an UpFor" (empty state) | 38px | 44px |
+| UpFor | safety link to /safety-center | 18px | 44px |
+| Events | 4 surface tabs | 36px | 44px |
+| Plans | 5 bucket tabs | 42px | 44px |
+| **Messages** | **4 filter tabs** | **34px** | **44px** |
+| **Notifications** | **5 filter tabs** | **34px** | **44px** |
+| Home | "Wave" secondary action | 43x32 | 44px |
+| Profile | avatar edit button | 40x40 | 44x44 |
+| Profile | visibility pill -> glow settings | 34px | 44px |
+| Profile | 3 completion rows | 42px | 44px |
+| Profile | "Add"/"Edit" interests | 23x16 | 44x44 |
+| Profile / Buddy Score | "View progress" / "View all" links | 16-20px | 44px |
+| Journey | "View My Progress", "Continue" | 20px / 36px | 44px |
+| Journey | "Replay guide" | 28px | 44px |
+| **Linkr** | **back button** | **36px** | **44px** |
+| Linkr | "How Linkr works" | 20px | 44px |
+
+**Nine** distinct filter/tab rows across the product, at **four** different
+heights (34, 36, 41, 42) - four independent implementations of the same
+component, none of which adopted the 44px convention the codebase already used
+elsewhere. The Messages and Notifications rows share a byte-identical class
+string, so the pattern was copied between surfaces and the defect with it.
+
+The Linkr **back button** deserves separate mention: a user who cannot reliably
+hit Back is stuck, which makes it the last control in the product that should
+have been under the minimum.
+
+**Deliberately NOT changed.** "Create a Plan" on Home sits inside the sentence
+"Create a Plan with your Muddies." It is a genuine inline prose link; giving it a
+44px box would break the line it lives in. Inline links in running text are the
+documented exception to the touch-target rule, and treating them otherwise would
+damage the reading experience to satisfy a number.
+
+## Journey verification (Mission 1 mutation/navigation audit)
+
+Ten core journeys driven through REAL controls in a real browser against
+production output - not fetch() calls, because a server action existing does not
+prove a button reaches it (`scripts/hardening/journeys-core.mjs`).
+
+```
+PASS  bottom nav — Muddies          PASS  Plans -> create
+PASS  bottom nav — Messages         PASS  Profile from Settings
+PASS  bottom nav — Linkr            PASS  Safe Arrival reachable
+PASS  bottom nav — UpFor            PASS  deep link preserves intent
+PASS  Muddy -> message              PASS  Muddy -> profile modal
+10/10
+```
+
+Notable: **"Muddy -> profile modal" initially FAILED and the product was right.**
+The journey asserted a URL change; tapping a Muddy actually opens a profile
+**modal**, which is the better interaction - it keeps the list underneath and
+offers Wave / Ping / Message inline. The assertion was corrected, not the app.
+The modal was then verified to show the correct person (`@kofim`), the correct
+relationship state ("Approved Muddy"), a privacy-safe proximity band ("Just
+Around", never a distance), and a working route through to `/friends/kofim`.
+
+This is the distinction the program asks for: a failing check is a question, not
+a verdict.

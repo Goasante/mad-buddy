@@ -89,7 +89,10 @@ export function ProfileCompletionCard({
               <button
                 type="button"
                 onClick={() => startTask(task)}
-                className="focus-ring safe-motion flex w-full items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/50 px-3.5 py-2.5 text-left hover:bg-secondary/40"
+                className=// min-h-11 (44px): these completion rows are the primary calls to action
+                // for a new user finishing their profile, and padding alone left
+                // them at 42px.
+                "focus-ring safe-motion flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/50 px-3.5 py-2.5 text-left hover:bg-secondary/40"
               >
                 <span className="min-w-0 truncate text-sm font-medium">{task.label}</span>
                 <span

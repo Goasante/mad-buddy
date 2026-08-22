@@ -400,7 +400,7 @@ export function ActivationCard({
             type="button"
             onClick={onSecondaryAction}
             disabled={pending}
-            className="focus-ring rounded-lg px-1 py-1.5 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-60"
+            className="focus-ring inline-flex min-h-11 items-center rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-60"
           >
             {secondaryLabel}
           </button>
@@ -409,7 +409,7 @@ export function ActivationCard({
             href={copy.secondary.href}
             // py-1.5 keeps a comfortable tap area on a text link without
             // adding measurable height to the row.
-            className="focus-ring rounded-lg px-1 py-1.5 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            className="focus-ring inline-flex min-h-11 items-center rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
           >
             {copy.secondary.label}
           </Link>

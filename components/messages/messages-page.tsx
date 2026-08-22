@@ -1024,7 +1024,10 @@ export function MessagesPageContent({
                     onClick={() => setActiveTab(tab.id)}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "focus-ring safe-motion inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium",
+                      // min-h-11 (44px): the app-wide minimum touch target. Same 34px pill
+                      // row as the notifications filters -- the pattern was copied
+                      // between the two surfaces, so the defect was too.
+                      "focus-ring safe-motion inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium",
                       active
                         ? "border-primary bg-primary/10 text-primary"
                         : "border-border/70 text-muted-foreground hover:bg-secondary/50 hover:text-foreground"

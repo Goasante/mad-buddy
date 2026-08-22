@@ -811,7 +811,9 @@ export function EventsPageContent({
                 className={cn(
                   // flex-1 + min-w-0: four equal shares, and the label may
                   // shrink rather than push a sibling off the row.
-                  "min-h-[2.25rem] min-w-0 flex-1 truncate rounded-lg px-1.5 text-[0.8125rem] font-medium transition sm:text-sm",
+                  // min-h-11 (44px) is the app-wide minimum touch target; this row was
+                  // 2.25rem (36px).
+                  "min-h-11 min-w-0 flex-1 truncate rounded-lg px-1.5 text-[0.8125rem] font-medium transition sm:text-sm",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                   active
                     ? "bg-background text-foreground shadow-sm"

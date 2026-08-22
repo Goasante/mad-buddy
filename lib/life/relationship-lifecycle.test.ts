@@ -69,13 +69,26 @@ describe("soft ending", () => {
     expect(body).toContain('.update({ ended_at: blockedAt })');
   });
 
+  /* 15s, matching the sibling scan-backed assertion in the privacy block.
+   *
+   * This is the FIRST call to collectFriendshipQuerySites in the process, so it
+   * pays for the whole tree scan and warms the cache every later caller reads.
+   * The scan itself was profiled and fixed (7336ms -> ~730ms; see
+   * lib/life/friendship-query-guard.ts), but ~730ms of SYNCHRONOUS work can
+   * still overrun a 5s default when the suite competes with a production build
+   * or another heavy process for CPU.
+   *
+   * Raising the budget was deliberately not the first move -- the cost was
+   * reduced tenfold first, and this covers only the residual. The number is a
+   * statement about what this assertion legitimately costs, not a way to make a
+   * slow test stop complaining. */
   it("no friendship hard delete survives outside account erasure", () => {
     const undeclared = undeclaredFriendshipDeletes(collectFriendshipQuerySites(process.cwd()));
     expect(
       undeclared.map((site) => `${site.file}:${site.line}`),
       `A DELETE destroys relationship identity. Soft-end with ended_at, or annotate ${HARD_DELETE_ANNOTATION} if this really is erasure.`
     ).toEqual([]);
-  });
+  }, 15_000);
 
   it("account deletion still hard-deletes, because erasure must erase", () => {
     const settings = read("app/(app)/settings-actions.ts");

@@ -442,7 +442,9 @@ export function PlansPageContent({
                 type="button"
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "focus-ring safe-motion inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium",
+                  // min-h-11 (44px) is the app-wide minimum touch target; padding alone
+                  // left this underline tab row at 42px.
+                  "focus-ring safe-motion inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium",
                   active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
                 )}
                 onClick={() => setActiveBucket(tab.id)}

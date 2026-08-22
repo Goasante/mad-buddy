@@ -48,6 +48,14 @@ Playwright is installed without touching `package.json`:
 | `hydration-auth.mjs` | Hydration + console check across authenticated routes. |
 | `authforms-nojs.mjs` | Submits the auth forms with JavaScript disabled and asserts no credential reaches the URL. Regression test for MB-GOD-003. |
 | `api-probe.mjs` | Calls an API route from inside an authenticated page and prints status + body. |
+| `crawl.mjs` | The main pass. Per route: status, landed URL, console/page errors, 4xx-5xx, horizontal overflow, a full interactive-control inventory, touch targets under 44px, unnamed controls, nested interactive elements, dead links, screenshot. |
+| `journey.mjs` | Declarative journey driver (`click` / `fill` / `expect-url` / `expect-text` / `expect-no-text`). Real clicks on real controls. |
+| `journeys-core.mjs` | The core product journeys: bottom-nav destinations, Muddy -> message, Muddy -> profile modal, Plans create, Safe Arrival, signed-out deep-link intent. |
+| `dismiss-tours.mjs` | Dismisses the guided tours for the QA account and re-saves auth state. **Run this before any crawl** - the tours overlay twelve surfaces and an undismissed crawl audits the overlay, not the page. |
+| `privacy-probe.mjs` | Product Constitution invariants: no coordinates/distances in any payload, non-Muddy data unreadable, IDOR attempts rejected. |
+| `seed-proximity.mjs` | Gives the privacy probe something real to catch - four users 120-500m apart with genuine lat/lng rows. Re-run before proximity assertions: locations go stale after 15 minutes by design. |
+| `nested-check.mjs` | Precise nested-interactive-element check (reports the outer element's own markup, not descendant text). |
+| `find-control.mjs` | Prints the class, size and markup of any control matching a text fragment. For pinning down a crawl finding. |
 
 ## Examples
 
@@ -69,6 +77,17 @@ MSYS_NO_PATHCONV=1 node scripts/hardening/authforms-nojs.mjs
 Output (screenshots, `report.json`, captured auth state) goes to `.hardening/`,
 which is gitignored — `auth-qa.json` holds a real session token.
 
+## Order of operations for a full pass
+
+```bash
+node scripts/hardening/seed-local.mjs        # cast
+node scripts/hardening/seed-proximity.mjs    # live locations (15-min freshness)
+node scripts/hardening/login.mjs             # real session
+node scripts/hardening/dismiss-tours.mjs     # clear first-run overlays
+node scripts/hardening/crawl.mjs   ...       # the pass itself
+node scripts/hardening/journeys-core.mjs     # end-to-end behaviour
+```
+
 ## Known local-only artifacts
 
 These are environment effects, **not** product defects. Do not "fix" them.
@@ -77,6 +96,13 @@ These are environment effects, **not** product defects. Do not "fix" them.
   `replace(/^https:/, "wss:")`, correct for production HTTPS but unable to
   convert a local `http://` origin to `ws://`. Console shows
   `realtime CHANNEL_ERROR; using poll fallback`.
-- **Slow first navigation.** The first visit to an authenticated route can take
-  ~100s while Turbopack compiles it. Harness timeouts are set generously for
-  this; a timeout on a first visit is not a product finding.
+- **Slow first navigation (dev only).** The first visit to an authenticated route
+  can take ~100s while Turbopack compiles it. This produced one false timeout
+  classification (`/linkr`), which is why exhaustive passes run against
+  production output, where the same route serves in ~2s.
+- **Stale proximity.** `user_locations` rows age out after 15 minutes by design,
+  and the product then correctly stops showing a proximity band. Re-run
+  `seed-proximity.mjs` before asserting on proximity, and never assert on a
+  specific band label - assert on the ABSENCE of measurements instead.
+- **`/linkr/orb-off.png` 404.** A deliberate probe for artwork that has not
+  landed yet; the component falls back to a placeholder. See MB-GOD-006.

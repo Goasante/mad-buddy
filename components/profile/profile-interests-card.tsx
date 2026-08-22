@@ -107,7 +107,10 @@ export function ProfileInterestsCard({
         <button
           type="button"
           onClick={openEditor}
-          className="focus-ring rounded text-xs font-semibold text-primary"
+          className=// min-w-11 as well as min-h-11: the label is often just "Add", which
+          // left the control 39px wide. The negative margin keeps the label
+          // visually where it was while the tappable box grows around it.
+          "focus-ring -mx-2 inline-flex min-h-11 min-w-11 items-center justify-center rounded px-2 text-xs font-semibold text-primary"
         >
           {display.length > 0 ? "Edit" : "Add"}
         </button>

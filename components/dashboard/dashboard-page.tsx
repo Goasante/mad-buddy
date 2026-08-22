@@ -919,7 +919,10 @@ export function DashboardPageContent({
                 ? waveAtMuddy(soloNearbyMuddy.friendId)
                 : runRelationshipAction(soloNearbyPlan.secondary!, soloNearbyMuddy.friendId)
             }
-            className="focus-ring rounded-lg px-1 py-1.5 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-60"
+            // min-h-11 + px-3: 44px minimum touch target. Wave is a real action on
+            // the Home surface and measured 43x32 -- under the minimum on both
+            // axes, with almost no horizontal padding to aim at.
+            className="focus-ring inline-flex min-h-11 items-center rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-60"
           >
             {soloSecondary === "wave" && wavingMuddyId === soloNearbyMuddy.friendId
               ? "Waving…"

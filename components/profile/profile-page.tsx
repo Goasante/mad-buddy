@@ -670,7 +670,7 @@ export function ProfilePageContent({
                   disabled={avatarUploading || returningToLinkr}
                   aria-label={avatarUrl ? "Change profile photo" : "Add profile photo"}
                   title={avatarUrl ? "Change photo" : "Add photo"}
-                  className="focus-ring safe-motion absolute bottom-1 right-1 grid h-10 w-10 place-items-center rounded-full border-2 border-background bg-secondary text-foreground hover:bg-secondary/80"
+                  className="focus-ring safe-motion absolute bottom-1 right-1 grid h-11 w-11 place-items-center rounded-full border-2 border-background bg-secondary text-foreground hover:bg-secondary/80"
                 >
                   <Camera className="h-4 w-4" aria-hidden="true" />
                 </button>
@@ -696,7 +696,7 @@ export function ProfilePageContent({
 
             <Link
               href="/settings/glow-visibility"
-              className="focus-ring safe-motion mt-3 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/50 px-3.5 py-1.5 text-sm font-medium hover:bg-secondary/40"
+              className="focus-ring safe-motion mt-3 inline-flex min-h-11 items-center gap-2 rounded-full border border-border/70 bg-card/50 px-3.5 py-1.5 text-sm font-medium hover:bg-secondary/40"
             >
               <span className={cn("h-2 w-2 rounded-full", ghostOn ? "bg-muted-foreground" : "bg-emerald-500")} aria-hidden="true" />
               <span className={ghostOn ? "text-muted-foreground" : "text-emerald-600 dark:text-emerald-300"}>
@@ -783,7 +783,7 @@ export function ProfilePageContent({
               ) : null}
               {identitySummary?.buddyScore?.recentActivity?.length ? (
                 <div className="mt-5 border-t border-border/60 pt-4">
-                  <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">Recent score activity</p><Link href="/buddy-score" className="focus-ring rounded text-xs font-semibold text-primary">View progress</Link></div>
+                  <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">Recent score activity</p><Link href="/buddy-score" className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded px-2 text-xs font-semibold text-primary">View progress</Link></div>
                   <div className="mt-2 divide-y divide-border/50">
                     {identitySummary.buddyScore.recentActivity.map((activity) => (
                       <div key={activity.id} className="flex items-center justify-between gap-3 py-2 text-xs">
@@ -795,7 +795,7 @@ export function ProfilePageContent({
                 </div>
               ) : null}
               <div className="mt-5 border-t border-border/60 pt-4">
-                <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">Achievements</p><Link href="/badges" className="focus-ring rounded text-xs font-semibold text-primary">View all</Link></div>
+                <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">Achievements</p><Link href="/badges" className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded px-2 text-xs font-semibold text-primary">View all</Link></div>
                 {identitySummary?.achievements?.featured.length ? (
                   <div className="mt-3 flex gap-3">
                     {identitySummary.achievements.featured.map((achievement) => (

@@ -645,7 +645,9 @@ export function NotificationsPageContent({
                   aria-selected={active}
                   onClick={() => setCategory(option.value)}
                   className={cn(
-                    "focus-ring safe-motion inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium",
+                    // min-h-11 (44px): the app-wide minimum touch target. This filter
+                    // row is the primary way to triage notifications and was 34px.
+                    "focus-ring safe-motion inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium",
                     active
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-border/70 text-muted-foreground hover:bg-secondary/50 hover:text-foreground"

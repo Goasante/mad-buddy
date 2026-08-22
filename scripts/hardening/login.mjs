@@ -9,6 +9,7 @@ import { mkdirSync } from "node:fs";
 const email = process.argv[2] || "qa@local.test";
 const password = process.argv[3] || "HardeningPass123!";
 const out = process.argv[4] || "C:/mb-god/.hardening/auth-qa.json";
+const BASE = process.env.MB_BASE || "http://localhost:3100";
 mkdirSync("C:/mb-god/.hardening", { recursive: true });
 
 const b = await chromium.launch();
@@ -16,7 +17,7 @@ const ctx = await b.newContext({ viewport: { width: 393, height: 852 }, isMobile
 const p = await ctx.newPage();
 p.on("console", (m) => { if (m.type() === "error") console.log("  [console.error]", m.text().slice(0, 300)); });
 
-await p.goto("http://localhost:3100/login", { waitUntil: "domcontentloaded", timeout: 180000 });
+await p.goto(`${BASE}/login`, { waitUntil: "domcontentloaded", timeout: 180000 });
 // Let React hydrate BEFORE filling. Without this the click can land on a
 // not-yet-interactive button and the submit is simply lost.
 await p.waitForTimeout(4000);
