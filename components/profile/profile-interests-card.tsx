@@ -131,7 +131,11 @@ export function ProfileInterestsCard({
           <button
             type="button"
             onClick={openEditor}
-            className="focus-ring flex w-full items-center gap-3 rounded-xl text-left"
+            /* min-h-11 (44px): the empty-state row inviting a new user to add
+               interests. At 430px width the text stops wrapping and the row
+               collapses to 40px, so the floor matters more on LARGER phones
+               here, not smaller ones. */
+            className="focus-ring flex min-h-11 w-full items-center gap-3 rounded-xl text-left"
           >
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
               <Sparkles className="h-5 w-5" aria-hidden="true" />

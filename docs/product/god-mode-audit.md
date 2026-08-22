@@ -679,3 +679,98 @@ Around", never a distance), and a working route through to `/friends/kofim`.
 
 This is the distinction the program asks for: a failing check is a question, not
 a verdict.
+## MISSION 5 — Global mobile shell, safe area, notch (Advanced)
+
+### MB-GOD-009 - Safe-area architecture: NO root-cause defect found
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Global shell, 12 authenticated surfaces |
+| **Severity** | n/a - **negative finding, recorded deliberately** |
+| **Category** | Mobile geometry |
+| **Stage** | Mission 5 - Advanced |
+| **Status** | **VERIFIED SOUND** |
+
+The brief states the notch/status-bar problem has recurred across development
+and asks for the root cause rather than another per-screen patch, treating
+repeated unsafe-area defects as evidence of a global architecture problem.
+
+**Audited, and the architecture is not the problem.** Recording this as a
+finding because "we looked hard and it is sound" is a result, and because the
+next person to meet a notch bug should not re-open this ground blindly.
+
+**What was verified.**
+
+1. **One canonical token set exists and is documented**, in `app/globals.css`:
+   ```css
+   --app-header-content-height: 4.25rem;                 /* the row itself */
+   --app-header-height: calc(env(safe-area-inset-top, 0px) + var(--app-header-content-height));
+   --mobile-nav-height: 5rem;                            /* bar, excluding inset */
+   --mobile-header-height: calc(env(safe-area-inset-top, 0px) + var(--mobile-header-content-height));
+   ```
+   The comments already say these are the single source of truth, that a page's
+   sticky control must offset from `--app-header-height` rather than `top: 0`,
+   and that `--mobile-nav-height` was corrected from 4.5rem after it left the
+   last section 1px occluded. This is a system somebody thought about.
+
+2. **Zero hard-coded notch guesses in the entire source.** Searched for
+   `padding-top: 44px|52px`, `padding-bottom: 34px`, `top: 44px|47px|59px` -
+   the scattered magic numbers the brief warns about. **None.**
+
+3. **Every pinned element derives its geometry from the tokens.** Across the 12
+   surfaces, each `<header>` and the bottom `<nav>` traces back to
+   `env(safe-area-inset-*)` or a token built from it: **0 elements** with
+   hard-coded edge geometry.
+
+4. **Content reserves the chrome's footprint.** `<main>` carries
+   `padding-top: 68px` against a 69px header and `padding-bottom: 100-160px`
+   against a 75px bottom bar, on every surface.
+
+5. **The immersive surfaces are correct too, by a different route.** `/linkr`
+   and `/hangout-mode` are in `IMMERSIVE_HEADER_PAGES`, so the shell adds no
+   offset and the page clears the header itself -
+   `.upfor-page { padding-top: calc(env(safe-area-inset-top, 0px) + 4.75rem) }`.
+   Verified directly in the browser: header bottom **76px**, first content
+   section top **76px**. Exact.
+
+6. **No horizontal overflow at any tested width** - 360x800, 375x812, 390x844,
+   393x852, 430x932 - in both light and dark.
+
+**Two harness errors worth recording, because both produced convincing false
+alarms and either could have sent this program off chasing a phantom:**
+
+- `env(safe-area-inset-*)` resolves to **0** in headless Chromium and cannot be
+  overridden from script or a stylesheet - it is a user-agent value, not a
+  custom property. A first attempt injected `--safe-top`/`--safe-bottom` and
+  painted markers at 59/34px, then reported every fixed header and every
+  bottom-nav tab as intruding. All false: the app resolved `env()` to 0 while
+  the markers drew at 59/34, so they disagreed by construction. **Simulating a
+  notch that way measures the simulation, not the app.**
+- A second attempt compared `<main>`'s top edge against the header height and
+  flagged all twelve surfaces. Also false: `<main>` deliberately starts at y=0
+  and reserves the header with `padding-top`, so content scrolls beneath a
+  translucent header while still beginning below it.
+
+The audit now checks the property that actually decides correctness on a real
+device: **whether the geometry is DERIVED from the insets**. A header sized
+`calc(env(safe-area-inset-top) + <content>)` is correct at every inset value,
+including the 0 a desktop browser reports; a header sized `44px` is wrong on
+every device whose inset differs, and no amount of screenshotting at inset 0
+would reveal it.
+
+**Residual, honestly stated.** `scripts/hardening/safe-area.mjs` still prints
+`CONTENT-UNDER-HEADER` for `/hangout-mode`. That is a **detector limitation, not
+a defect**: the padded element is `.upfor-page`, which contains the fixed header
+as its own first child, so a generic "first child's top" reading returns 0. The
+surface was checked by hand and is correct (76 = 76). Left visible rather than
+over-fitted away, so the flag keeps its meaning on other surfaces.
+
+**What this means for the recurring bug.** The tokens are right, so a future
+notch defect is far more likely to be a NEW surface that does not consume them
+than a flaw in the system. `scripts/hardening/safe-area.mjs` is the regression
+check: it fails the moment a pinned element appears whose geometry is not
+derived from the tokens.
+
+**Not yet covered** (deferred to Mission 5 Extremely Advanced): keyboard-open
+composer behaviour, landscape, installed-PWA/Capacitor standalone chrome, and
+safe-area correctness INSIDE sheets, modals, the photo viewer and the camera.
