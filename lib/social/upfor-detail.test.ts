@@ -206,7 +206,14 @@ describe("the sheet reveals nothing it should not", () => {
 
 describe("opening and closing", () => {
   it("opens from the card body, with no redundant View button", () => {
-    expect(page).toContain("onClick={() => setDetailId(item.id)}");
+    /* The card moved to its own component; the property did not. The card
+     * BODY is still the target -- a separate "View" button beside a tappable
+     * card is one more thing to aim at -- and the page still supplies the
+     * opener, so the sheet keeps re-reading the live row by id. */
+    const card = stripComments(read("components/hangout/upfor-card.tsx"));
+    expect(card).toContain("onClick: () => onOpen(upfor.id)");
+    expect(card).not.toContain(">View<");
+    expect(page).toContain("onOpen={(id) => setDetailId(id)}");
     expect(page).not.toContain(">View<");
   });
 

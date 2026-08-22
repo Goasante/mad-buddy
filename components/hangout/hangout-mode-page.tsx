@@ -14,17 +14,19 @@ import {
   Dumbbell,
   Footprints,
   Gamepad2,
+  Car,
+  Clapperboard,
   Hand,
   Loader2,
   Lock,
-  MapPin,
-  Navigation,
+  Moon,
+  PartyPopper,
   Plus,
-  SlidersHorizontal,
   Sparkles,
   Trophy,
   Users,
   UtensilsCrossed,
+  Wine,
   X
 } from "lucide-react";
 import {
@@ -32,6 +34,7 @@ import {
   endHangoutAction,
   getOwnerHangoutRequestsAction,
   leaveHangoutAction,
+  getVisibleHangoutsAction,
   requestHangoutAction,
   respondHangoutRequestAction,
   startHangoutAction,
@@ -40,6 +43,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { UpForFeed } from "@/components/hangout/upfor-feed";
 import { UpForDetailSheet } from "@/components/hangout/upfor-detail-sheet";
 import { PlanStack } from "@/components/socialize/plan-stack";
 import { PageSectionHeader } from "@/components/app-shell/page-section-header";
@@ -52,22 +56,8 @@ import { countActiveRequests } from "@/lib/social/hangout-requests";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
 import {
   UPFOR_QUICK_IDEAS,
-  isEndingSoon,
-  upForGoingLabel,
-  upForPlaceLabel,
-  upForTimeLeft,
   upForTitle
 } from "@/lib/social/upfor";
-import {
-  EMPTY_UPFOR_FILTERS,
-  UPFOR_ACTIVITIES,
-  UPFOR_FILTERS,
-  activeFilterCount,
-  applyUpForFilters,
-  setUpForActivity,
-  toggleUpForFilter,
-  type UpForFilterState
-} from "@/lib/social/upfor-filters";
 import { withTimeout } from "@/lib/network/resilience";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import type {
@@ -110,6 +100,7 @@ const durationOptions: Array<{ id: Duration; label: string; ms: number }> = [
 ];
 
 const ACTIVITY_ICONS: Record<HangoutActivityType, typeof Hand> = {
+  // The original eight.
   anything: Sparkles,
   food: UtensilsCrossed,
   study: BookOpen,
@@ -117,14 +108,26 @@ const ACTIVITY_ICONS: Record<HangoutActivityType, typeof Hand> = {
   gym: Dumbbell,
   walk: Footprints,
   gaming: Gamepad2,
-  chill: Coffee
+  chill: Moon,
+  /* Added with the 20260822120000 migration. `chill` moves to a moon so
+   * `coffee` can take the cup it always should have had -- the label was
+   * already "Chill 🌙" everywhere else, so this aligns the icon with the word
+   * rather than changing what the category means. */
+  coffee: Coffee,
+  football: Trophy,
+  drinks: Wine,
+  movie: Clapperboard,
+  drive: Car,
+  party: PartyPopper
 };
 
 const audienceLabel: Record<HangoutAudienceType, string> = {
   all_muddies: "all your Muddies",
   close_friends: "your Close Friends",
   selected_circles: "selected circles",
-  selected_muddies: "selected Muddies"
+  selected_muddies: "selected Muddies",
+  // Public communities, not private Circles -- the wording keeps them apart.
+  selected_groups: "selected groups"
 };
 
 function formatTime(iso: string): string {
@@ -181,6 +184,60 @@ export function HangoutModePage({
   const [activeHangout, setActiveHangout] = useState(initialActiveHangout);
   const [requests, setRequests] = useState(initialRequests);
   const [feed, setFeed] = useState(initialFeed);
+  /**
+   * Feed-level failure, kept in context.
+   *
+   * The list itself arrives as a server prop, so there is no client fetch to
+   * be "loading" -- claiming a skeleton on first paint would be theatre. This
+   * holds a REFRESH failure instead, which is the only feed-level error a
+   * person on this screen can actually hit, and it stays on the page rather
+   * than routing to a full-page error for something a retry usually fixes.
+   */
+  const [feedError, setFeedError] = useState<string | null>(null);
+  const [feedRefreshing, setFeedRefreshing] = useState(false);
+
+  /**
+   * Re-read the eligible feed after a write, or after a failure.
+   *
+   * A plain function, deliberately NOT useCallback. This component already
+   * carries manual memoization that the React Compiler analyses as a whole;
+   * adding one more useCallback made the inferred dependencies disagree with
+   * the written ones and the compiler skipped optimizing the entire component
+   * -- three lint errors for a memo nothing here needed. The function is
+   * called from event handlers, never passed as a dependency.
+   */
+  async function refreshFeed() {
+    setFeedRefreshing(true);
+    try {
+      const next = await getVisibleHangoutsAction();
+      setFeed(next);
+      setFeedError(null);
+    } catch {
+      setFeedError("Couldn't load UpFors. Try again.");
+    } finally {
+      setFeedRefreshing(false);
+    }
+  }
+
+  /**
+   * Answer "maybe".
+   *
+   * Same row and same unique constraint as joining -- the server moves the
+   * existing response rather than stacking a second one, so a person always
+   * has exactly one answer.
+   */
+  async function markMaybe(hangoutId: string) {
+    const result = await requestHangoutAction(hangoutId, undefined, "maybe").catch(() => ({
+      ok: false,
+      message: "Couldn't update that. Try again."
+    }));
+    showToast(result.message, !result.ok);
+    if (result.ok) {
+      setFeed((current) =>
+        current.map((item) => (item.id === hangoutId ? { ...item, myRequestStatus: "maybe" } : item))
+      );
+    }
+  }
 
   // Setup form draft state (only meaningful while the sheet is open).
   const [setupOpen, setSetupOpen] = useState(false);
@@ -211,8 +268,6 @@ export function HangoutModePage({
    * inside it would reset every time — so a user could not open the sheet,
    * close it, and still see their narrowing applied.
    */
-  const [filters, setFilters] = useState<UpForFilterState>(EMPTY_UPFOR_FILTERS);
-  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
   /**
    * The open UpFor, held as an ID rather than the row itself.
@@ -227,16 +282,14 @@ export function HangoutModePage({
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestRefreshRef = useRef<Promise<void> | null>(null);
 
-  // The feed, narrowed. Derived rather than stored, so a filter change never
-  // has to be kept in sync with an arriving refresh.
-  // One filtering path, from the registry. Derived rather than stored, so an
-  // arriving refresh is narrowed by the same rules without a sync step.
-  const visibleFeed = applyUpForFilters(feed, filters, nowMs);
-  const filterCount = activeFilterCount(filters);
+  /* The feed is no longer narrowed here. UpForFeed owns discovery now: the
+   * four modes are the only filter, and they are applied by the tested rules
+   * in lib/social/upfor-feed.ts rather than by a second filtering path on this
+   * page. lib/social/upfor-filters.ts survives for the callers that still use
+   * hasSpace/isJoined. */
   // Null when the row is gone — expired, or access lost on refresh — which
   // closes the sheet without announcing why.
   const detailUpFor = detailId ? (feed.find((item) => item.id === detailId) ?? null) : null;
-  const filtersActive = filterCount > 0;
 
   // Derive activation straight from the source of truth so an expired session
   // flips the orb back to inactive without a manual refresh.
@@ -313,18 +366,24 @@ export function HangoutModePage({
     };
   }, []);
 
-  const scheduleToastDismiss = useCallback(() => {
+  /* Plain functions, not useCallback.
+   *
+   * Both close over `setToast`, which React guarantees is stable -- so the
+   * empty and [scheduleToastDismiss] dependency arrays were correct by hand
+   * and wrong to the React Compiler, which infers `setToast` as a dependency
+   * and refuses to optimize a component whose written deps disagree with its
+   * inferred ones. Neither of these is ever passed as a dependency or to a
+   * memoized child, so the memo bought nothing and cost the whole component
+   * its optimization. */
+  function scheduleToastDismiss() {
     if (dismissTimer.current) clearTimeout(dismissTimer.current);
     dismissTimer.current = setTimeout(() => setToast(null), 3500);
-  }, []);
+  }
 
-  const showToast = useCallback(
-    (message: string, error = false, title?: string) => {
-      setToast({ message, error, title });
-      scheduleToastDismiss();
-    },
-    [scheduleToastDismiss]
-  );
+  function showToast(message: string, error = false, title?: string) {
+    setToast({ message, error, title });
+    scheduleToastDismiss();
+  }
 
   /**
    * Open the setup sheet.
@@ -356,16 +415,26 @@ export function HangoutModePage({
     setSetupOpen(true);
   }
 
-  function requestToJoin(hangoutId: string) {
-    startTransition(async () => {
-      const result = await requestHangoutAction(hangoutId);
-      showToast(result.message, !result.ok);
-      if (result.ok) {
-        setFeed((current) =>
-          current.map((item) => (item.id === hangoutId ? { ...item, myRequestStatus: "pending" } : item))
-        );
-      }
-    });
+  /**
+   * Join an UpFor.
+   *
+   * NOT inside startTransition. A transition is interruptible by design and
+   * React really does abandon it -- which would kill the request mid-flight
+   * and leave the card claiming a seat the server never recorded. Returns a
+   * promise so the feed can hold its own per-card pending state until the
+   * write actually settles.
+   */
+  async function requestToJoin(hangoutId: string) {
+    const result = await requestHangoutAction(hangoutId).catch(() => ({
+      ok: false,
+      message: "Couldn't join. Check your connection and try again."
+    }));
+    showToast(result.message, !result.ok);
+    if (result.ok) {
+      setFeed((current) =>
+        current.map((item) => (item.id === hangoutId ? { ...item, myRequestStatus: "pending" } : item))
+      );
+    }
   }
 
   const acceptedCount = requests.filter((request) => request.status === "accepted").length;
@@ -378,7 +447,7 @@ export function HangoutModePage({
    * silently keeps saying "Going" after a failed write looks identical to one
    * that worked.
    */
-  function leaveUpFor(hangoutId: string) {
+  async function leaveUpFor(hangoutId: string) {
     const previous = feed.find((item) => item.id === hangoutId)?.myRequestStatus ?? null;
     setFeed((current) =>
       current.map((item) =>
@@ -393,8 +462,13 @@ export function HangoutModePage({
           : item
       )
     );
-    startTransition(async () => {
-      const result = await leaveHangoutAction(hangoutId);
+    // Plain async for the same reason as join: an abandoned write here would
+    // leave the optimistic revert below unreachable.
+    {
+      const result = await leaveHangoutAction(hangoutId).catch(() => ({
+        ok: false,
+        message: "Couldn't update that. Try again."
+      }));
       if (result.ok) {
         showToast(result.message);
       } else {
@@ -411,7 +485,7 @@ export function HangoutModePage({
         );
         showToast(result.message, true);
       }
-    });
+    }
   }
 
   /**
@@ -433,7 +507,13 @@ export function HangoutModePage({
     if (!activity) return;
 
     const chosen = durationOptions.find((option) => option.id === duration) ?? durationOptions[1];
-    const endsAt = new Date(Date.now() + chosen.ms).toISOString();
+    /* `nowMs` rather than Date.now(): this runs in an event handler, but the
+     * React Compiler analyses the whole function body and cannot tell, so a
+     * direct clock read reads to it as an impure call during render. The
+     * component already keeps a ticking `nowMs`, which is the same instant to
+     * within a second and is what every other part of this screen measures
+     * against. */
+    const endsAt = new Date(nowMs + chosen.ms).toISOString();
     const editing = isActive && activeHangout !== null;
     const previousId = activeHangout?.id;
 
@@ -509,17 +589,33 @@ export function HangoutModePage({
     });
   }
 
-  function convertToPlan() {
-    if (!activeHangout) return;
-    startTransition(async () => {
-      const result = await convertHangoutToPlanAction(activeHangout.id);
-      showToast(result.message, !result.ok);
-      if (result.ok) {
+  /**
+   * Turn an UpFor into a canonical Plan.
+   *
+   * Takes an id so the feed's own "Looks like a plan" prompt can call it for
+   * whichever card the creator is looking at, rather than only for the session
+   * held in `activeHangout`. The action is unchanged and still routes through
+   * convertHangoutToPlanAction -> create_plan_lifecycle; there is no second
+   * Plan path.
+   */
+  async function convertToPlanById(hangoutId: string) {
+    const result = await convertHangoutToPlanAction(hangoutId).catch(() => ({
+      ok: false,
+      message: "Couldn't create the Plan yet. Try again."
+    }));
+    showToast(result.message, !result.ok);
+    if (result.ok) {
+      if (activeHangout?.id === hangoutId) {
         setActiveHangout(null);
         setRequests([]);
-        router.refresh();
       }
-    });
+      router.refresh();
+    }
+  }
+
+  function convertToPlan() {
+    if (!activeHangout) return;
+    void convertToPlanById(activeHangout.id);
   }
 
   const activityType = activeHangout?.activityType ?? "anything";
@@ -547,19 +643,6 @@ export function HangoutModePage({
         </div>
 
         <div className="upfor-header-actions">
-          <button
-            type="button"
-            onClick={() => setFilterSheetOpen(true)}
-            aria-label={filtersActive ? `Filters, ${filterCount} active` : "Filters"}
-            className="upfor-icon-button"
-          >
-            <SlidersHorizontal className="h-5 w-5" aria-hidden="true" />
-            {filtersActive ? (
-              <span className="upfor-filter-badge" aria-hidden="true">
-                {filterCount}
-              </span>
-            ) : null}
-          </button>
           <button
             type="button"
             data-tour-id={TOUR_TARGET_IDS.HANGOUT_TOGGLE}
@@ -683,153 +766,54 @@ UpFors are temporary and disappear when they end. Jump in while you can!
         </section>
       ) : null}
 
-      {/* ------------------------- HAPPENING NOW ------------------------- */}
+      {/* ------------------------- THE UPFOR FEED -------------------------
+          The approved "Live Social Pulse" feed. Four real discovery modes over
+          one eligible list: every row already cleared canViewHangout on the
+          server, so a tab narrows what the viewer is looking at rather than
+          deciding what they may see.
+
+          The 148-line inline list that used to live here is gone. It rendered a
+          single "Happening Now Nearby" section with a filter sheet, which is
+          not the approved structure, and every card rule it carried now lives
+          in lib/social/upfor-feed.ts where it can be tested.
+          ------------------------------------------------------------------ */}
       <section
         aria-labelledby="upfor-feed-heading"
         data-tour-id={TOUR_TARGET_IDS.HANGOUT_DISCOVERY}
         className="upfor-section"
       >
-        <div className="upfor-section-head">
-          <h2 id="upfor-feed-heading" className="upfor-section-title">
-            Happening Now Nearby <Navigation className="h-4 w-4 text-primary" aria-hidden="true" />
-          </h2>
-        </div>
-
-        {visibleFeed.length === 0 ? (
-          <div className="upfor-empty">
-            {filtersActive ? (
-              <>
-                <p className="upfor-empty-title">Nothing matches those filters</p>
-                <p className="upfor-empty-copy">
-                  {feed.length === 1
-                    ? "There is 1 UpFor right now, and it does not match."
-                    : `There are ${feed.length} UpFors right now, and none match.`}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setFilters(EMPTY_UPFOR_FILTERS)}
-                  className="upfor-empty-action"
-                >
-                  Clear filters
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="upfor-empty-title">Nothing happening right now</p>
-                <p className="upfor-empty-copy">
-                  {muddyCount === 0
-                    ? "UpFors come from your Muddies. Once you have a few, whatever they are up for shows here."
-                    : "None of your Muddies are up for anything at the moment. Start one and let them know you are."}
-                </p>
-              </>
-            )}
-          </div>
-        ) : (
-          <ul className="upfor-list">
-            {visibleFeed.map((item) => {
-              const timeLeft = upForTimeLeft(item.endsAt, nowMs);
-              const going = upForGoingLabel(item.goingCount);
-              // A cancelled row is NOT an outstanding request: treating it as one would
-              // leave the card stuck showing "Requested" forever.
-              const requested =
-                item.myRequestStatus !== null && item.myRequestStatus !== "cancelled";
-              return (
-                <li key={item.id} className="upfor-card">
-                  <UserAvatar
-                    src={item.ownerAvatarUrl}
-                    name={item.ownerName}
-                    size="lg"
-                    decorative
-                    className="upfor-card-avatar"
-                  />
-
-                  {/* The card body is the detail affordance, so no redundant
-                      View button returns. The action column beside it stops
-                      propagation, keeping join and leave one-tap. */}
-                  <button
-                    type="button"
-                    onClick={() => setDetailId(item.id)}
-                    aria-label={`Open ${upForTitle(item.activityType)}`}
-                    className="upfor-card-body upfor-card-open"
-                  >
-                    <p className="upfor-card-title">{upForTitle(item.activityType)}</p>
-                    {item.message ? <p className="upfor-card-message">{item.message}</p> : null}
-
-                    <div className="upfor-card-meta">
-                      {/* Broad area only. The projection carries no distance,
-                          and inventing one here would be a location claim the
-                          server never made. */}
-                      {/* One formatter, shared with the detail sheet, so the
-                          two can never disagree about where something is. */}
-                      {upForPlaceLabel(item) ? (
-                        <span className="upfor-card-place">
-                          <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-                          {upForPlaceLabel(item)}
-                        </span>
-                      ) : null}
-                      {going ? (
-                        <span className="upfor-card-going">
-                          <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                          {going}
-                        </span>
-                      ) : null}
-                    </div>
-                  </button>
-
-                  <div className="upfor-card-actions">
-                    {timeLeft ? (
-                      <span
-                        className={cn("upfor-card-timer", isEndingSoon(item.endsAt, nowMs) && "upfor-card-timer-soon")}
-                        suppressHydrationWarning
-                      >
-                        <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-                        {timeLeft}
-                      </span>
-                    ) : null}
-
-                    {/* Three states, each offering only what the server would
-                        accept. A withdrawn row shows the join control again if
-                        the session still takes requests — the server decides
-                        whether that re-request succeeds, not this card. */}
-                    {item.myRequestStatus === "accepted" ? (
-                      <button
-                        type="button"
-                        onClick={() => leaveUpFor(item.id)}
-                        disabled={isPending}
-                        className="upfor-card-leave"
-                      >
-                        Leave
-                      </button>
-                    ) : item.myRequestStatus === "pending" ? (
-                      <button
-                        type="button"
-                        onClick={() => leaveUpFor(item.id)}
-                        disabled={isPending}
-                        className="upfor-card-leave"
-                      >
-                        Cancel request
-                      </button>
-                    ) : item.allowPings && !requested ? (
-                      <button
-                        type="button"
-                        onClick={() => requestToJoin(item.id)}
-                        disabled={isPending}
-                        className="upfor-card-join"
-                      >
-                        I&rsquo;m in
-                      </button>
-                    ) : (
-                      <span className="upfor-card-state">
-                        {requested ? "Not going" : "Invite only"}
-                      </span>
-                    )}
-
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+        <h2 id="upfor-feed-heading" className="sr-only">
+          UpFors you can join
+        </h2>
+        <UpForFeed
+          items={feed.map((item) => ({
+            ...item,
+            /* Every row in `feed` is a live, eligible session -- the server
+             * drops expired and cancelled ones before projecting. Stated
+             * explicitly so the card's momentum gate reads a real status
+             * rather than inferring one. */
+            status: "active",
+            /* HangoutParticipant carries `displayName`; the card asks for
+             * `name`. Mapped rather than widening the card's type, so the card
+             * keeps a shape that any surface can satisfy. */
+            participants: item.participants.map((person) => ({
+              userId: person.userId,
+              name: person.displayName,
+              avatarUrl: person.avatarUrl
+            }))
+          }))}
+          viewerId={viewerId ?? ""}
+          nowMs={nowMs}
+          loading={feedRefreshing}
+          error={feedError}
+          onRetry={() => void refreshFeed()}
+          onJoin={requestToJoin}
+          onMaybe={(id) => markMaybe(id)}
+          onWithdraw={leaveUpFor}
+          onCreatePlan={convertToPlanById}
+          onOpen={(id) => setDetailId(id)}
+          onStart={() => openSetup()}
+        />
       </section>
 
       {/* The "Create your UpFor" banner was removed: the + in the header and
@@ -916,72 +900,6 @@ UpFors are temporary and disappear when they end. Jump in while you can!
 
       {/* The filter sheet. Rendered from the registry, so a future filter is a
           new entry there rather than an edit here. */}
-      <Modal
-        open={filterSheetOpen}
-        onOpenChange={setFilterSheetOpen}
-        title="Filter UpFors"
-        description="Narrow the list to what you are looking for."
-      >
-        <div className="upfor-filter-body">
-          <div className="upfor-filter-group">
-            <p className="upfor-filter-label">Show</p>
-            <div className="upfor-filter-options">
-              {UPFOR_FILTERS.map((definition) => {
-                const on = filters.toggles.has(definition.id);
-                return (
-                  <button
-                    key={definition.id}
-                    type="button"
-                    aria-pressed={on}
-                    title={definition.description}
-                    onClick={() => setFilters((current) => toggleUpForFilter(current, definition.id))}
-                    className={cn("upfor-filter-chip", on && "upfor-filter-chip-on")}
-                  >
-                    {definition.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="upfor-filter-group">
-            <p className="upfor-filter-label">Activity</p>
-            <div className="upfor-filter-options">
-              {UPFOR_ACTIVITIES.map((option) => {
-                const on = filters.activity === option.id;
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => setFilters((current) => setUpForActivity(current, option.id))}
-                    className={cn("upfor-filter-chip", on && "upfor-filter-chip-on")}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="upfor-filter-actions">
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              disabled={!filtersActive}
-              onClick={() => setFilters(EMPTY_UPFOR_FILTERS)}
-            >
-              Clear all
-            </Button>
-            <Button type="button" className="flex-1" onClick={() => setFilterSheetOpen(false)}>
-              {filtersActive
-                ? `Show ${visibleFeed.length} ${visibleFeed.length === 1 ? "UpFor" : "UpFors"}`
-                : "Done"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       <Modal
         open={setupOpen}

@@ -87,7 +87,9 @@ async function canViewHangout(
     areApprovedMuddies(admin, session.owner_id, viewerId),
     isBlockedEitherDirection(admin, session.owner_id, viewerId)
   ]);
-  if (!mutual || blocked) return false;
+
+  /* A BLOCK ALWAYS WINS, before any audience is considered. */
+  if (blocked) return false;
 
   const { data: profile } = await admin
     .from("profiles")
@@ -95,6 +97,19 @@ async function canViewHangout(
     .eq("user_id", session.owner_id)
     .maybeSingle();
   if (profile?.visibility_status === "ghost") return false;
+
+  /* MUTUAL-MUDDY IS REQUIRED FOR EVERY AUDIENCE EXCEPT GROUPS.
+   *
+   * It used to be an unconditional gate here, which was right while every
+   * audience was a flavour of "my Muddies". A public Group is the first
+   * audience that deliberately reaches beyond one social hop: the whole point
+   * of posting to a community is that people you have not met can see it.
+   *
+   * So the requirement moves into the switch rather than being dropped --
+   * `selected_groups` proves membership of a genuinely public Group instead,
+   * which is a different and equally real relationship. Every other audience
+   * still refuses a non-Muddy exactly as before. */
+  if (session.audience_type !== "selected_groups" && !mutual) return false;
 
   switch (session.audience_type) {
     case "all_muddies":
@@ -120,6 +135,43 @@ async function canViewHangout(
         .eq("target_id", viewerId)
         .maybeSingle();
       return Boolean(target);
+    }
+    case "selected_groups": {
+      /* Visible inside specific PUBLIC Groups the viewer actually belongs to.
+       *
+       * Three things are checked, and all three matter:
+       *   1. the UpFor targets this conversation,
+       *   2. the conversation is a group whose visibility is 'public' -- a
+       *      private Circle must never become a discovery surface this way,
+       *   3. the viewer is a joined member.
+       *
+       * Membership is checked against the viewer, never inferred from the
+       * target list, so targeting a group the viewer cannot see reveals
+       * nothing. */
+      const { data: targets } = await admin
+        .from("hangout_audience_targets")
+        .select("target_id")
+        .eq("hangout_session_id", session.id)
+        .eq("target_type", "group");
+      const groupIds = (targets ?? []).map((row) => row.target_id);
+      if (groupIds.length === 0) return false;
+
+      const { data: publicGroups } = await admin
+        .from("group_settings")
+        .select("conversation_id")
+        .in("conversation_id", groupIds)
+        .eq("visibility", "public");
+      const publicIds = (publicGroups ?? []).map((row) => row.conversation_id);
+      if (publicIds.length === 0) return false;
+
+      const { data: membership } = await admin
+        .from("conversation_members")
+        .select("conversation_id")
+        .eq("user_id", viewerId)
+        .eq("status", "joined")
+        .in("conversation_id", publicIds)
+        .limit(1);
+      return (membership ?? []).length > 0;
     }
     default:
       return false;
@@ -458,6 +510,25 @@ export type VisibleHangout = {
    * three people who asked.
    */
   goingCount: number;
+  /**
+   * Whether the viewer and the creator are approved Muddies.
+   *
+   * SERVER-DERIVED, and it has to be. The Muddies tab decides what a person
+   * sees, so letting the client infer a friendship from ids in a payload would
+   * make the filter a suggestion rather than a rule. Read once for the whole
+   * feed, never per card.
+   */
+  isMuddy: boolean;
+  /**
+   * Whether this UpFor reached the viewer through a public Group they belong
+   * to.
+   *
+   * Only ever true for a group the viewer is a JOINED member of and whose
+   * visibility is public -- the same three-part check canViewHangout applies.
+   * It says "you may see this through a group", never which group: naming it
+   * would disclose a membership the viewer may not share with the creator.
+   */
+  viaGroup: boolean;
 };
 
 /**
@@ -729,9 +800,58 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
     : { data: [] };
   const participantById = new Map((participantProfiles ?? []).map((row) => [row.user_id, row]));
 
+  /* RELATIONSHIP AND GROUP CONTEXT, in two batched reads.
+   *
+   * The discovery modes need to know how each UpFor reached this viewer.
+   * Deriving it here keeps that answer on the server: `filterForMode` narrows
+   * an already-eligible list, so these flags order and group what the viewer
+   * may already see -- they are not a second access check, and nothing is
+   * exposed that canViewHangout did not already allow. */
+  const ownerIdsForContext = [...new Set(visible.map((session) => session.owner_id))];
+  const muddyOwnerIds = new Set<string>();
+  await Promise.all(
+    ownerIdsForContext.map(async (ownerId) => {
+      if (ownerId === userId) return;
+      if (await areApprovedMuddies(admin, ownerId, userId)) muddyOwnerIds.add(ownerId);
+    })
+  );
+
+  /* Which sessions are reachable through a public Group the viewer has
+   * joined. One read for the viewer's joined conversations, one for the
+   * targets, intersected in memory -- never a per-card query, and never a
+   * claim about a group the viewer is not in. */
+  const groupSessionIds = new Set<string>();
+  {
+    const { data: joined } = await admin
+      .from("conversation_members")
+      .select("conversation_id")
+      .eq("user_id", userId)
+      .eq("status", "joined");
+    const joinedIds = (joined ?? []).map((row) => row.conversation_id);
+    if (joinedIds.length > 0) {
+      const { data: publicGroups } = await admin
+        .from("group_settings")
+        .select("conversation_id")
+        .in("conversation_id", joinedIds)
+        .eq("visibility", "public");
+      const publicJoinedIds = (publicGroups ?? []).map((row) => row.conversation_id);
+      if (publicJoinedIds.length > 0) {
+        const { data: targets } = await admin
+          .from("hangout_audience_targets")
+          .select("hangout_session_id, target_id")
+          .eq("target_type", "group")
+          .in("hangout_session_id", visible.map((session) => session.id))
+          .in("target_id", publicJoinedIds);
+        for (const row of targets ?? []) groupSessionIds.add(row.hangout_session_id);
+      }
+    }
+  }
+
   return visible.map((session) => ({
     id: session.id,
     ownerId: session.owner_id,
+    isMuddy: muddyOwnerIds.has(session.owner_id),
+    viaGroup: groupSessionIds.has(session.id),
     // Aged out rather than presented as current: a tier is a claim about now,
     // and a stale one would keep saying "Close by" long after it stopped
     // being true. The creator's own area TEXT survives, because that is a
@@ -845,7 +965,18 @@ async function canStrangerJoinUpFor(
 
 export async function requestHangoutAction(
   hangoutId: string,
-  message?: string
+  message?: string,
+  /**
+   * How the person is answering.
+   *
+   * "pending" is asking to join; "maybe" is soft interest. Both use the SAME
+   * row and the same unique (session, requester) constraint, so a person has
+   * exactly one answer at a time and changing their mind updates it rather
+   * than stacking a second request. Only these two are accepted here --
+   * "accepted" and "declined" belong to the owner, and letting a requester
+   * send them would be a privilege escalation dressed as a parameter.
+   */
+  intent: "pending" | "maybe" = "pending"
 ): Promise<HangoutActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
@@ -914,7 +1045,7 @@ export async function requestHangoutAction(
     .insert({
       hangout_session_id: hangoutId,
       requester_id: userId,
-      status: "pending",
+      status: intent,
       message: message?.trim() || null
     })
     .select("id")
@@ -923,7 +1054,41 @@ export async function requestHangoutAction(
   if (error) {
     // 23505 = unique violation: the request already exists. Idempotent success,
     // and no duplicate notification for the same existing request.
-    if (error.code === "23505") return { ok: true, message: "You've already asked to join.", hangoutId };
+    if (error.code === "23505") {
+      /* The row already exists. Idempotent for the same answer, and an UPDATE
+       * when the person is changing it -- tapping Maybe after I'm in has to
+       * move the existing row rather than report success and leave the old
+       * answer standing. Scoped to this requester's own row, so this can never
+       * touch anybody else's response. */
+      const { data: existing } = await admin
+        .from("hangout_requests")
+        .select("status")
+        .eq("hangout_session_id", hangoutId)
+        .eq("requester_id", userId)
+        .maybeSingle();
+
+      if (existing && existing.status !== intent) {
+        // Only a requester-owned state may be moved into; an accepted seat is
+        // the owner's decision and is left alone.
+        if (existing.status === "pending" || existing.status === "maybe" || existing.status === "cancelled") {
+          await admin
+            .from("hangout_requests")
+            .update({ status: intent, responded_at: null })
+            .eq("hangout_session_id", hangoutId)
+            .eq("requester_id", userId);
+          return {
+            ok: true,
+            message: intent === "maybe" ? "Marked as maybe." : "You've asked to join.",
+            hangoutId
+          };
+        }
+      }
+      return {
+        ok: true,
+        message: intent === "maybe" ? "Marked as maybe." : "You've already asked to join.",
+        hangoutId
+      };
+    }
     return { ok: false, message: "Couldn't send your request. Try again." };
   }
   if (!inserted) return { ok: false, message: "Couldn't send your request. Try again." };

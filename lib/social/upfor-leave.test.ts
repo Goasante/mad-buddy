@@ -174,15 +174,23 @@ describe("leaving frees the seat immediately", () => {
 // ---------------------------------------------------------------------------
 
 describe("the card offers the right withdrawal", () => {
+  /* The card moved to components/hangout/upfor-card.tsx. Both properties below
+   * are unchanged and still matter -- they just live in the component that
+   * draws the control rather than in the page that used to inline it. */
+  const card = stripComments(read("components/hangout/upfor-card.tsx"));
+
   it("says Cancel request while pending and Leave once accepted", () => {
-    expect(page).toContain("Cancel request");
-    expect(page).toContain("Leave");
+    expect(card).toContain('accepted ? "Leave" : "Cancel request"');
   });
 
   it("does not treat a cancelled row as an outstanding request", () => {
-    // Otherwise the card would sit on "Requested" forever and the join
-    // control could never return.
-    expect(page).toContain('item.myRequestStatus !== "cancelled"');
+    /* Otherwise the card would sit on "Cancel request" forever and the join
+     * control could never return. Only pending and accepted count as being
+     * in; every other status -- cancelled included -- falls through to the
+     * join controls. */
+    expect(card).toContain('const requested = upfor.myRequestStatus === "pending";');
+    expect(card).toContain('const accepted = upfor.myRequestStatus === "accepted";');
+    expect(card).toContain("const joined = requested || accepted;");
   });
 
   it("reverts optimistically on failure rather than claiming success", () => {

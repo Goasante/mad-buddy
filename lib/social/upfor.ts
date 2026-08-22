@@ -11,6 +11,7 @@
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
 import type { SocializeAreaTier } from "@/lib/social/socialize";
 import type { HangoutActivityType } from "@/lib/supabase/database.types";
+import { PROXIMITY_BAND_LABELS } from "@/lib/proximity/bands";
 
 /** Discovery filters. Ordered as they appear in the row. */
 export type UpForFilterId = "all" | "nearby" | "popular" | "for_you";
@@ -214,10 +215,22 @@ export function upForViewerAction(
  */
 export type UpForAreaTier = SocializeAreaTier | null;
 
+/**
+ * Tier wording, in the canonical Proximity Glow V2 vocabulary.
+ *
+ * These used to read "Close by" / "Nearby" / "Around your area" -- a second
+ * proximity vocabulary that drifted from the one every other surface speaks.
+ * They now defer to upForProximityLabel, so the card, the detail sheet and the
+ * Muddies rail all describe closeness with the same six named bands.
+ *
+ * The mapping stays conservative: UpFor's three coarse tiers can never reach
+ * "Right Here" or "Just Around", because a bucket that means "the nearest of
+ * three" cannot support a claim of being metres away.
+ */
 export const UPFOR_TIER_LABELS: Record<SocializeAreaTier, string> = {
-  close_by: "Close by",
-  nearby: "Nearby",
-  wider_area: "Around your area"
+  close_by: PROXIMITY_BAND_LABELS.close_by,
+  nearby: PROXIMITY_BAND_LABELS.nearby,
+  wider_area: PROXIMITY_BAND_LABELS.around_town
 };
 
 /**

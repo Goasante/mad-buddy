@@ -141,7 +141,7 @@ describe("a stale location stops claiming proximity", () => {
   });
 
   it("ages the tier out of the projection rather than showing stale certainty", () => {
-    // A tier is a claim about now; keeping it would say "Close by" long after
+    // A tier is a claim about now; keeping it would say "Close By" long after
     // it stopped being true.
     expect(actions).toContain("isLocationFreshEnough(session.area_derived_at, Date.now())");
   });
@@ -157,12 +157,12 @@ describe("a stale location stops claiming proximity", () => {
 
 describe("card and sheet cannot disagree about place", () => {
   it("combines area and tier when both exist", () => {
-    expect(upForPlaceLabel({ broadAreaText: "Osu", areaTier: "close_by" })).toBe("Osu · Close by");
+    expect(upForPlaceLabel({ broadAreaText: "Osu", areaTier: "close_by" })).toBe("Osu · Close By");
   });
 
   it("shows whichever one it has", () => {
     expect(upForPlaceLabel({ broadAreaText: "Osu", areaTier: null })).toBe("Osu");
-    expect(upForPlaceLabel({ broadAreaText: null, areaTier: "nearby" })).toBe("Nearby");
+    expect(upForPlaceLabel({ broadAreaText: null, areaTier: "nearby" })).toBe("In Your Area");
   });
 
   it("returns null when it knows neither, so the row is hidden", () => {
@@ -171,7 +171,10 @@ describe("card and sheet cannot disagree about place", () => {
   });
 
   it("is the single formatter both surfaces call", () => {
-    expect(page).toContain("upForPlaceLabel(item)");
+    /* The card moved to its own component, and both surfaces still call the
+     * SAME formatter -- which is the property this protects. */
+    const card = stripComments(read("components/hangout/upfor-card.tsx"));
+    expect(card).toContain("upForPlaceLabel(upfor)");
     expect(sheet).toContain("upForPlaceLabel(upFor)");
   });
 

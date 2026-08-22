@@ -1,3 +1,4 @@
+import { filterForMode } from "@/lib/social/upfor-feed";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -206,51 +207,90 @@ describe("no unsupported filter is offered", () => {
       "joined"
     ]);
   });
+});
 
-  it("renders no filter the product cannot back", () => {
-    // Nearby needs proximity the session does not carry; Popular is not
-    // popularity semantics; Just for you needs a model that does not exist;
-    // Starting soon cannot work while starts_at always defaults to now().
-    // Matched as filter CHIP labels. "Nearby" alone would hit the section
-    // heading "Happening Now Nearby", which is prose, not a control.
-    const sheet = page.slice(page.indexOf("upfor-filter-body"), page.indexOf("upfor-filter-actions"));
-    for (const dead of ["Popular", "Just for you", "Starting soon", "See map"]) {
-      expect(sheet).not.toContain(dead);
+// ---------------------------------------------------------------------------
+// The primary feed no longer filters. It has four discovery modes instead.
+// ---------------------------------------------------------------------------
+
+describe("the legacy filter sheet is gone, not hidden", () => {
+  /* The sheet was removed rather than kept beside the tabs. Tests that pinned
+   * its markup were correctly failing once the feed stopped consulting it: a
+   * control that opens a panel the feed ignores is a dead button, and hiding
+   * it with CSS would have left the same dead state behind.
+   *
+   * lib/social/upfor-filters.ts SURVIVES -- hasSpace and isJoined still have
+   * callers -- so only the page's filtering path is asserted gone. */
+  it("removes the control, its state and its sheet from the page", () => {
+    for (const dead of [
+      "setFilterSheetOpen",
+      "filterSheetOpen",
+      "applyUpForFilters(feed",
+      "activeFilterCount(",
+      "EMPTY_UPFOR_FILTERS",
+      "Nothing matches those filters",
+      "Clear filters",
+      "upfor-filter-body"
+    ]) {
+      expect(page, dead).not.toContain(dead);
     }
   });
 
-  it("renders the sheet FROM the registry, so a new filter is one entry", () => {
-    expect(page).toContain("UPFOR_FILTERS.map");
-    expect(page).toContain("UPFOR_ACTIVITIES.map");
+  it("keeps the shared helpers other surfaces still use", () => {
+    // Deleting a module because one caller stopped using it is how a second
+    // caller breaks later.
+    const lib = read("lib/social/upfor-filters.ts");
+    expect(lib).toContain("export function hasSpace");
+    expect(lib).toContain("export function isJoined");
   });
 
-  it("filters in one place, never a second copy in the component", () => {
-    expect(page).toContain("applyUpForFilters(feed, filters, nowMs)");
-    expect(page).not.toContain("feed.filter(");
-  });
-});
-
-describe("this stage changed no queries", () => {
-  it("still reads the same tables through the same action", () => {
-    expect(actions).toContain('from("hangout_sessions")');
-    expect(actions).toContain('from("hangout_requests")');
-    // The feed is loaded by the route and handed down as props; the page
-    // never queries.
-    const route = read("app/(app)/hangout-mode/page.tsx");
-    expect(route).toContain("getVisibleHangoutsAction");
-  });
-
-  it("filters on the client, leaving server data untouched", () => {
-    // The projection is the source of truth; narrowing is a view over it.
-    expect(page).toContain("const visibleFeed = applyUpForFilters");
+  it("does not bring back the legacy discovery labels", () => {
+    /* All / Nearby / Popular / Just for you were the old model. Asserted on
+     * the tab registry rather than on the page, because that is where a
+     * revival would have to start. */
+    const modes = read("lib/social/upfor-feed.ts");
+    const registry = modes.slice(modes.indexOf("export const UPFOR_MODES"), modes.indexOf("export function isUpForMode"));
+    for (const dead of ["All UpFors", "Popular", "Just for you"]) {
+      expect(registry, dead).not.toContain(dead);
+    }
   });
 });
 
-describe("an over-narrowed list offers a way out", () => {
-  it("distinguishes filtered-empty from genuinely empty", () => {
-    // Offering "start one" to somebody who just over-narrowed is the wrong
-    // answer to the problem they actually have.
-    expect(page).toContain("Nothing matches those filters");
-    expect(page).toContain("Clear filters");
+describe("the four discovery modes are the feed controls", () => {
+  it("renders exactly the approved tabs", () => {
+    const parts = read("components/hangout/upfor-feed-parts.tsx");
+    expect(parts).toContain("UPFOR_MODES.map");
+    const modes = read("lib/social/upfor-feed.ts");
+    for (const label of ["For You", "Muddies", "Around", "Groups"]) {
+      expect(modes, label).toContain(label);
+    }
+  });
+
+  it("narrows through the tested rules, never a second copy in the component", () => {
+    // The same property the old test protected, at its new address.
+    const feed = read("components/hangout/upfor-feed.tsx");
+    expect(feed).toContain("filterForMode(items, mode, nowMs)");
+    expect(feed).not.toContain("items.filter(");
+    expect(feed).not.toContain(".sort(");
+  });
+
+  it("switching a tab changes what the feed returns", () => {
+    /* Real behaviour, not markup: the same eligible list must produce
+     * different results per mode, or the tabs are decoration. */
+    const base = {
+      ownerId: "o",
+      activityType: "food" as const,
+      areaTier: null,
+      startsAt: new Date(NOW - 60_000).toISOString(),
+      endsAt: new Date(NOW + 3_600_000).toISOString(),
+      goingCount: 0
+    };
+    const list = [
+      { ...base, id: "muddy", isMuddy: true, viaGroup: false },
+      { ...base, id: "group", isMuddy: false, viaGroup: true }
+    ];
+    expect(filterForMode(list, "muddies", NOW).map((i) => i.id)).toEqual(["muddy"]);
+    expect(filterForMode(list, "groups", NOW).map((i) => i.id)).toEqual(["group"]);
+    expect(filterForMode(list, "for_you", NOW)).toHaveLength(2);
   });
 });

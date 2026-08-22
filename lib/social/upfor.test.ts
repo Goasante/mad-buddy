@@ -109,17 +109,26 @@ describe("filters are honest about what they can do", () => {
 
 describe("the card never claims more than the server said", () => {
   it("shows a broad area, never a distance", () => {
-    // Through the shared place formatter, which combines the area text with
-    // the coarse tier and returns null when it knows neither.
-    expect(page).toContain("upForPlaceLabel(item)");
+    /* The card moved to components/hangout/upfor-card.tsx, and the formatter
+     * moved with it: proximity now comes from upForProximityLabel, which maps
+     * UpFor's coarse tier onto a Glow V2 band and returns null when it knows
+     * nothing. The property is unchanged -- a band or silence, never a
+     * distance -- so this asserts it where the card actually lives. */
+    const card = stripComments(read("components/hangout/upfor-card.tsx"));
+    expect(card).toContain("upForPlaceLabel(upfor)");
     for (const absent of ["km away", "miles away", "latitude", "longitude"]) {
-      expect(page).not.toContain(absent);
+      expect(card, absent).not.toContain(absent);
+      expect(page, absent).not.toContain(absent);
     }
   });
 
   it("hides the join button when the server would refuse it", () => {
-    // Already asked, or an owner who did not open this one to requests.
-    expect(page).toContain("item.allowPings && !requested");
+    /* Same rule, expressed on the new card: an owner never sees a join
+     * control, somebody already in sees withdraw instead, and an ended UpFor
+     * offers nothing at all. */
+    const card = stripComments(read("components/hangout/upfor-card.tsx"));
+    expect(card).toContain("isOwner ? null : expired ? (");
+    expect(card).toContain("joined ? (");
   });
 });
 

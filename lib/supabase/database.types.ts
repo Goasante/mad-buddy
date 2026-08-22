@@ -839,7 +839,7 @@ export type Database = {
         Row: {
           id: string;
           session_id: string;
-          target_type: "circle" | "user";
+          target_type: "circle" | "user" | "group";
           target_id: string;
           access_type: "include" | "exclude";
           created_at: string;
@@ -847,7 +847,7 @@ export type Database = {
         Insert: {
           id?: string;
           session_id: string;
-          target_type: "circle" | "user";
+          target_type: "circle" | "user" | "group";
           target_id: string;
           access_type?: "include" | "exclude";
           created_at?: string;
@@ -933,14 +933,14 @@ export type Database = {
         Row: {
           id: string;
           status_id: string;
-          target_type: "circle" | "user";
+          target_type: "circle" | "user" | "group";
           target_id: string;
           created_at: string;
         };
         Insert: {
           id?: string;
           status_id: string;
-          target_type: "circle" | "user";
+          target_type: "circle" | "user" | "group";
           target_id: string;
           created_at?: string;
         };
@@ -1628,14 +1628,14 @@ export type Database = {
         Row: {
           id: string;
           hangout_session_id: string;
-          target_type: "circle" | "user";
+          target_type: "circle" | "user" | "group";
           target_id: string;
           created_at: string;
         };
         Insert: {
           id?: string;
           hangout_session_id: string;
-          target_type: "circle" | "user";
+          target_type: "circle" | "user" | "group";
           target_id: string;
           created_at?: string;
         };
@@ -4767,6 +4767,8 @@ export type PollResultsVisibility = "immediate" | "after_vote" | "after_close" |
 export type PollStatus = "open" | "closed" | "confirmed";
 
 export type HangoutActivityType =
+  // The original eight. `sports` and `chill` are retained deliberately: see
+  // the 20260822120000 migration for why neither was rewritten.
   | "food"
   | "study"
   | "sports"
@@ -4774,12 +4776,21 @@ export type HangoutActivityType =
   | "walk"
   | "gaming"
   | "chill"
-  | "anything";
+  | "anything"
+  // Added for the approved UpFor screen.
+  | "coffee"
+  | "football"
+  | "drinks"
+  | "movie"
+  | "drive"
+  | "party";
 export type HangoutAudienceType =
   | "all_muddies"
   | "close_friends"
   | "selected_circles"
-  | "selected_muddies";
+  | "selected_muddies"
+  /** Visible inside specific PUBLIC groups. Never a private Circle. */
+  | "selected_groups";
 export type HangoutStatus =
   | "draft"
   | "active"
