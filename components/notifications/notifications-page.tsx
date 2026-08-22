@@ -831,6 +831,9 @@ function ConnectionResponses({
         </div>
         {canSendCustomMessages ? (
           <form
+            /* method="post": without JavaScript a form with no method submits as
+               GET and puts its fields in the URL (MB-GOD-003's defect shape). */
+            method="post"
             className="space-y-2"
             onSubmit={(event) => {
               event.preventDefault();

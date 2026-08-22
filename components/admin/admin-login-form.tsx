@@ -47,8 +47,22 @@ export function AdminLoginForm({ nextDestination = "/admin" }: { nextDestination
     });
   }
 
+  /* method="post" is a SAFETY FALLBACK, not the submit path — the same defect
+   * class as MB-GOD-003 on the consumer auth forms, which this surface was
+   * missed by because that fix was scoped to components/auth/.
+   *
+   * Submission normally runs through onSubmit. But when the page's JavaScript
+   * has not run, the browser submits the form itself, and a <form> with no
+   * method defaults to GET — appending every field to the URL. Verified in a
+   * real browser before this change:
+   *     /admin/login?email=admin%40local.test&password=AdminSecret123%21
+   * A URL like that is written to browser history, server access logs and any
+   * intermediate proxy. These are ADMIN credentials.
+   *
+   * POST keeps the fields in the request body. Sign-in still fails closed
+   * without JavaScript; this only changes what leaks when it fails. */
   return (
-    <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+    <form className="space-y-4" method="post" onSubmit={handleSubmit(onSubmit)}>
       <FormField htmlFor="admin-email" label="Admin email" error={errors.email?.message}>
         <Input
           id="admin-email"

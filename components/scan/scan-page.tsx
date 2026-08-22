@@ -189,6 +189,9 @@ export function ScanPageContent() {
 
       <Card className="p-5">
         <form
+          /* method="post": without JavaScript a form with no method submits as
+             GET and puts its fields in the URL (MB-GOD-003's defect shape). */
+          method="post"
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();

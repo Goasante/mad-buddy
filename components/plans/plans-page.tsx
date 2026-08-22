@@ -1352,6 +1352,9 @@ function AddPollForm({
 
   return (
     <form
+      /* method="post": without JavaScript a form with no method submits as
+         GET and puts its fields in the URL (MB-GOD-003's defect shape). */
+      method="post"
       className="space-y-3 rounded-xl border border-border/70 bg-card/50 p-3"
       onSubmit={(event) => {
         event.preventDefault();

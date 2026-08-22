@@ -1839,9 +1839,13 @@ function AddMuddyModal({
   feedback: string;
   onRequest: (user: UserSummary) => void;
 }) {
+  /* method="post": without JavaScript a form with no method submits as GET and
+   * puts its fields in the URL. Nothing secret goes through this one, but the
+   * shape is the defect from MB-GOD-003 and there is no reason to leave it. */
   return (
     <Modal open={open} onOpenChange={onOpenChange} title="Add a Muddy" description="Search by username to send a request.">
       <form
+        method="post"
         className="flex items-center gap-2"
         onSubmit={(event) => {
           event.preventDefault();

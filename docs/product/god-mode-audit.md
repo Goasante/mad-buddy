@@ -774,3 +774,113 @@ derived from the tokens.
 **Not yet covered** (deferred to Mission 5 Extremely Advanced): keyboard-open
 composer behaviour, landscape, installed-PWA/Capacitor standalone chrome, and
 safe-area correctness INSIDE sheets, modals, the photo viewer and the camera.
+## MISSION 1 — Advanced (continued): pre-hydration / native-submit form audit
+
+### MB-GOD-010 - Admin credentials submitted in the URL when JavaScript does not run
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Admin authentication |
+| **Route** | `/admin/login`, plus `/admin` create-admin form |
+| **Severity** | **P0** - credential exposure (privileged account) |
+| **Category** | Security / privacy |
+| **Mission / Level** | Mission 1 - Advanced |
+| **Status** | **FIXED (runtime-verified)** |
+
+**Reproduction.** Load `/admin/login` with JavaScript unavailable, fill it, submit.
+
+**Expected.** Credentials never appear in a URL.
+
+**Actual (verified in a real browser before the fix):**
+
+```
+form method: null
+final URL:   /admin/login?email=admin%40local.test&password=AdminSecret123%21
+```
+
+**Root cause.** Exactly the MB-GOD-003 defect class, in a surface the first fix
+did not reach. That fix was scoped to `components/auth/` - the four consumer auth
+forms - rather than to the SHAPE of the defect. `components/admin/` builds its
+forms the same way (react-hook-form `onSubmit`, no `method`, no `action`), so it
+had the identical hole the whole time, on a form that grants staff access.
+
+This is the more important lesson of the two: the first fix addressed the
+instances it had seen instead of the class, and a second P0 was sitting one
+directory away.
+
+**Scope found.** A static sweep for the shape (`onSubmit` present, `method` and
+`action` both absent) found **8** forms:
+
+| File | What it does |
+| --- | --- |
+| `components/admin/admin-login-form.tsx` | **admin email + password** |
+| `components/admin/create-admin-form.tsx` | **new admin email + temporary password** |
+| `components/friends/friends-page.tsx` | Muddy search by username |
+| `components/messages/messages-page.tsx` | conversation search |
+| `components/messaging/message-composer.tsx` | message composer |
+| `components/notifications/notifications-page.tsx` | notification action form |
+| `components/plans/plans-page.tsx` | plan sub-form |
+| `components/scan/scan-page.tsx` | QR / code entry |
+
+**Fix.** `method="post"` on all eight. The six non-credential forms carry no
+secrets, but the shape is the defect and there is no reason to leave it - a
+search term in the URL is still a privacy leak into history and access logs, and
+the next person to add a password field to one of these would inherit the hole.
+
+**Verification (runtime, production build).**
+- JS disabled, after fix: `form method: post`, final URL `/admin/login` clean, no
+  `password=`, no `email=`.
+- JS enabled: the server action still handles it - request trace shows
+  `POST /admin/login nav=false` (a server action, not a native form navigation),
+  no leak, and a wrong password still shows the user an error.
+- Static sweep now reports **none - every onSubmit form declares method or action**.
+
+### MB-GOD-011 - Permanent guard against the native-GET form defect
+
+| Field | Value |
+| --- | --- |
+| **Category** | Test infrastructure / architectural invariant |
+| **Mission / Level** | Mission 1 - Advanced |
+| **Status** | **ADDED** |
+
+Two P0s of the same shape shipped (MB-GOD-003, MB-GOD-010), the second because
+the first was fixed instance-by-instance. Careful review demonstrably does not
+catch this: it is invisible to any test that runs JavaScript, and the JSX looks
+completely correct.
+
+`lib/security/form-method-guard.ts` + `.test.ts` scan `app/` and `components/`
+and fail on any `<form>` with an `onSubmit` handler but neither `method` nor
+`action`. Nine tests: six unit (including a multi-line opening tag whose
+`onSubmit` arrow contains `=>`, which a naive scan ends the tag on), and three
+repository-wide - one asserting the scanner finds forms at all, so the others
+cannot pass vacuously, and one naming the six credential forms explicitly so a
+refactor cannot quietly drop one out of the scanned set.
+
+**Mutation-tested, as the brief requires.** Removing `method="post"` from
+`components/admin/admin-login-form.tsx` fails **two** assertions, naming the
+exact file and line:
+
+```
+× no form submits as GET when JavaScript has not run
+    + "components/admin/admin-login-form.tsx:65"
+× every credential form posts
+    → components/admin/admin-login-form.tsx:65 does not post
+```
+
+File restored; guard green. It catches the regression rather than merely
+describing it.
+
+**One self-inflicted lesson, recorded because it nearly shipped.** The first
+version of the scanner reported `components/auth/login-form.tsx:98` - which is
+inside the **comment** explaining the MB-GOD-003 fix, quoting the very tag it
+searches for. Comments are now blanked length-preservingly (line numbers stay
+valid) before matching, the same technique `lib/life/friendship-query-guard.ts`
+uses for the same reason. A scanner that reports its own documentation is one
+nobody trusts, and worse, it teaches the next person to ignore it.
+
+### INVESTIGATED / NOT A DEFECT - "password" in `/forgot-password` URLs
+
+The runtime sweep initially reported `/forgot-password` and `/reset-password` as
+leaking "password". False positive: the word is the **route's own name**, in the
+path, not a query parameter. The detector now inspects only the query string.
+Recorded so a later session does not rediscover it.

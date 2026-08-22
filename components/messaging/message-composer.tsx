@@ -712,6 +712,9 @@ export function MessageComposer({
         }}
       />
       <form
+        /* method="post": without JavaScript a form with no method submits as
+           GET and puts its fields in the URL (MB-GOD-003's defect shape). */
+        method="post"
         className="composer-row"
         onSubmit={(event) => {
           event.preventDefault();
