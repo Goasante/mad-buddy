@@ -1,14 +1,14 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 8.** The next session continues from here.
+**Written at the end of session 9.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         2c3da22
+HEAD         (session 9 final — see git log -1)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      20 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      25 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -170,8 +170,40 @@ JOURNEYS    10/10   LIFECYCLE 7/7   MULTI-TAB 5/5   STATE GRAPH 193 edges
    installed PWA / Capacitor standalone, and safe-area INSIDE sheets, modals,
    the photo viewer and the camera. None of these are covered yet.
 
+## Next session: the two remaining domains
+
+**Domain 6 — Profile media (NOT STARTED)** is the larger piece. It needs real
+storage + DB work, not a UI test:
+- add / replace / reorder / visibility / remove, verifying DB *and* storage
+  object state after each
+- the replacement invariant: upload new → confirm ready → DB swap → retire old.
+  Never delete-then-upload, or a failed replacement destroys working media
+- failure injection: upload ok / DB swap fails; DB ok / refresh fails; duplicate
+  replace; stale slot id
+- capacity stays **3 showcase images** — do not expand it
+- visibility as self / approved Muddy / Linkr stranger / blocked / unrelated,
+  tested against the real storage path (a URL that is not rendered is still a URL
+  that can be fetched)
+- one multi-tab: Tab A holds stale slots, Tab B reorders, Tab A submits
+
+**Domain 5 — Event check-in / Event Linkr (PARTIAL)** needs the wiring, not the
+rules. The consent decision is proven (MB-GOD-028, mutation-tested); what remains
+is that the system actually recomputes from changed state:
+- checkout / opt-out / Event end → next candidate computation excludes the user
+- attendee enumeration against live payloads, with enough seeded attendees that a
+  leak would be visible
+- the five audience authorities: invite / link / community / nearby / public
+
 ## Things the next session should not re-derive
 
+- **Messages idempotency is a DATABASE guarantee** (MB-GOD-030): unique index on
+  `(sender_id, client_message_id)`. Do not "improve" it with client-side debounce.
+- **Plan Chat membership follows RSVP, not invitation** (MB-GOD-029). An invitee
+  who has not accepted is correctly absent from the chat.
+- **Conversations link to Plans via `context_type`/`context_id`**, NOT a `plan_id`
+  column. Querying `plan_id` returns nothing and looks like a missing chat.
+- **Valid `system_event_type` values** are the 14 in the check constraint;
+  `plan_created` is NOT one of them (`plan_confirmed` is).
 - **Event Linkr consent is proven** (MB-GOD-028), behaviourally and
   mutation-tested: attendance does not imply discoverability, a block beats Event
   eligibility, and revocation is immediate with no grace window. Do NOT re-derive
