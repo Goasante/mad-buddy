@@ -905,6 +905,13 @@ inconclusive rather than as passes:**
   the empty-fixture trap this program has already been caught by once. The
   lifecycle is covered by unit tests (`lib/life/relationship-lifecycle.test.ts`),
   but the end-to-end sequence remains **UNTESTED** and is carried forward.
+
+  **CLOSED in session 5 (MB-GOD-017): 7/7 passing.** Correction to the note
+  below — the 400 was **not** an anti-enumeration guard. It was a harness bug:
+  the probe sent `recipientId` where the endpoint takes `targetUserId`, and
+  queried `recipient_id` where the column is `receiver_id`. The plausible
+  explanation recorded at the time was wrong, which is its own lesson: an
+  inconclusive result must be chased down, not explained away.
 - `deleted resource returns 404` — reported PASS on page text, which led to
   MB-GOD-012 below. The assertion was too weak to be evidence either way.
 
@@ -1290,3 +1297,221 @@ The back link on `/friends/<username>` measured **74x20**. The identical class
 string appears in `components/groups/group-detail-page.tsx` — the same copied-
 pattern propagation that produced MB-GOD-005 across nine tab rows. Both fixed to
 44px in the same change rather than one now and one when it is noticed later.
+## MISSION 1 — Extremely Advanced: lifecycle and multi-tab sequences
+
+### MB-GOD-017 - Muddy relationship lifecycle: 7/7, all meaningfully exercised
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Muddies / friend requests |
+| **Severity** | n/a - **verification, no defect found** |
+| **Mission / Level** | Mission 1 - Extremely Advanced |
+| **Status** | **VERIFIED** |
+
+Full lifecycle driven against a real browser and a real database
+(`scripts/hardening/seq-muddy-lifecycle.mjs`), with every assertion reading
+Postgres directly:
+
+```
+PASS  request creates exactly one pending row          status 200, rows 1, status=pending
+PASS  a repeated request does not create a duplicate   rows 1
+PASS  two simultaneous requests still yield one row    rows 1 (statuses 200/400)
+PASS  accept produces exactly one friendship row       friendships 1 (rpc ok)
+PASS  blocking soft-ends rather than deleting          rows 1, ended_at set
+PASS  reactivation reuses the same relationship id     same id: true
+PASS  a blocked user does not appear in the Muddy list absent
+```
+
+The concurrency result is the notable one: two requests fired at the same instant
+returned **200 and 400** with exactly **one** row. The server serialises and the
+loser is cleanly refused, rather than both succeeding and leaving a duplicate.
+
+The soft-ending property holds end to end: blocking sets `ended_at` instead of
+deleting, and reactivation reuses the **same row id** — relationship identity
+survives an ending and a restart, which is what `lib/life/` exists to guarantee.
+
+**This test previously reported INCONCLUSIVE, and closing it out required three
+harness fixes — each of which had been quietly producing a green result:**
+
+1. The endpoint takes `targetUserId`; the probe sent `recipientId` → 400.
+2. The column is `receiver_id`; the probe queried `recipient_id` → row counts
+   came back `undefined`.
+3. `accept_friend_request` takes `p_request_id`, not `request_id`. With the wrong
+   name the RPC 404'd, and the assertion `fships.length <= 1` was **satisfied by
+   zero rows** — a check that could not fail.
+
+The previous session's ledger recorded the 400 as an anti-enumeration guard.
+**That was wrong**, and is corrected here: it was a harness bug. The lesson holds
+in the other direction too — an inconclusive result must be chased down, not
+explained away with a plausible story.
+
+### INVESTIGATED / NOT A DEFECT - `accept_friend_request` denies service_role
+
+Calling the RPC with the service-role client returns `permission denied for
+function accept_friend_request`. This is **correct and deliberate**: the
+migration grants EXECUTE to `authenticated` only, so the function runs as the
+real user and `auth.uid()` plus RLS decide what may be accepted. A service-role
+caller would bypass exactly the check that makes it safe.
+
+The harness now signs in as the receiver and calls it as that user, which is what
+the app does.
+
+### MB-GOD-018 - Multi-tab and stale-state behaviour: 5/5
+
+| Field | Value |
+| --- | --- |
+| **Severity** | n/a - **verification, no defect found** |
+| **Mission / Level** | Mission 1 - Extremely Advanced |
+| **Status** | **VERIFIED** |
+
+```
+PASS  same request fired from two tabs creates one row   rows 1 (400/200)
+PASS  acting on a deleted resource creates no duplicate  rows 1
+PASS  a request to someone who blocked you is refused    rows 0, status 400
+PASS  no permanent loading state after stale interaction clean
+PASS  a session-less tab cannot read an authenticated surface  → /login
+```
+
+Blocking is enforced **server-side**: a request to someone who has blocked you is
+refused with no row written, regardless of what the sending tab believed.
+
+**Harness note carried forward:** the friend-request endpoint is rate limited
+(correctly). A preceding lifecycle run exhausts the quota, after which every
+request returns `400 "Too many attempts"` and these checks measure the limiter
+rather than the concurrency behaviour. `reset()` now clears `rate_limits` for the
+test user. The limiter itself is untouched — it is a feature.
+
+## MISSION 1 — God Mode: reachable-state graph
+
+### MB-GOD-019 - State graph crawler, and the three ways it lied first
+
+| Field | Value |
+| --- | --- |
+| **Mission / Level** | Mission 1 - God Mode |
+| **Status** | **IN PROGRESS** |
+
+`scripts/hardening/state-graph.mjs` clicks every interactive control on every
+core surface and records SOURCE → CONTROL → EXPECTED → ACTUAL → NEW STATE,
+classifying each outcome as `nav` / `overlay` / `inline` / `self` / `dead`.
+
+**It produced convincing false findings three times before it was trustworthy,
+and all three are recorded because each would have wasted a session:**
+
+1. **Fuzzy text selection** → 16 strict-mode violations. Several controls share a
+   label ("Muddies" is a nav item, a section heading and a stat).
+2. **Index-based selection** → **ten impossible "destination mismatches"**, e.g.
+   `href=/moments` landing on `/notifications`. The order returned by an in-page
+   `querySelectorAll` does **not** match Playwright's locator order, so `nth(i)`
+   clicked a different element than was inventoried. Proven by instrumenting the
+   skip: at the same index the href was `/moments` in one ordering and
+   `/notifications` in the other. Every one of those ten was a harness artifact.
+3. **Denied geolocation** → "Turn on Glow" on Home reported as a **dead control**.
+   With permission granted it POSTs `/api/location/update` (200) and Home switches
+   to its populated state. Denying a permission the product legitimately asks for
+   turns a working feature into a false finding.
+
+The crawler now selects by **identity** (href for links, exact accessible name
+for handler-only buttons), re-checks that the element still matches before
+clicking, scrolls it into view (several nav links live in a horizontally
+scrolling rail — fully visible, but outside the viewport), grants geolocation,
+and classifies a link to the already-open page as `self` rather than `dead`.
+
+**Result on the first four surfaces after those corrections: 28 edges, ZERO
+destination mismatches, ZERO dead controls.**
+
+That is the honest headline. The earlier "10 mismatches + 6 dead" was my
+instrument, not the product.
+### MB-GOD-020 - Account data export returned 500 for every user
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Settings → Data → Export your data |
+| **Route** | `GET /api/account/export` |
+| **Severity** | **P1** — a compliance-relevant feature, broken for 100% of users |
+| **Category** | Correctness / data rights |
+| **Mission / Level** | Mission 1 - God Mode (found by the state-graph crawl) |
+| **Status** | **FIXED (runtime-verified, mutation-tested)** |
+
+**Reproduction.** Settings → "Export data".
+
+**Actual.** `GET /api/account/export` → **500**,
+`{"error":"Your data export could not be prepared."}`
+
+**Root cause.** The route selected `profiles.onboarding_complete`. That column
+does not exist — the real one is **`is_onboarded`**. Postgres rejects the entire
+query with `42703 (undefined_column)`, so the export failed for everyone, always.
+
+`onboarding_complete` appears in exactly **one place in the whole repository**:
+this broken query. It was never a rename that missed a call site; it was wrong
+from the start.
+
+**Why nothing caught it:**
+
+- **TypeScript could not.** A Supabase select list is a plain **string**, so a
+  wrong column name is not a type error.
+- **No test covered it**, because exercising the route needs a live database.
+- **The route discarded the error.** `[...].find((r) => r.error)` then returned a
+  generic message without logging, so the failure was undiagnosable from
+  outside: the export silently stopped working and nothing recorded why.
+
+It was found by the God Mode click-crawl noticing a 500 in the console while
+clicking every control on `/settings` — precisely the class of defect the brief
+predicted a state graph would surface and ordinary testing would not.
+
+**Fix, in two parts.**
+
+1. **The column**: `onboarding_complete` → `is_onboarded`.
+2. **The silence**: the Postgres error is now logged through
+   `logBackendEvent` — the app's privacy-safe channel, which strips location,
+   tokens and secrets — recording the error **code** (`PostgrestError:42703`) and
+   a hashed user id, never the message or any user data. This is what turned an
+   opaque 500 into a one-line diagnosis, and it did so within a single run.
+
+**Verification (production build, real session):**
+
+```
+before:  GET /api/account/export -> 500  {"error":"Your data export could not be prepared."}
+log:     errorType "PostgrestError:42703"   (undefined_column)
+after:   GET /api/account/export -> 200, 18 sections:
+         profile, subscription, preferences, currentLocation, friendships,
+         friendRequests, blockedUsers, notifications, reports, consentLogs,
+         friendCircles, privacyZones, meetupRequests, bestBuddies, eventModes,
+         appFeedback, supportRequests, mediaAssets
+```
+
+**Regression guard** — `lib/account/export-columns.test.ts`. Compares every
+column named in the route's select lists against the **generated database
+types**, so it cannot drift from the real schema, and runs without a database.
+Four tests, including one asserting the scanner finds queries at all so the
+others cannot pass vacuously, and one asserting the error is still logged.
+
+**Mutation-tested.** Reintroducing `onboarding_complete` fails two assertions and
+names the offending column exactly:
+
+```
+× selects only columns that exist in the database types
+    expected [ 'profiles.onboarding_complete' ] to deeply equal []
+× still exports the onboarding flag under its real name
+```
+
+**One harness correction recorded**: the guard's first version searched the
+generated types for `"Row: {"` and matched nothing, because Row is declared as
+`Row: RowWithTimestamps & {` — an intersection. It reported **thirty existing
+columns as missing**, including `profiles.full_name`. Fixed to anchor on `Row:`,
+brace-match its block, and include the intersected shared columns.
+
+### INVESTIGATED / NOT A DEFECT - nine "dead" controls in the state graph
+
+The full crawl (34 nodes, 193 edges) reported nine dead controls. All nine are
+the **already-active tab** on their surface — "For You" on UpFor, "All" on
+Messages and Notifications, "Upcoming" on Plans, "Home" on Events, "My Circles"
+on Circles. Clicking the tab you are already on correctly does nothing.
+
+The crawler classifies a *link* to the current page as `self`, but these are
+handler-only `<button role="tab">` elements with no href, so the same reasoning
+cannot be applied automatically. Left reported rather than suppressed: the
+distinction needs a per-surface notion of "current tab", and silencing it
+generically risks hiding a genuinely dead tab later.
+
+"Open quick actions" on `/buddy-score` is the same story — it opens a launcher
+whose content did not change the first 900 characters of body text.

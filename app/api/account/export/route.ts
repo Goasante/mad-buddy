@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import { errorType, logBackendEvent } from "@/lib/observability/logger";
 
 type ExportBundle = {
   exportedAt: string;
@@ -52,7 +53,7 @@ export async function GET() {
     supportRequests,
     mediaAssets
   ] = await Promise.all([
-    supabase.from("profiles").select("user_id, full_name, username, avatar_url, bio, mood_status, visibility_status, onboarding_complete, created_at, updated_at").eq("user_id", userId).maybeSingle(),
+    supabase.from("profiles").select("user_id, full_name, username, avatar_url, bio, mood_status, visibility_status, is_onboarded, created_at, updated_at").eq("user_id", userId).maybeSingle(),
     supabase.from("subscriptions").select("provider, plan, status, current_period_start, current_period_end, cancel_at_period_end, grace_ends_at, created_at, updated_at").eq("user_id", userId).maybeSingle(),
     supabase.from("user_preferences").select("user_id, notification_preferences, app_preferences, created_at, updated_at").eq("user_id", userId).maybeSingle(),
     supabase.from("user_locations").select("confidence, last_updated").eq("user_id", userId).maybeSingle(),
@@ -110,6 +111,23 @@ export async function GET() {
   ].find((result) => result.error);
 
   if (failed?.error) {
+    /* Log the failure before returning the generic message.
+     * The message shown to the user is deliberately vague, which is right — it
+     * must not leak schema detail. But the error was previously DISCARDED
+     * entirely, so a 500 here was undiagnosable from the outside: the export
+     * silently stopped working and nothing recorded why. Found by the God Mode
+     * state-graph crawl (MB-GOD-020).
+     * `logBackendEvent` is the privacy-safe channel — it strips location,
+     * tokens and secrets — and `errorType` records the Postgres error CODE
+     * rather than its message, which is enough to identify the failing query
+     * without putting user data in a log line. */
+    logBackendEvent("error", {
+      route: "/api/account/export",
+      action: "account.export",
+      statusCode: 500,
+      userId,
+      errorType: errorType(failed.error)
+    });
     return NextResponse.json({ error: "Your data export could not be prepared." }, { status: 500 });
   }
 
