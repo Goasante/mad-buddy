@@ -229,9 +229,21 @@ describe("Near section interaction", () => {
   });
 
   it("labels each avatar with the person and their proximity", () => {
+    /* The accessible name carries the FULL name, while the visible column
+       below it stays first-name-only (MB-GOD-045).
+     *
+     * This assertion used to pin `capitalize(firstName(name))` — the same
+     * truncation as the visible label. A 4.75rem column is why the visible
+     * text is short; a screen reader has no such constraint, and a first name
+     * alone stops identifying anyone the moment a user has two Muddies who
+     * share one. The test's own title says "the person", and a full name is
+     * what satisfies it. */
     expect(nearSection).toContain(
-      "aria-label={`${capitalize(firstName(name))}, ${proximityBandLabel(friend.proximityBand)}`}"
+      "aria-label={`${friend.displayName || friend.username}, ${proximityBandLabel(friend.proximityBand)}`}"
     );
+    // The visible label must NOT have grown to the full name: the column is
+    // fixed-width and would break.
+    expect(nearSection).toContain("{capitalize(firstName(name))}");
   });
 
   it("keeps a visible focus ring for keyboard users", () => {

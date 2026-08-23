@@ -247,9 +247,21 @@ describe("accessibility", () => {
   });
 
   it("announces full names even where the UI truncates", () => {
-    // Near shows a first name; Moments shows a first name.
-    expect(home).toContain("aria-label={`${capitalize(firstName(name))}");
+    /* Both surfaces show a first name and announce the full one.
+     *
+     * This test's TITLE has always stated the rule, and the Moments tile has
+     * always followed it (`${fullName}`). The Home assertion, however, pinned
+     * `capitalize(firstName(name))` — the truncated form — which contradicted
+     * the title it sat under. Home was the surface out of step with the
+     * codebase's own principle, not the principle that needed changing
+     * (MB-GOD-045).
+     *
+     * Visible text stays first-name on both: Home's Near column is 4.75rem
+     * wide and a full name would break the grid. */
+    expect(home).toContain("aria-label={`${friend.displayName || friend.username}");
     expect(momentTile).toContain("${fullName}");
+    // And the visible labels must still be the short form.
+    expect(home).toContain("{capitalize(firstName(name))}");
   });
 
   it("hides decoration from assistive technology", () => {

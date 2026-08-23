@@ -1473,7 +1473,17 @@ function NearbyHero({
             type="button"
             onClick={() => onSelect(heroFriend.friendId)}
             className="focus-ring safe-motion rounded-[1.5rem] p-1 transition-transform active:scale-[0.99] motion-reduce:active:scale-100"
-            aria-label={`${capitalize(firstName(heroFriend.displayName || heroFriend.username))}, ${proximityBandLabel(heroFriend.proximityBand)}. Open profile`}
+            /* THE FULL NAME, even though the label below shows only the first.
+             *
+             * The visible text is first-name because Home is a greeting
+             * surface and the card is narrow. An accessible name has neither
+             * constraint, and a first name alone is ambiguous the moment a
+             * user has two Muddies who share one -- which in Accra, where
+             * "Kofi" and "Kwame" are among the commonest given names, is
+             * ordinary rather than exotic. Sighted users disambiguate by
+             * avatar; a screen reader user gets only this string
+             * (MB-GOD-045). */
+            aria-label={`${heroFriend.displayName || heroFriend.username}, ${proximityBandLabel(heroFriend.proximityBand)}. Open profile`}
           >
             <span className="relative grid place-items-center">
               <ProximityGlowAvatar
@@ -1519,13 +1529,16 @@ function NearbyHero({
               <ul className="mt-2 flex flex-col gap-1">
                 {supporting.map((friend) => {
                   const name = capitalize(firstName(friend.displayName || friend.username));
+                  // Visible text stays first-name; the accessible name does
+                  // not truncate (MB-GOD-045).
+                  const fullName = friend.displayName || friend.username;
                   return (
                     <li key={friend.friendId}>
                       <button
                         type="button"
                         onClick={() => onSelect(friend.friendId)}
                         className="focus-ring safe-motion flex w-full items-center gap-3 rounded-2xl px-1 py-1.5 text-left transition-transform active:scale-[0.99] motion-reduce:active:scale-100"
-                        aria-label={`${name}, ${proximityBandLabel(friend.proximityBand)}. Open profile`}
+                        aria-label={`${fullName}, ${proximityBandLabel(friend.proximityBand)}. Open profile`}
                       >
                         <ProximityGlowAvatar
                           name={friend.displayName || friend.username}
@@ -1574,7 +1587,9 @@ function NearbyHero({
                 // labels line up across the row regardless of name length.
                 // shrink-0 is what keeps the row from wrapping or squashing.
                 className="focus-ring safe-motion group flex w-[4.75rem] shrink-0 flex-col items-center gap-2.5 text-center transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
-                aria-label={`${capitalize(firstName(name))}, ${proximityBandLabel(friend.proximityBand)}`}
+                /* Full name for assistive technology; the 4.75rem column below
+                   still shows only the first (MB-GOD-045). */
+                aria-label={`${friend.displayName || friend.username}, ${proximityBandLabel(friend.proximityBand)}`}
               >
                 {/* Fixed-height avatar slot. The halo's padding varies with
                     proximity, so without a fixed box each column would be a

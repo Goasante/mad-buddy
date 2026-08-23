@@ -3594,3 +3594,78 @@ demanding unconditional restoration, so it cannot be satisfied by a fix that
 fakes it.
 
 `scripts/hardening/focus-restoration.mjs` is the regression check.
+
+### Axis 1 - Product vocabulary
+
+`scripts/hardening/vocabulary.mjs` reads the accessible name of every control
+naming a known person, plus every occurrence of the feature vocabulary in
+VISIBLE text, across twelve surfaces.
+
+**Feature vocabulary is clean.** Every competing pair resolves to exactly one
+user-facing term:
+
+```
+Muddies      13  /dashboard /friends /messages /plans /events /hangout-mode
+                 /notifications /profile /settings /safe-arrival
+Plan         11    UpFor  5    Nearby  3    Circle  3
+Safe Arrival  3    Going  2    Muddy   1    Linkr   1    Glow  1
+
+ok  "Muddy"/"friend"    — only one is user-visible
+ok  "Circle"/"Group"    — only one is user-visible
+ok  "UpFor"/"Hangout"   — only one is user-visible
+```
+
+`friend`, `Group` and `Hangout` survive only as internal identifiers (the route
+is still `/hangout-mode`, the component still `friends-page.tsx`), which is
+exactly what the brief permits: implementation terminology may differ, user
+terminology may not. **No drift found. No change made.**
+
+### MB-GOD-045 (P2) - Home announced a first name where a full one was needed
+
+Three naming conventions were found for one person:
+
+```
+/dashboard   "Kofi, Just Around. Open profile"
+/friends     "Kofi Mensah, open profile"   /   "Kofi Mensah, just around"
+/messages    "KM Kofi Mensah ..."
+```
+
+The VISIBLE difference is deliberate and correct: Home is a greeting surface
+whose Near column is `w-[4.75rem]`, and a full name would break that grid.
+`/friends` is a directory, where a full name is what makes a row unambiguous.
+Two surfaces, two jobs, two treatments — that is considered design, not drift.
+
+**The accessible name is a different question**, and that is where the defect
+was. `aria-label` is what a screen reader announces, and it inherits no width
+constraint from the layout. A first name alone stops identifying anyone the
+moment a user has two Muddies who share one — and Mad Buddy is built in Accra,
+where "Kofi" and "Kwame" are among the commonest given names. A sighted user
+disambiguates by avatar; a screen-reader user gets only that string.
+
+**The codebase already held this exact principle.** `home-consistency.test.ts`
+has a test titled *"announces full names even where the UI truncates"*, and the
+Moments tile follows it (`${fullName}`). But the Home assertion inside that same
+test pinned `capitalize(firstName(name))` — the truncated form — contradicting
+the title it sat under. **Home was the surface out of step with the codebase's
+own stated rule**, not the rule that needed revising.
+
+Three `aria-label`s on Home now carry the full name; all visible labels are
+untouched. Verified at runtime:
+
+```
+accessible names: "Ama Boateng, Just Around. Open profile"
+                  "Kofi Mensah, Just Around. Open profile"
+visible text:     hasShort=true   hasFullVisible=false
+```
+
+The screen reader gets the full name; the 4.75rem column still shows "Kofi".
+
+**Canonical policy, now recorded so it stops being re-derived:**
+
+| Context | Visible | Accessible name |
+| --- | --- | --- |
+| Greeting / glance (Home, Moments) | first name | **full display name** |
+| Directory / list (Muddies, Messages) | full display name | full display name |
+| Compact column (`w-[4.75rem]`) | first name | **full display name** |
+
+The rule in one line: **truncate for layout, never for assistive technology.**
