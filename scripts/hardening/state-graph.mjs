@@ -87,7 +87,14 @@ for (const surface of SURFACES) {
       await page.goto(`${BASE}${surface}`, { waitUntil: "domcontentloaded", timeout: 60000 });
       await page.waitForTimeout(1400);
     }
-    // Dismiss anything left open by the previous control.
+    /* Dismiss anything left open by the previous control.
+       CAVEAT, and it produces false "dead" results on detail surfaces: on a
+       route like /messages?conversation=<id> the Escape ALSO closes the
+       conversation panel, so a subsequent click on "Back to conversations" has
+       nothing left to go back from and looks dead. Verified by hand — that
+       control navigates correctly to /messages and the content changes.
+       Detail-surface findings must be confirmed individually rather than read
+       straight off this crawl. */
     await page.keyboard.press("Escape").catch(() => {});
     await page.waitForTimeout(200);
 

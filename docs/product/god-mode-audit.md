@@ -2368,3 +2368,187 @@ take back a link already handed out."*
   exercised end to end.
 - **Cache behaviour across account switches**, which matters more for the later
   Capacitor transition than for web.
+## MISSION 1 — God Mode: the four remaining detail surfaces
+
+### MB-GOD-035 - Detail surfaces crawled: Conversation, Plan detail, Plan Chat, Event detail
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Conversation, Plan detail, Plan Chat, Event detail |
+| **Severity** | n/a - **verification, no defect found** |
+| **Mission / Level** | Mission 1 - God Mode |
+| **Status** | **VERIFIED** |
+
+All four are reached by query parameter over a list surface
+(`?conversation=`, `?plan=`, `?event=`), so crawling them needed **real ids of
+each kind**. `scripts/hardening/seed-detail-surfaces.mjs` creates a direct
+conversation with messages, a Plan with accepted participants (which yields a
+distinct Plan Chat), and a live public Event with RSVPs — crawling `?conversation=`
+with no conversation would have exercised the empty state and proven nothing.
+
+```
+nodes 7   edges 52
+outcomes: inline 19, overlay 9, nav 6, dead 4, error 14
+```
+
+**Zero wrong destinations. Zero real dead controls.**
+
+**Every "dead" result was investigated individually and none was a defect:**
+
+| Control | Verdict |
+| --- | --- |
+| "Created by you" (Plan detail) | already-active tab — clicking the current tab correctly does nothing |
+| "Hosting" (Event detail) | already-active tab |
+| "Back to conversations" ×2 | **works correctly** — verified by hand: navigates `?conversation=<id>` → `/messages` and the content changes |
+
+The "Back to conversations" result is a **crawler artifact worth recording**: the
+crawl presses Escape between controls to dismiss whatever the previous one
+opened, and on `/messages?conversation=<id>` that Escape *also closes the
+conversation panel* — so the subsequent Back click has nothing left to go back
+from. The caveat is now documented in `state-graph.mjs`: detail-surface findings
+must be confirmed individually rather than read straight off the crawl.
+
+**One destination was checked because it looked wrong and was not.** The graph
+recorded `Add Muddy → /friends?tab=requests`, which would be a semantic defect —
+"Add" should open search, not the requests tab. Verified by hand: the control
+opens a **dialog with a search field** and stays on `/friends`. The `?tab=requests`
+in the graph was residue from a preceding edge, not this control's destination.
+
+**The console 404s did not reproduce.** Loading each detail surface cleanly, and
+then interacting, produced **no 404 at all**. The errors recorded during the crawl
+came from traversing *through* Linkr during edge-walking — the documented orb
+probe (MB-GOD-006) — not from the detail surfaces.
+
+### Full state graph, after the detail crawl
+
+```
+core surfaces (13)   34 nodes   193 edges   0 destination mismatches
+detail surfaces (4)   7 nodes    52 edges   0 destination mismatches
+                     ----------------------------------------------
+TOTAL                41 nodes   245 edges
+```
+
+**Graph analysis against the checklist:**
+
+| Check | Result |
+| --- | --- |
+| dead-end states | none — every crawled surface offers navigation out |
+| wrong detail destination | none across 245 edges |
+| wrong-user destination | none — the Muddy modal was separately proven to open the correct person (MB-GOD-005 follow-up) |
+| accidental Home fallback | none observed |
+| circular navigation | none — no edge returned to its origin except correct self-links, classified `self` |
+| orphan route | `/hangout-mode` (MB-GOD-007, owner-blocked); `/dev/*` correctly 307s in production |
+| orphan tour target | none — `profile-privacy` was re-anchored when Profile was restructured (MB-GOD-013) |
+| legacy route leakage | `/hangout-mode` only, tracked |
+| modal/sheet trap | none — every overlay closed on Escape, which is how the crawl proceeds at all |
+| unreachable management action | none found; every Settings destination verified reachable (MB-GOD-013) |
+
+**Honest limits of this graph.** It covers reachable UI controls on 17 surfaces
+under one signed-in account with geolocation granted and tours dismissed. It does
+**not** cover: multiple concurrent account states, permission-denied variants
+beyond geolocation, or surfaces only reachable from a notification deep link. The
+crawl is evidence about this account's reachable graph, not a proof of total
+reachability.
+### MB-GOD-036 - Live Event attendee-enumeration attack: no leak (carried item CLOSED)
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Events, Event Linkr |
+| **Severity** | n/a - **security verification, no defect found** |
+| **Category** | Privacy / enumeration |
+| **Mission / Level** | Mission 1 - God Mode |
+| **Status** | **CLOSED** |
+
+The data contract was already proven (`eventLinkrCandidateIds` returns ids only,
+and only of consenting attendees). What had never been run is the **network**
+attack: what an actual HTTP response hands an actual viewer. *"The UI does not
+show it"* is not privacy proof.
+
+Seeded so a leak would be **visible** — attendees in three deliberately different
+states, because an empty attendee list cannot demonstrate the absence of a
+directory:
+
+```
+KOFI   checked in + consenting
+AMA    checked in, NO consent      ← the sharpest case
+JOJO   going, never checked in
+```
+
+Then every HTTP response body on `/events`, `/events?event=<id>` and
+`/events/<id>` was harvested, plus direct calls to `/api/events/<id>`,
+`/api/events/<id>/attendees` and `/api/events?event=<id>`, and searched for each
+attendee's user id.
+
+```
+PASS  the probe actually captured payloads (not an empty run)   host saw 132 payloads
+PASS  a signed-out visitor receives NO attendee identifiers      99 payloads, none leaked
+PASS  an unrelated authenticated user receives NO identifiers   133 payloads, none leaked
+PASS  the non-consenting attendee never appears in ANY payload   absent everywhere
+```
+
+**364 payloads inspected across three viewer types. Zero attendee identifiers.**
+
+The first assertion exists so the run cannot pass by capturing nothing — the
+empty-fixture trap this program has been caught by before.
+
+The AMA case is the one that matters most: someone who **checked in but did not
+consent** is invisible to every viewer. Presence does not become discoverability
+at the payload layer either, not merely in the eligibility function.
+
+### MB-GOD-037 - Signed-URL residual exposure: measured and bounded (carried item CLOSED)
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Profile media, all private media |
+| **Severity** | **P3 — accepted, documented limitation** |
+| **Category** | Privacy / capability lifetime |
+| **Mission / Level** | Mission 1 - God Mode |
+| **Status** | **MEASURED — accepted by design** |
+
+The question carried from domain 6: if A legitimately holds a signed media URL
+and B then blocks them, what happens?
+
+**The window is exactly 5 minutes.**
+
+```ts
+/** One lifetime for every private media URL minted by Mad Buddy. */
+export const MEDIA_SIGNED_URL_TTL_SECONDS = 5 * 60;
+```
+
+Two properties, and they are **different security claims** that must not be
+conflated:
+
+| Property | Status |
+| --- | --- |
+| **New access is prevented immediately** | ✅ Yes. The next projection excludes the photo — `loadVisibleProfilePhotosFor` re-queries by viewer role every time, and no new URL is minted. |
+| **A previously issued capability stays valid until it expires** | ⚠️ Yes, for **≤ 5 minutes**. This is inherent to time-bound signed URLs and is not fixable by application code. |
+
+**What remains exposed, precisely:** only media the viewer had **already
+legitimately obtained** a URL for, only for the remainder of that URL's ≤5-minute
+lifetime, and only the specific variant already signed. No new media, no other
+slots, no re-signing — `signMediaForAsset` would be asked again and would decline.
+
+**Why this is the right trade, and the code says so.** The implementation
+deliberately chose short-lived signatures over permanent URLs for exactly this
+reason:
+
+> *"Signed and short-lived rather than permanent: a permanent URL would outlive
+> the setting that allowed it, so switching a photo to `only_me` could not take
+> back a link already handed out."*
+
+The alternative — permanent URLs — would make the residual window **infinite**.
+The alternative to *that* — proxying every image through an authorising route —
+trades a bounded 5-minute window for a per-request auth check on every thumbnail,
+which is a real cost for a small marginal gain against a viewer who could simply
+have saved the image.
+
+**Additional revocation that IS immediate**, regardless of TTL: `signMediaForAsset`
+refuses to sign at all when the asset is soft-deleted (`deleted_at`) or its
+`moderation_status` is `removed`/`restricted` — *"whatever the parent says"*. So
+moderation and deletion take effect on the next request, not after 5 minutes.
+
+**Recorded as an accepted limitation rather than a defect.** It is a property of
+time-bound capabilities, the window is small and bounded, the exposure is limited
+to already-obtained media, and the design comment shows it was a considered
+choice. A future mitigation, if ever wanted, would be shortening the TTL for
+photos whose visibility is narrower than `everyone`.
