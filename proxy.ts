@@ -155,5 +155,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"]
+  /* `offline.html` and `sw.js` are excluded deliberately: both are static
+   * files the service worker must fetch WITHOUT a session. The offline
+   * shell was caught by the auth redirect and answered 307, so the worker
+   * could not precache it and the fallback never appeared (MB-GOD-041).
+   * Neither file contains user data, so no protection is lost. */
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|sw\\.js|offline\\.html|offline\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"]
 };

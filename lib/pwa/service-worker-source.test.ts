@@ -26,9 +26,25 @@ describe("Mad Buddy service worker safety and reliability", () => {
   });
 
   it("never introduces private application caching", () => {
-    expect(source).not.toMatch(/\bcaches\.(?:open|match|put|delete)\b/);
-    expect(source).not.toContain("cache.add");
+    /* The test's NAME is the rule, and it is now asserted directly rather than
+       through a blanket ban on the Cache API. The worker precaches two static
+       files -- /offline.html and /offline.js -- so a navigation that cannot
+       reach the network gets Mad Buddy's own offline page instead of the
+       browser's error page (MB-GOD-041). Neither file contains user data.
+
+       What would be PRIVATE caching, and still fails here:
+         - caches.put(...) of a fetched response
+         - a cache-first navigation handler
+         - answering event.request from the cache
+       The exact allowed URL list is pinned in
+       lib/security/session-storage.test.ts, which fails if it ever grows. */
+    expect(source).not.toMatch(/\bcaches\.\s*put\b/);
+    expect(source).not.toMatch(/caches\s*\.\s*match\s*\(\s*event\.request/);
     expect(source).not.toContain("cacheFirst");
+
+    // The network is always tried first for a navigation.
+    const nav = source.slice(source.indexOf('event.request.mode === "navigate"'));
+    expect(nav.indexOf("fetch(event.request)")).toBeLessThan(nav.indexOf("caches.match"));
   });
 
   it("rejects untrusted notification destinations", () => {

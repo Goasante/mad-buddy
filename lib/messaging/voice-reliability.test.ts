@@ -42,7 +42,14 @@ describe("voice reliability diagnostics", () => {
 describe("private media and bundle boundaries", () => {
   it("keeps the service worker network-only", () => {
     const worker = read("public/sw.js");
-    expect(worker).not.toMatch(/\bcaches\.(?:open|match|put|delete)\b/);
+    /* The blanket "no `caches` anywhere" rule moved to
+       lib/security/session-storage.test.ts, which now pins the EXACT URLs the
+       worker may precache (/offline.html, /offline.js) and fails on
+       cache-first navigation or any caches.put -- a stronger rule than banning
+       the API, which could not tell a static offline page from a cached
+       conversation (MB-GOD-041). What matters here is that a voice or media
+       response is never written to a cache. */
+    expect(worker).not.toMatch(/\bcaches\.\s*put\b/);
     expect(worker).toContain("fetch(event.request)");
   });
 

@@ -49,8 +49,11 @@ describe("existing installed PWA update flow", () => {
     expect(worker).toContain('addEventListener("install"');
     expect(worker).toContain('event.data?.type === "SKIP_WAITING"');
     expect(worker).toContain("self.clients.claim()");
-    expect(worker).not.toMatch(/\bcaches\.(?:open|match|put|delete)\b/);
-    expect(worker).not.toContain("cache.add");
+    /* See lib/security/session-storage.test.ts for the canonical rule: the
+       worker may precache /offline.html and /offline.js and nothing else
+       (MB-GOD-041). `cache.addAll` of those two static files is expected; a
+       caches.put of a fetched response is what must never appear. */
+    expect(worker).not.toMatch(/\bcaches\.\s*put\b/);
   });
 
   it("uses revalidating production headers for worker and manifest", () => {

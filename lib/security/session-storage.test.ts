@@ -118,18 +118,78 @@ describe("server-side authorisation derives identity from the server", () => {
 describe("service worker never caches authenticated data", () => {
   const serviceWorker = readFileSync(join(ROOT, "public/sw.js"), "utf8");
 
-  it("uses no Cache Storage at all", () => {
-    // A cache-first strategy over an authenticated route is how one account's
-    // JSON ends up rendered for the next account in a shared browser.
-    expect(serviceWorker).not.toMatch(/caches\s*\.\s*(?:open|match|addAll)/);
+  /* THE INVARIANT, STATED AS THE INVARIANT.
+   *
+   * This block used to assert `caches` was never mentioned at all. That was a
+   * proxy for the real rule, and a good one while the worker cached nothing --
+   * but a blanket ban cannot distinguish "caches a user's conversation" from
+   * "caches a static offline page", and the second is what MB-GOD-041 needed.
+   *
+   * The rule being protected has not changed and is not being relaxed: a
+   * cache-first strategy over an authenticated route is how one account's JSON
+   * ends up rendered for the next account in a shared browser. So the test now
+   * pins the exact set of URLs the worker may cache, and every other property
+   * that keeps authenticated data out.
+   */
+  const ALLOWED_CACHE_URLS = ["/offline.html", "/offline.js"];
+
+  it("caches ONLY the static offline shell, nothing else", () => {
+    /* Read the CACHE LIST the worker actually precaches, not every string in
+       the file -- notification icon paths are navigation/display assets, never
+       handed to the Cache API. */
+    const listMatch = serviceWorker.match(/const OFFLINE_ASSETS\s*=\s*\[([^\]]*)\]/);
+    expect(listMatch, "OFFLINE_ASSETS list not found in sw.js").toBeTruthy();
+    const listed = [...listMatch![1].matchAll(/["']([^"']+)["']/g)].map((m) => m[1]);
+    // OFFLINE_URL is referenced by name; resolve it.
+    const offlineUrl = serviceWorker.match(/const OFFLINE_URL\s*=\s*["']([^"']+)["']/)?.[1];
+    const resolved = listMatch![1].includes("OFFLINE_URL") && offlineUrl
+      ? [offlineUrl, ...listed]
+      : listed;
+    const unexpected = resolved.filter((url) => !ALLOWED_CACHE_URLS.includes(url));
+    expect(unexpected, `unexpected precached URL: ${unexpected.join(", ")}`).toEqual([]);
+    expect(resolved.sort()).toEqual([...ALLOWED_CACHE_URLS].sort());
+  });
+
+  it("does not open the cache anywhere outside the offline path", () => {
+    /* Every caches.* call must concern the offline assets. A caches.put() of a
+       fetched response, or a caches.match(event.request), would be the shape
+       that leaks one account's page to the next. */
+    expect(serviceWorker).not.toMatch(/caches\s*\.\s*put/);
+    expect(serviceWorker).not.toMatch(/caches\s*\.\s*match\s*\(\s*event\.request/);
+  });
+
+  it("caches nothing that could carry user data", () => {
+    /* The offline assets are static files checked into public/ and identical
+       for every user. If either ever gained a dynamic segment, this fails. */
+    for (const url of ALLOWED_CACHE_URLS) {
+      expect(url).not.toMatch(/[:*[\]]|\$\{/);
+    }
+  });
+
+  it("never answers a real route from the cache", () => {
+    /* Navigations are network-FIRST: the cached shell is reachable only from
+       the .catch() of a failed fetch. A cache-first navigation handler would
+       serve a stale authenticated page, which is the defect this guards. */
+    const navBlock = serviceWorker.slice(
+      serviceWorker.indexOf('if (event.request.mode === "navigate")'),
+      serviceWorker.indexOf("if (event.request.method !== \"GET\") return;")
+    );
+    expect(navBlock, "the navigation handler is missing").toContain("fetch(event.request)");
+    expect(
+      navBlock.indexOf("fetch(event.request)"),
+      "the cache is consulted before the network"
+    ).toBeLessThan(navBlock.indexOf("caches.match"));
+  });
+
+  it("never force-caches a request", () => {
+    // `cache: "reload"` on the precache is the opposite: it bypasses the HTTP
+    // cache to fetch a fresh copy. `force-cache` would be the dangerous one.
     expect(serviceWorker).not.toMatch(/cache\s*:\s*["']force-cache["']/);
   });
 
-  it("passes fetches straight through to the network", () => {
+  it("passes non-navigation fetches straight through to the network", () => {
     // A trailing .catch() is allowed (it only prevents an unhandled promise
-    // rejection on a blocked/offline request) — it must not introduce a
-    // cache read/write, which the "uses no Cache Storage at all" test above
-    // already guards.
+    // rejection on a blocked/offline request).
     expect(serviceWorker).toMatch(/event\.respondWith\(\s*fetch\(event\.request\)(?:\s*\.catch\([\s\S]*?\))?\s*\)/);
   });
 });

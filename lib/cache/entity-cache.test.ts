@@ -330,10 +330,15 @@ describe("security boundaries", () => {
   });
 
   it("leaves the service worker network-only", () => {
-    // The guard the caching brief explicitly preserves.
+    /* The guard the caching brief explicitly preserves: no ENTITY data may
+       reach the service worker's cache. The worker precaches exactly two
+       static files (/offline.html, /offline.js) so an offline navigation gets
+       Mad Buddy's own page rather than the browser's error page (MB-GOD-041);
+       the canonical URL allow-list lives in
+       lib/security/session-storage.test.ts and fails if it grows. */
     const worker = read("public/sw.js");
-    expect(worker).toContain("network-only-v2");
-    expect(worker).not.toMatch(/\bcaches\.(?:open|match|put|delete)\b/);
+    expect(worker).toContain("network-only");
+    expect(worker).not.toMatch(/\bcaches\.\s*put\b/);
   });
 
   it("adds no service-worker caching from the client either", () => {

@@ -3414,3 +3414,125 @@ and a card title is a large tap area whose measured height is only its text line
 Left unchanged deliberately. Inflating every text link to 44px would put visible
 gaps through running copy and card layouts to satisfy a number that the
 underlying interaction already meets.
+
+---
+
+# MISSION 2 - GOD MODE
+
+Advanced asked whether each screen is shippable. Extreme asked what the product
+costs to operate. God Mode asks whether Mad Buddy feels like **one exceptional
+product** rather than a set of individually good screens.
+
+### MB-GOD-041 - CLOSED. Offline navigation now lands in Mad Buddy, not Chrome
+
+The Extreme finding described a "blank page". Characterising it properly first
+(`scripts/hardening/offline-behaviour.mjs`) showed something different and
+worse:
+
+```
+[baseline, online]      /plans        text=222  controls=28   sw controlled=true
+[offline, soft nav]     /             text=  0  controls= 0
+  goBack threw: net::ERR_INTERNET_DISCONNECTED
+[offline, hard nav]     /             text=  0  controls= 0
+```
+
+Tracing the requests showed the real mechanism:
+
+```
+main-frame navigations: [ ".../notifications", "chrome-error://chromewebdata/" ]
+failed:  /notifications?_rsc=... ERR_FAILED
+         /notifications           ERR_INTERNET_DISCONNECTED
+```
+
+The RSC fetch fails, Next's router falls back to a hard document navigation,
+that fails, and the user lands on **`chrome-error://chromewebdata/`** — the
+browser's own error page, outside the app. In an installed PWA there is no
+address bar, so there is no way back. Back does not help: it also needs the
+network.
+
+**The fix, kept as small as the problem allows.**
+
+`sw.js` had `if (... || event.request.mode === "navigate") return;` — navigations
+were deliberately not handled. That early return is now preceded by a
+navigation branch that is **network-first**:
+
+```js
+if (event.request.mode === "navigate") {
+  event.respondWith(
+    fetch(event.request).catch(async () => (await caches.match(OFFLINE_URL)) ?? Response.error())
+  );
+  return;
+}
+```
+
+The network is always tried first and its response passed through untouched, so
+no real page is ever served from cache. The shell appears only when the fetch
+genuinely fails. A 500 or 404 is a real response and is **not** replaced —
+masking a server error as "offline" would be a lie, and the app's own error
+boundary already handles those well (verified in Extreme).
+
+**Nothing private is cached, and that is enforced, not promised.**
+`public/offline.html` is a static, self-contained page identical for every user:
+brand, an explanation, Try again, Go to Home. It is the only thing precached
+besides its own script. The runtime probe asserts the cache contents:
+
+```
+PASS  the service worker controls the page          — ["mad-buddy-offline-v1"]
+PASS  the offline shell and its script are precached — /offline.html, /offline.js
+PASS  NOTHING but the offline assets is cached       — 2 entries
+PASS  the user is NOT dropped on the browser's error page — .../notifications
+PASS  an offline explanation is shown
+PASS  a retry control is offered                     — Try again
+PASS  a way back into the app is offered             — Go to Home
+PASS  the offline shell contains NO user data        — static content only
+PASS  coming back online recovers a real page on its own — /notifications
+
+9/9 offline-shell checks passed
+```
+
+The URL stays on Mad Buddy's own origin, and the page recovers **by itself**
+when the network returns — a user who set the phone down does not have to
+notice and tap.
+
+**Two obstacles found only by running it**, both of which would have shipped a
+fallback that never appeared:
+
+1. **`/offline.html` answered 307.** The auth middleware matcher caught it, so
+   the worker could not precache it. `offline.html`, `offline.js` and `sw.js`
+   are now excluded from the matcher — all three are static files the worker
+   must fetch without a session, and none contains user data.
+2. **A nonce-based CSP cannot nonce a worker-served static page.** The shell's
+   script moved to `/offline.js` so it satisfies `script-src 'self'` without
+   depending on `'unsafe-inline'` staying in the policy.
+
+### The six service-worker guards, strengthened rather than relaxed
+
+The change failed **six existing tests** across five files, all asserting
+`caches.(open|match|put|delete)` never appears in `sw.js`. That is the correct
+thing for them to have done, and none was weakened to fit the change.
+
+The rule they protect — *"a cache-first strategy over an authenticated route is
+how one account's JSON ends up rendered for the next account in a shared
+browser"* — is unchanged. What changed is that a blanket ban on the Cache API
+**cannot distinguish a cached conversation from a static offline page**. So the
+canonical guard in `lib/security/session-storage.test.ts` now asserts the
+invariant directly:
+
+- the precache list is read from `OFFLINE_ASSETS` and must equal exactly
+  `/offline.html` + `/offline.js`
+- neither may contain a dynamic segment
+- `caches.put` and `caches.match(event.request)` are banned outright
+- the navigation handler must reach `fetch` **before** `caches.match`
+
+Mutation-tested both ways:
+
+```
+MUTATION 1  precache "/dashboard"            → FAIL "unexpected precached URL: /dashboard"
+MUTATION 2  cache-first navigation handler   → FAIL "does not open the cache outside the offline path"
+RESTORED                                     → 12/12 pass
+```
+
+The five peripheral tests now assert the property each actually cares about
+(`caches.put` never appears) and point at the canonical rule, rather than each
+re-implementing a blanket ban. **Net: the security invariant is more precisely
+enforced than before**, and the suite went from 6895 to 6899 tests.

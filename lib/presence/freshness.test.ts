@@ -238,7 +238,10 @@ const page = read("components/socialize/socialize-page.tsx");
 
   it("leaves the service worker untouched", () => {
     const worker = read("public/sw.js");
-    expect(worker).toContain("network-only-v2");
-    expect(worker).not.toMatch(/\bcaches\.(?:open|match|put|delete)\b/);
+    expect(worker).toContain("network-only");
+    /* See lib/security/session-storage.test.ts for the canonical rule: the
+       worker may precache /offline.html and /offline.js and nothing else
+       (MB-GOD-041). Presence data must never be written to a cache. */
+    expect(worker).not.toMatch(/\bcaches\.\s*put\b/);
   });
 });
