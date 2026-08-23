@@ -5438,3 +5438,129 @@ success ladder, notification and permission dependency models, and a diagnosed
 root cause for the one weak loop — rather than a defect list. The product's
 journey architecture holds; what it lacks is network density, which is not a
 bug.
+
+---
+
+# MISSION 4 — ADVANCED (information architecture / page responsibility)
+
+Mission 2 asked whether each screen is good. Mission 3 asked whether the
+journeys make sense over time. Mission 4 asks whether every piece of
+information, control and responsibility **lives in the right place**.
+
+## The surface responsibility map
+
+22 authenticated surfaces measured in the browser, reading the link topology of
+each page's own content. Every surface has exactly **one** primary job.
+
+| Route | Surface | Primary job | Own-content links | Verdict |
+| --- | --- | --- | --- | --- |
+| `/dashboard` | Home | ORCHESTRATION | 6 | clean |
+| `/friends` | Muddies | RELATIONSHIP MANAGEMENT | 2 | clean |
+| `/linkr` | Linkr | DISCOVERY | 0 | clean |
+| `/hangout-mode` | UpFor | TEMPORARY INTENT | 0 | clean |
+| `/plans` | Plans | COMMITMENT | 1 | clean |
+| `/events` | Events | PUBLISHED EXPERIENCE | 1 | clean |
+| `/messages` | Messages | COMMUNICATION | 0 | clean |
+| `/groups` | Circles | COMMUNICATION | 1 | clean |
+| `/safe-arrival` | Safe Arrival | SAFETY | 0 | clean |
+| `/profile` | Profile | IDENTITY | 6 | **lock intact — see below** |
+| `/settings` | Settings | SETTINGS / ADMINISTRATION | 27 (16 admin) | correct: it IS the index |
+| `/notifications` | Pulse | RE-ENTRY | 0 | clean |
+| `/badges` | Achievements | IDENTITY | 1 | clean |
+| `/buddy-score` | My Progress | IDENTITY | 2 | clean |
+| `/invites` | Invites | RELATIONSHIP MANAGEMENT | 1 | clean |
+| `/drops` | Muddy Drops | PUBLISHED EXPERIENCE | 0 | clean |
+| `/meeting-pings` | Meeting Pings | COMMUNICATION | 0 | clean |
+| `/reminders` | Reminders | SETTINGS / ADMINISTRATION | 1 | clean |
+| `/help` | Help & Support | SETTINGS / ADMINISTRATION | 2 | clean |
+| `/moments` | Moments | PUBLISHED EXPERIENCE | — | flag-gated → `/dashboard` |
+| `/discover` | — | — | — | **compatibility alias** → `/linkr` |
+| `/safety` | — | — | — | role redirect: staff → `/admin/reports`, else `/dashboard` |
+
+**No surface holds two primary responsibilities.** Settings carries 16
+administration links because it *is* the administration index — that is its job,
+not a violation.
+
+## Profile lock: PRESERVED
+
+The duplicate-index detector flagged Profile's 6 own-content links. Investigated
+before acting, because Profile is locked — and the flag is a **false positive**:
+
+```
+/settings/glow-visibility   the tour anchor the restructure deliberately kept
+/billing, /buddy-score      two identity chips in the hero, not settings rows
+/friends, /plans, /safe-arrival   ACTIVITY STATS — counts of what you have done
+```
+
+The activity stats are identity content ("2 Muddies · 0 Plans completed · 0 Safe
+Arrivals"), not a settings index. The code states the rule it is following:
+
+> Profile keeps ONE entry point to them (the "My Progress" button in the hero)
+> rather than a second copy of the surface.
+
+**No re-added privacy administration, billing dashboard, support or preferences
+blocks.** The MB-GOD-013 architecture holds: Profile = identity, Settings =
+management.
+
+## MB-GOD-053 (P2) — Two implementations of "create a direct conversation"
+
+**Class: duplicate authority.**
+
+`conversation_members` is mutated from four modules. Three are distinct jobs
+(group membership in `group-actions.ts` and `groups/mobile.ts`; direct
+conversations in `messaging/service.ts`). The fourth is a second
+implementation of the third:
+
+| | `lib/messaging/service.ts` | `lib/linkr/connection-service.ts` |
+| --- | --- | --- |
+| Canonical entry | `getOrCreateDirectConversation` | inline in `connectWithCandidate` |
+| Eligibility | `canCreateDirectConversation` | not called here |
+| Create race | reads the winner's row on conflict | no race handling |
+| `context_type` / `context_id` | supported via `context` param | set inline for Event context |
+| Seeds both members | yes | yes, duplicated literal |
+
+`getOrCreateDirectConversation` **already supports** the context parameter Linkr
+needs, and already handles the create race that Linkr's branch does not.
+
+**Not a security defect, and the severity reflects that.** Linkr checks blocks
+before anything is written (`connection-service.ts:116`, *"Blocks win, and they
+win before anything is written"*), re-checks target eligibility against a stale
+deck, and reuses an existing conversation rather than creating a second thread.
+Nothing unsafe happens. What exists is **one job with two implementations**, so
+a future change to how direct conversations are created — a new membership
+column, a different race strategy, an added guard — has to be made in two places
+and will silently drift if it is made in one.
+
+**Not fixed in this pass.** Routing Linkr through
+`getOrCreateDirectConversation` means passing an Event context through a
+function whose `context` parameter is typed for a different set of callers, and
+it touches the mutual-connection path that Mission 3 verified end to end.
+Recorded with the evidence so the consolidation is a deliberate change rather
+than a drive-by.
+
+**SCALE-RELEVANT**: no. Both paths run once per connection.
+
+## Legacy route classification
+
+| Route | Class | Evidence |
+| --- | --- | --- |
+| `/discover` | **COMPATIBILITY ALIAS** | redirects to `/linkr`, preserving `eventId`. The file states it is "KEPT as a redirect rather than deleted, because links to [it] exist" |
+| `/moments` | **ACTIVE, FLAG-GATED** | `isMomentsEnabled` → `/dashboard` when off; `scope-reduction.test.ts` asserts it is hidden from nav |
+| `/safety` | **ACTIVE CANONICAL** | role-dependent: staff → `/admin/reports`, everyone else → `/dashboard` |
+| `/hangout-mode` | **MIGRATION-BOUND** | MB-GOD-007, owner-blocked. Unchanged |
+| `/drops`, `/meeting-pings`, `/reminders`, `/invites`, `/badges`, `/buddy-score`, `/help`, `/faq` | **ACTIVE CANONICAL** | all reachable, all with inbound links, each a single job |
+
+**No LEGACY DEAD routes found.** All 92 page routes resolve to an owner surface,
+an intentional alias, or a flag gate.
+
+### Method note — the detector measured the app shell
+
+The first run flagged **four** duplicate-index candidates. `<main>` CONTAINS the
+app header, so `/notifications` and `/friends?tab=requests` were being counted
+as page content on every single surface — making each page look like an index of
+everything. Excluding `header`/`nav` descendants reduced four candidates to one,
+and that one turned out to be a false positive too.
+
+A detector that counts the app shell finds the app shell everywhere. Same
+lesson, differently dressed, as the scrollable-tab-strip false positives in
+Mission 2.
