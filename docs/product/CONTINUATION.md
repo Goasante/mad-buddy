@@ -5,7 +5,7 @@
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         abed148
+HEAD         63f7c64
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
 COMMITS      36 local recovery checkpoints, none pushed, nothing deployed
