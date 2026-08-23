@@ -4324,3 +4324,45 @@ survive closing the app and coming back the same evening, short enough that
 returning tomorrow is an ordinary Home rather than the product congratulating
 you again"*. Persisting for the session is correct. The check now tests the real
 rule on both sides of the window, by ageing the milestone past six hours.
+
+## MB-GOD-051 - CLASSIFIED (P3, deliberately not fixed)
+
+The brief asks what the issue actually is before touching it. Measured
+precisely:
+
+```
+BEFORE reload : scroll 0, 2 messages, draft "Draft under test"
+AFTER  reload : scroll 0, 2 messages, draft ""
+                url /messages?conversation=4799a0e9-…  (preserved)
+```
+
+**It is draft loss ONLY.** Everything else the brief lists as a candidate is
+intact: conversation identity survives in the URL, the thread reloads correctly
+(2 messages → 2), scroll position is unaffected, there is no stale send state
+and no duplicate submission. Backgrounding the tab — by far the commonest mobile
+interruption — preserves the draft; only a full reload loses it.
+
+**Why it stays classified rather than fixed.** Persisting a draft means writing
+user-authored content to `localStorage`, and this repository has an explicit
+allow-list guard on exactly that
+(`lib/security/session-storage.test.ts`, `ALLOWED_STORAGE_KEYS`). Every approved
+key today is a **preference or a dismissal flag**:
+
+```
+mad-buddy-theme-preference   mad-buddy-accent-color
+profile-reminder-dismissed   SESSION_REVISION_KEY
+INSTALL_*  PWA_UPDATE_ATTEMPT_KEY  completedKey  dismissedKey
+```
+
+**Not one holds user content.** A message draft would be the first, and it would
+outlive sign-out on a shared device unless a clearing story is designed with it.
+For a product whose stated position is that as little as possible persists, that
+is a storage/privacy decision with an owner — not a convenience to slip in
+during a journey audit. The brief's own instruction applies: *"If draft
+persistence would require a broader storage/privacy design decision, classify
+rather than overbuild."*
+
+**What a fix would need to decide**, recorded so the decision is cheap later:
+per-conversation scoping, when a draft is cleared (send, navigate away, sign
+out, expiry), whether an unsent draft appears in the conversation list, and
+whether the allow-list gains a content-bearing key at all.
