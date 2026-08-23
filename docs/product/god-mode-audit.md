@@ -4031,3 +4031,80 @@ DIALOG FOCUS (MB-GOD-042)
   before : 29/60 combinations broken; "UpFor" 30px past a 360px screen
   after  :  0/60 combinations broken; nav rightmost edge 348 ≤ 360
 ```
+
+---
+
+# MISSION 3 - ADVANCED (end-to-end journeys)
+
+Mission 1 asked whether the system behaves correctly. Mission 2 asked whether
+the screens are shippable. Mission 3 asks whether the correct pieces combine
+into a coherent experience over time.
+
+## MB-GOD-049 (P1) - An un-onboarded user who LOGS IN never reaches onboarding
+
+**Cause class: missing handoff / lost intent.**
+
+Onboarding is entered by exactly one route: the signup action returns
+`redirectTo: "/onboarding"` (`app/(auth)/actions.ts:309`). Nothing else sends
+anyone there — **the login action never checks `is_onboarded`**, it returns
+`safeAuthNext(next)`, whose fallback is `POST_LOGIN_ROUTE` = `/friends`.
+
+That is fine while signup always completes. It does not always complete.
+`actions.ts:299` handles the auto-signin failure and returns the person to the
+login form:
+
+```
+return { ok: true, message: "Account created. Log in to continue.", redirectTo: "/login" };
+```
+
+with the comment: *"even then they can simply log in, so nobody is stranded."*
+**They are stranded.** Logging in from that state does not resume onboarding.
+
+Reproduced against the exact row shape signup bootstraps — a profile with a
+placeholder username, empty name, `is_onboarded: false`:
+
+```
+un-onboarded user logging in landed on: /friends
+sees: Muddies · Find and connect with Muddies near you · My Muddies 0
+profile now: {"is_onboarded":false,"username":"user_02748448","full_name":""}
+```
+
+They are inside the product as an **anonymous placeholder**: no display name, a
+machine-generated username, and no route back to the step that would fix either.
+Every social surface will show them to other people that way.
+
+`/onboarding` itself is still reachable by typing the URL and works correctly
+("Choose how friends find you"), so the screens are fine — this is purely a
+missing handoff, which is exactly the class Mission 3 exists to find.
+
+**Not hypothetical.** The auto-signin failure path is real (a transient Supabase
+session error), and the same state arises for any account created outside the
+signup form.
+
+**Method note.** My first reading of this was wrong and worth recording. The
+journey harness created its account with `admin.createUser`, which produces **no
+profile row at all** — a state the product cannot reach through signup. Testing
+against that would have measured the harness. The finding was only confirmed
+after reproducing the row shape the signup action actually bootstraps.
+
+**Fix.** The guard belongs in `app/(app)/layout.tsx`, not the login action,
+because that layout wraps **every** authenticated route — a deep link, a shared
+Plan URL, a restored PWA session and an OAuth callback each bypass a login-only
+check. `is_onboarded` rides on the profile query the layout already makes, so it
+costs no extra round trip.
+
+```
+BEFORE  un-onboarded login  -> /friends   (anonymous placeholder, no way back)
+AFTER   un-onboarded login  -> /onboarding  "Choose how friends find you"
+AFTER   deep link /plans    -> /onboarding
+AFTER   onboarded user      -> /dashboard, /friends, /plans, /messages  all OK
+```
+
+The two halves cannot loop: `/onboarding` sends an already-onboarded profile
+straight back out, and `recoverOnboardingIfStranded` self-heals a
+stranded-but-complete profile. The guard compares `is_onboarded === false`
+explicitly rather than using a falsy check, so a MISSING profile row — a state
+signup cannot produce — is deliberately left alone.
+
+`lib/onboarding/resume-guard.test.ts` is the regression check, mutation-tested:
+replacing the condition with `if (false)` fails two assertions.

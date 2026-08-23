@@ -87,7 +87,9 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
           // avatar_url/bio/mood_status feed the menu sheet's read-only
           // identity header (profile completion is the same three-item model
           // the Home reminder uses).
-          .select("username, avatar_url, visibility_status, full_name, bio, mood_status")
+          // is_onboarded gates the redirect below (MB-GOD-049); it rides on
+          // the query this layout already makes, so it costs no round trip.
+          .select("username, avatar_url, visibility_status, full_name, bio, mood_status, is_onboarded")
           .eq("user_id", user.id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
@@ -113,6 +115,36 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   // it back off and verify the fix before reopening the app.
   if (maintenance && shouldBlockForMaintenance({ isActive: maintenance.isActive, isStaff: adminContext.ok })) {
     redirect("/maintenance");
+  }
+
+  /* UNFINISHED ONBOARDING RESUMES HERE (MB-GOD-049).
+   *
+   * Onboarding used to be reachable from exactly one place: the signup action
+   * returning `redirectTo: "/onboarding"`. The login action never checks
+   * `is_onboarded` -- it returns safeAuthNext(next), whose fallback is
+   * /friends -- so anybody who arrived by logging in instead of by completing
+   * signup walked straight past it.
+   *
+   * That path is real. `actions.ts:299` handles a failed auto-signin by
+   * sending the person to /login with "Account created. Log in to continue.",
+   * commenting that "nobody is stranded". They were: logging in put them in
+   * the product with an empty display name and a machine-generated username
+   * (`user_02748448`), which is how every other member would then see them,
+   * and nothing routed them back.
+   *
+   * The guard belongs in this layout rather than in the login action because
+   * the layout wraps EVERY authenticated route -- a deep link, a shared Plan
+   * URL, a restored PWA session and an OAuth callback all pass through here,
+   * and each was a separate way around a login-only check.
+   *
+   * `is_onboarded` is only false for someone who genuinely has not finished:
+   * /onboarding self-heals a stranded-but-complete profile via
+   * `recoverOnboardingIfStranded` and sends them straight back, so this cannot
+   * trap an existing member in a loop. A missing profile row is left alone --
+   * that state is not reachable through signup, and redirecting on it would
+   * bounce accounts created by other means. */
+  if (profileResult.data && profileResult.data.is_onboarded === false) {
+    redirect("/onboarding");
   }
 
   // Server-authoritative wallpaper resolve — deliberately NOT awaited here.
