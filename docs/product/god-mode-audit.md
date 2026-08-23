@@ -5810,3 +5810,76 @@ converge rather than duplicate.
 **Non-transferred data is deliberate**: an UpFor's pending responders do NOT
 become Plan participants (Mission 3, 6/6), and a Linkr connection does NOT
 become a friendship (verified again above).
+
+## MB-GOD-054 (P2) — A second implementation of "ensure a profile exists"
+
+**Tags: DUPLICATE MUTATOR. Found by running the same scan that produced
+MB-GOD-053, as the brief asked.**
+
+`profiles` is written from 9 files. Eight are distinct, legitimate jobs — the
+signup bootstrap writes a chosen username, onboarding writes the completed
+identity, profile edit writes user changes, premium writes `mood_status`,
+deletion tombstones, admin repairs correct. One is a copy:
+
+| | `lib/profiles/ensure-profile.ts` | `lib/friends/service.ts:484` (inside `sendFriendRequest`) |
+| --- | --- | --- |
+| Job | create a profile from OAuth metadata if missing | **the same** |
+| Existence check | `select … maybeSingle()` | the same |
+| Username derivation | provider username → `user_name` → `username` → email prefix | `metadata.username` → email prefix |
+| Name fallback | email prefix | `"Mad Buddy user"` |
+| `username_normalized` | **set** | **not set** |
+| `avatar_url` | **set** from provider | **not set** |
+| `visibility_status` | **`"ghost"`** | **not set** |
+
+**The divergence has a real consequence.** `username_normalized` is read by
+onboarding's uniqueness check (`lib/onboarding/complete.ts:95`,
+`.or(username.eq.…,username_normalized.eq.…)`). A profile created by the copy
+carries it as null, so that row is invisible to half the uniqueness predicate.
+The two implementations also disagree about a person's default visibility and
+whether their provider avatar carries over.
+
+**Why it is P2 and not higher.** The path is narrow: it fires only when
+`sendFriendRequest` is called by an account that has somehow reached the product
+without a profile row — the state MB-GOD-049 made much rarer by routing
+un-onboarded accounts back to onboarding. Nothing is corrupted; a person can
+end up with a slightly different default than the canonical path would give
+them.
+
+**Not fixed in this pass, deliberately.** The fix is to call
+`ensureProfileForUser` — but that helper takes a Supabase `User` object while
+`sendFriendRequest` holds only a `userId`, so consolidating means either
+changing its signature (touching the OAuth caller) or fetching the user first
+(an extra round trip on a hot path). Both are reasonable; neither should be
+chosen while closing an audit. Recorded with the divergence table so the
+decision is cheap.
+
+**SCALE-RELEVANT: no.** Both paths run at most once per account.
+
+## Axes 6, 7 — write paths and shadow state
+
+All 13 mapped authorities, by writer count:
+
+| Authority | Writer files | Verdict |
+| --- | --- | --- |
+| `plans` | 1 | `create_plan_lifecycle` is sole authority |
+| `profile_photos` | 1 | |
+| `linkr_profiles` | 2 | enable/intent only |
+| `friendships` | 3 | request accept, block cascade, deletion |
+| `blocked_users` | 4 | block, safety report, settings, deletion — one job each |
+| `notifications` | 7 | all funnel through `lib/notifications/server.ts` semantics |
+| `profiles` | 9 | **one duplicate** (MB-GOD-054); the rest distinct |
+| `conversation_members` | 4 modules | **resolved** (MB-GOD-053) |
+| `hangout_sessions`, `events`, `event_rsvps`, `check_ins`, `event_linkr_opt_ins`, `safe_arrival_sessions` | 0 direct | RPC / server-action only |
+
+**Shadow-state scan: none found.** Checked for the same truth stored twice
+across relationship status, RSVP, check-in, Linkr consent, conversation
+membership, profile media, activation and read/unread. Every derived value is a
+projection computed at read time — `deriveHomeMaturity`, `linkr_connections`
+carrying a `conversation_id` **pointer** (not a copy), `hangout_sessions`
+carrying `converted_plan_id` (a pointer). No denormalised field is writable from
+two places, and no UI-local state is authority.
+
+The two pointer fields are the shape worth naming: both are set once by the
+conversion that created them, both are `.is(…, null)`-guarded on write so a
+retry cannot overwrite, and neither is treated as truth about the target's
+lifecycle — the target owns that.
