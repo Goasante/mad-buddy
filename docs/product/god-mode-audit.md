@@ -1691,3 +1691,108 @@ is consistent with `reconcile_plan_conversation_members` creating it on first
 use rather than eagerly at conversion. The assertion is `<= 1` (never two), which
 is the invariant that matters; whether it is created eagerly or lazily is a
 separate question carried to the Plan Chat sequence.
+### MB-GOD-024 - Linkr lifecycle: 7/7, one-sided privacy verified against persisted authority
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Linkr |
+| **Severity** | n/a - **verification, no product defect found** |
+| **Mission / Level** | Mission 1 - Extremely Advanced |
+| **Status** | **VERIFIED** |
+
+The rule here is a **privacy** rule, not merely a correctness one: a one-sided
+Connect must stay invisible to its target. If the person you tapped Connect on
+can tell, Linkr stops being safe to use. So every assertion reads persisted
+authority (`linkr_actions`, `linkr_connections`) — never client state, because
+client state is exactly what a leak would travel through.
+
+```
+PASS  a one-sided Connect creates NO mutual connection          connections 0
+PASS  the one-sided interest is recorded for the actor only     actor rows 1, action=connect
+PASS  the target CANNOT see who connected with them             rows visible to target: 0
+PASS  no notification tells the target about one-sided interest linkr notifications: 0
+PASS  a reciprocal Connect creates exactly one mutual connection connections 1
+PASS  the connection is stored in canonical low/high order      canonical pair row
+PASS  two simultaneous reciprocal Connects yield exactly ONE    connections 1 (rpc ok/ok)
+```
+
+The privacy check is the one that matters most and it is **read as the target,
+under RLS** — signed in as `saa@local.test`, querying `linkr_actions` filtered to
+rows about themselves. Zero rows come back. A notification would leak the same
+fact just as effectively, so that is asserted separately; also zero.
+
+`linkr_connections` uses canonical `user_low`/`user_high` ordering, the same
+identity pattern as `friendships`, so a pair cannot be inserted twice under two
+orientations. Two simultaneous reciprocal Connects produced exactly one row.
+
+### INVESTIGATED / NOT A DEFECT - `linkr_record_connect` performs no block check
+
+A probe called the RPC **directly** with a block in place, watched a connection
+form, and it looked like a **P0 privacy defect**.
+
+It is not. The RPC is deliberately narrow — its own comment reads *"Did they
+already choose us? Only this function may ask"* — and the block check lives one
+layer up in `connectWithCandidate` (`lib/linkr/connection-service.ts:116`), which
+runs `isBlockedEitherDirection` **before** the RPC and then returns a result
+**indistinguishable from an ordinary private Connect**. The source comment there
+is explicit about why: *"Telling the caller 'you are blocked' would turn Connect
+into a block detector."*
+
+The same guard re-checks, against a stale deck: Linkr enabled, ghost mode,
+deletion, age ≥ 18, and profile photo — each failing silently for the same
+reason. That is careful work.
+
+**The product was right; the probe was wrong.** It had bypassed the authorization
+layer by calling the database function directly.
+
+### MB-GOD-025 - The Linkr block guard had no test, and the first one written was weak
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Linkr |
+| **Severity** | P2 (test coverage of a privacy-critical guard) |
+| **Mission / Level** | Mission 1 - Extremely Advanced |
+| **Status** | **FIXED** |
+
+The false alarm above exposed a real gap: **nothing asserted that the block guard
+stays where it is.** A refactor moving the check below the RPC — or dropping it
+on the assumption that the database enforces it — would let a blocked person form
+a Linkr connection, and no test would notice.
+
+`lib/linkr/connect-block-guard.test.ts` now asserts two load-bearing properties:
+
+1. **Order** — `isBlockedEitherDirection` must appear before `linkr_record_connect`.
+2. **Silence** — the blocked branch must return `ok: true, matched: false` with no
+   wording naming a block, so Connect cannot be used as a block detector.
+
+Plus the stale-deck re-checks, and Pass's deliberate *asymmetry*.
+
+**The first version of this test was itself weak, and mutation testing proved
+it.** Disabling the guard with `if (false && await isBlockedEitherDirection(…))`
+**still passed** — the call was present, at the right position, and doing
+nothing. A source-level guard that only proves a string exists is worth very
+little.
+
+Reachability assertions were added, and both mutations are now caught:
+
+```
+short-circuit  →  × the block check has been short-circuited
+                    expected 'if (false && await ' not to match /false\s*&&/
+guard removed   →  × connectWithCandidate no longer checks isBlockedEitherDirection
+                  × expected 'return { ok: false, … }' to contain 'ok: true'
+restored        →  4 passed
+```
+
+**Recorded honestly:** this is still a source-level guard, not a behavioural one.
+It cannot prove the check *works*, only that it is present, positioned and not
+obviously neutered. `connectWithCandidate` is a server action rather than an API
+route, so it cannot be driven from the runtime harness. A behavioural test would
+need the action invoked through the framework — worth doing, and noted as the
+stronger version of this guard rather than pretended to be already done.
+
+**Also corrected in this test:** an assertion that `passCandidate` should check
+blocks. It should not. Passing writes a private "not interested" row, creates no
+connection, no conversation and no visibility to the target, so there is nothing
+a block would protect — and it is the most frequently tapped control in the deck.
+Connect differs precisely because it can CREATE something. The asymmetry is now
+documented rather than "fixed".
