@@ -6135,3 +6135,80 @@ deliberately — rather than assuming the first was unique — found the other t
 Two remain open with the divergence documented, because both fixes involve a
 judgement (a signature change on a hot path; which mutations count as
 withdrawal) that should not be made while closing an audit.
+
+---
+
+# MISSION 4 — GOD MODE
+
+The question: if a new user and a new engineer independently inferred Mad
+Buddy's architecture from the product, routes, services and data model, would
+they arrive at the same mental model?
+
+## MB-GOD-054 — RESOLVED. One owner for the profile bootstrap shape.
+
+**The ownership question first, as the brief asked: should relationship
+creation ever create a Profile independently?**
+
+**No — but the defensive bootstrap itself is legitimate and stays.**
+`/api/friends/request` reaches `sendFriendRequest` without passing through Home,
+and Home is the surface that otherwise guarantees a profile exists
+(`dashboard/page.tsx:41` calls `ensureProfileForUser` on every load). So the
+friendship service is right to insist a profile exists; it was wrong to decide
+what one looks like.
+
+**The smallest safe consolidation.** Rather than changing `sendFriendRequest`'s
+signature or adding a round trip to a hot path, the *helper* gained an
+id-addressed sibling:
+
+```ts
+ensureProfileForUserId(userId)   // existence check → auth lookup ONLY on the miss
+  → ensureProfileForUser(user)   // the canonical shape, unchanged
+```
+
+A caller whose profile already exists — overwhelmingly the common case — pays
+exactly what it paid before: one existence check. Nothing was added to the hot
+path, and the canonical helper was not broadened.
+
+**What the copy was getting wrong**, and why it mattered:
+
+| Field | Canonical | The copy |
+| --- | --- | --- |
+| `username_normalized` | set | **not set** |
+| `avatar_url` | from provider metadata | **not set** |
+| `visibility_status` | **`"ghost"`** | **not set** |
+| name fallback | email prefix | `"Mad Buddy user"` |
+
+`username_normalized` is read by onboarding's uniqueness check
+(`.or(username.eq.…,username_normalized.eq.…)`), so a profile from the copy was
+invisible to half that predicate. And `visibility_status` is a **privacy
+default** — the copy started a person visible where the canonical path starts
+them hidden. A privacy default decided in two places is the kind of drift that
+does not announce itself.
+
+**Verified behaviourally**, against the local database:
+
+```
+fixture has no profile (so the test can fail) : true
+canonical shape accepted by the schema        : true
+username_normalized set                       : true
+visibility_status                             : ghost
+is_onboarded                                  : false
+onboarding uniqueness check sees it           : true
+```
+
+The last line is the one that matters: the shape the friendship path now
+produces is visible to the predicate the old shape hid from.
+
+**Structural guard, mutation-tested.** `lib/profiles/bootstrap-ownership.test.ts`
+fails if the friendship service writes profiles again, if the `"Mad Buddy user"`
+fallback or `user_metadata` derivation returns, **or if the canonical helper
+ever stops setting the three fields** — because consolidating onto a helper that
+lost them would have propagated the weaker shape rather than fixing it. It also
+pins that the auth lookup stays on the miss path.
+
+```
+MUTATION  inline bootstrap reintroduced  → 2 tests FAIL
+RESTORED                                 → 5/5 pass
+```
+
+Suite: **6922 tests / 346 files**.

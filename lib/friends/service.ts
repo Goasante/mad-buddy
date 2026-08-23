@@ -4,6 +4,7 @@ import { z } from "zod";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { ensureProfileForUserId } from "@/lib/profiles/ensure-profile";
 import { hasVerifiedAccountStatus, type VerificationRow } from "@/lib/trust/verified-account";
 import { deliverNotification } from "@/lib/notifications/server";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
@@ -457,33 +458,18 @@ export async function sendFriendRequest(
       requestContext = "socialize";
     }
   }
-  const { data: existingProfile } = await admin
-    .from("profiles")
-    .select("user_id")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (!existingProfile) {
-    const { data: authUser } = await admin.auth.admin.getUserById(userId);
-    const metadata = authUser.user?.user_metadata;
-    const emailPrefix = authUser.user?.email?.split("@")[0] ?? "muddy";
-    const usernameBase =
-      typeof metadata?.username === "string" && metadata.username.length >= 3
-        ? metadata.username
-        : emailPrefix;
-    const username = `${usernameBase.toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 16)}_${userId.slice(0, 6)}`;
-    const fullName =
-      typeof metadata?.full_name === "string" && metadata.full_name.trim()
-        ? metadata.full_name.trim()
-        : "Mad Buddy user";
-
-    await admin.from("profiles").upsert({
-      user_id: userId,
-      full_name: fullName,
-      username,
-      is_onboarded: false
-    });
-  }
+  /* THE CANONICAL BOOTSTRAP, not a second one (MB-GOD-054).
+   *
+   * This used to reimplement `ensureProfileForUser` inline, and disagreed with
+   * it: no `username_normalized` (which onboarding's uniqueness check reads via
+   * `.or(username.eq.…,username_normalized.eq.…)`), no `avatar_url`, and no
+   * `visibility_status: "ghost"` -- so a person bootstrapped here started
+   * visible while the canonical path starts them hidden.
+   *
+   * The defensive bootstrap itself is KEPT: /api/friends/request reaches this
+   * without going through Home, which is the surface that otherwise guarantees
+   * a profile exists. What changed is that the shape now has one owner. */
+  await ensureProfileForUserId(userId);
 
   const { data: pendingRequests } = await admin
     .from("friend_requests")
