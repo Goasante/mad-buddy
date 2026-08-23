@@ -5,10 +5,10 @@
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         4ddb81c
+HEAD         0127faa
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      46 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      48 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -469,6 +469,8 @@ EMPTY STATES       12 audited, 0 defects
 FAILURE STATES     offline / 500 / mid-session, 0 internal leaks
 HANDOFFS           5 audited, 5 preserve context
 ACCESSIBILITY      6/7 (dialog focus-return is the one failure)
+TOUCH TARGETS      /linkr and the plan stack now clear 44px; remaining
+                   sub-44 controls on Home are inline text links (exception)
 ```
 
 ### What was found
@@ -479,6 +481,7 @@ ACCESSIBILITY      6/7 (dialog focus-return is the one failure)
 | MB-GOD-041 | P2 | **OPEN** | Offline in-app navigation → blank page, no way back |
 | MB-GOD-042 | P2 | **OPEN** | Muddy profile modal drops focus to `<body>` on close |
 | MB-GOD-043 | P2 | **FIXED** | Linkr header + distance controls under 44px |
+| MB-GOD-044 | P3 | **FIXED** | Plan stack's keyboard-alternative arrows were 32px |
 
 ### Things the next session should not re-derive
 
