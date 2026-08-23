@@ -1,14 +1,14 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 10.** The next session continues from here.
+**Written at the end of session 11.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         d0b6bda
+HEAD         (session 11 final — see git log -1)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      28 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      31 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -16,7 +16,7 @@ COMMITS      28 local recovery checkpoints, none pushed, nothing deployed
 | Mission | Level | State |
 | --- | --- | --- |
 | 1 — Reliability | Advanced | **COMPLETE** (route audit, auth, control inventory, mutation & journey audit, hydration, test infra, pre-hydration form audit) |
-| 1 — Reliability | Extremely Advanced | **PARTIAL — 3/7 domains** (corrected in MB-GOD-027; previously mis-reported as 5/7). See the canonical domain table below. |
+| 1 — Reliability | Extremely Advanced | **COMPLETE (7/7 domains)** | **PARTIAL — 3/7 domains** (corrected in MB-GOD-027; previously mis-reported as 5/7). See the canonical domain table below. |
 | 1 — Reliability | God Mode | **PARTIAL** — state graph 34 nodes / 193 edges / 0 mismatches. **DB contract check clean** (1081 selects, 1165 filters) and **error observability closed** (67/67 routes log 5xx causes). Not yet crawled: Conversation, Plan detail, Plan Chat, Event detail |
 | 2 — UI/UX | Advanced | **PARTIAL** — Profile RESTRUCTURED and verified (MB-GOD-013 fixed: 3.97 -> 2.40 screens, settings share 28.6% -> 0%). Home judged good. 8 surfaces still unaudited: Landing, Auth, Activation, Conversation, Plan detail, Plan Chat, Event detail, Safe Arrival |
 | 3 — Flow | all levels | not started (deep-link intent + 10 journeys verified as Mission 1 evidence) |
@@ -170,7 +170,36 @@ JOURNEYS    10/10   LIFECYCLE 7/7   MULTI-TAB 5/5   STATE GRAPH 193 edges
    installed PWA / Capacitor standalone, and safe-area INSIDE sheets, modals,
    the photo viewer and the camera. None of these are covered yet.
 
-## Next session: ONE remaining domain
+## MILESTONE — MISSION 1 EXTREMELY ADVANCED IS COMPLETE
+
+All seven canonical lifecycle domains are closed, each verified against the
+server/database boundary rather than the UI:
+
+| # | Domain | Coverage | Multi-tab |
+| --- | --- | --- | --- |
+| 1 | Muddy relationship | 7/7 | 5 |
+| 2 | Linkr | 7/7 | 0 |
+| 3 | UpFor → Plan | 7/7 | 0 |
+| 4 | Plan RSVP / membership | 10/10 | 1 |
+| 5 | Event check-in / Event Linkr | 8/8 + 12/12 + 9/9 | 1 |
+| 6 | Profile media | 10/10 + EXIF 4/4 | 1 |
+| 7 | Safe Arrival + Messages | 5/5 + 8/8 | 1 |
+
+Exit gate, checked honestly:
+- 7/7 domains complete, none partial-disguised-as-complete
+- stale-state coverage in five of seven domains (Linkr and UpFor have none)
+- no setup failure counted as PASS — every one reported INCONCLUSIVE and fixed
+- no empty-fixture privacy proof — each was seeded so it could fail
+- public authorities tested, not the deepest callable primitive
+- critical privacy invariants verified at the real layer (RLS, schema, sharp)
+
+**Two items are carried forward rather than counted as done:**
+- Linkr behavioural block guard — structural guard verified and mutation-tested;
+  server-action invocation still OUTSTANDING.
+- Live Event attendee-enumeration HTTP attack — the data contract is proven;
+  the network attack is a God Mode/security item, not a lifecycle gap.
+
+## Next session: Mission 1 God Mode
 
 **Domain 6 — Profile media** is the last untouched lifecycle. Everything needed
 is specified below; nothing else blocks Mission 1 Extreme from closing.
