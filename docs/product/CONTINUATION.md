@@ -1,14 +1,14 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 3.** The next session continues from here.
+**Written at the end of session 4.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         cd4b81b
+HEAD         28a2093
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      7 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      9 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -18,9 +18,9 @@ COMMITS      7 local recovery checkpoints, none pushed, nothing deployed
 | 1 — Reliability | Advanced | **COMPLETE** (route audit, auth, control inventory, mutation & journey audit, hydration, test infra, pre-hydration form audit) |
 | 1 — Reliability | Extremely Advanced | **PARTIAL** — mutation/duplicate, mid-mutation nav, two-tab consistency, deleted-resource done. Lifecycle sequences (request→cancel→resend, UpFor→Plan→Chat, Event Going→Check In→Linkr→Checkout) NOT done |
 | 1 — Reliability | God Mode | not started (click-graph crawl) |
-| 2 — UI/UX | Advanced | **PARTIAL** — Profile and Home IA measured and judged (MB-GOD-013, MB-GOD-014). The other 16 surfaces not yet audited |
+| 2 — UI/UX | Advanced | **PARTIAL** — Profile RESTRUCTURED and verified (MB-GOD-013 fixed: 3.97 -> 2.40 screens, settings share 28.6% -> 0%). Home judged good. 8 surfaces still unaudited: Landing, Auth, Activation, Conversation, Plan detail, Plan Chat, Event detail, Safe Arrival |
 | 3 — Flow | all levels | not started (deep-link intent + 10 journeys verified as Mission 1 evidence) |
-| 4 — Information architecture | — | **PARTIAL** — Profile restructuring plan written (MB-GOD-013), not implemented; **MB-GOD-007 still waiting** |
+| 4 — Information architecture | — | **PARTIAL** — Profile restructure DONE, Settings receiving work DONE; **MB-GOD-007 still waiting** |
 | 5 — Mobile shell / safe area | Advanced | **complete — no root-cause defect** (MB-GOD-009) |
 | 5 — Mobile shell | Extremely Advanced | not started (keyboard, landscape, PWA/Capacitor, sheets/modals/camera) |
 | 6 — Security / privacy | — | early evidence gathered (privacy probe passes meaningfully); full pass not started |
@@ -69,10 +69,9 @@ JOURNEYS    10/10
 
 ## Open items, in the order they should be picked up
 
-0. **MB-GOD-013 — Profile restructuring** (P2, Mission 4). The audit and the
-   section-by-section plan are written; the implementation is not. Needs the
-   Settings-side receiving work to land with it so no capability is homeless in
-   between. **Highest-value open item.**
+0. ~~MB-GOD-013 — Profile restructuring~~ **DONE in session 4.** 3.97 -> 2.40
+   screens, settings/support 28.6% -> 0%, identity 29.1% -> 48.1%, bio moved
+   from y=2227 to y=1267. All 7 moved destinations verified reachable at runtime.
 0b. **MB-GOD-012 — `notFound()` inside `(app)` returns HTTP 200** (P2). Framework
    constraint, not app code: the `force-dynamic` layout streams before the call
    is reached. A group-level `not-found.tsx` was tried and did NOT fix it
@@ -104,6 +103,16 @@ JOURNEYS    10/10
    the photo viewer and the camera. None of these are covered yet.
 
 ## Things the next session should not re-derive
+
+- **Profile's Privacy/Preferences/Support blocks were a DUPLICATE INDEX, not a
+  home.** Every row only linked to a Settings destination Settings already listed.
+  That is why removing them was safe. `/about` was the one exception and was added
+  to Settings first.
+- **`profile-privacy` tour target is now anchored to the hero's visibility pill.**
+  A shipped migration row references it as a live tour step, so it must keep an
+  anchor somewhere on `/profile`.
+- **`scripts/hardening/profile-reachability.mjs` is the regression check** for the
+  restructure: it fails if any moved destination stops being reachable.
 
 - **Home's IA is good** (MB-GOD-014): 1 screen, adaptive, one clear job. Verified
   in ONE account state only — do not claim it adapts broadly without more fixtures.
