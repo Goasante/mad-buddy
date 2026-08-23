@@ -1,6 +1,6 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 20.** The next session continues from here.
+**Written at the end of session 21.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
@@ -8,7 +8,7 @@ BRANCH       hardening/god-mode-product-pass
 HEAD         (see foot of file)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      80 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      84 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -26,7 +26,8 @@ COMMITS      80 local recovery checkpoints, none pushed, nothing deployed
 | 3 — Journeys | Extremely Advanced | **COMPLETE.** UpFor momentum 7/7 and conversion 6/6 with three live people; stale/expiry/offline 6/6; permissions 10/10; Home matrix 4/4. Findings: P0=0 P1=0 P2=1 (fixed) P3=0. |
 | 3 — Journeys | God Mode | **COMPLETE.** P0-P3 = 0 findings. Produced the activation lifecycle, network-effect map, density thresholds, success ladder, notification/permission models and the Linkr root cause. |
 | **3 — Journeys** | **ALL THREE LEVELS** | **COMPLETE — closeout written in the audit ledger** |
-| 4 — Information architecture | — | **PARTIAL** — Profile restructure DONE, Settings receiving work DONE; **MB-GOD-007 still waiting** |
+| 4 — Information architecture | Advanced | **COMPLETE.** 22 surfaces mapped, 13 data authorities, 6/6 deep links, nav 5/5. Findings: P0-P1=0, P2=1 (MB-GOD-053 open). Profile lock preserved. |
+| 4 — Information architecture | Extreme / God Mode | not started |
 | 5 — Mobile shell / safe area | Advanced | **complete — no root-cause defect** (MB-GOD-009) |
 | 5 — Mobile shell | Extremely Advanced | not started (keyboard, landscape, PWA/Capacitor, sheets/modals/camera) |
 | 6 — Security / privacy | — | early evidence gathered (privacy probe passes meaningfully); full pass not started |
@@ -897,3 +898,53 @@ Not started. Some IA work already landed (the Profile/Settings responsibility
 correction in Mission 2, and MB-GOD-007's `/hangout-mode` rename remains
 owner-blocked), but Mission 4 still needs its own formal Advanced, Extreme and
 God Mode passes. Do not skip it because those findings exist.
+
+## Session 21 — Mission 4 Advanced CLOSED
+
+```
+Surfaces mapped        22/22, every one holds exactly ONE primary job
+Duplicate indexes      0
+Duplicate authorities  1  (MB-GOD-053, P2, open)
+Legacy dead routes     0
+Deep-link ownership    6/6
+Nav responsibility     5/5 durable mental models
+Profile lock           PRESERVED
+```
+
+### Things the next session should not re-derive
+
+- **MB-GOD-053 (P2, open):** two implementations of "create a direct
+  conversation". `lib/messaging/service.ts` owns
+  `getOrCreateDirectConversation` (eligibility + create-race handling);
+  `lib/linkr/connection-service.ts:252` reimplements it inline. NOT a security
+  defect — Linkr checks blocks before writing anything and reuses an existing
+  conversation. It is one job with two implementations that will drift.
+  `getOrCreateDirectConversation` already supports the `context` parameter
+  Linkr needs.
+- **`<main>` CONTAINS the app header.** Any link-topology probe must exclude
+  `header`/`nav` descendants, or the shell's own links count as page content on
+  every surface. This produced four false duplicate-index findings on the first
+  run.
+- **Profile's 6 links are NOT a lock regression**: the `/settings/glow-visibility`
+  tour anchor, two identity chips, and three activity stats (counts of what you
+  have done). The code states the rule — *"Profile keeps ONE entry point rather
+  than a second copy of the surface."*
+- **Route classifications:** `/discover` is a documented COMPATIBILITY ALIAS to
+  `/linkr` (preserves `eventId`); `/moments` is flag-gated; `/safety` is a role
+  redirect (staff → `/admin/reports`); `/hangout-mode` stays MIGRATION-BOUND
+  under MB-GOD-007. **No LEGACY DEAD routes exist** among 92 page routes.
+- **`/discover → /linkr` is the proven pattern for MB-GOD-007's eventual
+  rename**: keep the old route as a documented alias rather than deleting it.
+- **Nav is 5 durable mental models**, and Plans/Events are deliberately
+  secondary because both are outcomes of the primary five. Home already
+  surfaces an upcoming Plan at tier 4. Do not promote them without new evidence.
+- **`friendships` is the healthy authority shape**: read in 36 files, mutated in
+  3. Wide readership, narrow write authority.
+
+### Next: MISSION 4 EXTREME
+
+Cross-feature ownership under pathological states, aliases and redirects, data
+migration authority, admin/user boundary, state ownership during conversions,
+stale routes, information scent, deep-link consistency.
+
+`scripts/hardening/ia-responsibility.mjs` is the harness to extend.
