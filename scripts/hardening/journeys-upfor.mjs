@@ -35,7 +35,6 @@ const check = (name, ok, detail) => {
   results.push(ok);
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? `  — ${detail}` : ""}`);
 };
-const inconclusive = (name, why) => console.log(`INCONC  ${name}  — ${why}`);
 
 async function person(tag) {
   const stamp = `${Date.now()}${Math.floor(Math.random() * 900 + 100)}`;

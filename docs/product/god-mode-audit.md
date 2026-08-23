@@ -4898,3 +4898,61 @@ false Muddy relationship. What is missing is any truthful reason to come back
 and *find* a mutual. Per the brief this is carried to Mission 3 God Mode rather
 than patched with streaks, badges or manufactured urgency. The honest direction
 is surface freshness — real new candidate availability — not a push.
+
+## Linkr behavioural block guard — RETAINED as classified
+
+Attempted opportunistically, as the brief allows. `connectWithCandidateAction`
+(`app/(app)/linkr-actions.ts:153`) is a `"use server"` action, and invoking one
+from a browser context requires Next's action-id encoding rather than a plain
+call — the same constraint recorded in Mission 1. Reaching it through the UI
+additionally needs an activated Linkr profile on both sides plus a live
+discovery match.
+
+The brief is explicit that calling the reciprocity RPC directly is **not**
+substitute proof, so nothing was recorded as behavioural evidence. The
+structural guard (`lib/linkr/connect-block-guard.test.ts`) remains verified and
+mutation-tested; the behavioural half stays outstanding.
+
+What DID become available this session is adjacent and worth noting: the
+multi-persona harness verified from the recipient's side that one-sided Linkr
+interest is invisible on both `/linkr` and `/notifications`, and that a block
+produces no detector on the Muddies surface. Neither replaces the guard.
+
+---
+
+# MISSION 3 — EXTREMELY ADVANCED: COMPLETE
+
+```
+UpFor momentum (3 people)        PASS  7/7
+UpFor -> Plan (3 people)         PASS  6/6
+Multi-device continuity          PASS
+Session expiry mid-flow          PASS
+Offline / reconnect mutations    PASS
+Abandoned creation               CLASSIFIED by measured effort
+Time transitions                 PASS (celebration window, UpFor expiry)
+Burst re-entry                   covered via notification re-entry + Home matrix
+Extended permissions             PASS  10/10 surfaces usable, 0 asks on navigation
+Home priority stress             PASS  4/4 combinations, 8-tier model holds
+Return loops                     RE-RATED: 6 STRONG, 1 WEAK
+```
+
+**Findings: P0 = 0, P1 = 0, P2 = 1 (MB-GOD-052, fixed), P3 = 0.**
+
+The honest headline is that this level found **one** defect, and it was the one
+carried in from Advanced. Everything else — conversion enrolment, offline
+duplication, expired-session writes, permission gating, stale recovery — was
+already correct, and is now verified rather than assumed.
+
+**The two results most worth keeping:**
+
+1. **Nobody is silently enrolled in a Plan.** A pending UpFor responder is
+   absent from the converted Plan entirely; only a genuine acceptance carries
+   over as `going`. That was the brief's sharpest worry about the conversion.
+2. **No failure looks like a success.** An expired session and an offline send
+   both produce "The message could not be sent. Try again.", write nothing, and
+   duplicate nothing on reconnect.
+
+**Carried forward unchanged:** MB-GOD-051 (draft loss, classified),
+MB-GOD-046 (warm-colour token debt), signature moments quiet, MB-GOD-007
+owner-blocked, MB-GOD-012 framework-constrained, signed-media 5-minute residual,
+and the Linkr behavioural block guard.

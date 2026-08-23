@@ -154,12 +154,10 @@ try {
     await composer.fill("Typed before the session died");
     await devB.page.waitForTimeout(600);
     // Kill the session the way a real expiry does: revoke server-side.
-    const { error: signOutErr } = await admin.auth.admin.signOut(
-      (await devB.ctx.cookies()).find((c) => c.name.includes("auth-token"))?.value ?? "",
-      "global"
-    ).catch(() => ({ error: null }));
-    // Cookie removal is the reliable local simulation; the server rejects the
-    // mutation either way.
+    /* Cookie removal is the reliable local simulation of an expired session.
+       A server-side signOut was tried first and is not needed: the mutation is
+       rejected either way, and clearing the cookie is what an expired session
+       looks like to the browser. */
     await devB.ctx.clearCookies();
 
     const send = devB.page.getByRole("button", { name: /^send$/i }).first();
