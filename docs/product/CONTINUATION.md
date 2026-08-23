@@ -40,13 +40,12 @@ arithmetic over it.
 | 1 | Muddy relationship | **COMPLETE** | 7/7 (MB-GOD-017) | Yes (5 scenarios, MB-GOD-018) |
 | 2 | Linkr | **COMPLETE** | 7/7 (MB-GOD-024) | No |
 | 3 | UpFor → Plan | **COMPLETE** | 7/7 (MB-GOD-023) | No |
-| 4 | Plan RSVP / membership | **PARTIAL** | RSVP only; no add/remove participant, no Plan Chat reconciliation | No |
+| 4 | Plan RSVP / membership | **COMPLETE** | 10/10 (MB-GOD-029) — RSVP cycle, add participant, Plan Chat reconciliation, outsider exclusion | Yes (1: stale RSVP replay) |
 | 5 | Event check-in / Event Linkr | **PARTIAL** | Consent boundary 8/8, behavioural + mutation-tested (MB-GOD-028). NOT done: checkout→eligibility wiring end to end, attendee-directory enumeration, 5 audience authorities | No |
 | 6 | Profile media | **NOT STARTED** | — | No |
 | 7 | Safe Arrival + Messages | **PARTIAL** | Safe Arrival 5/5 (MB-GOD-026); Messages none | No |
 
-**LIFECYCLES COMPLETE = 3 / 7.** All five multi-tab scenarios sit inside domain 1;
-four domains have no stale-state coverage at all.
+**LIFECYCLES COMPLETE = 4 / 7.** Multi-tab by domain: Muddy 5, Plan 1. Domains 2, 3, 5, 6, 7 still have no stale-state coverage.
 
 Report these four columns per domain at every checkpoint. A bare fraction is what
 let two independent errors hide inside one number.

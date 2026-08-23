@@ -1892,12 +1892,12 @@ cannot drift again:
 | 1 | Muddy relationship | **COMPLETE** | 7/7 (MB-GOD-017) | Yes (MB-GOD-018, 5/5) |
 | 2 | Linkr | **COMPLETE** | 7/7 (MB-GOD-024) | No |
 | 3 | UpFor → Plan | **COMPLETE** | 7/7 (MB-GOD-023) | No |
-| 4 | Plan RSVP / membership | **PARTIAL** | RSVP transitions only, inside MB-GOD-023. No add/remove participant, no Plan Chat membership reconciliation | No |
+| 4 | Plan RSVP / membership | **COMPLETE** | 10/10 (MB-GOD-029) — RSVP cycle, add participant, Plan Chat reconciliation, outsider exclusion | Yes (1: stale RSVP replay) |
 | 5 | Event check-in / Event Linkr | **PARTIAL** | Consent boundary 8/8, behavioural + mutation-tested (MB-GOD-028). NOT done: checkout→eligibility wiring end to end, attendee-directory enumeration, 5 audience authorities | No |
 | 6 | Profile media | **NOT STARTED** | — | No |
 | 7 | Safe Arrival + Messages | **PARTIAL** | Safe Arrival 5/5 (MB-GOD-026); **Messages: none** | No |
 
-**LIFECYCLES COMPLETE = 3 / 7.**
+**LIFECYCLES COMPLETE = 4 / 7** (updated after MB-GOD-029).
 
 **Multi-tab coverage is thinner than the raw "5 scenarios" figure suggests**: all
 five sit inside domain 1. Four of the seven domains have no stale-state coverage
@@ -1992,3 +1992,63 @@ feeds it is not. Also not covered: attendee-directory enumeration against live
 API payloads, and the five audience authorities (invite / link / community /
 nearby / public) — the visibility column and its check constraint were confirmed,
 but authorization was not exercised per audience.
+### MB-GOD-029 - Plan RSVP / membership: 10/10, domain 4 COMPLETE
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Plans, Plan Chat |
+| **Severity** | n/a - **verification, no defect found** |
+| **Mission / Level** | Mission 1 - Extremely Advanced (domain 4) |
+| **Status** | **VERIFIED — domain COMPLETE** |
+
+RSVP transitions were already covered inside the UpFor→Plan sequence. This adds
+**membership**: adding participants through the canonical authority, and proving
+Plan Chat membership *follows* from it rather than being maintained separately.
+
+```
+PASS  a Plan is created with its invitee as a participant          participants 2
+PASS  a full RSVP cycle leaves exactly one participant row         rows 1, final going
+PASS  the host can add a participant                               participants 3
+PASS  adding the same participant twice does not duplicate them    rows 1
+PASS  a Plan has exactly one canonical conversation                conversations 1
+PASS  everyone who is going is a member of the Plan Chat           going 2, members 2
+PASS  an invitee who has not accepted is NOT yet in the Plan Chat  none in chat
+PASS  a non-participant is NOT a member of the Plan Chat           outsider absent
+PASS  re-reconciling does not duplicate conversation members       rows 2, distinct 2
+PASS  a stale RSVP replay leaves one row and the server's value    rows 1, going
+```
+
+**The membership rule was discovered, not assumed — and the first assertion was
+wrong.** An initial version asserted "all participants are members of the Plan
+Chat" and passed, but only because the host and the invitee happened to be
+`going` at that moment. Inspecting persisted state on a fresh Plan showed
+**3 participants / 1 chat member**:
+
+```
+PARTICIPANTS:  QA(host) rsvp=going role=host
+               KOFI(invited) rsvp=invited role=participant
+               AMA(added)    rsvp=invited role=participant
+CHAT MEMBERS:  QA(host) status=joined
+```
+
+The real rule is that **Plan Chat membership follows RSVP, not invitation** — you
+join when you accept, because a Plan Chat is for the people actually coming. The
+assertions now test that, in both directions: everyone going is a member, and
+every invitee who has not accepted is not.
+
+**Multi-tab (domain 4, first stale-state coverage outside domain 1):** Tab B
+declines while Tab A holds a stale "going" view and re-sends it. Server truth
+wins, one row, latest value.
+
+### INVESTIGATED / NOT A DEFECT - "conversations 0" in the earlier UpFor sequence
+
+MB-GOD-023 reported `conversations 0` for a converted Plan and speculated that
+Plan Chat might be created lazily. **That was a wrong query, not lazy creation.**
+
+Conversations link to their Plan via `context_type = 'plan'` / `context_id`, not
+a `plan_id` column. The probe filtered on `conversations.plan_id`, matched
+nothing, and read the empty result as meaningful. Corrected here: a Plan has
+exactly **one** canonical conversation, created eagerly.
+
+The MB-GOD-023 assertion (`<= 1`, never two) was still correct and still holds —
+it simply passed for a weaker reason than it appeared to.
