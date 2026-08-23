@@ -4956,3 +4956,131 @@ already correct, and is now verified rather than assumed.
 MB-GOD-046 (warm-colour token debt), signature moments quiet, MB-GOD-007
 owner-blocked, MB-GOD-012 framework-constrained, signed-media 5-minute residual,
 and the Linkr behavioural block guard.
+
+---
+
+# MISSION 3 — GOD MODE
+
+Advanced asked whether the journeys work. Extreme asked whether they survive
+people, time and failure. God Mode asks whether they **compound into durable
+social value**.
+
+## Axis 6 — Linkr's weak return loop: ROOT CAUSE FOUND
+
+**Verdict: NETWORK-DENSITY LIMITATION amplified by a real product gap — not a
+UI defect.** Diagnosed from the data layer, not from the surface.
+
+**What genuinely changes in Linkr over time.** Reading
+`lib/linkr/candidate-service.ts`, the candidate pool is recomputed per request
+and filtered by: enabled Linkr profile, compatible intent, age ≥ 18, a Profile
+picture, proximity tier, blocks, restrictions, and **prior actions**. So the
+truthful sources of change are:
+
+| Source | Changes over time? | Surfaced to a returning user? |
+| --- | --- | --- |
+| A new person enables Linkr | yes | **no** |
+| Someone moves into your distance tier | yes | **no** |
+| A pass expires (`PASS_DURATION_MS` = 30 days) | yes, slowly | **no** |
+| Someone becomes "active now" | yes, frequently | partially — a per-card `Active now` chip |
+| Intent compatibility changes | rarely | no |
+
+`linkr_profiles` already carries `only_new_today` and `only_active_now`, and
+`rules.ts` implements `candidateJoinedToday` and `candidateActiveNow`. **The
+system already knows who is new and who is active** — it exposes both as
+*filters the user must go and set*, and as one chip on a card they are already
+looking at.
+
+**Nothing tells a returning user whether returning was worth it.** The empty
+state is:
+
+```
+emptyTitle : "No one nearby right now"
+emptyBody  : "Check back later or widen your search."
+```
+
+That is honest and non-manipulative — but "check back later" asks for faith
+without evidence. A user who returns to the same apparently-static surface
+learns that returning does not pay, which is precisely the WEAK loop.
+
+**The root cause, stated precisely:** Linkr's freshness data exists but is
+**latent**. It is available as a filter and as a per-card chip, and nowhere as
+an answer to "has anything changed since I was last here?"
+
+**The truthful direction, if this is ever built** — recorded, not implemented:
+surface the freshness the system already computes ("3 people are new since you
+last looked", derived from `linkr_profiles.created_at` versus the viewer's last
+Linkr visit). That is a real fact about the world, not a manufactured signal. It
+needs a "last visited" timestamp, which is a schema decision, and it must never
+degrade into a red dot that appears whether or not anything changed.
+
+**Explicitly rejected**, per the brief: fake "new people waiting", artificial
+badges, streaks, countdowns, scarcity, engagement push. None of these would be
+true, and Linkr is the surface where an untrue nudge damages trust most.
+
+**Density caveat that keeps this honest.** In a low-density network the answer
+to "has anything changed?" is legitimately *no*, and a freshness indicator would
+correctly say nothing. That is why this is classified as a density limitation
+first: no interface change makes an empty city populated. Linkr's loop cannot be
+strong until supply exists, and the product should not pretend otherwise.
+
+## Axis 2 — Empty-network resilience: PASS, 9/9 surfaces, ZERO graveyards
+
+One real account, nobody else in the network, nothing faked — no fake users, no
+fake UpFors, no fake proximity. Each surface was scored on two questions: does
+it EXPLAIN the emptiness, and does it offer an action that could actually change
+it? Navigation chrome was excluded, because reaching another empty page is not
+an answer to emptiness.
+
+```
+/dashboard      USEFUL   4 actions   "Start with one person — Add your first Muddy to see
+                                      their Glow when they're close by"
+/friends        USEFUL   3 actions   "Find Your Muddies — See which people you already know"
+/messages       USEFUL   1 action    "Message an approved Muddy to start one"
+/plans          USEFUL   1 action    "Your upcoming plans will appear here"
+/events         USEFUL   2 actions   "When you or your Muddies publish an event, it shows up here"
+/notifications  USEFUL   3 actions   "You're all caught up"
+/groups         USEFUL   2 actions   "Create a private Circle or accept an invitation"
+/linkr          action, no explanation   2 actions   "Turn on Linkr"
+/hangout-mode   action, no explanation   9 actions   six one-tap activity starters
+
+9/9 surfaces offer a truthful way forward
+```
+
+**The two "no explanation" surfaces are correct as they are.** Linkr is in its
+pre-activation state, where there is nothing to explain yet — the screen's job
+is to state the purpose and the privacy promise, which it does. UpFor answers
+emptiness with nine ways to end it, which is a stronger answer than a sentence.
+
+**The product does not become a graveyard.** Every surface converges on the same
+truthful next step — get one person here — rather than pretending activity
+exists. That is the single most important structural property for a social
+product at zero density, and it holds.
+
+## Axis 4 — The network-effect map
+
+| Action | Creates value for | Timing | Scope | Depends on |
+| --- | --- | --- | --- | --- |
+| Invite accepted | both | immediate | local | nothing — **the bootstrap loop** |
+| Muddy connection formed | both | immediate | local | one invite |
+| Location enabled | both Muddies | delayed | local | ≥1 Muddy + proximity |
+| Message sent | recipient | immediate | local | ≥1 Muddy |
+| UpFor created | all Muddies | immediate | group | ≥1 Muddy |
+| UpFor response | creator | immediate | local | an UpFor exists |
+| UpFor → Plan | all accepted | immediate | group | ≥1 acceptance |
+| Plan created | invitees | delayed | group | ≥1 Muddy |
+| Plan Chat | participants | immediate | group | a Plan |
+| Event published | broad audience | delayed | **broad** | nothing — **the only broad loop** |
+| Event check-in | co-attendees | immediate | group | attendance |
+| Event Linkr opt-in | consenting attendees | immediate | group | check-in + **explicit consent** |
+| Linkr enabled | all compatible viewers | delayed | broad | **candidate supply** |
+| Linkr mutual | both | immediate | local | reciprocity |
+
+**Two loops need nothing to start**: invite, and publishing an Event. Everything
+else requires at least one Muddy. That is the correct shape for a
+relationship-first product — and it means **invite is the only bootstrap for the
+private graph**, which makes it the highest-leverage growth surface.
+
+**Linkr is the one loop whose value is gated on strangers rather than on the
+user's own action.** A person can invite, message, plan or publish alone; they
+cannot make Linkr candidates exist. This is the structural reason its return
+loop is WEAK, independent of any interface decision.
