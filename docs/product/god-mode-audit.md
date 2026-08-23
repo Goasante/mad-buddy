@@ -5118,3 +5118,160 @@ day 3  window passed     Near > Next step
 empty-network surfaces for administrative copy found exactly one hit — Linkr's
 "Turn on Linkr", which is the feature's own purpose rather than clutter.
 Administrative UI does not dominate social value anywhere else.
+
+## Axis 1 — The activation architecture, made explicit
+
+Validated against observed behaviour, not redefined. The existing model is
+SOUND; what was missing is that the stages were never written down as a
+lifecycle.
+
+| Stage | Product event | Why this and not something else |
+| --- | --- | --- |
+| **SETUP** | account created, `is_onboarded`, profile details, Glow enabled | All reversible, all solo. `home-maturity.ts` already rejects profile completion as value: *"setup, not value"* |
+| **ACTIVATION** | `first_muddy_added` | The first thing that required **another person to agree**. It cannot be self-served, which is exactly what makes it meaningful |
+| **FIRST VALUE** | `first_muddy_added` **AND** one social act (wave / message / Plan / status) | A relationship that has been *used*. Verified end to end at 11/11 in Advanced |
+| **SECOND VALUE** | a two-sided conversation, or Plan participation | `looksEstablished()` — somebody replied, or a real arrangement exists. A completed loop, not a count |
+| **RETENTION VALUE** | a recurring reason another person creates: a reply, an UpFor, a Plan, an Event | Created by the network, not by the app. This is why notifications are an enhancement rather than the loop itself |
+
+**One Muddy IS enough to understand the product** — Glow, Message, UpFor, Plan
+and Safe Arrival all become meaningful at n=1. Only Linkr and Events need
+strangers. That is a strong property: the product explains itself at the
+smallest possible network.
+
+## Axis 13 — Notification dependency (for Native Readiness, not implemented)
+
+| Loop | Class | Reason |
+| --- | --- | --- |
+| Incoming message | **ENHANCED** | unread survives in-app; Home now suppresses setup for it (MB-GOD-052) |
+| Muddy request | **ENHANCED** | visible in Muddies and Pulse on next open |
+| Plan update / RSVP | **ENHANCED** | the Plan leads Home while it is upcoming |
+| Event update | **ENHANCED** | LIVE NOW surfaces on Home |
+| Linkr mutual | **REQUIRED-ish** | the only fact with **no in-app surface that changes** — the strongest argument for push in the product |
+| UpFor response | **REQUIRED-ish** | UpFor is time-boxed; a response after expiry is worthless |
+| Safe Arrival | **REQUIRED** | a safety timeout that only fires when the app is open is not a safety feature |
+
+**Nothing except Safe Arrival is functionally broken without push**, which is a
+good position for a web/PWA product. The two time-critical loops (Linkr mutual,
+UpFor response) are where native push adds the most, and both are recorded for
+Native Readiness rather than worked around now.
+
+## Axis 14 — Permission / value model
+
+Established by the Extreme result (10/10 surfaces usable with everything
+denied):
+
+| Value | Without permissions | With permissions |
+| --- | --- | --- |
+| Relationships, messaging, Plans, Events, Circles | **full** | unchanged |
+| Proximity / Glow | absent, explained honestly | the product's signature capability |
+| Linkr | needs location to rank candidates | full discovery |
+| Safe Arrival | can start; timing works | stronger with notifications |
+| Media in Moments / Profile | file picker still works | camera is a convenience |
+
+**Permissions are additive, never coercive.** No permission is requested on
+ordinary navigation, and no surface breaks when all are denied.
+
+## Axis 20 — Welcome Access start point (recommendation only, NOT implemented)
+
+Compared against journey evidence:
+
+| Candidate | Verdict |
+| --- | --- |
+| Auth row creation | **No.** MB-GOD-049 proved an account can exist while the person is an anonymous placeholder |
+| Signup completion | **No.** Same state; the auto-signin failure path lands here |
+| Onboarding completion | **No.** All solo setup — reversible and self-served |
+| First Home | **No.** Arrival is not value |
+| **`first_muddy_added`** | **RECOMMENDED** |
+| First social act (full first value) | Tempting, but depends on a second person's *timing*, so the clock would start at a moment the user cannot control |
+
+**Recommendation: start Welcome Access at `first_muddy_added`.**
+
+It is the first event that required another person to agree, it is
+non-reversible, it already exists as a milestone with a `reached_at`, and it is
+the point at which the product genuinely becomes usable. Starting earlier would
+bill setup; starting at full first value would make the clock hostage to a third
+party's reply.
+
+No schema, timestamp or billing logic was created. This is a recommendation for
+Monetization Reset to consume.
+
+## Axis 22 — The Mad Buddy success ladder
+
+Defined in product events, never in vanity metrics.
+
+```
+ACQUIRED          account exists
+ONBOARDED         is_onboarded — identity chosen, discoverable
+ACTIVATED         first_muddy_added — someone agreed
+CONNECTED         first social act: wave, message, Plan or status
+SOCIALLY ACTIVE   a two-sided conversation, or Plan participation
+REAL-WORLD VALUE  a Plan that happened, an Event checked into, a Safe Arrival completed
+RETAINED          a repeat of the rung above in a later period
+```
+
+**REAL-WORLD VALUE is the rung that matters**, and it is the one the product is
+actually built around: a Plan is an arrangement to meet, a check-in is physical
+presence, a Safe Arrival is a real journey. Screen time, cards viewed and
+sessions opened are deliberately absent — they measure the app, not the point of
+it.
+
+## Axis 21 — SCALE-RELEVANT markers (for Mission 9, not optimised now)
+
+| Path | Frequency | Note |
+| --- | --- | --- |
+| `getUnreadMessageCount` | every authenticated page | **SCALE-RELEVANT** — now also on Home's critical path (MB-GOD-052); memberships + `conversation_previews` RPC per render |
+| `loadActivationProjection` | every Home | **SCALE-RELEVANT** — batched in one `Promise.all`, already deliberate |
+| `discoverLinkrCandidates` | every Linkr open | **SCALE-RELEVANT** — bounded by `CANDIDATE_BATCH_SIZE`, then ~8 batched `.in()` queries |
+| Proximity refresh | Home + Muddies | **SCALE-RELEVANT** — 15-minute freshness window bounds it |
+| Realtime subscriptions | conversations, presence | **SCALE-RELEVANT** — per-conversation channels |
+| `loadMaturityEvidence` | every Home with ≥1 Muddy | reads every direct conversation's messages; **the most likely to degrade with history** |
+
+No optimisation performed — none is pathological at current scale, and Mission 9
+is the right place. `loadMaturityEvidence` is flagged as the first thing to look
+at there.
+
+## Axis 11 — Feature cannibalization: PASS, distinctions hold
+
+| Pair | Distinction | Verdict |
+| --- | --- | --- |
+| Linkr vs Muddies | discovers **new** people vs manages **approved** relationships | clear — and verified: a Linkr connection creates no friendship row |
+| UpFor vs Plans | temporary intent that expires vs a commitment with a time | clear — an UpFor is `ends_at`-bound; a Plan has RSVP and a chat |
+| Plans vs Events | private arrangement among Muddies vs published experience with a broad audience | clear — different audiences, different visibility rules |
+| Event Linkr vs Linkr | consenting co-attendees vs proximity-ranked strangers | clear — Event Linkr requires check-in **and** explicit opt-in |
+| Circles vs Plan Chat | a durable private space vs a conversation attached to one Plan | clear — a Plan Chat dies with its Plan |
+
+No merge is warranted. Each has a job a user can state in one sentence, and the
+conversion paths between them (UpFor → Plan, Event → Event Linkr) are one-way
+and deliberate.
+
+## Axes 7, 10, 17 — Return loops, dead states and repeated failure
+
+**Return-loop classification by reason, not by mechanism:**
+
+| Loop | Return reason | Class |
+| --- | --- | --- |
+| Messages | somebody replied | RESPONSE |
+| Muddies | a request, or proximity changed | RELATIONSHIP |
+| Plans | an arrangement with a time | TIME-BOUND COMMITMENT |
+| Events | upcoming or live right now | LIVE CONTEXT |
+| UpFor | live availability that expires | LIVE CONTEXT |
+| Safe Arrival | an active journey | SAFETY UTILITY |
+| Linkr | new people might exist | DISCOVERY — **the weakest kind** |
+
+Six of seven loops are driven by **another person doing something**. Only Linkr
+is driven by hope, which is the same conclusion the root-cause diagnosis reached
+from the data side. The product does not rely on badges, guilt or completion
+pressure anywhere.
+
+**Long-term dead states — the product adapts rather than repeating itself.**
+Observed directly in the longitudinal run: at day 3 Home had stopped offering
+"Add your first Muddy" (no longer true) and offered "Invite another Muddy"
+instead. Education disappears when it stops applying, and the celebration
+retires on a timer rather than waiting to be dismissed.
+
+The honest limit: with an empty network, every surface correctly converges on
+"get one person here". That is repetition, but it is **true** repetition — the
+one action that would genuinely change the situation. The failure mode the brief
+warns about ("Try again! forever" when the environment is the cause) does not
+occur, because the offered action addresses the environment rather than retrying
+against it.
