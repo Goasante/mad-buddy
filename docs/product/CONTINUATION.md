@@ -1,6 +1,6 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 16.** The next session continues from here.
+**Written at the end of session 17.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
@@ -8,7 +8,7 @@ BRANCH       hardening/god-mode-product-pass
 HEAD         (see foot of file)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      62 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      67 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -22,7 +22,8 @@ COMMITS      62 local recovery checkpoints, none pushed, nothing deployed
 | 2 — UI/UX | Extremely Advanced | **COMPLETE.** Task cost 20/20 goals measured (max 3 taps); 12 empty states, 0 defects; failure states under offline/500; 5 cross-feature handoffs; accessibility depth. 4 findings: MB-GOD-040 and 043 FIXED, MB-GOD-041 and 042 recorded OPEN with reproductions. |
 | 2 — UI/UX | God Mode | **COMPLETE.** MB-GOD-041 and 042 closed; hover-only class closed; vocabulary, component/typography/icon grammar, focus system, theme parity, state colour, trust expression and the visual board all audited. 200% text went 29/60 broken → 0/60. |
 | **2 — UI/UX** | **ALL THREE LEVELS** | **COMPLETE — closeout written in the audit ledger** |
-| 3 — Journeys | Advanced | **PARTIAL.** New-user, zero-Muddy, pending-request, first-Muddy, location-denied, interruption and return-loop journeys audited. 3 findings: MB-GOD-049 FIXED, 050 and 051 recorded OPEN. |
+| 3 — Journeys | Advanced | **COMPLETE — 20/24 audited experientially, 4 resting on Mission 1 lifecycle proof.** 4 findings: MB-GOD-049 and 050 FIXED, 051 classified, 052 open. |
+| 3 — Journeys | Extremely Advanced | not started — multiple personas, pathological combinations, multi-device |
 | 4 — Information architecture | — | **PARTIAL** — Profile restructure DONE, Settings receiving work DONE; **MB-GOD-007 still waiting** |
 | 5 — Mobile shell / safe area | Advanced | **complete — no root-cause defect** (MB-GOD-009) |
 | 5 — Mobile shell | Extremely Advanced | not started (keyboard, landscape, PWA/Capacitor, sheets/modals/camera) |
@@ -684,3 +685,58 @@ block/safety recovery (J22), privacy change (J23), account management (J24).
 `scripts/hardening/journeys-m3.mjs` is the harness to extend — add a journey by
 seeding its state, asserting the seed applied, and recording what each surface
 offers.
+
+## Session 17 — Mission 3 Advanced CLOSED
+
+```
+MB-GOD-049  un-onboarded login skips onboarding  P1  FIXED (previous session)
+MB-GOD-050  first-Muddy moment had no action     P2  FIXED — 11/11 end to end
+MB-GOD-051  message draft lost on reload         P3  CLASSIFIED, not fixed
+MB-GOD-052  Home cannot see unread messages      P2  OPEN
+```
+
+### Things the next session should not re-derive
+
+- **The first-value chain is now complete and verified 11/11.** Home's
+  first-Muddy card offers "Say hi to <first name>", which calls Home's canonical
+  `runRelationshipAction("say_hi", id)` → `openDirectConversationAction` →
+  `conversationHref`. Do NOT let the card open a conversation itself;
+  `first-muddy.test.ts` fails if it grows its own `/messages` path.
+- **The card's two CTAs are ONE conditional**, not two blocks:
+  `needsLocation ? "Turn on Glow" : onSayHi ? "Say hi" : null`. Rendering both
+  puts the warm thing beside the useful thing. The "offers one primary action"
+  test now asserts that chain rather than counting `<Button`.
+- **`shouldAcknowledgeFirstMuddy` is TIME-boxed, not act-boxed** — six hours
+  (`FIRST_MUDDY_ACKNOWLEDGEMENT_MS`), reasoned in `state.ts`. The celebration
+  correctly survives the session and retires next day. I asserted the opposite
+  first and was wrong; the probe now tests both sides of the window.
+- **MB-GOD-052's structural cause is known**: `unread` appears nowhere in
+  `lib/activation/projection.ts` or `home-composition.ts`. The count lives only
+  in the app shell's nav badge (`useUnreadMessageCount`, `app-shell.tsx:327`).
+  Adding it to Home means deciding its precedence against the Plan and proximity
+  modules — that precedence decision is the only work left.
+- **Home's priority for an active user is CORRECT** and should not be
+  "improved": upcoming Plan → Near → My Plans → Suggestions. A commitment
+  outranks proximity.
+- **MB-GOD-051 is a storage/privacy decision, not a bug.**
+  `lib/security/session-storage.test.ts` holds an allow-list of localStorage
+  keys, and every approved key today is a preference or dismissal flag — none
+  holds user content. A draft would be the first, and would outlive sign-out on
+  a shared device. Decide the clearing story before adding the key.
+- **Turnstile blocks form signup on a local production build** (`next start`
+  sets `NODE_ENV=production`). Correct fail-closed behaviour. Create journey
+  accounts via the admin API, then sign in through the real login form.
+- **Linkr is the only WEAK return loop.** Nothing signals new candidates.
+  Recorded, not fixed — the brief forbids manufacturing notifications, and the
+  honest option is freshness in the surface itself, not a push.
+
+### Next: MISSION 3 EXTREMELY ADVANCED
+
+Four journeys deliberately deferred to it because they need multiple live
+accounts: Linkr mutual (J10), UpFor response/momentum (J12), UpFor→Plan and Plan
+over time as EXPERIENCE (J13/J15), block/safety recovery UX (J22). The brief
+already places "multiple personas" and "pathological combinations" there.
+
+`scripts/hardening/journeys-m3.mjs`, `journeys-m3b.mjs` and
+`journey-first-value.mjs` are the harnesses to extend. Every seed asserts its
+own success — keep that rule.
