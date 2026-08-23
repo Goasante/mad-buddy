@@ -6936,3 +6936,148 @@ MISSION 8:  Advanced = COMPLETE   Extreme = COMPLETE   God Mode = COMPLETE
 FINDINGS:   P0 = 0  P1 = 0  P2 = 0  P3 = 0 new
             MB-GOD-046 advanced from RECORDED to PARTIAL
 ```
+
+---
+
+# MISSION 9 — SCALE / PERFORMANCE / COST
+
+## Measured baseline (local production build, warm)
+
+| Route | TTDC | Requests | Transfer | WebSockets |
+| --- | --- | --- | --- | --- |
+| `/dashboard` | 2158 ms | 56 | 71 KB | 0 |
+| `/friends` | 682 ms | 41 | 71 KB | 0 |
+| `/messages` | 862 ms | 43 | 71 KB | 0 |
+| `/linkr` | 534 ms | 37 | 72 KB | 0 |
+| `/plans` | 540 ms | 41 | 71 KB | 0 |
+| `/events` | 376 ms | 41 | 71 KB | 0 |
+| `/notifications` | 426 ms | 39 | 71 KB | 0 |
+
+**~40 requests and ~71 KB per route** is a healthy shape — the payload is
+dominated by a shared bundle that caches, not per-route data. **Home is the
+outlier at 2158 ms** and that is expected: it is the orchestrator, resolving
+activation, proximity, plans, events and maturity in one batched `Promise.all`.
+
+## MB-GOD-060 (P2) — `loadMaturityEvidence` grows without bound
+
+**SCALE-RELEVANT. The clearest architectural waste in the product.**
+
+`lib/activation/projection.ts` runs on **every Home load for every account with
+at least one Muddy**, and it reads:
+
+```sql
+select conversation_id, sender_id from messages
+where conversation_id in (<every direct conversation this user is in>)
+  and message_type <> 'system' and deleted_at is null
+```
+
+Measured on the QA account: 7 conversations, 3 messages scanned. That is
+harmless today and **unbounded tomorrow** — the cost is
+`O(total messages this person has ever exchanged)`, with no time window, no
+limit, and no index-friendly predicate to stop it.
+
+A two-year user with 20 conversations averaging 500 messages makes Home read
+**10,000 rows to answer one boolean**: *has anyone ever replied to you?*
+
+**Why it looks innocent**: the function is well-written, batched into the same
+`Promise.all` as everything else, and correct. The defect is not the query — it
+is that a **derived boolean is recomputed from raw history on every render**.
+
+**The fix shape** (recorded, not implemented — Mission 9 is analysis):
+`twoSidedConversationCount` is exactly the kind of value that should be a
+milestone. The product already has `activation_milestones` with
+`first_message_sent`; a `first_reply_received` milestone would answer the same
+question in one indexed row read and would never grow. That is a schema change,
+so it belongs to an owner-approved migration alongside MB-GOD-058.
+
+## Scale cohort model
+
+Assumptions stated so they can be argued with: **DAU ≈ 25% of MAU** for a
+proximity-social product (people open it when they are out), **≈ 12 route views
+per DAU**, **≈ 3 Home loads per session**.
+
+| Registered | MAU | DAU | Home loads/day | Route views/day | Peak req/s* |
+| --- | --- | --- | --- | --- | --- |
+| 100 | 60 | 15 | 45 | 180 | < 1 |
+| 500 | 300 | 75 | 225 | 900 | < 1 |
+| 1,000 | 600 | 150 | 450 | 1,800 | ~1 |
+| 5,000 | 3,000 | 750 | 2,250 | 9,000 | ~4 |
+| 10,000 | 6,000 | 1,500 | 4,500 | 18,000 | ~8 |
+| 50,000 | 30,000 | 7,500 | 22,500 | 90,000 | ~40 |
+| 100,000 | 60,000 | 15,000 | 45,000 | 180,000 | ~80 |
+| 500,000 | 300,000 | 75,000 | 225,000 | 900,000 | ~400 |
+
+\* peak assumes traffic concentrated into ~6 active evening hours at 3× the flat
+rate — the shape a "who is out right now" product actually has.
+
+**The honest conclusion the brief asked for: Vercel's free tier does NOT carry
+500,000 users.** It does not carry 10,000. The realistic reading:
+
+- **to ~1,000 registered** — free/hobby is genuinely fine
+- **~1,000–10,000** — Vercel Pro + Supabase Pro; the cost driver is function
+  invocations on Home, not bandwidth
+- **10,000+** — `loadMaturityEvidence` (MB-GOD-060) and `getUnreadMessageCount`
+  become the two paths worth caching before adding capacity
+- **100,000+** — realtime connection count becomes the Supabase constraint
+  rather than compute
+
+## SCALE-RELEVANT paths, ranked
+
+1. **`loadMaturityEvidence`** — unbounded per-Home message scan (MB-GOD-060)
+2. **`getUnreadMessageCount`** — every authenticated page; memberships + a
+   `conversation_previews` RPC per render. Bounded per user, but the highest
+   *frequency* path in the product
+3. **`loadActivationProjection`** — every Home; already one batched round trip
+4. **`discoverLinkrCandidates`** — bounded by `CANDIDATE_BATCH_SIZE`, then ~8
+   batched `.in()` queries
+5. **Proximity refresh** — bounded by the 15-minute freshness window
+6. **Realtime subscriptions** — per-conversation channels; the 100k+ constraint
+
+**No N+1 was found.** Every hot path already uses `.in()` batching or a single
+RPC — the program's earlier missions enforced that, and it holds.
+
+## Cost model
+
+Usage per DAU, from the measured baseline:
+
+```
+route views/DAU        ~12          function invocations/DAU   ~12–15
+transfer/DAU           ~200 KB      (shared bundle caches after first load)
+DB queries/DAU         ~60–90       concentrated in Home
+realtime/DAU           ~1 channel while a conversation is open
+```
+
+**Exact currency figures need current official pricing**, which this environment
+cannot reach. Per the brief, the **usage model above is the deliverable** and the
+price lookup is marked:
+
+```
+VERCEL PRICING     = NEEDS CURRENT OFFICIAL DOCS
+SUPABASE PRICING   = NEEDS CURRENT OFFICIAL DOCS
+PUSH/FCM PRICING   = NEEDS CURRENT OFFICIAL DOCS
+```
+
+Multiply the per-DAU figures by the cohort table to get invocation and query
+volumes; those are the units both vendors bill on.
+
+## Architecture verdict
+
+**Stay on Vercel + Supabase.** No evidence in this codebase justifies moving:
+there is no heavy background compute, no long-running job, and no workload that
+a worker tier would serve better. Image processing is the only CPU-bound work
+and it is per-upload, not per-request.
+
+**Escape strategy, documented per the brief**: the authority already lives in
+Postgres behind RPCs and RLS, and the app reads through service modules rather
+than scattered queries — so a move would be a hosting change, not a rewrite.
+The one true lock-in is `pg_cron` for scheduled work, which any Postgres host
+provides.
+
+**Launch staging**: 100 → 500 → 1k on hobby infrastructure, upgrading at ~1k
+registered *because real users create real value*, not in anticipation. Fix
+MB-GOD-060 before 10k.
+
+```
+MISSION 9:  Advanced = COMPLETE   Extreme = COMPLETE   God Mode = COMPLETE
+FINDINGS:   P0 = 0  P1 = 0  P2 = 1 (MB-GOD-060, open, schema-bound)  P3 = 0
+```
