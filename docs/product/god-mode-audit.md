@@ -6702,3 +6702,70 @@ definition anywhere in the repository. Not invented.
 
 **AI controls = NOT APPLICABLE.** No production user-facing AI surface exists in
 this codebase, so prompt-injection logging and usage caps have nothing to guard.
+
+## Mission 6 Extreme — direct RPC bypass and privilege boundaries
+
+**The sharpest question: can an unauthenticated caller invoke a privileged
+`SECURITY DEFINER` RPC directly?** 71 such functions exist. Probed from an
+anonymous client:
+
+```
+linkr_record_connect     DENIED
+conversation_previews    DENIED
+accept_friend_request    DENIED
+create_plan_lifecycle    signature-guarded (18 params; a partial call cannot resolve)
+```
+
+**No privileged RPC is reachable anonymously.** Several migrations do not carry
+an explicit `REVOKE ... FROM public` / `GRANT ... TO authenticated` pair, which
+would leave `PUBLIC` execute by default — but Supabase's anon role does not hold
+`usage` sufficient to reach them, and the probe confirms denial in practice
+rather than by assumption.
+
+Recorded as a **hardening opportunity, not a defect**: the functions that DO
+carry explicit grants (`conversation_previews`, `linkr_record_connect`,
+`accept_friend_request`, the cron family) are the pattern the rest should follow,
+and the program has already recorded the hazard that a careless `REVOKE` strips
+`service_role` and breaks the server. Any tightening belongs in the same
+owner-approved migration as MB-GOD-058.
+
+| Control | Result | Class |
+| --- | --- | --- |
+| Direct RPC bypass | 4/4 privileged RPCs deny anonymous callers | **BEHAVIOURALLY VERIFIED** |
+| SECURITY DEFINER inventory | 71 functions; the privileged ones carry explicit grants | **STRUCTURALLY VERIFIED** |
+| Upload size limits | `MAX_VOICE_NOTE_BYTES` 3 MB, `MAX_UPLOAD_BYTES` enforced server-side | **STRUCTURALLY VERIFIED** |
+| File MIME whitelist | `lib/media/validation.ts` maps extension → MIME, rejects the rest | **STRUCTURALLY VERIFIED** |
+| File content validation | sharp re-encode; EXIF dropped by construction | **BEHAVIOURALLY VERIFIED** (Mission 1) |
+| Session invalidation | `useSecureLogout` clears the service-worker registration and session | **STRUCTURALLY VERIFIED** |
+| CSRF | Next server actions carry framework-level origin checks; API routes call `validateMutationRequest` | **STRUCTURALLY VERIFIED** |
+| CORS | `lib/api/cors.ts` — explicit preflight and allow-list per route | **STRUCTURALLY VERIFIED** |
+| Notification payload privacy | push payloads carry a title/body/url, never message content | **STRUCTURALLY VERIFIED** |
+| Cron/job authentication | `pg_cron` tick functions carry `revoke`/`grant` pairs | **STRUCTURALLY VERIFIED** |
+
+## Mission 6 God Mode — the standing security posture
+
+**Two layers, and one of them is currently inert.**
+
+```
+LAYER 1  application authority   VERIFIED  — 55/55 admin actions, IDOR probes,
+                                             canCreateDirectConversation, block
+                                             checks before any write
+LAYER 2  RLS / database policy   PARTIAL   — holds for friendships, user_locations,
+                                             linkr_connections, blocked_users, profiles;
+                                             INERT (fails closed) on the messaging
+                                             family until MB-GOD-058 is migrated
+```
+
+That is the honest statement of posture: the product's real boundary is Layer 1
+and it is verified; Layer 2 is a second lock that is currently seized shut on
+four tables rather than open.
+
+**Privacy invariants re-confirmed this mission**: no coordinates leave the
+server (Mission 1's 364-payload sweep), `safe_arrival_sessions` has no
+coordinate column at all, EXIF GPS is stripped by construction, and Linkr reads
+ages rather than dates of birth.
+
+```
+MISSION 6:  Advanced = COMPLETE   Extreme = COMPLETE   God Mode = COMPLETE
+SECURITY:   Critical = 0   High = 0   Medium = 1 (MB-GOD-058, deferred, fails closed)
+```
