@@ -1,6 +1,6 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 22.** The next session continues from here.
+**Written at the end of session 23.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
@@ -8,7 +8,7 @@ BRANCH       hardening/god-mode-product-pass
 HEAD         (see foot of file)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      88 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      93 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -28,7 +28,8 @@ COMMITS      88 local recovery checkpoints, none pushed, nothing deployed
 | **3 — Journeys** | **ALL THREE LEVELS** | **COMPLETE — closeout written in the audit ledger** |
 | 4 — Information architecture | Advanced | **COMPLETE.** 22 surfaces mapped, 13 data authorities, 6/6 deep links, nav 5/5. Findings: P0-P1=0, P2=1 (MB-GOD-053 open). Profile lock preserved. |
 | 4 — Information architecture | Extremely Advanced | **COMPLETE.** MB-GOD-053 RESOLVED; 054 and 055 open. 5 conversions, 55/55 admin actions authorized, 13/13 write paths, no shadow state. P0=0 P1=0 P2=2 P3=1. |
-| 4 — Information architecture | God Mode | not started |
+| 4 — Information architecture | God Mode | **COMPLETE.** One architecture across UI/routes/backend/data, with two naming exceptions. MB-GOD-054 and 055 RESOLVED; 056 open P3. |
+| **4 — Information architecture** | **ALL THREE LEVELS** | **COMPLETE — closeout in the audit ledger** |
 | 5 — Mobile shell / safe area | Advanced | **complete — no root-cause defect** (MB-GOD-009) |
 | 5 — Mobile shell | Extremely Advanced | not started (keyboard, landscape, PWA/Capacitor, sheets/modals/camera) |
 | 6 — Security / privacy | — | early evidence gathered (privacy probe passes meaningfully); full pass not started |
@@ -1003,3 +1004,49 @@ Does Mad Buddy express the same conceptual architecture in its UI, routes,
 backend and user mental model? Route vocabulary, domain vocabulary, feature
 boundaries, navigation model, backend authority model, conversion model,
 compatibility debt, future monetization/native boundaries.
+
+## Session 23 — MISSION 4 CLOSED (all three levels)
+
+```
+MB-GOD-054  duplicate profile bootstrap   RESOLVED, mutation-tested
+MB-GOD-055  Moments flag semantics        RESOLVED, mutation-tested both ways
+MB-GOD-056  "Circles" names two concepts  OPEN P3 — owner decision
+God Mode findings: P0=0 P1=0 P2=0 P3=1
+```
+
+**Verdict: UI, routes, backend and data model DO express one architecture**,
+with two naming exceptions that cost comprehension rather than correctness.
+
+### Things the next session should not re-derive
+
+- **`ensureProfileForUserId(userId)`** is the id-addressed bootstrap. It fetches
+  the auth user ONLY on the miss path, so the hot path still costs one existence
+  check. `sendFriendRequest` delegates to it. Do not reintroduce an inline
+  profile write there — `lib/profiles/bootstrap-ownership.test.ts` fails, and it
+  also fails if the canonical helper stops setting `username_normalized`,
+  `avatar_url` or `visibility_status: "ghost"`.
+- **The Moments flag rule is semantic, not blanket**: participation is gated
+  (`upload`, `react`, `tuneIn`), withdrawal and safety are not (`deleteMoment`,
+  `reportContent`, `tuneOut`). `lib/features/flag-semantics.test.ts` catches
+  BOTH over-gating and under-gating — gating `tuneOut` fails it. `removeReaction`
+  stays gated with its counterpart, recorded as a deliberate edge case.
+- **MB-GOD-056 (open, P3):** "Circles" means a private label on your own Muddies
+  (`friend_circles`, visible only to you, used for audience filtering) AND a
+  shared space at `/groups` (`conversations` + `group_settings`). Separate
+  tables, separate services, no shadow state — the collision is vocabulary only.
+  Cheaper resolution is renaming the Muddies filter, which nobody else sees.
+- **Raw DOB never reaches Linkr** — it reads ages through `resolveAges`.
+- **The new-engineer test found only two genuine architecture debts**
+  (`/hangout-mode`, "Circles"). `friendships` and `hangout_sessions` as table
+  names are acceptable internal terminology; the brief's own rule is that the DB
+  need not mirror marketing language.
+
+### OWNER REVIEW COHORT — preserved, do not delete
+
+Five accounts on the local Docker stack, all loggable at
+`http://localhost:3200/login`, password `ReviewPass123!`. Re-seed with
+`node scripts/hardening/seed-owner-review.mjs` (idempotent).
+
+### Next: MISSION 5 — SAFE AREA / MOBILE SHELL
+
+Not started. Mission 5 deserves a fresh session.

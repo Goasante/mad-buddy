@@ -6331,3 +6331,154 @@ Buddy."* That teaches the product's word instead of undermining it.
 brief's own rule is that database language need not mirror marketing language —
 what matters is that one concept does not mean two things, and `friendships`
 means exactly one thing everywhere it appears (76 references, one meaning).
+
+## Axes 3, 6–17 — the conceptual model, verified
+
+**UI ownership matches backend ownership.** For every major action the visible
+owner and the service owner agree:
+
+| Action | UI owner | Service | Authority |
+| --- | --- | --- | --- |
+| Linkr Connect | Linkr | `lib/linkr` | `linkr_record_connect` (SECURITY DEFINER) |
+| Muddy request | Muddies | `lib/friends` | `friendships` / `accept_friend_request` |
+| create Plan | Plans | `lib/plans` | `create_plan_lifecycle` |
+| RSVP | Plan detail | `lib/plans` | `set_plan_participant_rsvp` |
+| UpFor response | UpFor | `lib/social` | `hangout_requests` |
+| Event Going | Events | `lib/events` | `event_rsvps` |
+| check-in | Events | `lib/events` | `check_ins` |
+| Event Linkr opt-in | Event detail | `lib/events` | `event_linkr_opt_ins` |
+| direct message | Messages | `lib/messaging` | `getOrCreateDirectConversation` |
+| profile media | Profile | `lib/profile` | `profile_photos` |
+| block | Muddies / Safety | `lib/social` | `blocked_users` |
+| Safe Arrival | Safe Arrival | `lib/safety` | `safe_arrival_sessions` |
+
+The one case where a feature's UI action reaches another feature's service —
+Linkr → messaging — is now **shared infrastructure with an explicit boundary**
+(MB-GOD-053), not shared lifecycle authority: Linkr owns mutuality, messaging
+owns the conversation.
+
+**Social relationship distinctions hold** (Axis 7). Verified across services,
+data model and runtime: a Linkr mutual creates no `friendships` row; a
+conversation is not a relationship; Going is `event_rsvps` and check-in is
+`check_ins`; check-in does not imply Event Linkr consent (`event_linkr_opt_ins`
+is a separate explicit row); a pending UpFor response does not become Plan
+participation. **No state is collapsed into another anywhere.**
+
+**Conversion model is one-way** (Axis 6). Each destination becomes authoritative
+and each source keeps only a pointer — `hangout_sessions.converted_plan_id`,
+`linkr_connections.conversation_id` — both set once and null-guarded, neither
+treated as truth about the target's lifecycle.
+
+**Communication model is three distinct things** (Axis 11): conversation
+(direct, Plan Chat, Circle), broadcast (Event updates), and attention/re-entry
+(Pulse). Notifications store attention, never message content; Event updates are
+not an Event group chat.
+
+**Identity has one owner** (Axis 12). Profile owns name, username, avatar,
+showcase and DOB; Linkr, Muddies, Messages and Events all *project* it. Linkr
+reads DOB only through `resolveAges`, which returns an age — **raw DOB never
+reaches Linkr**.
+
+**Temporary vs durable is coherent** (Axis 9):
+
+```
+EPHEMERAL   proximity/Glow (no location history), presence
+TIME-BOUND  UpFor (ends_at), Safe Arrival session, first-Muddy celebration (6h),
+            signed media URL (5 min)
+DURABLE     Muddy, Linkr mutual, Conversation, Circle
+HISTORICAL  past Plan, ended Event, expired UpFor, ended friendship
+```
+
+Storage matches the class in every case — most importantly, proximity is
+ephemeral and `safe_arrival_sessions` has no coordinate column at all.
+
+**Access / visibility / eligibility remain distinct** (Axis 13). Events keeps
+`canViewEvent`, `isDiscoverableInFeed` and `isBroadlyRankable` as separate
+predicates, and unknown still fails closed — verified in Mission 1 and unchanged.
+
+**Home remains orchestration-only** (Axis 15). Its actions invoke canonical
+services (`runRelationshipAction` → `openDirectConversationAction`); it owns no
+lifecycle state and reimplements nothing. MB-GOD-052 added a *suppression* rule,
+not an authority.
+
+**Navigation model holds** (Axis 14): five items, five mental models. No
+evidence emerged to promote Plans or Events — both remain outcomes surfaced by
+Home at the moment they matter.
+
+## Axis 20 — The new-engineer test
+
+The five most confusing names, classified honestly:
+
+| # | Name | Class |
+| --- | --- | --- |
+| 1 | `/hangout-mode` route for the UpFor feature | **MIGRATION DEBT** (MB-GOD-007) |
+| 2 | "Circles" meaning two things | **PRODUCT ARCHITECTURE DEBT** (MB-GOD-056) |
+| 3 | `friendships` table for the Muddy concept | **ACCEPTABLE INTERNAL TERMINOLOGY** |
+| 4 | `/groups` route rendering "Circles" | **MIGRATION DEBT** — the route kept its old name |
+| 5 | `hangout_sessions` / `hangout_requests` tables | **ACCEPTABLE INTERNAL TERMINOLOGY** |
+
+Only two are genuine architecture debt, and both are recorded findings. A new
+engineer reading `lib/` would correctly infer every lifecycle owner: the service
+directory names match the product features one-to-one.
+
+## Axis 21 — The new-user test
+
+Answered against the running product with the review accounts:
+
+| "Where would I…" | Canonical owner | Reached? |
+| --- | --- | --- |
+| meet someone new | Linkr | yes — bottom nav |
+| manage an existing friend | Muddies | yes — bottom nav |
+| say I'm free now | UpFor | yes — bottom nav |
+| make a commitment | Plans | yes — Quick Actions, and Home when one exists |
+| find a published experience | Events | yes — Quick Actions |
+| change how I appear | Profile | yes — Menu |
+| change account/privacy | Settings | yes — Menu |
+
+**A reasonable user arrives at the canonical owner in every case.** The only
+place the model bends is "Circles", which is MB-GOD-056.
+
+## VERDICT — do UI, routes, backend and data model express ONE architecture?
+
+**Yes, with two named exceptions.**
+
+The conceptual model is expressed consistently through product language,
+navigation, pages, services, RPCs, data ownership and conversions. Every
+lifecycle has exactly one authority; every conversion is one-way with a pointer,
+not shared ownership; identity, communication and discovery each have a single
+owner; and the admin model is per-capability rather than a single privileged
+flag.
+
+The two exceptions are both **naming**, not authority:
+- `/hangout-mode` addresses UpFor (MB-GOD-007, owner-blocked, migration planned)
+- "Circles" names two distinct concepts (MB-GOD-056, resolution is the owner's)
+
+Neither can cause a user to act in the wrong place or a service to own the wrong
+lifecycle. They cost comprehension, which is exactly what a God Mode pass should
+surface and exactly the kind of change that should not be made unilaterally.
+
+## MISSION 4 GOD MODE = COMPLETE
+
+```
+MB-GOD-053  duplicate conversation creation   RESOLVED  (Extreme)
+MB-GOD-054  duplicate profile bootstrap       RESOLVED  (this level)
+MB-GOD-055  flag semantics                    RESOLVED  (this level)
+MB-GOD-056  "Circles" names two concepts      OPEN, P3, owner decision
+
+GOD MODE FINDINGS: P0 = 0  P1 = 0  P2 = 0  P3 = 1
+FIXES COMPLETED = 2        FINDINGS OPEN = 1
+```
+
+# MISSION 4 — COMPLETE
+
+```
+Advanced              COMPLETE   22 surfaces, 13 authorities, 0 conflicts
+Extremely Advanced    COMPLETE   5 conversions, 55/55 admin actions, 0 shadow state
+God Mode              COMPLETE   one architecture, two naming exceptions
+```
+
+**Architecture invariants added this mission**, each mutation-tested:
+`lib/linkr/conversation-ownership.test.ts` (Linkr cannot create conversations
+inline), `lib/profiles/bootstrap-ownership.test.ts` (the friendship path cannot
+bootstrap a profile independently), `lib/features/flag-semantics.test.ts` (a
+disabled feature gates participation and never blocks withdrawal or safety).
