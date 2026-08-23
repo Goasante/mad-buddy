@@ -1,14 +1,14 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 7.** The next session continues from here.
+**Written at the end of session 8.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         cbe02b6
+HEAD         (session 8 final — see git log -1)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      17 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      20 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -126,7 +126,7 @@ Prefix commands with `MSYS_NO_PATHCONV=1` in Git Bash.
 ## Verified baselines to compare against
 
 ```
-TESTS       6853 / 6853   (338 files)  — 56-92s
+TESTS       6861 / 6861   (339 files)
 TSC         PASS
 ESLINT      0 errors, 44 warnings (all no-unused-vars dead code)
 BUILD       PASS
@@ -172,6 +172,17 @@ JOURNEYS    10/10   LIFECYCLE 7/7   MULTI-TAB 5/5   STATE GRAPH 193 edges
    the photo viewer and the camera. None of these are covered yet.
 
 ## Things the next session should not re-derive
+
+- **Event Linkr consent is proven** (MB-GOD-028), behaviourally and
+  mutation-tested: attendance does not imply discoverability, a block beats Event
+  eligibility, and revocation is immediate with no grace window. Do NOT re-derive
+  the decision rules — `isCandidateEligible` is the single authority and it is a
+  pure function, so it can be tested directly.
+- **What Event Linkr still needs**: the checkout → `eventEligible` recompute
+  wiring driven end to end, attendee-directory enumeration against live payloads,
+  and the five audience authorities (invite / link / community / nearby / public).
+- **The lifecycle denominator is 7 and the count is domain-based** (MB-GOD-027).
+  Multi-tab is a technique, not a domain. Safe Arrival + Messages is ONE domain.
 
 - **Linkr's one-sided privacy holds** (MB-GOD-024). Verified by reading as the
   TARGET under RLS: zero rows, zero notifications.
