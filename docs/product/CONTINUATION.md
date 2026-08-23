@@ -1,6 +1,6 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 19.** The next session continues from here.
+**Written at the end of session 20.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
@@ -8,7 +8,7 @@ BRANCH       hardening/god-mode-product-pass
 HEAD         (see foot of file)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      75 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      80 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -24,7 +24,8 @@ COMMITS      75 local recovery checkpoints, none pushed, nothing deployed
 | **2 — UI/UX** | **ALL THREE LEVELS** | **COMPLETE — closeout written in the audit ledger** |
 | 3 — Journeys | Advanced | **COMPLETE — 20/24 audited experientially, 4 resting on Mission 1 lifecycle proof.** 4 findings: MB-GOD-049 and 050 FIXED, 051 classified, 052 open. |
 | 3 — Journeys | Extremely Advanced | **COMPLETE.** UpFor momentum 7/7 and conversion 6/6 with three live people; stale/expiry/offline 6/6; permissions 10/10; Home matrix 4/4. Findings: P0=0 P1=0 P2=1 (fixed) P3=0. |
-| 3 — Journeys | God Mode | not started — the "does this lead to real-world social value" pass |
+| 3 — Journeys | God Mode | **COMPLETE.** P0-P3 = 0 findings. Produced the activation lifecycle, network-effect map, density thresholds, success ladder, notification/permission models and the Linkr root cause. |
+| **3 — Journeys** | **ALL THREE LEVELS** | **COMPLETE — closeout written in the audit ledger** |
 | 4 — Information architecture | — | **PARTIAL** — Profile restructure DONE, Settings receiving work DONE; **MB-GOD-007 still waiting** |
 | 5 — Mobile shell / safe area | Advanced | **complete — no root-cause defect** (MB-GOD-009) |
 | 5 — Mobile shell | Extremely Advanced | not started (keyboard, landscape, PWA/Capacitor, sheets/modals/camera) |
@@ -847,3 +848,52 @@ retention, long-term failure states.
 
 The Linkr return loop is the single largest open journey question and belongs
 there.
+
+## Session 20 — MISSION 3 CLOSED (all three levels)
+
+```
+God Mode findings: P0=0 P1=0 P2=0 P3=0
+Empty network      9/9 surfaces, zero graveyards
+Home over time     4 states, every transition correct
+Linkr              WEAK — density-limited, deferred with a truthful direction
+```
+
+God Mode produced an **architecture**, not a defect list. Nothing was broken;
+what the product lacks is network density, which is not a bug.
+
+### Things the next session should not re-derive
+
+- **The activation lifecycle is now written down** (audit ledger): SETUP →
+  ACTIVATION (`first_muddy_added`) → FIRST VALUE (+ one social act) → SECOND
+  VALUE (two-sided conversation or Plan) → RETENTION VALUE. Do not redefine it;
+  it was validated against behaviour, not invented.
+- **Welcome Access should start at `first_muddy_added`** — the first
+  non-reversible event requiring another person to agree, already carrying a
+  `reached_at`. Recommendation only; no schema created. Monetization Reset
+  consumes this.
+- **One Muddy is enough** for Glow, Message, UpFor, Plan and Safe Arrival. Only
+  Linkr and Events need strangers. Invite is the ONLY bootstrap for the private
+  graph.
+- **Linkr's root cause is data-side, not UI.** `candidate-service.ts` already
+  computes `candidateJoinedToday` and `candidateActiveNow`, and
+  `linkr_profiles` carries `only_new_today` / `only_active_now`. Freshness
+  exists but is exposed only as filters the user must set and one card chip —
+  never as "has anything changed since I was last here". A fix needs a
+  last-visited timestamp (schema decision) and will still say nothing truthful
+  at low density. Dark patterns are prohibited.
+- **Notification dependency is classified** for Native Readiness: only Safe
+  Arrival is functionally broken without push. Linkr mutual is the only fact in
+  the product with no in-app surface that changes.
+- **`loadMaturityEvidence` is the first Mission 9 target** — it reads every
+  direct conversation's messages on every Home with ≥1 Muddy.
+- **No trust reversal exists.** The privacy promise is restated at signup, first
+  Muddy, Event check-in, Safe Arrival and Linkr, and never weakens later.
+- **Feature distinctions hold** — no merge is warranted between Linkr/Muddies,
+  UpFor/Plans, Plans/Events, Event Linkr/Linkr, or Circles/Plan Chat.
+
+### Next: MISSION 4 — INFORMATION ARCHITECTURE / PAGE RESPONSIBILITY
+
+Not started. Some IA work already landed (the Profile/Settings responsibility
+correction in Mission 2, and MB-GOD-007's `/hangout-mode` rename remains
+owner-blocked), but Mission 4 still needs its own formal Advanced, Extreme and
+God Mode passes. Do not skip it because those findings exist.
