@@ -1,14 +1,14 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 4.** The next session continues from here.
+**Written at the end of session 5.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         28a2093
+HEAD         8c54e3b
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      9 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      11 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -16,8 +16,8 @@ COMMITS      9 local recovery checkpoints, none pushed, nothing deployed
 | Mission | Level | State |
 | --- | --- | --- |
 | 1 — Reliability | Advanced | **COMPLETE** (route audit, auth, control inventory, mutation & journey audit, hydration, test infra, pre-hydration form audit) |
-| 1 — Reliability | Extremely Advanced | **PARTIAL** — mutation/duplicate, mid-mutation nav, two-tab consistency, deleted-resource done. Lifecycle sequences (request→cancel→resend, UpFor→Plan→Chat, Event Going→Check In→Linkr→Checkout) NOT done |
-| 1 — Reliability | God Mode | not started (click-graph crawl) |
+| 1 — Reliability | Extremely Advanced | **PARTIAL** — Muddy lifecycle 7/7 and multi-tab 5/5 done (MB-GOD-017/018). Still NOT done: Linkr, UpFor→Plan→Chat, Plan RSVP, Event Going→Check In→Linkr→Checkout, Profile media, Safe Arrival, Messages |
+| 1 — Reliability | God Mode | **PARTIAL** — state graph built and run over 13 surfaces: **34 nodes, 193 edges, 0 destination mismatches**. Found MB-GOD-020 (P1). Not yet crawled: Conversation, Plan detail, Plan Chat, Event detail |
 | 2 — UI/UX | Advanced | **PARTIAL** — Profile RESTRUCTURED and verified (MB-GOD-013 fixed: 3.97 -> 2.40 screens, settings share 28.6% -> 0%). Home judged good. 8 surfaces still unaudited: Landing, Auth, Activation, Conversation, Plan detail, Plan Chat, Event detail, Safe Arrival |
 | 3 — Flow | all levels | not started (deep-link intent + 10 journeys verified as Mission 1 evidence) |
 | 4 — Information architecture | — | **PARTIAL** — Profile restructure DONE, Settings receiving work DONE; **MB-GOD-007 still waiting** |
@@ -57,14 +57,14 @@ Prefix commands with `MSYS_NO_PATHCONV=1` in Git Bash.
 ## Verified baselines to compare against
 
 ```
-TESTS       6845 / 6845   (336 files)  — 57s quiet
+TESTS       6849 / 6849   (337 files)  — 61-70s
 TSC         PASS
 ESLINT      0 errors, 44 warnings (all no-unused-vars dead code)
 BUILD       PASS
 DIFF CHECK  CLEAN
 CRAWL       13/13 authenticated surfaces clean at 393x852
 VIEWPORTS   no horizontal overflow at 360/375/390/393/430, light and dark
-JOURNEYS    10/10
+JOURNEYS    10/10   LIFECYCLE 7/7   MULTI-TAB 5/5   STATE GRAPH 193 edges
 ```
 
 ## Open items, in the order they should be picked up
@@ -103,6 +103,24 @@ JOURNEYS    10/10
    the photo viewer and the camera. None of these are covered yet.
 
 ## Things the next session should not re-derive
+
+- **The state-graph crawler lied three times before it was trustworthy.** Fuzzy
+  text → strict-mode violations. Index-based clicking → ten impossible
+  "destination mismatches" (in-page querySelectorAll order does NOT match
+  Playwright locator order). Denied geolocation → "Turn on Glow" reported dead.
+  It now selects by identity (href / exact accessible name), re-checks before
+  clicking, scrolls into view, and grants geolocation. **Do not revert to index
+  selection.**
+- **The nine "dead" controls in the graph are already-active tabs.** Clicking the
+  tab you are on correctly does nothing. Left reported rather than suppressed
+  because silencing it generically could hide a genuinely dead tab.
+- **`accept_friend_request` denying service_role is correct** — it grants EXECUTE
+  to `authenticated` only, so it runs as the real user under RLS. Call it as the
+  signed-in receiver.
+- **The friend-request and export endpoints are rate limited.** A prior run
+  exhausts the quota and every later call returns 400/429, which then measures
+  the limiter instead of the behaviour under test. Clear `rate_limits` in setup.
+- **`profiles.onboarding_complete` does not exist; the column is `is_onboarded`.**
 
 - **Profile's Privacy/Preferences/Support blocks were a DUPLICATE INDEX, not a
   home.** Every row only linked to a Settings destination Settings already listed.
