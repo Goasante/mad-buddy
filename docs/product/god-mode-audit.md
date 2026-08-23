@@ -5564,3 +5564,118 @@ and that one turned out to be a false positive too.
 A detector that counts the app shell finds the app shell everywhere. Same
 lesson, differently dressed, as the scrollable-tab-strip false positives in
 Mission 2.
+
+## Deep-link ownership: 6/6 land in the owner surface
+
+```
+Plan          /plans?plan=…        owner kept: yes   dialog over the list
+Event         /events?event=…      owner kept: yes   dialog over the list
+Conversation  /messages?…          owner kept: yes   thread in place
+Muddy         /friends/kofim       owner kept: yes   h1 = "Kofi Mensah"
+Requests      /friends?tab=requests owner kept: yes
+Invite        /invite              owner kept: yes   h1 = "Invite a Muddy"
+```
+
+**No deep link is redirected away from its owner**, and no resource has two
+pages. Plan and Event use the list-plus-dialog pattern already cleared in
+Mission 2 as canonical (the same pattern the Muddy profile modal uses), so the
+URL naming the list while a dialog shows the resource is the design rather than
+a leak of ownership.
+
+The Muddy deep link is the one that gets its own route (`/friends/[username]`),
+which is correct: a person is a durable addressable thing, while a Plan or Event
+detail is a view over a list the user is already in.
+
+## Navigation responsibility
+
+**Bottom nav (mobile):** Messages · Muddies · [Home Orb] · Linkr · UpFor
+**Quick Actions launcher:** Moments · Plans · Events · Safe Arrival · Circles
+
+| Nav item | Durable mental model? | Evidence |
+| --- | --- | --- |
+| Messages | **yes** — "talking to people" | STRONG return loop; unread is the most common re-entry |
+| Muddies | **yes** — "the people I know" | the relationship graph everything else depends on |
+| Home Orb | **yes** — "what matters now" | the orchestrator, 8-tier model |
+| Linkr | **yes** — "people I do not know yet" | the only DISCOVERY surface; distinct from Muddies |
+| UpFor | **yes** — "who is free right now" | TEMPORARY INTENT; nothing else owns liveness |
+
+**Five items, five distinct mental models**, and together they cover the
+product's whole conceptual space: existing people, new people, right-now,
+conversation, and orchestration.
+
+**Plans and Events are deliberately secondary, and the Mission 3 evidence
+supports that.** Both are *outcomes* of the primary five rather than places you
+go first — a Plan comes from an UpFor or a Muddy, an Event is discovered. Home
+already surfaces an upcoming Plan at tier 4 and a live Event, which is where
+they matter. Promoting either would mean demoting a mental model for a
+destination.
+
+**No top-level concept is missing.** Safe Arrival is correctly in the launcher
+rather than the nav: it is a SAFETY UTILITY that matters intensely while active
+and not at all otherwise, and Home surfaces it at tier 1 when live.
+
+**No nav item is merely a route.** Each names a thing a user can describe
+without referring to the app's structure.
+
+## Create / view / manage / communicate separation
+
+| Feature | Create | View | Manage | Communicate |
+| --- | --- | --- | --- | --- |
+| Plan | `/plans` → New plan | Plan dialog | Plan dialog (RSVP, participants) | **Plan Chat** |
+| Event | `/events` → Create | Event dialog | Event admin manager | Event updates |
+| UpFor | `/hangout-mode` → Start | the feed card | owner controls on the card | converts to a Plan |
+| Muddy | `/friends?tab=add` | `/friends/[username]` | profile modal actions | **Messages** |
+| Circle | `/groups` → Create Circle | `/groups/[id]` | member management | the Circle conversation |
+| Profile | onboarding | `/profile` | Edit profile | — |
+| Safe Arrival | `/safe-arrival` → Start | the active card | extend / complete | notifies chosen Muddies |
+
+**No surface does all four without necessity.** The two that combine view and
+manage — Plan detail and Event detail — do so because RSVP *is* the view for a
+participant: seeing a Plan and stating whether you are going are the same
+moment. Communication is separated in every case, which is the distinction the
+brief asks to preserve.
+
+**Plan detail is not a conversation**, and **Plan Chat is not a Plan manager** —
+verified in Mission 2's surface audit and unchanged.
+
+## Data authority map
+
+| Concept | Authority | Mutation sites | Notes |
+| --- | --- | --- | --- |
+| Identity / display name | `profiles` | onboarding + profile edit | single owner |
+| DOB | `profiles` | profile edit | **Linkr reads, never owns** — `resolveAges` |
+| Profile media | `profile_photos` | 1 | avatar + 3 slots, schema-enforced |
+| Muddy relationship | `friendships` | 3 | read in 36 files, mutated in 3 — **wide read, narrow write** |
+| Linkr state | `linkr_profiles` | 2 | enable/intent only |
+| Linkr decisions | `linkr_actions` | via `linkr_record_connect` | SECURITY DEFINER, sole reciprocity reader |
+| UpFor state | `hangout_sessions` | 0 direct (RPC/actions) | |
+| Plan lifecycle | `plans` | 1 | `create_plan_lifecycle` is the authority |
+| Event lifecycle | `events` | 0 direct | |
+| Event Linkr consent | `event_linkr_opt_ins` | 0 direct | explicit opt-in only |
+| Messaging membership | `conversation_members` | **10** | see MB-GOD-053 |
+| Safe Arrival | `safe_arrival_sessions` | 0 direct | no coordinate column by design |
+| Activation / maturity | `activation_milestones` | 0 direct | derived by `home-maturity.ts` |
+
+**The `friendships` shape is the healthy one**: read in 36 files, mutated in 3.
+Wide readership with narrow write authority is exactly what a shared concept
+should look like.
+
+**No shadow fields or duplicate storage were found.** The one duplicate is a
+duplicate *implementation*, not duplicate state (MB-GOD-053).
+
+## Contextual vs persistent UI
+
+| Control | Class | Placement verdict |
+| --- | --- | --- |
+| Bottom nav (5) | PERSISTENT | correct — durable models |
+| Quick Actions launcher | PERSISTENT | correct — one tap, five secondary features |
+| First-Muddy card | TEMPORARY | correct — six-hour window, then gone |
+| Activation card | CONTEXTUAL | correct — recedes at first value |
+| Profile completion nudge | CONTEXTUAL | correct — and now suppressed while someone waits (MB-GOD-052) |
+| Safe Arrival active card | TEMPORARY | correct — tier 1 while live, absent otherwise |
+| Privacy Zones, Devices, Language | RARE | correct — in Settings, not on a product surface |
+| Ghost Mode | CONTEXTUAL | in Settings **and** Home quick controls — a deliberate dual entry, not duplicate authority |
+
+**No rare setting occupies permanent space**, and **no temporary state outlives
+its relevance** — the longitudinal run in Mission 3 confirmed the celebration
+and education both retire on schedule.
