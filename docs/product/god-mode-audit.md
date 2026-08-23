@@ -4108,3 +4108,87 @@ signup cannot produce — is deliberately left alone.
 
 `lib/onboarding/resume-guard.test.ts` is the regression check, mutation-tested:
 replacing the condition with `if (false)` fails two assertions.
+
+## MB-GOD-050 (P2) - The first-Muddy moment has no next action once location is handled
+
+**Cause class: dead-end / missing next action.**
+
+`FirstMuddyCard` is a deliberately good piece of work — it acknowledges the
+relationship before the mechanism, and its comment says why: *"Before this, Home
+went straight from 'you have a Muddy' to 'turn on location' — functionally
+right, emotionally flat, and it made an operating-system permission the headline
+of the best thing that had happened in the product so far."*
+
+But the card has exactly **one** branch. `needsLocation` adds "Turn on Glow";
+when location is already handled, the card renders the celebration and stops.
+Measured with the guided tour dismissed, on a real first-Muddy account:
+
+```
+sees   : Home · Good afternoon, Jay · KM · Your first Muddy is here ·
+         Kofi Mensah is now one of your Muddies.
+offers : Menu | Notifications | Add Muddy | Quick controls | Messages | Muddies |
+         Home | Linkr | UpFor | Moments | Plans | Events | Safe Arrival | Circles
+```
+
+Every one of those is **chrome** — global navigation and the launcher. There is
+no "Say hi", no "Message Kofi", no action on the person the card is about.
+
+**Why this matters more than a missing button.** The product's own definition of
+first value (`lib/activation/home-maturity.ts`) is `first_muddy_added` **AND**
+one social act — a wave, a message, a Plan, a status. This card marks the exact
+moment the first half completes, and then offers nothing that would complete the
+second half. The screen celebrating the milestone is the screen best placed to
+drive the next one, and it sends the user to the bottom navigation to work it
+out themselves.
+
+Home DOES offer "Say hi" and "Wave" once someone is nearby (verified in Mission
+2), so the actions exist — they are simply gated behind proximity, and this
+moment is not.
+
+**Recorded, not fixed in this pass.** The right change is a next action on this
+card, but choosing WHICH action is a product decision — "Say hi" (opens a
+conversation) versus "Wave" (a lighter touch) carry different weight, and the
+card's own comments show the emotional register was chosen carefully. Adding a
+CTA without that judgement would be exactly the "manufacture a fix" failure the
+brief warns against. The evidence is here for the decision.
+
+## Journeys 3, 4a, 6 - PASS, and Home's adaptiveness is a genuine strength
+
+Three account states, driven through real logins with the tour dismissed:
+
+| State | What Home says |
+| --- | --- |
+| Zero Muddies | *"Start with one person — Add your first Muddy to see their Glow when they're close by, then say hi or make a plan."* + Find your first Muddy / Share your invite link |
+| Request pending | *"Waiting on your first Muddy — Your request is on its way. You can add someone else in the meantime — Muddies aren't one at a time."* |
+| First Muddy accepted | *"Your first Muddy is here — Kofi Mensah is now one of your Muddies."* |
+
+The pending-request copy is the strongest of the three: it acknowledges the wait
+AND removes the false belief that you must wait for one person before adding
+another. That is a journey problem solved in copy rather than with a feature.
+
+**Journey 6 (location denied) degrades gracefully.** With geolocation refused,
+Home renders identically minus the proximity module — no error, no nag, no
+broken-looking surface, and the rest of the product is fully usable. The brief's
+requirement that "no location permission must not make the product appear
+broken" is met.
+
+**Zero-Muddy surfaces all explain themselves** rather than showing bare empties:
+Messages *"Message an approved Muddy to start one"*, Plans *"Your upcoming plans
+will appear here"*, Linkr *"Meet people who are open to connecting. Your exact
+location is never shown."*, UpFor *"Say what you are up for and see who is in."*
+
+### Method note: a fixture that failed silently
+
+The first run of J4b claimed to test a first-Muddy account and actually measured
+a zero-Muddy one. The seed inserted `friendships` with `status: "active"` — but
+**there is no `status` column**; the table is keyed on `ended_at IS NULL`
+(`lib/friends/service.ts:118`). PostgREST rejected the insert, the error was
+never read, and the journey ran against an account with no Muddy at all.
+
+Every seed in `scripts/hardening/journeys-m3.mjs` now asserts its own success.
+A fixture that failed to apply is the most expensive kind of false evidence:
+it produces a confident, wrong finding about a feature that works.
+
+The same run also audited the guided-tour overlay rather than Home, exactly as
+the continuation warns ("dismiss the tours before any crawl"). Both readings
+were re-taken with the tour dismissed before anything was recorded.
