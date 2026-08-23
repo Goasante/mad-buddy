@@ -1281,7 +1281,19 @@ html.landing-snap .landing-section {
 
 
 body {
-  min-height: 100vh;
+  /* 100svh, then 100dvh — never a bare 100vh (Mission 5).
+   *
+   * `100vh` on a mobile browser is the LARGE viewport: it includes the
+   * collapsible URL bar, so the body is taller than what the user can see and
+   * the page gains a phantom scroll before any content requires one. The app
+   * shell already uses `min-h-[100svh] min-h-[100dvh]`
+   * (app-shell.tsx:377); `body` was the one surface still on the legacy unit,
+   * so public routes and the auth pages behaved differently from the app.
+   *
+   * svh first as the fallback for engines without dvh: the small viewport is
+   * the safe assumption, because it never over-reports the visible area. */
+  min-height: 100svh;
+  min-height: 100dvh;
   background:
     radial-gradient(circle at top, var(--body-radial), transparent 32rem),
     linear-gradient(180deg, var(--bg-primary), var(--warm-grad-1) 46%, var(--bg-secondary));

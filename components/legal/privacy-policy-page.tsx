@@ -161,7 +161,11 @@ export function PrivacyPolicyPage() {
           <aside className="print:hidden">
             <nav className="sticky top-24 rounded-[1rem] border border-border bg-card/65 p-3" aria-label="Privacy policy table of contents">
               <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">On this page</p>
-              <ul className="max-h-[calc(100vh-9rem)] space-y-0.5 overflow-y-auto">
+              {/* dvh, not vh (Mission 5). A sticky list capped at 100vh is
+                  capped against the LARGE viewport, so on a phone with the URL
+                  bar showing its last entries sit below the fold and cannot be
+                  scrolled to inside their own container. */}
+              <ul className="max-h-[calc(100dvh-9rem)] space-y-0.5 overflow-y-auto">
                 {sections.map((section) => (
                   <li key={section.id}>
                     <a

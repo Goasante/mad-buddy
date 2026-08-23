@@ -6482,3 +6482,114 @@ God Mode              COMPLETE   one architecture, two naming exceptions
 inline), `lib/profiles/bootstrap-ownership.test.ts` (the friendship path cannot
 bootstrap a profile independently), `lib/features/flag-semantics.test.ts` (a
 disabled feature gates participation and never blocks withdrawal or safety).
+
+---
+
+# MISSION 5 — GLOBAL SAFE AREA / NOTCH / MOBILE SHELL
+
+The rule: **stop patching notch problems page by page.** Fix the shell
+primitives.
+
+## Advanced — the phone matrix
+
+`scripts/hardening/mobile-shell.mjs`: 5 viewports × 2 themes × 10 routes.
+
+```
+360x800  375x812  390x844  393x852  430x932      light + dark
+100 combinations checked, 0 with problems
+scrolling regions inside the page: 0
+```
+
+**One scrolling region, no nested traps.** The document scrolls
+(`/settings` = 3135px in an 852px viewport) and **zero** inner containers
+scroll. That is the healthy mobile pattern: a native WebView will not fight a
+nested scroll surface.
+
+## MB-GOD-057 (P2) — `body` sized on the LARGE viewport
+
+The one real defect, and it is exactly the class Mission 5 exists to find:
+
+```css
+body { min-height: 100vh; }        /* before */
+body { min-height: 100svh;         /* after  */
+       min-height: 100dvh; }
+```
+
+`100vh` is the **large** viewport — it includes the collapsible mobile URL bar,
+so the body is taller than what the user can see and the page gains a phantom
+scroll before any content requires one.
+
+**The app shell was already correct** (`min-h-[100svh] min-h-[100dvh]`,
+`app-shell.tsx:377`), which is what makes this a genuine inconsistency rather
+than a missing feature: the authenticated app behaved correctly while `body` —
+and therefore every public and auth route — did not.
+
+`svh` first as the fallback: the small viewport never over-reports the visible
+area, so an engine without `dvh` degrades safely rather than optimistically.
+
+**One other instance fixed**: the privacy-policy table of contents capped its
+sticky list at `calc(100vh-9rem)`, so on a phone with the URL bar showing its
+last entries sat below the fold and could not be scrolled to inside their own
+container. Now `100dvh`.
+
+The remaining two `100vh` uses are `md:` desktop-only, where there is no URL bar
+to collapse — correct as they are.
+
+## Extreme — landscape, keyboard and short viewports
+
+Stressed at `852×393` (landscape), `393×420` (keyboard open) and `360×640`:
+
+```
+landscape 852x393      /dashboard  /messages  /settings    all clean
+keyboard-open 393x420  /dashboard  /messages  /settings    all clean
+tiny 360x640           /dashboard  /messages  /settings    all clean
+```
+
+**Method note — three false positives, all mine.** The first pass flagged
+"fixed bar 420px of 420" and "fixed element below fold" on Messages. Reading
+the actual elements:
+
+```
+home-ambient-bg        z-index -10   decorative, behind content
+app-wallpaper          pointer-events: none
+conversation-canvas    the deliberate immersive full-screen surface
+nav (top=420)          pointer-events: none — the slide-away Mission 2 documented
+```
+
+None was a defect. A naive height or bottom-edge threshold flags every
+decorative layer and every deliberate full-screen surface. The probe now
+ignores inert elements (`pointer-events: none`, negative z-index) and asks the
+real question: **does an INTERACTIVE fixed element escape the viewport?**
+
+## God Mode — the shell contract
+
+**Could the whole UI mount inside a native WebView without route-by-route
+safe-area redesign? Yes.** The contract, now enforced by
+`lib/design/mobile-shell-contract.test.ts` (mutation-tested — reverting `body`
+to `100vh` fails two assertions):
+
+| Contract | Rule | Enforced by |
+| --- | --- | --- |
+| **Viewport** | `viewportFit: "cover"` declared once, in the root layout | test |
+| **Viewport units** | `svh`/`dvh` everywhere; bare `100vh` only behind `md:` | test scans 366 files |
+| **Safe area** | every pinned element derives from `env(safe-area-inset-*)`; zero hardcoded notch values | test + MB-GOD-009 |
+| **Fixed/sticky** | anchored to the visual viewport; decorative layers inert | runtime matrix |
+| **Scroll** | exactly one scrolling region — the document | runtime matrix |
+| **Bottom nav** | reserves `env(safe-area-inset-bottom)`; slides away inert when immersive | runtime matrix |
+| **Modal/sheet** | `max-h` from `svh` minus insets; sheets pad the bottom inset | Mission 2 |
+| **Keyboard** | no fixed element depends on a tall viewport; verified at 393×420 | Extreme stress |
+
+**Nothing Capacitor-specific was implemented**, as instructed. The contract is
+what makes that later work small: a WebView changes the insets, not the layout
+model.
+
+**Environment limit, stated rather than worked around**:
+`env(safe-area-inset-*)` is 0 in headless Chromium and cannot be set from
+script — Mission 2 established that simulating a notch measures the simulation.
+So the runtime matrix proves layout behaviour and the contract test proves the
+properties that survive a real notch. Neither pretends to be the other.
+
+```
+MISSION 5:  Advanced = COMPLETE   Extreme = COMPLETE   God Mode = COMPLETE
+FINDINGS:   P0 = 0  P1 = 0  P2 = 1 (MB-GOD-057, FIXED)  P3 = 0
+```
