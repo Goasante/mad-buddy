@@ -3345,3 +3345,39 @@ assertion that cannot fail is not evidence.
 QA account's Pulse is empty ("You're all caught up"), so there was no
 notification to follow. Seeding one and following it to its exact source is the
 right test and is left for the next pass rather than being claimed here.
+
+### MB-GOD-043 (P2) - Linkr's header and distance controls were under 44px
+
+Linkr was previously audited in its **opted-out** state, where the only control
+is "Turn on Linkr". With the account now opted in, its real controls became
+measurable for the first time — and they carry the same defect as MB-GOD-039:
+
+```
+My Linkr profile  36x36        Very close   84x30
+Filters           36x36        Around you   94x30
+Linkr settings    36x36        Wider        60x30
+```
+
+Three icon-only header buttons at `2.25rem` (`globals.css:6934`), and the three
+distance chips at 30px tall.
+
+**Why this one matters more than its size suggests.** `Linkr settings` is where
+consent and visibility for a discovery feature live, and the distance chips are
+how a user chooses **how far Linkr reaches**. These are the privacy controls of
+the product's most exposure-sensitive surface, sitting at the top of the screen
+where a thumb is least accurate.
+
+**Fix.** Icon buttons to `2.75rem`; the glyph stays `1.125rem`, so only the
+target grows. The chips get `min-height: 2.75rem` rather than extra padding, so
+the pill keeps its visual weight while the control clears 44px.
+
+```
+after: My Linkr profile 44x44 | Filters 44x44 | Linkr settings 44x44
+       Very close 84x44 | Around you 94x44 | Wider 60x44
+       controls under 44px on /linkr: NONE
+```
+
+**Recorded as a lesson about coverage, not just a fix.** A feature behind an
+opt-in has TWO states, and auditing the gate is not auditing the feature. The
+earlier "Linkr: 2 controls, both fine" reading was true and useless. Any future
+surface with an enable/disable gate must be measured on both sides of it.

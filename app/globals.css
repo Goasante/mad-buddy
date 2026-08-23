@@ -6934,8 +6934,13 @@ select {
 .linkr-topbar__actions button {
   display: grid;
   place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  /* 2.75rem (44px), not 2.25rem. Three icon-only controls sized by their glyph
+   * rather than by a thumb -- the same defect class as MB-GOD-005/016/039. One
+   * of them opens Linkr settings, where consent and visibility for a
+   * discovery feature live, so a mis-tap here is a privacy control missed.
+   * The icon stays 1.125rem; only the target grows. */
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 999px;
   color: hsl(var(--muted-foreground));
   background: color-mix(in srgb, hsl(var(--foreground)) 6%, transparent);
@@ -6966,6 +6971,11 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
+  /* min-height rather than more padding: these measured 30px tall, and the
+   * distance chips ("Very close" / "Around you" / "Wider") are how a user sets
+   * how far Linkr reaches. The pill keeps its visual weight -- the padding is
+   * unchanged -- while the control itself clears 44px. */
+  min-height: 2.75rem;
   padding: 0.3125rem 0.75rem;
   border-radius: 999px;
   font-size: 0.8125rem;
