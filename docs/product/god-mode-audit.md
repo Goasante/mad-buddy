@@ -6769,3 +6769,83 @@ ages rather than dates of birth.
 MISSION 6:  Advanced = COMPLETE   Extreme = COMPLETE   God Mode = COMPLETE
 SECURITY:   Critical = 0   High = 0   Medium = 1 (MB-GOD-058, deferred, fails closed)
 ```
+
+---
+
+# MISSION 7 — LANDING / PUBLIC PRODUCT STORY
+
+## What the public story already does well
+
+```
+title      "When your Muddies are close, they glow"
+desc       "Mad Buddy lets mutually approved friends know when they are nearby
+            through privacy-safe glow signals, no maps, coordinates, or exact
+            distances."
+og:title / og:description / og:image   all present
+fake social proof   NONE  (regex for "N users already joined" → no match)
+```
+
+**The description is the strongest asset in the public story.** It states the
+product AND its privacy boundary in one sentence, and the boundary is phrased as
+an absence — *"no maps, coordinates, or exact distances"* — which is checkable
+rather than aspirational. It matches what Missions 1 and 6 proved.
+
+**No fake anything.** No invented user counts, no testimonials, no logos of
+companies that never used it. For a pre-launch product that is the correct and
+uncommon choice.
+
+## MB-GOD-059 (P2) — Linkr and UpFor are absent from the public story
+
+Landing names four capabilities — **Glow, Wave, Plan, Meet** — and never
+mentions **Linkr** or **UpFor**.
+
+Both are:
+- **primary navigation** (2 of the 5 bottom-nav items),
+- the **entire future paid tier** (locked monetization: *"PAID: Linkr, UpFor"*).
+
+So the public story explains the free core and is silent about the two features
+a visitor would eventually be asked to pay for. Someone arriving from the
+landing page meets Linkr and UpFor for the first time **inside** the product,
+with no prior framing — and later meets a Welcome Access clock on features the
+story never introduced.
+
+**This is a P2 and belongs to Mission 7 rather than to Monetization Reset**,
+because it is a story gap that exists today regardless of when billing ships.
+
+**Not fixed in this pass.** Adding two feature sections to a page already
+measured at **9.46 screens** — the debt Mission 2 recorded — would make the
+length problem worse, and choosing what to cut is a narrative decision about the
+public product story. The brief's own rule applies: a genuinely major landing
+change needs owner reference. Recorded with the measurement.
+
+**What the fix would need to decide**: whether Linkr/UpFor replace an existing
+section or extend the page; and whether they are introduced as capabilities
+("meet people who are open to connecting") or deferred to post-signup education.
+The first is a story choice; the second is a conversion choice.
+
+## Route responsibility
+
+`/` is a **public story surface only** — no product UI, no authenticated data,
+and no second implementation of an app screen. Public legal (`/privacy`,
+`/terms`, `/about`, `/faq`, `/pricing`) each own one job. `/faq` is the one
+public route that returns 200 without auth alongside the landing page; every
+other product route correctly redirects to `/login?next=…`.
+
+**Brand preserved**: Orange `#E88C2B`, Maroon `#4E0401`, Warm Paper `#FEFBF3`,
+no purple anywhere (confirmed by Mission 2's painted-colour sweep).
+
+## Method note — a finding that was not one
+
+`og:image` resolved to `http://localhost:3100/brand/mad-buddy-social-share.jpg`,
+which looks exactly like a hardcoded dev URL that would break every social share
+in production. It is not: `lib/seo.ts:11` resolves
+`NEXT_PUBLIC_APP_URL` → `VERCEL_PROJECT_PRODUCTION_URL` → `VERCEL_URL` →
+fallback, and Vercel supplies the second automatically. The localhost value is
+**this machine's `.env.local`**, not the code. Verified before recording, and
+recorded because it will look like a defect again to the next reader.
+
+```
+MISSION 7:  Advanced = COMPLETE   Extreme = COMPLETE   God Mode = COMPLETE
+FINDINGS:   P0 = 0  P1 = 0  P2 = 1 (MB-GOD-059, open)  P3 = 0
+            plus the carried 9.46-screen length debt
+```
