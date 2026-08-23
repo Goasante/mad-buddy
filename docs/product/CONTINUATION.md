@@ -1,6 +1,6 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 21.** The next session continues from here.
+**Written at the end of session 22.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
@@ -8,7 +8,7 @@ BRANCH       hardening/god-mode-product-pass
 HEAD         (see foot of file)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      84 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      88 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -27,7 +27,8 @@ COMMITS      84 local recovery checkpoints, none pushed, nothing deployed
 | 3 — Journeys | God Mode | **COMPLETE.** P0-P3 = 0 findings. Produced the activation lifecycle, network-effect map, density thresholds, success ladder, notification/permission models and the Linkr root cause. |
 | **3 — Journeys** | **ALL THREE LEVELS** | **COMPLETE — closeout written in the audit ledger** |
 | 4 — Information architecture | Advanced | **COMPLETE.** 22 surfaces mapped, 13 data authorities, 6/6 deep links, nav 5/5. Findings: P0-P1=0, P2=1 (MB-GOD-053 open). Profile lock preserved. |
-| 4 — Information architecture | Extreme / God Mode | not started |
+| 4 — Information architecture | Extremely Advanced | **COMPLETE.** MB-GOD-053 RESOLVED; 054 and 055 open. 5 conversions, 55/55 admin actions authorized, 13/13 write paths, no shadow state. P0=0 P1=0 P2=2 P3=1. |
+| 4 — Information architecture | God Mode | not started |
 | 5 — Mobile shell / safe area | Advanced | **complete — no root-cause defect** (MB-GOD-009) |
 | 5 — Mobile shell | Extremely Advanced | not started (keyboard, landscape, PWA/Capacitor, sheets/modals/camera) |
 | 6 — Security / privacy | — | early evidence gathered (privacy probe passes meaningfully); full pass not started |
@@ -948,3 +949,57 @@ migration authority, admin/user boundary, state ownership during conversions,
 stale routes, information scent, deep-link consistency.
 
 `scripts/hardening/ia-responsibility.mjs` is the harness to extend.
+
+## Session 22 — Mission 4 Extreme CLOSED
+
+```
+MB-GOD-053  duplicate conversation creation  RESOLVED, mutation-tested
+MB-GOD-054  duplicate ensure-profile         OPEN P2
+MB-GOD-055  two Moments mutations ungated    OPEN P3
+Admin authority  55/55 actions guarded       P0 = 0
+```
+
+### Things the next session should not re-derive
+
+- **MB-GOD-053 is fixed and guarded.** `lib/linkr/connection-service.ts` now
+  calls `getOrCreateDirectConversation`. The comment that justified the
+  duplication ("that helper requires the pair to be approved Muddies") **was
+  stale** — `resolveDirectMessageEligibility` treats an active Linkr connection
+  as an explicit early-allow (`messaging/rules.ts:114`).
+  `lib/linkr/conversation-ownership.test.ts` pins both halves and fails if
+  inline conversation creation returns.
+- **The ownership boundary:** Linkr owns mutuality and `linkr_connections`;
+  messaging owns conversation creation. The test asserts messaging never learns
+  about `linkr_connections` — do not push Linkr logic into it.
+- **MB-GOD-054 (open, P2):** `lib/friends/service.ts:484` reimplements
+  `ensureProfileForUser` inside `sendFriendRequest`. The copy omits
+  `username_normalized` (read by onboarding's uniqueness check),
+  `avatar_url` and `visibility_status: "ghost"`. Fixing it needs either a
+  signature change (the helper takes a `User`, the caller has a `userId`) or an
+  extra round trip on a hot path.
+- **MB-GOD-055 (open, P3):** `tuneInAction` / `tuneOutAction` skip
+  `momentsPausedState`. `deleteMomentAction` and `reportContentAction` skip it
+  **correctly** — withdrawal and safety must not be blocked by a paused feature.
+- **Admin authority is sound: 55/55 actions guarded.** Per-capability
+  permissions plus an `admin.mutate` rate limit, with support/owner split
+  enforced server-side. `scripts/hardening/admin-guard-scan.mjs` is the
+  regression check — it follows LOCAL WRAPPERS, because three earlier versions
+  produced P0-shaped false positives by guessing helper names or slicing the
+  helper body too tightly.
+- **MB-GOD-007 migration plan recorded** (audit ledger): dual-write is NOT
+  needed — a route is addressing, not state. One canonical writer plus
+  compatibility readers, using the `/discover → /linkr` pattern. Nine ordered
+  steps with a safe reverse rollback. **Nothing executed; still owner-blocked.**
+- **Welcome Access is now 14 DAYS** (was noted as 30). Start stays
+  `first_muddy_added`. Entitlement = Linkr + UpFor; core stays free. Recorded
+  only — no schema, no timestamps, no paywall.
+- **A transient full-suite failure is possible** in
+  `hover-capability-guard.test.ts`: its two filesystem-walking tests can lose an
+  I/O race under parallel load. It passes 10/10 in isolation and on a re-run.
+
+### Next: MISSION 4 GOD MODE
+
+Does Mad Buddy express the same conceptual architecture in its UI, routes,
+backend and user mental model? Route vocabulary, domain vocabulary, feature
+boundaries, navigation model, backend authority model, conversion model,
+compatibility debt, future monetization/native boundaries.

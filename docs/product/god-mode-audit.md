@@ -5969,3 +5969,169 @@ stranded.
 surface that created it, and each ended state is represented by a column on the
 canonical row rather than by deletion — which is what makes the deep links
 resolve safely rather than 404.
+
+## Axis 5 — Admin / user authority: PASS, 55/55
+
+```
+admin action files : 17
+exported actions   : 55
+unguarded          : 0
+```
+
+**Every exported admin action reaches an authorization primitive** —
+`requireSafetyAdmin`, `requireAdminPermission`, `requireAdminPagePermission` or
+`getSafetyAdminContext` — directly or through a per-file wrapper that calls one.
+Each wrapper also carries a named permission (`admin.billing.view`,
+`admin.wallpapers.manage`, `admin.tours.manage`) and an `admin.mutate` rate
+limit, so authorization is per-capability rather than a single "is admin" flag.
+
+**Admin UI hiding is explicitly not the boundary**, and the code says so.
+`tours/actions.ts` documents it:
+
+> Support deliberately does not hold this permission, so a support account
+> calling these actions directly is refused here rather than relying on the page
+> being hidden.
+
+**The support/owner boundary is real**: support holds a different permission set
+from an owner, and the refusal happens server-side in the action.
+
+### Method note — a P0-shaped false positive, three times
+
+The scan reported 14, then 19, then 3 unguarded actions before reporting 0. All
+were the scanner:
+
+1. **Counting `grep` hits per file** — a file with 5 actions and 2 guard
+   references looked like a gap; the 2 references were one shared wrapper used
+   by all 5.
+2. **Guessing wrapper names** (`authorize[A-Z]`) — `wallpapers/actions.ts` calls
+   its helper plain `guard()`.
+3. **Requiring the helper body to start at the parenthesis** — `tours/actions.ts`
+   declares `async function authorize(): Promise<AuthorizeResult> {`, and the
+   return-type annotation pushed the authorization past the slice window.
+
+Each version produced a finding that, if recorded, would have claimed the
+product had unauthenticated admin mutations. **A P0-shaped false positive is the
+most expensive kind of harness bug**, and the only thing that caught all three
+was reading the actual file before believing the tool.
+
+## Axis 4 — MB-GOD-007 migration architecture (plan only, nothing executed)
+
+No production mutation. `/hangout-mode` is unchanged and stays OWNER-BLOCKED.
+
+**`/discover → /linkr` is the proven pattern**, and Advanced established why it
+is healthy: the old route stays reachable, the canonical route owns behaviour,
+the redirect preserves intent (`eventId` is carried through), and there is no
+second page implementation.
+
+**Dual-write is NOT needed.** The route is an addressing concern, not state —
+nothing is stored under `/hangout-mode` that would need writing twice. The
+correct shape is **one canonical writer, compatibility readers**, which is what
+the alias gives for free.
+
+**Migration order:**
+
+```
+1  add /upfor (or the chosen name) as the canonical route
+2  /hangout-mode becomes a redirect to it, preserving query params
+3  readers that match on the literal path accept BOTH for one window
+4  migrate persisted references:
+     tour target rows, notification destination rows, deep links in
+     stored content, OAuth allow-list entries, analytics route mapping
+5  switch canonical writes to emit the new path only
+6  compatibility window — /hangout-mode keeps redirecting
+7  retire only on evidence: zero inbound hits over a full window
+```
+
+**Rollback order is the reverse and is safe at every step**: because the alias
+never stops working until step 7, a rollback before then is simply "stop
+emitting the new path". After step 4 a rollback additionally needs the persisted
+references restored, which is why step 4 should be a single reversible migration
+rather than a trickle.
+
+**The dependency that makes this owner-blocked is unchanged**: persisted
+migration rows reference the tour target, and those rows are production data.
+
+## Future monetization IA — RECORDED ONLY, not built
+
+Updating the note to the locked rule:
+
+```
+WELCOME ACCESS    = 14 DAYS   (was recorded as 30; 14 is now locked)
+START             = first_muddy_added   (Mission 3 recommendation, unchanged)
+ENTITLEMENT       = Linkr + UpFor
+CORE REMAINS FREE = Muddies, Messages, Plans, Events, Glow, Safe Arrival
+```
+
+Admin will later support: grant, extend, revoke, custom duration, indefinite,
+and a global override. The admin permission model audited above already has the
+right shape for it — per-capability permissions with a support/owner split — so
+no new authority model is needed, only new permissions.
+
+**Pre-expiry UX, recorded only**: transparent reminders approaching expiry, with
+Day 10 / Day 12 / final-day as candidate windows for product review. The message
+must state that **only Linkr and UpFor access changes** — everything else stays
+free. Nothing was implemented: no schema, no timestamps, no notifications, no
+paywall.
+
+## Axes 13, 14, 15, 16, 18 — shortcuts, server actions, jobs, analytics, account switch
+
+**Cross-feature shortcuts always land in the same owner.** Home → Plan, Muddy →
+Message, Event → Event Linkr, Notification → source were each verified in
+Mission 3's handoff audit and again in Advanced's deep-link map. Multiple entry
+points to one owner is not duplicate authority — it is discoverability.
+
+**Server-action / RPC duplication scan complete.** Two findings, both recorded:
+MB-GOD-053 (resolved) and MB-GOD-054 (open). No third instance found. Every
+lifecycle RPC — `create_plan_lifecycle`, `set_plan_participant_rsvp`,
+`linkr_record_connect`, `accept_friend_request`,
+`reconcile_plan_conversation_members` — has exactly one calling service, and no
+API route duplicates a server action's mutation semantics.
+
+**Background mutators derive, they do not invent.** UpFor expiry moves a status
+the schema already constrains, Safe Arrival transitions follow the session's own
+timestamps, and media retention acts on `media_assets` rows the interactive path
+created. Each is idempotent by construction — they act on a state predicate
+rather than a queue position, so a re-run is a no-op.
+
+**Analytics is never authority.** No UI behaviour is gated on GA state, no
+lifecycle decision reads client analytics, and activation is derived
+server-side from `activation_milestones` alone. Confirmed while mapping the
+13 authorities: no analytics table appears in any of them.
+
+**Account switch** was covered structurally by MB-GOD-049's layout guard: every
+authenticated route re-resolves the user server-side per request, so a stale
+client cannot present one account's resource as another's. The URL-authority
+result above is the same property from the other direction — a resource id is a
+request, not a grant.
+
+---
+
+## MISSION 4 EXTREME = COMPLETE
+
+```
+MB-GOD-053  duplicate conversation creation   RESOLVED (mutation-tested)
+MB-GOD-054  duplicate ensure-profile          OPEN, P2
+MB-GOD-055  two Moments mutations ungated     OPEN, P3
+
+CONVERSIONS AUDITED            5 / 5, no shared lifecycle ownership
+ALIASES / REDIRECTS            4 classified, none a second implementation
+ADMIN / USER BOUNDARIES        55 / 55 actions authorized
+AUTHORITY WRITE PATHS          13 / 13 mapped
+SHADOW STATE                   none found
+STALE AUTHORITY                owner rejects; URL never grants
+ROLE REDIRECT                  navigation only; server-side auth intact
+FLAG-GATED ROUTE               routing + creation gated; reads deliberately not
+HISTORICAL RESOURCES           6 kinds, none fall back to generic Home
+BACKGROUND MUTATORS            derive only, idempotent
+ANALYTICS                      observes, never decides
+```
+
+**Findings: P0 = 0, P1 = 0, P2 = 2 (1 resolved, 1 open), P3 = 1 open.**
+**SCALE-RELEVANT duplication: none.**
+
+The level's real output is that **the one duplicate-implementation shape found in
+Advanced turned out to be a class with three members**, and running the same scan
+deliberately — rather than assuming the first was unique — found the other two.
+Two remain open with the divergence documented, because both fixes involve a
+judgement (a signature change on a hot path; which mutations count as
+withdrawal) that should not be made while closing an audit.
