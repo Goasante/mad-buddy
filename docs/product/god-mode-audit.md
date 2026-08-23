@@ -4619,3 +4619,56 @@ reported `unread shown: YES` for case 1. The account was named
 showing nothing. The probe now strips the greeting before any content test.
 A regex that matches the test data rather than the product is the same class of
 error as a fixture that fails silently.
+
+## Journey A — Linkr mutual: PASS (the trust property holds)
+
+Two live personas, driven through the canonical `linkr_record_connect`:
+
+```
+PASS  the RPC returned a row with the expected shape   — keys: matched, connection_id, created
+PASS  a one-sided Linkr connect does NOT report a match — matched=false
+PASS  B is never told that A connected first           — /linkr and /notifications both silent
+PASS  reciprocity produces a mutual connection         — matched=true, created=true
+PASS  a Linkr connection does NOT create a Muddy relationship
+```
+
+The distinction the brief calls critical holds: **a Linkr connection is not a
+Muddy relationship**, and no friendship row is created. One-sided interest is
+invisible to the recipient on both the Linkr surface and Pulse — the module's
+own comment claims this ("`connect()` returns `matched: false` and NOTHING is
+written that the recipient can observe"), and it is now verified from the
+recipient's side rather than taken on trust.
+
+## Journey E — Block / recovery: PASS (no detector, and the control is findable)
+
+```
+PASS  the blocked person is not told a block happened   — no block language; Carol named: false
+```
+
+Dave, holding a stale Muddies screen after Carol blocks him, sees no "blocked",
+"restricted", "unavailable" or "no longer available" language. Carol simply
+stops appearing — indistinguishable from any other reason somebody is absent,
+which is exactly what stops the Muddies list becoming a block detector.
+
+The blocker's own control is reachable at `/friends?tab=blocked` (verified in an
+earlier run before a harness login timing issue; the surface exists and lists
+the blocked person).
+
+### Method note — two probes that could not fail
+
+Both were caught by asserting the shape before asserting the behaviour, and both
+would otherwise have produced confident nonsense:
+
+1. **Wrong RPC parameter names.** `linkr_record_connect` takes
+   `p_actor` / `p_target` / `p_event_id`, not `p_actor_id` / `p_target_id`.
+   PostgREST answered "Could not find the function", which reads exactly like a
+   missing feature rather than a typo.
+2. **Wrong return field.** The row carries `matched`, not `is_mutual`. Reading a
+   non-existent field made BOTH assertions vacuous: `undefined` is falsy, so
+   "one-sided is not a match" passed for a reason unrelated to the product, and
+   "reciprocity produces a match" could never pass at all. The probe now asserts
+   `"matched" in row` first, so a renamed field fails loudly instead of quietly.
+3. **The "Blocked" tab label is not a leak.** A bare `/blocked/i` match fires on
+   every account, because `/friends` carries Dave's own Blocked filter tab. The
+   navigation chrome is stripped before testing whether CAROL is described in
+   block language.
