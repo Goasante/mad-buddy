@@ -6259,3 +6259,75 @@ REQUIRED; the only change is one guard on one action, plus the reasoning written
 where the asymmetry lives.
 
 Suite: **6931 tests / 347 files**.
+
+## MB-GOD-056 (P3) — "Circles" names two different concepts
+
+**Class: VOCABULARY. Found by Axis 8, which the brief singled out for scrutiny.**
+
+Verified at runtime, both surfaces reachable from the bottom navigation:
+
+```
+/friends   "Circle" ×2   — a filter tab beside All · Close Friends · Requests · Blocked
+/groups    "Circle" ×6   — page title: "Circles — Private spaces for conversations
+                            and shared plans"
+```
+
+They are **not the same thing**, and they do not share storage:
+
+| | Muddies → Circles | `/groups` → Circles |
+| --- | --- | --- |
+| Storage | `friend_circles` + `circle_members` | `conversations` + `group_settings` |
+| What it is | a **private label** you put on your own Muddies | a **shared space** other people are members of |
+| Who knows it exists | only you | every member |
+| Purpose | audience filtering (`selected_circles` messaging permission, UpFor audience) | conversation and shared plans |
+| Managed from | a Muddy's card menu | `/groups` |
+
+So one word covers a **private audience label** and a **shared multi-person
+space**. A user who creates a "Circle" in Muddies and then opens "Circles" in
+the launcher finds none of them, because they are different objects.
+
+**Why P3 and not higher.** No authority is confused: the two are separate tables
+with separate services, and Mission 4 Extreme confirmed no shadow state between
+them. Nothing can be acted on in the wrong place. This is a naming collision
+that costs comprehension, not correctness.
+
+**Not renamed here, deliberately.** Both names are user-facing and appear in
+persisted content, tour targets and notification copy — the same class of change
+as MB-GOD-007, which is owner-blocked for exactly this reason. Renaming either
+is a product decision with migration cost, and the brief is explicit: *"Do not
+normalize names merely because they share IDs/tables. Resolve only genuine
+conceptual ambiguity."* The ambiguity is genuine; the resolution is the owner's
+to choose.
+
+**The two candidate resolutions**, recorded so the decision is cheap:
+- Rename the Muddies filter to **"Lists"** or **"Groups of Muddies"** — smaller
+  blast radius, since it is a private label nobody else sees.
+- Rename `/groups` Circles to **"Spaces"** — larger blast radius: member-visible,
+  in notification copy and shared content.
+
+The first is the cheaper change and preserves "Circle" for the thing other
+people can see, which is where the word carries more weight.
+
+## Axis 1 — Vocabulary matrix
+
+| User term | Route | Service | Table | Legacy | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| Muddy | `/friends` | `lib/friends` | `friendships` | "friend" | **acceptable internal terminology** |
+| Linkr | `/linkr` | `lib/linkr` | `linkr_connections`, `linkr_actions` | — | aligned |
+| UpFor | `/hangout-mode` | `lib/social` | `hangout_sessions` | "hangout" | **MIGRATION DEBT** (MB-GOD-007) |
+| Plan | `/plans` | `lib/plans` | `plans` | — | aligned |
+| Event | `/events` | `lib/events` | `events` | — | aligned |
+| Circle (audience) | `/friends` tab | `circles-actions` | `friend_circles` | — | **VOCABULARY** (MB-GOD-056) |
+| Circle (space) | `/groups` | `lib/groups` | `conversations` + `group_settings` | "group" | **VOCABULARY** (MB-GOD-056) |
+| Message | `/messages` | `lib/messaging` | `conversations`, `messages` | — | aligned |
+| Safe Arrival | `/safe-arrival` | `lib/safety` | `safe_arrival_sessions` | — | aligned |
+| Going / check-in | `/events` | `lib/events` | `event_rsvps`, `check_ins` | — | aligned, and distinct |
+
+**"friend" in user copy appears exactly once**, and it is a definition rather
+than a competing term: *"A Muddy is a friend you have mutually approved on Mad
+Buddy."* That teaches the product's word instead of undermining it.
+
+**`friendships` as the table name is acceptable internal terminology.** The
+brief's own rule is that database language need not mirror marketing language —
+what matters is that one concept does not mean two things, and `friendships`
+means exactly one thing everywhere it appears (76 references, one meaning).
