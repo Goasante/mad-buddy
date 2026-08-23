@@ -5275,3 +5275,166 @@ one action that would genuinely change the situation. The failure mode the brief
 warns about ("Try again! forever" when the environment is the cause) does not
 occur, because the offered action addresses the environment rather than retrying
 against it.
+
+---
+
+# MISSION 3 — END-TO-END USER JOURNEY / APP FLOW: COMPLETE
+
+```
+Advanced              COMPLETE
+Extremely Advanced    COMPLETE
+God Mode              COMPLETE
+```
+
+## Canonical first value
+
+**`first_muddy_added` AND one social act** (wave, message, Plan or status).
+
+Not my definition — the product's own, in `lib/activation/home-maturity.ts`,
+which explicitly rejects the weaker candidates: *"DELIBERATELY NOT SUFFICIENT:
+Muddy count (a big list is not usage), profile completion (setup, not value),
+and `first_status_created` alone (broadcast rather than interaction)."*
+
+Verified end to end at **11/11**: the first-Muddy card offers Say hi, which
+opens the canonical conversation, the message sends, `first_message_sent`
+records, and the celebration retires after six hours.
+
+## The activation lifecycle
+
+```
+SETUP             account, is_onboarded, profile, Glow      — solo, reversible
+ACTIVATION        first_muddy_added                          — someone agreed
+FIRST VALUE       + one social act                           — the relationship was used
+SECOND VALUE      two-sided conversation, or Plan            — a completed loop
+RETENTION VALUE   a reason another person creates            — the network, not the app
+```
+
+## The 24 journeys
+
+**20 audited experientially; 4 rested on Mission 1 lifecycle proof and were then
+covered in Extreme with live personas.** Verdicts: new user FIXED, invite PASS,
+zero Muddies PASS, first Muddy FIXED, first Glow PASS, location denied PASS,
+first message PASS, Linkr activation PASS, Linkr mutual PASS, UpFor create PASS,
+UpFor momentum PASS, UpFor→Plan PASS, direct Plan PASS, Plan over time PASS,
+Event PASS, Event Linkr PASS (Mission 1 consent proof), Safe Arrival PASS,
+notification re-entry PASS, dormant return FIXED, active return PASS, block
+recovery PASS, privacy change PASS, account management PASS.
+
+## Multi-persona findings
+
+- **Nobody is silently enrolled in a Plan.** A pending UpFor responder is absent
+  from the converted Plan entirely; only a genuine acceptance carries over.
+- **One-sided Linkr interest is invisible** on both `/linkr` and Pulse, verified
+  from the recipient's side.
+- **A Linkr connection creates no friendship row** — the distinction holds.
+- **Block leaks nothing**: the blocked person sees no block language; the
+  blocker simply stops appearing.
+- **UpFor social proof is truthful**: the creator sees names AND a count.
+
+## Home priority model
+
+Eight tiers, formalized and stress-tested (4/4 combinations):
+
+```
+1 Safety  2 Activation guidance  3 First-Muddy moment  4 Imminent commitment
+5 Live proximity  6 Own plans / discovery  7 One next step  8 Setup
+```
+
+Unread sits at tier 8 as a **suppressor**, not a module: it outranks setup and
+nothing else. Home gained no inbox, count or preview.
+
+Longitudinally it genuinely learns the user — education disappears when it stops
+being true, Home opens gradually at first value, and the celebration retires on
+a timer rather than lingering.
+
+## Return loops
+
+**STRONG = 6** (Messages, Muddies, Plans, Events, UpFor, Safe Arrival) —
+each driven by another person doing something.
+**WEAK = 1** (Linkr) — driven by hope.
+
+## Density constraints
+
+- **Two loops bootstrap from nothing**: invite, and publishing an Event.
+- Everything else needs ≥1 Muddy — correct for a relationship-first product, and
+  it makes **invite the only bootstrap for the private graph**.
+- **One Muddy is enough** for Glow, Message, UpFor, Plan and Safe Arrival to
+  make sense. Only Linkr and Events require strangers.
+- **Empty network: 9/9 surfaces offer a truthful way forward, zero graveyards.**
+
+## Trust findings
+
+Reinforcement is consistent and never reverses:
+
+```
+signup       "Your exact location is never shared"
+first Muddy  "Only approved Muddies · Never your exact location · You stay in control"
+Event        "Only Muddies who are also checked in can see you here"
+Safe Arrival "No live location is shared. You're in control."
+Linkr        "Your exact location is never shown" — stated BEFORE activation
+```
+
+**No trust reversal was found.** Nothing becomes more invasive later, Event
+Linkr requires explicit opt-in after check-in, and permissions are additive —
+10/10 surfaces remain usable with everything denied.
+
+## Linkr return loop — conclusion
+
+**Classification: NETWORK-DENSITY LIMITATION amplified by a product gap. Action:
+DEFERRED, deliberately.**
+
+Root cause from the data layer: the system already computes freshness
+(`only_new_today` / `candidateJoinedToday`, `only_active_now` /
+`candidateActiveNow`, and a 30-day pass expiry), but exposes it only as filters
+a user must set and one chip on a card they are already looking at — never as an
+answer to *"has anything changed since I was last here?"*
+
+The truthful direction is recorded (surface the freshness that already exists,
+derived against a last-visited timestamp). It needs a schema decision, and in a
+low-density network the honest answer is often "nothing changed" — which is why
+no interface change can make this loop strong before supply exists.
+
+Dark patterns explicitly rejected: no fake "new people waiting", no red dots, no
+streaks, no countdowns, no manufactured scarcity.
+
+## Future Welcome Access start
+
+**`first_muddy_added`** — the first non-reversible event requiring another
+person's agreement, already carrying a `reached_at`. Recommendation only; no
+schema or billing logic created.
+
+## Product success ladder
+
+```
+ACQUIRED → ONBOARDED → ACTIVATED → CONNECTED → SOCIALLY ACTIVE
+→ REAL-WORLD VALUE → RETAINED
+```
+
+REAL-WORLD VALUE is the rung that matters: a Plan that happened, an Event
+checked into, a Safe Arrival completed.
+
+## Open and deferred debts
+
+| Item | State |
+| --- | --- |
+| Linkr return loop | WEAK — density-limited, deferred with a truthful direction |
+| MB-GOD-051 draft loss | CLASSIFIED — storage/privacy decision |
+| MB-GOD-046 warm-colour tokens | OPEN — needs semantic state tokens |
+| Signature moments quiet | OPEN — Mission 8 design debt |
+| MB-GOD-048 launcher overlap | OPEN — P3 |
+| Linkr behavioural block guard | structural verified, behavioural unmeasured |
+| MB-GOD-007 | OWNER-BLOCKED |
+| MB-GOD-012 | FRAMEWORK-CONSTRAINED |
+| Signed media URL | 5-minute residual, measured |
+| `loadMaturityEvidence` | SCALE-RELEVANT — first thing to check in Mission 9 |
+
+## God Mode findings
+
+**P0 = 0, P1 = 0, P2 = 0, P3 = 0.**
+
+God Mode found **no new defects**. That is the honest result: it produced an
+architecture — activation lifecycle, network-effect map, density thresholds,
+success ladder, notification and permission dependency models, and a diagnosed
+root cause for the one weak loop — rather than a defect list. The product's
+journey architecture holds; what it lacks is network density, which is not a
+bug.
