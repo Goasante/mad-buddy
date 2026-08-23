@@ -3669,3 +3669,120 @@ The screen reader gets the full name; the 4.75rem column still shows "Kofi".
 | Compact column (`w-[4.75rem]`) | first name | **full display name** |
 
 The rule in one line: **truncate for layout, never for assistive technology.**
+
+### Axes 2, 4, 5 - Component, typography and icon grammar
+
+`scripts/hardening/design-grammar.mjs` scans all 366 `.tsx` files and asks, per
+UI job, how many implementations exist — because repetition only matters where
+implementations DIVERGE.
+
+**Icon language: one library, no fragmentation.**
+
+```
+lucide-react           : 211 files
+any OTHER icon library :   0 files
+inline <svg>           :  11 files (brand marks, charts, editor, plan covers)
+square icon sizes      : h-4(433) h-5(110) h-3.5(103) h-3(29) h-6(13) ...
+```
+
+Zero react-icons, heroicons, phosphor or radix-icons. The eleven inline SVG
+files are brand marks and data visualisations — things a general icon set cannot
+provide. `h-4` / `h-5` / `h-3.5` account for 646 of ~740 usages, so the sizing
+is a scale rather than a scatter. **No finding.**
+
+**Typography: a real scale, zero arbitrary sizes.**
+
+```
+scale steps : sm(902) xs(704) base(51) 2xl(50) 3xl(35) xl(31) lg(29) 4xl(9) 5xl(4)
+ARBITRARY   : 0 distinct
+weights     : semibold(610) medium(402) bold(47) normal(15)
+```
+
+Not one `text-[13px]`-style escape hatch anywhere in the product, and four
+weights rather than eight. `sm`/`xs` dominating is correct for a phone-first
+app. **No finding.**
+
+**Component grammar: shared primitives dominate.**
+
+```
+Button      shared 139 files | raw <button> 102     Avatar  shared 59 | ad-hoc 0
+Modal       shared  36 files | raw Dialog     5     Menu    shared 25 | raw  1
+EmptyState  shared  34 files                        Switch  shared  6 | checkbox 8
+```
+
+The two apparent outliers were investigated and are **not drift**:
+
+- **Raw `<button>` in 102 files is correct.** These are icon buttons, cards and
+  list rows — jobs the shared `Button` (a labelled CTA with variants) is not
+  for. Wrapping a 44px icon target in a CTA component would fight it.
+- **The eight "checkbox" files are genuinely checkboxes**, not switches. A
+  Switch means "this setting applies now"; a checkbox means "part of this
+  form" — signup's terms consent, moment-composer's spotlight confirmation,
+  admin multi-select. Different jobs, correct controls.
+
+### MB-GOD-046 (P3) - Four different oranges paint one screen
+
+The one real finding on the visual-language axes.
+
+`scripts/hardening/theme-parity.mjs` reads every colour actually PAINTED, rather
+than every colour written in source. On `/dashboard` alone:
+
+```
+rgb(249,116,21)  #f97415   468 elements   Tailwind orange-500 family
+rgb(201,146,47)  #c9922f   100 elements   Quick Actions glyphs
+rgb(232,140,43)  #e88c2b    80 elements   THE BRAND TOKEN
+rgb(255,176,78)  #ffb04e    72 elements
+rgb(249,115,22)  #f97316     2 elements   ← 1 rgb unit from #f97415
+```
+
+Nine distinct warm colours across the product. Two of them differ by **a single
+rgb unit**, which cannot be intentional.
+
+The brand token is defined once (`--color-brand-orange: #e88c2b`, used 64 times
+in `globals.css`) and `globals.css` explains the choice: the previous value
+"read as a saturated safety orange rather than a brand". Tailwind's `orange-500`
+(`#f97316`) is *more* saturated than the value that was rejected for being too
+saturated — and it now paints 468 elements, **5.8x more than the brand token
+itself**.
+
+159 hardcoded `orange-NNN` occurrences across 26 files sit beside the token
+system.
+
+**Not fixed in this pass, and the reason matters.** In Safe Arrival — the
+largest cluster, 24 occurrences — orange is a STATE colour, sitting directly
+beside `text-red-600` for overdue:
+
+```
+transit:  "text-orange-600 dark:text-orange-300"
+extended: "text-orange-600 dark:text-orange-300"
+overdue:  "text-red-600 dark:text-red-300"
+```
+
+Brand orange also means "primary action". Mechanically replacing the state
+orange with the brand token would collapse a state signal into the primary-action
+colour — an Axis 7 state-collision introduced while fixing an Axis 2 consistency
+issue. The correct fix is a **semantic state token** (`--state-transit`) distinct
+from `--primary`, which is a design decision with real blast radius, not a
+find-and-replace.
+
+Recorded as OPEN with the measurement, the file list and the reason a blunt fix
+would be wrong. This is a top-5 experience debt (see below).
+
+### Axis 9 - Dark / light parity: PASS, 12/12 routes
+
+```
+every route   light rgb(254,251,246) → dark rgb(24,18,17)
+              text luminance 0.11 → 0.97
+```
+
+Both grounds are warm — the light is "Calming White" `#fefbf6`, the dark is a
+maroon-tinted `#181211`, not pure black, exactly as `globals.css` documents
+("pure black crushes the warm palette and makes the orange read as neon"). No
+route is stuck in one theme, and no route diverges in layout between them.
+
+**Method note.** The first run reported "IDENTICAL background in both themes"
+for all twelve routes — a false alarm. `body` is deliberately transparent
+(`rgba(0,0,0,0)`) because the app paints its ground on a wrapper, so comparing
+`body.backgroundColor` compared nothing. The probe now resolves the first
+genuinely painted ancestor and cross-checks the text/ground luminance gap, which
+is what makes the pass meaningful rather than vacuous.
