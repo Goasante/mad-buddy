@@ -55,16 +55,26 @@ let two independent errors hide inside one number.
 Owner-defined phase order after the hardening program completes:
 
 ```
-GOD MODE COMPLETE
+GOD MODE MISSIONS 1-8
+  ↓
+MISSION 9 — SCALE / PERFORMANCE / COST GOD MODE
+  ↓
+FINAL CONVERGENCE
   ↓
 MONETIZATION RESET
   ↓
-SMALL FINAL PRODUCT CLEANUP
+SMALL FINAL CLEANUP
   ↓
 NATIVE READINESS AUDIT
   ↓
-ANDROID + IOS CAPACITOR TRANSITION
+ANDROID + IOS / CAPACITOR
 ```
+
+**Mission 9 scope** (recorded, NOT to be started yet): Vercel Fluid CPU,
+invocations, requests per DAU, Supabase query/load profile, Realtime, Storage,
+cache behaviour, polling, N+1, cron/background work, bot amplification, usage
+modelling at 100 / 500 / 1k / 5k / 10k / 50k / 100k / 500k, provider escape
+strategy, and infrastructure cost per active user.
 
 **Do not begin monetization work during a Mission 1 session.** Recorded here so
 it is not lost, and so no hardening change accidentally forecloses it.
