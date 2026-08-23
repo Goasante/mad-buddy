@@ -5,10 +5,10 @@
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         da8dc0b
+HEAD         (session 3 final — see git log -1)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      6 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      7 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -134,6 +134,27 @@ JOURNEYS    10/10
   measurements rather than a specific band label.
 - **Dismiss the tours before any crawl**, or the pass audits the overlay instead
   of the page.
+
+## Session 3 additions to the method
+
+The pattern from session 2 held, and paid again:
+
+- **MB-GOD-010 was found by fixing a defect CLASS instead of instances.**
+  MB-GOD-003 was scoped to `components/auth/` — the forms that had been seen. A
+  sweep for the SHAPE (onSubmit present, method and action both absent) found a
+  second P0 one directory away, on `/admin/login`. Eight forms carried it.
+  When a defect is structural, fix the shape and add a guard, not the sightings.
+- **The form guard reported its own documentation** on its first run
+  (`login-form.tsx:98`, inside the comment explaining MB-GOD-003, which quotes
+  the tag it searches for). Comments must be blanked length-preservingly before
+  matching — same technique, same reason, as the friendship query guard.
+- **Two sequence probes were downgraded from PASS to INCONCLUSIVE.** One hit a
+  400 because the API correctly refuses a raw id without a prior search, so it
+  exercised nothing and "passed" by not failing. That is the empty-fixture trap
+  again in a new costume. A check that could not have failed is not evidence.
+- **A weak assertion still earned its keep.** The 404 check accepted "the page
+  says 404" and so passed on a 200 — which turned out to BE the defect
+  (MB-GOD-012). Strengthening it to assert on status is what surfaced the finding.
 
 ## Method notes that earned their keep
 

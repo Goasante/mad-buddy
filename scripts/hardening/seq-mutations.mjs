@@ -5,7 +5,7 @@
  * created" is proven against the database rather than against whatever the list
  * happened to render.
  */
-import { admin, countRows, openPage, tap, result } from "./sequences.mjs";
+import { admin, countRows, openPage, result } from "./sequences.mjs";
 
 const QA = "d901121e-688e-477b-b8f0-56c782a16801";       // qatester
 const STRANGER = "1fd04f79-7ab6-482a-a969-348767e00f7c"; // saao, no relationship
