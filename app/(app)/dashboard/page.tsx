@@ -147,6 +147,7 @@ export default async function DashboardPage() {
       activationMilestones={activation?.milestones ?? []}
       relationshipFocus={activation?.relationshipFocus ?? null}
       twoSidedConversationCount={activation?.twoSidedConversationCount ?? 0}
+      unreadConversationCount={activation?.unreadConversationCount ?? 0}
       planParticipationCount={activation?.planParticipationCount ?? 0}
       muddyCount={activation?.muddyCount ?? 0}
       serverNearby={activation?.nearby ?? []}

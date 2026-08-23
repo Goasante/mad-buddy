@@ -284,6 +284,7 @@ describe("Home matures only after the message, not before", () => {
         muddyCount: 1,
         nextUnspokenMuddy: null,
         missingProfileItems: [],
+        unreadConversationCount: 0,
         upcomingPlanCount: 0
       })
     ).toBe(true);
@@ -301,6 +302,7 @@ describe("Home matures only after the message, not before", () => {
       muddyCount: 1,
       nextUnspokenMuddy: null,
       missingProfileItems: [],
+      unreadConversationCount: 0,
       upcomingPlanCount: 0
     };
     /* Activation ENDS, but Home does not open all at once.

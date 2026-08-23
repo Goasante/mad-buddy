@@ -3,6 +3,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { loadNearbyForUser } from "@/lib/proximity/nearby-service";
+import { getUnreadMessageCount } from "@/lib/messaging/mobile";
 import type { SafeNearbyFriend } from "@/lib/proximity/backend";
 import {
   selectRelationshipFocus,
@@ -52,6 +53,16 @@ export type ActivationProjection = {
   locationGranted: boolean;
   /** Direct conversations where both people have written. Maturity evidence. */
   twoSidedConversationCount: number;
+  /**
+   * Conversations with something unread (MB-GOD-052).
+   *
+   * THE CANONICAL AUTHORITY, not a second definition. `getUnreadMessageCount`
+   * reads the same `conversation_previews` RPC the inbox and the nav badge use,
+   * and carries a documented correction about `status = 'joined'` that a
+   * hand-rolled count here would lose. Home only needs to know whether somebody
+   * is waiting; it does not display the number.
+   */
+  unreadConversationCount: number;
   /** Plans this person is on, past or upcoming. Maturity evidence. */
   planParticipationCount: number;
   /** Whether the viewer's own fix can support a claim about who is nearby. */
@@ -91,6 +102,7 @@ const EMPTY: ActivationProjection = {
   firstMuddy: null,
   relationshipFocus: null,
   twoSidedConversationCount: 0,
+  unreadConversationCount: 0,
   planParticipationCount: 0
 };
 
@@ -444,10 +456,22 @@ export async function loadActivationProjection(userId: string): Promise<Activati
    * Not folded into loadRelationshipFocus: that only runs on the quiet-evening
    * Home, and Home needs to know how experienced somebody is on every screen --
    * including the one where a Muddy is actually nearby. */
-  const maturity =
+  /* Maturity evidence and unread run TOGETHER, and only when there is somebody
+   * to have a conversation with. Home pays for neither on an account with no
+   * Muddies, where both answers are known to be zero. */
+  const [maturity, unreadConversationCount] =
     (muddyCount ?? 0) > 0
-      ? await loadMaturityEvidence(admin, userId)
-      : { twoSidedConversationCount: 0, planParticipationCount: 0 };
+      ? await Promise.all([
+          loadMaturityEvidence(admin, userId),
+          /* The CANONICAL count (MB-GOD-052), not a second definition. It reads
+           * the same conversation_previews RPC as the inbox and the badge, and
+           * carries a documented `status = 'joined'` correction that a
+           * hand-rolled query here would silently lose. Failing soft: an unread
+           * lookup that errors must never take Home down with it -- the worst
+           * case is the setup nudge the fix suppresses. */
+          getUnreadMessageCount(userId).catch(() => 0)
+        ])
+      : [{ twoSidedConversationCount: 0, planParticipationCount: 0 }, 0];
   const inputs: ActivationInputs = {
     muddyCount: muddyCount ?? 0,
     pendingOutgoingCount: pendingOutgoingCount ?? 0,
@@ -475,6 +499,7 @@ export async function loadActivationProjection(userId: string): Promise<Activati
     firstMuddy,
     relationshipFocus,
     twoSidedConversationCount: maturity.twoSidedConversationCount,
+    unreadConversationCount,
     planParticipationCount: maturity.planParticipationCount
   };
 }

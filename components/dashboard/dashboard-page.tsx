@@ -186,6 +186,8 @@ type DashboardPageContentProps = {
   relationshipFocus?: RelationshipFocus | null;
   /** Direct conversations where both people have written. Maturity evidence. */
   twoSidedConversationCount?: number;
+  /** Conversations with something unread. Suppresses setup nudges (MB-GOD-052). */
+  unreadConversationCount?: number;
   /** Plans this person is on. Maturity evidence. */
   planParticipationCount?: number;
   /** Live, mutual Muddies. */
@@ -327,6 +329,7 @@ export function DashboardPageContent({
   activationMilestones = [],
   relationshipFocus = null,
   twoSidedConversationCount = 0,
+  unreadConversationCount = 0,
   planParticipationCount = 0,
   muddyCount = 0,
   serverNearby = [],
@@ -842,6 +845,7 @@ export function DashboardPageContent({
       hasSafetyCard: hasSafeArrival,
       upcomingPlanCount: agendaItems.length,
       twoSidedConversationCount,
+      unreadConversationCount,
       planParticipationCount,
       muddyCount,
       nextUnspokenMuddy: relationshipFocus?.nextUnspokenMuddy ?? null,
@@ -855,6 +859,7 @@ export function DashboardPageContent({
       hasSafeArrival,
       agendaItems.length,
       twoSidedConversationCount,
+      unreadConversationCount,
       planParticipationCount,
       muddyCount,
       profileReminder,

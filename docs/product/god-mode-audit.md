@@ -4540,3 +4540,82 @@ are new since your last visit) rather than a push.
 App-controlled: **2 decisions** after the account exists — add a Muddy, then one
 social act. Not app-controlled and correctly so: the other person must accept.
 That social dependency is the product, not friction.
+
+---
+
+# MISSION 3 - EXTREMELY ADVANCED
+
+## MB-GOD-052 - CLOSED. A waiting person now outranks a setup nudge
+
+**The matrix first, the fix second.** Before changing Home's priority model,
+`scripts/hardening/home-priority-matrix.mjs` measured what Home ACTUALLY leads
+with across the state combinations the brief names, reading section ORDER rather
+than presence:
+
+```
+BEFORE
+1 unread + incomplete profile   Near > My Plans > Suggestions      unread NO   profile SHOWN
+2 unread + upcoming Plan        Plan > Near > My Plans > Sugg      unread NO   profile SHOWN
+3 upcoming Plan, no unread      Plan > Near > My Plans > Sugg      unread NO   profile SHOWN
+4 quiet: Muddy only             Near > My Plans > Suggestions      unread NO   profile SHOWN
+```
+
+**Cases 2 and 3 were byte-identical** — Home could not distinguish an account
+with an unread message from one without. The count existed only in the
+navigation badge.
+
+```
+AFTER
+1 unread + incomplete profile   unread state  ->  profile NOT SHOWN
+2 unread + upcoming Plan        Plan leads    ->  profile NOT SHOWN
+3 upcoming Plan, no unread      Plan leads    ->  profile SHOWN
+4 quiet: Muddy only             Near leads    ->  profile SHOWN
+```
+
+**The fix is SUPPRESSION, not a new module.** Home gains no inbox, no count and
+no message preview — the brief's own line is that Home must orient rather than
+summarise, and Messages already presents unread properly one tap away. What
+changed is that Home stops asking for administration while somebody is waiting
+for a reply.
+
+This is not a new principle. `home-composition.ts` already states *"profile
+administration must never outrank a relationship"* — it simply had no way to
+know a relationship was active.
+
+**Deliberately narrow.** The answers to the brief's four questions, and what was
+built:
+
+| Question | Answer |
+| --- | --- |
+| Should unread outrank profile completion? | **Yes** — implemented |
+| Should unread outrank a nearby Muddy? | **No** — Near is untouched |
+| Should unread outrank an imminent Plan? | **No** — a Plan has a time attached; a message does not |
+| Separate compact module, or dominant state? | **Neither** — suppression only |
+
+**The canonical count, not a second definition.** `getUnreadMessageCount` reads
+the same `conversation_previews` RPC as the inbox and the badge, and carries a
+documented `status = 'joined'` correction (a production bug where four accounts
+saw a badge no action could clear). A hand-rolled query in the projection would
+have lost it. The call runs only when `muddyCount > 0`, in the same
+`Promise.all` as the maturity evidence, and fails soft — an unread lookup that
+errors must never take Home down, and its worst case is the nudge this fix
+suppresses.
+
+**Mutation-tested** (`home-composition.test.ts`, 5 new tests):
+
+```
+MUTATION 1  guard never fires (return composition)      -> 2 tests FAIL
+MUTATION 2  truthiness instead of > 0                   -> 1 test FAIL
+RESTORED                                                -> 49/49 pass
+```
+
+The control test matters as much as the assertion: "shows setup nudges when
+nobody is waiting" prevents the suppression test from passing on a composition
+that never showed them at all.
+
+**Method note — the probe detected its own fixture.** The first matrix run
+reported `unread shown: YES` for case 1. The account was named
+"Mx-**unread** Tester", and the greeting line matched `/unread/i`. Home was
+showing nothing. The probe now strips the greeting before any content test.
+A regex that matches the test data rather than the product is the same class of
+error as a fixture that fails silently.

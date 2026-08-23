@@ -29,6 +29,7 @@ const base: HomeCompositionInputs = {
   muddyCount: 1,
   nextUnspokenMuddy: null,
   missingProfileItems: [],
+  unreadConversationCount: 0,
   upcomingPlanCount: 0
 };
 const at = (over: Partial<HomeCompositionInputs>) => ({ ...base, ...over });
@@ -355,5 +356,74 @@ describe("Home applies the decision rather than re-deriving it", () => {
   it("keeps the activation-focused quick actions", () => {
     // These point at the same goal the card does, so they reinforce it.
     expect(home).toContain("<FirstTimeQuickActions");
+  });
+});
+
+/**
+ * A waiting person outranks a setup nudge (MB-GOD-052).
+ *
+ * Home could not see unread messages at all: the count lived only in the
+ * navigation badge, so a returning user was offered "Complete your profile,
+ * 3 steps left" while a real message sat unanswered one tap away. Measured
+ * across four account states, Home WITH an unread message and Home WITHOUT one
+ * rendered identically.
+ *
+ * The rule is suppression, not a new module — Home does not gain an inbox, a
+ * count or a preview. It simply stops asking for administration at the moment
+ * somebody is waiting for a reply.
+ */
+describe("unread suppresses setup, and nothing else", () => {
+  /* Established: real activity, so this lands in the mature branch where the
+     profile reminder and Journey card are both on. */
+  const established = {
+    activationState: null,
+    twoSidedConversationCount: 2,
+    planParticipationCount: 1,
+    muddyCount: 3
+  } as const;
+
+  it("shows setup nudges when nobody is waiting", () => {
+    // The control. Without this, the assertion below could pass on a
+    // composition that never showed these at all.
+    const quiet = composeHome(at({ ...established, unreadConversationCount: 0 }));
+    expect(quiet.showProfileReminder).toBe(true);
+    expect(quiet.showJourneyCard).toBe(true);
+  });
+
+  it("suppresses the profile reminder and Journey card while someone waits", () => {
+    const waiting = composeHome(at({ ...established, unreadConversationCount: 1 }));
+    expect(waiting.showProfileReminder).toBe(false);
+    expect(waiting.showJourneyCard).toBe(false);
+  });
+
+  it("leaves live social content untouched", () => {
+    /* DELIBERATELY NARROW. An imminent Plan still outranks an unread message —
+       a Plan has a time attached and a message does not — and proximity is a
+       live fact in its own right. Only setup yields. */
+    const quiet = composeHome(at({ ...established, unreadConversationCount: 0 }));
+    const waiting = composeHome(at({ ...established, unreadConversationCount: 1 }));
+    expect(waiting.showNearby).toBe(quiet.showNearby);
+    expect(waiting.showTrending).toBe(quiet.showTrending);
+    expect(waiting.showMoments).toBe(quiet.showMoments);
+    expect(waiting.nextBestAction).toBe(quiet.nextBestAction);
+  });
+
+  it("does not fire on a zero or negative count", () => {
+    // A guard on `> 0`, not on truthiness: a stale or malformed count must not
+    // silently hide the profile nudge forever.
+    expect(composeHome(at({ ...established, unreadConversationCount: 0 })).showProfileReminder).toBe(true);
+    expect(composeHome(at({ ...established, unreadConversationCount: -1 })).showProfileReminder).toBe(true);
+  });
+
+  it("applies in the no_one_nearby branch too", () => {
+    /* That branch returns its own composition rather than falling through, so
+       it was a second way for the setup nudge to survive an unread message. */
+    const waiting = composeHome(at({
+      ...established,
+      activationState: "no_one_nearby",
+      milestones: new Set(["first_muddy_added", "first_message_sent"]),
+      unreadConversationCount: 1
+    }));
+    expect(waiting.showProfileReminder).toBe(false);
   });
 });

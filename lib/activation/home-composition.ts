@@ -56,6 +56,21 @@ export type HomeCompositionInputs = {
   heroPrimaryAction?: string;
   /** Profile details still missing, e.g. ["photo"]. Empty when complete. */
   missingProfileItems: readonly string[];
+  /**
+   * Direct conversations with something unread in them (MB-GOD-052).
+   *
+   * A LIVE SOCIAL FACT, and the only input here that represents another person
+   * actively waiting. Home previously could not see it at all: the count lived
+   * only in the navigation badge, so a returning user was offered
+   * "Complete your profile, 3 steps left" while a real message sat unanswered
+   * one tap away. Measured across four states, Home with an unread message and
+   * Home with none rendered identically.
+   *
+   * Used to SUPPRESS setup nudges, not to add a module. The rule this file
+   * already states -- "profile administration must never outrank a
+   * relationship" -- simply had no way to know a relationship was active.
+   */
+  unreadConversationCount: number;
 };
 
 /**
@@ -233,6 +248,35 @@ export function selectNextBestAction(input: HomeCompositionInputs): NextBestActi
   return null;
 }
 
+/**
+ * A waiting person outranks a setup nudge (MB-GOD-052).
+ *
+ * This file already states the rule -- "profile administration must never
+ * outrank a relationship" -- but had no way to know a relationship was active:
+ * `unread` existed only in the navigation badge, so Home offered
+ * "Complete your profile, 3 steps left" while a real message sat unanswered.
+ * Measured across four states, Home with an unread message and Home without one
+ * rendered identically.
+ *
+ * SUPPRESSION, NOT A NEW MODULE. Home does not gain an inbox, a count or a
+ * message preview -- the brief's own line is that Home must orient rather than
+ * summarise, and Messages already presents unread properly one tap away. What
+ * changes is that Home stops asking for administration at the moment somebody
+ * is waiting for a reply.
+ *
+ * DELIBERATELY NARROW. The Plan card, Near, and the Journey card are all
+ * untouched: an imminent commitment still outranks an unread message (a Plan
+ * has a time attached and the message does not), and proximity is a live fact
+ * in its own right. Only setup yields.
+ */
+function suppressSetupWhileSomeoneWaits(
+  composition: HomeComposition,
+  input: HomeCompositionInputs
+): HomeComposition {
+  if (input.unreadConversationCount <= 0) return composition;
+  return { ...composition, showProfileReminder: false, showJourneyCard: false };
+}
+
 export function composeHome(input: HomeCompositionInputs): HomeComposition {
   const maturity = deriveHomeMaturity({
     milestones: input.milestones,
@@ -288,11 +332,11 @@ export function composeHome(input: HomeCompositionInputs): HomeComposition {
   if (input.activationState === "no_one_nearby" && !isEarlyActivation(input)) {
     // Same single-profile-authority rule as the mature branch below; stating
     // it once here would have let the duplicate back in through this path.
-    return {
+    return suppressSetupWhileSomeoneWaits({
       ...MATURE,
       showNearby: false,
       showJourneyCard: input.missingProfileItems.length === 0
-    };
+    }, input);
   }
 
   if (!isEarlyActivation(input)) {
@@ -314,9 +358,9 @@ export function composeHome(input: HomeCompositionInputs): HomeComposition {
      * whether Home may speak about proximity is a separate question. */
     const mature = { ...MATURE, showNearby: proximityAllowsNearby(input) };
     if (input.missingProfileItems.length > 0) {
-      return { ...mature, showJourneyCard: false };
+      return suppressSetupWhileSomeoneWaits({ ...mature, showJourneyCard: false }, input);
     }
-    return mature;
+    return suppressSetupWhileSomeoneWaits(mature, input);
   }
 
   return {

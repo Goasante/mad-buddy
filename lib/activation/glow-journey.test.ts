@@ -182,6 +182,7 @@ describe("configuring Glow is not first value", () => {
     muddyCount: 1,
     nextUnspokenMuddy: null,
     missingProfileItems: [],
+    unreadConversationCount: 0,
     upcomingPlanCount: 0
   };
 

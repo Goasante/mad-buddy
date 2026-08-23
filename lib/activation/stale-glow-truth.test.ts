@@ -27,6 +27,7 @@ const at = (over: Partial<HomeCompositionInputs> = {}): HomeCompositionInputs =>
   muddyCount: 1,
   nextUnspokenMuddy: null,
   missingProfileItems: [],
+  unreadConversationCount: 0,
   ...over
 });
 

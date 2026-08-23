@@ -114,7 +114,9 @@ describe("fresh location, nobody nearby, two Muddies", () => {
       planParticipationCount: 0,
       muddyCount: 2,
       nextUnspokenMuddy: { id: "kofi", displayName: "kofi", avatarUrl: null },
-      missingProfileItems: ["photo"]
+      missingProfileItems: ["photo"],
+      // Nobody is waiting on a reply in this fixture (MB-GOD-052).
+      unreadConversationCount: 0
     });
     /* THE REGRESSION: generic Near replaced relationship Home entirely. */
     expect(composed.showNearby).toBe(false);
@@ -150,7 +152,8 @@ describe("no friendship homework", () => {
     muddyCount: 3,
     nextUnspokenMuddy: { id: "kojo", displayName: "Kojo", avatarUrl: null },
     heroPrimaryAction: "say_hi" as const,
-    missingProfileItems: []
+    missingProfileItems: [],
+    unreadConversationCount: 0
   };
 
   it("does not stack a second Say hi beneath a hero already saying it", () => {
