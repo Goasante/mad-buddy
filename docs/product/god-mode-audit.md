@@ -4366,3 +4366,80 @@ rather than overbuild."*
 per-conversation scoping, when a draft is cleared (send, navigate away, sign
 out, expiry), whether an unsent draft appears in the conversation list, and
 whether the allow-list gains a content-bearing key at all.
+
+## MB-GOD-052 (P2) - Home does not know about unread messages
+
+**Cause class: wrong priority.**
+
+Seeded a returning user with one Muddy and one unread message from them, then
+signed in and looked at Home:
+
+```
+Home sees   : "Near — No trusted Muddies nearby. Invite friends or turn on your
+               Glow. · My Plans — No upcoming Plans. Create a Plan with your
+               Muddies. · Suggestions for you — UpFor / Invite Friends /
+               Find Muddies · Complete your profile, 3 steps left"
+Home offers : Menu | Notifications | Add Muddy | Quick controls | Invite friends |
+              Create a Plan | UpFor | Invite Friends | Find Muddies |
+              Complete your profile, 3 steps left
+```
+
+Messages, one tap away, has it correctly:
+
+```
+All · Unread 1 · KM Kofi Mensah "Are you around this week?"  1
+```
+
+**Home leads with three empty states and a setup nudge while a real person is
+waiting for a reply.** "Complete your profile, 3 steps left" is setup; the
+unread message is the only live social fact in the account, and Home does not
+mention it.
+
+**Structural cause, confirmed:** `unread` appears nowhere in
+`lib/activation/projection.ts` or `home-composition.ts`. The count exists only
+in the app shell's navigation badge (`useUnreadMessageCount` in
+`app-shell.tsx:327`) — a number with no sender and no content, sitting in
+chrome rather than in the orchestrator.
+
+**Why this matters for the journey.** The brief's Home rule is that it should
+orchestrate the product and lead with the right dominant job. For a returning
+user the single most actionable thing is usually "someone wrote to you", and it
+is the one input Home cannot see. This is also the return loop the audit rated
+strongest — undermined at the surface meant to route people into it.
+
+**Not fixed in this pass.** Adding unread to Home's composition means deciding
+its precedence against the Plan and proximity modules, which the composition
+rules define deliberately (an upcoming Plan currently outranks a nearby Muddy).
+Slotting a new module in without that judgement is exactly the "turn Home into a
+dashboard of everything" failure the brief warns against. Recorded with the
+measurement and the structural cause so the precedence decision is the only work
+left.
+
+## Journeys 8, 10, 12, 15, 17, 19, 20 — PASS
+
+**J8 Invite** — signed-out preserves intent (`/invite` → `/login?next=%2Finvite`),
+and a bad token answers *"This invite isn't available. The link may have expired
+or been revoked. Ask for a fresh one."* — no existence leak, and a clear
+recovery.
+
+**J10 Linkr activation** — the pre-activation screen states purpose and privacy
+together before asking for anything: *"Meet people who are open to connecting.
+Your exact location is never shown."* + "Turn on Linkr" / "How Linkr works?".
+No setup is requested before the value is explained.
+
+**J12 UpFor** — the temporary nature leads: *"⚡ Live & temporary — UpFors are
+temporary and disappear when they end. Jump in while you can!"*, then six
+one-tap activity starters (Food, Study, Walk, Sports, Gaming, Chill). Creation
+does not feel like Event creation, which was the specific risk.
+
+**J15 Plans / J17 Events** — both empty states explain rather than report:
+*"Your upcoming plans will appear here"*, *"When you or your Muddies publish an
+event, it shows up here"* + "Create an event".
+
+**J19 Safe Arrival** — still the best privacy copy in the product: *"They'll know
+your destination and expected arrival time. You can extend your time if you need
+to. No live location is shared. You're in control."*
+
+**J20 Notifications** — *"You're all caught up. New updates will appear here."*
+with tabbed filters (All / Nearby / Social / Plans / Safety). The re-entry
+destinations were already proven in Mission 1; nothing here contradicts that.
