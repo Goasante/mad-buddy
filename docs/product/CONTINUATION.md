@@ -16,7 +16,7 @@ COMMITS      17 local recovery checkpoints, none pushed, nothing deployed
 | Mission | Level | State |
 | --- | --- | --- |
 | 1 — Reliability | Advanced | **COMPLETE** (route audit, auth, control inventory, mutation & journey audit, hydration, test infra, pre-hydration form audit) |
-| 1 — Reliability | Extremely Advanced | **PARTIAL** — done: Muddy 7/7, multi-tab 5/5, UpFor→Plan→RSVP 7/7, **Linkr 7/7**, **Safe Arrival 5/5** (MB-GOD-017/018/023/024/026). Still NOT done: **Event check-in/Event Linkr, Profile media, Messages** |
+| 1 — Reliability | Extremely Advanced | **PARTIAL — 3/7 domains** (corrected in MB-GOD-027; previously mis-reported as 5/7). See the canonical domain table below. |
 | 1 — Reliability | God Mode | **PARTIAL** — state graph 34 nodes / 193 edges / 0 mismatches. **DB contract check clean** (1081 selects, 1165 filters) and **error observability closed** (67/67 routes log 5xx causes). Not yet crawled: Conversation, Plan detail, Plan Chat, Event detail |
 | 2 — UI/UX | Advanced | **PARTIAL** — Profile RESTRUCTURED and verified (MB-GOD-013 fixed: 3.97 -> 2.40 screens, settings share 28.6% -> 0%). Home judged good. 8 surfaces still unaudited: Landing, Auth, Activation, Conversation, Plan detail, Plan Chat, Event detail, Safe Arrival |
 | 3 — Flow | all levels | not started (deep-link intent + 10 journeys verified as Mission 1 evidence) |
@@ -27,6 +27,75 @@ COMMITS      17 local recovery checkpoints, none pushed, nothing deployed
 | 7 — Landing page | — | not started |
 | 8 — Cross-product consistency | — | not started; 44 dead-code eslint warnings waiting |
 | FINAL — convergence | — | not started |
+
+## Canonical lifecycle domains (the ONLY valid denominator)
+
+Corrected in MB-GOD-027. Sessions 5-7 reported 5/7 by counting multi-tab (a
+cross-cutting technique, not a domain) and by counting Safe Arrival+Messages
+complete while Messages had no coverage. No evidence was altered — only the
+arithmetic over it.
+
+| # | Canonical domain | Status | Valid sequence coverage | Multi-tab coverage |
+| --- | --- | --- | --- | --- |
+| 1 | Muddy relationship | **COMPLETE** | 7/7 (MB-GOD-017) | Yes (5 scenarios, MB-GOD-018) |
+| 2 | Linkr | **COMPLETE** | 7/7 (MB-GOD-024) | No |
+| 3 | UpFor → Plan | **COMPLETE** | 7/7 (MB-GOD-023) | No |
+| 4 | Plan RSVP / membership | **PARTIAL** | RSVP only; no add/remove participant, no Plan Chat reconciliation | No |
+| 5 | Event check-in / Event Linkr | **NOT STARTED** | — | No |
+| 6 | Profile media | **NOT STARTED** | — | No |
+| 7 | Safe Arrival + Messages | **PARTIAL** | Safe Arrival 5/5 (MB-GOD-026); Messages none | No |
+
+**LIFECYCLES COMPLETE = 3 / 7.** All five multi-tab scenarios sit inside domain 1;
+four domains have no stale-state coverage at all.
+
+Report these four columns per domain at every checkpoint. A bare fraction is what
+let two independent errors hide inside one number.
+
+## POST-GOD-MODE ROADMAP (recorded, NOT to be implemented yet)
+
+Owner-defined phase order after the hardening program completes:
+
+```
+GOD MODE COMPLETE
+  ↓
+MONETIZATION RESET
+  ↓
+SMALL FINAL PRODUCT CLEANUP
+  ↓
+NATIVE READINESS AUDIT
+  ↓
+ANDROID + IOS CAPACITOR TRANSITION
+```
+
+**Do not begin monetization work during a Mission 1 session.** Recorded here so
+it is not lost, and so no hardening change accidentally forecloses it.
+
+### Monetization target (future scope — design constraints only)
+
+Current: Free / Plus / Pro feature-tier architecture.
+
+Target:
+- **Core Mad Buddy is FREE.**
+- **Linkr + UpFor become a paid access entitlement.**
+- New users get roughly **30 days complimentary access, no card required**, after
+  genuine activation.
+- After that, core stays free; Linkr + UpFor lock unless a valid entitlement
+  exists.
+
+**Must never become hostage to payment:** Muddies, Messages, Plans, existing
+Linkr conversations, Safe Arrival, core Glow/proximity. This constraint matters
+to hardening work too — it means the entitlement boundary must sit around
+*discovery*, never around existing relationships or safety.
+
+Staff/admin/support get an internal bypass by role.
+
+Admin entitlement architecture must eventually support: individual grant, extend,
+revoke, custom duration; and global +1 month, global free period, global 1 year,
+global until revoked, early global revoke.
+
+**Global access must be a resolver-level override, NOT a mass update of every
+user row.** (Consistent with the existing "one backend authority per lifecycle"
+rule, and with how feature flags already fail closed from a single row.)
 
 ## Environment setup for the next session
 

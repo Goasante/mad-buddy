@@ -1853,3 +1853,74 @@ one signal that should never be ignored.
 Both are the same trap in different costumes: a check that cannot fail, and a
 check that fails on the wrong thing. The first is more dangerous, because it
 looks like success.
+## LIFECYCLE DOMAIN RECONCILIATION (correction to sessions 5-7 reporting)
+
+### MB-GOD-027 - The reported lifecycle count was wrong: 3/7, not 5/7
+
+| Field | Value |
+| --- | --- |
+| **Category** | Reporting accuracy |
+| **Mission / Level** | Mission 1 - Extremely Advanced |
+| **Status** | **CORRECTED** |
+
+The session 7 checkpoint reported `LIFECYCLES COMPLETE = 5 / 7` while its own
+"Not done" section named **three** remaining areas. Those two statements cannot
+both be true, and the discrepancy was noticed by the reader, not by me.
+
+Traced to **two compounding errors of my own**:
+
+1. **I counted a technique as a domain.** MB-GOD-018 is *multi-tab / stale-state
+   behaviour* — a cross-cutting method applied WITHIN lifecycles, not a lifecycle
+   of its own. Counting it inflated the numerator by one.
+2. **I counted a half-domain as whole.** The original brief groups **Safe Arrival
+   + Messages** as one domain ("Treat as two sub-sequences if necessary").
+   Safe Arrival was verified (MB-GOD-026, 5/5); Messages had no coverage at all.
+   Reporting that domain complete inflated the numerator again.
+
+**No historical evidence was altered to make the numbers fit.** Every finding
+MB-GOD-017/018/023/024/026 stands exactly as recorded and was genuinely
+exercised. What was wrong is the *arithmetic over them*, and only that is
+corrected.
+
+### The seven canonical domains, fixed from here on
+
+Taken from the original program brief's own enumeration, so the denominator
+cannot drift again:
+
+| # | Canonical domain | Status | Valid sequence coverage | Multi-tab coverage |
+| --- | --- | --- | --- | --- |
+| 1 | Muddy relationship | **COMPLETE** | 7/7 (MB-GOD-017) | Yes (MB-GOD-018, 5/5) |
+| 2 | Linkr | **COMPLETE** | 7/7 (MB-GOD-024) | No |
+| 3 | UpFor → Plan | **COMPLETE** | 7/7 (MB-GOD-023) | No |
+| 4 | Plan RSVP / membership | **PARTIAL** | RSVP transitions only, inside MB-GOD-023. No add/remove participant, no Plan Chat membership reconciliation | No |
+| 5 | Event check-in / Event Linkr | **NOT STARTED** | — | No |
+| 6 | Profile media | **NOT STARTED** | — | No |
+| 7 | Safe Arrival + Messages | **PARTIAL** | Safe Arrival 5/5 (MB-GOD-026); **Messages: none** | No |
+
+**LIFECYCLES COMPLETE = 3 / 7.**
+
+**Multi-tab coverage is thinner than the raw "5 scenarios" figure suggests**: all
+five sit inside domain 1. Four of the seven domains have no stale-state coverage
+at all.
+
+### Standing reporting rule (adopted)
+
+From here on, every checkpoint reports the four columns above per domain —
+`CANONICAL DOMAIN / STATUS / VALID SEQUENCE COVERAGE / MULTI-TAB COVERAGE` —
+rather than a bare fraction. A single number was what allowed two independent
+errors to hide inside it, and neither would have survived a per-domain table.
+
+### Standing testing principle (adopted)
+
+**Test the public authority, not merely the deepest callable primitive.**
+
+Earned the hard way this session: a probe called `linkr_record_connect` directly,
+saw a connection form despite a block, and it looked like a P0 privacy defect.
+The RPC is deliberately reciprocity-only; the block guard lives in
+`connectWithCandidate`, the actual product-facing authority. The probe had
+bypassed the authorization layer and was testing a primitive no product path
+calls unguarded.
+
+The corollary matters as much: when a primitive *appears* to permit something
+forbidden, the question is "which layer is the authority?" before "is this a
+defect?".
