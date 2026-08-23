@@ -3916,3 +3916,118 @@ elements past the edge are a `pointer-events-none` decoration and the
 deliberately-peeking scroll rail. **A screenshot is evidence of what the page
 looks like, not of what it does** — the same discipline the safe-area false
 positives taught.
+
+---
+
+# MISSION 2 - COMPLETE UI/UX RECONSTRUCTION
+
+```
+Advanced              COMPLETE
+Extremely Advanced    COMPLETE
+God Mode              COMPLETE
+```
+
+## Surface verdicts (Advanced, 18/18)
+
+**14 GOOD · 4 GOOD WITH MINOR DEBT · 0 structural problems remaining ·
+0 rebuilds remaining.** Profile was the single structural problem and was
+rebuilt (MB-GOD-013): 3.97 screens reduced by removing a duplicate settings
+index, with Showcase promoted from 3.7% of the page.
+
+## Task cost (Extreme)
+
+**20/20 goals completed. Maximum 3 taps.** Distribution 1x9, 2x7, 3x4. All four
+3-tap paths are `launcher → destination → the thing` with no wasted screen. No
+interaction-cost defect found, and none manufactured.
+
+## Empty, loading, error, success states (Extreme)
+
+**12 empty states audited, 0 defects.** Every one uses title + explanation; a
+bare-copy regex matched none. Failure states verified under injected offline and
+500: **zero internal detail** (SQL, PGRST/Postgres codes, constraint text, stack
+frames) reached the user, and mutation failure rolls back with a retry message.
+
+## Cross-feature handoffs (Extreme)
+
+**5 audited, 5 preserve context.** Three navigate, two open a dialog in place.
+The strongest is Muddies → profile → Messages: two taps landing inside the
+conversation with history and the peer named.
+
+## Structural changes made
+
+1. **Profile IA rebuild** (MB-GOD-013) — Advanced.
+2. **Message actions made reachable on touch** (MB-GOD-040) — Extreme.
+3. **Offline navigation shell** (MB-GOD-041) — God Mode.
+4. **Focus restoration moved into the Modal primitive** (MB-GOD-042) — God Mode,
+   fixing the shape across eleven call sites.
+5. **Chrome unpinned from `rem`** (MB-GOD-047) — God Mode.
+
+## Accessibility defects fixed
+
+| ID | What |
+| --- | --- |
+| MB-GOD-039 | Conversation header icon buttons 32px → 44px |
+| MB-GOD-040 | Message actions invisible on touch; emoji picker a dead end |
+| MB-GOD-042 | Dialog close dropped focus to `<body>` (11 call sites) |
+| MB-GOD-043 | Linkr privacy controls 36px/30px → 44px |
+| MB-GOD-044 | Plan stack's keyboard alternative 32px → 44px |
+| MB-GOD-045 | Home announced a first name where a full one was needed |
+| MB-GOD-047 | Primary navigation left the screen at 200% text |
+
+## Component / design-system findings
+
+- **One icon library.** 211 files lucide, **0** other libraries.
+- **Zero arbitrary text sizes** across 366 files; four font weights.
+- **Shared primitives dominate**; the two apparent outliers (raw `<button>`,
+  raw checkbox) were investigated and are correct usage, not drift.
+- **Feature vocabulary has no drift** — Muddy/friend, Circle/Group,
+  UpFor/Hangout each resolve to exactly one user-facing term.
+- **Theme parity 12/12 routes**, both grounds deliberately warm.
+
+## Top experience debts (the honest short list)
+
+1. **MB-GOD-046 — nine warm colours, four on one screen.** Tailwind's
+   `orange-500` paints 468 elements, **5.8x more than the brand token itself**,
+   and two of the nine differ by a single rgb unit. This is the largest gap
+   between "good" and "unmistakably one product". The fix needs a semantic state
+   token, because Safe Arrival uses orange as a STATE beside red.
+2. **MB-GOD-048 — the Quick Actions launcher overlaps card content.** Needs a
+   scroll-padding reservation, not a nudge.
+3. **Signature moments are correct but quiet.** Glow is the one unmistakable
+   system; Linkr mutual, UpFor→Plan and Safe Arrival completion are all
+   *correct* without being *memorable*. Deliberately not "fixed" with confetti.
+4. **Landing debt** (9.46 screens, 8 parallel headings) — Mission 7.
+5. **Notification → source handoff** was NOT AUDITED (the QA Pulse is empty) —
+   recorded as unmeasured rather than assumed good.
+
+## Deferred, with reasons
+
+- **MB-GOD-007** — OWNER-BLOCKED, production migration required.
+- **MB-GOD-012** — FRAMEWORK-CONSTRAINED.
+- **Linkr behavioural block guard** — structural verified, behavioural
+  outstanding.
+- **Signed media URLs** — 5-minute bounded residual, measured.
+- **MB-GOD-046, MB-GOD-048** — recorded above with measurements.
+
+## Before / after
+
+```
+MESSAGE ACTIONS (MB-GOD-040)
+  touch, before : React 34x17 op=0   Edit 26x17 op=0   Delete 39x17 op=0
+  touch, after  : React 42x44 op=1   Edit 34x44 op=1   Delete 47x44 op=1
+  mouse, after  : op=0 at rest, op=1 on hover   (desktop design preserved)
+  emoji picker  : 0/6 visible 23x20  →  6/6 visible 44x44
+
+OFFLINE NAVIGATION (MB-GOD-041)
+  before : chrome-error://chromewebdata/   (outside the app, no way back)
+  after  : Mad Buddy's own offline page, retry, Go to Home, auto-recovery
+           cache holds exactly 2 static entries, 0 user data
+
+DIALOG FOCUS (MB-GOD-042)
+  before : Escape → document.body
+  after  : Escape → the control that opened it, across 3 verified call sites
+
+200% TEXT (MB-GOD-047)
+  before : 29/60 combinations broken; "UpFor" 30px past a 360px screen
+  after  :  0/60 combinations broken; nav rightmost edge 348 ≤ 360
+```

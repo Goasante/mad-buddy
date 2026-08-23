@@ -1,14 +1,14 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 14.** The next session continues from here.
+**Written at the end of session 15.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         0127faa
+HEAD         (see foot of file)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      48 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      58 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -20,7 +20,8 @@ COMMITS      48 local recovery checkpoints, none pushed, nothing deployed
 | 1 — Reliability | God Mode | **COMPLETE** — 41 nodes / 245 edges / 0 wrong destinations; both carried security items closed |
 | 2 — UI/UX | Advanced | **COMPLETE — 18/18 surfaces.** Verdicts: 14 GOOD, 4 GOOD WITH MINOR DEBT, 0 structural, 0 rebuild. Profile was the one structural problem and is fixed (MB-GOD-013). |
 | 2 — UI/UX | Extremely Advanced | **COMPLETE.** Task cost 20/20 goals measured (max 3 taps); 12 empty states, 0 defects; failure states under offline/500; 5 cross-feature handoffs; accessibility depth. 4 findings: MB-GOD-040 and 043 FIXED, MB-GOD-041 and 042 recorded OPEN with reproductions. |
-| 2 — UI/UX | God Mode | not started — the "why is this not exceptional" pass |
+| 2 — UI/UX | God Mode | **COMPLETE.** MB-GOD-041 and 042 closed; hover-only class closed; vocabulary, component/typography/icon grammar, focus system, theme parity, state colour, trust expression and the visual board all audited. 200% text went 29/60 broken → 0/60. |
+| **2 — UI/UX** | **ALL THREE LEVELS** | **COMPLETE — closeout written in the audit ledger** |
 | 3 — Flow | all levels | not started (deep-link intent + 10 journeys verified as Mission 1 evidence) |
 | 4 — Information architecture | — | **PARTIAL** — Profile restructure DONE, Settings receiving work DONE; **MB-GOD-007 still waiting** |
 | 5 — Mobile shell / safe area | Advanced | **complete — no root-cause defect** (MB-GOD-009) |
@@ -558,3 +559,72 @@ accessible names depending on where you meet them. That is a God Mode
 consistency question, not an Extreme defect.
 
 Do not begin a whole-app redesign merely because God Mode is next.
+
+## Session 15 — Mission 2 God Mode, and MISSION 2 CLOSED
+
+```
+MB-GOD-041  offline navigation      CLOSED   9/9 runtime checks
+MB-GOD-042  dialog focus restore    CLOSED   3 call sites verified by keyboard
+MB-GOD-045  Home accessible name    FIXED
+MB-GOD-046  nine warm colours       OPEN     (top experience debt)
+MB-GOD-047  200% text breakage      FIXED    29/60 → 0/60
+MB-GOD-048  launcher overlaps card  OPEN     (P3, measured)
+```
+
+### Things the next session should not re-derive
+
+- **`sw.js` is network-only BY DESIGN and that stance is unchanged.** The one
+  exception is `/offline.html` + `/offline.js`, precached so a failed NAVIGATION
+  gets Mad Buddy's page instead of `chrome-error://chromewebdata/`. Navigations
+  are network-FIRST; a 500 or 404 is a real response and is deliberately NOT
+  replaced. `lib/security/session-storage.test.ts` pins the exact allowed URL
+  list and is mutation-tested — precaching `/dashboard` fails it, and a
+  cache-first navigation handler fails it.
+- **Six SW guards across five files were REWRITTEN, not weakened.** They banned
+  `caches.*` outright, which cannot distinguish a cached conversation from a
+  static offline page. They now assert the invariant directly. Net +4 tests.
+- **`/offline.html`, `/offline.js` and `/sw.js` are excluded from the proxy
+  matcher.** Without that the shell answered 307 and could never be precached.
+- **`components/ui/modal.tsx` now owns focus restoration.** Eleven call sites
+  pass `open={Boolean(resource)}` and unmount the Dialog in the same commit as
+  the close, which is why Radix could not restore. Guarded three ways: only when
+  focus fell to `body`, only if the opener `isConnected`, inside rAF. **A
+  cross-page opener is deliberately NOT restored** (Plan deep link) — that case
+  asserts non-restoration so a fake fix cannot pass.
+- **Never size chrome in `rem`** (MB-GOD-047). A rem doubles at 200% text, so
+  buttons and icon circles outgrew the screen and primary nav became
+  unreachable. Chrome is pixels; icons and text keep rem so the glyph still
+  scales. Regression check: `scripts/hardening/extreme-content.mjs`, 0/60.
+- **The harness flagged 17 false failures by treating scrollable tab strips as
+  clipped.** `plans-page.tsx` already documents that exact false positive. A
+  control inside a scrollable ancestor is reachable.
+- **A full-page screenshot renders `fixed` elements at document scale.** My
+  first reading of Home claimed the bottom nav "floats mid-page" and rows were
+  clipped; measuring showed `scrollWidth == viewport`. Capture at viewport size
+  when judging layout.
+- **Check the BUILD EXIT CODE before believing a runtime result.** One fix
+  looked ineffective for two rounds because the build was failing and the server
+  was serving a stale bundle.
+- **Two JSX comments in expression slots** (`return ( {/* */}`, and inside a
+  ternary) are Turbopack build errors, not warnings.
+- **Vocabulary has no drift.** Muddy/friend, Circle/Group, UpFor/Hangout each
+  resolve to one user-facing term; the others survive only as internal
+  identifiers. Do not re-audit.
+- **Naming policy, now canonical:** truncate for layout, **never** for assistive
+  technology. Greeting surfaces show a first name and announce the full one.
+
+### Next: MISSION 3 — END-TO-END USER JOURNEY / APP FLOW
+
+Not started. Mission 3 examines longitudinal journeys rather than screens: new
+user → first value, first Muddy, first Linkr connection, first UpFor → Plan,
+first Event → Event Linkr, first Safe Arrival, dormant user returning, user with
+zero Muddies, user with active Plans/Events.
+
+Two inputs already collected for it:
+- **MB-GOD-046** (nine warm colours) is the top experience debt and needs a
+  semantic state token, because Safe Arrival uses orange as a STATE beside red.
+- **Signature moments are correct but quiet** — Linkr mutual, UpFor→Plan and
+  Safe Arrival completion all work without being memorable. That is a Mission 3
+  journey question more than a Mission 2 screen question.
+
+Do NOT start Mission 9.
