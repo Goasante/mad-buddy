@@ -1894,10 +1894,10 @@ cannot drift again:
 | 3 | UpFor → Plan | **COMPLETE** | 7/7 (MB-GOD-023) | No |
 | 4 | Plan RSVP / membership | **COMPLETE** | 10/10 (MB-GOD-029) — RSVP cycle, add participant, Plan Chat reconciliation, outsider exclusion | Yes (1: stale RSVP replay) |
 | 5 | Event check-in / Event Linkr | **COMPLETE** | Consent 8/8 (MB-GOD-028) + audiences 12/12 (MB-GOD-031) + wiring 9/9 (MB-GOD-032) | Yes (1: stale eligibility) |
-| 6 | Profile media | **NOT STARTED** | — | No |
+| 6 | Profile media | **COMPLETE** | 10/10 (MB-GOD-034) + EXIF 4/4 mutation-tested (MB-GOD-033) | Yes (1: stale slot delete) |
 | 7 | Safe Arrival + Messages | **COMPLETE** | Safe Arrival 5/5 (MB-GOD-026) + Messages 8/8 (MB-GOD-030) | Yes (1: stale membership send) |
 
-**LIFECYCLES COMPLETE = 6 / 7** (updated after MB-GOD-032).
+**LIFECYCLES COMPLETE = 7 / 7** (updated after MB-GOD-034). **MISSION 1 EXTREME = COMPLETE.**
 
 **Multi-tab coverage is thinner than the raw "5 scenarios" figure suggests**: all
 five sit inside domain 1. Four of the seven domains have no stale-state coverage
@@ -2248,3 +2248,123 @@ with a large seeded attendee set. The *data* contract is proven (ids only, and
 only of consenting attendees), and the source is explicit that
 `eventLinkrCandidateIds` returns *"IDS ONLY… deliberately not a directory"* — but
 the network-payload attack was not run.
+### MB-GOD-033 - EXIF GPS does not survive an upload (behavioural, mutation-tested)
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Profile media, all image uploads |
+| **Severity** | n/a - **verification, no defect found** |
+| **Category** | Privacy |
+| **Mission / Level** | Mission 1 - Extremely Advanced (domain 6) |
+| **Status** | **VERIFIED** |
+
+The highest-stakes property in this domain. Mad Buddy exposes proximity **bands**
+rather than distances and stores **no coordinates** for Safe Arrival — a photo
+carrying GPS EXIF would walk straight past all of it, because the image is
+downloadable and the metadata survives the browser.
+
+`lib/media/processing.ts` documents that re-encoding through sharp without
+`withMetadata()` drops every metadata block. **This does not take that on trust.**
+`lib/media/exif-stripping.test.ts` builds a JPEG carrying real GPS EXIF (the
+Accra fixture coordinates used elsewhere in this program), runs the product's own
+`processImageUpload`, and reads the output back.
+
+```
+PASS  the fixture really does carry GPS, so this test can fail
+PASS  strips GPS EXIF from the stored image
+PASS  strips metadata from every variant, not only the original
+PASS  keeps the image itself intact while dropping the metadata
+```
+
+The first assertion is deliberate: without it, "no GPS in the output" would be
+satisfied by an input that never had any — the empty-fixture trap this program
+has already been caught by once.
+
+The **variant** assertion matters as much as the original: a variant is what
+actually gets served to other people, so stripping the original while shipping a
+thumbnail that still carried GPS would defeat the entire point.
+
+**Mutation-tested.** Re-enabling `withMetadata()` on the encode pipeline fails
+**two** tests, and the failure message shows the leaked bytes themselves —
+`Buffer[ 69, 120, 105, 102, … ]`, which is ASCII `Exif`:
+
+```
+× EXIF survived processing
+× EXIF survived in the thumb variant
+```
+
+Also confirmed by reading the implementation: processing happens **before any
+byte reaches storage**, so no window exists in which GPS data is at rest.
+
+### MB-GOD-034 - Profile media lifecycle: 10/10, domain 6 COMPLETE
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Profile media / showcase |
+| **Severity** | n/a - **verification, no defect found** |
+| **Mission / Level** | Mission 1 - Extremely Advanced (domain 6) |
+| **Status** | **VERIFIED — domain COMPLETE** |
+
+```
+PASS  three showcase photos occupy positions 0,1,2
+PASS  a fourth slot (position 3) is refused by the database
+PASS  two photos cannot occupy the same slot
+PASS  replacing a slot swaps the reference without losing the slot
+PASS  a failed retirement leaves an ORPHAN asset, not a broken slot
+PASS  a stale delete keyed on the OLD asset does not remove the new image
+PASS  the owner sees all three photos
+PASS  an approved Muddy sees everyone + approved_muddies, never only_me
+PASS  a stranger sees only the `everyone` photo
+PASS  a stranger querying the table directly cannot read private slots
+```
+
+**The capacity limit is enforced by the SCHEMA, not by hiding a button:**
+
+```sql
+profile_photos:
+  CHECK (position >= -1 AND position <= 2)   -- 3 showcase slots, -1 = avatar
+  UNIQUE (user_id, position)                 -- no two photos in one slot
+  CHECK (visibility IN ('everyone','approved_muddies','only_me'))
+```
+
+A direct authenticated insert at `position: 3` is **refused by the database**, and
+so is a duplicate position. That is the difference between a limit and a
+suggestion.
+
+**Replacement durability.** The canonical order is upload new → swap reference →
+retire old. Modelling "retirement failed" (swap succeeds, old asset survives)
+leaves an **orphan asset** but an **intact slot** — the user's showcase is never
+broken by a failed cleanup. `media_deletion_queue` exists as the cleanup
+infrastructure, so orphans are tracked rather than abandoned.
+
+**Concurrency (domain 6 multi-tab).** Tab A believes slot 1 holds asset B; Tab B
+has already replaced it with D. Tab A's delete, keyed on the **old asset id**,
+removes **0 rows** and D survives. Had the delete been keyed on *position* alone,
+it would have destroyed someone else's newer image — that is the shape this test
+exists to catch.
+
+**Privacy is enforced at two layers, and both were checked.** The projection in
+`loadVisibleProfilePhotosFor` narrows by viewer role, and the RLS policy narrows
+the table itself: a stranger signed in under their own credentials reads **exactly
+one row** — the `everyone` photo — with zero private slots among them. A
+projection alone would be decoration if the row were readable directly.
+
+The implementation's own reasoning on URLs is worth preserving: thumbnails are
+signed **short-lived** rather than permanent, because *"a permanent URL would
+outlive the setting that allowed it, so switching a photo to `only_me` could not
+take back a link already handed out."*
+
+**One harness correction:** `moderation_status: "approved"` is not in the enum
+(the values are `active`, `under_review`, `restricted`, `removed`, `restored`,
+`deleted_by_user`). The probe reported INCONCLUSIVE rather than passing.
+
+**Carried forward, stated rather than claimed:**
+- **Signed-URL residual exposure after a block.** A short-lived URL already
+  handed out remains valid until it expires; revocation is not instantaneous by
+  construction. The design mitigates this by keeping the window short, but the
+  exact expiry window and its acceptability were not measured.
+- **Invalid-media handling** (spoofed MIME, oversized, zero-byte, malformed) —
+  `lib/media/validation.ts` exists and is typed, but the failure paths were not
+  exercised end to end.
+- **Cache behaviour across account switches**, which matters more for the later
+  Capacitor transition than for web.
