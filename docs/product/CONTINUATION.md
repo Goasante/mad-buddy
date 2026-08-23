@@ -1,14 +1,14 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 13.** The next session continues from here.
+**Written at the end of session 14.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         e832e32
+HEAD         4ddb81c
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      41 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      46 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -19,6 +19,8 @@ COMMITS      41 local recovery checkpoints, none pushed, nothing deployed
 | 1 — Reliability | Extremely Advanced | **COMPLETE (7/7 domains)** | **PARTIAL — 3/7 domains** (corrected in MB-GOD-027; previously mis-reported as 5/7). See the canonical domain table below. |
 | 1 — Reliability | God Mode | **COMPLETE** — 41 nodes / 245 edges / 0 wrong destinations; both carried security items closed |
 | 2 — UI/UX | Advanced | **COMPLETE — 18/18 surfaces.** Verdicts: 14 GOOD, 4 GOOD WITH MINOR DEBT, 0 structural, 0 rebuild. Profile was the one structural problem and is fixed (MB-GOD-013). |
+| 2 — UI/UX | Extremely Advanced | **COMPLETE.** Task cost 20/20 goals measured (max 3 taps); 12 empty states, 0 defects; failure states under offline/500; 5 cross-feature handoffs; accessibility depth. 4 findings: MB-GOD-040 and 043 FIXED, MB-GOD-041 and 042 recorded OPEN with reproductions. |
+| 2 — UI/UX | God Mode | not started — the "why is this not exceptional" pass |
 | 3 — Flow | all levels | not started (deep-link intent + 10 journeys verified as Mission 1 evidence) |
 | 4 — Information architecture | — | **PARTIAL** — Profile restructure DONE, Settings receiving work DONE; **MB-GOD-007 still waiting** |
 | 5 — Mobile shell / safe area | Advanced | **complete — no root-cause defect** (MB-GOD-009) |
@@ -455,3 +457,101 @@ right to stop showing a stale band).
 The discipline that caught all five: when a check fails, find out what the app
 actually does before concluding it is broken. A failing check is a question, not
 a verdict.
+
+## Session 14 — Mission 2 Extremely Advanced
+
+**Question the level answers:** not "is this screen well built?" but **how much
+effort does Mad Buddy make a user spend to do ordinary things?**
+
+```
+TASK COST          20/20 goals completed   taps: 1 x9  2 x7  3 x4   max = 3
+EMPTY STATES       12 audited, 0 defects
+FAILURE STATES     offline / 500 / mid-session, 0 internal leaks
+HANDOFFS           5 audited, 5 preserve context
+ACCESSIBILITY      6/7 (dialog focus-return is the one failure)
+```
+
+### What was found
+
+| ID | P | State | What |
+| --- | --- | --- | --- |
+| MB-GOD-040 | P1 | **FIXED** | Message actions invisible on touch: `opacity-0 group-hover:` + emoji picker dead end |
+| MB-GOD-041 | P2 | **OPEN** | Offline in-app navigation → blank page, no way back |
+| MB-GOD-042 | P2 | **OPEN** | Muddy profile modal drops focus to `<body>` on close |
+| MB-GOD-043 | P2 | **FIXED** | Linkr header + distance controls under 44px |
+
+### Things the next session should not re-derive
+
+- **MB-GOD-040 was the carried open question, and the answer was worse than the
+  question.** Both suspicions were true at once: the actions ARE ~17px AND they
+  are inside a menu. The defect is the combination — `group-hover` made the
+  inline row invisible on touch while `pointer-events` stayed `auto`, and the
+  long-press menu's `React` opened a picker in that same invisible row. So the
+  ONE action offered to every user on every message was a dead end on phones.
+- **`.message-actions` in globals.css is now load-bearing.** Its fade is gated on
+  `@media (any-hover: hover)`. Do not convert it back to Tailwind
+  `group-hover:` classes — that is the defect. `lib/design/hover-capability-guard.ts`
+  is mutation-tested and fails if the shape returns; it finds **zero** other
+  occurrences app-wide, so this was isolated, not a class.
+- **`any-hover`, not `hover`.** A touchscreen laptop reports `hover: none` when
+  the touchscreen is the primary pointer; `any-hover` keeps the trackpad reveal.
+- **Task cost is fine and should not be "optimised".** Nothing exceeds 3 taps,
+  and all four 3-tap paths are `launcher → destination → the thing` with no
+  wasted screen. Collapsing them would mean promoting settings into primary
+  navigation — exactly the duplication the Profile restructure removed.
+- **Empty states are a strength, not a gap.** All 12 use title + explanation;
+  a bare-copy regex matched none. UpFor's are per-tab and the `around` variant
+  explains a privacy boundary as a feature. Do not "improve" these.
+- **Plans tabs are CLIENT-SIDE filtering** (`setActiveBucket` over plans already
+  in memory). No request is made, so a tab switch cannot test a failing read.
+- **`public/sw.js:26` deliberately skips navigations** (`request.mode ===
+  "navigate"`). That is why offline navigation is blank; an offline fallback is
+  a service-worker change and is MB-GOD-041's fix, not a UI tweak.
+- **The Muddy profile modal is `open={Boolean(muddy)}`** and the call sites clear
+  `muddy` on close, unmounting the Dialog in the same commit — which is why
+  Radix cannot restore focus (MB-GOD-042). `components/ui/modal.tsx` does NOT
+  override `onCloseAutoFocus`; the primitive is correct, the call sites are not.
+- **A feature behind an opt-in has TWO states.** Linkr had only ever been
+  audited opted-OUT, where the sole control is "Turn on Linkr" — a true and
+  useless reading. Measure both sides of any gate.
+- **`MSYS_NO_PATHCONV=1` is mandatory** for every harness invocation passing a
+  `/route` argument, exactly as the README says.
+- **`hydration-auth.mjs` used to hard-code port 3100** and reported
+  ERR_CONNECTION_REFUSED against a production run as if it were a finding. Fixed
+  to `MB_BASE`, defaulting to 3200.
+- **Seed data must obey the product's invariants.** `direct_key` is
+  `[a,b].sort().join(":")`, not a readable tag — a fixture keyed
+  "detail-fixture" made the inbox look unable to name a direct conversation. The
+  unique index then refused the canonical re-key, proving a real conversation
+  already existed and the fixture was a duplicate the product would never create.
+
+### Harness bugs that produced convincing false findings
+
+The task matrix read 13/19 → 16 → 17 → 19/20 → 20/20. **Not one intervening
+failure was a product defect.** All five were selector/method bugs: a default
+role of `button` that missed every icon-only control; a fragment match ambiguous
+between the proximity rail and the list; an `href` ambiguous between the nav and
+a Home card; a wrong assumption about which Plans tab holds a hosted Plan; and
+MSYS path rewriting. Three probes also measured *nothing* on their first
+version — `page.reload()` measured Chromium's error page, a Plans tab switch
+filtered in-memory data, and the keyboard check read opacity in the same tick as
+`.focus()` (a false failure against a real fix).
+
+**A failing check is a question, not a verdict.** That rule earned its keep
+eight times this session.
+
+### Next
+
+**MISSION 2 GOD MODE.** The question is: if Apple/Airbnb/Snapchat/Linear's
+strongest designers reviewed this without knowing its history, what would still
+keep it from feeling exceptional? Cross-product visual language, emotional
+quality, interaction personality, whole-app information hierarchy, visual
+rhythm, signature moments, memorability, consistency without sameness.
+
+One concrete input already collected: **Home names a Muddy by first name only**
+("KM Kofi Just Around") while `/friends` uses the full name ("Kofi Mensah, open
+profile"). Both defensible in place; together it means one person has two
+accessible names depending on where you meet them. That is a God Mode
+consistency question, not an Extreme defect.
+
+Do not begin a whole-app redesign merely because God Mode is next.
