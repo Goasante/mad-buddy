@@ -2676,4 +2676,3 @@ primitive deliberately has no block check.
 | 7/7 lifecycle domains green | ✅ |
 
 **MISSION 1 = COMPLETE.**
-
