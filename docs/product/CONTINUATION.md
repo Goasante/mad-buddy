@@ -1,14 +1,14 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 9.** The next session continues from here.
+**Written at the end of session 10.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         f3a9fee
+HEAD         (session 10 final — see git log -1)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      25 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      28 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -170,7 +170,17 @@ JOURNEYS    10/10   LIFECYCLE 7/7   MULTI-TAB 5/5   STATE GRAPH 193 edges
    installed PWA / Capacitor standalone, and safe-area INSIDE sheets, modals,
    the photo viewer and the camera. None of these are covered yet.
 
-## Next session: the two remaining domains
+## Next session: ONE remaining domain
+
+**Domain 6 — Profile media** is the last untouched lifecycle. Everything needed
+is specified below; nothing else blocks Mission 1 Extreme from closing.
+
+**Domain 5 is now COMPLETE** (MB-GOD-031 audiences 12/12, MB-GOD-032 wiring 9/9).
+Do not re-run it. The one piece deliberately carried forward is attendee
+enumeration against live HTTP payloads with a large seeded attendee set — the
+data contract is proven, the network attack was not run.
+
+## Superseded: the two remaining domains
 
 **Domain 6 — Profile media (NOT STARTED)** is the larger piece. It needs real
 storage + DB work, not a UI test:
@@ -195,6 +205,21 @@ is that the system actually recomputes from changed state:
 - the five audience authorities: invite / link / community / nearby / public
 
 ## Things the next session should not re-derive
+
+- **Event revocation is immediate because nothing is cached** (MB-GOD-032):
+  `resolveEventLinkrEligibility` reads liveness → check-in → consent live on every
+  call. There is no eligibility column to go stale.
+- **Four separate flags, four separate meanings**: `event_rsvps.status='going'`
+  (intent), `check_ins.status='checked_in'` (presence),
+  `event_linkr_opt_ins.enabled` (consent), `check_ins.event_glow_enabled`
+  (Glow — NOT consent). Do not conflate any two.
+- **`link` Events are viewable but NOT discoverable** (MB-GOD-031). That gap is
+  the point of an unlisted audience; do not "simplify" the two authorities into one.
+- **The Event/Linkr seam fails closed** and Linkr re-derives no consent. Do not
+  move consent logic into `candidate-service.ts`.
+- **Real schema notes**: Event status enum is
+  `draft|scheduled|active|ended|cancelled` (NOT `published`); check-in lives in
+  `check_ins` (context_type/context_id), not `event_rsvps`.
 
 - **Messages idempotency is a DATABASE guarantee** (MB-GOD-030): unique index on
   `(sender_id, client_message_id)`. Do not "improve" it with client-side debounce.
