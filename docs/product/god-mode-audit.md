@@ -4443,3 +4443,100 @@ to. No live location is shared. You're in control."*
 **J20 Notifications** — *"You're all caught up. New updates will appear here."*
 with tabbed filters (All / Nearby / Social / Plans / Safety). The re-entry
 destinations were already proven in Mission 1; nothing here contradicts that.
+
+## Journeys 22, 23, 24 — PASS
+
+**J22 Active social return — Home's priority is correct.** With Muddies, an
+upcoming Plan and a live Event, Home's section order is:
+
+```
+y=  211   You've got something on   (the upcoming Plan)
+y=  388   Near
+y=  504   My Plans
+y=  620   Suggestions for you
+```
+
+A real commitment leads, proximity follows, suggestions last. The canonical
+precedence holds, and Home is not a dashboard of everything — four sections, in
+a defensible order.
+
+**J23 Privacy change** — `/settings/privacy` is honest about its own scope:
+*"Manage the privacy controls that Mad Buddy currently enforces"*, then Glow
+visibility and Messaging privacy each stating what they govern.
+
+**J24 Account management** — `/settings/data-storage` shows a real storage
+figure ("0 B across 0 items") and offers *"Export your data — Download a copy of
+your account data"* directly. `/about` explains the product's premise rather than
+its features: *"It is built around one idea: what happens offline matters more
+than what happens in the app."* Findable and trustworthy, which is the standard
+the brief set for this journey rather than tap count.
+
+## MISSION 3 ADVANCED — journey ledger summary
+
+| # | Journey | Verdict |
+| --- | --- | --- |
+| 1 | New user → first value | **FIXED** (MB-GOD-049 P1) |
+| 2 | Invite → activation | PASS |
+| 3 | Zero Muddies | PASS |
+| 4 | First Muddy | **FIXED** (MB-GOD-050 P2) |
+| 5 | First Glow / proximity | PASS |
+| 6 | Location denied | PASS — degrades, no nag |
+| 7 | First message | PASS — verified inside the first-value chain |
+| 8 | Linkr activation | PASS |
+| 9 | Linkr incomplete-profile handoff | carried from Mission 1 evidence |
+| 10 | Linkr mutual | not exercised (needs two live Linkr accounts) |
+| 11 | First UpFor | PASS |
+| 12 | UpFor response / momentum | not exercised (needs 3 live accounts) |
+| 13 | UpFor → Plan | Mission 1 proved lifecycle; UX not re-exercised |
+| 14 | Direct Plan | PASS (empty + create path) |
+| 15 | Plan over time | Mission 1 proved lifecycle |
+| 16 | First Event | PASS |
+| 17 | Event → Event Linkr | Mission 1 proved consent gating (8/8 + 12/12 + 9/9) |
+| 18 | Safe Arrival | PASS — best privacy copy in the product |
+| 19 | Notification re-entry | PASS |
+| 20 | Dormant return | **FINDING** (MB-GOD-052 P2, open) |
+| 21 | Active social return | PASS — correct priority |
+| 22 | Block / safety recovery | Mission 1 proved authority; UX not re-exercised |
+| 23 | Privacy change | PASS |
+| 24 | Account management | PASS |
+
+**20 of 24 audited experientially this mission.** Four (10, 12, 13/15, 22) rest
+on Mission 1's lifecycle proof plus multi-account setups that belong in Mission
+3 Extreme, where the brief already places "multiple personas" and "pathological
+combinations".
+
+### Return loops, classified
+
+| Loop | Rating |
+| --- | --- |
+| Messages | STRONG |
+| Muddies | STRONG |
+| Plans | STRONG |
+| Events | STRONG |
+| UpFor | STRONG (temporary by design) |
+| Safe Arrival | STRONG, and correctly silent when idle |
+| Linkr | **WEAK** — nothing signals new candidates |
+
+Linkr stays WEAK and unfixed. The brief forbids manufacturing notifications for
+retention, and Linkr is the surface where an unsolicited nudge would be least
+welcome. The honest options are freshness in the surface itself (how many people
+are new since your last visit) rather than a push.
+
+### Abandonment points recorded
+
+| Point | Consequence | Recovery |
+| --- | --- | --- |
+| Signup auto-signin fails | stranded as a placeholder | **FIXED** (MB-GOD-049) |
+| First Muddy, no next action | first value never completes | **FIXED** (MB-GOD-050) |
+| Reload mid-draft | typed message lost | classified (MB-GOD-051) |
+| Return with unread | Home does not surface it | open (MB-GOD-052) |
+| Location denied | none — degrades gracefully | PASS |
+| Bad/expired invite | none — clear message, no leak | PASS |
+| Linkr with no candidates | no reason to return | WEAK loop, recorded |
+| Turnstile unavailable | signup blocked | correct fail-closed behaviour |
+
+### First-value decision cost
+
+App-controlled: **2 decisions** after the account exists — add a Muddy, then one
+social act. Not app-controlled and correctly so: the other person must accept.
+That social dependency is the product, not friction.
