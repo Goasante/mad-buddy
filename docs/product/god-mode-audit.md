@@ -7081,3 +7081,115 @@ MB-GOD-060 before 10k.
 MISSION 9:  Advanced = COMPLETE   Extreme = COMPLETE   God Mode = COMPLETE
 FINDINGS:   P0 = 0  P1 = 0  P2 = 1 (MB-GOD-060, open, schema-bound)  P3 = 0
 ```
+
+---
+
+# MAD BUDDY — PRE-MONETIZATION BASELINE
+
+## Final convergence
+
+```
+TESTS        6937 / 6937        TEST FILES  348
+TSC          PASS               ESLINT      0 errors / 45 baseline warnings
+BUILD        PASS               DIFF CHECK  CLEAN
+
+mobile shell matrix   100 / 100 combinations clean
+hydration             clean
+offline shell         9 / 9
+admin authorization   55 / 55 actions guarded
+security suite        84 / 84
+```
+
+## Mission status
+
+| Mission | Advanced | Extreme | God Mode |
+| --- | --- | --- | --- |
+| 1 — Correctness / reliability | COMPLETE | COMPLETE | COMPLETE |
+| 2 — UI / UX | COMPLETE | COMPLETE | COMPLETE |
+| 3 — Journeys | COMPLETE | COMPLETE | COMPLETE |
+| 4 — Information architecture | COMPLETE | COMPLETE | COMPLETE |
+| 5 — Mobile shell / safe area | COMPLETE | COMPLETE | COMPLETE |
+| 6 — Security / privacy | COMPLETE | COMPLETE | COMPLETE |
+| 7 — Public story | COMPLETE | COMPLETE | COMPLETE |
+| 8 — Design consistency | COMPLETE | COMPLETE | COMPLETE |
+| 9 — Scale / performance / cost | COMPLETE | COMPLETE | COMPLETE |
+
+## Open findings
+
+**P0 = 0 · P1 = 0 · P2 = 4 · P3 = 2**
+
+| ID | P | State | Why it is open |
+| --- | --- | --- | --- |
+| MB-GOD-058 | P2 | DEFERRED | recursive RLS policy; **fails closed**, needs a production migration |
+| MB-GOD-059 | P2 | OPEN | Linkr and UpFor absent from the public story; needs a narrative decision |
+| MB-GOD-060 | P2 | OPEN | unbounded per-Home message scan; fix is a schema change |
+| MB-GOD-046 | P2 | **PARTIAL** | state-token vocabulary shipped; migrating 159 call sites is owner review |
+| MB-GOD-056 | P3 | OPEN | "Circles" names two concepts; owner naming decision |
+| MB-GOD-055 | — | RESOLVED | — |
+
+## Classified / deferred debt
+
+```
+MB-GOD-007   /hangout-mode route rename        OWNER-BLOCKED, migration plan recorded
+MB-GOD-012   dynamic notFound returns HTTP 200 FRAMEWORK-CONSTRAINED
+MB-GOD-051   message draft lost on full reload STORAGE/PRIVACY DECISION
+Linkr return loop                              WEAK / density-limited
+Linkr behavioural block guard                  structural verified, behavioural outstanding
+signed media URL                               5-minute bounded residual, measured
+signature moments                              correct but quiet
+Profile media post-save layout                 OWNER-OBSERVED, deferred
+EFTS                                           NEEDS DEFINITION
+```
+
+## State by dimension
+
+**Product architecture** — one authority per lifecycle; 22 surfaces each with one
+primary job; 13 data authorities mapped; 5 conversions one-way with pointers, not
+shared ownership. Two naming exceptions, both recorded.
+
+**Security** — Critical 0, High 0, Medium 1. Application authority verified
+(55/55 admin actions, IDOR probes, no auth enumeration, no open redirect,
+timing-safe webhooks, server-owned prices). RLS holds on five tables and **fails
+closed** on the messaging family pending MB-GOD-058.
+
+**Mobile shell** — a contract, not per-page patches: `viewportFit: cover`, svh/dvh
+everywhere, every pinned element derived from `env(safe-area-inset-*)`, zero
+hardcoded notch values, one scrolling region. Mountable in a WebView without
+route-by-route redesign.
+
+**Public story** — honest and privacy-forward, no fake proof; incomplete on Linkr
+and UpFor.
+
+**Design consistency** — one icon library, zero arbitrary text sizes, four
+weights, theme parity 12/12. State-colour vocabulary now exists.
+
+**Scale / cost** — healthy shape (~40 requests, ~71 KB per route, no N+1). Free
+tier is fine to ~1,000 registered, not beyond. One unbounded path identified.
+
+## Monetization planning (documented only, nothing built)
+
+```
+CORE MAD BUDDY   FREE
+PAID             Linkr, UpFor
+WELCOME ACCESS   14 DAYS          START  first_muddy_added
+CARD REQUIRED    NO               AUTO-RENEW FROM WELCOME ACCESS  NO
+FUTURE ADMIN     grant · extend · revoke · custom duration · indefinite · global override
+```
+
+**MONETIZATION IMPLEMENTED = NO. NATIVE IMPLEMENTED = NO.**
+
+## Owner polish list
+
+| Item | Class |
+| --- | --- |
+| Profile media / post-save layout | **OWNER-OBSERVED** |
+| MB-GOD-056 "Circles" naming | **PRODUCT CHOICE** |
+| MB-GOD-007 `/hangout-mode` rename | **MIGRATION-BOUND** |
+| MB-GOD-058 recursive RLS policy | **SECURITY-CLASSIFIED** — migration-ready |
+| MB-GOD-060 maturity-evidence scan | **MIGRATION-BOUND** — schema change |
+| MB-GOD-059 landing omits Linkr/UpFor | **PRODUCT CHOICE** — narrative |
+| MB-GOD-046 migrate 159 colour call sites | **DEFERRED VISUAL** |
+| MB-GOD-012 notFound HTTP 200 | **FRAMEWORK-CONSTRAINED** |
+| MB-GOD-051 draft loss on reload | **SECURITY-CLASSIFIED** — storage/privacy |
+| Signature moments quietness | **DEFERRED VISUAL** |
+| Landing at 9.46 screens | **DEFERRED VISUAL** |

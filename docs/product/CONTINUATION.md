@@ -1,6 +1,6 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 23.** The next session continues from here.
+**Written at the end of session 24 — PRE-MONETIZATION BASELINE.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
@@ -1050,3 +1050,51 @@ Five accounts on the local Docker stack, all loggable at
 ### Next: MISSION 5 — SAFE AREA / MOBILE SHELL
 
 Not started. Mission 5 deserves a fresh session.
+
+## Session 24 — MISSIONS 5–9 + FINAL CONVERGENCE COMPLETE
+
+```
+Mission 5  mobile shell        COMPLETE   MB-GOD-057 fixed
+Mission 6  security            COMPLETE   MB-GOD-058 deferred (fails closed)
+Mission 7  public story        COMPLETE   MB-GOD-059 open
+Mission 8  design consistency  COMPLETE   MB-GOD-046 → PARTIAL
+Mission 9  scale / cost        COMPLETE   MB-GOD-060 open
+
+FINAL CONVERGENCE = PASS
+TESTS 6937/6937 · 348 files · TSC PASS · ESLINT 0 err · BUILD PASS · DIFF CLEAN
+Security: Critical 0 · High 0 · Medium 1
+```
+
+### Things the next session should not re-derive
+
+- **MB-GOD-058** — the RLS policy on `conversation_members` reads itself, so
+  Postgres reports infinite recursion on it, `conversations`, `messages` and
+  `safe_arrival_sessions`. It **fails closed**: nothing leaks, and the app is
+  unaffected because messaging reads through the admin client. The fix is a
+  `SECURITY DEFINER` helper following the existing `public.is_friend` pattern —
+  **a production migration, so owner-approved**. Write the grants explicitly:
+  a careless `REVOKE` strips `service_role`.
+- **MB-GOD-060** — `loadMaturityEvidence` reads every message in every
+  conversation on **every Home load**. Unbounded. The fix is a
+  `first_reply_received` milestone, not a query tweak — the value is a derived
+  boolean being recomputed from raw history.
+- **MB-GOD-057 is fixed**: `body` now uses `min-height: 100svh; min-height: 100dvh`.
+  A bare `100vh` is the LARGE viewport and includes the collapsible URL bar.
+  `lib/design/mobile-shell-contract.test.ts` is mutation-tested and scans all
+  366 files — desktop `md:` usage is allowed, nothing else.
+- **State tokens now exist** (`--state-transit/extended/overdue/arrived/ended`)
+  but **nothing was migrated onto them**. That was deliberate: rewiring 159 call
+  sites changes what Safe Arrival and Moments look like.
+- **Landing omits Linkr and UpFor** — the two paid features. The page is already
+  9.46 screens, so this needs a narrative decision, not an addition.
+- **Vercel free does not carry 10,000 users**, let alone 500,000. Fine to ~1,000.
+  Currency figures are marked NEEDS CURRENT OFFICIAL DOCS rather than guessed.
+
+### Owner review cohort — preserved
+
+Five accounts, `ReviewPass123!`, all verified loggable at
+`http://localhost:3200/login`. Re-seed: `node scripts/hardening/seed-owner-review.mjs`.
+
+### Next: OWNER REVIEW, then Monetization Reset
+
+Do NOT start monetization or native work.
