@@ -3536,3 +3536,61 @@ The five peripheral tests now assert the property each actually cares about
 (`caches.put` never appears) and point at the canonical rule, rather than each
 re-implementing a blanket ban. **Net: the security invariant is more precisely
 enforced than before**, and the suite went from 6895 to 6899 tests.
+
+### MB-GOD-042 - CLOSED. Focus returns to the opener, fixed at the primitive
+
+Reproduced through the real keyboard path, which is the user this affects:
+
+```
+trigger focused : "Kofi Mensah, open profile"
+Enter           : dialog open, focus inside  ✓
+Escape          : dialog closed, focus on BODY  ✗
+```
+
+**Eleven call sites share the defect shape**, so the brief's rule applies — fix
+the shape, not the first instance:
+
+```
+admin/team-access-manager.tsx:343   events/events-page.tsx:912
+drops/drops-page.tsx:174            events/events-page.tsx:1009
+events/event-admin-manager.tsx:197  friends/friends-page.tsx:1914
+glow/muddy-profile-modal.tsx:90     messages/messages-page.tsx:1756
+notifications/notifications-page.tsx:712, :739
+plans/plans-page.tsx:1174
+```
+
+All pass `open={Boolean(someResource)}` and clear that resource on close, so
+`open` goes false AND the Dialog subtree unmounts **in the same commit**. Radix
+restores focus during its close sequence; there is nothing left to run it from.
+
+**Fixed in `components/ui/modal.tsx`**, which all eleven use. The element that
+held focus when the dialog opened is remembered and refocused after the close
+commit, guarded three ways so it never fights a deliberate decision:
+
+- only when focus actually fell to `document.body` — if Radix or the caller
+  moved focus somewhere real, that choice is left alone;
+- only if the opener is still `isConnected`;
+- inside `requestAnimationFrame`, so it cannot race Radix's own restore.
+
+Verified across THREE independent call sites, by keyboard:
+
+```
+PASS  Muddy profile (from /friends): focus returns to the opener
+        — "Kofi Mensah, open profile"
+PASS  Muddy profile (from Home):     focus returns to the opener
+        — "Kofi, Just Around. Open profile"
+PASS  Event detail (from /events):   focus returns to the opener
+        — "Open detail-fixture launch night"
+PASS  Plan detail (from Home): focus is NOT restored to a detached opener
+        — navigated to /plans?plan=...; opener no longer exists
+```
+
+**The fourth case is the interesting one.** The Plan deep link NAVIGATES from
+`/dashboard` to `/plans?plan=...`, so when the dialog closes the trigger belongs
+to a page that no longer exists. The `isConnected` guard declines, which is
+correct — restoring focus to a detached node would be wrong and inventing a
+nearby substitute would be worse. The check asserts that distinction rather than
+demanding unconditional restoration, so it cannot be satisfied by a fix that
+fakes it.
+
+`scripts/hardening/focus-restoration.mjs` is the regression check.

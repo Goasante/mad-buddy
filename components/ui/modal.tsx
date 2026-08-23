@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { cn } from "@/lib/utils";
@@ -51,6 +51,46 @@ export function Modal({
   // Sheets are dismissible with the hardware/browser Back button, like a native
   // mobile sheet. No-op for the centred variant.
   useDismissOnBack(variant === "sheet" && open, () => onOpenChange(false));
+
+  /* FOCUS RESTORATION, OWNED BY THE PRIMITIVE (MB-GOD-042).
+   *
+   * Radix restores focus to the trigger during its close sequence. Every call
+   * site in this app passes `open={Boolean(someResource)}` and clears that
+   * resource on close, so `open` goes false AND the whole Dialog subtree
+   * unmounts in the SAME commit -- leaving Radix's restore step with nothing to
+   * run from. Focus landed on <body>, and a keyboard user was returned to the
+   * top of the document after every dialog.
+   *
+   * Eleven call sites share that shape, so this is fixed here rather than in
+   * each: the element that had focus when the dialog opened is remembered, and
+   * refocused when it closes. Guarded so it only acts when focus actually fell
+   * to the body -- if Radix or the caller already moved focus somewhere
+   * deliberate, that choice is left alone.
+   */
+  const openerRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      const active = document.activeElement;
+      openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+      wasOpenRef.current = true;
+      return;
+    }
+    if (!open && wasOpenRef.current) {
+      wasOpenRef.current = false;
+      const opener = openerRef.current;
+      openerRef.current = null;
+      if (!opener) return;
+      /* After the close commit, so this cannot race Radix's own restore. If
+         focus already went somewhere real, leave it there. */
+      requestAnimationFrame(() => {
+        if (document.activeElement !== document.body) return;
+        if (!opener.isConnected) return;
+        opener.focus({ preventScroll: true });
+      });
+    }
+  }, [open]);
 
   const isSheet = variant === "sheet";
   return (
