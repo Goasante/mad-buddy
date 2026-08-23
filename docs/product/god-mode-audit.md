@@ -1116,3 +1116,64 @@ Events, no messages). The brief asks for state-based Home behaviour across
 brand-new / no-activity / imminent-Plan / live-Event users. Those fixtures do not
 exist yet, so "Home adapts" is currently evidenced for a single state and must
 not be claimed more broadly than that.
+### MB-GOD-015 - Cross-surface IA sweep: Profile is the outlier, not the pattern
+
+| Field | Value |
+| --- | --- |
+| **Surface** | All primary surfaces |
+| **Severity** | n/a - **measurement, informs MB-GOD-013** |
+| **Mission / Level** | Mission 2 Advanced / Mission 4 Advanced |
+| **Status** | **RECORDED** |
+
+Measured every primary surface the same way, same run, 393x852, tours dismissed.
+This matters because it decides whether MB-GOD-013 is a Profile problem or a
+house style — and the answer changes what should be done about it.
+
+| Surface | Screens | First-view job |
+| --- | ---: | --- |
+| Home | 1.00 | "Refresh your Glow" — the one thing blocking this account |
+| Messages | 1.00 | "Your conversations with Muddies, Circles and Plans" |
+| Plans | 1.00 | "Plan something with your Muddies" + New plan |
+| Events | 1.00 | "What is happening around you" + Create |
+| Notifications | 1.00 | "What's happening with your Muddies" |
+| Muddies | 1.04 | "Find and connect with Muddies near you" + Add Muddy |
+| Linkr | 1.06 | "Meet people who are open to connecting" + Turn on Linkr |
+| UpFor | 1.21 | "See what people are up for" + Live & temporary |
+| **Settings** | **3.60** | "Manage your account and app preferences" |
+| **Profile** | **3.97** | identity, then eight further sections |
+
+**Nine of ten primary surfaces fit in roughly one screen and state their job in
+their first line.** That is a strong result and it was not assumed — it was
+measured.
+
+Settings at 3.60 screens is **correct**: a settings index is meant to be a long
+list of destinations, and its first view reads as one ("Account, Privacy,
+Sessions…").
+
+Which leaves **Profile as the single genuine outlier at 3.97 screens** — and
+notably the only surface that is long WITHOUT being a list of destinations. It
+is long because it accumulated sections.
+
+**Why this strengthens rather than weakens MB-GOD-013.** If every surface were
+4 screens deep, the fix would be a house-wide design-system problem and a much
+larger argument. It is not: the team demonstrably builds tight, single-job
+surfaces — nine times over. Profile drifted on its own, which makes the
+restructuring plan a targeted correction rather than a redesign of the product's
+character.
+
+**Empty states, observed in passing** (the brief treats these as product, not
+placeholder). Each states the situation and offers the next action rather than
+stopping at "nothing here":
+
+- Plans — "Nothing planned yet. Your upcoming plans will appear here." + New plan
+- Events — "Nothing on yet. When you or your Muddies publish an event, it shows
+  up here." + Create an event
+- Notifications — "You're all caught up. New updates will appear here."
+- UpFor — "Nothing happening yet" + Say / Start an UpFor
+
+These are good. Recorded so the deeper Mission 2 pass does not spend time
+re-deriving that they are fine.
+
+**Not yet audited** (Mission 2 Advanced remains PARTIAL): Landing, Auth,
+Activation, Conversation, Plan detail, Plan Chat, Event detail, Safe Arrival.
+Eight surfaces, none of which have had the user-job / hierarchy treatment.
