@@ -18,7 +18,7 @@ COMMITS      36 local recovery checkpoints, none pushed, nothing deployed
 | 1 — Reliability | Advanced | **COMPLETE** (route audit, auth, control inventory, mutation & journey audit, hydration, test infra, pre-hydration form audit) |
 | 1 — Reliability | Extremely Advanced | **COMPLETE (7/7 domains)** | **PARTIAL — 3/7 domains** (corrected in MB-GOD-027; previously mis-reported as 5/7). See the canonical domain table below. |
 | 1 — Reliability | God Mode | **COMPLETE** — 41 nodes / 245 edges / 0 wrong destinations; both carried security items closed |
-| 2 — UI/UX | Advanced | **PARTIAL** — Profile RESTRUCTURED and verified (MB-GOD-013 fixed: 3.97 -> 2.40 screens, settings share 28.6% -> 0%). Home judged good. 8 surfaces still unaudited: Landing, Auth, Activation, Conversation, Plan detail, Plan Chat, Event detail, Safe Arrival |
+| 2 — UI/UX | Advanced | **COMPLETE — 18/18 surfaces.** Verdicts: 14 GOOD, 4 GOOD WITH MINOR DEBT, 0 structural, 0 rebuild. Profile was the one structural problem and is fixed (MB-GOD-013). |
 | 3 — Flow | all levels | not started (deep-link intent + 10 journeys verified as Mission 1 evidence) |
 | 4 — Information architecture | — | **PARTIAL** — Profile restructure DONE, Settings receiving work DONE; **MB-GOD-007 still waiting** |
 | 5 — Mobile shell / safe area | Advanced | **complete — no root-cause defect** (MB-GOD-009) |

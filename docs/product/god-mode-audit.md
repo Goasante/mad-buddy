@@ -2676,3 +2676,128 @@ primitive deliberately has no block check.
 | 7/7 lifecycle domains green | ✅ |
 
 **MISSION 1 = COMPLETE.**
+---
+
+## MISSION 2 ADVANCED — the remaining eight surfaces
+
+Measured with `scripts/hardening/ux-audit.mjs` at 393x852 against production
+output, using the same method that made the Profile restructure decidable:
+length in screens, the first-screenful text, section headings with their
+positions, control counts, and touch targets.
+
+### MB-GOD-038 - Surface audit: eight surfaces measured, verdicts assigned
+
+| Surface | Length | Above-fold controls | Primary CTA | Verdict |
+| --- | ---: | ---: | --- | --- |
+| **Landing** | 9.46 screens | 4 | "Get started: create a Mad Buddy account" | **GOOD WITH MINOR DEBT** |
+| **Login** | 1.00 | 7 of 7 | "Log in" (+ Continue with Google) | **GOOD** |
+| **Signup** | 1.00 | 9 of 9 | "Create account" | **GOOD** |
+| **Conversation** | 1.00 | 10 | the composer | **GOOD WITH MINOR DEBT** |
+| **Plan Chat** | 1.00 | 9 | the composer | **GOOD WITH MINOR DEBT** |
+| **Plan detail** | 1.00 | 23 | "Open Plan Chat" | **GOOD** |
+| **Event detail** | 1.88 | 19 | "Open <event>" | **GOOD** |
+| **Safe Arrival** | 1.00 | 8 of 8 | "Start Safe Arrival" | **GOOD** |
+
+**No surface is a structural UX problem, and none needs a rebuild.** That is a
+genuinely good result and it is worth stating plainly rather than manufacturing
+findings: seven of eight fit in roughly one screen, every one has a single
+unambiguous primary CTA, and every one states its job in its first line.
+
+**Three-second test, verbatim first screenfuls:**
+
+- **Login** — *"Welcome Muddy · Continue with Google · OR LOG IN WITH EMAIL"*
+- **Signup** — *"Create your account · Start with email, then choose how friends find you."*
+- **Safe Arrival** — *"Let trusted Muddies know you got there safely. They'll know
+  your destination and expected arrival time… No live location is shared. You're
+  in control."*
+- **Landing** — *"When your Muddies are close, they glow. A Muddy is a friend you
+  both approve. See who's nearby, connect, and make plans, without sharing exact
+  locations."*
+
+Safe Arrival's copy is the strongest in the product: it states what is shared,
+what is not, and who decides, in three sentences. The Landing headline does the
+same job for the whole app and leads with the privacy constraint rather than
+burying it.
+
+**Auth is the cleanest pair of surfaces audited so far.** Both are exactly one
+screen with every control above the fold — no scrolling to find the button that
+completes the task, which is the single most common failure on sign-in screens.
+
+### MB-GOD-039 - Conversation header icon buttons were 32px
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Conversation, Plan Chat |
+| **Severity** | P2 |
+| **Category** | Mobile ergonomics / design-system drift |
+| **Status** | **FIXED (runtime-verified)** |
+
+Three icon-only buttons in the conversation header measured **32x32**:
+
+```
+Back to conversations   32x32   ← the primary way OUT of a conversation on mobile
+Message information     32x32
+Unmute conversation     32x32
+```
+
+`h-8 w-8` — sized by the glyph rather than by a thumb. Same defect class as
+MB-GOD-005 (nine tab rows) and MB-GOD-016 (back links in two files): an
+icon-only control inheriting its size from its icon.
+
+**Back matters most.** On mobile it is the only way out of a thread, and a
+32px target next to the screen edge is exactly where a mis-tap costs the user
+their place.
+
+Fixed to `h-11 w-11` (44px). Verified at runtime: all three are gone from the
+small-target list. The visually identical `h-8 w-8` spans in `auth-layout.tsx`,
+`journey-progress.tsx` and `safe-arrival-page.tsx` were deliberately **not**
+touched — they are decorative `<span>` icons that nobody taps.
+
+### INVESTIGATED / NOT A DEFECT - the signup terms checkbox is 16x16
+
+The audit flagged an unnamed **16x16** control on `/signup` — the terms-consent
+checkbox, which is legally significant and far below the touch minimum.
+
+**It is not a defect.** The input is wrapped in a `<label>` measuring **319x48**,
+and tapping the label text toggles it — verified by clicking 40px from the right
+edge of the label, well away from the box itself, and confirming the checked
+state flipped. The effective target is comfortably above minimum; the measurement
+saw only the `<input>` element.
+
+Recorded because the same shape will recur: an input's own box is not its
+tappable area when a label wraps it.
+
+### INVESTIGATED / NOT A DEFECT - Plan and Event deep links "land on the list"
+
+The audit recorded `?plan=<id>` landing on `/plans` and `?event=<id>` landing on
+`/events`, which reads like a deep link being ignored.
+
+**Both work correctly.** Each opens a detail **dialog** over the list route, with
+the correct resource:
+
+```
+Plan detail  → dialog: "detail-fixture dinner · Sun, Aug 23, 1:29 PM · The usual
+               place · PEOPLE (2 GOING) · You Going · Ama Boateng Invited"
+Event detail → dialog: "detail-fixture launch night · LIVE NOW · You are hosting
+               · Share this event"
+```
+
+A list route hosting a detail modal is a legitimate pattern — the same one the
+Muddy profile modal uses (MB-GOD-005 follow-up). The URL not changing is the
+design, not a failure.
+
+### Landing: minor debt, recorded for Mission 7
+
+Landing is **9.46 screens** — long, but it is a marketing page whose job is to
+explain a product nobody has used yet, so length is not automatically wrong (the
+same reasoning that cleared Settings at 3.60 screens as an index).
+
+Two small items, neither urgent:
+- Footer links (`privacy policy`, `How it works`, `Privacy`, `About`, `Features`)
+  measure ~19px tall. They are inline prose links in a footer, the documented
+  exception, but a footer is also where they are hardest to hit.
+- The feature sections (`Glow`, `Wave`, `Plan`, `Meet`, then `Easy catch-ups`,
+  `Same event`, `Everyday plans`, `Privacy-first`) present **eight** headings
+  across ~1,700px, which is a lot of parallel structure for one scroll.
+
+Full landing work remains **Mission 7**; this is the baseline it starts from.

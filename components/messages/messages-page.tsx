@@ -1301,7 +1301,7 @@ export function MessagesPageContent({
                     onClick={closeConversation}
                     aria-label="Back to conversations"
                     title="Back to conversations"
-                    className="focus-ring safe-motion -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground lg:hidden"
+                    className="focus-ring safe-motion -ml-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground lg:hidden"
                   >
                     <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                   </button>
@@ -1319,7 +1319,7 @@ export function MessagesPageContent({
                         type="button"
                         aria-label="Message information"
                         title="Message information"
-                        className="focus-ring safe-motion grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        className="focus-ring safe-motion grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
                       >
                         <Info className="h-4 w-4" aria-hidden="true" />
                       </button>
@@ -1344,7 +1344,7 @@ export function MessagesPageContent({
                     disabled={isPending}
                     aria-label={selected.muted ? "Unmute conversation" : "Mute conversation"}
                     title={selected.muted ? "Unmute conversation" : "Mute conversation"}
-                    className="focus-ring safe-motion grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
+                    className="focus-ring safe-motion grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
                   >
                     <VolumeX className="h-4 w-4" aria-hidden="true" />
                   </button>
