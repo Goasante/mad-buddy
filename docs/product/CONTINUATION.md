@@ -1,14 +1,14 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 12.** The next session continues from here.
+**Written at the end of session 13.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         63f7c64
+HEAD         (session 13 final — see git log -1)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      36 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      41 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -179,6 +179,33 @@ JOURNEYS    10/10   LIFECYCLE 7/7   MULTI-TAB 5/5   STATE GRAPH 193 edges
 6. **Mission 5 Extremely Advanced**: keyboard-open composer, landscape,
    installed PWA / Capacitor standalone, and safe-area INSIDE sheets, modals,
    the photo viewer and the camera. None of these are covered yet.
+
+## MISSION 2 ADVANCED IS COMPLETE — 18/18 surfaces
+
+Verdicts: **14 GOOD, 4 GOOD WITH MINOR DEBT, 0 structural problems, 0 rebuilds.**
+Profile was the single structural problem and it is fixed (MB-GOD-013).
+
+Full detail in MB-GOD-038/039 at the end of `god-mode-audit.md`.
+
+**Next: MISSION 2 EXTREMELY ADVANCED.** That level asks a different question from
+Advanced — not "is this screen well built?" but:
+- interaction cost (how many taps for the frequent jobs?)
+- cognitive load (how much must be read before acting?)
+- progressive disclosure (what could appear only when relevant?)
+- cross-feature transitions (does finishing one thing lead to the next?)
+- empty / loading / error quality as product, not placeholder
+- motion, micro-interactions, platform feel
+- accessibility depth (screen reader, focus order, reduced motion)
+
+Do not rush it because Advanced closed. It is the level where the Profile-style
+structural insight actually comes from.
+
+**Minor debt carried from Advanced** (not urgent, do not batch-fix blindly):
+- Landing is 9.46 screens with eight parallel feature headings — Mission 7 owns it
+- Footer links ~19px — inline prose exception, but a footer is where they are
+  hardest to hit
+- Per-message actions (React / Edit / Delete) measure ~17px tall; not yet
+  established whether they sit inside a menu, which would make that acceptable
 
 ## 🏁 MISSION 1 IS COMPLETE (Advanced + Extremely Advanced + God Mode)
 
