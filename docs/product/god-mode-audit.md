@@ -4820,3 +4820,81 @@ nothing to return *to* — the user never left.
 met: the second device's message arrives on the next navigation, with no stale
 contradiction in between. The brief explicitly does not require real-time sync
 everywhere; it requires safe and understandable recovery.
+
+## Extended permissions — PASS
+
+**Nothing is asked for on ordinary navigation.** `getUserMedia`,
+`Notification.requestPermission` and `geolocation.getCurrentPosition` were each
+wrapped and the app driven across seven surfaces:
+
+```
+permissions requested on ordinary navigation: NONE
+```
+
+Every permission is behind a deliberate user action, which is the discipline
+Advanced already found for location (`first-muddy-card.tsx`: *"The OS prompt
+fires only after this tap… never automatically on render"*) — and it holds for
+camera, microphone and notifications too.
+
+**With every permission DENIED, the whole product still works:**
+
+```
+/dashboard /friends /messages /plans /events /linkr
+/hangout-mode /safe-arrival /profile /settings     10/10 usable
+page errors: none
+```
+
+Linkr degrades to *"No one nearby"* rather than breaking; Safe Arrival still
+explains itself. No surface depends on a permission to render.
+
+## Abandoned creation — classified by effort, not by capability
+
+Measured the actual input cost of each creator:
+
+| Creator | Visible inputs | Classification |
+| --- | --- | --- |
+| Plan | 5 (text, date, time, textarea) | **SHOULD PERSIST** — highest effort, and a date/time pair is genuinely annoying to re-enter |
+| UpFor | 2 (text) | **ACCEPTABLE TO RESET** — deliberately cheap; the feature's whole point is spontaneity |
+| Event | 0 at first step | **ACCEPTABLE TO RESET** — progressive, nothing typed yet at the point of abandonment |
+| Profile edit | — | **PRIVACY-SENSITIVE TO PERSIST** — same allow-list question as MB-GOD-051 |
+| Message draft | 1 | **CLASSIFIED** (MB-GOD-051, unchanged) |
+
+Only the Plan creator crosses the effort threshold where persistence is clearly
+worth its cost, and none is implemented here — the brief is explicit that draft
+persistence must not be built merely because input can be lost. Recorded so the
+decision has evidence attached.
+
+## Home priority — extreme matrix
+
+The formalized 8-tier model was stress-tested across reachable combinations
+(`scripts/hardening/home-priority-matrix.mjs`, four states) and holds:
+
+```
+unread + incomplete profile   -> setup SUPPRESSED, Near leads
+unread + upcoming Plan        -> Plan leads, setup SUPPRESSED
+upcoming Plan, no unread      -> Plan leads, setup SHOWN
+quiet: Muddy only             -> Near leads, setup SHOWN
+```
+
+Unread suppresses setup and **nothing else** — the Plan card still leads where a
+Plan exists, and Near is untouched. No dashboard creep: Home gained no module,
+no count and no message preview.
+
+## Return loops — re-rated after multi-person testing
+
+| Loop | Rating | Evidence from repeated / multi-user behaviour |
+| --- | --- | --- |
+| Messages | **STRONG** | someone replies; unread now also suppresses setup on Home |
+| Muddies | **STRONG** | requests and proximity change without prompting |
+| Plans | **STRONG** | an upcoming commitment leads Home; conversion carries only real acceptances |
+| Events | **STRONG** | LIVE NOW surfaces on Home |
+| UpFor | **STRONG** | verified multi-person: the creator sees names AND a count, and expiry is honest on both sides |
+| Safe Arrival | **STRONG** | active session only, correctly silent when idle |
+| Linkr | **WEAK** | unchanged |
+
+**Linkr stays WEAK, deliberately.** The multi-persona run confirmed the mutual
+moment is handled well — one-sided interest invisible, reciprocity clean, no
+false Muddy relationship. What is missing is any truthful reason to come back
+and *find* a mutual. Per the brief this is carried to Mission 3 God Mode rather
+than patched with streaks, badges or manufactured urgency. The honest direction
+is surface freshness — real new candidate availability — not a push.
