@@ -6212,3 +6212,50 @@ RESTORED                                 → 5/5 pass
 ```
 
 Suite: **6922 tests / 346 files**.
+
+## MB-GOD-055 — RESOLVED. The flag gates participation, never withdrawal.
+
+**The semantic table the brief asked for**, derived from what each action does
+rather than from symmetry:
+
+| Action | Flag required? | Why |
+| --- | --- | --- |
+| `uploadMomentMediaAction` | **yes** | creates content |
+| `reactToMomentAction` | **yes** | new participation |
+| `removeMomentReactionAction` | **yes** | withdrawal, but paired — see below |
+| `tuneInAction` | **yes → FIXED** | CREATES a relationship row |
+| `deleteMomentAction` | **no** | withdrawal — must never trap content |
+| `reportContentAction` | **no** | safety — must never suspend moderation |
+| `tuneOutAction` | **no** | withdrawal — DELETES a relationship row |
+
+**The principle, stated once:** the Product Constitution's *"disabled features
+cannot block progression"* cuts **both ways**. A paused feature must not keep
+accruing new participation for a surface nobody can see; and it must never trap
+somebody in content, a relationship, or a moderation queue they cannot leave.
+
+`tuneIn` inserts into `tune_ins`; `tuneOut` deletes from it. That is the whole
+distinction, and it is why they are treated differently despite being a matched
+pair in the UI.
+
+**`removeMomentReactionAction` is the honest edge case**, and the test records
+it as a deliberate choice rather than pretending the rule is clean:
+react/unreact are one control on one surface, and splitting them would let a
+paused feature show a reaction that cannot be undone through the same control.
+Both stay gated.
+
+**Mutation-tested in BOTH directions** — which matters more than usual here,
+because the failure modes are opposite:
+
+```
+MUTATION  gate the withdrawal action (tuneOut)  → FAIL "stays reachable while paused"
+RESTORED                                        → 9/9 pass
+```
+
+A guard that only caught under-gating would have let somebody be trapped by an
+over-eager fix. `lib/features/flag-semantics.test.ts` catches both.
+
+**Moments was not redesigned or expanded.** It remains LEGACY / PRODUCT REVIEW
+REQUIRED; the only change is one guard on one action, plus the reasoning written
+where the asymmetry lives.
+
+Suite: **6931 tests / 347 files**.

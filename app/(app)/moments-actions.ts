@@ -922,6 +922,17 @@ export async function tuneInAction(
   if (!userId) return { ok: false, message: "Log in first." };
   if (userId === creatorId) return { ok: false, message: "You can't tune in to yourself." };
 
+  /* NEW PARTICIPATION IS GATED; WITHDRAWAL IS NOT (MB-GOD-055).
+   *
+   * Tuning in CREATES a relationship, so it is creation and the flag applies
+   * -- a paused feature must not keep accruing new participation for a surface
+   * nobody can see. `tuneOutAction` deliberately does NOT carry this check, for
+   * the same reason `deleteMomentAction` and `reportContentAction` do not:
+   * pausing a feature must never trap somebody in a relationship, a piece of
+   * content, or a moderation queue they cannot leave. */
+  const paused = await momentsPausedState(createSupabaseAdminClient());
+  if (paused) return paused;
+
   const rateLimit = await consumeRateLimit({ action: "moments.react", userId });
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
@@ -971,7 +982,14 @@ export async function tuneInAction(
   return { ok: true, message: "Tuned in." };
 }
 
-/** Tune Out. Low friction by design: no confirmation, and the creator is not told. */
+/**
+ * Tune Out. Low friction by design: no confirmation, and the creator is not told.
+ *
+ * DELIBERATELY NOT FLAG-GATED (MB-GOD-055). This is withdrawal, and a paused
+ * feature must not trap somebody in a relationship they can no longer see or
+ * manage. Same reasoning as `deleteMomentAction` and `reportContentAction`;
+ * `tuneInAction` is gated because it is new participation.
+ */
 export async function tuneOutAction(creatorId: string): Promise<MomentActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
