@@ -1,6 +1,6 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 18.** The next session continues from here.
+**Written at the end of session 19.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
@@ -8,7 +8,7 @@ BRANCH       hardening/god-mode-product-pass
 HEAD         (see foot of file)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      70 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      75 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -23,7 +23,8 @@ COMMITS      70 local recovery checkpoints, none pushed, nothing deployed
 | 2 — UI/UX | God Mode | **COMPLETE.** MB-GOD-041 and 042 closed; hover-only class closed; vocabulary, component/typography/icon grammar, focus system, theme parity, state colour, trust expression and the visual board all audited. 200% text went 29/60 broken → 0/60. |
 | **2 — UI/UX** | **ALL THREE LEVELS** | **COMPLETE — closeout written in the audit ledger** |
 | 3 — Journeys | Advanced | **COMPLETE — 20/24 audited experientially, 4 resting on Mission 1 lifecycle proof.** 4 findings: MB-GOD-049 and 050 FIXED, 051 classified, 052 open. |
-| 3 — Journeys | Extremely Advanced | **PARTIAL.** MB-GOD-052 FIXED; Linkr mutual and block/recovery audited with live personas; Home priority model formalized; return loops re-rated. Remaining: UpFor momentum/conversion UX, multi-device, session expiry, offline recovery, time transitions, burst re-entry, extended permissions. |
+| 3 — Journeys | Extremely Advanced | **COMPLETE.** UpFor momentum 7/7 and conversion 6/6 with three live people; stale/expiry/offline 6/6; permissions 10/10; Home matrix 4/4. Findings: P0=0 P1=0 P2=1 (fixed) P3=0. |
+| 3 — Journeys | God Mode | not started — the "does this lead to real-world social value" pass |
 | 4 — Information architecture | — | **PARTIAL** — Profile restructure DONE, Settings receiving work DONE; **MB-GOD-007 still waiting** |
 | 5 — Mobile shell / safe area | Advanced | **complete — no root-cause defect** (MB-GOD-009) |
 | 5 — Mobile shell | Extremely Advanced | not started (keyboard, landscape, PWA/Capacitor, sheets/modals/camera) |
@@ -791,3 +792,58 @@ permissions — notifications, camera, microphone, file access.
 `scripts/hardening/journeys-multi.mjs` and `home-priority-matrix.mjs` are the
 harnesses to extend. Every fixture asserts its own success — keep that, and
 assert the SHAPE of any RPC result before asserting behaviour.
+
+## Session 19 — Mission 3 Extreme CLOSED
+
+```
+UpFor momentum            PASS 7/7   (3 live people)
+UpFor -> Plan             PASS 6/6   (nobody silently enrolled)
+Multi-device / expiry / offline  PASS 6/6
+Extended permissions      PASS 10/10 surfaces, 0 asks on navigation
+Home priority matrix      PASS 4/4
+Return loops              6 STRONG, 1 WEAK (Linkr)
+```
+
+### Things the next session should not re-derive
+
+- **UpFor conversion does not enrol anyone silently.** A pending responder is
+  ABSENT from the converted Plan; only an accepted one carries over as `going`.
+  `lib/plans/service.ts:477-478` passes `p_invitee_ids: []` and
+  `p_initial_going_ids: []` — the RPC projects participants from the UpFor's own
+  accepted requests, so there is no second definition of who joins.
+  `p_request_key: hangoutId` makes one UpFor become exactly one Plan.
+- **Failure messaging is already right.** An expired session and an offline send
+  both produce "The message could not be sent. Try again.", write nothing, and
+  duplicate nothing on reconnect. The app stays on the conversation rather than
+  redirecting to login — there is nothing to return to, because the user never
+  left.
+- **Permissions are contextual everywhere.** Nothing is requested on ordinary
+  navigation (verified by wrapping getUserMedia, Notification.requestPermission
+  and getCurrentPosition), and all ten surfaces stay usable with every
+  permission denied.
+- **Schema facts that have each cost a probe:** `hangout_sessions` keys on
+  `owner_id` (not host_id); `hangout_ends_after_start` forbids dragging
+  `ends_at` into the past, so simulating expiry moves the whole window;
+  `linkr_record_connect` takes `p_actor`/`p_target`/`p_event_id` and returns
+  `{ matched, connection_id, created }`.
+- **Abandoned creation, classified by measured effort:** Plan = 5 inputs
+  including a date/time pair (SHOULD PERSIST), UpFor = 2 and deliberately cheap
+  (ACCEPTABLE TO RESET), Event = 0 at its first step. None implemented.
+- **Linkr behavioural block guard stays classified.** Attempted this session.
+  `connectWithCandidateAction` is a "use server" action needing Next's action-id
+  encoding, plus an activated Linkr profile on both sides. The brief forbids
+  substituting the reciprocity RPC as proof.
+- **Linkr is still the one WEAK return loop**, and that is deliberate. The
+  mutual moment is handled well; nothing gives a truthful reason to come back
+  and find one. Carried to God Mode rather than patched with streaks or urgency.
+
+### Next: MISSION 3 GOD MODE
+
+Fresh session. The question: does Mad Buddy systematically move people from
+setup → relationship → social opportunity → real-world connection → meaningful
+return? Activation quality, network effects, empty-network survival, density,
+cross-feature conversion, emotional progression, trust accumulation, healthy
+retention, long-term failure states.
+
+The Linkr return loop is the single largest open journey question and belongs
+there.
