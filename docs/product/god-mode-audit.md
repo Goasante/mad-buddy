@@ -4263,3 +4263,64 @@ candidates exist, so returning is entirely self-motivated. Recorded rather than
 "fixed", because the brief is explicit that notifications must not be
 manufactured for retention — and Linkr is the surface where an unsolicited nudge
 would be least welcome.
+
+## MB-GOD-050 - CLOSED. The first-Muddy moment now completes first value
+
+The card celebrated `first_muddy_added` and offered nothing. The product's own
+first-value definition needs `first_muddy_added` **AND** a social act, so the
+screen marking the first half was the screen best placed to drive the second.
+
+**"Say hi", not a new interaction.** The repository already owns both a Wave
+primitive (`lib/social/waves-mobile.ts`) and a Say-hi path
+(`runRelationshipAction` in `dashboard-page.tsx`, with its own semantics tests).
+A wave is a nudge; the milestone that completes first value is a conversation.
+Say hi is also the verb Home already uses for a nearby Muddy, so the vocabulary
+does not fork — and no new interaction system was invented to satisfy a
+milestone.
+
+**The card reuses Home's canonical path** rather than growing a second route to
+a conversation: `onSayHi` calls `runRelationshipAction("say_hi", muddyId)`,
+which resolves through `openDirectConversationAction` and `conversationHref` —
+the same entry New Message uses. Nothing is auto-sent; the door opens and the
+person writes their own words. `first-muddy.test.ts` now asserts the card
+contains neither `openDirectConversationAction` nor a hand-built `/messages`
+path.
+
+**ONE action, enforced structurally.** "Turn on Glow" and "Say hi" are branches
+of a single conditional, not two blocks. While Glow is off, turning it on is
+the honest next step; once on, the social act is. An earlier version rendered
+both, which put the warm thing beside the useful thing and made the person
+choose — and the existing "offers one primary action" test caught it. That test
+now asserts the exclusive `needsLocation ? … : onSayHi ? …` chain rather than
+counting `<Button` in the file, so it can tell an exclusive branch from two
+competing buttons.
+
+**Verified end to end** (`scripts/hardening/journey-first-value.mjs`):
+
+```
+PASS  the fixture applied: one Muddy, milestone recorded, no social act
+PASS  Home acknowledges the first Muddy
+PASS  the card offers Say hi as its next action            — "Say hi to Kofi"
+PASS  Say hi and Turn on Glow are never offered together
+PASS  Say hi opens a conversation, not a 404 or the list   — /messages?conversation=…
+PASS  the conversation names the right person              — "KM Kofi Mensah @kofim"
+PASS  exactly one direct conversation exists               — 1 conversation
+PASS  the message was actually sent                        — 1 message
+PASS  a social-act milestone is recorded                    — first_muddy_added, first_message_sent
+PASS  the celebration survives the same session, as designed
+PASS  the celebration retires once the six-hour window passes
+
+11/11 first-value checks passed
+```
+
+The chain is complete: **first value is now reachable in one tap from the
+moment that announces it.**
+
+**Method note — an assertion I got wrong.** The probe first asserted the
+celebration disappears once the social act lands. That was my assumption, not
+the product's rule: `shouldAcknowledgeFirstMuddy` is TIME-boxed
+(`FIRST_MUDDY_ACKNOWLEDGEMENT_MS`, six hours), reasoned as *"long enough to
+survive closing the app and coming back the same evening, short enough that
+returning tomorrow is an ordinary Home rather than the product congratulating
+you again"*. Persisting for the session is correct. The check now tests the real
+rule on both sides of the window, by ageing the milestone past six hours.

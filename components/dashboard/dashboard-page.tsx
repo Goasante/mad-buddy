@@ -168,7 +168,7 @@ type DashboardPageContentProps = {
    * The Muddy to acknowledge, or null once the moment has passed.
    * Server-derived from milestone recency -- never a client flag.
    */
-  firstMuddy?: { displayName: string; avatarUrl: string | null } | null;
+  firstMuddy?: { id: string; displayName: string; avatarUrl: string | null } | null;
   firstMuddyNeedsLocation?: boolean;
   /**
    * Milestones this person has ever reached.
@@ -1013,7 +1013,18 @@ export function DashboardPageContent({
             REPLACES the generic activation card -- two cards asking for the same
             thing is the app repeating itself at the moment it should be warm. */}
         {firstMuddy ? (
-          <FirstMuddyCard muddy={firstMuddy} needsLocation={firstMuddyNeedsLocation} className="mb-4" />
+          <FirstMuddyCard
+            muddy={firstMuddy}
+            needsLocation={firstMuddyNeedsLocation}
+            /* The SAME canonical path every other Say hi uses
+               (MB-GOD-050): openDirectConversationAction, then
+               conversationHref. Home already owns that in
+               runRelationshipAction, so the card borrows it rather than
+               growing a second route to a conversation. */
+            onSayHi={(muddyId) => runRelationshipAction("say_hi", muddyId)}
+            sayHiPending={isPending}
+            className="mb-4"
+          />
         ) : activationState ? (
           <ActivationCard
             state={activationState}

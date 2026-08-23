@@ -161,7 +161,38 @@ describe("the capability is offered, never taken", () => {
   });
 
   it("offers one primary action", () => {
-    expect(card.split("<Button").length - 1).toBe(1);
+    /* ONE VISIBLE, not one in the file (MB-GOD-050).
+     *
+     * The card now has two CTAs, and they are MUTUALLY EXCLUSIVE: while Glow
+     * is off, "Turn on Glow" is the honest next step; once it is on, "Say hi"
+     * is, because the product's own first-value definition needs a social act
+     * after `first_muddy_added` and this card previously offered nothing at
+     * all in that state.
+     *
+     * Counting `<Button` in the source cannot tell an exclusive branch from
+     * two competing buttons, so the assertion moved to the structure that
+     * makes them exclusive. If anyone renders them side by side, the
+     * `needsLocation ? … : onSayHi ? …` chain disappears and this fails. */
+    const buttons = card.split("<Button").length - 1;
+    expect(buttons, "more CTAs than the two exclusive states").toBe(2);
+    expect(card, "the two CTAs must be branches of ONE conditional").toMatch(
+      /needsLocation \? \([\s\S]*?\) : onSayHi \? \(/
+    );
+    // And neither may sit outside that conditional as a third, always-on CTA.
+    const afterChain = card.slice(card.indexOf(") : onSayHi ? ("));
+    expect(afterChain.split("<Button").length - 1, "a CTA outside the exclusive chain").toBe(1);
+  });
+
+  it("Say hi goes through Home's canonical conversation path", () => {
+    /* The card must not grow its own route to a conversation. Home already
+       owns `runRelationshipAction`, which calls openDirectConversationAction
+       and then conversationHref -- the same entry New Message uses. */
+    const home = stripComments(readFileSync("components/dashboard/dashboard-page.tsx", "utf8"));
+    expect(home).toContain('onSayHi={(muddyId) => runRelationshipAction("say_hi", muddyId)}');
+    expect(card, "the card must not open a conversation itself").not.toContain(
+      "openDirectConversationAction"
+    );
+    expect(card, "the card must not build a conversation URL itself").not.toContain("/messages");
   });
 
   it("states each guarantee in words, not icon alone", () => {

@@ -59,8 +59,12 @@ export type ActivationProjection = {
   milestones: string[];
   /** True only while the first-Muddy moment is still recent. */
   acknowledgeFirstMuddy: boolean;
-  /** Who it was with. Null unless the acknowledgement is live. */
-  firstMuddy: { displayName: string; avatarUrl: string | null } | null;
+  /** Who it was with. Null unless the acknowledgement is live.
+   *
+   * `id` carries so the card can offer "Say hi" on that person (MB-GOD-050).
+   * It comes from the listMuddies call this branch already makes, so nothing
+   * extra is fetched to get it. */
+  firstMuddy: { id: string; displayName: string; avatarUrl: string | null } | null;
   /**
    * The relationship Home should name, and what to offer for it.
    *
@@ -417,7 +421,7 @@ export async function loadActivationProjection(userId: string): Promise<Activati
     const { muddies } = await listMuddies(userId);
     const only = muddies[0];
     if (only) {
-      firstMuddy = { displayName: only.displayName, avatarUrl: only.avatarUrl };
+      firstMuddy = { id: only.id, displayName: only.displayName, avatarUrl: only.avatarUrl };
     }
   }
 

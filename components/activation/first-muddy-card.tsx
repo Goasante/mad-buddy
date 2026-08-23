@@ -24,14 +24,32 @@ import { cn } from "@/lib/utils";
  * screen where the metaphor is being introduced.
  */
 
+/** "Ama Serwaa" -> "Ama". The CTA speaks to a person, not a record. */
+function firstNameOf(name: string): string {
+  return name.trim().split(/\s+/)[0] || name;
+}
+
 export function FirstMuddyCard({
   muddy,
   /** True when the OS permission has not produced a usable fix yet. */
   needsLocation,
+  onSayHi,
+  sayHiPending = false,
   className
 }: {
-  muddy: { displayName: string; avatarUrl: string | null };
+  muddy: { id: string; displayName: string; avatarUrl: string | null };
   needsLocation: boolean;
+  /**
+   * Opens the direct conversation with this person (MB-GOD-050).
+   *
+   * Passed in rather than performed here, so this card keeps using Home's
+   * canonical `runRelationshipAction` -- `openDirectConversationAction` then
+   * `conversationHref` -- instead of growing a second path to a conversation.
+   * Nothing is auto-sent: the door opens and the person writes their own
+   * words.
+   */
+  onSayHi?: (muddyId: string) => void;
+  sayHiPending?: boolean;
   className?: string;
 }) {
   const reducedMotion = useReducedMotion();
@@ -71,6 +89,27 @@ export function FirstMuddyCard({
         </div>
       </div>
 
+      {/* ONE next action at a time, and never two CTAs (MB-GOD-050).
+        *
+        * This card marked the moment `first_muddy_added` completes and then
+        * offered nothing -- every visible control was global chrome. The
+        * product's own definition of first value
+        * (lib/activation/home-maturity.ts) is `first_muddy_added` AND a social
+        * act, so the screen celebrating the first half was the screen best
+        * placed to drive the second, and it sent people to the bottom
+        * navigation to work it out.
+        *
+        * The two states are MUTUALLY EXCLUSIVE, which is why this is an
+        * if/else rather than two independent blocks. While Glow is still off,
+        * turning it on is the honest next step and the card says so; once it
+        * is on, the next step is the social act. Rendering both would put
+        * "Say hi" beside "Turn on Glow" and make the person choose between the
+        * warm thing and the useful thing -- and `first-muddy.test.ts` already
+        * holds the line that this card offers ONE primary action.
+        *
+        * "Say hi" rather than Wave: a wave is a nudge, and the milestone that
+        * completes first value is a conversation. It is also the verb Home
+        * already uses for a nearby Muddy, so the vocabulary does not fork. */}
       {needsLocation ? (
         <>
           <hr className="my-4 border-border/60" />
@@ -106,10 +145,20 @@ export function FirstMuddyCard({
 
           {/* The OS prompt fires only after this tap, from the existing
               settings flow -- never automatically on render. */}
-          <Button asChild size="lg" className="mt-4 w-full sm:w-auto sm:min-w-[12rem]">
+          <Button asChild size="lg" className="mt-4 w-full sm:w-auto sm:min-w-[min(12rem,100%)]">
             <Link href={"/settings" as Route}>Turn on Glow</Link>
           </Button>
         </>
+      ) : onSayHi ? (
+        <Button
+          type="button"
+          size="lg"
+          className="mt-4 w-full sm:w-auto sm:min-w-[min(12rem,100%)]"
+          onClick={() => onSayHi(muddy.id)}
+          disabled={sayHiPending}
+        >
+          {sayHiPending ? "Opening…" : `Say hi to ${firstNameOf(muddy.displayName)}`}
+        </Button>
       ) : null}
     </section>
   );
