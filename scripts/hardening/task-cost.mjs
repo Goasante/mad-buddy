@@ -79,6 +79,20 @@ export async function measureTask(browser, task) {
          * mis-declared role costs nothing and only a genuinely absent control
          * fails. */
         const candidates = [];
+        /* An href pins a navigation to its DESTINATION. "Muddies" matches both
+           the bottom-nav link (/friends) and a Home card reading "Find Muddies"
+           (/friends?tab=add), and `.first()` picks whichever the DOM orders
+           first -- which landed the journey on the Add tab and made the list
+           look unrendered. Same lesson as the state-graph crawler: select by
+           identity. */
+        /* Scoped to the bottom nav, then anywhere. An unscoped
+           a[href="/messages"] matches the nav item AND the quick-actions
+           launcher, and `.first()` on an off-screen match times out at zero
+           taps -- which read as "the app has no Messages link". */
+        if (step.href) {
+          candidates.push(page.locator(`nav a[href="${step.href}"]`));
+          candidates.push(page.locator(`a[href="${step.href}"]`));
+        }
         if (step.role) candidates.push(page.getByRole(step.role, { name: step.text, exact: step.exact ?? false }));
         for (const role of ["button", "link"]) {
           if (role !== step.role) candidates.push(page.getByRole(role, { name: step.text, exact: step.exact ?? false }));
@@ -87,7 +101,14 @@ export async function measureTask(browser, task) {
 
         let target = null;
         for (const c of candidates) {
-          if (await c.count()) { target = c.first(); break; }
+          const n = await c.count();
+          if (!n) continue;
+          // Prefer a candidate that is actually visible; a present-but-hidden
+          // match otherwise wins and then times out.
+          for (let i = 0; i < Math.min(n, 4); i += 1) {
+            if (await c.nth(i).isVisible().catch(() => false)) { target = c.nth(i); break; }
+          }
+          if (target) break;
         }
         if (!target) throw new Error(`no control named "${step.text}" (any role)`);
         await target.scrollIntoViewIfNeeded({ timeout: 8000 }).catch(() => {});

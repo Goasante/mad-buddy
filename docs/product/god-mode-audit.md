@@ -3003,3 +3003,205 @@ data measures the seed, not the product. The unique index also refused the
 canonical re-key, revealing that a proper QA<->Kofi conversation already
 existed — the malformed fixture was a duplicate the product would never have
 created. `seed-detail-surfaces.mjs` now builds the key canonically.
+
+### Empty states: 12 audited, 0 defects
+
+`scripts/hardening/empty-states.mjs` visits each surface's empty state in the
+browser and captures the ACTUAL rendered copy plus the actions offered. The
+brief's standard is that an empty state must answer three questions: what is
+this, why is it empty, what should I do next.
+
+Every one uses a **title + explanation** pair, and none reduces to the bare
+database report the brief warns against:
+
+| Surface | Copy |
+| --- | --- |
+| Muddies · Requests | No new requests / New friend requests will appear here. |
+| Muddies · Blocked | No blocked users / People you block will appear here. |
+| Plans · Upcoming | Nothing planned yet / Your upcoming plans will appear here. |
+| Plans · Past | No past plans / Plans you've joined will appear here. |
+| Plans · Invitations | No invitations / New plan invitations will appear here. |
+| Plans · No date yet | Nothing waiting on a time / Plans without a date yet will appear here. |
+| Messages · Unread | No conversations found / Try another name or keyword. |
+| Notifications | You're all caught up / New updates will appear here. |
+| Circles · My Circles | No Circles yet / Create a private Circle or accept an invitation to get started. |
+| Circles · Invitations | No Circle invitations / Invitations from approved Muddies will appear here. |
+| UpFor · Muddies | None of your Muddies are UpFor anything / When one of them says what they are up for, it shows up here. |
+| UpFor · Around | Nothing live around you right now / This only shows UpFors you can join. Start one and see who is in. |
+
+A regex for bare copy (`no data`, `nothing here`, `empty`, `none`, `no results`)
+matched **zero** surfaces.
+
+**UpFor's are the strongest in the product.** `upForEmptyCopy` in
+`lib/social/upfor-feed.ts` returns DIFFERENT copy per tab, so each explains why
+*that particular* list is empty rather than sharing one generic line — and the
+`around` variant does the hardest thing an empty state can do, explaining a
+privacy boundary as a feature: "This only shows UpFors you can join."
+
+The codebase already states the standard, in `activation-card.tsx:25`:
+
+> their evening; "No results" is a database report.
+
+**Verdict: PASS, no changes.** This is a case where the correct Extreme outcome
+is to confirm quality rather than manufacture a finding.
+
+Two notes, neither a defect:
+
+- **`/moments` redirects to Home.** Moments is behind the `momentsEnabled`
+  feature flag and is currently scope-reduced OUT, with
+  `lib/features/scope-reduction.test.ts` asserting it is removed from navigation.
+  The redirect is the flag working, not a broken route.
+- **Messages' empty state is search-shaped** ("No conversations found / Try
+  another name or keyword") because the Unread tab was reached with the filter
+  active. That copy is right for a filtered result. The zero-conversations state
+  is a different string and was not reachable in this account, so it is recorded
+  as NOT AUDITED rather than assumed good.
+
+### MB-GOD-041 (P2) - Offline in-app navigation leaves a blank page with no way back
+
+`scripts/hardening/failure-states.mjs` drives real failures against a RUNNING
+app rather than a cold load, because a mid-session outage is the realistic
+shape: the app is open, and the next thing the user does fails.
+
+Going offline and then tapping an in-app link:
+
+```
+before offline   url=/plans          body length 222
+t~2000ms         url=/               body length 0
+t~4000ms         url=/               body length 0
+t~8000ms         url=/               body length 0
+```
+
+The user lands on `/` with a **completely blank document** that never resolves.
+No error, no offline notice, no retry, no navigation — the app is gone, and the
+only exit is the browser's own back button or a force-reload, neither of which
+exists as a visible control in an installed PWA.
+
+**Why it happens.** `public/sw.js:26` returns early for navigations:
+
+```js
+if (event.request.method !== "GET" || event.request.mode === "navigate") return;
+```
+
+So the service worker caches assets but deliberately does not handle document
+navigation, and there is no offline fallback route anywhere in the app. The
+per-feature offline handling that does exist — `socialize-page.tsx` watching
+`navigator.onLine`, `RealtimeNotice` on Safe Arrival — covers realtime state
+inside a loaded page, not the navigation itself.
+
+**Scope, stated precisely.** This is a P2, not a P1, because:
+
+- It needs a genuine network loss, not a slow one.
+- Nothing is lost or corrupted; the failure is inert.
+- Mutations already handle failure well (see below), so no user work is
+  destroyed by it.
+
+It is not P3 because a blank screen with no exit is indistinguishable from a
+crashed app, and Mad Buddy's users are frequently mobile and moving — which is
+exactly when connectivity drops.
+
+**Not fixed in this pass.** An offline fallback is a service-worker change
+affecting every navigation in the product, and the surrounding code documents
+having been burned once already by a bare `fetch` in that handler
+(`sw.js:27-33`). That deserves its own change with its own verification, not a
+same-session edit tacked onto a UX audit. Recorded as OPEN with the reproduction
+above.
+
+### Error handling that IS good, verified under injected failure
+
+Three things passed and are worth recording so a later pass does not
+re-investigate them:
+
+- **No internal detail ever reached the user.** A regex for SQL fragments,
+  PostgREST/Postgres error codes (`PGRST*`, `23505`, `42P01`), constraint
+  violation text, JS stack frames and the raw Supabase REST host matched
+  **nothing** in any failure scenario.
+- **A 500 on every request degrades gracefully.** With every non-asset request
+  fulfilled as 500, navigating to `/friends` still rendered the full list with
+  real data from the prefetched RSC payload, rather than erroring.
+- **Mutation failure is handled properly**, and better than most products
+  manage. `plans-page.tsx:246-262` captures the previous RSVP, restores it when
+  the server refuses or throws, and says "Couldn't save your RSVP. Try again."
+  The comment explains the exact defect it fixes: an optimistic update that was
+  never rolled back "left 'Going' selected underneath an error message saying it
+  had not worked".
+
+### Method note: two failure probes that measured nothing
+
+Recorded because both looked like findings and neither was.
+
+1. **`page.reload()` under failure measured the browser, not the app.** Offline
+   produced Chromium's own error page and the 500 produced a raw
+   `Internal Server Error` body. The app cannot style either. Replaced with
+   in-app interaction against a loaded page.
+2. **Switching a Plans tab measured nothing at all.** `setActiveBucket` filters
+   plans ALREADY IN MEMORY — no request is made — so the clean-load data simply
+   re-rendered, and the empty state it produced looked like "the app reports
+   emptiness when a fetch fails". It does not; the fetch never happened. A check
+   that cannot fail is not evidence, and this one would have shipped a false P1.
+
+### MB-GOD-042 (P2) - Closing the Muddy profile modal drops keyboard focus to the body
+
+`scripts/hardening/a11y-depth.mjs` opens the Muddy profile modal from `/friends`,
+presses Escape, and asks where focus went. WCAG 2.4.3 expects it back on the
+control that opened the dialog.
+
+```
+PASS  an opened dialog moves focus inside itself
+PASS  the dialog names itself for assistive technology
+PASS  Escape closes the dialog
+FAIL  focus returns to the control that opened it
+      — focus is on "Skip to content..." (document body)
+```
+
+Measured directly, the trigger is NOT the problem:
+
+```
+triggers in DOM before: 1
+triggers in DOM after : 1        active: BODY        activeIsBody: true
+```
+
+The opener survives the close, so this is not focus landing on a removed
+element. Focus is simply never restored.
+
+**Root cause: the dialog unmounts in the same commit as the close.**
+`muddy-profile-modal.tsx:90` passes `open={Boolean(muddy)}`, and the call sites
+(`friends-page.tsx:1338`, `dashboard-page.tsx:1274`) derive `muddy` from
+`profileUser`. Closing sets `profileUser` to null, so `open` becomes false AND
+the entire Dialog subtree disappears in one render. Radix restores focus in its
+close sequence; there is nothing left to run it from.
+
+Notably `components/ui/modal.tsx` does NOT override `onCloseAutoFocus` — only
+`onOpenAutoFocus`, and for a good documented reason (keeping the opening focus
+ring off the exit button). So the shared primitive is correct; the defect is in
+how these two call sites gate `open`.
+
+**P2, not P1**: a pointer user is unaffected, and the modal itself is otherwise
+well-built (focus moves inside on open, it is properly labelled, Escape works).
+For a keyboard or screen-reader user it is a real cost — after every profile
+view they are returned to the top of the document and must traverse the whole
+page again.
+
+**Not fixed in this pass.** The change is to keep the Dialog mounted through its
+close transition (hold the last `muddy` value until `onOpenChange(false)` has
+settled, rather than clearing it synchronously), and it touches a modal shared
+by Home and Muddies. The brief requires evidence before a structural flow
+change; this is that evidence. Recorded OPEN with a reproducible probe.
+
+### Accessibility depth: what passed
+
+- **Dialog focus on open, labelling, and Escape** all behave correctly.
+- **No infinite animation runs under `prefers-reduced-motion`.** Checked by
+  walking every element's computed `animationIterationCount`, so a spinner that
+  ignored the preference would be caught.
+- **Message actions are keyboard-reachable and reveal on focus** (`tabIndex=0`,
+  effective opacity 1 under `:focus-within`) — the accessibility half of
+  MB-GOD-040, confirmed after the fix.
+
+**Method note.** The keyboard check FAILED on its first run, reporting effective
+opacity 0. That was the probe, not the app: it called `.focus()` and read the
+computed style in the same synchronous tick, before the style recalculated for
+`:focus-within`. Separating focus and measurement by a frame shows opacity 1 and
+`:focus-within` matching. A false failure against a real fix is the most
+expensive kind of harness bug, because the obvious response is to "fix" working
+code.

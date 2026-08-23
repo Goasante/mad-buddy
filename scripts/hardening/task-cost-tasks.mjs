@@ -19,7 +19,7 @@ export const TASKS = [
     from: "/dashboard",
     decisions: 1, // which conversation
     steps: [
-      { do: "tap", text: "Messages", role: "link" },
+      { do: "tap", text: "Messages", role: "link", href: "/messages" },
       { do: "tap", text: "Kofi Mensah", role: "button" },
       { do: "type", selector: "textarea, input[type=text][placeholder*='essage']", value: "Task-cost probe." },
       { do: "expect-url", contains: "/messages" }
@@ -30,7 +30,7 @@ export const TASKS = [
     from: "/dashboard",
     decisions: 1, // which person
     steps: [
-      { do: "tap", text: "Messages", role: "link" },
+      { do: "tap", text: "Messages", role: "link", href: "/messages" },
       { do: "tap", text: "New message" },
       { do: "expect-text", contains: "Kofi" }
     ]
@@ -42,17 +42,36 @@ export const TASKS = [
     from: "/dashboard",
     decisions: 0,
     steps: [
-      { do: "tap", text: "Muddies", role: "link" },
+      { do: "tap", text: "Muddies", role: "link", href: "/friends" },
       { do: "expect-text", contains: "Kofi Mensah" }
     ]
   },
   {
     name: "open a Muddy profile",
-    from: "/dashboard",
+    from: "/friends",
     decisions: 0,
     steps: [
-      { do: "tap", text: "Muddies", role: "link" },
-      { do: "tap", text: "Kofi Mensah, open profile", role: "button" },
+      { do: "tap", text: "Kofi Mensah, open profile", role: "button", exact: true },
+      { do: "expect-text", contains: "@kofim" }
+    ]
+  },
+  {
+    name: "open a Muddy profile (from Home)",
+    from: "/dashboard",
+    decisions: 0,
+    /* The same job measured from where the app actually OPENS. Home names the
+       person by first name only ("KM Kofi Just Around"), the list uses the full
+       name -- so the two surfaces need different labels for one person, which
+       is itself worth knowing. */
+    steps: [
+      { do: "tap", text: "Muddies", role: "link", href: "/friends" },
+      /* EXACT accessible name, not a fragment. `/friends` carries TWO controls
+         naming this person -- "Kofi Mensah, just around" in the proximity rail
+         and "Kofi Mensah, open profile" in the list -- so a fragment match is
+         ambiguous and `.first()` silently picks whichever the DOM happens to
+         order first. This is the same strict-mode trap the state-graph crawler
+         hit; the fix there was identical: select by identity. */
+      { do: "tap", text: "Kofi Mensah, open profile", role: "button", exact: true },
       { do: "expect-text", contains: "@kofim" }
     ]
   },
@@ -72,7 +91,7 @@ export const TASKS = [
     from: "/friends",
     decisions: 0,
     steps: [
-      { do: "tap", text: "Kofi Mensah, open profile", role: "button" },
+      { do: "tap", text: "Kofi Mensah, open profile", role: "button", exact: true },
       { do: "tap", text: "Message" },
       { do: "expect-url", contains: "/messages" }
     ]
@@ -84,7 +103,7 @@ export const TASKS = [
     from: "/dashboard",
     decisions: 1, // opting in is a real consent decision
     steps: [
-      { do: "tap", text: "Linkr", role: "link" },
+      { do: "tap", text: "Linkr", role: "link", href: "/linkr" },
       { do: "expect-text", contains: "Linkr" }
     ]
   },
@@ -95,7 +114,7 @@ export const TASKS = [
     from: "/dashboard",
     decisions: 1, // which activity
     steps: [
-      { do: "tap", text: "UpFor", role: "link" },
+      { do: "tap", text: "UpFor", role: "link", href: "/hangout-mode" },
       { do: "tap", text: "Start an UpFor for Food" },
       { do: "expect-text", contains: "Food" }
     ]
@@ -105,7 +124,7 @@ export const TASKS = [
     from: "/dashboard",
     decisions: 0,
     steps: [
-      { do: "tap", text: "UpFor", role: "link" },
+      { do: "tap", text: "UpFor", role: "link", href: "/hangout-mode" },
       { do: "expect-text", contains: "UpFor" }
     ]
   },
@@ -131,12 +150,19 @@ export const TASKS = [
     ]
   },
   {
-    name: "RSVP to a Plan",
+    name: "open a Plan you created",
     from: "/plans",
-    decisions: 1, // going / not going
+    decisions: 1, // which tab holds it
     steps: [
-      { do: "tap", text: "detail-fixture dinner", role: "link" },
-      { do: "expect-text", contains: "Going" }
+      /* QA HOSTS this Plan, so it sits under "Created by you" and is correctly
+         absent from "Invitations" -- you are not invited to your own Plan.
+         Measuring "RSVP" against the host was the wrong task: a host does not
+         RSVP. This measures reaching the Plan they own, which is the real job
+         from this account. A guest-side RSVP needs a second signed-in account
+         and is covered by the Plan membership sequence probe. */
+      { do: "tap", text: "Created by you" },
+      { do: "tap", text: "detail-fixture dinner" },
+      { do: "expect-text", contains: "going" }
     ]
   },
 
