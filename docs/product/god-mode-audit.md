@@ -3853,3 +3853,66 @@ run 5    0 / 60      (activation CTA fixed)
 3. **Two JSX comments were placed in expression slots** (`return ( {/* ... */}`
    and inside a ternary), which Turbopack rejects. Both were caught by the
    build rather than by review.
+
+### Axes 7, 10, 15 - State colour, trust expression, and the visual board
+
+**Axis 7 - State colour: no collisions.** Red is used for danger, error,
+safety-critical and destructive actions throughout, plus the unread badge (a
+universal convention). No surface uses red to mean "normal active status". The
+one nuance is Safe Arrival's orange transit/extended states sitting beside red
+overdue — a deliberate severity ramp, and the reason MB-GOD-046's fix needs a
+semantic state token rather than a find-and-replace.
+
+**Axis 10 - Trust and privacy expression: a genuine strength.** The reassurance
+appears exactly where the brief predicts a user would wonder:
+
+```
+Event check-in   "Only Muddies who are also checked in can see you here.
+                  Your exact location is never shown."
+Buddy Score      "Private to you."
+Badges           "Private to you. Nothing here is ranked, compared, or shown
+                  to anyone else."
+Tuned-in         "Only you can see this list."
+Activation       "Only approved Muddies. Never your exact location."
+Sign-up          "Your exact location is never shared"
+```
+
+`first-muddy-card.tsx:84` carries a comment about deliberately NOT repeating the
+reassurance twice on one card — the "50th use" discipline (Axis 12) applied
+without being asked. **No finding.**
+
+**Axis 15 - Visual board: 24 full-page captures, both themes, twelve routes**
+(`.hardening/theme-parity/`). With titles removed the screens still read as one
+product: one warm ground, one radius family, one icon set, one type scale, the
+same card treatment, and Glow as the only high-energy element.
+
+### MB-GOD-048 (P3) - The Quick Actions launcher overlaps card content
+
+Found by LOOKING at a viewport-sized capture, which no source scan would have
+surfaced. On Home at 393x852 the floating launcher sits at x 337..381,
+y 700..760 and overlaps the third suggestion card:
+
+```
+overlapping: a "Find Muddies Find people you a"
+             span "Find Muddies"
+             span "Find people you already know."
+```
+
+The launcher covers that card's title and body text. It is the documented FAB
+pattern and the suggestions rail scrolls horizontally, so nothing is
+unreachable — the user can scroll the card clear. That is why this is P3 and not
+higher.
+
+**Not fixed here.** The candidate fixes (extra end-padding on the rail, or
+shifting the launcher) each affect a surface used on nearly every route, and the
+right answer is a scroll-padding reservation rather than a nudge. Recorded with
+the measurement for the polish pass.
+
+**Method note.** My first reading of the FULL-PAGE capture claimed the bottom
+nav "floats mid-page" and the Also-close row was "clipped". Both were artefacts
+of full-page screenshots rendering `fixed` elements at document scale. Measured
+in the browser, `scrollWidth` equals the viewport (393 = 393) and the only
+elements past the edge are a `pointer-events-none` decoration and the
+deliberately-peeking scroll rail. **A screenshot is evidence of what the page
+looks like, not of what it does** — the same discipline the safe-area false
+positives taught.
