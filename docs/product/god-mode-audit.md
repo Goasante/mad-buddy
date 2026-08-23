@@ -4672,3 +4672,52 @@ would otherwise have produced confident nonsense:
    every account, because `/friends` carries Dave's own Blocked filter tab. The
    navigation chrome is stripped before testing whether CAROL is described in
    block language.
+
+## The Home priority model, formalized
+
+Derived from `lib/activation/home-composition.ts` plus the measured matrix — not
+inferred from render order alone.
+
+| Tier | What | Rule |
+| --- | --- | --- |
+| 1 | **Safety** | A live Safe Arrival card outranks activation (`hasSafetyCard`) |
+| 2 | **Activation guidance** | While `isEarlyActivation`, the activation card is the sole authority and Near/Trending/Journey/Moments/Profile all stand aside |
+| 3 | **The first-Muddy moment** | Replaces the generic activation card for six hours; carries exactly one CTA |
+| 4 | **Imminent commitment** | An upcoming Plan leads Home ("You've got something on") |
+| 5 | **Live proximity** | Near, but only when proximity is *knowable* (`proximityAllowsNearby`) |
+| 6 | **Own plans / discovery** | My Plans, then Trending, then Moments |
+| 7 | **One next step** | `nextBestAction` — at most one, or null |
+| 8 | **Setup** | Profile reminder and Journey card — **suppressed whenever someone is waiting on a reply** (MB-GOD-052) |
+
+Two invariants worth stating because the code enforces them and a future change
+could quietly break either:
+
+- **One authority per concept.** Only one surface may say "nobody is around",
+  only one may campaign for the profile, and only one may instruct about Glow.
+  Each has a documented tie-break.
+- **Maturity and proximity truth are independent.** How much of Home to show is
+  a different question from whether Home may speak about proximity at all. A
+  stale fix means proximity is UNKNOWN, not empty.
+
+**Unread sits at tier 8 as a suppressor, not as a module of its own.** It
+outranks setup and nothing else — the deliberate answer to the brief's question
+about whether it should become a compact attention module.
+
+## Return loops, re-rated after multi-persona testing
+
+| Loop | Rating | Why |
+| --- | --- | --- |
+| Messages | **STRONG** | someone replied; unread now also suppresses setup on Home |
+| Muddies | **STRONG** | requests and proximity change without prompting |
+| Plans | **STRONG** | an upcoming commitment leads Home |
+| Events | **STRONG** | LIVE NOW surfaces on Home |
+| UpFor | **STRONG** | expiry is the loop; temporary by design |
+| Safe Arrival | **STRONG** | active session only, correctly silent when idle |
+| Linkr | **WEAK** | unchanged — nothing signals new candidates |
+
+Linkr stays WEAK and unfixed. The multi-persona run confirms *why*: a mutual
+connection is genuinely well handled, but nothing brings anyone back to
+discover one. The honest fix is freshness inside the surface (how many people
+are new since the last visit), not a push — the brief forbids manufacturing
+notifications for retention, and Linkr is where an unsolicited nudge would be
+least welcome.
