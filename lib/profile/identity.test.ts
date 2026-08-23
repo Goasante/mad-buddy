@@ -39,10 +39,25 @@ describe("profile identity projection", () => {
   });
 
   it("renders recent score activity only on the owner identity surface", () => {
-    const profilePage = readFileSync("components/profile/profile-page.tsx", "utf8");
+    /* The privacy invariant is unchanged and is the point of this test: recent
+     * score activity is visible to the OWNER and to nobody else, not even an
+     * approved Muddy. */
     expect(profileIdentityAccess("self").showBuddyScoreActivity).toBe(true);
     expect(profileIdentityAccess("approved_muddy").showBuddyScoreActivity).toBe(false);
-    expect(profilePage).toContain("Recent score activity");
-    expect(profilePage).toContain("identitySummary.buddyScore.recentActivity");
+
+    /* WHERE it renders moved (MB-GOD-013). Profile used to carry a second copy
+     * of the Buddy Score card; that duplicate was removed and /buddy-score —
+     * an owner-only route that already rendered it in more detail — is now the
+     * single surface for it. Profile must NOT show it, so the two assertions
+     * are inverted rather than deleted: the projection flag alone would still
+     * pass if a future change re-rendered the activity somewhere it should not
+     * appear. */
+    const profilePage = readFileSync("components/profile/profile-page.tsx", "utf8");
+    expect(profilePage).not.toContain("Recent score activity");
+    expect(profilePage).not.toContain("identitySummary.buddyScore.recentActivity");
+
+    const buddyScorePage = readFileSync("components/buddy-score/buddy-score-page.tsx", "utf8");
+    expect(buddyScorePage).toContain("Recent score activity");
+    expect(buddyScorePage).toContain("score.recentActivity");
   });
 });

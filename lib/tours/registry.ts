@@ -211,7 +211,7 @@ export const TOUR_TARGETS: TourTargetOption[] = [
   target(TOUR_TARGET_IDS.PROFILE_EDIT, "Edit profile", "/profile", "Edit display name, username, bio, and mood."),
   target(TOUR_TARGET_IDS.PROFILE_PHOTO, "Profile photo", "/profile", "Add or replace a profile photo."),
   target(TOUR_TARGET_IDS.PROFILE_ABOUT, "About", "/profile", "Profile information visible to approved Muddies."),
-  target(TOUR_TARGET_IDS.PROFILE_PRIVACY, "Profile privacy", "/profile", "Visibility state and privacy summary."),
+  target(TOUR_TARGET_IDS.PROFILE_PRIVACY, "Profile privacy", "/profile", "Visibility state; links to the full privacy controls in Settings."),
 
   target(TOUR_TARGET_IDS.PULSE_OVERVIEW, "Pulse", "/notifications", "Friend requests, nearby alerts, and account updates."),
   target(TOUR_TARGET_IDS.PULSE_FILTERS, "Pulse filters", "/notifications", "Filter updates by category."),

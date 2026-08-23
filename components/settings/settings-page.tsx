@@ -12,6 +12,7 @@ import {
   Ghost,
   Globe,
   HelpCircle,
+  Info,
   Laptop,
   MapPinOff,
   MessageSquare,
@@ -324,6 +325,17 @@ export function SettingsPageContent({
             description="Invite friends and track your invites."
             href="/invite"
           />
+          {/* Moved here from Profile (MB-GOD-013). Settings already indexed every
+              other destination Profile's Support block linked to; /about was the
+              one exception, so it is added HERE FIRST — removing the Profile
+              block before this row existed would have left version and legal
+              information unreachable from inside the app. */}
+          <SettingsLinkRow
+            icon={Info}
+            title="About Mad Buddy"
+            description="Version, credits, and legal."
+            href="/about"
+          />
         </SettingsSection>
         </div>
 
@@ -365,7 +377,11 @@ type SettingsLinkRowProps = {
   icon: LucideIcon;
   title: string;
   description: string;
+  /* An explicit allow-list rather than `Route`: it catches a typo or a link to
+     a route that no longer exists at compile time, which is worth more here
+     than the convenience of accepting any string. Extend it deliberately. */
   href:
+    | "/about"
     | "/profile"
     | "/upgrade"
     | "/billing"

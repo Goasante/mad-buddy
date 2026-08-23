@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Award, CakeSlice, MapPin, CalendarCheck2, CalendarDays, Camera, ChevronRight, Edit3, Ghost, Images, Info, LifeBuoy, MessageSquareText, MonitorSmartphone, Palette, ShieldCheck, Smile, Sparkles, UserCog, UsersRound } from "lucide-react";
+import { CakeSlice, MapPin, CalendarCheck2, CalendarDays, Camera, ChevronRight, Edit3, Images, MessageSquareText, ShieldCheck, Smile, Sparkles, UsersRound } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updateProfileAction, uploadAvatarAction } from "@/app/(app)/actions";
 import { FormField } from "@/components/auth/form-field";
@@ -33,8 +32,6 @@ import { profileCompletion, type ProfileIdentitySummary } from "@/lib/profile/id
 import type { CompletionTask } from "@/lib/profile/rules";
 import { ProfileInterestsCard } from "@/components/profile/profile-interests-card";
 import { ProfileCompletionCard } from "@/components/profile/profile-completion-card";
-import { JourneyProgress } from "@/components/journey/journey-progress";
-import type { JourneyData } from "@/lib/journey/journey";
 
 type BirthVisibility = "only_me" | "approved_muddies";
 
@@ -71,7 +68,6 @@ type ProfilePageContentProps = {
    * here, so this component adds no database round trip of its own.
    */
   momentsEnabled?: boolean;
-  journey: JourneyData | null;
   /** The owner's own gallery — every photo, including only_me. */
   photos?: ProfilePhoto[];
   /** Trusted Member approval, or null. */
@@ -129,7 +125,6 @@ export function ProfilePageContent({
   completion = null,
   generalArea = null,
   momentsEnabled = false,
-  journey,
   photos = [],
   trustedSince = null,
   trustedStanding = null,
@@ -481,7 +476,11 @@ export function ProfilePageContent({
           {/* Hidden on mobile: the shared header above carries the title
               there. Desktop has no mobile header, so it keeps this. */}
           <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Me</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Your profile, progress, and preferences.</p>
+          {/* Describes what this page IS now. "progress, and preferences" was
+              accurate when Profile hosted the Buddy Score card and three
+              settings groups; those moved to /buddy-score and /settings
+              (MB-GOD-013), so the old subtitle promised things no longer here. */}
+          <p className="mt-1 text-sm text-muted-foreground">How you appear on Mad Buddy.</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {!editing ? (
@@ -694,7 +693,16 @@ export function ProfilePageContent({
               </p>
             ) : null}
 
+            {/* Carries the PROFILE_PRIVACY tour target (MB-GOD-013).
+                The Privacy section this target used to anchor was removed —
+                every row in it only linked to Settings, which already owns them.
+                This pill is what survived that responsibility on Profile: the
+                contextual read-out of Glow state, linking to the real control.
+                A shipped migration row references this target, so re-anchoring
+                keeps that live tour step working instead of pointing it at a
+                section that no longer exists. */}
             <Link
+              data-tour-id={TOUR_TARGET_IDS.PROFILE_PRIVACY}
               href="/settings/glow-visibility"
               className="focus-ring safe-motion mt-3 inline-flex min-h-11 items-center gap-2 rounded-full border border-border/70 bg-card/50 px-3.5 py-1.5 text-sm font-medium hover:bg-secondary/40"
             >
@@ -765,70 +773,10 @@ export function ProfilePageContent({
             onSaved={() => router.refresh()}
           />
 
-          {journey ? <JourneyProgress journey={journey} variant="profile" /> : null}
-
-          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-            <Card className="p-5 sm:p-6">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Progress</p>
-                  <h3 className="mt-1 text-lg font-semibold">{identitySummary?.buddyScore?.levelLabel ?? "New Buddy"}</h3>
-                </div>
-                {identitySummary?.buddyScore?.total !== null && identitySummary?.buddyScore ? <span className="text-2xl font-semibold tabular-nums">{identitySummary.buddyScore.total}</span> : null}
-              </div>
-              {identitySummary?.buddyScore?.progressPercent !== null && identitySummary?.buddyScore ? (
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-secondary" aria-label={`${identitySummary.buddyScore.progressPercent}% Buddy Score progress`} role="progressbar" aria-valuenow={identitySummary.buddyScore.progressPercent} aria-valuemin={0} aria-valuemax={100}>
-                  <span className="block h-full rounded-full bg-primary" style={{ width: `${identitySummary.buddyScore.progressPercent}%` }} />
-                </div>
-              ) : null}
-              {identitySummary?.buddyScore?.recentActivity?.length ? (
-                <div className="mt-5 border-t border-border/60 pt-4">
-                  <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">Recent score activity</p><Link href="/buddy-score" className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded px-2 text-xs font-semibold text-primary">View progress</Link></div>
-                  <div className="mt-2 divide-y divide-border/50">
-                    {identitySummary.buddyScore.recentActivity.map((activity) => (
-                      <div key={activity.id} className="flex items-center justify-between gap-3 py-2 text-xs">
-                        <div className="min-w-0"><p className="truncate font-medium">{activity.label}</p><p className="text-muted-foreground">{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(activity.createdAt))}</p></div>
-                        <span className={activity.points >= 0 ? "font-semibold text-emerald-400" : "font-semibold text-red-400"}>{activity.points > 0 ? "+" : ""}{activity.points}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              <div className="mt-5 border-t border-border/60 pt-4">
-                <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">Achievements</p><Link href="/badges" className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded px-2 text-xs font-semibold text-primary">View all</Link></div>
-                {identitySummary?.achievements?.featured.length ? (
-                  <div className="mt-3 flex gap-3">
-                    {identitySummary.achievements.featured.map((achievement) => (
-                      <Link key={achievement.code} href={`/badges?achievement=${achievement.code}`} className="focus-ring min-w-0 flex-1 rounded-xl bg-secondary/35 p-2 text-center" title={achievement.name}>
-                        {achievement.iconPath ? <Image src={achievement.iconPath} alt="" width={36} height={36} className="mx-auto h-9 w-9 object-contain" /> : <Award className="mx-auto h-8 w-8 text-primary" aria-hidden="true" />}
-                        <span className="mt-1 block truncate text-[11px] font-medium">{achievement.name}</span>
-                      </Link>
-                    ))}
-                  </div>
-                ) : <p className="mt-3 text-sm text-muted-foreground">No achievements unlocked yet.</p>}
-                <p className="mt-3 text-xs text-muted-foreground">{identitySummary?.achievements?.unlockedCount ?? 0} unlocked</p>
-              </div>
-            </Card>
-
-            {identitySummary?.activity ? (
-              <section aria-labelledby="profile-activity-heading">
-                <h3 id="profile-activity-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Activity</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <ActivityStat icon={UsersRound} value={identitySummary.activity.muddyCount} label="Muddies" href="/friends" />
-                  {/* Paused: the stat would link into a redirecting route
-                      and advertise a feature that is switched off. The count
-                      itself is untouched in the database. */}
-                  {momentsEnabled ? (
-                    <ActivityStat icon={Images} value={identitySummary.activity.momentCount} label="Moments" href="/moments" />
-                  ) : null}
-                  <ActivityStat icon={CalendarCheck2} value={identitySummary.activity.completedPlanCount} label="Plans completed" href="/plans" />
-                  <ActivityStat icon={ShieldCheck} value={identitySummary.activity.completedSafeArrivalCount} label="Safe Arrivals" href="/safe-arrival" />
-                </div>
-              </section>
-            ) : null}
-          </div>
-
-          {/* About */}
+          {/* ABOUT — promoted above Activity (MB-GOD-013).
+              Mood and bio are the fields that actually say who this person is,
+              and they were the EIGHTH thing on the page, at y=2227 — below two
+              full screens of metrics. Identity now precedes statistics. */}
           <section data-tour-id={TOUR_TARGET_IDS.PROFILE_ABOUT} aria-labelledby="profile-about-heading">
             <h3 id="profile-about-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               About
@@ -882,57 +830,44 @@ export function ProfilePageContent({
           </section>
 
           {/* Privacy */}
-          <section data-tour-id={TOUR_TARGET_IDS.PROFILE_PRIVACY} aria-labelledby="profile-privacy-heading">
-            <h3 id="profile-privacy-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Privacy
-            </h3>
-            <Link
-              href="/settings/glow-visibility"
-              className="focus-ring safe-motion flex items-center gap-3.5 rounded-2xl border border-border/70 bg-card/50 p-3.5 hover:bg-secondary/40"
-            >
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-500/12 text-emerald-600 dark:text-emerald-300">
-                <Ghost className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold">Ghost Mode</span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">Hide your glow and activity.</span>
-              </span>
-              <span className={cn("shrink-0 text-sm font-semibold", ghostOn ? "text-emerald-600 dark:text-emerald-300" : "text-muted-foreground")}>
-                {ghostOn ? "On" : "Off"}
-              </span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            </Link>
-          </section>
+          {/* ACTIVITY — a small amount of genuine social context, kept.
+              The Journey card and the Buddy Score card that used to sit here
+              moved to /buddy-score (MB-GOD-013), which already owns both and
+              renders them in more detail. Profile keeps ONE entry point to them
+              (the "My Progress" button in the hero) rather than a second copy of
+              the surface. */}
+          {identitySummary?.activity ? (
+            <section aria-labelledby="profile-activity-heading">
+              <h3 id="profile-activity-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Activity</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <ActivityStat icon={UsersRound} value={identitySummary.activity.muddyCount} label="Muddies" href="/friends" />
+                {/* Paused: the stat would link into a redirecting route and
+                    advertise a feature that is switched off. The count itself is
+                    untouched in the database. */}
+                {momentsEnabled ? (
+                  <ActivityStat icon={Images} value={identitySummary.activity.momentCount} label="Moments" href="/moments" />
+                ) : null}
+                <ActivityStat icon={CalendarCheck2} value={identitySummary.activity.completedPlanCount} label="Plans completed" href="/plans" />
+                <ActivityStat icon={ShieldCheck} value={identitySummary.activity.completedSafeArrivalCount} label="Safe Arrivals" href="/safe-arrival" />
+              </div>
+            </section>
+          ) : null}
 
-          {/* Preferences — the account-level settings pages. Rows only; each
-              destination owns its own state and server data, so nothing here
-              re-implements or re-fetches what those pages already do. */}
-          <section aria-labelledby="profile-preferences-heading">
-            <h3 id="profile-preferences-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Preferences
-            </h3>
-            <MeRowGroup
-              rows={[
-                { href: "/settings", label: "Account", description: "Name, email, and account controls.", icon: UserCog },
-                { href: "/settings/appearance", label: "Appearance", description: "Theme, accent, and wallpaper.", icon: Palette },
-                { href: "/settings/sessions", label: "Devices & sessions", description: "Where you're signed in.", icon: MonitorSmartphone }
-              ]}
-            />
-          </section>
+          {/* PRIVACY, PREFERENCES and SUPPORT used to sit here (MB-GOD-013).
+              They were removed rather than redesigned, because every row in them
+              was already only a LINK to a Settings destination — /settings,
+              /settings/appearance, /settings/sessions, /settings/glow-visibility,
+              /help, /settings/feedback, /about. Settings indexes all of them
+              under Account / Privacy & safety / Preferences / Support & feedback,
+              so this was a duplicate index, not a home. Nothing became
+              unreachable: /about was the one destination Settings did not list,
+              and it was added there first.
 
-          {/* Support */}
-          <section aria-labelledby="profile-support-heading">
-            <h3 id="profile-support-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Support
-            </h3>
-            <MeRowGroup
-              rows={[
-                { href: "/help", label: "Help & Support", description: "Guides and getting help.", icon: LifeBuoy },
-                { href: "/settings/feedback", label: "Send Feedback", description: "Tell us what's working.", icon: MessageSquareText },
-                { href: "/about", label: "About Mad Buddy", description: "Version and legal.", icon: Info }
-              ]}
-            />
-          </section>
+              Together they were 28.6% of an identity surface — Support alone was
+              17.6%, five times the Showcase. What remains of that responsibility
+              on Profile is the hero's visibility pill (a contextual read-out of
+              Glow state that links to the real control) and the Edit / Membership
+              / My Progress buttons. */}
 
           {/* Complete your profile */}
           {missingSteps > 0 ? (
@@ -1031,37 +966,5 @@ function ProfileDetailRow({
       </span>
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </button>
-  );
-}
-
-/**
- * A grouped list of navigation rows for the Me sections (Preferences,
- * Support). Rows link out to the pages that already own each concern —
- * nothing here duplicates their data, state, or server calls.
- */
-function MeRowGroup({
-  rows
-}: {
-  rows: Array<{ href: Route; label: string; description: string; icon: typeof Smile }>;
-}) {
-  return (
-    <Card className="divide-y divide-border/60 p-0">
-      {rows.map((row) => (
-        <Link
-          key={row.href}
-          href={row.href}
-          className="focus-ring safe-motion flex items-center gap-3.5 p-3.5 first:rounded-t-2xl last:rounded-b-2xl hover:bg-secondary/40"
-        >
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-secondary/70 text-muted-foreground">
-            <row.icon className="h-5 w-5" aria-hidden="true" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold">{row.label}</span>
-            <span className="mt-0.5 block truncate text-xs text-muted-foreground">{row.description}</span>
-          </span>
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        </Link>
-      ))}
-    </Card>
   );
 }

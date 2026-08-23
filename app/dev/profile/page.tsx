@@ -77,7 +77,6 @@ export default async function ProfileHarnessPage({
       initialAvatarUrl={incomplete ? null : "/visuals/activities/coffee.jpg"}
       initialVisibilityStatus="visible"
       identitySummary={null}
-      journey={null}
       interests={interests}
       completion={{
         percent: profileCompletionPercent(completionInput),

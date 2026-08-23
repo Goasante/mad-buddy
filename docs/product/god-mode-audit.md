@@ -1177,3 +1177,116 @@ re-deriving that they are fine.
 **Not yet audited** (Mission 2 Advanced remains PARTIAL): Landing, Auth,
 Activation, Conversation, Plan detail, Plan Chat, Event detail, Safe Arrival.
 Eight surfaces, none of which have had the user-job / hierarchy treatment.
+## MISSION 2 / 4 — Profile restructure IMPLEMENTED
+
+### MB-GOD-013 (continued) - Profile restructured; measured before and after
+
+**Status: FIXED (runtime-verified).** The audit's plan was implemented, with the
+Settings receiving work landing first so no capability was ever homeless.
+
+**Measured, same tool, same viewport (393x852), production build:**
+
+| Metric | Before | After | Change |
+| --- | ---: | ---: | ---: |
+| Total length | 3.97 screens (3382px) | **2.40 screens (2044px)** | **-40%** |
+| Bio ("About") vertical position | y=2227 | **y=1267** | **-43%** |
+| Settings / Support share | 28.6% | **0%** | removed |
+| Identity share (Me + Showcase + About) | 29.1% | **48.1%** | **+65%** |
+| Sections | 11 | **6** | |
+
+With a more complete profile (institution and general_area set) the page settles
+at **2.28 screens**, and `general_area` ("Legon") appears in the hero as the
+brief specifies.
+
+**Section order now:** Me (identity hero) → My Showcase → Complete your profile
+(only while incomplete) → Interests → **About** → Activity.
+
+**First view now reads:** *"Me · How you appear on Mad Buddy · QA Tester ·
+@qatester · Legon · Visible to approved friends · [bio] · Edit profile ·
+Membership · My Progress · MY SHOWCASE"* — unmistakably a person's profile.
+
+**What moved, and where it went:**
+
+| Removed from Profile | New home | Verified |
+| --- | --- | --- |
+| PRIVACY (Ghost Mode row) | `/settings/glow-visibility` | 200, linked from Settings |
+| PREFERENCES (Account, Appearance, Devices) | `/settings`, `/settings/appearance`, `/settings/sessions` | 200, linked |
+| SUPPORT (Help, Feedback, About) | `/help`, `/settings/feedback`, `/about` | 200, linked |
+| JOURNEY card | `/buddy-score` (already rendered it in more detail) | 200 |
+| PROGRESS / Buddy Score card | `/buddy-score` | 200 |
+
+**The key discovery that made this safe.** Every row in Profile's Privacy,
+Preferences and Support blocks was *already only a link* to a Settings
+destination. Settings already indexes all of them under Account / Privacy &
+safety / Preferences / Support & feedback. So these were a **duplicate index,
+not a home** — removing them relocated nothing, it stopped repeating Settings on
+an identity surface.
+
+One genuine exception: **`/about` was the single destination Settings did not
+list.** It was added to Settings' "Support & feedback" group **first**, before
+the Profile block was removed, so version and legal information was never
+unreachable for even one commit. `SettingsLinkRowProps` uses an explicit href
+allow-list (a deliberate compile-time guard against dead links) which was
+extended rather than widened to `Route`.
+
+**Reachability proven at runtime, not by grep**
+(`scripts/hardening/profile-reachability.mjs`): all 7 moved destinations return
+200, and 6 of 7 are linked from Settings (the 7th is `/settings` itself, which
+cannot link to itself — an earlier version of the check reported that as a false
+MISS and was corrected). **0 unreachable destinations.**
+
+**Three tests failed on this change, and all three were right to.** They are
+recorded because how they were resolved matters:
+
+1. `lib/tours/authoring.test.ts` — *"every registered target is actually rendered
+   somewhere"* caught a **real defect**: the `profile-privacy` tour target was
+   orphaned by the removal, and a **shipped migration row** references it as a
+   live tour step. Deleting the target would have pointed that step at nothing.
+   Re-anchored to the hero's visibility pill — which is precisely what survived
+   of that responsibility on Profile — so the tour still works.
+2. `lib/journey/journey-integration.test.ts` — asserted Profile renders its own
+   Journey summary. Rewritten to assert the **consolidation** instead: the
+   Journey must still exist (on `/buddy-score`), Profile must still offer a way
+   to reach it (`href="/buddy-score"`), and Profile must not render a duplicate.
+3. `lib/profile/identity.test.ts` — the privacy invariant (recent score activity
+   is owner-only, not visible even to an approved Muddy) is **unchanged and still
+   asserted**. Only the two source-string checks moved, and they were **inverted
+   rather than deleted**: Profile must NOT contain the activity, `/buddy-score`
+   must. The projection flag alone would still pass if a future change re-rendered
+   it somewhere it should not appear, so the inverted assertions are load-bearing.
+
+**Runtime gate.** `/profile`, `/settings`, `/buddy-score` and `/friends/kofim`
+all clean at 360x800, 393x852, 430x932, light and dark: no overflow, no
+sub-44px targets, no console errors.
+
+**The Muddy view is correctly separate.** `/friends/kofim` renders at 1.65
+screens with no self-only controls — no Edit profile, no Membership, no
+completion card. A viewer sees identity and a Message action.
+
+**Answering the brief's questions directly:**
+
+- *Does the first screenful look like a profile?* Yes — identity, handle, area,
+  visibility, bio, then Showcase.
+- *Is identity visually dominant?* Yes — 48.1% of the page, up from 29.1%.
+- *Is Showcase easy to discover?* Yes — second section, directly under the hero.
+- *Is management subordinate to identity?* Yes — three buttons in the hero
+  (Edit / Membership / My Progress) instead of three settings sections.
+- *Are settings out of the way until requested?* Yes — 0% of Profile.
+- *Can the owner still reach all previous functionality?* Yes — 7/7 destinations
+  return 200, proven at runtime.
+- *Is another viewer protected from self-only controls?* Yes — the Muddy view
+  carries none of them.
+
+### MB-GOD-016 - Back-link touch target, in two files from one copied class
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Muddy profile, Circle detail |
+| **Severity** | P3 |
+| **Category** | Mobile ergonomics / design-system drift |
+| **Status** | **FIXED** |
+
+The back link on `/friends/<username>` measured **74x20**. The identical class
+string appears in `components/groups/group-detail-page.tsx` — the same copied-
+pattern propagation that produced MB-GOD-005 across nine tab rows. Both fixed to
+44px in the same change rather than one now and one when it is noticed later.

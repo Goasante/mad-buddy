@@ -168,7 +168,7 @@ export function MuddyProfilePage({
 
   return (
     <div className="mx-auto max-w-[900px] space-y-6 pt-6">
-      <Link href="/friends" className="focus-ring safe-motion inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link href="/friends" className="focus-ring safe-motion -mx-2 inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground hover:text-foreground">
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         Muddies
       </Link>

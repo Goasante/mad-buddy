@@ -25,11 +25,22 @@ describe("Journey integrations", () => {
     expect(page).not.toContain("Coming in the next milestone.");
   });
 
-  it("uses a compact Journey summary on Profile", () => {
+  it("keeps the Journey on Buddy Score, with Profile linking to it rather than repeating it", () => {
+    /* CHANGED by MB-GOD-013. Profile used to render its own Journey summary
+     * card, which made it the second surface showing the same progress data.
+     * The Journey now lives only on /buddy-score, which already rendered it in
+     * more detail (asserted above), and Profile carries a single "My Progress"
+     * entry point to that page.
+     *
+     * This asserts the CONSOLIDATION, not the removal: the Journey must still
+     * exist somewhere, Profile must still offer a way to reach it, and Profile
+     * must no longer render a duplicate. */
     const profile = readFileSync("components/profile/profile-page.tsx", "utf8");
-    expect(profile).toContain('variant="profile"');
-    const journeyProgress = readFileSync("components/journey/journey-progress.tsx", "utf8");
-    expect(journeyProgress).toContain('variant === "profile"');
+    expect(profile).not.toContain("<JourneyProgress");
+    expect(profile).toContain('href="/buddy-score"');
+
+    const buddyScore = readFileSync("components/buddy-score/buddy-score-page.tsx", "utf8");
+    expect(buddyScore).toContain("<JourneyProgress journey={journey}");
   });
 
   it("surfaces the Journey on Home through the Smart Card engine", () => {
