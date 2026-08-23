@@ -3381,3 +3381,36 @@ after: My Linkr profile 44x44 | Filters 44x44 | Linkr settings 44x44
 opt-in has TWO states, and auditing the gate is not auditing the feature. The
 earlier "Linkr: 2 controls, both fine" reading was true and useless. Any future
 surface with an enable/disable gate must be measured on both sides of it.
+
+### MB-GOD-044 (P3) - The plan stack's keyboard alternative was 32px
+
+`plan-stack.tsx:131` states the intent plainly:
+
+> Buttons, not only a drag: the gesture is an enhancement and every plan has to
+> be reachable by keyboard.
+
+The two controls that provide that alternative measured **32x32**
+(`globals.css:3050`, `2rem`). A target added specifically to be the accessible
+route through a gesture-driven component should not itself be below the minimum
+— it undermines the thing it exists to provide.
+
+Raised to `2.75rem`. Verified: `Previous plan 44x44`, `Next plan 44x44`.
+
+P3 rather than P2 because the drag gesture works and the stack is a
+convenience surface, not a primary path.
+
+### Remaining sub-44px controls on Home: the documented exception, not defects
+
+```
+Invite friends 77x17 | See top events 47x24 | See all plans 47x24
+detail-fixture dinner 178x20 | detail-fixture launch night 200x21 | Going 76x36
+```
+
+All are **inline text links or card titles**, not icon-only controls. A text link
+in prose is the exception this program already recorded (Landing's footer links),
+and a card title is a large tap area whose measured height is only its text line.
+`Going 76x36` is text-bearing and 76px wide.
+
+Left unchanged deliberately. Inflating every text link to 44px would put visible
+gaps through running copy and card layouts to satisfy a number that the
+underlying interaction already meets.

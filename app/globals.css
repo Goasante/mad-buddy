@@ -3049,8 +3049,13 @@ select {
 
 .plan-stack-nav {
   display: grid;
-  height: 2rem;
-  width: 2rem;
+  /* 2.75rem (44px), not 2rem. These two buttons exist SPECIFICALLY as the
+   * non-gesture route through the plan stack -- plan-stack.tsx calls the drag
+   * "an enhancement" and says every plan has to be reachable without it. A
+   * 32px target undermines the alternative it was added to provide. Same
+   * defect class as MB-GOD-039/043. */
+  height: 2.75rem;
+  width: 2.75rem;
   place-items: center;
   border-radius: 999px;
   border: 1px solid hsl(var(--border) / 0.6);
