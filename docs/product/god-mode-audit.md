@@ -4721,3 +4721,69 @@ discover one. The honest fix is freshness inside the surface (how many people
 are new since the last visit), not a push — the brief forbids manufacturing
 notifications for retention, and Linkr is where an unsolicited nudge would be
 least welcome.
+
+## Journey C — UpFor momentum: PASS (7/7, three live people)
+
+A creates an UpFor; B and C respond; A returns.
+
+```
+PASS  the UpFor fixture applied with the expected shape   — status=active cap=4
+PASS  a Muddy can see the creator's UpFor                 — message visible: true, creator named: true
+PASS  the responder's own state changes after responding  — responder view updated
+PASS  both responses exist in the database                — 2 requests
+PASS  the creator can see that people responded           — names: true, a count appears: true
+PASS  an expired UpFor no longer presents as live
+PASS  a responder does not see an expired UpFor as joinable
+
+7/7 UpFor multi-person checks passed
+```
+
+**Social proof is truthful.** The creator's view names both responders AND shows
+a count — momentum is legible, which is what makes conversion worth doing. The
+responder's own view changes after responding, so participation state is not
+guessed.
+
+**Expiry is honest on both sides.** Once the session expires it stops presenting
+as live to the creator and to a responder — an expired UpFor that still looked
+joinable was the specific stale-state risk here.
+
+## Journey D — UpFor → Plan: PASS (6/6), and nobody is silently enrolled
+
+The brief's sharpest question is whether a responder can be dragged into a
+commitment. Tested with B **accepted** and C only **pending**:
+
+```
+participants: creator=going, accepted-responder=going
+PASS  the conversion returned a plan with the expected shape  — plan_id, conversation_id, created
+PASS  the creator is on the Plan                              — creator=going
+PASS  nobody is silently marked GOING without having accepted
+PASS  a merely PENDING responder is not enrolled as going     — pending-responder=absent
+PASS  a Plan Chat exists after conversion                     — conversation 850ebea5
+PASS  the UpFor records that it became a Plan                  — status=converted_to_plan, converted_plan_id set
+```
+
+**A pending responder is absent from the Plan entirely** — not invited-but-not-
+going, simply not there. Only somebody who actually accepted the UpFor carries
+over as `going`. That is the correct reading of "an UpFor response is not an
+automatic forced commitment".
+
+The conversion also passes `p_invitee_ids: []` and `p_initial_going_ids: []`
+(`lib/plans/service.ts:477-478`) — the participant projection is done by the
+canonical RPC from the UpFor's own accepted requests, not assembled by the
+caller, so there is no second definition of who joins.
+
+`p_request_key: hangoutId` makes the UpFor's own UUID the idempotency key, so
+one UpFor can become exactly one Plan across tabs, devices and retries.
+
+### Method notes
+
+- **`hangout_ends_after_start`** forbids dragging `ends_at` into the past to
+  simulate expiry; the whole window has to move back. Caught by reading the
+  error rather than by a confusing result.
+- **A check that matched page furniture.** "A Muddy can see the creator's UpFor"
+  originally ORed `/Late lunch/` with `/Alma/`, so a page showing neither could
+  pass on generic copy. It now requires the message string that is unique to
+  this session.
+- **Sign-in is asserted.** `sessionFor` throws if the page is still on `/login`,
+  because a silently-failed sign-in makes every later reading a reading of the
+  login page — which has already invalidated one probe in this program.
