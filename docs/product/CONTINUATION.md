@@ -1,14 +1,14 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 6.** The next session continues from here.
+**Written at the end of session 7.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         270b2cb
+HEAD         (session 7 final — see git log -1)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      14 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      17 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -16,7 +16,7 @@ COMMITS      14 local recovery checkpoints, none pushed, nothing deployed
 | Mission | Level | State |
 | --- | --- | --- |
 | 1 — Reliability | Advanced | **COMPLETE** (route audit, auth, control inventory, mutation & journey audit, hydration, test infra, pre-hydration form audit) |
-| 1 — Reliability | Extremely Advanced | **PARTIAL** — done: Muddy 7/7, multi-tab 5/5, **UpFor→Plan→RSVP 7/7** (MB-GOD-017/018/023). Still NOT done: Linkr, Event check-in/Event Linkr, Profile media, Safe Arrival, Messages |
+| 1 — Reliability | Extremely Advanced | **PARTIAL** — done: Muddy 7/7, multi-tab 5/5, UpFor→Plan→RSVP 7/7, **Linkr 7/7**, **Safe Arrival 5/5** (MB-GOD-017/018/023/024/026). Still NOT done: **Event check-in/Event Linkr, Profile media, Messages** |
 | 1 — Reliability | God Mode | **PARTIAL** — state graph 34 nodes / 193 edges / 0 mismatches. **DB contract check clean** (1081 selects, 1165 filters) and **error observability closed** (67/67 routes log 5xx causes). Not yet crawled: Conversation, Plan detail, Plan Chat, Event detail |
 | 2 — UI/UX | Advanced | **PARTIAL** — Profile RESTRUCTURED and verified (MB-GOD-013 fixed: 3.97 -> 2.40 screens, settings share 28.6% -> 0%). Home judged good. 8 surfaces still unaudited: Landing, Auth, Activation, Conversation, Plan detail, Plan Chat, Event detail, Safe Arrival |
 | 3 — Flow | all levels | not started (deep-link intent + 10 journeys verified as Mission 1 evidence) |
@@ -57,7 +57,7 @@ Prefix commands with `MSYS_NO_PATHCONV=1` in Git Bash.
 ## Verified baselines to compare against
 
 ```
-TESTS       6849 / 6849   (337 files)  — 61-70s
+TESTS       6853 / 6853   (338 files)  — 56-92s
 TSC         PASS
 ESLINT      0 errors, 44 warnings (all no-unused-vars dead code)
 BUILD       PASS
@@ -103,6 +103,24 @@ JOURNEYS    10/10   LIFECYCLE 7/7   MULTI-TAB 5/5   STATE GRAPH 193 edges
    the photo viewer and the camera. None of these are covered yet.
 
 ## Things the next session should not re-derive
+
+- **Linkr's one-sided privacy holds** (MB-GOD-024). Verified by reading as the
+  TARGET under RLS: zero rows, zero notifications.
+- **`linkr_record_connect` performs no block check, and that is CORRECT.** It is
+  reciprocity-only. The block guard lives in `connectWithCandidate`
+  (connection-service.ts:116), runs before the RPC, and returns a result
+  indistinguishable from an ordinary Connect so it cannot be used as a block
+  detector. Do not "fix" the RPC. A probe that calls it directly bypasses the
+  authorization layer and will look like a P0.
+- **`passCandidate` deliberately has no block check** — passing creates nothing
+  and reveals nothing. The asymmetry with Connect is intentional.
+- **Safe Arrival cannot leak a location structurally**: `safe_arrival_sessions`
+  has NO latitude/longitude/geohash/accuracy column. The destination is a text
+  label. A leak would require a schema change.
+- **`lib/linkr/connect-block-guard.test.ts` is source-level only.** It proves the
+  check is present, ordered and not short-circuited — NOT that it works. A
+  behavioural test needs the server action driven through the framework; that is
+  the stronger version and is still outstanding.
 
 - **MB-GOD-020's defect class does NOT recur** (MB-GOD-021). 1081 select lists and
   1165 filters checked against the generated types: zero unknown columns.

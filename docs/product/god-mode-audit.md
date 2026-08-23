@@ -1796,3 +1796,60 @@ connection, no conversation and no visibility to the target, so there is nothing
 a block would protect — and it is the most frequently tapped control in the deck.
 Connect differs precisely because it can CREATE something. The asymmetry is now
 documented rather than "fixed".
+### MB-GOD-026 - Safe Arrival lifecycle: 5/5, and the privacy guarantee is structural
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Safe Arrival |
+| **Severity** | n/a - **verification, no defect found** |
+| **Mission / Level** | Mission 1 - Extremely Advanced |
+| **Status** | **VERIFIED** |
+
+```
+PASS  the Safe Arrival session schema has no location column at all
+PASS  a Safe Arrival session starts active
+PASS  the documented states are all reachable    grace_period → extended → unconfirmed → completed
+PASS  a completed session records when it was confirmed
+PASS  no emergency/alarm language in the surface  10 files scanned, none
+```
+
+**The strongest result is the first one, and it is structural.** The privacy
+guarantee is not "we are careful not to send coordinates" — it is that
+`safe_arrival_sessions` **has nowhere to put them**:
+
+```
+id, traveller_id, destination_type, destination_label, destination_event_id,
+expected_arrival_at, grace_period_minutes, note, status, started_at,
+confirmed_at, cancelled_at, unconfirmed_notified_at, created_at, updated_at
+```
+
+No latitude, longitude, geohash, accuracy or point column exists. The destination
+is a **text label** the traveller writes. A leak would require a schema change,
+which is a far better guarantee than a code review.
+
+The state machine has nine documented states
+(`draft`, `pending_acknowledgement`, `active`, `grace_period`, `extended`,
+`completed`, `cancelled`, `expired`, `unconfirmed`) and the ones the product
+actually walks were exercised end to end.
+
+**"Waiting" stays neutral.** An unconfirmed arrival means the timer elapsed and
+nothing more. Ten source files were scanned for escalation language —
+`emergency`, `danger`, `911`, `999`, `police`, `missing person`,
+`help is on the way`, `sos` — and none appears in user-facing copy. That matters
+because escalating a flat battery into a crisis would teach people to ignore the
+one signal that should never be ignored.
+
+**Two harness errors, both of which produced a green result that meant nothing:**
+
+1. **The copy check scanned ZERO files.** It guessed `components/safe-arrival/`
+   and `lib/safe-arrival/`; the real directories are `components/safety/` and
+   `lib/safety/`. It reported PASS on an empty scan. The check now **fails** if
+   it reads no files, and prints the count in its result — "0 files scanned" must
+   never look like a clean bill of health.
+2. **`variant="danger"` was flagged as alarm language.** It is a Button style
+   prop, not something a user reads. Prop values are now excluded (preceded by
+   `name=`, and real copy contains whitespace).
+
+Both are the same trap in different costumes: a check that cannot fail, and a
+check that fails on the wrong thing. The first is more dangerous, because it
+looks like success.
