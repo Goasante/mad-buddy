@@ -5084,3 +5084,37 @@ private graph**, which makes it the highest-leverage growth surface.
 user's own action.** A person can invite, message, plan or publish alone; they
 cannot make Linkr candidates exist. This is the structural reason its return
 loop is WEAK, independent of any interface decision.
+
+## Axes 12, 18, 19 — Home over time: PASS. It genuinely learns the user.
+
+Not snapshots — one account, advanced through four states, Home re-read each
+time:
+
+```
+day 0  zero Muddies      Start with one person > Suggestions
+                         education YES   celebration no    setup no
+day 1  first Muddy       Your first Muddy is here
+                         education NO    celebration YES   setup no
+day 2  first message     Your first Muddy is here > Near > Next step
+                         education NO    celebration YES   setup no
+day 3  window passed     Near > Next step
+                         education NO    celebration NO    setup no
+```
+
+**Every transition is correct, and each is the hard case:**
+
+- **Education disappears the moment it stops being true.** "Add your first
+  Muddy" is gone at day 1 — it does not linger as decoration.
+- **Home opens gradually rather than all at once.** At first value the
+  celebration stays but Near and a single "Next step" return alongside it. The
+  `early_value` branch's stated intent — *"They have graduated from onboarding,
+  not into the whole product"* — is visibly what happens.
+- **The celebration retires on schedule** and is replaced by a forward action
+  ("Invite another Muddy"), not by emptiness.
+- **The setup nudge never appears at all** across four states, because this
+  account's profile is complete. No administrative creep.
+
+**Axis 16 — value density: no further MB-GOD-052 instances.** Scanning all nine
+empty-network surfaces for administrative copy found exactly one hit — Linkr's
+"Turn on Linkr", which is the feature's own purpose rather than clutter.
+Administrative UI does not dominate social value anywhere else.
