@@ -1,6 +1,6 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 17.** The next session continues from here.
+**Written at the end of session 18.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
@@ -8,7 +8,7 @@ BRANCH       hardening/god-mode-product-pass
 HEAD         (see foot of file)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      67 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      70 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -23,7 +23,7 @@ COMMITS      67 local recovery checkpoints, none pushed, nothing deployed
 | 2 — UI/UX | God Mode | **COMPLETE.** MB-GOD-041 and 042 closed; hover-only class closed; vocabulary, component/typography/icon grammar, focus system, theme parity, state colour, trust expression and the visual board all audited. 200% text went 29/60 broken → 0/60. |
 | **2 — UI/UX** | **ALL THREE LEVELS** | **COMPLETE — closeout written in the audit ledger** |
 | 3 — Journeys | Advanced | **COMPLETE — 20/24 audited experientially, 4 resting on Mission 1 lifecycle proof.** 4 findings: MB-GOD-049 and 050 FIXED, 051 classified, 052 open. |
-| 3 — Journeys | Extremely Advanced | not started — multiple personas, pathological combinations, multi-device |
+| 3 — Journeys | Extremely Advanced | **PARTIAL.** MB-GOD-052 FIXED; Linkr mutual and block/recovery audited with live personas; Home priority model formalized; return loops re-rated. Remaining: UpFor momentum/conversion UX, multi-device, session expiry, offline recovery, time transitions, burst re-entry, extended permissions. |
 | 4 — Information architecture | — | **PARTIAL** — Profile restructure DONE, Settings receiving work DONE; **MB-GOD-007 still waiting** |
 | 5 — Mobile shell / safe area | Advanced | **complete — no root-cause defect** (MB-GOD-009) |
 | 5 — Mobile shell | Extremely Advanced | not started (keyboard, landscape, PWA/Capacitor, sheets/modals/camera) |
@@ -740,3 +740,54 @@ already places "multiple personas" and "pathological combinations" there.
 `scripts/hardening/journeys-m3.mjs`, `journeys-m3b.mjs` and
 `journey-first-value.mjs` are the harnesses to extend. Every seed asserts its
 own success — keep that rule.
+
+## Session 18 — Mission 3 Extreme (partial)
+
+```
+MB-GOD-052  Home could not see unread   P2  FIXED — mutation-tested, runtime-verified
+MB-GOD-051  message draft on reload     P3  CLASSIFIED (unchanged, per brief)
+```
+
+### Things the next session should not re-derive
+
+- **MB-GOD-052's fix is SUPPRESSION, not a module.** `unreadConversationCount`
+  enters `HomeCompositionInputs` and only turns OFF `showProfileReminder` and
+  `showJourneyCard`. Near, Trending, Moments, `nextBestAction` and the Plan card
+  are asserted unchanged. Do not promote unread into a Home module — an imminent
+  Plan still outranks it, because a Plan has a time attached and a message does
+  not.
+- **Use `getUnreadMessageCount`**, never a hand-rolled count. It reads the same
+  `conversation_previews` RPC as the inbox and badge and carries a documented
+  `status = 'joined'` correction (a production bug where four accounts saw a
+  badge no action could clear). It runs only when `muddyCount > 0` and fails
+  soft.
+- **The Home priority model is now written down** in the audit ledger (8 tiers).
+  Two invariants the code enforces: one authority per concept, and maturity vs
+  proximity-truth are independent questions.
+- **`linkr_record_connect` takes `p_actor` / `p_target` / `p_event_id`** and
+  returns `{ matched, connection_id, created }`. NOT `p_actor_id`, NOT
+  `is_mutual`. A wrong param reads as "function not found"; a wrong field makes
+  both assertions vacuous.
+- **Linkr's trust property is verified from the recipient's side**: one-sided
+  interest is invisible on `/linkr` AND `/notifications`, and a Linkr connection
+  creates no friendship row.
+- **Block leaks nothing.** The blocked person sees no block language; the
+  blocker simply stops appearing. When testing this, strip the `/friends`
+  navigation chrome first — the "Blocked" filter tab makes a bare `/blocked/i`
+  match fire on every account.
+- **`profiles_username_format` rejects hyphens.** A tag-based fixture username
+  like `mx-unread` fails the insert.
+- **Beware a probe matching its own fixture.** The first priority matrix
+  reported "unread shown: YES" because the account was named "Mx-unread Tester"
+  and the greeting matched `/unread/i`. Strip the greeting before content tests.
+
+### Mission 3 Extreme — what remains
+
+UpFor momentum (C) and UpFor→Plan (D) as multi-user EXPERIENCE; multi-device
+continuity (H); session expiry mid-flow (I); offline/reconnect journey recovery
+(J); abandoned creation (K); time transitions (L); burst re-entry (M); extended
+permissions — notifications, camera, microphone, file access.
+
+`scripts/hardening/journeys-multi.mjs` and `home-priority-matrix.mjs` are the
+harnesses to extend. Every fixture asserts its own success — keep that, and
+assert the SHAPE of any RPC result before asserting behaviour.
