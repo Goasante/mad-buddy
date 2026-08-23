@@ -1,6 +1,6 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 15.** The next session continues from here.
+**Written at the end of session 16.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
@@ -8,7 +8,7 @@ BRANCH       hardening/god-mode-product-pass
 HEAD         (see foot of file)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      58 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      62 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -22,7 +22,7 @@ COMMITS      58 local recovery checkpoints, none pushed, nothing deployed
 | 2 — UI/UX | Extremely Advanced | **COMPLETE.** Task cost 20/20 goals measured (max 3 taps); 12 empty states, 0 defects; failure states under offline/500; 5 cross-feature handoffs; accessibility depth. 4 findings: MB-GOD-040 and 043 FIXED, MB-GOD-041 and 042 recorded OPEN with reproductions. |
 | 2 — UI/UX | God Mode | **COMPLETE.** MB-GOD-041 and 042 closed; hover-only class closed; vocabulary, component/typography/icon grammar, focus system, theme parity, state colour, trust expression and the visual board all audited. 200% text went 29/60 broken → 0/60. |
 | **2 — UI/UX** | **ALL THREE LEVELS** | **COMPLETE — closeout written in the audit ledger** |
-| 3 — Flow | all levels | not started (deep-link intent + 10 journeys verified as Mission 1 evidence) |
+| 3 — Journeys | Advanced | **PARTIAL.** New-user, zero-Muddy, pending-request, first-Muddy, location-denied, interruption and return-loop journeys audited. 3 findings: MB-GOD-049 FIXED, 050 and 051 recorded OPEN. |
 | 4 — Information architecture | — | **PARTIAL** — Profile restructure DONE, Settings receiving work DONE; **MB-GOD-007 still waiting** |
 | 5 — Mobile shell / safe area | Advanced | **complete — no root-cause defect** (MB-GOD-009) |
 | 5 — Mobile shell | Extremely Advanced | not started (keyboard, landscape, PWA/Capacitor, sheets/modals/camera) |
@@ -628,3 +628,59 @@ Two inputs already collected for it:
   journey question more than a Mission 2 screen question.
 
 Do NOT start Mission 9.
+
+## Session 16 — Mission 3 Advanced (partial)
+
+```
+MB-GOD-049  un-onboarded login skips onboarding   P1  FIXED (mutation-tested guard)
+MB-GOD-050  first-Muddy card has no next action   P2  OPEN
+MB-GOD-051  message draft lost on reload          P3  OPEN
+```
+
+### Things the next session should not re-derive
+
+- **FIRST VALUE is already defined by the product** and the definition is good:
+  `first_muddy_added` AND one social act, in `lib/activation/home-maturity.ts`.
+  It explicitly rejects Muddy count, profile completion and
+  `first_status_created` alone. **Do not change the milestone schema** — the
+  model is sound; the gap is the PATH to the second half (MB-GOD-050).
+- **Onboarding is entered from ONE place** — the signup action's
+  `redirectTo: "/onboarding"`. The login action never checks `is_onboarded`.
+  The guard now lives in `app/(app)/layout.tsx` because that wraps every
+  authenticated route; a login-only check is bypassed by deep links, shared
+  URLs, restored PWA sessions and OAuth callbacks. It compares
+  `is_onboarded === false` explicitly — a falsy check would fire on a missing
+  profile row and loop accounts created outside signup.
+- **`friendships` has NO `status` column.** It is keyed on `ended_at IS NULL`.
+  An insert with `status` is rejected by PostgREST and, if the error is not
+  read, produces a journey that measures a zero-Muddy account while claiming to
+  test a first-Muddy one. Every seed in `journeys-m3.mjs` now asserts success.
+- **`admin.createUser` creates NO profile row.** The signup action does. A
+  journey seeded without a profile is testing a state the product cannot reach.
+- **Turnstile blocks form signup on a local production build.** `next start`
+  sets `NODE_ENV=production`, which makes `isTurnstileRequired` true; with no
+  secret it fails closed. Correct behaviour, not a defect — create journey
+  accounts via the admin API and sign in through the real login form.
+- **Dismiss the guided tour in journey runs too.** The first J4b/J6 readings
+  audited the tour overlay, exactly as this document already warns for crawls.
+- **Home is genuinely adaptive and is a strength.** Zero-Muddy, pending-request
+  and first-Muddy each get distinct, well-written copy. The pending-request line
+  ("You can add someone else in the meantime — Muddies aren't one at a time")
+  solves a journey problem in copy rather than with a feature.
+- **Location-denied degrades gracefully** — Home renders without the proximity
+  module, no error and no nag, and the rest of the product is fully usable.
+- **Linkr is the weakest return loop**: nothing signals that new candidates
+  exist. Recorded, NOT fixed — the brief forbids manufacturing notifications
+  for retention, and Linkr is where an unsolicited nudge would be least welcome.
+
+### Mission 3 Advanced — what remains before the exit gate
+
+Not yet audited: invite journey (J2), first message (J7), Linkr activation and
+mutual (J8-J10), UpFor create/respond/convert (J11-J13), direct Plan (J14),
+Plan lifecycle over time (J15), Event and Event Linkr (J16-J17), Safe Arrival
+(J18), notification re-entry (J19), dormant and active returning user (J20-J21),
+block/safety recovery (J22), privacy change (J23), account management (J24).
+
+`scripts/hardening/journeys-m3.mjs` is the harness to extend — add a journey by
+seeding its state, asserting the seed applied, and recording what each surface
+offers.
