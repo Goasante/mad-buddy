@@ -4787,3 +4787,36 @@ one UpFor can become exactly one Plan across tabs, devices and retries.
 - **Sign-in is asserted.** `sessionFor` throws if the page is still on `/login`,
   because a silently-failed sign-in makes every later reading a reading of the
   login page — which has already invalidated one probe in this program.
+
+## Journeys H, I, J — stale state, session expiry, offline mutations: PASS (6/6)
+
+```
+PASS  device B shows the conversation before anything changes
+PASS  a stale conversation recovers, live or on re-entry     — arrived on re-entry
+PASS  a mutation after session expiry does not reach the DB  — 0 messages from the expired session
+PASS  the user is not left believing the send succeeded
+      "The message could not be sent. Try again."
+      stayed on /messages?conversation=... rather than redirecting
+PASS  an offline send does not silently vanish               — same honest error
+PASS  reconnecting never produces a duplicate message        — 0 copies
+```
+
+**No failure ever looks like a success.** Both the expired-session send and the
+offline send produce *"The message could not be sent. Try again."* — the same
+sentence, which is correct: from the user's position the two situations are the
+same problem with the same remedy.
+
+**Nothing is written and nothing is duplicated.** The expired session wrote zero
+messages, and reconnecting after an offline attempt produced zero copies — the
+idempotency work from Mission 1 holding under a genuinely interrupted mutation
+rather than a simulated one.
+
+**The interrupted place is kept.** The app does NOT redirect to login on a
+failed mutation; it stays on the conversation with the error beside the
+composer. That is better than a `next=`-carrying redirect, because there is
+nothing to return *to* — the user never left.
+
+**Multi-device recovery is by re-entry, not live push**, and the brief's bar is
+met: the second device's message arrives on the next navigation, with no stale
+contradiction in between. The brief explicitly does not require real-time sync
+everywhere; it requires safe and understandable recovery.
