@@ -1893,11 +1893,11 @@ cannot drift again:
 | 2 | Linkr | **COMPLETE** | 7/7 (MB-GOD-024) | No |
 | 3 | UpFor → Plan | **COMPLETE** | 7/7 (MB-GOD-023) | No |
 | 4 | Plan RSVP / membership | **COMPLETE** | 10/10 (MB-GOD-029) — RSVP cycle, add participant, Plan Chat reconciliation, outsider exclusion | Yes (1: stale RSVP replay) |
-| 5 | Event check-in / Event Linkr | **PARTIAL** | Consent boundary 8/8, behavioural + mutation-tested (MB-GOD-028). NOT done: checkout→eligibility wiring end to end, attendee-directory enumeration, 5 audience authorities | No |
+| 5 | Event check-in / Event Linkr | **COMPLETE** | Consent 8/8 (MB-GOD-028) + audiences 12/12 (MB-GOD-031) + wiring 9/9 (MB-GOD-032) | Yes (1: stale eligibility) |
 | 6 | Profile media | **NOT STARTED** | — | No |
 | 7 | Safe Arrival + Messages | **COMPLETE** | Safe Arrival 5/5 (MB-GOD-026) + Messages 8/8 (MB-GOD-030) | Yes (1: stale membership send) |
 
-**LIFECYCLES COMPLETE = 5 / 7** (updated after MB-GOD-030).
+**LIFECYCLES COMPLETE = 6 / 7** (updated after MB-GOD-032).
 
 **Multi-tab coverage is thinner than the raw "5 scenarios" figure suggests**: all
 five sit inside domain 1. Four of the seven domains have no stale-state coverage
@@ -2124,3 +2124,127 @@ passing, and surfacing the insert error named the constraint immediately.
 as computed by `conversation_previews` across the list/badge/notification
 surfaces, and read-receipt reconciliation. The *storage* invariants are proven;
 the *projection* of unread into the three UI surfaces is not.
+### MB-GOD-031 - Event audiences: five audiences × three authorities, 12/12
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Events |
+| **Severity** | n/a - **verification, no defect found** |
+| **Mission / Level** | Mission 1 - Extremely Advanced (domain 5) |
+| **Status** | **VERIFIED (behavioural, mutation-tested)** |
+
+Three genuinely different questions, never to be collapsed into one "can see
+event" check:
+
+```
+isDiscoverableInFeed   may this be BROWSED to?
+canViewEvent           may this be OPENED when the id is already held?
+isBroadlyRankable      may this claim to be trending across Mad Buddy?
+```
+
+The full matrix, asserted (`lib/events/audience-matrix.test.ts`):
+
+| visibility | discoverable | viewable | broadly rankable |
+| --- | --- | --- | --- |
+| public | yes | yes | **yes** |
+| nearby | yes | yes | **yes** |
+| community (untargeted) | yes | yes | no |
+| community (targeted) | members only | members only | no |
+| link | **no** | **yes** | no |
+| invite | no | invite list | no |
+| unknown | no | no | no |
+
+**`link` is the asymmetry, and it is the point.** Not browsable, but openable by
+anyone holding the URL — sharing is *transport*, and possession of the link IS
+the permission for that audience. Collapsing the two questions would either
+break sharing or leak private Events into the feed.
+
+**Ranking is stricter than browsing.** A community Event is legitimately
+discoverable by its members, but "trending across Mad Buddy" is a claim about the
+whole product. The source states it well: *"a private wedding with five thousand
+Going can never rank"* — visibility is asked before any score is calculated.
+
+Also verified: a **draft** is invisible to everyone but its host in every
+audience; the host always sees their own; an **unknown** audience fails closed in
+all three authorities; and no audience makes a private Event rankable, so sharing
+cannot widen ranking.
+
+**Mutation-tested:** making `link` discoverable fails 2 tests; making `community`
+broadly rankable fails 3 (one by name).
+
+### MB-GOD-032 - Event check-in / Event Linkr wiring: 9/9, domain 5 COMPLETE
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Events, Event Linkr, Linkr candidates |
+| **Severity** | n/a - **verification, no defect found** |
+| **Mission / Level** | Mission 1 - Extremely Advanced (domain 5) |
+| **Status** | **VERIFIED — domain COMPLETE** |
+
+MB-GOD-028 proved the *rules*. This proves the system **recomputes from changed
+state** — where the rules could be right and the product still wrong.
+
+```
+PASS  a checked-in, opted-in attendee at a live Event is eligible   reason eligible
+PASS  checking out removes eligibility immediately                  reason not_checked_in
+PASS  checking back in restores eligibility                         recomputed live
+PASS  opting out removes eligibility while still checked in         reason no_consent
+PASS  an Event that has ended removes eligibility                   reason event_not_live
+PASS  a cancelled Event removes eligibility before its end time     reason event_not_live
+PASS  a draft Event never confers eligibility                       reason event_not_live
+PASS  a stale tab cannot preserve revoked Event eligibility         eligible → not_checked_in
+PASS  the consent set is narrower than the attendee set             2 of 2
+```
+
+Each assertion checks the **reason**, not just the boolean — a right answer for
+the wrong cause would be a latent defect.
+
+**Why revocation is immediate: there is nothing to go stale.**
+`resolveEventLinkrEligibility` reads liveness, then check-in, then consent, live
+from the database on every call. No cached eligibility column exists, so a
+checkout is visible on the very next evaluation.
+
+**Three separate statements, three separate tables** — the distinction this
+domain exists to protect:
+
+```
+event_rsvps.status = 'going'          I intend to come      (RSVP)
+check_ins.status = 'checked_in'       I am here             (presence)
+event_linkr_opt_ins.enabled = true    I am open to meeting  (consent)
+```
+
+`check_ins.event_glow_enabled` is a **fourth** flag: Event Glow is not Event
+Linkr consent either.
+
+**The seam is exemplary and is asserted** (`lib/events/linkr-consent-wiring.test.ts`):
+`lib/linkr/event-mode-adapter.ts` is the only place Linkr knows Events exist, it
+re-derives nothing, and it **fails closed** when the consent module is absent —
+*"no consent module means no Event Mode, never assume everyone consented"*.
+Linkr intersects the attendee set rather than adding to it, and an empty set
+short-circuits so Event Mode can never widen the ordinary pool.
+
+Granting consent **requires a live check-in**; withdrawing it never does. That
+asymmetry is deliberate: withdrawal must not be harder than granting, including
+for someone who has already left.
+
+**A weak assertion of mine, caught by mutation testing.** The fail-closed check
+first asserted only that `return new Set()` appeared somewhere in the function.
+Mutating the guard to `return new Set([viewerId])` — which fails **open** by
+seeding the pool with a real id — **still passed**, because the string survived
+elsewhere. The assertion now reads each guard line and rejects any that returns a
+non-empty set or an eligible verdict. Re-mutated: caught, naming the line.
+
+That correction also surfaced a **third** guard I had not accounted for —
+`describeEventLinkrPool`, which returns display copy rather than access. Demanding
+an empty Set from it would have been wrong, so the assertion targets
+access-granting shapes specifically.
+
+**Multi-tab (domain 5):** a candidate list computed while the attendee was
+eligible, then a checkout, then an action — `eligible → not_checked_in`. A stale
+tab has no cached verdict to rely on.
+
+**Not covered, carried forward:** attendee enumeration against live HTTP payloads
+with a large seeded attendee set. The *data* contract is proven (ids only, and
+only of consenting attendees), and the source is explicit that
+`eventLinkrCandidateIds` returns *"IDS ONLY… deliberately not a directory"* — but
+the network-payload attack was not run.
