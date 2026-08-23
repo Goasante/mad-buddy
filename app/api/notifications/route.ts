@@ -7,6 +7,7 @@ import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { resolveApiUser } from "@/lib/api/auth";
 import { preflightResponse, withCors } from "@/lib/api/cors";
 import { CONVERSATION_NOTIFICATION_TYPE_PATTERNS } from "@/lib/notifications/conversation-boundary";
+import { errorType, logBackendEvent } from "@/lib/observability/logger";
 
 const notificationResponseSchema = z.object({
   notifications: z.array(
@@ -84,6 +85,15 @@ export async function GET(request: Request) {
   const { data, error } = await query;
 
   if (error) {
+    /* Record the cause before returning the generic message — see the note in
+     * app/api/account/export/route.ts (MB-GOD-020). Discarding a database error
+     * is what makes a route fail silently and undiagnosably. */
+    logBackendEvent("error", {
+      route: "/api/notifications",
+      action: "notifications.list",
+      statusCode: 500,
+      errorType: errorType(error)
+    });
     return withCors(NextResponse.json({ error: "Could not load notifications." }, { status: 500 }), request);
   }
 
@@ -132,6 +142,15 @@ export async function POST(request: Request) {
   }
   const { error } = await query;
   if (error) {
+    /* Record the cause before returning the generic message — see the note in
+     * app/api/account/export/route.ts (MB-GOD-020). Discarding a database error
+     * is what makes a route fail silently and undiagnosably. */
+    logBackendEvent("error", {
+      route: "/api/notifications",
+      action: "notifications.update",
+      statusCode: 500,
+      errorType: errorType(error)
+    });
     return withCors(NextResponse.json({ error: "Could not update notifications." }, { status: 500 }), request);
   }
   return withCors(NextResponse.json({ ok: true }), request);

@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
 import { invalidMutationOriginResponse } from "@/lib/security/csrf";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import { errorType, logBackendEvent } from "@/lib/observability/logger";
 
 // Backward compatible: an empty body still marks every notification read.
 // Additively supports a bounded set of ids and an explicit read state so the
@@ -67,6 +68,18 @@ export async function PATCH(request: Request) {
   const { error } = await query;
 
   if (error) {
+    /* Record the cause before returning the generic message.
+     * The user-facing text stays vague on purpose — it must not leak schema
+     * detail — but discarding the error entirely is what made MB-GOD-020
+     * (a broken data export) invisible for its whole life. logBackendEvent is
+     * the privacy-safe channel: it strips location, tokens and secrets, and
+     * errorType records the Postgres CODE rather than the message. */
+    logBackendEvent("error", {
+      route: "/api/notifications/read",
+      action: "notifications.read",
+      statusCode: 500,
+      errorType: errorType(error)
+    });
     return NextResponse.json({ error: "Could not update notification status." }, { status: 500 });
   }
 

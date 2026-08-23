@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { invalidMutationOriginResponse } from "@/lib/security/csrf";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { errorType, logBackendEvent } from "@/lib/observability/logger";
 
 const subscriptionSchema = z.object({
   endpoint: z.string().url().max(1000),
@@ -31,7 +32,18 @@ export async function POST(request: Request) {
       .delete()
       .eq("user_id", user.id)
       .eq("endpoint", parsed.data.previousEndpoint);
-    if (deleteError) return NextResponse.json({ error: "Could not replace subscription" }, { status: 500 });
+    if (deleteError) {
+      /* Record the cause — see app/api/account/export/route.ts (MB-GOD-020).
+         A push subscription that silently fails to replace leaves the device
+         receiving nothing, with no trace of why. */
+      logBackendEvent("error", {
+        route: "/api/push-subscriptions",
+        action: "push.replaceSubscription",
+        statusCode: 500,
+        errorType: errorType(deleteError)
+      });
+      return NextResponse.json({ error: "Could not replace subscription" }, { status: 500 });
+    }
   }
 
   const { error } = await supabase.from("push_subscriptions").upsert(

@@ -1515,3 +1515,106 @@ generically risks hiding a genuinely dead tab later.
 
 "Open quick actions" on `/buddy-score` is the same story — it opens a launcher
 whose content did not change the first 900 characters of body text.
+## MISSION 1 — God Mode: database contract and error observability
+
+### MB-GOD-021 - MB-GOD-020's defect class does NOT recur (class-based search)
+
+| Field | Value |
+| --- | --- |
+| **Severity** | n/a - **negative finding, deliberately recorded** |
+| **Category** | Database contract |
+| **Mission / Level** | Mission 1 - God Mode |
+| **Status** | **VERIFIED CLEAN** |
+
+The brief's instruction after MB-GOD-020 was explicit: *do not assume the account
+export was the only place*. `scripts/hardening/db-contract.mjs` checks every
+`.from("table").select("…")` and every `.eq/.neq/.gt/.lt/.is/.in/.order("column")`
+in `app/` and `lib/` against the **generated database types**.
+
+```
+files scanned        : 553
+select lists checked : 1081
+filters checked      : 1165
+result               : NO UNKNOWN COLUMNS
+```
+
+**Mutation-tested, so "clean" means something.** Reintroducing the original bug
+is caught exactly:
+
+```
+1 REFERENCE(S) TO COLUMNS NOT IN THE GENERATED TYPES:
+  app/api/account/export/route.ts:56
+      profiles.onboarding_complete   (.select)
+```
+
+Restoring the fix returns it to clean. A checker that reports nothing and cannot
+report anything is worthless; this one demonstrably detects the defect it was
+built for.
+
+**The checker was wrong three times first, and each error inflated the count.**
+Recorded because every intermediate number looked like a real finding:
+
+| Attempt | Reported | Cause |
+| ---: | ---: | --- |
+| 1 | **161** | Column names matched only at line starts, so tables whose `Row` is declared on ONE line (`Row: { id: string; user_id: string; … }`) reported *every* column as unknown. Verified against the live DB: `earned_premium_rewards` has 15 columns and exists. |
+| 2 | **28** | Embedded relations were split on commas, so `plans!inner(status, completed_at, end_at)` made `completed_at` look like a column of `plan_participants`. All three survivors (`tour_versions.title`, `tour_versions.description`, `plan_participants.completed_at`) were embeds. |
+| 3 | **23** | Columns preceded by a **comment line** were missed, e.g. `profiles.username_normalized` sits under `// Added by the batch-9 profiles migration`. |
+| final | **0** | — |
+
+Every intermediate finding was checked against the **live schema** with
+`information_schema.columns` before being believed. That is what stopped 161
+fabricated defects from reaching this ledger.
+
+**Two tables are skipped** because they are absent from the generated types:
+`account_deletion_requests`, `user_phone_identities`. They exist in the database;
+the types are simply not regenerated for them. Not a defect — but it means the
+guard cannot cover those two, which is worth knowing.
+
+### MB-GOD-022 - Six API routes returned 5xx while discarding the cause
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Notifications, Billing, Push subscriptions |
+| **Severity** | P2 |
+| **Category** | Error observability |
+| **Mission / Level** | Mission 1 - God Mode |
+| **Status** | **FIXED** |
+
+MB-GOD-020 had two halves. The wrong column was the bug; the **discarded error**
+is why it survived undetected for the route's whole life. So the same question
+was asked of every API route: does it record the cause of a 5xx?
+
+`scripts/hardening/error-observability.mjs` scanned all **67** routes and found
+**six** returning 500 with the database error thrown away:
+
+| Route | Action |
+| --- | --- |
+| `app/api/notifications/route.ts` | list |
+| `app/api/notifications/route.ts` | update |
+| `app/api/notifications/read/route.ts` | mark read |
+| `app/api/notifications/unread-count/route.ts` | unread count |
+| `app/api/billing/status/route.ts` | subscription status |
+| `app/api/push-subscriptions/route.ts` | replace subscription |
+
+`/api/notifications` is notable: it produced an **undiagnosable 500 in session 2**
+that cost real time to trace, precisely because the cause was discarded.
+
+**Fix.** Each now calls `logBackendEvent("error", …)` before returning. The
+user-facing message stays deliberately vague — it must not leak schema detail —
+but the internal record now carries the route, the action, the status and the
+Postgres **error code** via `errorType()`. Never the message, never user data:
+`logBackendEvent` strips location, tokens and secrets by construction.
+
+The push-subscription case matters more than it looks: a subscription that
+silently fails to replace leaves that device receiving **no notifications at
+all**, with nothing recorded to explain why.
+
+**After: all 67 routes record the cause of any 5xx.**
+
+### INVESTIGATED / NOT A DEFECT - `app/api/billing/trials` "missing" logging
+
+Flagged by the observability checker, but its only 5xx is `status: 503` for
+absent Supabase configuration — a missing-env-var guard, not a swallowed
+database error, and the message already says everything there is to record. Its
+real failure paths return 401, 429 and 409. The checker now matches only
+500/501/502/504 so this does not recur as noise.

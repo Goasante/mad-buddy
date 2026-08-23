@@ -3,6 +3,7 @@ import { resolveApiUser } from "@/lib/api/auth";
 import { preflightResponse, withCors } from "@/lib/api/cors";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
 import { CONVERSATION_NOTIFICATION_TYPE_PATTERNS } from "@/lib/notifications/conversation-boundary";
+import { errorType, logBackendEvent } from "@/lib/observability/logger";
 
 // Cost note: the client previously derived this badge count by fetching a
 // full page of notification rows and counting the unread ones in JS — both
@@ -34,6 +35,18 @@ export async function GET(request: Request) {
     .eq("is_read", false);
 
   if (error) {
+    /* Record the cause before returning the generic message.
+     * The user-facing text stays vague on purpose — it must not leak schema
+     * detail — but discarding the error entirely is what made MB-GOD-020
+     * (a broken data export) invisible for its whole life. logBackendEvent is
+     * the privacy-safe channel: it strips location, tokens and secrets, and
+     * errorType records the Postgres CODE rather than the message. */
+    logBackendEvent("error", {
+      route: "/api/notifications/unread-count",
+      action: "notifications.unreadCount",
+      statusCode: 500,
+      errorType: errorType(error)
+    });
     return withCors(NextResponse.json({ error: "Could not load the unread count." }, { status: 500 }), request);
   }
 
