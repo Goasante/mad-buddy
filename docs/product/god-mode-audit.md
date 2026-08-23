@@ -3205,3 +3205,143 @@ computed style in the same synchronous tick, before the style recalculated for
 `:focus-within` matching. A false failure against a real fix is the most
 expensive kind of harness bug, because the obvious response is to "fix" working
 code.
+
+### The task-cost matrix
+
+`scripts/hardening/task-cost.mjs` drives each goal through real controls at
+393x852 with touch, and **counts the taps in the driver** rather than taking a
+declared number — so a path that needs an extra step reports the extra step, and
+a task that does not complete is reported INCOMPLETE rather than as a cheap path.
+
+```
+task                              from            taps  type  scr  ovl  done
+send a message (existing thread)  /dashboard         2     1    2    0  yes
+start a NEW conversation          /dashboard         2     0    2    0  yes
+find a Muddy                      /dashboard         1     0    2    0  yes
+open a Muddy profile              /friends           1     0    1    0  yes
+open a Muddy profile (from Home)  /dashboard         2     0    2    0  yes
+view a NEARBY Muddy               /dashboard         1     0    1    0  yes
+message a Muddy from their profile /friends          2     0    2    0  yes
+discover someone in Linkr         /dashboard         1     0    2    0  yes
+create an UpFor                   /dashboard         2     0    2    0  yes
+browse UpFor feed                 /dashboard         1     0    2    0  yes
+create a Plan (reach the form)    /dashboard         2     0    2    0  yes
+create a Plan from Plans tab      /plans             1     0    1    0  yes
+open a Plan you created           /plans             2     0    1    0  yes
+create an Event (reach the form)  /events            1     0    1    0  yes
+open an Event                     /events            1     0    1    0  yes
+start Safe Arrival                /dashboard         3     0    2    1  yes
+update Profile                    /dashboard         3     0    2    0  yes
+change a privacy setting          /dashboard         3     0    3    0  yes
+find account export / deletion    /dashboard         3     0    2    0  yes
+check notifications               /dashboard         1     0    2    0  yes
+
+20/20 tasks completed        taps: 1 x9   2 x7   3 x4        max = 3
+```
+
+**Nothing in the product costs more than three taps**, and only one task opens
+an overlay on the way.
+
+**The four 3-tap tasks are the interesting group**, because three of them
+(Profile, privacy, account export) require 0 or 1 real decisions — so the taps
+are navigation, not deliberation. Their traces:
+
+```
+start Safe Arrival        Open quick actions -> Safe Arrival -> Start Safe Arrival
+update Profile            Menu -> Profile    -> Edit profile
+change a privacy setting  Menu -> Settings   -> Account Privacy
+find account export       Menu -> Settings   -> Account
+```
+
+Each is `launcher -> destination -> the specific thing`, with **no wasted
+intermediate screen** and a third tap that actually does the job. That is a
+legitimate hierarchy rather than friction, and the Profile restructure
+(MB-GOD-013) is why: the settings rows that used to be duplicated onto Profile
+were removed, so these paths now have exactly one home each.
+
+**Verdict: PASS. No interaction-cost defect found.** Deliberately not "optimised"
+further — the brief's own standard is that the purpose is to detect unnecessary
+cost, not to drive every task to one tap. Collapsing `Menu -> Settings -> X`
+would mean promoting settings into the primary navigation, which is precisely
+the duplication Profile was just rebuilt to remove.
+
+One asymmetry recorded, not a defect: **Home names a Muddy by first name only**
+("KM Kofi Just Around") while `/friends` uses the full name ("Kofi Mensah, open
+profile"). Both are defensible in place — Home is a glance surface, the list is a
+directory — but it means one person has two accessible names depending on where
+you meet them. Worth a look in Mission 2 God Mode under consistency, not worth
+changing on its own.
+
+### Method note: five harness bugs, each of which produced a convincing false finding
+
+The matrix reported 13/19, then 16/19, 17/19, 19/20, and finally 20/20. **Not one
+of the intervening failures was a product defect.** Recorded because the pattern
+is now unmistakable and the next session should expect it:
+
+1. **Default role.** The resolver tried role `button` then visible TEXT, which
+   silently missed every icon-only control — `Notifications` is an `<a>` with an
+   `aria-label` and empty `innerText`. Six journeys "failed".
+2. **Ambiguous fragment match.** `/friends` carries TWO controls naming one
+   person ("Kofi Mensah, just around" in the proximity rail, "Kofi Mensah, open
+   profile" in the list). `.first()` picked the rail. Same strict-mode trap the
+   state-graph crawler hit; same fix — select by identity.
+3. **Ambiguous href.** Pinning navigation to `a[href="/friends"]` then matched
+   both the bottom nav and a Home card, and an off-screen match timed out at
+   zero taps, reading as "the app has no Muddies link". Now scoped to `nav` first
+   and skips non-visible candidates.
+4. **A wrong assumption about tabs.** "RSVP to a Plan" targeted Invitations; QA
+   HOSTS that Plan, so it correctly sits under "Created by you" — and a host does
+   not RSVP at all. The task was renamed to what it actually measures.
+5. **MSYS path rewriting**, exactly as the README warns: `--routes /login` became
+   `C:/Program Files/Git/login`. `MSYS_NO_PATHCONV=1` is mandatory.
+
+The discipline that caught all five is the one already written down: **a failing
+check is a question, not a verdict.** Every one was investigated in the browser
+before being believed, and every one turned out to be the harness.
+
+### Cross-feature handoffs: 5 audited, 5 pass
+
+Mission 1 proved these are functionally correct — the click reaches the right
+destination with the right resource. Extreme asks whether they are
+experientially smooth: is context preserved, and does the user understand why
+they moved?
+
+```
+Muddies -> profile modal -> Messages   navigated    /messages?conversation=4799a0e9…   PRESERVED
+Plan    -> Plan detail                 dialog       /plans                              PRESERVED
+Home    -> nearby Muddy                dialog       /dashboard                          PRESERVED
+Quick actions -> Safe Arrival          navigated    /safe-arrival                       PRESERVED
+Event   -> detail                      dialog       /events                             PRESERVED
+```
+
+**The best handoff in the product is Muddies -> profile -> Messages.** Two taps
+from the list, and the destination is not "the Messages tab" but the
+conversation itself, with history and the peer named:
+
+```
+/messages?conversation=4799a0e9-758c-41b8-8adb-febd7b0f00a5
+KM Kofi Mensah @kofim   TODAY   Yes — see you at seven.   1h ago · Sent
+React Edit Delete   Are we still on for later?
+```
+
+That capture also confirms MB-GOD-040's fix in a natural flow rather than in a
+probe: `React Edit Delete` are present and visible in the rendered thread.
+
+**Three of the five open a dialog in place rather than navigating**, and that is
+the right call each time — the Muddy profile, the Plan detail and the Event
+detail all keep their list underneath, so dismissing returns you exactly where
+you were with no reload and no lost scroll position. This is the same pattern
+already cleared in Advanced.
+
+**Method note — the first version of this check passed vacuously.** It asked
+only "does the destination mention the thing I came from", which is trivially
+true when the tap did nothing: the source page still names its own content. THREE
+of the six scored PRESERVED while never moving. The check now requires the
+handoff to actually hand off — either the URL changed or a dialog opened — before
+naming counts for anything. Same failure family as the empty-fixture trap: an
+assertion that cannot fail is not evidence.
+
+`Notification -> its source` is recorded as **NOT AUDITED**, not as a pass: the
+QA account's Pulse is empty ("You're all caught up"), so there was no
+notification to follow. Seeding one and following it to its exact source is the
+right test and is left for the next pass rather than being claimed here.
