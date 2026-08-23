@@ -25,7 +25,8 @@ const QA = "d901121e-688e-477b-b8f0-56c782a16801";   // host
 const KOFI = "2a54c81c-acad-4191-b89d-2c427c693c7a"; // checked in + consenting
 const AMA = "b66cd360-1f24-4b02-9b8c-123b522d0c61";  // checked in, NO consent
 const JOJO = "11abd0ec-5ae6-4a6a-8b74-3806b8a47bb2"; // going, not checked in
-const SAA = "1fd04f79-7ab6-482a-a969-348767e00f7c";  // unrelated
+// The unrelated attacker signs in as saa@local.test below; their id is not
+// needed here because the attack looks for the ATTENDEES' ids, not their own.
 
 const results = [];
 const check = (name, ok, detail) => {
