@@ -2552,3 +2552,128 @@ time-bound capabilities, the window is small and bounded, the exposure is limite
 to already-obtained media, and the design comment shows it was a considered
 choice. A future mitigation, if ever wanted, would be shortening the TTL for
 photos whose visibility is narrower than `everyone`.
+---
+
+# MISSION 1 — PRODUCT CORRECTNESS / RELIABILITY: CLOSEOUT
+
+```
+ADVANCED              COMPLETE
+EXTREMELY ADVANCED    COMPLETE
+GOD MODE              COMPLETE
+```
+
+**The first full mission closure of the program.**
+
+## Major defects found and fixed
+
+| ID | Sev | What it was |
+| --- | --- | --- |
+| MB-GOD-003 | **P0** | `/login` and `/signup` put **passwords in the URL** when JavaScript had not run — a form with no `method` defaults to GET. Verified in the server access log. |
+| MB-GOD-010 | **P0** | `/admin/login` had the **same defect**, missed because the first fix was scoped to `components/auth/` rather than to the defect's shape. Eight forms carried it. |
+| MB-GOD-020 | **P1** | The **account data export returned 500 for every user, always** — it selected `profiles.onboarding_complete`, a column that does not exist. The route also discarded the Postgres error, so it was undiagnosable. |
+| MB-GOD-002 | **P1** | App-wide hydration warning, root-caused to **CSP nonce-hiding** (a browser behaviour) rather than suppressed broadly. |
+| MB-GOD-001 | P2 | Test-worker starvation from repeated synchronous source-tree parsing. Suite **147s → 72s**. |
+| MB-GOD-005 | P2 | **Nine tab rows at four different heights**, all under the 44px minimum. ~30 targets fixed. |
+| MB-GOD-013 | P2 | **Profile was an account dashboard**: 3.97 screens, 28.6% settings, Showcase at 3.7%. Restructured to 2.40 screens, 0% settings, identity 29% → 48%. |
+| MB-GOD-022 | P2 | Six API routes returned 5xx while **discarding the cause**. All 67 routes now log it. |
+| MB-GOD-016 | P3 | Back-link touch target, in two files from one copied class string. |
+
+**P0 history: 2 discovered, 2 fixed, 0 open.** Both were the same defect class,
+and the second existed *because* the first was fixed instance-by-instance. That
+lesson produced `lib/security/form-method-guard.ts`, which is mutation-tested.
+
+## Lifecycle proof — 7/7 domains
+
+| # | Domain | Coverage | Multi-tab |
+| --- | --- | --- | --- |
+| 1 | Muddy relationship | 7/7 | 5 |
+| 2 | Linkr | 7/7 | 0 |
+| 3 | UpFor → Plan | 7/7 | 0 |
+| 4 | Plan RSVP / membership | 10/10 | 1 |
+| 5 | Event check-in / Event Linkr | 8/8 + 12/12 + 9/9 | 1 |
+| 6 | Profile media | 10/10 + EXIF 4/4 | 1 |
+| 7 | Safe Arrival + Messages | 5/5 + 8/8 | 1 |
+
+Every domain verified at the **server/database boundary**, not the UI.
+
+## State graph
+
+```
+core surfaces (13)    34 nodes   193 edges
+detail surfaces (4)    7 nodes    52 edges
+                      -------------------------
+TOTAL                 41 nodes   245 edges
+
+0 wrong destinations   0 real dead controls
+```
+
+## Concurrency proof
+
+Nine multi-tab scenarios across five domains. The results that matter:
+
+- Two simultaneous friend requests → **200/400, one row**
+- Two simultaneous UpFor→Plan conversions with one key → **both ok, one Plan**
+  (the second waits on `for update` and returns the first's Plan)
+- Same `client_message_id` twice → **one message** (unique index, not button timing)
+- Stale slot delete keyed on the **old asset id** → 0 rows, newer image survives
+- A removed member's still-open tab → **refused**
+
+## Privacy proof
+
+- **Linkr one-sided interest is invisible** — verified by reading as the *target*
+  under RLS: zero rows, zero notifications
+- **Event consent is not implied by presence** — behavioural, mutation-tested
+- **No attendee enumeration** — 364 HTTP payloads across three viewer types, zero
+  identifiers; the non-consenting attendee absent everywhere
+- **EXIF GPS is stripped** — mutation-tested; re-enabling `withMetadata()` fails
+  two tests and shows the leaked `Exif` bytes
+- **Safe Arrival cannot leak a location structurally** — the schema has no
+  latitude/longitude column at all
+- **Profile media privacy holds at two layers** — projection *and* RLS
+- **1081 select lists + 1165 filters** checked against generated types: 0 unknown
+  columns, mutation-tested
+
+## Known external / owner blocks
+
+| ID | Status | Why it is blocked, not unexamined |
+| --- | --- | --- |
+| **MB-GOD-007** | OWNER-BLOCKED / READY FOR FUTURE MIGRATION | `/hangout-mode` → UpFor rename touches 37 files **including shipped migration rows**, notification destinations and the OAuth allow-list. Requires production data migration, which is the owner's call. Fully mapped; no code defect. |
+| **MB-GOD-012** | FRAMEWORK-CONSTRAINED | `notFound()` inside the `(app)` group renders the correct 404 screen with **HTTP 200**, because the `force-dynamic` layout streams before the call is reached. A group-level `not-found.tsx` was tried and **reverted** — it did not help. Remedy is resolving existence before the stream opens: architectural, belongs with Mission 4. Impact: crawlers index it, monitoring misses it, caches treat it as valid. |
+| **MB-GOD-037** | ACCEPTED LIMITATION | Signed media URLs remain valid ≤5 minutes after a block. New access is prevented immediately; a previously issued capability expires on its own. Inherent to time-bound capabilities. |
+
+## Deferred polish (P3)
+
+- **MB-GOD-006** — `/linkr/orb-off.png` 404s on every load. A deliberate probe for
+  artwork that has not landed; the component falls back to a placeholder.
+- **MB-GOD-008** — twelve consecutive tour overlays for a new user. Each is fine
+  individually; the cumulative first-run effect is a Mission 3 question.
+- 44 eslint `no-unused-vars` warnings — dead code, no correctness risk.
+
+## Outstanding behavioural verification
+
+**Linkr block guard: STRUCTURAL = VERIFIED, BEHAVIOURAL = OUTSTANDING.**
+The guard's presence, position and non-neutering are asserted and
+mutation-tested (short-circuit and removal both caught). What is *not* proven is
+that it works when invoked: `connectWithCandidate` is a **server action**, not an
+API route, so driving it needs framework-level invocation the local harness
+cannot perform. Testing the lower-level RPC instead would be fake proof — that
+primitive deliberately has no block check.
+
+## Final gate
+
+| Gate | Status |
+| --- | --- |
+| 4 remaining detail surfaces crawled | ✅ |
+| Full graph analysed | ✅ 245 edges |
+| No unresolved P0 | ✅ 0 |
+| No unresolved P1 | ✅ 0 |
+| P2 fixed or explicitly blocked | ✅ 4 fixed, 4 owner/framework-blocked |
+| Linkr block guard resolved or documented | ✅ precisely documented |
+| Live Event enumeration attack | ✅ closed, no leak |
+| Signed-URL residual measured | ✅ 5 minutes, bounded |
+| DB contract audit clean | ✅ mutation-tested |
+| 5xx observability clean | ✅ 67/67 |
+| 7/7 lifecycle domains green | ✅ |
+
+**MISSION 1 = COMPLETE.**
+

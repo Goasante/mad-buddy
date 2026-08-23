@@ -1,14 +1,14 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 11.** The next session continues from here.
+**Written at the end of session 12.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         be491db
+HEAD         abed148
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      31 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      36 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -17,7 +17,7 @@ COMMITS      31 local recovery checkpoints, none pushed, nothing deployed
 | --- | --- | --- |
 | 1 — Reliability | Advanced | **COMPLETE** (route audit, auth, control inventory, mutation & journey audit, hydration, test infra, pre-hydration form audit) |
 | 1 — Reliability | Extremely Advanced | **COMPLETE (7/7 domains)** | **PARTIAL — 3/7 domains** (corrected in MB-GOD-027; previously mis-reported as 5/7). See the canonical domain table below. |
-| 1 — Reliability | God Mode | **PARTIAL** — state graph 34 nodes / 193 edges / 0 mismatches. **DB contract check clean** (1081 selects, 1165 filters) and **error observability closed** (67/67 routes log 5xx causes). Not yet crawled: Conversation, Plan detail, Plan Chat, Event detail |
+| 1 — Reliability | God Mode | **COMPLETE** — 41 nodes / 245 edges / 0 wrong destinations; both carried security items closed |
 | 2 — UI/UX | Advanced | **PARTIAL** — Profile RESTRUCTURED and verified (MB-GOD-013 fixed: 3.97 -> 2.40 screens, settings share 28.6% -> 0%). Home judged good. 8 surfaces still unaudited: Landing, Auth, Activation, Conversation, Plan detail, Plan Chat, Event detail, Safe Arrival |
 | 3 — Flow | all levels | not started (deep-link intent + 10 journeys verified as Mission 1 evidence) |
 | 4 — Information architecture | — | **PARTIAL** — Profile restructure DONE, Settings receiving work DONE; **MB-GOD-007 still waiting** |
@@ -179,6 +179,26 @@ JOURNEYS    10/10   LIFECYCLE 7/7   MULTI-TAB 5/5   STATE GRAPH 193 edges
 6. **Mission 5 Extremely Advanced**: keyboard-open composer, landscape,
    installed PWA / Capacitor standalone, and safe-area INSIDE sheets, modals,
    the photo viewer and the camera. None of these are covered yet.
+
+## 🏁 MISSION 1 IS COMPLETE (Advanced + Extremely Advanced + God Mode)
+
+The first full mission closure. Full closeout is at the end of
+`docs/product/god-mode-audit.md` — defects, lifecycle proof, graph size,
+concurrency proof, privacy proof, owner/framework blocks and the final gate.
+
+Headline: **2 P0 and 2 P1 found and fixed, 0 open.** 7/7 lifecycle domains,
+245 graph edges with 0 wrong destinations, 364 HTTP payloads with 0 attendee
+leakage.
+
+Three items remain OPEN by classification rather than neglect:
+- **MB-GOD-007** owner-blocked (production data migration)
+- **MB-GOD-012** framework-constrained (streamed 404 → HTTP 200)
+- **Linkr block guard** structural verified, behavioural outstanding (server
+  action cannot be invoked from the local harness)
+
+**Next: Mission 2 Advanced — 8 of 18 surfaces remain.** Landing, Auth,
+Activation, Conversation, Plan detail, Plan Chat, Event detail, Safe Arrival.
+Profile IA is LOCKED; do not reopen it.
 
 ## MILESTONE — MISSION 1 EXTREMELY ADVANCED IS COMPLETE
 
