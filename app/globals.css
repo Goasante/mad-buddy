@@ -1035,6 +1035,50 @@ html.dark .home-ambient-bg {
   --body-radial: rgba(232, 140, 43, 0.1);
 }
 
+/* --------------------------------------------------------------------------
+ * SEMANTIC STATE TOKENS (MB-GOD-046)
+ *
+ * Warm colour in Mad Buddy carries TWO unrelated meanings, and until now both
+ * were spelled the same way. `--primary` is the brand and means "the action to
+ * take"; a journey in transit is a STATE, and Safe Arrival renders it in orange
+ * directly beside `text-red-600` for overdue. Mission 2 measured nine distinct
+ * warm colours painted across the product, with Tailwind's `orange-500` on 468
+ * elements -- 5.8x the brand token itself.
+ *
+ * The reason that was recorded rather than find-and-replaced: collapsing the
+ * state orange into `--primary` would merge a severity signal into the
+ * primary-action colour, which is a worse defect than the inconsistency.
+ *
+ * These tokens are the missing vocabulary. `JourneyTone` already exists in
+ * TypeScript (`journey-parts.tsx:65`) as transit | extended | overdue |
+ * arrived | ended; this gives those names a colour identity that is NOT the
+ * brand, so a future consolidation has somewhere correct to land.
+ *
+ * Deliberately additive: nothing is rewired in this pass. Introducing the
+ * vocabulary is safe; migrating 159 call sites onto it is a visual change that
+ * belongs with owner review.
+ * ------------------------------------------------------------------------ */
+:root {
+  /* In progress, no action needed. Warm but NOT the brand orange, so a state
+     can never be mistaken for a call to action. */
+  --state-transit: 32 74% 46%;
+  --state-extended: 32 74% 46%;
+  /* Needs attention. Shares the destructive hue deliberately: the product
+     already renders overdue in red beside transit, and that ramp is correct. */
+  --state-overdue: 0 72% 45%;
+  /* Resolved. */
+  --state-arrived: 152 55% 38%;
+  --state-ended: 3 12% 40%;
+}
+
+html.dark {
+  --state-transit: 32 80% 66%;
+  --state-extended: 32 80% 66%;
+  --state-overdue: 0 80% 70%;
+  --state-arrived: 152 50% 60%;
+  --state-ended: 38 12% 70%;
+}
+
 html.dark {
   /* Warm dark surfaces, tinted toward the maroon accent rather than a cool
      blue-black. Pure black is avoided entirely: it crushes the warm palette

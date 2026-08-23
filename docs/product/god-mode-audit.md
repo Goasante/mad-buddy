@@ -6849,3 +6849,90 @@ MISSION 7:  Advanced = COMPLETE   Extreme = COMPLETE   God Mode = COMPLETE
 FINDINGS:   P0 = 0  P1 = 0  P2 = 1 (MB-GOD-059, open)  P3 = 0
             plus the carried 9.46-screen length debt
 ```
+
+---
+
+# MISSION 8 — CROSS-PRODUCT CONSISTENCY / DESIGN DEBT
+
+Missions 2 and 4 already established that the design grammar is largely sound:
+one icon library (211 files lucide, 0 others), zero arbitrary text sizes across
+366 files, four font weights, shared primitives dominant, theme parity 12/12
+routes. Mission 8's job is the accumulated inconsistency underneath that.
+
+## MB-GOD-046 — semantic state tokens introduced (partial resolution)
+
+Mission 2 measured the defect and deliberately did not fix it:
+
+```
+#f97415  468 elements   Tailwind orange-500 family
+#c9922f  100 elements
+#e88c2b   80 elements   THE BRAND TOKEN
+#ffb04e   72 elements
+… 9 distinct warm colours, two differing by ONE rgb unit
+```
+
+and recorded why a find-and-replace would be wrong: **warm colour carries two
+unrelated meanings.** `--primary` is the brand and means *"this is the action to
+take"*. A journey in transit is a **state**, rendered in orange directly beside
+`text-red-600` for overdue. Collapsing the state orange into `--primary` would
+merge a severity signal into the primary-action colour — a worse defect than the
+inconsistency it fixed.
+
+**The missing piece was vocabulary, and that is what this adds.** `JourneyTone`
+already exists in TypeScript (`journey-parts.tsx:65`) as
+`transit | extended | overdue | arrived | ended`. Those names had no colour
+identity of their own, so every author reached for a Tailwind palette value.
+
+```css
+--state-transit / --state-extended   warm, but NOT the brand hue
+--state-overdue                      shares the destructive hue deliberately —
+                                     the product already ramps transit → overdue
+--state-arrived                      resolved
+--state-ended                        inactive
+```
+
+Defined for light and lifted for dark, verified at runtime in both themes:
+
+```
+light  transit=32 74% 46%   overdue=0 72% 45%   arrived=152 55% 38%
+dark   transit=32 80% 66%   overdue=0 80% 70%   arrived=152 50% 60%
+```
+
+**Deliberately additive: nothing was rewired.** Introducing the vocabulary is
+safe and reversible; migrating 159 call sites onto it changes what the product
+looks like on Safe Arrival, Moments and the admin surfaces, which is owner
+review territory. The debt is now *actionable* rather than merely recorded — a
+future consolidation has somewhere correct to land.
+
+**MB-GOD-046 status: PARTIAL — vocabulary shipped, migration deferred.**
+
+## Signature moments — reviewed, deliberately unchanged
+
+Mission 3 rated them **correct but quiet**. Re-examined here against the rule
+"improve only if evidence supports it":
+
+| Moment | Current treatment | Verdict |
+| --- | --- | --- |
+| First Muddy | dedicated card, avatar in Glow, one CTA, 6-hour window | **strong** — the best moment in the product |
+| Linkr mutual | match screen with both photos and Say hi | adequate |
+| UpFor momentum | responder names + count on the owner's card | adequate |
+| UpFor → Plan | Plan and Plan Chat appear | quiet |
+| Event live | LIVE NOW on Home | adequate |
+| Safe Arrival complete | completion state | quiet |
+
+**No confetti added.** The two quiet ones (UpFor→Plan, Safe Arrival completion)
+are quiet in a way that matches their emotional register — a commitment forming
+and a journey ending safely are not celebrations. Changing them is a design
+choice with no defect behind it, so it stays on the owner-polish list rather
+than being invented here.
+
+## Profile IA — untouched, lock preserved
+
+Not reopened. The owner-observed Profile media/post-save layout debt is recorded
+on the owner-polish list and was **not** silently redesigned, per the brief.
+
+```
+MISSION 8:  Advanced = COMPLETE   Extreme = COMPLETE   God Mode = COMPLETE
+FINDINGS:   P0 = 0  P1 = 0  P2 = 0  P3 = 0 new
+            MB-GOD-046 advanced from RECORDED to PARTIAL
+```
