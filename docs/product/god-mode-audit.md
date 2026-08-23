@@ -1893,7 +1893,7 @@ cannot drift again:
 | 2 | Linkr | **COMPLETE** | 7/7 (MB-GOD-024) | No |
 | 3 | UpFor → Plan | **COMPLETE** | 7/7 (MB-GOD-023) | No |
 | 4 | Plan RSVP / membership | **PARTIAL** | RSVP transitions only, inside MB-GOD-023. No add/remove participant, no Plan Chat membership reconciliation | No |
-| 5 | Event check-in / Event Linkr | **NOT STARTED** | — | No |
+| 5 | Event check-in / Event Linkr | **PARTIAL** | Consent boundary 8/8, behavioural + mutation-tested (MB-GOD-028). NOT done: checkout→eligibility wiring end to end, attendee-directory enumeration, 5 audience authorities | No |
 | 6 | Profile media | **NOT STARTED** | — | No |
 | 7 | Safe Arrival + Messages | **PARTIAL** | Safe Arrival 5/5 (MB-GOD-026); **Messages: none** | No |
 
@@ -1924,3 +1924,71 @@ calls unguarded.
 The corollary matters as much: when a primitive *appears* to permit something
 forbidden, the question is "which layer is the authority?" before "is this a
 defect?".
+### MB-GOD-028 - Event Linkr consent: presence does not imply discoverability
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Events, Event Linkr |
+| **Severity** | n/a - **verification, no defect found** |
+| **Category** | Privacy / consent |
+| **Mission / Level** | Mission 1 - Extremely Advanced (domain 5) |
+| **Status** | **VERIFIED (behavioural, mutation-tested)** |
+
+Three things must never be conflated, each strictly narrower than the last:
+
+```
+GOING       I intend to attend.
+CHECK-IN    I am physically here.
+EVENT LINKR I am open to meeting new people here.
+```
+
+Only the third is consent to be discovered. Collapsing any two would mean
+someone who merely showed up becomes discoverable without ever saying yes.
+
+**This is tested against the real authority, not a reconstruction of it.**
+`isCandidateEligible` (`lib/linkr/rules.ts`) is the single function that decides
+discoverability, and it is **pure** — so unlike the Linkr block guard, this could
+be exercised behaviourally rather than by reading source. Its own comment states
+the governing property: *"Event Mode narrows; it never widens."*
+
+```
+PASS  an ordinary eligible candidate is eligible (baseline is not vacuous)
+PASS  being at the Event does NOT make someone discoverable   → not_event_eligible
+PASS  opting in to Event Linkr is what makes someone discoverable
+PASS  Event Mode narrows and never widens: cannot rescue an ineligible candidate
+PASS  a block beats Event eligibility, decided before anything else  → blocked
+PASS  revoking Event eligibility removes discoverability immediately
+PASS  an existing connection is excluded from candidacy, not re-offered
+PASS  presence expiry removes an attendee who has gone stale
+```
+
+The first assertion exists so the rest cannot pass vacuously: if the fixture were
+ineligible for some unrelated reason, every "not eligible" assertion below would
+succeed for the wrong reason.
+
+**Mutation-tested on the two safety-critical properties:**
+
+| Mutation | Result |
+| --- | --- |
+| Make attendance imply consent (`false && input.eventModeActive && …`) | **2 tests fail** |
+| Let Event Mode bypass blocking (`blocked && !eventModeActive`) | **1 test fails** |
+| Restored | 8 passed |
+
+**"Revoke removes discoverability immediately" is the load-bearing one.**
+Checkout, opt-out and Event end all converge on the same signal — `eventEligible`
+goes false — and the next evaluation excludes the candidate. There is no grace
+window in which a departed attendee stays visible.
+
+**Existing matches survive** by construction rather than by special-casing: an
+already-connected pair is excluded from *candidacy* (`already_connected`), which
+removes them from future discovery without touching the connection or its
+conversation. Revocation narrows who can be FOUND; it does not reach back into
+what was already legitimately created.
+
+**Not covered here, and carried forward:** the wiring from a check-out/Event-end
+*event* to `eventEligible` being recomputed lives in `candidate-service.ts` and
+was not driven end to end. The decision authority is proven; the plumbing that
+feeds it is not. Also not covered: attendee-directory enumeration against live
+API payloads, and the five audience authorities (invite / link / community /
+nearby / public) — the visibility column and its check constraint were confirmed,
+but authorization was not exercised per audience.

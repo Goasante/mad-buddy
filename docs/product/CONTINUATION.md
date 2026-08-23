@@ -41,7 +41,7 @@ arithmetic over it.
 | 2 | Linkr | **COMPLETE** | 7/7 (MB-GOD-024) | No |
 | 3 | UpFor → Plan | **COMPLETE** | 7/7 (MB-GOD-023) | No |
 | 4 | Plan RSVP / membership | **PARTIAL** | RSVP only; no add/remove participant, no Plan Chat reconciliation | No |
-| 5 | Event check-in / Event Linkr | **NOT STARTED** | — | No |
+| 5 | Event check-in / Event Linkr | **PARTIAL** | Consent boundary 8/8, behavioural + mutation-tested (MB-GOD-028). NOT done: checkout→eligibility wiring end to end, attendee-directory enumeration, 5 audience authorities | No |
 | 6 | Profile media | **NOT STARTED** | — | No |
 | 7 | Safe Arrival + Messages | **PARTIAL** | Safe Arrival 5/5 (MB-GOD-026); Messages none | No |
 
