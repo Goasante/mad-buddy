@@ -4192,3 +4192,74 @@ it produces a confident, wrong finding about a feature that works.
 The same run also audited the guided-tour overlay rather than Home, exactly as
 the continuation warns ("dismiss the tours before any crawl"). Both readings
 were re-taken with the tour dismissed before anything was recorded.
+
+## MB-GOD-051 (P3) - A typed message does not survive a reload
+
+**Cause class: poor recovery.** Carried from Mission 2, where interruption
+testing was recorded as NOT RUN.
+
+```
+draft after tab background -> return : "Draft that must survive an interruption"   SURVIVES
+draft after full reload              : ""                                          LOST
+```
+
+Backgrounding — by far the commonest mobile interruption — preserves the draft,
+because React state survives a `visibilitychange`. A full reload does not, and
+there is **no draft persistence anywhere in the product**: no `localStorage`,
+no save/restore path in `components/messaging/` or `components/messages/`.
+
+So this is a missing capability rather than a regression, which is why it is P3
+and not higher. It matters more on a PWA than a website — an installed app that
+the OS reclaims memory from comes back as a reload, and the message is simply
+gone with no warning.
+
+Not fixed here: draft persistence is a feature with real decisions attached
+(per-conversation scoping, when to clear, whether an unsent draft should be
+visible in the conversation list), and Mission 2 established that
+`localStorage` is the right home for exactly this class of per-viewer
+convenience. Recorded with the measurement.
+
+## First value, and the activation milestone verdict
+
+**FIRST VALUE = `first_muddy_added` AND one social act** (wave, message, Plan or
+status). This is not my definition — it is the product's own, in
+`lib/activation/home-maturity.ts`, and it is a good one. The code explicitly
+rejects the weaker candidates:
+
+> DELIBERATELY NOT SUFFICIENT: Muddy count (a big list is not usage), profile
+> completion (setup, not value), and `first_status_created` alone (broadcast
+> rather than interaction).
+
+**Verdict: the milestone model is sound and should NOT be changed.** It already
+draws the distinction the brief asks about — "are we calling someone activated
+too early?" — and answers no. Two details worth carrying forward:
+
+- `deriveHomeMaturity` checks real activity (`looksEstablished`) BEFORE the
+  milestone check, deliberately, so that long-standing accounts predating a
+  milestone key are not re-onboarded. That is the right instinct for the future
+  Experience Migration.
+- The code already flags `first_status_created` as "a taxonomy concern". That
+  is the one milestone that could inflate activation, and it is already known.
+
+**The gap is not the definition, it is the path.** MB-GOD-050 is precisely the
+distance between the two halves: Home marks `first_muddy_added` with a
+celebration and then offers no way to perform the social act that would complete
+first value.
+
+## Return loops
+
+| Feature | Reason to come back | Verdict |
+| --- | --- | --- |
+| Messages | someone replied | strong — unread badge, conversation list |
+| Muddies | requests, proximity changes | strong |
+| Plans | an upcoming commitment | strong — Home surfaces the next Plan |
+| Events | upcoming / live | strong — Home shows LIVE NOW |
+| UpFor | live availability, expires | strong by design (temporary) |
+| Safe Arrival | active session | strong, and correctly absent when idle |
+| Linkr | new candidates | **weakest** — no signal that anything changed |
+
+Linkr is the one loop with no return trigger: nothing tells a user new
+candidates exist, so returning is entirely self-motivated. Recorded rather than
+"fixed", because the brief is explicit that notifications must not be
+manufactured for retention — and Linkr is the surface where an unsolicited nudge
+would be least welcome.
