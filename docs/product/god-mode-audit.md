@@ -1618,3 +1618,76 @@ absent Supabase configuration — a missing-env-var guard, not a swallowed
 database error, and the message already says everything there is to record. Its
 real failure paths return 401, 429 and 409. The checker now matches only
 500/501/502/504 so this does not recur as noise.
+### MB-GOD-023 - UpFor → Plan → RSVP lifecycle: 7/7, canonical invariants hold
+
+| Field | Value |
+| --- | --- |
+| **Surface** | UpFor, Plans, Plan Chat |
+| **Severity** | n/a - **verification, no defect found** |
+| **Mission / Level** | Mission 1 - Extremely Advanced |
+| **Status** | **VERIFIED** |
+
+The Product Constitution's hard rule for this path is that **one UpFor converts
+into exactly one canonical Plan**. So the conversion is fired **twice
+simultaneously** with the same idempotency key — a double-tap — and the result is
+counted in Postgres rather than read off the UI.
+
+```
+PASS  an UpFor session is created active
+PASS  two participants joined                              requests 2
+PASS  one UpFor converts into exactly one Plan             plans 1  (rpc: ok/ok)
+PASS  the Plan records the UpFor it came from              source_hangout_id set
+PASS  the Plan is owned by the UpFor host                  creator_id correct
+PASS  the Plan has at most one canonical conversation      conversations 0
+PASS  RSVP changes update one row rather than adding rows  rows 1, final "going"
+```
+
+**The concurrency result is the important one.** Both calls returned **ok** and
+exactly **one** Plan exists. The migration explains why, and the comment is worth
+quoting because it shows the mechanism was designed rather than accidental:
+
+```sql
+-- A real source row is stronger than an advisory lock. The second
+-- concurrent converter waits here and then observes converted_plan_id.
+select hs.id, hs.owner_id, hs.status, hs.converted_plan_id
+  into v_hangout
+from public.hangout_sessions as hs
+where hs.id = p_source_hangout_id
+for update;
+```
+
+The second converter does not fail — it waits on the row lock, sees the Plan the
+first one created, and returns it. That is a better outcome than an error: a
+double-tap gets the Plan, not a failure message.
+
+RSVP was cycled **going → maybe → not_going → going** and produced **one**
+participant row, not four.
+
+**Five harness corrections were needed to reach a real result, every one of them
+reported as INCONCLUSIVE rather than passed.** Recorded because the sequence is
+itself the evidence that "setup failed" is never allowed to read as PASS:
+
+| Attempt | Reported | Cause |
+| --- | --- | --- |
+| 1 | INCONC | `hangout_sessions.activity` — the column is `activity_type` |
+| 2 | INCONC | `audience_type: "muddies"` — must be `all_muddies` (check constraint) |
+| 3 | INCONC | `create_plan_lifecycle` signature: 18 parameters, not 3 |
+| 4 | INCONC | `PLAN_REQUEST_KEY_INVALID` — the key must be a **UUID** |
+| 5 | INCONC | `PLAN_TYPE_INVALID` — must be `quick`/`scheduled`/`poll` |
+| 6 | INCONC | `set_plan_participant_rsvp(p_actor_id, p_plan_id, p_status)` — no `p_user_id` |
+| final | **7/7** | — |
+
+Two of those "failures" are actually **product strengths** found by tripping over
+them:
+
+- **`PLAN_REQUEST_KEY_INVALID`** — the idempotency key is validated as a UUID by
+  the database itself, so a client cannot pass a weak or colliding key.
+- **`set_plan_participant_rsvp` takes no `p_user_id`.** A participant sets their
+  OWN RSVP; there is no parameter through which one person could RSVP on
+  another's behalf. The authorization model is enforced by the signature.
+
+**Note on `conversations 0`:** the converted Plan had no Plan Chat row yet, which
+is consistent with `reconcile_plan_conversation_members` creating it on first
+use rather than eagerly at conversion. The assertion is `<= 1` (never two), which
+is the invariant that matters; whether it is created eagerly or lazily is a
+separate question carried to the Plan Chat sequence.

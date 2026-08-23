@@ -1,14 +1,14 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 5.** The next session continues from here.
+**Written at the end of session 6.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         8c54e3b
+HEAD         (session 6 final — see git log -1)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      11 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      14 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
@@ -16,8 +16,8 @@ COMMITS      11 local recovery checkpoints, none pushed, nothing deployed
 | Mission | Level | State |
 | --- | --- | --- |
 | 1 — Reliability | Advanced | **COMPLETE** (route audit, auth, control inventory, mutation & journey audit, hydration, test infra, pre-hydration form audit) |
-| 1 — Reliability | Extremely Advanced | **PARTIAL** — Muddy lifecycle 7/7 and multi-tab 5/5 done (MB-GOD-017/018). Still NOT done: Linkr, UpFor→Plan→Chat, Plan RSVP, Event Going→Check In→Linkr→Checkout, Profile media, Safe Arrival, Messages |
-| 1 — Reliability | God Mode | **PARTIAL** — state graph built and run over 13 surfaces: **34 nodes, 193 edges, 0 destination mismatches**. Found MB-GOD-020 (P1). Not yet crawled: Conversation, Plan detail, Plan Chat, Event detail |
+| 1 — Reliability | Extremely Advanced | **PARTIAL** — done: Muddy 7/7, multi-tab 5/5, **UpFor→Plan→RSVP 7/7** (MB-GOD-017/018/023). Still NOT done: Linkr, Event check-in/Event Linkr, Profile media, Safe Arrival, Messages |
+| 1 — Reliability | God Mode | **PARTIAL** — state graph 34 nodes / 193 edges / 0 mismatches. **DB contract check clean** (1081 selects, 1165 filters) and **error observability closed** (67/67 routes log 5xx causes). Not yet crawled: Conversation, Plan detail, Plan Chat, Event detail |
 | 2 — UI/UX | Advanced | **PARTIAL** — Profile RESTRUCTURED and verified (MB-GOD-013 fixed: 3.97 -> 2.40 screens, settings share 28.6% -> 0%). Home judged good. 8 surfaces still unaudited: Landing, Auth, Activation, Conversation, Plan detail, Plan Chat, Event detail, Safe Arrival |
 | 3 — Flow | all levels | not started (deep-link intent + 10 journeys verified as Mission 1 evidence) |
 | 4 — Information architecture | — | **PARTIAL** — Profile restructure DONE, Settings receiving work DONE; **MB-GOD-007 still waiting** |
@@ -103,6 +103,26 @@ JOURNEYS    10/10   LIFECYCLE 7/7   MULTI-TAB 5/5   STATE GRAPH 193 edges
    the photo viewer and the camera. None of these are covered yet.
 
 ## Things the next session should not re-derive
+
+- **MB-GOD-020's defect class does NOT recur** (MB-GOD-021). 1081 select lists and
+  1165 filters checked against the generated types: zero unknown columns.
+  `scripts/hardening/db-contract.mjs` is mutation-tested — it catches the original
+  bug — so "clean" is trustworthy. Re-run it after any schema change.
+- **All 67 API routes now log the cause of a 5xx** (MB-GOD-022).
+  `scripts/hardening/error-observability.mjs` is the regression check.
+- **UpFor → Plan is safe under concurrency** (MB-GOD-023). Two simultaneous
+  conversions with the same key both return ok and produce ONE Plan; the second
+  waits on `for update` and observes `converted_plan_id`.
+- **Real signatures**, so the next session does not rediscover them:
+  `create_plan_lifecycle` takes **18** params and needs a **UUID** `p_request_key`
+  and a `p_plan_type` of quick/scheduled/poll;
+  `set_plan_participant_rsvp(p_actor_id, p_plan_id, p_status)` has **no**
+  `p_user_id` (a participant sets their own RSVP — enforced by the signature);
+  `hangout_sessions.activity_type` (not `activity`), `audience_type` must be
+  `all_muddies`; `hangout_requests.hangout_session_id` + `requester_id`.
+- **Two tables are absent from the generated types** and so are skipped by the
+  contract check: `account_deletion_requests`, `user_phone_identities`. They exist
+  in the database.
 
 - **The state-graph crawler lied three times before it was trustworthy.** Fuzzy
   text → strict-mode violations. Index-based clicking → ten impossible
