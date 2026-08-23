@@ -6593,3 +6593,112 @@ properties that survive a real notch. Neither pretends to be the other.
 MISSION 5:  Advanced = COMPLETE   Extreme = COMPLETE   God Mode = COMPLETE
 FINDINGS:   P0 = 0  P1 = 0  P2 = 1 (MB-GOD-057, FIXED)  P3 = 0
 ```
+
+---
+
+# MISSION 6 — SECURITY / PRIVACY / COMPLIANCE
+
+Every control below ends in a stated verification class. Nothing is recorded as
+"the provider probably handles it".
+
+## MB-GOD-058 (P2) — Recursive RLS policy on `conversation_members`
+
+**Class: DEFERRED — owner-blocked, needs a production migration.**
+
+`supabase/migrations/20260717160000_messaging.sql:131` defines a SELECT policy on
+`conversation_members` whose `EXISTS` subquery reads **`conversation_members`
+itself**:
+
+```sql
+create policy "conversation members visible to members" on public.conversation_members
+  for select using (
+    auth.uid() = user_id
+    or exists (
+      select 1 from public.conversation_members m      -- ← the same table
+      where m.conversation_id = conversation_members.conversation_id
+        and m.user_id = auth.uid() and m.status = 'joined'
+    )
+  );
+```
+
+Postgres reports `infinite recursion detected in policy for relation
+"conversation_members"`, and the failure propagates to every table whose policy
+joins through it — `conversations`, `messages`, `safe_arrival_sessions`.
+
+**Measured impact — it fails CLOSED, which is why this is P2 and not P0/P1.**
+Verified from a real authenticated session (Yaw, a review account):
+
+```
+conversations          DENIED — fails CLOSED
+messages               DENIED — fails CLOSED
+conversation_members   DENIED — fails CLOSED
+safe_arrival_sessions  DENIED — fails CLOSED
+```
+
+**No data leaks.** An anonymous client and an authenticated client both get
+nothing. The application is unaffected because messaging never reads through the
+RLS client — it uses the service-role admin client, whose authorization Missions
+1 and 4 verified independently (`canCreateDirectConversation`,
+`conversation_previews`, 55/55 admin actions).
+
+So the practical position is: **RLS on these tables is currently inert rather
+than protective.** The app's real boundary holds; the second layer beneath it
+does not.
+
+**Why this is not fixed here.** The correct repair is a `SECURITY DEFINER`
+helper that breaks the recursion —
+
+```sql
+create or replace function public.is_conversation_member(p_conversation_id uuid)
+returns boolean language sql security definer stable as $$
+  select exists (select 1 from public.conversation_members
+                 where conversation_id = p_conversation_id
+                   and user_id = auth.uid() and status = 'joined')
+$$;
+```
+
+— and then rewriting the policies to call it. That is exactly the pattern
+`public.is_friend` already uses in this schema, so the shape is proven here.
+
+**But it is a production migration**, and this program's standing rule is that
+production schema is owner-approved. It also touches the same
+`REVOKE`/`GRANT` hazard already recorded (locking a function down strips
+`service_role` and breaks the server), so it needs a deliberate deployment with
+its grants written explicitly.
+
+**Risk of deferring: low.** The system currently denies more than it should, not
+less. The exposure is a missing defence-in-depth layer, not an open door — and
+the layer above it is verified.
+
+**MIGRATION-READY.** The helper, the policy rewrite and the grant restoration
+are specified above; nothing was executed.
+
+## Controls verified this mission
+
+| Control | Result | Class |
+| --- | --- | --- |
+| Auth enumeration | identical message for existing vs unknown account | **BEHAVIOURALLY VERIFIED** |
+| Open redirect (`?next=`) | 4/4 hostile values stayed on-origin | **BEHAVIOURALLY VERIFIED** |
+| RLS — anonymous read | 8 sensitive tables, **0 rows** returned | **BEHAVIOURALLY VERIFIED** |
+| RLS — recursion | fails closed (see MB-GOD-058) | **OPEN, DEFERRED** |
+| Cross-user IDOR (API) | fabricated target → generic 400, no existence oracle | **BEHAVIOURALLY VERIFIED** |
+| Notifications scoping | a foreign account sees only its own (empty) | **BEHAVIOURALLY VERIFIED** |
+| Service-role leakage | `lib/supabase/admin.ts` is `server-only`; absent from all client code | **STRUCTURALLY VERIFIED** |
+| Env exposure | only `NEXT_PUBLIC_SUPABASE_{URL,ANON_KEY,PUBLISHABLE_KEY}` | **STRUCTURALLY VERIFIED** |
+| Webhook signature | HMAC-SHA512 + **`timingSafeEqual`** + length check | **STRUCTURALLY VERIFIED** |
+| Webhook replay/idempotency | stable `provider_event_id` + `dedupe_key` ledger; failures do not poison it | **STRUCTURALLY VERIFIED** |
+| Payment amount authority | **server-owned** in `lib/paystack/config.ts`; the client never supplies an amount | **STRUCTURALLY VERIFIED** |
+| CSP | `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, per-request nonce | **STRUCTURALLY VERIFIED** |
+| Cookies | `secure` in production; `httpOnly: false` documented as required by the SSR library | **STRUCTURALLY VERIFIED** |
+| Rate limiting | 189 guarded call sites across actions and API routes | **STRUCTURALLY VERIFIED** |
+| Admin RBAC | 55/55 actions authorized, per-capability, support/owner split | **BEHAVIOURALLY VERIFIED** (Mission 4) |
+| EXIF/GPS stripping | mutation-tested with a real GPS-tagged fixture | **BEHAVIOURALLY VERIFIED** (Mission 1) |
+| Signed URL lifetime | 5-minute bounded residual, measured | **BEHAVIOURALLY VERIFIED** (Mission 1) |
+| Account export / deletion | reachable, column contract tested | **BEHAVIOURALLY VERIFIED** (Mission 1) |
+| Security suite | 84/84 | **BEHAVIOURALLY VERIFIED** |
+
+**EFTS = NEEDS DEFINITION.** The term appears in the control matrix with no
+definition anywhere in the repository. Not invented.
+
+**AI controls = NOT APPLICABLE.** No production user-facing AI surface exists in
+this codebase, so prompt-injection logging and usage caps have nothing to guard.
