@@ -1895,9 +1895,9 @@ cannot drift again:
 | 4 | Plan RSVP / membership | **COMPLETE** | 10/10 (MB-GOD-029) — RSVP cycle, add participant, Plan Chat reconciliation, outsider exclusion | Yes (1: stale RSVP replay) |
 | 5 | Event check-in / Event Linkr | **PARTIAL** | Consent boundary 8/8, behavioural + mutation-tested (MB-GOD-028). NOT done: checkout→eligibility wiring end to end, attendee-directory enumeration, 5 audience authorities | No |
 | 6 | Profile media | **NOT STARTED** | — | No |
-| 7 | Safe Arrival + Messages | **PARTIAL** | Safe Arrival 5/5 (MB-GOD-026); **Messages: none** | No |
+| 7 | Safe Arrival + Messages | **COMPLETE** | Safe Arrival 5/5 (MB-GOD-026) + Messages 8/8 (MB-GOD-030) | Yes (1: stale membership send) |
 
-**LIFECYCLES COMPLETE = 4 / 7** (updated after MB-GOD-029).
+**LIFECYCLES COMPLETE = 5 / 7** (updated after MB-GOD-030).
 
 **Multi-tab coverage is thinner than the raw "5 scenarios" figure suggests**: all
 five sit inside domain 1. Four of the seven domains have no stale-state coverage
@@ -2052,3 +2052,75 @@ exactly **one** canonical conversation, created eagerly.
 
 The MB-GOD-023 assertion (`<= 1`, never two) was still correct and still holds —
 it simply passed for a weaker reason than it appeared to.
+### MB-GOD-030 - Messages: 8/8, domain 7 COMPLETE
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Messages, conversations |
+| **Severity** | n/a - **verification, no defect found** |
+| **Mission / Level** | Mission 1 - Extremely Advanced (domain 7b) |
+| **Status** | **VERIFIED — domain 7 COMPLETE (Safe Arrival + Messages)** |
+
+The missing half of domain 7. Three properties dominate, each enforced in a
+different place:
+
+```
+PASS  a two-member conversation exists                              QA + KOFI joined
+PASS  a message sends                                               inserted
+PASS  the same client_message_id twice yields exactly one message   rows 1 (ok/err)
+PASS  identical text with different client ids stays two messages   rows 2
+PASS  a system message has no sender, so it cannot read as waiting  system rows 1, sender null
+PASS  a non-member reads ZERO messages from the conversation        rows visible: 0
+PASS  a non-member cannot read the conversation row itself          rows visible: 0
+PASS  a removed member's stale tab cannot post into the conversation rows written: 0 (refused)
+```
+
+**Idempotency is enforced by the database, not by button timing.** A unique
+index does the work:
+
+```sql
+messages_idempotency_unique
+  ON public.messages (sender_id, client_message_id)
+  WHERE client_message_id IS NOT NULL AND sender_id IS NOT NULL
+```
+
+Two concurrent inserts with the **same** `client_message_id` produced `ok/err`
+and exactly **one** row — the real shape of a double-tap or a retry after the
+client never saw the first response. The disabled-button trick is not what is
+holding this together, which matters because that trick fails precisely when the
+network is slow.
+
+The **converse** is tested too, because over-deduplicating is its own defect:
+identical text sent with two different client ids stays two messages. Someone
+typing "ok" twice must get two messages.
+
+There is a second index, `messages_system_event_dedupe_idx` on
+`(conversation_id, client_message_id) WHERE message_type = 'system'`, so a
+lifecycle notice cannot be emitted twice for one event either.
+
+**System messages carry `sender_id = NULL`**, which is what stops them reading as
+"someone is waiting for a reply". The unread badge counts *people*, and a system
+notice has no person behind it.
+
+**Membership privacy is proven under RLS, as the outsider** — not by observing
+that the UI declines to render. A non-member reads **zero** messages and cannot
+even read the conversation row.
+
+**Multi-tab (domain 7, stale membership):** the member is removed
+(`status='left'`, `left_at` set), then that user's own still-open tab attempts to
+post using their own credentials. The write is **refused**. A stale tab cannot
+outlive its membership.
+
+**One harness correction:** the first system-message insert used
+`system_event_type: "plan_created"`, which is not in the enum — the constraint
+lists `plan_confirmed`, `plan_time_changed`, `plan_place_changed`,
+`plan_cancelled`, `poll_confirmed`, `participant_joined`, `participant_left`,
+`conversation_created`, `member_promoted`, `member_demoted`,
+`ownership_transferred`, `participant_removed`, `group_renamed`,
+`group_avatar_changed`. The check failed honestly (0 system rows) rather than
+passing, and surfacing the insert error named the constraint immediately.
+
+**Not covered, and carried forward:** voice and media messages, the unread count
+as computed by `conversation_previews` across the list/badge/notification
+surfaces, and read-receipt reconciliation. The *storage* invariants are proven;
+the *projection* of unread into the three UI surfaces is not.

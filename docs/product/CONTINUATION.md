@@ -43,9 +43,9 @@ arithmetic over it.
 | 4 | Plan RSVP / membership | **COMPLETE** | 10/10 (MB-GOD-029) — RSVP cycle, add participant, Plan Chat reconciliation, outsider exclusion | Yes (1: stale RSVP replay) |
 | 5 | Event check-in / Event Linkr | **PARTIAL** | Consent boundary 8/8, behavioural + mutation-tested (MB-GOD-028). NOT done: checkout→eligibility wiring end to end, attendee-directory enumeration, 5 audience authorities | No |
 | 6 | Profile media | **NOT STARTED** | — | No |
-| 7 | Safe Arrival + Messages | **PARTIAL** | Safe Arrival 5/5 (MB-GOD-026); Messages none | No |
+| 7 | Safe Arrival + Messages | **COMPLETE** | Safe Arrival 5/5 (MB-GOD-026) + Messages 8/8 (MB-GOD-030) | Yes (1: stale membership send) |
 
-**LIFECYCLES COMPLETE = 4 / 7.** Multi-tab by domain: Muddy 5, Plan 1. Domains 2, 3, 5, 6, 7 still have no stale-state coverage.
+**LIFECYCLES COMPLETE = 5 / 7.** Multi-tab by domain: Muddy 5, Plan 1, Messages 1. Domains 2, 3, 5, 6 still have no stale-state coverage.
 
 Report these four columns per domain at every checkpoint. A bare fraction is what
 let two independent errors hide inside one number.
