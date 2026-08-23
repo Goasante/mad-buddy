@@ -5718,3 +5718,95 @@ recorded rather than executed: the rename touches persisted migration rows, tour
 targets, notification destinations, the OAuth allow-list, deep links, aliases
 and analytics, so `/discover → /linkr` is the proven pattern to copy — keep the
 old route as a documented compatibility alias rather than deleting it.
+
+---
+
+# MISSION 4 — EXTREMELY ADVANCED
+
+Advanced asked who owns each concept. Extreme asks whether that ownership holds
+when the system is stale, converted, aliased, migrated or privileged.
+
+## MB-GOD-053 — RESOLVED. Linkr now delegates conversation creation.
+
+**The stale comment was the finding inside the finding.**
+`ensureConnectionConversation` carried a justification for its own duplication:
+
+> DOES NOT go through `getOrCreateDirectConversation`. That helper requires the
+> pair to be approved Muddies… Routing through it would either fail every time
+> or force Linkr to fabricate a friendship.
+
+That was **false at the time it was read**. `resolveDirectMessageEligibility`
+treats an active Linkr connection as an explicit early-allow
+(`messaging/rules.ts:114`), and `canCreateDirectConversation` feeds it through
+`hasActiveLinkrConnection`. The connection row is written before the
+conversation is needed, so the pair is eligible by the canonical rule — no
+friendship is fabricated, which remains the thing the product must never do.
+
+**Proven rather than assumed.** `lib/linkr/conversation-ownership.test.ts`
+replays the canonical rule with the real inputs:
+
+```
+PASS  allows a connected pair who are NOT Muddies
+PASS  still refuses two unconnected strangers          (the control)
+PASS  keeps a block winning over a Linkr connection
+PASS  lets a Linkr connection outrank "nobody" preference
+```
+
+The control matters: without it, the first assertion could pass because the rule
+allows everybody.
+
+**The ownership boundary is now explicit, and runs both ways:**
+
+```
+Linkr owns      the mutual-connection decision and linkr_connections
+Messaging owns  creating and reusing a direct conversation
+```
+
+Linkr's reciprocity logic was **not** pushed into messaging, and messaging was
+**not** broadened to accommodate Linkr — the test asserts messaging never learns
+about `linkr_connections`. `getOrCreateDirectConversation` needed no change at
+all; its existing `context` parameter carries the Event context Linkr wanted.
+
+**Net effect:** ~35 lines of duplicated lookup, insert, member-seeding and
+race-handling deleted from Linkr, replaced by one delegating call.
+
+**Safety gate re-run** (`scripts/hardening/linkr-consolidation-gate.mjs`),
+asserting on database rows rather than return values:
+
+```
+PASS  the RPC row has the expected shape
+PASS  a one-sided connect does not match
+PASS  a one-sided connect creates NO conversation
+PASS  a one-sided connect creates NO connection row
+PASS  reciprocity produces a mutual connection
+PASS  exactly one connection row exists
+PASS  no Muddy relationship is created
+PASS  a blocked pair never gets a conversation
+
+8/8 consolidation-gate checks passed
+```
+
+**Mutation-tested**: reintroducing inline `conversations`/`conversation_members`
+inserts in Linkr fails the guard, naming the test that catches it.
+
+Suite: **6917 tests / 345 files**, up 7 tests and 1 file.
+
+## Axis 1 — Conversion authority
+
+| Conversion | Source authority | Target authority | Idempotency key | Second writer? |
+| --- | --- | --- | --- | --- |
+| Linkr mutual → Conversation | `linkr_connections` | `conversations` | `direct_key` unique index | **no** (fixed) |
+| UpFor → Plan | `hangout_sessions` | `plans` | `p_request_key = hangoutId` | no |
+| Plan → Plan Chat | `plans` | `conversations` (`context_id`) | plan id | no |
+| Event → Event Linkr | `check_ins` + `event_linkr_opt_ins` | `linkr_actions` | opt-in row | no |
+| Invite → Muddy | `invites` | `friendships` | `accept_friend_request` | no |
+
+**No conversion leaves both sides owning the same lifecycle state.** The UpFor
+records `converted_plan_id` and moves to `converted_to_plan` — a historical
+pointer, not continued authority; Mission 3 verified it does not go on mutating
+Plan participants. Each conversion carries an idempotency key that makes a retry
+converge rather than duplicate.
+
+**Non-transferred data is deliberate**: an UpFor's pending responders do NOT
+become Plan participants (Mission 3, 6/6), and a Linkr connection does NOT
+become a friendship (verified again above).

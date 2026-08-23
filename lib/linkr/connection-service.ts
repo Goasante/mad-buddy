@@ -5,7 +5,7 @@ import { isBlockedEitherDirection } from "@/lib/social/permissions";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { directConversationKey } from "@/lib/messaging/rules";
+import { getOrCreateDirectConversation } from "@/lib/messaging/service";
 import { guardAction } from "@/lib/admin/enforcement";
 import { resolveAge } from "@/lib/linkr/profile-service";
 import { hasProfilePicture } from "@/lib/linkr/media-projection";
@@ -211,17 +211,27 @@ export async function connectWithCandidate(
 /**
  * Creates (or finds) the conversation for a mutual connection.
  *
- * DOES NOT go through `getOrCreateDirectConversation`. That helper requires
- * the pair to be approved Muddies, which is the correct rule for ordinary
- * direct messages and the wrong one here: a Linkr connection is precisely a
- * pair who chose each other WITHOUT being Muddies. Routing through it would
- * either fail every time or force Linkr to fabricate a friendship, and
- * fabricating a friendship is the one thing this product must not do.
+ * DELEGATES to `getOrCreateDirectConversation` (MB-GOD-053). This function used
+ * to build the conversation itself -- look up the direct_key, insert the row,
+ * seed both members, handle the unique-key race -- which made Mad Buddy hold
+ * TWO implementations of one job. Nothing unsafe came of it, but a future
+ * change to how direct conversations are created (a new membership column, a
+ * different race strategy, an added guard) had to be made in two places and
+ * would silently drift if it were made in one.
  *
- * So the conversation is created directly, with the same canonical shape
- * (`direct_key`, both members joined) that every other direct conversation
- * has. Messaging reads it identically; nothing downstream knows the
- * difference, and no second chat engine exists.
+ * The comment that used to sit here said the canonical helper "requires the
+ * pair to be approved Muddies". THAT WAS STALE. `resolveDirectMessageEligibility`
+ * treats an active Linkr connection as an explicit early-allow
+ * (`messaging/rules.ts:114`), and `canCreateDirectConversation` feeds it via
+ * `hasActiveLinkrConnection`. The connection row is written before this runs,
+ * so the pair is eligible by the canonical rule -- no friendship is fabricated,
+ * which remains the thing this product must never do.
+ *
+ * THE OWNERSHIP BOUNDARY IS THE POINT, and it is now explicit:
+ *   Linkr owns     the mutual-connection decision and its own record.
+ *   Messaging owns creating and reusing a direct conversation.
+ * Linkr-specific reciprocity logic stays here; it was not pushed into
+ * messaging, and messaging was not broadened to accommodate Linkr.
  */
 async function ensureConnectionConversation(
   admin: Admin,
@@ -237,53 +247,16 @@ async function ensureConnectionConversation(
     .maybeSingle();
   if (connection?.conversation_id) return connection.conversation_id;
 
-  const key = directConversationKey(viewerId, targetId);
-
-  // The pair may already have a conversation from some other context; reuse it
-  // rather than creating a second thread between the same two people.
-  const { data: existing } = await admin
-    .from("conversations")
-    .select("id")
-    .eq("direct_key", key)
-    .eq("conversation_type", "direct")
-    .maybeSingle();
-
-  let conversationId = existing?.id;
-  if (!conversationId) {
-    const { data: created } = await admin
-      .from("conversations")
-      .insert({
-        conversation_type: "direct",
-        created_by: viewerId,
-        direct_key: key,
-        // 'event' when the connection happened at one, so the thread can show
-        // "Connected at ...". Otherwise null: Linkr does not need a context
-        // type of its own, and adding one would touch the shared enum that
-        // Events is also editing.
-        context_type: eventId ? ("event" as const) : null,
-        context_id: eventId,
-        status: "active" as const
-      })
-      .select("id")
-      .maybeSingle();
-
-    if (created?.id) {
-      conversationId = created.id;
-      await admin.from("conversation_members").insert([
-        { conversation_id: created.id, user_id: viewerId, role: "member" as const, status: "joined" as const },
-        { conversation_id: created.id, user_id: targetId, role: "member" as const, status: "joined" as const }
-      ]);
-    } else {
-      // Lost the unique-key race: the other side's connect created it first.
-      const { data: raced } = await admin
-        .from("conversations")
-        .select("id")
-        .eq("direct_key", key)
-        .eq("conversation_type", "direct")
-        .maybeSingle();
-      conversationId = raced?.id;
-    }
-  }
+  /* `event` context when the connection happened at one, so the thread can
+     show "Connected at ...". Otherwise no context: Linkr does not need a
+     context type of its own, and adding one would touch the shared enum that
+     Events also edits. */
+  const { conversationId } = await getOrCreateDirectConversation(
+    admin,
+    viewerId,
+    targetId,
+    eventId ? { contextType: "event", contextId: eventId } : undefined
+  );
 
   if (conversationId) {
     await admin
@@ -292,7 +265,7 @@ async function ensureConnectionConversation(
       .eq("id", connectionId)
       .is("conversation_id", null);
   }
-  return conversationId;
+  return conversationId ?? undefined;
 }
 
 /**
