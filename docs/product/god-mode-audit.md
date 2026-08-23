@@ -884,3 +884,235 @@ The runtime sweep initially reported `/forgot-password` and `/reset-password` as
 leaking "password". False positive: the word is the **route's own name**, in the
 path, not a query parameter. The detector now inspects only the query string.
 Recorded so a later session does not rediscover it.
+## MISSION 1 — Extremely Advanced: state-transition sequences
+
+Sequences driven through a real browser against production output, with row
+counts read directly from Postgres where "no duplicate was created" is the claim
+— a duplicate the list happens not to render is still a duplicate.
+
+```
+PASS  rapid create: double-tap must not create two Plans   — 1 plan created
+PASS  navigating away mid-mutation leaves no stuck state   — clean on return
+PASS  two tabs do not disagree about Muddy count           — A=2, B=2
+```
+
+**Two of the five checks did NOT actually test anything and are recorded as
+inconclusive rather than as passes:**
+
+- `request -> cancel -> resend` — the endpoint returned **400** for the payload
+  the probe sent, so no request was ever created and the row counts came back
+  `undefined`. The harness reported PASS because nothing failed; that is exactly
+  the empty-fixture trap this program has already been caught by once. The
+  lifecycle is covered by unit tests (`lib/life/relationship-lifecycle.test.ts`),
+  but the end-to-end sequence remains **UNTESTED** and is carried forward.
+- `deleted resource returns 404` — reported PASS on page text, which led to
+  MB-GOD-012 below. The assertion was too weak to be evidence either way.
+
+### MB-GOD-012 - `notFound()` inside the authenticated group responds HTTP 200
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Any `(app)` route that calls `notFound()` |
+| **Route** | `/friends/<missing>`, `/groups/<missing>` |
+| **Severity** | P2 |
+| **Category** | Correctness / SEO / observability |
+| **Mission / Level** | Mission 1 - Extremely Advanced |
+| **Status** | **OPEN — framework constraint, not an app defect** |
+
+**Reproduction.** Open `/friends/definitelynotarealusername` with a session.
+
+**Actual.** The correct 404 screen renders — branded, with recovery actions and
+an on-brand privacy line ("Even we don't know where it is, and we don't track
+locations"). But the response status is **200**.
+
+```
+200  shows404page=true   /friends/nosuchuser                    (inside (app))
+200  shows404page=true   /groups/<missing uuid>                 (inside (app))
+404  shows404page=true   /totally-not-a-route                   (routing miss)
+404  shows404page=true   /plans/<missing uuid>                  (outside (app))
+```
+
+**Why it matters.** A 404 served as 200 is indexed by crawlers, invisible to
+uptime monitoring, and cacheable as though it were real content.
+
+**Root cause.** Not the page code — `app/(app)/friends/[username]/page.tsx`
+calls `notFound()` correctly, and also uses it to hide blocked users, which is
+good privacy design. The difference is WHEN the call happens. `/totally-not-a-route`
+fails during routing, before anything renders, so the status is still settable.
+`/friends/<missing>` renders the `(app)` layout first — which is `force-dynamic`
+and streams (`Transfer-Encoding: chunked`, no `content-length`) — and reaches
+`notFound()` only after the response has begun. The status cannot be changed
+once headers are away.
+
+**Attempted and reverted:** adding `app/(app)/not-found.tsx` as a group-level
+boundary. It did not change the status; the response has already committed by
+then. Reverted rather than left in as a fix that does not fix anything.
+
+**Carried forward, not waived.** A real remedy exists but is an architectural
+change, not a patch: resolve the resource's existence in the layout or in the
+proxy — before the stream opens — so a miss becomes a routing-level 404. That
+touches every dynamic detail route and belongs with Mission 4's information-
+architecture pass, where the route/authorization boundaries are being decided
+anyway. Recorded here with the evidence so that decision is informed.
+
+### INVESTIGATED / NOT A DEFECT - `/events/<missing>` renders instead of 404
+
+`/events/<uuid>` returns 200 with an "Opening Event…" screen for an event that
+does not exist, rather than a 404.
+
+**This is correct and deliberate.** The route is a share/redirect page that must
+reveal nothing about whether an event exists: `robots: { index: false }`, a
+generic fallback title for anyone not permitted to see the real one, and a
+client redirect to `/events?event=<id>` where server-side authorization actually
+decides. Returning 404 for a missing event would leak existence to anyone probing
+IDs — a privacy regression dressed up as a correctness fix.
+
+It also degrades well: `EventShareRedirect` renders a real "Open Event" link, so
+the handoff still works when JavaScript does not run.
+
+Same reasoning applies to `/invite/<bad token>`.
+
+### INVESTIGATED / NOT A DEFECT - double-tapping "Create" on Plans
+
+Tapping the create control twice as fast as the browser allows produced exactly
+**one** Plan (verified by row count in Postgres, before 0 / after 1). No
+duplicate-submission defect on this path.
+## MISSION 2 / 4 — Profile information architecture
+
+### MB-GOD-013 - Profile is an account dashboard with profile information attached
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Profile |
+| **Route** | `/profile` |
+| **Severity** | P2 |
+| **Category** | Information architecture / visual hierarchy |
+| **Mission / Level** | Mission 2 Advanced / Mission 4 Advanced |
+| **Status** | **OPEN — audited, restructuring plan below, not yet implemented** |
+
+The brief names Profile as a known IA concern and asks for a specific test:
+strip the labels, and does the composition read as *a person's profile* or as
+*an account/settings dashboard*? Measured at runtime rather than judged by
+reading the JSX.
+
+**Measured.** `/profile` is **3.97 screens tall (3382px)** at 393x852, in this
+order:
+
+```
+Me → MY SHOWCASE → COMPLETE YOUR PROFILE → INTERESTS → JOURNEY →
+PROGRESS → ACTIVITY → ABOUT → PRIVACY → PREFERENCES → SUPPORT
+```
+
+**Vertical space, by section:**
+
+| Section | px | share |
+| --- | ---: | ---: |
+| Me (identity hero) | 672 | 19.9% |
+| MY SHOWCASE | 124 | **3.7%** |
+| COMPLETE YOUR PROFILE | 300 | 8.9% |
+| INTERESTS (incl. Journey + Progress) | 858 | 25.4% |
+| ACTIVITY | 252 | 7.5% |
+| ABOUT (bio, mood) | 187 | 5.5% |
+| PRIVACY | 118 | 3.5% |
+| PREFERENCES | 256 | 7.6% |
+| SUPPORT | 594 | **17.6%** |
+
+**Verdict: it reads as an account dashboard.** Roughly **29%** of the page is
+identity (hero, showcase, about, interests content); roughly **58%** is
+settings, support, progress metrics and completion nudges.
+
+Three specifics make the point sharper than the totals:
+
+1. **The Showcase gets 3.7%.** The photos that most define a person's profile
+   occupy less space than SUPPORT (17.6%) — five times less than links to help
+   articles and feedback.
+2. **ABOUT sits at y=2227**, below two full screens of metrics. The bio and mood
+   — the fields that actually say who this person is — are the eighth thing on
+   the page.
+3. **PRIVACY, PREFERENCES and SUPPORT total 968px (28.6%)** of a surface whose
+   job is identity. `Account`, `Appearance`, `Help & Support`, `Send Feedback`
+   are Settings, sitting on Profile.
+
+**Why this happened, and why it is not a criticism of the rebuild.** The Profile
+rebuild made every capability *available*, which was the goal at the time and is
+genuine progress — nothing here is missing or broken. But availability is not
+architecture: the sections accumulated in the order they were built, so the page
+is a truthful list of everything Profile's data layer owns rather than a designed
+answer to "who am I here?".
+
+**Proposed restructuring** (classification per the brief; nothing is deleted,
+only relocated):
+
+| Section | Verdict | Where it belongs |
+| --- | --- | --- |
+| Identity hero (avatar, name, @handle, visibility) | **KEEP PRIMARY** | Profile |
+| MY SHOWCASE | **KEEP PRIMARY — promote** | Profile, directly under the hero; this is the surface's substance |
+| ABOUT (bio, mood) | **KEEP PRIMARY — promote** | Profile, adjacent to identity, not below the metrics |
+| INTERESTS | KEEP SECONDARY | Profile, after Showcase/About |
+| COMPLETE YOUR PROFILE | **CONTEXTUAL ONLY** | Show only while incomplete; it is onboarding scaffolding, not a permanent fixture of one's identity |
+| ACTIVITY (2 Muddies, 0 Plans, 0 Safe Arrivals) | KEEP SECONDARY, compact | Profile, as a single row rather than three cards |
+| JOURNEY + PROGRESS (Buddy Score, achievements) | **MOVE** | `/buddy-score`, which already exists and already owns this. Leave one entry point on Profile |
+| PRIVACY (Ghost Mode) | **MOVE TO PRIVACY** | `/settings/privacy` / `/settings/glow-visibility`, already the canonical home. Keep the hero's visibility pill as the contextual read-out |
+| PREFERENCES (Account, Appearance) | **MOVE TO SETTINGS** | `/settings`, which owns exactly these |
+| SUPPORT (Help, Feedback) | **MOVE TO SETTINGS** | `/settings`; help is not identity |
+
+Expected shape afterwards: identity, showcase, about, interests, a compact
+activity row, and one link each to Progress and Settings — roughly **1.5-2
+screens** instead of 4, with the person's actual identity above the fold.
+
+**Not implemented in this pass, deliberately.** This is a structural change to a
+surface that was recently rebuilt, and the brief is explicit that a prettier
+screen with worse hierarchy is a regression. It needs the before/after runtime
+proof the brief asks for (current job → problem → proposed hierarchy → why →
+implementation → runtime proof), and it should land together with the Settings-
+side receiving work so no capability is homeless in between. Sequenced for
+Mission 4, with this audit as its evidence.
+
+**One thing the audit vindicated.** The identity hero itself is good: avatar,
+name, `@handle`, and a visibility pill that reads "Visible to approved friends"
+and links to the glow settings. That is the right information, in the right
+place, in the right words — the problem is what was piled underneath it.
+### MB-GOD-014 - Home information architecture: GOOD (contrast case)
+
+| Field | Value |
+| --- | --- |
+| **Surface** | Home |
+| **Route** | `/dashboard` |
+| **Severity** | n/a - **negative finding** |
+| **Mission / Level** | Mission 2 Advanced / Mission 4 Advanced |
+| **Status** | **VERIFIED GOOD** |
+
+Measured the same way as Profile, at 393x852, tours dismissed:
+
+```
+/dashboard  —  1.00 screens tall (852px)
+
+  Home
+  Good morning, QA
+  Refresh your Glow — "Glow needs an updated location before it can show who's around."
+    → Ama Boateng · Refresh Glow · Say hi
+```
+
+**This is what the brief asks Home to be**, and it is worth recording as a
+contrast because it proves the Profile problem is not a house style — the team
+can clearly build an adaptive surface, and did.
+
+- **Exactly one screen.** No scrolling to find the point.
+- **Adaptive, not a directory.** It is not showing a menu of every feature; it
+  showed the one thing that mattered for this account's actual state — a stale
+  location blocking the Glow — and the nearest Muddy.
+- **The primary state carries its own action.** "Refresh Glow" sits inside the
+  card that explains why it is needed, rather than being a setting to hunt for.
+- **It answers "what matters right now?"** rather than "what does this app
+  contain?"
+
+Home and Profile were measured with the same tool on the same run. Home: 1
+screen, adaptive, one clear job. Profile: 3.97 screens, fixed order, ~58% of it
+settings and support. The difference is architecture, not effort.
+
+**Carried forward for the deeper Mission 3 pass:** Home's adaptiveness has only
+been observed in ONE account state (Muddies present, location stale, no Plans, no
+Events, no messages). The brief asks for state-based Home behaviour across
+brand-new / no-activity / imminent-Plan / live-Event users. Those fixtures do not
+exist yet, so "Home adapts" is currently evidenced for a single state and must
+not be claimed more broadly than that.

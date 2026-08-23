@@ -1,26 +1,26 @@
 # God Mode hardening — continuation report
 
-**Written at the end of session 2.** The next session continues from here.
+**Written at the end of session 3.** The next session continues from here.
 
 ```
 WORKTREE     C:\mb-god
 BRANCH       hardening/god-mode-product-pass
-HEAD         30fd3b5
+HEAD         (see git log — session 3 head)
 ORIGIN/MAIN  3a42cc06e1506682595de544ca335abc3c110749  (unchanged, nothing pushed)
 STATUS       clean
-COMMITS      3 local recovery checkpoints, none pushed, nothing deployed
+COMMITS      6 local recovery checkpoints, none pushed, nothing deployed
 ```
 
 ## Where the program is
 
 | Mission | Level | State |
 | --- | --- | --- |
-| 1 — Reliability | Advanced | **substantially complete** (route audit, auth/authorization, control inventory, mutation & journey audit, hydration, test infrastructure) |
-| 1 — Reliability | Extremely Advanced | not started |
-| 1 — Reliability | God Mode | not started |
-| 2 — UI/UX | all levels | not started (touch-target work done, but that is ergonomics, not the design review) |
+| 1 — Reliability | Advanced | **COMPLETE** (route audit, auth, control inventory, mutation & journey audit, hydration, test infra, pre-hydration form audit) |
+| 1 — Reliability | Extremely Advanced | **PARTIAL** — mutation/duplicate, mid-mutation nav, two-tab consistency, deleted-resource done. Lifecycle sequences (request→cancel→resend, UpFor→Plan→Chat, Event Going→Check In→Linkr→Checkout) NOT done |
+| 1 — Reliability | God Mode | not started (click-graph crawl) |
+| 2 — UI/UX | Advanced | **PARTIAL** — Profile and Home IA measured and judged (MB-GOD-013, MB-GOD-014). The other 16 surfaces not yet audited |
 | 3 — Flow | all levels | not started (deep-link intent + 10 journeys verified as Mission 1 evidence) |
-| 4 — Information architecture | — | not started; **MB-GOD-007 waiting here** |
+| 4 — Information architecture | — | **PARTIAL** — Profile restructuring plan written (MB-GOD-013), not implemented; **MB-GOD-007 still waiting** |
 | 5 — Mobile shell / safe area | Advanced | **complete — no root-cause defect** (MB-GOD-009) |
 | 5 — Mobile shell | Extremely Advanced | not started (keyboard, landscape, PWA/Capacitor, sheets/modals/camera) |
 | 6 — Security / privacy | — | early evidence gathered (privacy probe passes meaningfully); full pass not started |
@@ -57,7 +57,7 @@ Prefix commands with `MSYS_NO_PATHCONV=1` in Git Bash.
 ## Verified baselines to compare against
 
 ```
-TESTS       6836 / 6836   (335 files)  — 80s quiet, 106s under build load
+TESTS       6845 / 6845   (336 files)  — 57s quiet
 TSC         PASS
 ESLINT      0 errors, 44 warnings (all no-unused-vars dead code)
 BUILD       PASS
@@ -68,6 +68,20 @@ JOURNEYS    10/10
 ```
 
 ## Open items, in the order they should be picked up
+
+0. **MB-GOD-013 — Profile restructuring** (P2, Mission 4). The audit and the
+   section-by-section plan are written; the implementation is not. Needs the
+   Settings-side receiving work to land with it so no capability is homeless in
+   between. **Highest-value open item.**
+0b. **MB-GOD-012 — `notFound()` inside `(app)` returns HTTP 200** (P2). Framework
+   constraint, not app code: the `force-dynamic` layout streams before the call
+   is reached. A group-level `not-found.tsx` was tried and did NOT fix it
+   (reverted). Real remedy is resolving existence before the stream opens —
+   architectural, belongs with Mission 4.
+0c. **Lifecycle sequences still UNTESTED end-to-end.** The `request → cancel →
+   resend` probe hit a 400 (the API correctly refuses a raw id without a prior
+   search — an anti-enumeration guard) and so exercised nothing. Needs a fixture
+   that goes through the real search flow.
 
 1. **MB-GOD-007 — UpFor is served from `/hangout-mode`** (P2, Mission 4).
    The product says UpFor everywhere; the URL says hangout-mode. Deferred here
@@ -90,6 +104,16 @@ JOURNEYS    10/10
    the photo viewer and the camera. None of these are covered yet.
 
 ## Things the next session should not re-derive
+
+- **Home's IA is good** (MB-GOD-014): 1 screen, adaptive, one clear job. Verified
+  in ONE account state only — do not claim it adapts broadly without more fixtures.
+- **Profile's IA is the problem** (MB-GOD-013): 3.97 screens, ~58% settings and
+  support, Showcase at 3.7% while Support gets 17.6%. Measured, not guessed.
+- **`/events/<missing>` and `/invite/<bad token>` returning 200 is CORRECT.**
+  They are share/redirect pages that must not reveal whether a resource exists.
+  Do not "fix" them into 404s; that would leak existence to anyone probing ids.
+- **Double-tapping Create on Plans creates exactly one Plan.** Verified by row
+  count in Postgres, not by reading the list.
 
 - **The safe-area architecture is sound** (MB-GOD-009). Tokens are canonical,
   zero hard-coded notch values, every pinned element derives from the insets.
