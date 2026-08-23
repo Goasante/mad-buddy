@@ -3786,3 +3786,70 @@ for all twelve routes — a false alarm. `body` is deliberately transparent
 `body.backgroundColor` compared nothing. The probe now resolves the first
 genuinely painted ancestor and cross-checks the text/ground luminance gap, which
 is what makes the pass meaningful rather than vacuous.
+
+### MB-GOD-047 (P2) - CLOSED. The product broke at 200% text, and it was one defect class
+
+`scripts/hardening/extreme-content.mjs` runs ten routes across three viewports
+(360/393/430) at normal and 200% text, and reports only GENUINE breakage:
+horizontal page overflow, a control clipped by an ancestor that cannot scroll,
+or text clipped by a fixed height. Normal wrapping is not a failure.
+
+**Every failure was the same root cause: chrome sized in `rem`.**
+
+A `rem` is measured against the root font size, so a user who scales text to
+200% doubles every `rem` dimension — including buttons, icon circles and
+container caps that have nothing to do with reading. The user who most needs
+larger text lost primary navigation:
+
+```
+360px @ 200% text   the five bottom-nav tabs demanded 390px in a 360px bar
+                    "UpFor" sat at x=310..390 — thirty pixels past the edge,
+                    on a nav that does not scroll
+```
+
+Fixed by pinning **chrome** to pixels while leaving **text** to scale:
+
+| Element | Was | Now |
+| --- | --- | --- |
+| Bottom-nav icon circle | `h-10 w-10` (80px @200%) | `h-[40px] w-[40px]` |
+| Bottom-nav tab | `flex-1` | `min-w-0 flex-1`, label `truncate` |
+| Mobile header button | `h-11 w-11` (88px @200%) | `h-[44px] w-[44px] shrink-0` |
+| Header spacer | `h-11 w-11` | `h-[44px] w-[44px] shrink-0` |
+| Linkr topbar button | `2.75rem` | `44px` |
+| Activation CTA | `min-w-[11rem]` (352px @200%) | `min-w-[min(11rem,100%)]` |
+| Two capped containers | `max-width: 26rem` | `min(26rem, 100%)` |
+
+The icons inside those buttons keep their `rem` sizing, so the **glyph still
+grows for legibility** — what stops growing is the chrome around it. The 56px
+nav row and 44px touch targets are unchanged.
+
+**Result, measured:**
+
+```
+run 1   29 / 60 combinations flagged
+run 2   12 / 60      (after the harness stopped flagging scrollable tab strips)
+run 3    6 / 60      (bottom nav fixed)
+run 4    2 / 60      (headers fixed)
+run 5    0 / 60      (activation CTA fixed)
+
+360px @200% text: rightmost nav edge 348 ≤ 360   OK
+393px @200% text: rightmost nav edge 381 ≤ 393   OK
+```
+
+**Three method notes, because two of them cost real time.**
+
+1. **17 of the original 29 were the harness, not the app.** It flagged every
+   horizontally scrollable tab strip — "Blocked", "Nearby", "Past", "Circles" —
+   as off-screen. `plans-page.tsx` already documents this exact false positive
+   ("THE CLIPPED TAB WAS SCROLLING, NOT BREAKING"). A control the user can
+   scroll to is reachable; the probe now ignores anything inside a scrollable
+   ancestor.
+2. **My first two fixes were confident and wrong.** Capping the `<ul>` did
+   nothing because the `<ul>` was already 360px — the overflow was in its
+   children. Adding `min-w-0` was right but insufficient, and worse, **the
+   build was failing at the time**, so the browser served a stale bundle and a
+   real fix looked like no fix. Checking the build's exit code before believing
+   a runtime result is not optional.
+3. **Two JSX comments were placed in expression slots** (`return ( {/* ... */}`
+   and inside a ternary), which Turbopack rejects. Both were caught by the
+   build rather than by review.

@@ -381,7 +381,11 @@ export function ActivationCard({
         {onPrimaryAction ? (
           <Button
             size="lg"
-            className="min-w-[11rem]"
+            /* min(11rem, 100%), not a bare rem (MB-GOD-047): 11rem is 352px at
+               200% text, which pushed this CTA past the edge of a 360px screen.
+               The min-width exists for visual balance among sibling cards and
+               has no business outgrowing the viewport. */
+            className="min-w-[min(11rem,100%)]"
             onClick={onPrimaryAction}
             disabled={pending}
             data-activation-action={primaryActionId}
@@ -389,7 +393,7 @@ export function ActivationCard({
             {pending ? pendingLabel ?? primaryText : primaryText}
           </Button>
         ) : (
-          <Button asChild size="lg" className="min-w-[11rem]">
+          <Button asChild size="lg" className="min-w-[min(11rem,100%)]">
             <Link href={copy.href}>{primaryText}</Link>
           </Button>
         )}

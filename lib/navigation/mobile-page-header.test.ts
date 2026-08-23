@@ -11,9 +11,16 @@ describe("mobile page header layout", () => {
     // so it cannot shift when the right-hand cluster changes width.
     expect(header).toContain("grid-cols-[auto_1fr_auto]");
     expect(header).toMatch(/<h1[^>]*text-center/);
-    // The leading slot is always occupied — an empty spacer when there is no
-    // action — so the centred title cannot drift.
-    expect(header).toContain('<span className="h-11 w-11" aria-hidden="true" />');
+    /* The leading slot is always occupied — an empty spacer when there is no
+       action — so the centred title cannot drift.
+     *
+     * The spacer is sized in PIXELS rather than rem (MB-GOD-047): at 200% text
+     * a 2.75rem spacer became 88px, and together with the header's buttons it
+     * pushed "Quick controls" off a header that does not scroll. It must stay
+     * the same size as the buttons it stands in for, which is what keeps the
+     * title centred. */
+    expect(header).toContain('<span className="h-[44px] w-[44px] shrink-0" aria-hidden="true" />');
+    expect(header, "the spacer must match the header button size").toContain("h-[44px] w-[44px]");
   });
 
   it("renders the title from a prop, so every screen supplies its own", () => {

@@ -6941,13 +6941,19 @@ select {
 .linkr-topbar__actions button {
   display: grid;
   place-items: center;
-  /* 2.75rem (44px), not 2.25rem. Three icon-only controls sized by their glyph
-   * rather than by a thumb -- the same defect class as MB-GOD-005/016/039. One
-   * of them opens Linkr settings, where consent and visibility for a
-   * discovery feature live, so a mis-tap here is a privacy control missed.
-   * The icon stays 1.125rem; only the target grows. */
-  width: 2.75rem;
-  height: 2.75rem;
+  /* 44px, not 2.25rem. Three icon-only controls sized by their glyph rather
+   * than by a thumb -- the same defect class as MB-GOD-005/016/039. One of
+   * them opens Linkr settings, where consent and visibility for a discovery
+   * feature live, so a mis-tap here is a privacy control missed.
+   *
+   * FIXED PIXELS, not rem (MB-GOD-047): at 200% text a 2.75rem button becomes
+   * 88px and "Linkr settings" left the viewport on a header that does not
+   * scroll. 44px is a touch minimum and has no reason to grow with text --
+   * scaling text should enlarge what is READ, not the chrome around it. The
+   * icon stays 1.125rem, so the glyph still scales for legibility. */
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
   border-radius: 999px;
   color: hsl(var(--muted-foreground));
   background: color-mix(in srgb, hsl(var(--foreground)) 6%, transparent);

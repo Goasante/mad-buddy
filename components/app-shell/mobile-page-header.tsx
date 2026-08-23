@@ -129,7 +129,7 @@ export function MobilePageHeader({
           <ChevronLeft className={ICON} strokeWidth={STROKE} aria-hidden="true" />
         </HeaderButton>
       ) : (
-        <span className="h-11 w-11" aria-hidden="true" />
+        <span className="h-[44px] w-[44px] shrink-0" aria-hidden="true" />
       )}
 
       <h1 className="truncate text-center text-[1.125rem] font-semibold tracking-tight">{title}</h1>
@@ -196,7 +196,17 @@ const STROKE = 1.75;
 
 /** Shared 44px hit target and press feedback, so every control matches. */
 const HIT_TARGET =
-  "focus-ring safe-motion grid h-11 w-11 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:active:scale-100";
+  /* A FIXED 44px TARGET, not 2.75rem (MB-GOD-047).
+   *
+   * `h-11 w-11` is rem-based, so at 200% text each header button became 88px
+   * and three of them plus the title outgrew the grid -- "Quick controls" and
+   * "Linkr settings" left the viewport entirely, on a header that does not
+   * scroll. The ICON constant beside this is already fixed-pixel
+   * (`h-[22px]`) for the same reason; the button had been missed.
+   *
+   * 44px is the touch minimum and does not need to grow with text: scaling
+   * text should enlarge what is READ, not the chrome around it. */
+  "focus-ring safe-motion grid h-[44px] w-[44px] shrink-0 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:active:scale-100";
 
 function HeaderButton({
   label,
