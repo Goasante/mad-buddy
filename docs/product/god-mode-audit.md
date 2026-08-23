@@ -2801,3 +2801,205 @@ Two small items, neither urgent:
   across ~1,700px, which is a lot of parallel structure for one scroll.
 
 Full landing work remains **Mission 7**; this is the baseline it starts from.
+
+---
+
+# MISSION 2 - EXTREMELY ADVANCED
+
+Advanced asked whether each screen is structurally shippable. Extreme asks a
+different question: **how much effort does Mad Buddy make a user spend to do
+ordinary things?** A screen can be well built and still cost too much.
+
+### MB-GOD-040 (P1) - Message actions are invisible on mobile
+
+**The carried open question from Advanced, now answered — and the answer is
+worse than the question assumed.**
+
+Advanced measured React/Edit/Delete at roughly 17px and could not establish
+whether they sat inside a menu, which would have made that size acceptable. Both
+things turn out to be true at once, and the combination is the defect.
+
+There are **two** action paths on a message:
+
+1. `MessageActionsMenu` wrapped in `LongPressActions` (messages-page.tsx:1427) —
+   a press-and-hold menu.
+2. An inline row of text buttons under the bubble (messages-page.tsx:1531-1581),
+   styled `opacity-0 transition-opacity group-hover:opacity-100`.
+
+Measured at runtime in a real touch context (393x852, `hasTouch`, `isMobile`)
+and a real mouse context, via `scripts/hardening/message-actions-geometry.mjs`:
+
+```
+touch (phone)     at rest : React 34x17 op=0   Edit 26x17 op=0   Delete 39x17 op=0
+                  hovered : React 34x17 op=1   Edit 26x17 op=1   Delete 39x17 op=1
+mouse (desktop)   at rest : React 34x17 op=0   Edit 26x17 op=0   Delete 39x17 op=0
+                  hovered : React 34x17 op=1   Edit 26x17 op=1   Delete 39x17 op=1
+```
+
+`op` is the EFFECTIVE opacity (the product of every ancestor's), not the
+button's own — the row is what carries the fade.
+
+**Hover is a pointer capability. A finger cannot produce it.** So on a phone the
+inline row is at opacity 0 permanently: never visible, at any time, in any
+state. It is not "small"; it is **invisible**.
+
+Two aggravating details:
+
+- `pointer-events` stays `auto` and `elementFromPoint` returns the button
+  itself, so these invisible controls are still **tappable**. A 17px-tall
+  invisible `Delete` sitting directly under a message is a mis-tap hazard, not
+  merely dead weight.
+- The fallback works, which is why this survived Advanced.
+  `scripts/hardening/message-actions-reachability.mjs` drives a real
+  press-and-hold on touch:
+
+```
+PASS  press-and-hold opens a contextual menu on touch
+      — 4 items: Copy text, React, Delete for me, Delete for everyone
+PASS  every menu row meets the 44px minimum — all 4 rows >=44px
+```
+
+So the actions ARE reachable on mobile, correctly sized, with the right
+eligibility. The defect is **discoverability**: the only route is a gesture with
+no visible affordance.
+
+This is not a judgement call imported from outside the codebase. It contradicts
+the explicit contract `LongPressActions` writes about itself:
+
+> DOES NOT REPLACE A VISIBLE CONTROL. Every surface using this keeps its own
+> "More" button or equivalent: a hold is a shortcut for people who know it,
+> never the only route to an action. That is what keeps these actions
+> reachable by keyboard and screen reader.
+
+Messages is the surface that breaks that rule. The inline row was presumably
+intended as the "visible control", but `group-hover` silently reduces it to a
+desktop-only affordance.
+
+**Accessibility consequence**, and the reason this is P1 rather than P2: the
+component names keyboard and screen-reader reach as the specific thing a
+visible control protects. `focus-within:opacity-100` does keep the row usable
+once focus arrives — but a long-press has no keyboard equivalent at all, so on
+touch + assistive technology there is no route to Edit or Delete.
+
+**Verdict: DEFECT.** Not "17px targets" — *invisible targets plus a
+gesture-only route*.
+
+**The fallback is not a fallback for React.** The emoji picker renders inside
+the SAME faded row (messages-page.tsx:1539), so choosing `React` from the
+long-press menu leads to a picker that is itself invisible on touch.
+`scripts/hardening/message-react-picker.mjs` drives the real gesture:
+
+```
+PASS  the long-press menu offers React                          — 1 matching item
+PASS  choosing React reveals an emoji picker in the DOM         — 6 emoji buttons
+FAIL  the emoji picker is VISIBLE on touch after choosing React — 0/6 visible; opacities 0
+FAIL  emoji targets meet the 44px minimum                       — 0/6; sizes 23x20
+```
+
+This matters more than the discoverability point, because `React` is the ONE
+action `messageActions` grants unconditionally — every user, every non-deleted,
+non-system message. So the single universally-available message action is, on a
+phone, a **dead end**: the menu offers it, the tap succeeds, and nothing
+appears. Six invisible 23x20 emoji buttons sit there, tappable by accident.
+
+That moves this from "an undiscoverable route exists" to "a advertised action
+does not work on the primary platform", and it is why the fix has to correct the
+ROW rather than merely add a visible entry point beside it.
+
+**Fix.** The root cause is a pointer-capability assumption, so the fix is made
+where that assumption lives rather than at the call sites. `app/globals.css`
+gains a `.message-actions` class whose fade is gated on `@media (any-hover:
+hover)`:
+
+- A device that can hover keeps the design's intent — a quiet thread with zero
+  chrome at rest, actions appearing under the cursor.
+- A device that cannot hover shows the actions permanently, because no gesture
+  would otherwise reveal them.
+
+`any-hover` rather than `hover`, so a touchscreen laptop — which reports
+`hover: none` when the touchscreen is the primary pointer — keeps the reveal
+from its trackpad instead of losing it.
+
+The controls were then given real hit areas: the three text buttons use
+`min-h-11` with `-my-3`, so each gets a 44px target while the row's contribution
+to layout stays unchanged (paying for the height in layout would push every
+bubble apart and undo the message-grouping work). Emoji targets went from 23x20
+to `h-11 w-11`.
+
+Runtime proof, same probes that found the defect, after the fix:
+
+```
+touch (phone)   at rest : React 42x44 op=1   Edit 34x44 op=1   Delete 47x44 op=1
+mouse (desktop) at rest : React 42x44 op=0   Edit 34x44 op=0   Delete 47x44 op=0
+                hovered : React 42x44 op=1   Edit 34x44 op=1   Delete 47x44 op=1
+
+4/4 geometry checks passed
+4/4 react-picker checks passed
+      — emoji picker 6/6 visible; sizes 44x44
+```
+
+Touch is visible at rest; mouse still fades in on hover. The desktop design was
+preserved rather than traded away.
+
+Widths stay text-sized (34-47px) by design: these sit in a horizontal row where
+the vertical dimension is what a thumb must clear. Forcing 44px width would put
+~130px of invisible padding between three adjacent text labels and make the row
+read as three buttons in a toolbar rather than a quiet inline affordance.
+
+`scripts/hardening/message-actions-geometry.mjs`,
+`message-actions-reachability.mjs` and `message-react-picker.mjs` are the
+regression checks. The geometry probe measures BOTH contexts, so a future change
+that fixes touch by breaking desktop fails it too.
+
+### INVESTIGATED / NOT A DEFECT - `/messages` showing "A Muddy" and "Plan chat"
+
+The first task-cost run could not find `Kofi Mensah` on `/messages`, and the
+page read:
+
+```
+PC  Plan chat   Plan   Conversation started.   3h ago
+PC  Plan chat   Plan   Conversation started.   12h ago
+AM  A Muddy
+AM  A Muddy     Are we still on for later?
+```
+
+Two apparent defects: a direct conversation that cannot name the person in it,
+and four Plan chats indistinguishable from one another. **Both were my
+fixtures.**
+
+`direct_key` is not a label. `lib/messaging/rules.ts:45` builds it as
+`[a, b].sort().join(":")`, and `mobile.ts:731` derives the OTHER participant by
+splitting it on `":"`. `seed-detail-surfaces.mjs` had seeded
+`direct_key: "detail-fixture"` — readable, and with no derivable peer, so the
+list correctly fell back to `"A Muddy"` for a person whose name was sitting in
+the database. Re-keying the fixture canonically:
+
+```
+names Kofi Mensah: true      still says A Muddy: false
+AB  Ama Boateng
+KM  Kofi Mensah   Are we still on for later?
+```
+
+The four `"Plan chat"` rows are the same story. Checking each conversation's
+backing row:
+
+```
+7ce4b000  plan=52c5f26a -> NO PLAN ROW
+1a536e30  plan=9be1368f -> NO PLAN ROW
+525f0315  plan=c45dd19c -> NO PLAN ROW
+4f911dce  plan=d8106d3e -> NO PLAN ROW
+face2b79  plan=dec5ce96 -> "detail-fixture dinner" [inviting]
+```
+
+The only Plan chat with a live Plan row is named after its Plan, exactly as
+mobile.ts:841 documents. The other four are orphans left by earlier probe
+cleanups that deleted Plans without their conversations, and `"Plan chat"` is
+the documented fallback "for a conversation whose Plan row is unreadable, which
+is better than an empty header".
+
+**Verdict: the product is right on both counts.** Recorded because the failure
+mode is instructive: seed data that does not obey the same invariants as real
+data measures the seed, not the product. The unique index also refused the
+canonical re-key, revealing that a proper QA<->Kofi conversation already
+existed — the malformed fixture was a duplicate the product would never have
+created. `seed-detail-surfaces.mjs` now builds the key canonically.

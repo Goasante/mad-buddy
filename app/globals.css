@@ -9130,3 +9130,44 @@ html.dark .proximity-glow {
   font-size: 0.84rem;
   font-weight: 600;
 }
+
+/* MESSAGE ACTIONS: revealed by hover ONLY where hover exists (MB-GOD-040).
+ *
+ * The row under a message bubble (React / Edit / Delete, and the emoji picker)
+ * used `opacity-0 group-hover:opacity-100`. Hover is a POINTER CAPABILITY, and
+ * a finger cannot produce it -- so on every touch device the row sat at opacity
+ * 0 permanently while remaining tappable, and the long-press menu's `React`
+ * item led to an emoji picker that was equally invisible.
+ *
+ * `any-hover: hover` asks the real question: can ANY connected input hover? A
+ * mouse or trackpad keeps the quiet, zero-chrome thread the design intends. A
+ * phone gets the actions permanently visible, because there is no gesture that
+ * would otherwise reveal them.
+ *
+ * `any-hover` rather than `hover`, so a laptop with a touchscreen -- which
+ * reports `hover: none` when the touchscreen is the primary pointer -- still
+ * gets the reveal from its trackpad instead of losing it.
+ */
+.message-actions {
+  opacity: 1;
+}
+
+@media (any-hover: hover) {
+  .message-actions {
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+
+  /* Keyboard reach is preserved on pointer devices: focus inside the row
+   * reveals it, exactly as `focus-within:opacity-100` did before. */
+  .group:hover .message-actions,
+  .message-actions:focus-within {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-actions {
+    transition: none;
+  }
+}

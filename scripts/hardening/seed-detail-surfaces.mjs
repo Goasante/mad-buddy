@@ -23,12 +23,26 @@ const TAG = "detail-fixture";
 
 /** A direct conversation between QA and KOFI, with a couple of messages. */
 async function directConversation() {
+  /* THE CANONICAL KEY, not a readable tag.
+   *
+   * `direct_key` is not a label -- lib/messaging/rules.ts builds it as
+   * `[a, b].sort().join(":")` and mobile.ts:731 derives the OTHER participant
+   * by splitting it on ":". A fixture keyed "detail-fixture" therefore has no
+   * derivable peer, and the conversation list correctly falls back to
+   * "A Muddy" for a person whose name is sitting in the database.
+   *
+   * That cost this program a false finding: the list looked like it had lost
+   * the ability to name a direct conversation. The app was right; the fixture
+   * was malformed. Seed data must obey the same invariants as real data, or it
+   * measures the seed rather than the product. */
+  const directKey = [QA, KOFI].sort().join(":");
+
   const { data: existing } = await admin.from("conversations")
-    .select("id").eq("direct_key", TAG).maybeSingle();
+    .select("id").eq("direct_key", directKey).maybeSingle();
   if (existing) return existing.id;
 
   const { data: convo, error } = await admin.from("conversations")
-    .insert({ conversation_type: "direct", created_by: QA, status: "active", direct_key: TAG })
+    .insert({ conversation_type: "direct", created_by: QA, status: "active", direct_key: directKey })
     .select("id").maybeSingle();
   if (error) throw new Error(`conversation: ${error.message}`);
 

@@ -95,6 +95,18 @@ const REACTIONS = [
   { id: "wow", emoji: "😮" }
 ] as const;
 
+/**
+ * The inline message actions (React / Edit / Delete).
+ *
+ * `min-h-11` with a negative vertical margin: the row is now permanently
+ * visible on touch (MB-GOD-040), so each control needs a real 44px hit area,
+ * but paying for that in layout would push every bubble apart and turn the
+ * thread back into a table of records. The margin gives the height back to the
+ * layout while the button keeps it for the finger.
+ */
+const MESSAGE_ACTION_BUTTON =
+  "focus-ring -my-3 inline-flex min-h-11 items-center rounded px-2 hover:text-foreground";
+
 function reactionEmoji(id: string | null): string | null {
   return REACTIONS.find((reaction) => reaction.id === id)?.emoji ?? null;
 }
@@ -1532,7 +1544,14 @@ export function MessagesPageContent({
                             {!message.deleted ? (
                               <div
                                 className={cn(
-                                  "mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
+                                  /* `message-actions` (globals.css), not
+                                     `opacity-0 group-hover:opacity-100`.
+                                     Hover is a pointer capability a finger
+                                     cannot produce, so the old classes left
+                                     this row invisible-but-tappable on every
+                                     phone, and made the menu's React item lead
+                                     to an invisible picker (MB-GOD-040). */
+                                  "message-actions mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground",
                                   message.isMine ? "justify-end" : "justify-start"
                                 )}
                               >
@@ -1543,7 +1562,11 @@ export function MessagesPageContent({
                                       type="button"
                                       onClick={() => react(message.id, reaction.id)}
                                       aria-label={`React with ${reaction.id}`}
-                                      className="focus-ring rounded px-0.5 text-sm hover:scale-110"
+                                      /* h-11/w-11: this is now genuinely
+                                         visible on touch, so it has to be
+                                         genuinely tappable. It measured 23x20
+                                         while invisible (MB-GOD-040). */
+                                      className="focus-ring grid h-11 w-11 place-items-center rounded-full text-base hover:scale-110 motion-reduce:hover:scale-100"
                                     >
                                       {reaction.emoji}
                                     </button>
@@ -1553,7 +1576,7 @@ export function MessagesPageContent({
                                     <button
                                       type="button"
                                       onClick={() => setReactingId(message.id)}
-                                      className="focus-ring rounded px-1 hover:text-foreground"
+                                      className={MESSAGE_ACTION_BUTTON}
                                     >
                                       React
                                     </button>
@@ -1565,7 +1588,7 @@ export function MessagesPageContent({
                                             setEditingId(message.id);
                                             setEditDraft(message.text ?? "");
                                           }}
-                                          className="focus-ring rounded px-1 hover:text-foreground"
+                                          className={MESSAGE_ACTION_BUTTON}
                                         >
                                           Edit
                                         </button>
@@ -1575,7 +1598,7 @@ export function MessagesPageContent({
                                       <button
                                         type="button"
                                         onClick={() => remove(message.id)}
-                                        className="focus-ring rounded px-1 hover:text-destructive"
+                                        className={cn(MESSAGE_ACTION_BUTTON, "hover:text-destructive")}
                                       >
                                         Delete
                                       </button>
