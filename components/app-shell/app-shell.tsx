@@ -1280,7 +1280,19 @@ function MobileNav({
       inert={immersive || undefined}
       aria-label="Mobile navigation"
     >
-      <ul className="mx-auto flex w-full max-w-[30rem] items-stretch justify-between px-1.5">
+      {/* `min(30rem, 100%)`, not `30rem` (MB-GOD-047).
+        *
+        * A rem-only cap is measured against the ROOT FONT SIZE, so a user who
+        * scales text to 200% turns this 30rem bar into 960px inside a 360px
+        * screen -- and the fifth tab ("UpFor") ended up at x=310..390, thirty
+        * pixels past the edge of a bar that does not scroll. Primary
+        * navigation became unreachable for exactly the user who most needs the
+        * larger text.
+        *
+        * `100%` re-anchors the cap to the viewport, so the bar can never grow
+        * wider than the screen no matter what the root font size is. The
+        * labels below shrink-wrap and the icons stay 44px. */}
+      <ul className="mx-auto flex w-full max-w-[min(30rem,100%)] items-stretch justify-between px-1.5">
         {leftTabs.map((tab) => (
           <MobileNavTab
             key={tab.href}
@@ -1291,7 +1303,15 @@ function MobileNav({
           />
         ))}
 
-        <li className="flex-1 py-2">
+        {/* `min-w-0` matters (MB-GOD-047).
+      *
+      * A flex item defaults to `min-width: auto`, which refuses to shrink below
+      * its content -- so at 200% text the five tabs demanded 390px inside a
+      * 360px bar and "UpFor" sat thirty pixels past the edge of a nav that does
+      * not scroll. Capping the <ul> did nothing because the OVERFLOW IS IN THE
+      * CHILDREN. `min-w-0` lets each tab shrink; the label truncates and the
+      * 44px icon target is unaffected. */}
+    <li className="min-w-0 flex-1 py-2">
           <MadBuddyOrb
             isActive={homeActive}
             onHomeReselect={onHomeReselect}
@@ -1328,8 +1348,16 @@ function MobileNavTab({
   const isActive = isNavigationItemActive({ href: tab.href, label: tab.label, icon: tab.icon } as NavigationItem, pathname);
   const Icon = tab.icon;
 
+  /* `min-w-0` matters (MB-GOD-047).
+   *
+   * A flex item defaults to `min-width: auto`, which refuses to shrink below
+   * its content -- so at 200% text the five tabs demanded 390px inside a 360px
+   * bar and "UpFor" sat thirty pixels past the edge of a nav that does not
+   * scroll. Capping the <ul> did nothing because the OVERFLOW IS IN THE
+   * CHILDREN. `min-w-0` lets each tab shrink; the label truncates and the icon
+   * target is unaffected. */
   return (
-    <li className="flex-1 py-2">
+    <li className="min-w-0 flex-1 py-2">
       <Link
         href={tab.href}
         prefetch={false}
@@ -1345,7 +1373,15 @@ function MobileNavTab({
       >
         <span
           className={cn(
-            "relative grid h-10 w-10 place-items-center rounded-full transition-colors duration-200 ease-out motion-reduce:transition-none",
+            /* A FIXED 40px TARGET, not 2.5rem (MB-GOD-047).
+             *
+             * `h-10 w-10` is rem-based, so at 200% text this circle became
+             * 80px and five of them demanded 390px inside a 360px bar --
+             * pushing "UpFor" off a nav that does not scroll. An icon is not
+             * text: scaling text up should not scale the chrome around it,
+             * and 40px keeps the row's proportions identical at every text
+             * size while the 56px row height preserves the touch target. */
+            "relative grid h-[40px] w-[40px] shrink-0 place-items-center rounded-full transition-colors duration-200 ease-out motion-reduce:transition-none",
             isActive ? "bg-primary/12 text-primary" : "text-muted-foreground"
           )}
         >
@@ -1362,7 +1398,11 @@ function MobileNavTab({
           {tab.href === "/friends" && muddyRequestCount > 0 ? <UnreadBadge count={muddyRequestCount} /> : null}
         </span>
         {isActive ? (
-          <span className="text-[10px] font-medium leading-none tracking-wide text-primary">{tab.label}</span>
+          // max-w-full + truncate: the label must be allowed to give way, or it
+          // re-imposes the width `min-w-0` just removed (MB-GOD-047). The
+          // accessible name is on the Link's aria-label, so a visually
+          // truncated label costs a screen-reader user nothing.
+          <span className="max-w-full truncate text-[10px] font-medium leading-none tracking-wide text-primary">{tab.label}</span>
         ) : null}
       </Link>
     </li>
