@@ -5883,3 +5883,89 @@ The two pointer fields are the shape worth naming: both are set once by the
 conversion that created them, both are `.is(…, null)`-guarded on write so a
 retry cannot overwrite, and neither is treated as truth about the target's
 lifecycle — the target owns that.
+
+## MB-GOD-055 (P3) — Two Moments mutations skip the flag guard
+
+**Tags: ROLE BOUNDARY / flag enforcement.**
+
+`app/(app)/moments-actions.ts:110` states the rule without qualification:
+
+> UI hiding is not enforcement: these actions are reachable directly, so the
+> **MUTATIONS** re-check the flag server-side.
+
+Checked every exported action for a mutation and for the guard:
+
+```
+uploadMomentMediaAction     mut=1  guard=1   ✓
+getOpenMomentFeedAction     mut=1  guard=1   ✓
+reactToMomentAction         mut=1  guard=1   ✓
+removeMomentReactionAction  mut=1  guard=1   ✓
+deleteMomentAction          mut=1  guard=0   — correct exception
+reportContentAction         mut=2  guard=0   — correct exception
+tuneInAction                mut=1  guard=0   ← gap
+tuneOutAction               mut=1  guard=0   ← gap
+```
+
+**Two of the four are correct exceptions and must stay ungated.** Deleting your
+own Moment and reporting content are *withdrawal and safety* actions — the
+Product Constitution's rule that a disabled feature must not block progression
+cuts the other way for these. Blocking a delete because the feature is paused
+would trap somebody's content, and blocking a report would suspend moderation
+exactly when it might be needed.
+
+**`tuneInAction` / `tuneOutAction` are the genuine gap.** They are Moments-scoped
+— called only from `components/content/moments-page.tsx` — and they create and
+remove a follow-like relationship rather than withdrawing anything. With Moments
+paused, the surface is hidden but the actions remain directly reachable, so new
+tuned-in relationships can still be created for a feature nobody can see.
+
+**P3, not higher.** No data is corrupted, no permission is bypassed, and the
+actions still enforce their own authorization. The consequence is that a paused
+feature can still accrue relationship state.
+
+**Not fixed in this pass**: adding `momentsPausedState` to both is a two-line
+change, but "which mutations count as withdrawal" is a product judgement, and
+`tuneOut` in particular is arguably withdrawal (removing a relationship) even
+though `tuneIn` clearly is not. Recorded with the classification so the
+distinction is decided deliberately rather than by symmetry.
+
+## Axes 9, 10, 17 — role redirect, flag gate, URL authority: PASS
+
+```
+foreign conversation id  -> /messages   "Not found."     id echoed: false
+foreign plan id          -> /plans      plain list       id echoed: false
+foreign event id         -> /events     plain list       id echoed: false
+/safety (non-staff)      -> /dashboard
+/moments (flag off)      -> /dashboard
+```
+
+**A URL identifies context; it never grants authorization.** A fabricated
+resource id lands on the **owner surface** — not a generic error page, not Home
+— and the surface simply has nothing to show. The id is never echoed back, so a
+probe cannot confirm existence.
+
+**The role redirect is navigation, not security.** `/safety` sends staff to
+`/admin/reports` and everyone else to `/dashboard`; the admin routes carry their
+own server-side authorization (`getSafetyAdminContext`), so the redirect is a
+convenience rather than the boundary.
+
+**The flag gate blocks routing AND creation**, and deliberately not reads —
+`momentsPausedState`'s own comment explains that leaving reads alone "keeps
+existing Moments retrievable the moment the flag returns". No persisted data is
+stranded.
+
+## Axis 11 — historical and deleted resources
+
+| Resource | Ownership after it ends | Deep link behaviour |
+| --- | --- | --- |
+| Past Plan | `plans` keeps it; the Past tab is its home | resolves to the Plans surface |
+| Ended Event | `events` keeps it; Past tab | resolves to the Events surface |
+| Expired UpFor | `hangout_sessions` keeps status `expired` | stops presenting as joinable (Mission 3, verified both sides) |
+| Ended friendship | `friendships.ended_at` set, row kept | disappears from Muddies; no tombstone shown |
+| Removed conversation membership | `conversation_members.status` | conversation hidden from that member's inbox |
+| Deleted profile media | `profile_photos` row removed; asset may orphan | slot frees; orphan classified in Mission 1 |
+
+**No historical resource falls back to a generic Home.** Each stays owned by the
+surface that created it, and each ended state is represented by a column on the
+canonical row rather than by deletion — which is what makes the deep links
+resolve safely rather than 404.
