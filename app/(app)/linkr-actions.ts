@@ -21,6 +21,7 @@ import {
 } from "@/lib/linkr/profile-service";
 import { resolveViewerEventMode } from "@/lib/linkr/event-mode-adapter";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { checkAccess } from "@/lib/access/guard";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { LinkrDistancePreference } from "@/lib/linkr/rules";
 
@@ -58,9 +59,15 @@ export async function loadMyLinkrProfileAction(): Promise<LinkrOwnProfile | null
   return userId ? loadOwnLinkrProfile(userId) : null;
 }
 
+/* GATED: switching Linkr ON starts a discovery session and makes you
+   discoverable to strangers. That is the paid capability itself, so it is
+   checked before the session begins rather than only when the deck loads. */
 export async function enableLinkrAction(input: unknown): Promise<LinkrActionResult> {
   const userId = await getAuthedUserId();
   if (!userId) return NOT_LOGGED_IN;
+
+  const access = await checkAccess(userId, "linkr");
+  if (!access.ok) return { ok: false, message: access.message };
   const result = await enableLinkr(userId, input);
   if (result.ok) revalidatePath("/linkr");
   return result;
@@ -118,6 +125,13 @@ export async function loadLinkrCandidatesAction(input?: {
   const userId = await getAuthedUserId();
   if (!userId) return [];
 
+  /* GATED: the deck is discovery -- it is the act of expanding your social
+     world, which is what Mad Buddy Access pays for. Returning an empty deck
+     rather than throwing keeps this a read: the page renders its locked state
+     from the same shape it always had, with no error boundary in the way. */
+  const access = await checkAccess(userId, "linkr");
+  if (!access.ok) return [];
+
   let eventId: string | null = null;
   let eventName: string | null = null;
   if (input?.eventId) {
@@ -144,6 +158,14 @@ export async function passCandidateAction(input: {
 }): Promise<LinkrActionResult> {
   const userId = await getAuthedUserId();
   if (!userId) return NOT_LOGGED_IN;
+
+  /* GATED, though it is a refusal rather than an expansion. Passing only has
+     meaning against a deck, and the deck is gated; allowing it through would
+     let an expired account walk the candidate list one pass at a time and
+     learn who is nearby, which is the discovery the gate exists to stop. */
+  const access = await checkAccess(userId, "linkr");
+  if (!access.ok) return { ok: false, message: access.message };
+
   return passCandidate(userId, input.targetId, {
     permanent: input.permanent,
     eventId: input.eventId ?? null
@@ -157,6 +179,16 @@ export async function connectWithCandidateAction(input: {
   const userId = await getAuthedUserId();
   if (!userId) {
     return { ok: false, matched: false, message: "Log in first." };
+  }
+
+  /* GATED: Connect is the mutation that can create a NEW relationship, so it
+     is the single most important server check in Linkr. Checked here at
+     mutation time rather than trusted from page load -- if access lapses
+     between the deck rendering and the tap, the server is still authoritative
+     and the answer changes. */
+  const access = await checkAccess(userId, "linkr");
+  if (!access.ok) {
+    return { ok: false, matched: false, message: access.message };
   }
 
   // The event id is re-authorised here too: a connection may only record the

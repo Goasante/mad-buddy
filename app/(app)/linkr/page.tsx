@@ -12,6 +12,8 @@ import { loadOwnLinkrProfile } from "@/lib/linkr/profile-service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { isLinkrIntent } from "@/lib/linkr/intent";
+import { AccessLocked } from "@/components/access/access-locked";
+import { checkAccess } from "@/lib/access/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +36,19 @@ export default async function LinkrRoute({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+
+  /* THE LOCKED STATE IS DECIDED HERE, BEFORE ANY DISCOVERY WORK.
+   *
+   * Rendering the lock at the top of the route rather than inside the client
+   * component means an account without Access never causes a candidate query
+   * to run at all -- the gate is not decoration over data that was fetched
+   * anyway. The Server Actions are independently gated, so this is the
+   * presentation of a decision the server already enforces, never the
+   * enforcement itself. */
+  const access = await checkAccess(user.id, "linkr");
+  if (!access.ok) {
+    return <AccessLocked surface="linkr" hadWelcomeAccess={access.hadWelcomeAccess} />;
+  }
 
   const admin = createSupabaseAdminClient();
   const params = await searchParams;

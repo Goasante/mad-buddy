@@ -143,6 +143,12 @@ export function SettingsPageContent({
             href="/settings/privacy"
           />
           <SettingsLinkRow
+            icon={ShieldCheck}
+            title="Mad Buddy Access"
+            description="Linkr and UpFor. See your access and what stays free."
+            href="/settings/access"
+          />
+          <SettingsLinkRow
             icon={Laptop}
             title="Sessions"
             description="See where you're logged in."
@@ -386,6 +392,7 @@ type SettingsLinkRowProps = {
     | "/upgrade"
     | "/billing"
     | "/friends"
+    | "/settings/access"
     | "/settings/privacy"
     | "/settings/glow-visibility"
     | "/settings/notifications"
