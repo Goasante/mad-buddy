@@ -6,6 +6,7 @@ import { ChevronLeft, LogOut, MoreHorizontal, UserPlus, Users2 } from "lucide-re
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { getMessagesAction, markConversationReadAction } from "@/app/(app)/messaging-actions";
 import { MESSAGES_UPDATED_EVENT } from "@/hooks/use-unread-message-count";
+import type { CSSProperties } from "react";
 import type { ChatMessageView } from "@/lib/messaging/mobile";
 import {
   demoteGroupAdminAction,
@@ -227,6 +228,62 @@ export function GroupDetailPage({
       mountedRef.current = false;
     };
   }, []);
+
+  /**
+   * The chat panel takes exactly the room the phone actually leaves it.
+   *
+   * The old height was `h-[min(620px,65vh)]` -- a fixed card, not a viewport.
+   * On an 844px phone 65vh is 549px, so the conversation ended part way up the
+   * screen with a large dead region beneath it and the bottom navigation
+   * floating further down still. `vh` is also the wrong unit here: iOS
+   * measures it against the viewport WITHOUT browser chrome, so it over-reports
+   * and content can ride up under the status area.
+   *
+   * Subtracting a guessed stack of header and tab heights does not work either
+   * -- everything above this panel varies with content and with the top inset,
+   * so any constant is wrong on some device. Measuring the panel's own top and
+   * subtracting what genuinely sits below it (the navigation and the bottom
+   * safe area) is the only version that holds on every screen.
+   *
+   * `visualViewport` is observed as well as `resize` so the panel follows the
+   * keyboard opening and closing rather than being covered by it.
+   */
+  const chatPanelRef = useRef<HTMLElement>(null);
+  const [chatHeight, setChatHeight] = useState<number | null>(null);
+  useEffect(() => {
+    if (tab !== "chat") return;
+    const measure = () => {
+      const node = chatPanelRef.current;
+      if (!node) return;
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const top = node.getBoundingClientRect().top;
+      const styles = getComputedStyle(document.documentElement);
+      const navHeight = parseFloat(styles.getPropertyValue("--mobile-nav-height")) || 0;
+      // --mobile-nav-height is in rem; convert with the root font size.
+      const rootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const navPx = navHeight * rootFontSize;
+      const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+      // Below md the bottom navigation is what sits under the panel; from md
+      // up the CSS takes over and no measurement is applied.
+      const reserved = isDesktop ? 24 : navPx + 12;
+      const available = viewportHeight - top - reserved;
+      setChatHeight(Number.isFinite(available) && available > 240 ? Math.round(available) : null);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("scroll", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("scroll", measure);
+    };
+  }, [tab, messages.length]);
+
+  const chatPanelStyle = useMemo(
+    () => (chatHeight ? ({ "--chat-height": `${chatHeight}px` } as CSSProperties) : undefined),
+    [chatHeight]
+  );
 
   /**
    * Opening a Circle marks it read -- the step this page never took.
@@ -456,7 +513,42 @@ export function GroupDetailPage({
       </nav>
 
       {tab === "chat" ? (
-        <section className="flex h-[min(620px,65vh)] min-h-[420px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/25" aria-label={`${group.name} chat`}>
+        /* THE CHAT FILLS WHAT THE PHONE ACTUALLY LEAVES IT.
+         *
+         * This was `h-[min(620px,65vh)]`, a fixed card rather than a viewport.
+         * On a 844px-tall phone 65vh is 549px, so the conversation ended part
+         * way up the screen with a large dead region beneath it and the bottom
+         * navigation floating further down still -- the composer never sat
+         * where a chat's composer belongs.
+         *
+         * `vh` is also the wrong unit on a phone: iOS measures it against the
+         * viewport WITHOUT browser chrome, so it over-reports and content can
+         * ride up under the status area. `svh` is the small-viewport unit --
+         * the height that is always visible, chrome showing -- so the panel
+         * cannot be taller than what the user can actually see.
+         *
+         * What is subtracted is what genuinely sits outside the chat: the app
+         * header (which already includes the top inset), this page's own header
+         * and tab bar, the bottom navigation, and the bottom safe area. The
+         * result is a real filling column -- messages take the remainder,
+         * composer stays attached to the bottom of it -- while `max-h` keeps a
+         * desktop window from stretching one conversation absurdly tall. The
+         * min-height still protects the layout on a very short window. */
+        <section
+          /* The height is measured from where the panel actually STARTS, not
+             from a guessed stack of header and tab heights. Everything above
+             this section -- app header, page header, the member strip, the tab
+             bar -- varies with content and with the phone's top inset, so any
+             fixed subtraction is wrong on some device: too tall and the
+             composer slides under the bottom navigation, too short and the
+             dead region comes back. `--chat-top` is set from the element's own
+             offset on mount and on resize, so the panel takes exactly the room
+             that is left. The static calc is the pre-hydration fallback. */
+          ref={chatPanelRef}
+          style={chatPanelStyle}
+          className="flex h-[var(--chat-height,calc(100svh-22rem))] max-h-[720px] min-h-[320px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/25 md:h-[min(620px,65svh)] md:max-h-none md:min-h-[420px]"
+          aria-label={`${group.name} chat`}
+        >
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4" aria-live="polite">
             {messages.length > 0 ? messages.map((message, messageIndex) => {
               const previous = messages[messageIndex - 1];
