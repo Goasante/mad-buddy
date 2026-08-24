@@ -10,6 +10,24 @@ export type FriendRequestStatus =
   | "blocked"
   | "expired";
 export type VisibilityStatus = "visible" | "ghost" | "app_open_only";
+
+/**
+ * Mad Buddy Access sources (20260824110000_access_entitlement_model).
+ *
+ * Independent reasons a person may currently use Linkr and UpFor. Deliberately
+ * NOT a ranked tier: a user may hold several at once and access is the union,
+ * so revoking one never destroys another. `apple_subscription` and
+ * `google_subscription` exist so native stores need no schema change later;
+ * nothing implements them yet.
+ */
+export type AccessSourceName =
+  | "welcome_access"
+  | "web_subscription"
+  | "apple_subscription"
+  | "google_subscription"
+  | "admin_grant"
+  | "staff"
+  | "global_promo";
 export type LocationConfidence = "high" | "medium" | "low";
 export type ProximityLevel = "close" | "near" | "far" | "hidden";
 export type SubscriptionPlan = "free" | "buddy_plus" | "buddy_pro";
@@ -2892,6 +2910,84 @@ export type Database = {
         Row: { id: string; user_id: string; milestone: MilestoneName; reached_at: string };
         Insert: { id?: string; user_id: string; milestone: MilestoneName; reached_at?: string };
         Update: Partial<Database["public"]["Tables"]["activation_milestones"]["Insert"]>;
+        Relationships: [];
+      };
+      /**
+       * Per-user Mad Buddy Access. Append-mostly: a revoke sets `revoked_at`
+       * and `revoked_by`, it never deletes the row or rewrites `expires_at`,
+       * because "who granted this, when, and why" is what an audit asks.
+       *
+       * `expires_at: null` means indefinite (staff, "until revoked").
+       *
+       * A partial unique index allows exactly ONE `welcome_access` row per
+       * user, which is what makes the 14 days unresettable by clearing
+       * cookies, reinstalling or signing out. The database refuses a second
+       * one even to the service role.
+       */
+      access_grants: {
+        Row: {
+          id: string;
+          user_id: string;
+          source: AccessSourceName;
+          starts_at: string;
+          expires_at: string | null;
+          granted_by: string | null;
+          reason: string | null;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          revoked_reason: string | null;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          source: AccessSourceName;
+          starts_at?: string;
+          expires_at?: string | null;
+          granted_by?: string | null;
+          reason?: string | null;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          revoked_reason?: string | null;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["access_grants"]["Insert"]>;
+        Relationships: [];
+      };
+      /**
+       * Periods where Access is open to everyone.
+       *
+       * One row per window, never one row per user: mass-updating users would
+       * make the end of a promotion destructive, because each person must fall
+       * back to whatever they independently hold. Since this table never
+       * touches user rows, ending a window restores those sources by itself.
+       */
+      access_global_windows: {
+        Row: {
+          id: string;
+          starts_at: string;
+          expires_at: string | null;
+          created_by: string;
+          reason: string;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          revoked_reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          starts_at?: string;
+          expires_at?: string | null;
+          created_by: string;
+          reason: string;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          revoked_reason?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["access_global_windows"]["Insert"]>;
         Relationships: [];
       };
       profile_field_privacy: {
