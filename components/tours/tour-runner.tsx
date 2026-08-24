@@ -101,7 +101,19 @@ export function TourRunner({
   const spotlitRef = useRef<HTMLElement | null>(null);
   // Preview-only signal: the current step named a target that is not on screen.
   const [targetMissing, setTargetMissing] = useState(false);
-  const step = steps[index];
+  /**
+   * The step to show, clamped DURING RENDER rather than stored.
+   *
+   * `index` is clamped in the useState initialiser above, which runs once and
+   * never again -- so if `steps` shrinks while the tour is running (a step that
+   * stops being eligible after navigation, a shorter list from the server),
+   * the stored index is left pointing past the end. Deriving the position here
+   * means it can never be out of range, whatever `index` holds: no effect, no
+   * extra render, and no window in which `step` is undefined while the running
+   * branch below paints its full-screen scrim.
+   */
+  const stepIndex = steps.length === 0 ? 0 : Math.min(Math.max(index, 0), steps.length - 1);
+  const step = steps[stepIndex];
 
   const record = useCallback(
     (status: "started" | "completed" | "skipped" | "dismissed", currentStepKey?: string | null) => {
@@ -238,7 +250,25 @@ export function TourRunner({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [phase, skip]);
 
+  /**
+   * A SCRIM MAY NEVER OUTLIVE ITS CARD.
+   *
+   * `index` was clamped only in the useState initialiser, which runs once and
+   * never again. If `steps` shrank while the tour was running -- a step that
+   * stops being eligible after navigation, a shorter list arriving from the
+   * server -- `index` was left pointing past the end. `step` became undefined,
+   * and the running branch below renders the scrim WITHOUT requiring a step:
+   * a full-screen blur over the page with an empty card and no working way
+   * out. That is the stranded backdrop, and it is worst exactly where it was
+   * reported, because navigating is what changes which steps apply.
+   *
+   * The invariant, enforced here rather than hoped for: if there is no step to
+   * show, there is no overlay. `steps.length === 0` was already covered; this
+   * extends it to the out-of-range case, which is the one that actually
+   * happened.
+   */
   if (phase === "closed" || steps.length === 0) return null;
+  if (phase === "running" && !step) return null;
 
   if (phase === "invitation") {
     return (
@@ -281,7 +311,7 @@ export function TourRunner({
     );
   }
 
-  const isLast = index === steps.length - 1;
+  const isLast = stepIndex === steps.length - 1;
   const stepEntitlements = (step?.entitlementKeys ?? [])
     .map((key) => entitlements[key])
     .filter((entry): entry is ResolvedEntitlementView => Boolean(entry));
@@ -333,7 +363,7 @@ export function TourRunner({
 
         <div className="flex items-start justify-between gap-3">
           <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
-            {preview ? "Preview · " : ""}Step {index + 1} of {steps.length}
+            {preview ? "Preview · " : ""}Step {stepIndex + 1} of {steps.length}
           </p>
           <button
             type="button"
@@ -465,8 +495,8 @@ export function TourRunner({
             Skip tour
           </Button>
           <div className="flex items-center gap-2">
-            {index > 0 ? (
-              <Button type="button" size="sm" variant="outline" onClick={() => setIndex((value) => value - 1)}>
+            {stepIndex > 0 ? (
+              <Button type="button" size="sm" variant="outline" onClick={() => setIndex(stepIndex - 1)}>
                 Back
               </Button>
             ) : null}
@@ -498,7 +528,7 @@ export function TourRunner({
               onClick={() => {
                 if (step) recordStep(step.id, "tour_step_completed");
                 if (isLast) finish();
-                else setIndex((value) => value + 1);
+                else setIndex(stepIndex + 1);
               }}
             >
               {isLast ? "Finish" : "Next"}

@@ -24,7 +24,7 @@ import {
   X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
@@ -1114,6 +1114,10 @@ export function DashboardPageContent({
             soloActions={soloNearbyActions}
             focusedId={relationshipFocus?.muddy.id ?? null}
             onSelect={setSelectedFriendId}
+            /* The paused card resolves the state it reports, through the same
+               authority the Glow switch uses. */
+            onResumeVisibility={toggleVisibility}
+            resumingVisibility={isPending}
           />
         ) : null}
 
@@ -1378,11 +1382,23 @@ function NearbyHero({
   loaded = true,
   soloActions,
   focusedId = null,
-  onSelect
+  onSelect,
+  onResumeVisibility,
+  resumingVisibility = false
 }: {
   friends: DashboardFriend[];
   total: number;
   ghostMode: boolean;
+  /**
+   * Resumes visibility, supplied by Home so this stays presentation only.
+   *
+   * It is the SAME `toggleVisibility` the Glow switch calls -- one server
+   * action, one permission path, one failure message -- rather than a second
+   * visibility system living down here next to the copy that describes it.
+   */
+  onResumeVisibility?: () => void;
+  /** True while that resume is in flight, so a double tap cannot write twice. */
+  resumingVisibility?: boolean;
   glowColorByFriendId: Record<string, string>;
   reducedMotion: boolean;
   /** False until the first nearby fetch settles; drives the skeleton. */
@@ -1685,7 +1701,46 @@ function NearbyHero({
         // existing concentric-rings mark (the resting form of the glow) at a
         // small size, so the section stays quiet when nobody is around rather
         // than drawing attention to its own emptiness.
-        <div className="flex items-center gap-3.5 py-1">
+        /* WHEN IT IS PAUSED, THE WHOLE THING IS THE BUTTON.
+         *
+         * Home used to state "Visibility is paused" and then tell the reader to
+         * turn it back on somewhere else -- naming the fix but not offering it,
+         * so the only way out of the state Home was complaining about was to go
+         * and find the control. The paused card is now the control.
+         *
+         * It calls `toggleVisibility`, the SAME authority the Glow switch uses:
+         * one server action, one permission path, one failure message. There is
+         * no second visibility system here, and nothing is set optimistically --
+         * `ghostMode` flips only after the server confirms, so a failed or
+         * offline resume leaves the card honestly paused and says why.
+         *
+         * `disabled` while the transition is in flight makes a double tap a
+         * no-op rather than a second write. When nobody is nearby but visibility
+         * is ON there is nothing to resume, so that variant stays a plain
+         * region with its own links.
+         */
+        <div
+          className={cn(
+            "flex items-center gap-3.5 py-1",
+            ghostMode && "focus-ring w-full rounded-xl text-left transition hover:bg-secondary/40 disabled:opacity-70"
+          )}
+          {...(ghostMode
+            ? {
+                role: "button" as const,
+                tabIndex: 0,
+                onClick: () => {
+                  if (!resumingVisibility) onResumeVisibility?.();
+                },
+                onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  if (!resumingVisibility) onResumeVisibility?.();
+                },
+                "aria-busy": resumingVisibility,
+                "aria-label": "Visibility is paused. Tap to resume."
+              }
+            : {})}
+        >
           <span className="relative grid h-11 w-11 shrink-0 place-items-center" aria-hidden="true">
             <span className="absolute inset-0 rounded-full border border-border/60" />
             <span className="grid h-7 w-7 place-items-center rounded-full bg-secondary/70 text-muted-foreground">
@@ -1698,7 +1753,11 @@ function NearbyHero({
             </p>
             <p className="mt-0.5 text-[0.8125rem] leading-5 text-muted-foreground">
               {ghostMode ? (
-                "Turn visibility back on to appear nearby."
+                resumingVisibility ? (
+                  "Resuming…"
+                ) : (
+                  <span className="font-medium text-[var(--color-brand-orange)]">Tap to resume</span>
+                )
               ) : (
                 <>
                   <Link

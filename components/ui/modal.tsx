@@ -150,13 +150,16 @@ export function Modal({
           ) : null}
           <div
             className={cn(
-              "flex shrink-0 items-start justify-between gap-3",
+              "flex min-w-0 shrink-0 items-start justify-between gap-3",
               // Floated over the content it is hiding for, so the panel body
               // can run edge-to-edge underneath the close button.
               hideTitle && "pointer-events-none absolute inset-x-0 top-0 z-10 p-3"
             )}
           >
-            <div className="space-y-1">
+            {/* min-w-0 for the same reason as the body below: without it a long
+                unbroken title grows this flex child past the panel and pushes
+                the close button out of reach. */}
+            <div className="min-w-0 space-y-1">
               <Dialog.Title className={cn("text-base font-semibold sm:text-lg", hideTitle && "sr-only")}>
                 {title}
               </Dialog.Title>
@@ -194,7 +197,18 @@ export function Modal({
               last invitee row behind them. */}
           <div
             className={cn(
-              "min-h-0 flex-1 overflow-y-auto overscroll-contain",
+              /* min-w-0 IS WHAT KEEPS THE CONTENTS FROM SLIDING SIDEWAYS.
+                 A flex child defaults to min-width:auto -- its intrinsic
+                 content minimum, not its container -- so one unbreakable child
+                 (a long word, a wide row, a grid track) makes this scroller
+                 wider than the panel. The panel is overflow-hidden, so the
+                 surplus does not scroll: it is simply clipped, and the content
+                 inside reads as shifted to one side while the dialog frame
+                 itself stays perfectly still. Exactly the reported symptom,
+                 and it appears only on the steps whose content happens to be
+                 wide, which is why it looked like a broken step transition
+                 rather than a width bug. */
+              "min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain",
               hideTitle ? "mt-0" : compact ? "mt-2.5" : "mt-4"
             )}
           >
