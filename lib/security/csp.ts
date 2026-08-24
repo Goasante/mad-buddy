@@ -39,6 +39,22 @@ export function supabaseOriginFromEnv(supabaseUrl: string | undefined): string |
   }
 }
 
+/**
+ * The WebSocket origin for a Supabase REST origin.
+ *
+ * `https:` -> `wss:` and `http:` -> `ws:`. Both are needed: production is
+ * https, but local development runs the whole stack on http, and a CSP source
+ * only authorises the exact scheme it names.
+ *
+ * Returns the origin unchanged for anything else rather than guessing, so a
+ * malformed value produces a policy that is merely no wider than before.
+ */
+export function realtimeOrigin(origin: string): string {
+  if (origin.startsWith("https:")) return origin.replace(/^https:/, "wss:");
+  if (origin.startsWith("http:")) return origin.replace(/^http:/, "ws:");
+  return origin;
+}
+
 export function buildContentSecurityPolicy(options: {
   supabaseOrigin: string | null;
   mode: "report-only" | "enforce";
@@ -90,17 +106,30 @@ export function buildContentSecurityPolicy(options: {
      * so it grants no new exfiltration or injection surface the page did not
      * already have. */
     `img-src 'self' data: blob:${supabase ? ` ${supabase}` : ""} ${gtm} ${ga}`,
-    // The Supabase origin is listed twice on purpose: once as https:// for
-    // REST/auth, and once as wss:// for the Realtime socket. CSP scheme
-    // matching does NOT let an https: source authorise a wss: connection, so
-    // without the second entry every Realtime subscription breaks the moment
-    // this policy moves from Report-Only to enforcing.
+    // The Supabase origin is listed twice on purpose: once as its own scheme for
+    // REST/auth, and once as a WebSocket scheme for the Realtime socket. CSP
+    // scheme matching does NOT let an https: source authorise a wss:
+    // connection, so without the second entry every Realtime subscription
+    // breaks the moment this policy moves from Report-Only to enforcing.
+    //
+    // BETA-002/006. That mapping used to be a bare
+    // `.replace(/^https:/, "wss:")`, which silently did nothing to an
+    // `http://` origin -- so LOCAL development emitted the http origin twice
+    // and never authorised `ws://`. Every Realtime subscription was blocked by
+    // CSP before the socket even opened: no phx_join, no CHANNEL_ERROR, no
+    // retry, just a console violation. Unread badges never moved on arrival
+    // and message edits never propagated, while every database test stayed
+    // green because the server was never the problem.
+    //
+    // Production was unaffected (it is https, so the replace worked), which is
+    // the nastiest part: the defect lived only where the fix would be
+    // developed and tested.
     // `data:` here is scoped to connect-src only (fetch/XHR/WebSocket targets,
     // never a remote host) — gtag.js's own bootstrap dynamically imports a
     // same-content `data:text/javascript;base64,...` module in some browsers,
     // which connect-src otherwise blocks even though the gtag.js script tag
     // itself is already trusted via the googletagmanager.com host source.
-    `connect-src 'self' data:${supabase ? ` ${supabase} ${supabase.replace(/^https:/, "wss:")}` : ""} ${gtm} ${ga} ${turnstile}`,
+    `connect-src 'self' data:${supabase ? ` ${supabase} ${realtimeOrigin(supabase)}` : ""} ${gtm} ${ga} ${turnstile}`,
     `font-src 'self'`,
     `frame-src ${turnstile}`,
     `frame-ancestors 'none'`,

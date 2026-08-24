@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildContentSecurityPolicy, supabaseOriginFromEnv } from "@/lib/security/csp";
+import { buildContentSecurityPolicy, supabaseOriginFromEnv, realtimeOrigin } from "@/lib/security/csp";
 
 describe("supabaseOriginFromEnv", () => {
   it("extracts a clean origin from the project URL", () => {
@@ -147,5 +147,66 @@ describe("buildContentSecurityPolicy", () => {
     expect(withSupabase).not.toContain("upgrade-insecure-requests");
     const enforced = buildContentSecurityPolicy({ supabaseOrigin: null, mode: "enforce" });
     expect(enforced).toContain("upgrade-insecure-requests");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BETA-002 / BETA-006 — the Realtime socket must be authorised on BOTH schemes
+// ---------------------------------------------------------------------------
+
+describe("connect-src authorises the Realtime WebSocket", () => {
+  it("maps an https origin to wss", () => {
+    expect(realtimeOrigin("https://abc123.supabase.co")).toBe("wss://abc123.supabase.co");
+  });
+
+  it("maps an http origin to ws", () => {
+    /* THE BUG. This used to be a bare `.replace(/^https:/, "wss:")`, which
+       silently did nothing to an http origin -- so local development listed the
+       http origin twice and never authorised ws://. Every Realtime subscription
+       was blocked by CSP before the socket opened: no phx_join, no
+       CHANNEL_ERROR, just a console violation. Unread badges never moved on
+       arrival and message edits never propagated, while every database test
+       stayed green because the server was never at fault. */
+    expect(realtimeOrigin("http://127.0.0.1:54321")).toBe("ws://127.0.0.1:54321");
+  });
+
+  it("leaves an unrecognised scheme alone rather than guessing", () => {
+    expect(realtimeOrigin("example.com")).toBe("example.com");
+  });
+
+  it("emits a ws:// source for a local Supabase origin", () => {
+    const policy = buildContentSecurityPolicy({
+      nonce: "n",
+      supabaseOrigin: "http://127.0.0.1:54321",
+      mode: "enforce"
+    });
+    const connect = policy.split("; ").find((d) => d.startsWith("connect-src")) ?? "";
+    expect(connect).toContain("http://127.0.0.1:54321");
+    expect(connect, "the local Realtime socket is not authorised").toContain("ws://127.0.0.1:54321");
+  });
+
+  it("emits a wss:// source for a production Supabase origin", () => {
+    const policy = buildContentSecurityPolicy({
+      nonce: "n",
+      supabaseOrigin: "https://abc123.supabase.co",
+      mode: "enforce"
+    });
+    const connect = policy.split("; ").find((d) => d.startsWith("connect-src")) ?? "";
+    expect(connect).toContain("https://abc123.supabase.co");
+    expect(connect).toContain("wss://abc123.supabase.co");
+  });
+
+  it("never lists the same origin twice with no socket scheme", () => {
+    /* The symptom that made this visible: `connect-src` contained
+       `http://127.0.0.1:54321 http://127.0.0.1:54321` -- the same origin
+       repeated, because the replace was a no-op. */
+    const policy = buildContentSecurityPolicy({
+      nonce: "n",
+      supabaseOrigin: "http://127.0.0.1:54321",
+      mode: "enforce"
+    });
+    const connect = policy.split("; ").find((d) => d.startsWith("connect-src")) ?? "";
+    const occurrences = connect.split("http://127.0.0.1:54321").length - 1;
+    expect(occurrences, "the origin is duplicated instead of mapped to ws://").toBe(1);
   });
 });

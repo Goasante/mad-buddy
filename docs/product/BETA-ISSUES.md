@@ -187,13 +187,64 @@ re-runs the count (navigation, refresh, focus) is correct.
 - `useUnreadMessageCount` listens for that event, for focus, for
   visibilitychange, and for a Realtime `INSERT` on `messages`
 
-**Therefore the remaining suspects are narrow**: the Realtime INSERT
-subscription in `useUnreadMessageCount` is not delivering to the client —
-either `authenticateRealtime()` is not completing before `subscribe()`, the
-channel never reaches `SUBSCRIBED`, or the socket is not authenticated for RLS
-so the row is filtered out server-side before broadcast. Next session should
-instrument the channel's status callback and log delivery, rather than reading
-more code.
+#### ROOT CAUSE FOUND — Content Security Policy blocked the WebSocket
+
+**STATUS: FIXED.** And it was not a channel-auth race at all.
+
+Instrumenting the live socket showed something blunter than any of the
+suspects: **`websockets opened: 0`**. No `phx_join`, no `phx_reply`, no
+`CHANNEL_ERROR`, no retry. The subscription was never attempted, because the
+browser refused the connection:
+
+```
+Connecting to 'ws://127.0.0.1:54321/realtime/v1/websocket?apikey=<redacted>'
+violates the following Content Security Policy directive:
+"connect-src 'self' data: http://127.0.0.1:54321 http://127.0.0.1:54321 ..."
+```
+
+Note the origin listed **twice**, and no `ws://` anywhere. `lib/security/csp.ts`
+mapped the Supabase origin to a socket scheme with:
+
+```ts
+supabase.replace(/^https:/, "wss:")
+```
+
+which silently does **nothing** to an `http://` origin. So local development
+emitted the http origin twice and never authorised `ws://`, and CSP killed
+every Realtime subscription before the socket opened.
+
+**Production was unaffected** — it is `https`, so the replace worked and
+`wss://cabkhxxn….supabase.co` is present in the live header. That is the
+nastiest property of this bug: it existed *only* in the environment where the
+fix would be developed and tested, which is why every database test stayed
+green and why three sessions of server-side auditing found nothing.
+
+**FIX** A `realtimeOrigin()` helper mapping `https:→wss:` **and** `http:→ws:`,
+leaving anything else untouched rather than guessing.
+
+**VERIFICATION**
+- `lib/security/csp.test.ts` — 24/24, with a **negative control**: reinstating
+  the original `replace` fails exactly 3 assertions, including "the origin is
+  duplicated instead of mapped to ws://".
+- `scripts/hardening/unread-client-sync.mjs` — **7/7**, up from 6/7. The badge
+  now shows `1` the moment the message arrives, with no navigation or refresh.
+- Socket confirmed open at runtime: `ws://127.0.0.1:54321/realtime/v1/websocket`,
+  zero console errors.
+
+### BETA-006 — message edits do not reach the recipient
+- **SEVERITY** P1 · **CATEGORY** BROKEN · **ROUTE** `/messages`
+- **STATUS** **FIXED — SAME ROOT CAUSE AS BETA-002**
+- The messages page already subscribed with `event: "*"` (INSERT, UPDATE and
+  DELETE) and refetched through the server action on any change. That code was
+  correct the whole time; CSP was blocking the socket it depended on, so edits
+  could no more propagate than arrivals could.
+- **No second mechanism was added, and no polling.** One CSP fix closed both.
+- **VERIFICATION** `scripts/hardening/message-edit-sync.mjs` — **4/4** with B
+  keeping the conversation OPEN while A edits: B sees the original, the database
+  holds the edited value with `edited_at` set, **B sees the edit without
+  reloading**, and a reload remains canonical. A test that reloaded between the
+  edit and the assertion would have passed even with the socket dead, so it
+  deliberately does not.
 
 **Note on the probe.** The first version read the `/messages` link's
 `textContent` and got `""`, which is indistinguishable from "no badge" — a
@@ -209,7 +260,6 @@ Investigated and queued, not yet fixed:
 | --- | --- | --- |
 | BETA-003 | P1 | Events surface renders blurred with no dialog |
 | BETA-005 | P1 | Create Event modal overflows and jumps between audience options |
-| BETA-006 | P1 | message edits do not reach the recipient |
 | BETA-007 | P1 | Linkr mutual moment reaches only the second person; Say hi must open the chat |
 | BETA-008 | P2 | Linkr "Hide from specific people" opens Safe Center |
 | BETA-009 | P2 | @mentions do not render or resolve |
