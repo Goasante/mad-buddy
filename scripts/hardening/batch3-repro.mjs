@@ -126,8 +126,25 @@ const navOverlap = () => {
     if (cs.position === "fixed" || cs.position === "sticky") continue;
     const r = el.getBoundingClientRect();
     if (r.width < 8 || r.height < 8) continue;
-    // Its centre lies under the nav band.
+
+    /* CLIPPED IS NOT HIDDEN.
+     *
+     * `getBoundingClientRect()` reports a rectangle for a child even when an
+     * ancestor clips it away -- the collapsed quick-actions list is
+     * `max-height: 0; overflow: hidden`, and its items still measure as real
+     * boxes sitting inside the nav band. Reading only the rectangle produced a
+     * confident false positive: "a Quick Action is unreachable behind the nav"
+     * when the menu was simply shut.
+     *
+     * The honest question is whether the user can actually reach it, so ask
+     * the document: if the point belongs to something else, the control is not
+     * exposed there. */
+    const cx = r.left + r.width / 2;
     const cy = r.top + r.height / 2;
+    if (cx < 0 || cx > window.innerWidth || cy < 0 || cy > window.innerHeight) continue;
+    const atPoint = document.elementFromPoint(cx, cy);
+    if (!atPoint || !(el === atPoint || el.contains(atPoint))) continue;
+
     if (cy > nav.r.top + 2 && cy < nav.r.bottom) {
       const t = (el.textContent || el.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim().slice(0, 28);
       hidden.push(t || el.tagName.toLowerCase());

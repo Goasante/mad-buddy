@@ -328,28 +328,66 @@ Recommended next step for these three: a short screen-recording from the
 tester, or the device's own Safari inspector — not more headless probing.
 
 ### BETA-014 — a Quick Action sits underneath the bottom navigation
-- **SEVERITY** P2 · **CATEGORY** BROKEN · **ROUTE** every route with the quick-actions menu
-- **STATUS** **REPRODUCED, root cause found, NOT YET FIXED**
-- **MEASUREMENT** at 390x844, scrolled fully to the bottom of `/friends`:
+- **SEVERITY** P2 · **ROUTE** every route with the quick-actions menu
+- **STATUS** **NOT REPRODUCED — the previous session's finding was a false
+  positive, and the retraction is mine.**
+
+**What was reported last session:** at 390x844 scrolled fully to the bottom of
+`/friends`, a quick-actions "Events" link measured at `y=799 h=44` while the
+bottom nav started at `y=769` — apparently unreachable behind the nav, on three
+routes.
+
+**Why that was wrong.** `getBoundingClientRect()` reports a rectangle for a
+child even when an ancestor clips it away. The COLLAPSED quick-actions list is
+`max-height: 0; overflow: hidden`, and its items still measure as real boxes
+that happen to fall inside the nav band. The probe read those rectangles and
+concluded the controls were hidden behind the nav, when the menu was simply
+shut.
+
+**The measurement that settles it**, taken with `document.elementFromPoint` at
+each item's centre:
 
 ```
-bottom nav starts at   y = 769
-quick-actions "Events" y = 799, height 44   -> entirely inside the nav band
-document height 888, viewport 844, scrollY 44 (already at the end)
+collapsed   list max-height 0px, overflow hidden
+            element at "Plans" centre = NAV.fixed  -> not the item
+            visibility visible, opacity 1, but CLIPPED and unreachable
+
+expanded    listBottom = 686   navTop = 769
+            every item sits 83px clear of the nav
 ```
 
-  The control is unreachable: there is no further scroll that can bring it out.
-  Reproduces identically on `/friends`, `/messages` and `/events`.
-- **ROOT CAUSE** `.quick-actions` (the container) correctly reserves
-  `--mobile-nav-height + env(safe-area-inset-bottom) + gap`. The expanded menu
-  items, `.quick-actions-action`, are laid out *above* the trigger and the last
-  one overshoots into the nav band — the reserve accounts for the trigger, not
-  for the menu's own height.
-- **NOTE FOR THE FIX** `env(safe-area-inset-bottom)` is **0 in headless
-  Chromium**, so a real iPhone has *less* usable space than this measurement,
-  not more. The defect is at least as bad on device as it measures here.
-- **NOT FIXED** — reproduced and root-caused within this context; the fix and
-  its verification belong to the next session so it is not left half-applied.
+So the geometry was correct all along: `.quick-actions` reserves
+`--mobile-nav-height + env(safe-area-inset-bottom) + gap`, the stack grows
+upward from there, and when open nothing touches the nav band.
+
+**The probe is fixed** rather than deleted: `batch3-repro.mjs` now hit-tests
+every candidate with `elementFromPoint` before counting it, so a clipped
+descendant can never again be reported as a hidden control. With that
+correction the batch reads **17/17**.
+
+**The lesson, which is the recurring one in this program:** *clipped is not
+hidden, and a rectangle is not reachability.* Rect-only probes have now
+produced three confident false positives across this beta — decorative blobs
+"escaping" the viewport, a link's empty textContent read as a zero badge, and
+this. Ask the document what is actually at the point.
+
+### Batch 3 status after correction
+
+| Issue | Headless result | Status |
+| --- | --- | --- |
+| BETA-003 Events blur | not reproduced | **TESTER REPRO REQUIRED** |
+| BETA-005 Create Event overflow | not reproduced | **TESTER REPRO REQUIRED** |
+| BETA-010 duplicate search | not reproduced (1 field each) | **TESTER RECHECK REQUIRED** |
+| BETA-014 nav overlap | not reproduced (retracted) | **TESTER RECHECK REQUIRED** |
+| BETA-016 touch instability | not reproduced | **TESTER REPRO REQUIRED** |
+
+**None of these are closed.** Headless Chromium passing is not evidence that a
+real iPhone behaves the same way, and this environment is known to differ in
+ways that matter here: `env(safe-area-inset-bottom)` is **0** rather than 34,
+transitions settle before a probe reads the DOM, and touch feedback is
+synthesised. Every one of these reports came from a real device.
+
+No product code was changed for Batch 3.
 
 ### Remaining in this batch
 
