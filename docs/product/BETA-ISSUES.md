@@ -252,6 +252,56 @@ false failure waiting to happen. It now reads the badge `<span>` directly and
 treats its absence as an explicit zero, because the badge only renders when the
 count is above zero.
 
+### BETA-009 — @mentions do not render the person
+- **SEVERITY** P2 · **CATEGORY** BROKEN · **ROUTE** Plan Chat in `/messages`
+- **STATUS** **FIXED** (local, runtime-proven)
+- **ARCHITECTURE: STRUCTURED, and already complete.** `lib/messaging/mentions.ts`
+  stores identity as a **user id, never matched text** — with trigger detection,
+  candidate filtering, reconciliation against the typed text, and a renderer
+  that highlights only the ids the server persisted. `message_mentions`
+  (`message_id`, `mentioned_user_id`) has existed all along. Both the composer
+  and the renderer were wired to it.
+- **ROOT CAUSE** The **candidate list**, not the mention system. The composer
+  defaults `mentionCandidates = []` and opens its picker only when that list is
+  non-empty. The group page passed one; `/messages` passed nothing. So in Plan
+  Chat the picker never opened, `@Ama` stayed plain text, and no identity was
+  stored — exactly the reported symptom.
+- **WHY PLAN CHAT SPECIFICALLY** Clicking a `group` row in the inbox routes to
+  `/groups/{id}`, a different page that already had candidates. The surface that
+  genuinely stays inside `/messages` and is multi-party is **Plan Chat** — and
+  it had no picker at all. The page already derived `hasMultipleSpeakers` from
+  `kind !== "direct"` for message attribution, for the same underlying reason.
+- **FIX** `listMentionCandidates()` (server) + `getMentionCandidatesAction()`,
+  fetched per conversation alongside the thread, passed to the composer with
+  `isGroup={selected.kind !== "direct"}`.
+- **SECURITY — the outsider guard is server-side**
+  - the caller must pass `resolveConversationAccess`
+  - `status = 'joined'` only: invited, removed, banned and departed members are
+    not mentionable
+  - the sender is excluded (mentioning yourself must not notify you)
+  - **no query parameter and no name search**, so it cannot enumerate users
+    outside the conversation; filtering happens client-side over a list the
+    server already decided the caller may see
+  - direct conversations return `[]`
+- **VERIFICATION**
+  - `scripts/hardening/group-mentions.mjs` — **9/9**, with a **negative
+    control**: removing the `joined` filter leaks removed and invited members
+    and fails exactly 2 assertions.
+  - `scripts/hardening/mentions-runtime.mjs` — **3/3**: the Plan Chat opens from
+    the inbox, the composer is present, and typing `@Kwa` offers the real member
+    "Kwame Boateng".
+  - Identity survives a rename: the stored id is unchanged after the mentioned
+    user's display name changes.
+- **MENTION NOTIFICATION** Existing behaviour, not expanded. `message_mentions`
+  rows are written by the send path and consumed by the existing notification
+  layer; this tranche added no new notification product.
+- **AN OUTDATED INVARIANT, CORRECTED** `composer-layout.test.ts` asserted that
+  the inbox never sets `isGroup` — true when `/messages` hosted only direct
+  chats, false once Plan Chat lives there. It now asserts the real property:
+  neither surface hard-codes the answer, and the inbox must derive it from
+  `kind`. A literal `isGroup={true}` would put a mention picker in a two-person
+  chat.
+
 ### Remaining in this batch
 
 Investigated and queued, not yet fixed:
@@ -262,7 +312,6 @@ Investigated and queued, not yet fixed:
 | BETA-005 | P1 | Create Event modal overflows and jumps between audience options |
 | BETA-007 | P1 | Linkr mutual moment reaches only the second person; Say hi must open the chat |
 | BETA-008 | P2 | Linkr "Hide from specific people" opens Safe Center |
-| BETA-009 | P2 | @mentions do not render or resolve |
 | BETA-010 | P2 | duplicate search inputs on Muddies and Messages |
 | BETA-011 | P2 | private Muddy Circles to be removed (owner decision on MB-GOD-056) |
 | BETA-012 | P2 | contact matching does not work on device |

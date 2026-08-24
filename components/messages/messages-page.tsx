@@ -16,6 +16,7 @@ import {
   getConversationsAction,
   getMessageableFriendsAction,
   getMessagesAction,
+  getMentionCandidatesAction,
   markConversationReadAction,
   muteConversationAction,
   openDirectConversationAction,
@@ -67,6 +68,7 @@ import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { MessageAttachmentImage } from "@/components/messaging/message-attachment-image";
 import { SafeMessageText } from "@/components/messages/safe-message-text";
+import type { MentionCandidate } from "@/lib/messaging/mentions";
 import { MessageComposer } from "@/components/messaging/message-composer";
 import { VoiceMessageBubble } from "@/components/messaging/voice-message-bubble";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
@@ -155,6 +157,7 @@ export function MessagesPageContent({
   const searchParams = useSearchParams();
   const requestedConversationId = searchParams.get("conversation");
   const [conversations, setConversations] = useState(initialConversations);
+  const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
   const [activeTab, setActiveTab] = useState<TabId>("all");
   /* ?conversation= is a SERVER-VALIDATED id: openDirectConversationAction
    * resolved or created it and re-checked eligibility. It is deliberately NOT
@@ -213,6 +216,17 @@ export function MessagesPageContent({
       if (requestId !== loadRequestIdRef.current) return;
       setMessages(loaded);
       setActionsNowMs(Date.now());
+
+      /* BETA-009. Mention candidates for THIS conversation, fetched with the
+         thread rather than held globally: membership is per-conversation, and
+         a stale list from a previous thread could offer somebody who is not in
+         this one. The server refuses anything the viewer may not see, and
+         returns [] for direct chats. */
+      void (async () => {
+        const people = await getMentionCandidatesAction(conversationId).catch(() => []);
+        if (requestId !== loadRequestIdRef.current) return;
+        setMentionCandidates(people);
+      })();
 
       const readResult = await withTimeout(markConversationReadAction(conversationId), {
         operation: "mark conversation read"
@@ -1718,6 +1732,8 @@ export function MessagesPageContent({
                   <MessageComposer
                     key={selected.id}
                     conversationId={selected.id}
+                    isGroup={selected.kind !== "direct"}
+                    mentionCandidates={mentionCandidates}
                     voiceRecorderConfig={voiceRecorderConfig}
                     placeholder={`Message ${selected.title}`}
                     onFeedback={setFeedback}

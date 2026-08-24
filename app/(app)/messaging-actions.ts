@@ -28,6 +28,7 @@ import {
   listConversations,
   listMessages,
   listMessageableFriends,
+  listMentionCandidates,
   markConversationRead,
   openDirectConversation,
   persistMentions,
@@ -38,6 +39,10 @@ import {
   type ConversationView,
   type MessageableFriend
 } from "@/lib/messaging/mobile";
+/* Type-only, and NEVER re-exported: a `"use server"` module that exports a
+   type produces a Turbopack runtime ReferenceError that breaks every action in
+   the file, and tsc does not catch it. */
+import type { MentionCandidateView } from "@/lib/messaging/mobile";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import type { AuthorizedVoicePlayback } from "@/lib/messaging/voice-playback";
 
@@ -117,6 +122,20 @@ export async function getMessagesAction(conversationId: string): Promise<ChatMes
   if (!userId) return [];
 
   return listMessages(userId, conversationId);
+}
+
+/**
+ * BETA-009. Who may be @mentioned in this conversation.
+ *
+ * Returns [] rather than throwing for an unauthorized caller, matching every
+ * other read action here: a picker that quietly offers nobody is the correct
+ * failure, and an error would tell a prober that the conversation exists.
+ */
+export async function getMentionCandidatesAction(conversationId: string): Promise<MentionCandidateView[]> {
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+
+  return listMentionCandidates(userId, conversationId);
 }
 
 export async function markConversationReadAction(conversationId: string): Promise<MessagingActionState> {

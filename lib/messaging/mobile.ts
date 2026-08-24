@@ -98,6 +98,18 @@ export type ChatMessageView = {
   myReaction: string | null;
 };
 
+/**
+ * A person the mention picker may offer. Mirrors `MentionCandidate` in
+ * lib/messaging/mentions.ts, kept as its own type here so the transport shape
+ * is explicit at the server boundary.
+ */
+export type MentionCandidateView = {
+  userId: string;
+  displayName: string;
+  username: string;
+  avatarUrl: string | null;
+};
+
 export type ConversationView = {
   id: string;
   title: string;
@@ -1259,4 +1271,75 @@ export async function setConversationHidden(
   // "Hidden", not "Deleted": the copy has to match what actually happened, or
   // someone will expect the other person to have lost the conversation too.
   return { ok: true, message: hidden ? "Chat hidden." : "Chat restored." };
+}
+
+/**
+ * The people a message in this conversation may mention.
+ *
+ * BETA-009. `lib/messaging/mentions.ts` has held a complete structured
+ * implementation all along -- identity by user id, reconciliation against the
+ * text, safe rendering -- and both the composer and the renderer were wired to
+ * it. What was missing was the CANDIDATE LIST on `/messages`: the composer
+ * defaults `mentionCandidates = []` and only opens the picker when that list is
+ * non-empty, so group and Plan chats reached from the inbox never offered
+ * anybody. Typing "@Ama" produced plain text with no stored identity, which is
+ * exactly what the tester reported.
+ *
+ * SECURITY. This is the outsider guard, and it is a server function rather than
+ * anything the client assembles:
+ *
+ *   - the caller must be able to view the conversation (same
+ *     `resolveConversationAccess` every other read uses)
+ *   - only `status = 'joined'` members are returned, so somebody invited,
+ *     removed, banned or departed is not mentionable
+ *   - the sender is excluded: mentioning yourself must not notify you, and
+ *     offering it in the picker only invites the confusion
+ *   - there is no query parameter and no name search, so this cannot be used to
+ *     enumerate users outside the conversation -- filtering happens on the
+ *     client, over a list the server already decided the caller may see
+ *
+ * Direct conversations return an empty list: a mention in a two-person chat
+ * names the only other person present, which the message already does.
+ */
+export async function listMentionCandidates(
+  userId: string,
+  conversationId: string
+): Promise<MentionCandidateView[]> {
+  if (!hasServiceRoleEnv()) return [];
+  if (!uuidSchema.safeParse(conversationId).success) return [];
+
+  const admin = createSupabaseAdminClient();
+  const access = await resolveConversationAccess(admin, userId, conversationId);
+  if (!access.canView) return [];
+
+  const { data: conversation } = await admin
+    .from("conversations")
+    .select("conversation_type")
+    .eq("id", conversationId)
+    .maybeSingle();
+  if (!conversation || conversation.conversation_type === "direct") return [];
+
+  const { data: members } = await admin
+    .from("conversation_members")
+    .select("user_id")
+    .eq("conversation_id", conversationId)
+    .eq("status", "joined")
+    .neq("user_id", userId);
+
+  const ids = (members ?? []).map((row) => row.user_id);
+  if (ids.length === 0) return [];
+
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("user_id, full_name, username, avatar_url")
+    .in("user_id", ids);
+
+  return (profiles ?? [])
+    .map((profile) => ({
+      userId: profile.user_id,
+      displayName: profile.full_name?.trim() || profile.username,
+      username: profile.username,
+      avatarUrl: profile.avatar_url ?? null
+    }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }

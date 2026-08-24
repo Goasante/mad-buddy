@@ -113,9 +113,30 @@ describe("tool rail", () => {
     expect(mentionBlock).toContain('aria-label="Mention someone"');
   });
 
-  it("is marked as a group only by the group surface", () => {
+  it("is marked multi-party by conversation KIND, never hard-coded", () => {
+    /* BETA-009. This used to assert `dmPage` never mentions `isGroup` -- true
+       when /messages hosted only direct chats. It also hosts PLAN CHAT, which
+       is multi-party: the page already derives `hasMultipleSpeakers` from
+       `kind !== "direct"` for exactly that reason, and mentions belong there
+       for the same reason.
+
+       So the invariant is not "the inbox never sets isGroup". It is that
+       neither surface hard-codes the answer: the group page knows it is a
+       group, and the inbox asks the conversation. A literal `isGroup={true}`
+       on the inbox would put a mention picker in a two-person chat. */
     expect(groupPage).toContain("isGroup");
-    expect(dmPage).not.toContain("isGroup");
+    expect(dmPage).toContain("isGroup");
+    expect(dmPage, "the inbox hard-codes isGroup instead of deriving it")
+      .not.toContain("isGroup={true}");
+    expect(dmPage).toContain('isGroup={selected.kind !== "direct"}');
+  });
+
+  it("only offers mention candidates the server chose", () => {
+    /* The candidate list is fetched per conversation from a server action that
+       returns joined members only. The inbox must not assemble one itself from
+       whatever profiles it happens to be holding. */
+    expect(dmPage).toContain("getMentionCandidatesAction");
+    expect(dmPage).toContain("mentionCandidates={mentionCandidates}");
   });
 
   it("keeps the existing attachment picker rather than a new one", () => {
