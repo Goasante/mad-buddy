@@ -78,9 +78,89 @@ Copy this block for each new issue.
 
 ---
 
-## Open issues
+## Stabilization Batch 1 — in progress
 
-_None yet — beta opens with this log empty._
+Source: real tester reports and owner screenshots from the friend beta.
+
+### BETA-001 — block → unblock → re-add leaves the conversation dead
+- **SEVERITY** P1 · **CATEGORY** BROKEN · **ROUTE** `/messages/[id]`
+- **STATUS** **FIXED** (local; pending production migration)
+- **REPRO** Block a Muddy → unblock → add them again → open the thread → send.
+  Banner reads "This conversation is closed." and the message shows
+  Not sent / Retry / Delete. Permanent.
+- **ROOT CAUSE** `blockUserAction` archives the pair's direct conversation via
+  `applyBlockToConversations`. **Nothing ever un-archives it.**
+  `unblockUserAction` only deletes the `blocked_users` row, and the
+  relationship-lifecycle RPC that reactivates a friendship never touches
+  `conversations`. `resolveSendPermission` refuses on
+  `conversationStatus !== 'active'`, so the archive was a one-way door.
+  The banner was a *correct* projection of a state that was never restored —
+  hiding it would have hidden the bug, not fixed it.
+- **FIX** `20260824140000_reopen_conversation_on_refriend.sql` — a trigger on
+  `friendships` reopens an archived direct conversation when a friendship
+  becomes live. Placed on the relationship, not on unblock: unblock alone must
+  NOT reopen anything, because at that moment there is no relationship and
+  reopening would restore a channel the other side never agreed to. In the
+  database rather than application code because friendships are written from
+  several RPCs and any future path would silently miss it.
+- **SECURITY** A live block outranks the friendship — verified. Re-adding
+  someone can never undo their block.
+- **VERIFICATION** `scripts/hardening/block-unblock-readd.mjs` **13/13**,
+  including the security edge and "an UPDATE that does not change `ended_at`
+  reopens nothing". Failed 9/10 before the fix, at exactly the reported step.
+
+### BETA-004 — profile editor overflows when the account has photos
+- **SEVERITY** P1 · **CATEGORY** VISUAL QUALITY · **ROUTE** `/profile` (editor)
+- **STATUS** **FIXED** (local)
+- **REPRO** Open the profile editor on an account **with photos**. Content is
+  clipped at the right edge: "Save profil…", "Lowercase letters, numbers, and
+  undersco…", "Your full date and birth year stay priv…".
+- **THE CLUE THAT CRACKED IT** The owner screenshot at "Photos 0 of 3" renders
+  perfectly. Same screen, same phone — the only difference is photos.
+- **ROOT CAUSE** `.profile-photos` is a **grid item**, and a grid item default
+  `min-width: auto` resolves to its *content* intrinsic minimum rather than its
+  container. The visibility chip row (Everyone / My Muddies / Only me) plus the
+  reorder and remove buttons cannot shrink below ~385px, so the grid column
+  computed to **384.6px inside a 316px box** and pushed the document to **422px**
+  at a 390px viewport. Every `fixed inset-x-0` header and nav then stretched to
+  match — which is why the whole page looked shifted rather than just this card,
+  and why the first passes chasing the *widest* element found only symptoms.
+- **FIX** `min-width: 0` on `.profile-photos`, `flex-wrap` + `min-width: 0` on
+  the controls row, and `flex: 1 1 0` with ellipsis on the chips. Deliberately
+  NOT `overflow-x: hidden` on an ancestor — that hides the clipping and leaves
+  the controls genuinely unreachable off-screen.
+- **INVARIANT** User-supplied images can never determine page width.
+- **VERIFICATION** `scripts/hardening/profile-width-invariant.mjs` **30/30** —
+  5 phone widths × 2 themes × (view + edit + Save-not-clipped), 3 photos loaded.
+
+### Remaining in this batch
+
+Investigated and queued, not yet fixed:
+
+| ID | Severity | Issue |
+| --- | --- | --- |
+| BETA-002 | P1 | unread / notification lifecycle (group, Plan Chat, nav badge, deep links, offline persistence) |
+| BETA-003 | P1 | Events surface renders blurred with no dialog |
+| BETA-005 | P1 | Create Event modal overflows and jumps between audience options |
+| BETA-006 | P1 | message edits do not reach the recipient |
+| BETA-007 | P1 | Linkr mutual moment reaches only the second person; Say hi must open the chat |
+| BETA-008 | P2 | Linkr "Hide from specific people" opens Safe Center |
+| BETA-009 | P2 | @mentions do not render or resolve |
+| BETA-010 | P2 | duplicate search inputs on Muddies and Messages |
+| BETA-011 | P2 | private Muddy Circles to be removed (owner decision on MB-GOD-056) |
+| BETA-012 | P2 | contact matching does not work on device |
+| BETA-013 | P2 | Glow ring does not match avatar geometry |
+| BETA-014 | P2 | scroll container extends into the bottom nav |
+| BETA-015 | P2 | full-screen profile image viewer missing |
+| BETA-016 | P2 | group/Circle interface shifts on touch |
+| BETA-017 | P2 | Linkr preview card does not work |
+| BETA-018 | P2 | Linkr mutual icon: heart → wave (owner decision) |
+
+A note on the detector that found BETA-004: it initially reported **0 overflow
+across 14 routes** — a false negative on two counts. It ran as an account with
+no photos, and `/profile/edit` is a 404 (the editor opens in-page), so it was
+scanning error pages and calling them clean. Both are fixed. The lesson is the
+recurring one: **a probe that cannot reach the state cannot report on it.**
 
 ---
 

@@ -4093,6 +4093,25 @@ select {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  /* BETA-004. USER PHOTOS MUST NEVER SET PAGE WIDTH.
+   *
+   * Tester screenshots showed the profile editor clipped at the right edge --
+   * "Save profil…", "Lowercase letters, numbers, and undersco…" -- but only for
+   * an account WITH photos. An account at "0 of 3" rendered correctly.
+   *
+   * Measured cause: this section is a GRID ITEM, and a grid item's default
+   * `min-width: auto` is its content's intrinsic minimum, not its container.
+   * The visibility chip row ("Everyone / My Muddies / Only me") plus the move
+   * and remove buttons cannot shrink below ~385px, so the grid column resolved
+   * to 384.6px inside a 316px box and pushed the DOCUMENT to 422px. Every
+   * fixed header and nav then stretched to match, which is why the whole page
+   * looked shifted rather than just this card.
+   *
+   * `min-width: 0` lets the item shrink to its column and hand the overflow to
+   * the control row, which is already equipped for it (chips flex, the strip
+   * scrolls). Fixed here rather than with `overflow-x: hidden` on an ancestor:
+   * hiding it would leave the controls genuinely unreachable off-screen. */
+  min-width: 0;
 }
 
 .profile-photos-head {
@@ -4186,18 +4205,31 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  /* The row that sets the intrinsic floor: three visibility chips plus reorder
+     and remove. It may wrap rather than force its parent wider -- on a 360px
+     phone the chips and the buttons simply take two lines. */
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .profile-photos-visibility {
   display: flex;
   min-width: 0;
-  flex: 1;
+  /* `flex: 1` alone still refuses to go below its content. A basis of 0 with a
+     sensible floor lets the three chips share whatever width exists. */
+  flex: 1 1 0;
   gap: 0.375rem;
 }
 
 .profile-photos-chip {
   min-height: 2.25rem;
-  flex: 1;
+  /* Shrinkable, with an ellipsis rather than an overflow: a narrow phone gets
+     smaller chips, never a wider page. */
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   border-radius: 999px;
   border: 1px solid hsl(var(--border) / 0.7);
   padding-inline: 0.625rem;
