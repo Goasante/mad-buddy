@@ -59,7 +59,18 @@ export const ADMIN_PERMISSIONS = [
   "admin.tours.manage",
   "admin.emergency_controls.manage",
   "admin.maintenance.manage",
-  "admin.roles.manage"
+  "admin.roles.manage",
+  /**
+   * Open or end a GLOBAL Mad Buddy Access promotion -- access for every user
+   * at once.
+   *
+   * Its own permission rather than a borrowed one. The obvious shortcut was to
+   * require `admin.roles.manage` and call it owner-only, but that is not true
+   * in this matrix: `trust_safety_administrator` holds it, so the shortcut
+   * would have let a T&S admin give the entire user base a paid product. This
+   * is granted to `super_administrator` alone.
+   */
+  "admin.access.global.manage"
 ] as const;
 
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];

@@ -2964,6 +2964,31 @@ export type Database = {
        * back to whatever they independently hold. Since this table never
        * touches user rows, ending a window restores those sources by itself.
        */
+      /**
+       * Dedupe ledger for Welcome Access reminders.
+       *
+       * UNIQUE (grant_id, milestone) is what makes the reminder job safe under
+       * retries and overlapping cron runs. The job claims a row BEFORE sending,
+       * so a crash costs a missed reminder rather than a duplicate one.
+       */
+      access_reminder_log: {
+        Row: {
+          id: string;
+          grant_id: string;
+          user_id: string;
+          milestone: string;
+          sent_at: string;
+        };
+        Insert: {
+          id?: string;
+          grant_id: string;
+          user_id: string;
+          milestone: string;
+          sent_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["access_reminder_log"]["Insert"]>;
+        Relationships: [];
+      };
       access_global_windows: {
         Row: {
           id: string;

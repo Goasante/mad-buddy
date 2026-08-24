@@ -936,6 +936,14 @@ export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
   "financial.capture_daily_snapshot": handleCaptureDailyFinancialSnapshot,
   "financial.reconcile_paystack_fees": handleReconcilePaystackFees,
   "trials.lifecycle": handlePremiumTrialLifecycle,
+  "access.welcome_reminders": async (admin) => {
+    const { processWelcomeAccessReminders } = await import("@/lib/access/reminders");
+    const run = await processWelcomeAccessReminders(admin);
+    /* The contract is a count of things processed. `sent` is the honest number:
+       grants skipped because the person already holds other access were
+       correctly NOT notified, and counting them would inflate the figure. */
+    return run.sent;
+  },
   "streaks.close_expired_periods": handleCloseExpiredStreaks,
   "recap.generate_monthly": handleGenerateMonthlyRecaps,
   "birthdays.notify": async (admin) => deliverBirthdayNotifications(admin),

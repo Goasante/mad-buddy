@@ -28,6 +28,16 @@ export type JobType =
   | "financial.capture_daily_snapshot"
   | "financial.reconcile_paystack_fees"
   | "trials.lifecycle"
+  /**
+   * Welcome Access reminders (days 4 and 1 remaining).
+   *
+   * DAILY, not hourly. The milestones are whole days, so an hourly run would
+   * re-evaluate the same population 24 times to send the same two
+   * notifications -- the dedupe ledger would absorb it, but the work is
+   * pointless. Reminders are also the ONLY thing this job does: expiry itself
+   * is resolver-time, so no job has to flip anybody from active to expired.
+   */
+  | "access.welcome_reminders"
   | "recap.generate_monthly"
   | "streaks.close_expired_periods"
   | "birthdays.notify"
@@ -174,6 +184,7 @@ export const SCHEDULE: readonly ScheduleSpec[] = [
   { jobType: "financial.capture_daily_snapshot", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "financial.reconcile_paystack_fees", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "trials.lifecycle", everyMinutes: 60, priority: 3 },
+  { jobType: "access.welcome_reminders", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "streaks.close_expired_periods", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "recap.generate_monthly", everyMinutes: 60 * 24, priority: 7 },
   { jobType: "birthdays.notify", everyMinutes: 60, priority: 5 },
