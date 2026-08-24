@@ -84,7 +84,7 @@ Source: real tester reports and owner screenshots from the friend beta.
 
 ### BETA-001 — block → unblock → re-add leaves the conversation dead
 - **SEVERITY** P1 · **CATEGORY** BROKEN · **ROUTE** `/messages/[id]`
-- **STATUS** **FIXED** (local; pending production migration)
+- **STATUS** **PRODUCTION VERIFIED** (migration `20260824140000` applied 2026-08-24)
 - **REPRO** Block a Muddy → unblock → add them again → open the thread → send.
   Banner reads "This conversation is closed." and the message shows
   Not sent / Retry / Delete. Permanent.
@@ -111,7 +111,7 @@ Source: real tester reports and owner screenshots from the friend beta.
 
 ### BETA-004 — profile editor overflows when the account has photos
 - **SEVERITY** P1 · **CATEGORY** VISUAL QUALITY · **ROUTE** `/profile` (editor)
-- **STATUS** **FIXED** (local)
+- **STATUS** **PRODUCTION VERIFIED**
 - **REPRO** Open the profile editor on an account **with photos**. Content is
   clipped at the right edge: "Save profil…", "Lowercase letters, numbers, and
   undersco…", "Your full date and birth year stay priv…".
@@ -133,13 +133,36 @@ Source: real tester reports and owner screenshots from the friend beta.
 - **VERIFICATION** `scripts/hardening/profile-width-invariant.mjs` **30/30** —
   5 phone widths × 2 themes × (view + edit + Save-not-clipped), 3 photos loaded.
 
+### BETA-002 — unread / notification lifecycle
+- **SEVERITY** P1 · **CATEGORY** BROKEN · **ROUTE** nav badge, `/messages`, Plan Chat
+- **STATUS** **INVESTIGATED — server side is CORRECT, cause is client-side**
+- **REPRO (reported)** Group unread stays after viewing; Plan Chat unread stays;
+  the nav badge does not decrease.
+- **WHAT WAS TESTED** `scripts/hardening/unread-lifecycle.mjs`, **21/21**:
+  direct, group and Plan Chat unread accrue and clear; reading one conversation
+  clears only that one; my own messages never count against me; system messages
+  never raise the badge; a removed member accrues nothing; the count survives
+  reload; and — the decisive one — the **`conversation_previews` RPC that the
+  badge actually calls** agrees with the read-cursor model at every step.
+- **FINDING** The read cursor (`conversation_members.last_read_message_id`),
+  `markConversationRead`, and the RPC are all correct and mutually consistent.
+  Both the web action and the mobile API route call the same function.
+  **The server-side lifecycle is not the defect.**
+- **THEREFORE** The remaining candidates are client-side: badge state not
+  refetched after `markConversationReadAction` resolves, a stale cached
+  conversation list, or a Server-Component boundary not revalidating. That is
+  where the next session should start — with a two-browser runtime
+  reproduction, not another database audit.
+- **NOT FIXED.** Recording a negative result rather than declaring victory: the
+  harness passing 21/21 is evidence about the server, and the testers are
+  describing something the server is not doing wrong.
+
 ### Remaining in this batch
 
 Investigated and queued, not yet fixed:
 
 | ID | Severity | Issue |
 | --- | --- | --- |
-| BETA-002 | P1 | unread / notification lifecycle (group, Plan Chat, nav badge, deep links, offline persistence) |
 | BETA-003 | P1 | Events surface renders blurred with no dialog |
 | BETA-005 | P1 | Create Event modal overflows and jumps between audience options |
 | BETA-006 | P1 | message edits do not reach the recipient |
