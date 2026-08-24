@@ -327,6 +327,108 @@ transient state during navigation, which a settled-DOM probe cannot see.
 Recommended next step for these three: a short screen-recording from the
 tester, or the device's own Safari inspector — not more headless probing.
 
+## Beta Recovery Sprint — Phase A (shipped)
+
+Owner instruction: real-device screenshots and video are authoritative. Where
+headless could not reproduce an iPhone state, the evidence stands and the code
+was read for the defect instead.
+
+| Ref | Issue | Root cause | Status |
+| --- | --- | --- | --- |
+| A1 | Circle unread never cleared | the Circle page never called `markConversationRead` at all | **FIXED** |
+| A2 | Circle @mention vanished after send | picker inserted the placeholder "A Muddy"; renderer searched for the real name | **FIXED** |
+| A3 | Events stranded blur | tour scrim rendered without requiring a step; `index` clamped only at mount | **FIXED** |
+| A4 | Create Event content slid sideways | modal body is a flex child with no `min-w-0` | **FIXED** |
+| A5 | Circle chat ended halfway up the phone | fixed `65vh` card instead of a filling viewport | **FIXED** |
+| A6 | "Visibility is paused" not actionable | already answered by the activation card; pinned with tests | **VERIFIED, no defect** |
+
+### A1 — the Circle never marked itself read
+
+Direct chats and Plan Chat both live inside `/messages`, which calls
+`markConversationReadAction` when a thread is selected. A Circle opens at its
+own route, and nothing on that path ever cleared the unread state — so the
+messages were visibly read and the badge kept counting them. Not a projection
+bug, not a stale client: the call did not exist.
+
+Fixed through the SHARED authority rather than a Circle-specific path.
+`markConversationRead` re-checks `resolveConversationAccess` and writes only
+the reader's own `last_read_message_id`; the page then dispatches the same
+`MESSAGES_UPDATED_EVENT` the inbox uses, so the nav badge and conversation list
+reconcile without a hard refresh. Keyed on the newest message id, so a message
+arriving while the Circle is open is marked too.
+
+**Proven in a real browser: 3 unread → open the Circle → 0.** Visiting
+`/messages` first does NOT clear it, so the check is measuring the open.
+
+**Count semantics, now documented:** the Messages nav badge is the sum of
+per-conversation unread for conversations the viewer is a joined member of; a
+Circle row badge is that same count for one conversation; the notification bell
+is a different system entirely (`notifications`, not messages) and is not
+affected by reading a Circle.
+
+### A2 — the mention that vanished on send
+
+`message_mentions` stored the right id and notified the right person. What
+broke was the highlight: `MessageText` locates a mention by searching the text
+for "@" + the name the projection returns, and `loadGroupDetail` substitutes
+the placeholder **"A Muddy"** for a member whose profile it could not fully
+read. Picking that member inserted "@A Muddy", and the renderer — looking for
+their real name — found nothing.
+
+Fixed on both sides. The picker no longer offers a placeholder as a name, and
+the renderer matches EITHER the display name or the username, since those are
+the two things a picker can insert. Widening the match cannot over-claim: every
+alias belongs to an id the server already stored as a mention on that message.
+The placeholder is now a shared constant, not a literal at five call sites.
+
+**17/17 against the real database, with a negative control** proving the old
+behaviour loses the mention.
+
+### A3 — a scrim that outlived its card
+
+`TourRunner` clamped its step `index` only in the `useState` initialiser, which
+runs once. If the step list shrank while the tour was running — which is what
+navigating can do, since steps stop being eligible — `index` pointed past the
+end, `step` became `undefined`, and the running branch rendered its full-screen
+`z-[94]` scrim WITHOUT requiring a step. A blur over the page, an empty card,
+no way out. That is the reported defect, and navigation is exactly its trigger.
+
+The position is now derived during render, so it can never be out of range, and
+the overlay refuses to paint when there is no step behind it.
+
+**Invariant now enforced by harness:** for every full-screen dimming layer,
+something interactive must be reachable above it — hit-tested with
+`elementFromPoint`, not rectangles. The negative control confirms the probe
+detects a genuinely orphaned scrim.
+
+### A4 — the dialog that slid sideways
+
+The Modal's scrolling body is a flex child with no `min-w-0`, so its min-width
+defaulted to `auto`: the intrinsic content minimum rather than its container.
+One unbreakable child made the scroller wider than the panel, and because the
+panel is `overflow-hidden` the surplus did not scroll — it was clipped, so the
+contents read as shifted while the dialog frame stayed still. That is why it
+looked like a broken step transition rather than a width bug, and why it hit
+some audience steps and not others. The header got the same guard.
+
+**Verified at 360/390/430:** all five audiences, dialog x = 12 every time, zero
+overflowing elements.
+
+### A6 — already answered, on a different surface
+
+When visibility is off, `visibility_off` is a proximity-unknown state, so the
+nearby section stands down entirely and the activation card takes over with
+"Turn on visibility" — a 176x48 button wired to the canonical resume, confirmed
+in the browser taking a ghosted profile back to `visible`. That is deliberate:
+one surface owns the instruction rather than two disagreeing. Pinned with tests
+instead of adding a competing control.
+
+### Still open — tester recheck
+
+BETA-002, BETA-006 (CSP/realtime, fixed locally, production always correct),
+and the Batch 3 set (BETA-003 as a separate report from A3, BETA-005, BETA-010,
+BETA-016). BETA-014 remains retracted.
+
 ### BETA-014 — a Quick Action sits underneath the bottom navigation
 - **SEVERITY** P2 · **ROUTE** every route with the quick-actions menu
 - **STATUS** **NOT REPRODUCED — the previous session's finding was a false
