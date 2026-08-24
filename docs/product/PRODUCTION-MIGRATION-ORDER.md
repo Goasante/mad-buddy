@@ -1,19 +1,45 @@
-# Production application order — five migrations, owner-approved only
+# Production application order — SIX migrations, owner-approved only
 
-**NOTHING IN THIS DOCUMENT HAS BEEN APPLIED TO PRODUCTION.**
-All four migrations were applied and verified against the local Docker Supabase
-stack only (`http://127.0.0.1:54321`). No `db push` was run.
+> **ALWAYS PASS `--linked` FOR PRODUCTION.**
+>
+> `supabase db query` defaults to the LOCAL database and prints only
+> `Connecting to local database...` to say so. On 2026-08-24 that default caused
+> a false "production drift" alarm: local schema and local seed rows were
+> reported as production state. Verified production reads
+> `Initialising login role...` and a public IPv6 `inet_server_addr()`.
+> See `INCIDENT-2026-08-24-migration-drift.md`.
+>
+> Every verification query below assumes `--linked`.
 
-Apply in the order below. 090000 and 100000 are independent of each other;
-110000 and 120000 build the Mad Buddy Access model and must go in that order.
+**STATUS: pending production application.**
+All six migrations were applied and verified against the local Docker Supabase
+stack (`http://127.0.0.1:54321`) before any production run.
+
+**CORRECTED TO SIX.** An earlier version of this document listed five. Checking
+`supabase migration list` against production found a sixth pending migration --
+`20260822120000_upfor_categories_and_group_audience`, from the earlier UpFor
+batch -- which sorts FIRST by timestamp and would therefore have been applied
+first regardless of what this document said. Documenting five while six were
+pending is the kind of gap that turns a controlled rollout into a surprise, so
+the list below is what `supabase db push` will actually do, in the order it will
+do it.
 
 | # | Migration | What it does | Coupled to a deploy? |
 | --- | --- | --- | --- |
-| 1 | `20260824090000_first_reply_received_milestone` | stops Home scanning message history | **yes** — before/with the app deploy |
-| 2 | `20260824100000_rls_recursion_repair` | makes RLS protective instead of inert | no |
-| 3 | `20260824110000_access_entitlement_model` | access grants, global windows, Welcome Access trigger | **yes** — the app reads these tables |
-| 4 | `20260824120000_access_reminders_and_launch` | reminder dedupe, launch mechanism | no |
-| 5 | `20260824130000_access_subscription_plan` | adds `mad_buddy_access` to the `subscription_plan` enum | **yes** — before the deploy that writes it |
+| 1 | `20260822120000_upfor_categories_and_group_audience` | six new UpFor categories, Groups as an audience target | **yes** — app code already merged (`c744461`) |
+| 2 | `20260824090000_first_reply_received_milestone` | stops Home scanning message history | **yes** — before/with the app deploy |
+| 3 | `20260824100000_rls_recursion_repair` | makes RLS protective instead of inert | no |
+| 4 | `20260824110000_access_entitlement_model` | access grants, global windows, Welcome Access trigger | **yes** — the app reads these tables |
+| 5 | `20260824120000_access_reminders_and_launch` | reminder dedupe, launch mechanism | no |
+| 6 | `20260824130000_access_subscription_plan` | adds `mad_buddy_access` to the `subscription_plan` enum | **yes** — before the deploy that writes it |
+
+090000 and 100000 are independent of each other; 110000, 120000 and 130000 build
+the Mad Buddy Access model and must go in that order.
+
+**No migration in this set contains a destructive statement.** Verified by
+scanning all six for `drop table`, `truncate` and `delete from`: zero matches.
+The `drop constraint` calls in migration 1 remove an old CHECK immediately
+before adding a wider one, which rewrites no rows.
 
 **Applying 3 does NOT start charging anybody.** It creates the tables and the
 Welcome Access trigger. Nothing is gated until the application deploy that
@@ -22,7 +48,49 @@ price is configured (see below).
 
 ---
 
-## 1. `20260824090000_first_reply_received_milestone.sql`
+## 1. `20260822120000_upfor_categories_and_group_audience.sql`
+
+From the earlier UpFor batch, not the monetization work, but pending in
+production and first by timestamp.
+
+**Purely additive.** Six activity categories added (`coffee`, `football`,
+`drinks`, `movie`, `drive`, `party`) and `selected_groups` added as an audience
+type. Nothing is renamed, nothing is rewritten. The migration's own comments
+record why: production holds live UpFors across all eight existing types, and
+rewriting `sports` to `football` would put words in their authors' mouths.
+
+**Coupled to the deploy.** Its application code is already in this branch
+(commit `c744461`), so the code that writes these values ships together with the
+constraint that permits them.
+
+**Verification after applying**
+
+```sql
+select pg_get_constraintdef(oid) from pg_constraint
+ where conrelid = 'public.hangout_sessions'::regclass
+   and conname = 'hangout_sessions_activity_type_check';
+-- Expect all 14 values: the original 8 plus the 6 added.
+
+select pg_get_constraintdef(oid) from pg_constraint
+ where conrelid = 'public.hangout_sessions'::regclass
+   and conname = 'hangout_sessions_audience_type_check';
+-- Expect 'selected_groups' among the values.
+```
+
+Existing rows must be unchanged:
+
+```sql
+select activity_type, count(*) from public.hangout_sessions group by 1 order by 2 desc;
+-- Compare against the pre-migration counts. No value should move.
+```
+
+**Rollback:** in the migration footer — restore the narrower CHECK constraints.
+Only safe while no row uses a new value; if any does, those rows must be
+reassigned first.
+
+---
+
+## 2. `20260824090000_first_reply_received_milestone.sql`
 
 Adds a `first_reply_received` milestone so Home stops scanning message history
 on every load (MB-GOD-060).
@@ -70,7 +138,7 @@ so a rollback degrades rather than breaks.
 
 ---
 
-## 2. `20260824100000_rls_recursion_repair.sql`
+## 3. `20260824100000_rls_recursion_repair.sql`
 
 Breaks four RLS recursion cycles so RLS is protective rather than inert
 (MB-GOD-058).
@@ -145,7 +213,7 @@ layer beneath a boundary that already holds.
 
 ---
 
-## 3. `20260824110000_access_entitlement_model.sql`
+## 4. `20260824110000_access_entitlement_model.sql`
 
 Creates the Mad Buddy Access entitlement model: `access_grants`,
 `access_global_windows`, the `access_source` enum, the Welcome Access trigger on
@@ -208,7 +276,7 @@ grants must survive.
 
 ---
 
-## 4. `20260824120000_access_reminders_and_launch.sql`
+## 5. `20260824120000_access_reminders_and_launch.sql`
 
 Creates `access_reminder_log` (reminder dedupe) and `access_launch` plus
 `launch_welcome_access_for_existing_users()`.
@@ -274,7 +342,7 @@ refuses rather than guessing — everything else in the entitlement system works
 
 ---
 
-## 5. `20260824130000_access_subscription_plan.sql`
+## 6. `20260824130000_access_subscription_plan.sql`
 
 Adds `mad_buddy_access` to the `subscription_plan` enum so Access subscriptions
 are recorded as themselves.

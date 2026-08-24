@@ -46,3 +46,8 @@ qa-shots/
 # Hardening program runtime artifacts (screenshots, captured auth state).
 # Never commit: .hardening/auth-*.json contains a real session token.
 .hardening/
+
+# Added by `vercel link`, and kept: it is stricter than the entries above and
+# catches any .env variant a future tool might create. `.env.example` is
+# already tracked, so this does not hide it.
+.env*
