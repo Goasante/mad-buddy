@@ -7227,3 +7227,81 @@ FUTURE ADMIN     grant · extend · revoke · custom duration · indefinite · g
 | MB-GOD-051 draft loss on reload | **SECURITY-CLASSIFIED** — storage/privacy |
 | Signature moments quietness | **DEFERRED VISUAL** |
 | Landing at 9.46 screens | **DEFERRED VISUAL** |
+
+
+---
+
+# MONETIZATION RESET
+
+Implemented end to end and verified locally. Nothing pushed, nothing deployed,
+no production migration applied. See `docs/product/MONETIZATION-ACCESS-MODEL.md`
+for the authoritative model and `docs/product/PRODUCTION-MIGRATION-ORDER.md`
+for the four staged migrations.
+
+## The audit finding that shaped the work
+
+**The model was inverted.** Before any code changed:
+
+| | Constitution | Repository |
+| --- | --- | --- |
+| Linkr | PAID | **no billing reference anywhere in `lib/linkr/`** |
+| UpFor | PAID | catalog limits existed, **enforced nowhere** |
+| Plans | FREE | capped at 5 active |
+| Groups | FREE | capped at 3, 15 members |
+| Circles | FREE | capped at 3 |
+| Messages | FREE | tiered plan-chat archive |
+| Events | FREE | tiered size and archive |
+| Muddies | FREE | tiered friend requests/day |
+
+So the job was **moving the boundary**, not adding a paywall. Nine entitlement
+keys were neutralized at the registry, and the two surfaces that had no gate at
+all got one.
+
+## Defects found and fixed during the reset
+
+| Finding | Severity | Detail |
+| --- | --- | --- |
+| Global access gated on a permission T&S also holds | **privilege escalation** | `admin.roles.manage` is held by `trust_safety_administrator`; a T&S admin could have given the whole user base a paid product. Replaced with a dedicated `admin.access.global.manage`. Caught by its own test on first run. |
+| `archivesAtMs` fed `Infinity` into `new Date(...).toISOString()` | **runtime crash** | Closing an event circle would throw `RangeError` while every unit test passed, because none called the action. Returns `null` now. |
+| Paid tiers granted LESS than free | **migration regression** | The tier objects spread `...FREE` then overrode with lower finite values. Overrides removed, not raised, so nobody loses capability. |
+| Consumer UI still sold dead tiers | **stale product language** | Nav "Membership" → `/billing`, a Muddy-profile "See Buddy Plus" upsell, a Notifications gate on `hasPremium` (messaging is free), and a "Free plan" sidebar badge. All repointed or removed. |
+
+## Harness bugs that produced confident nonsense
+
+Recorded because each passed review at a glance:
+
+1. **`raise notice` goes to stderr**, and `execFileSync` only surfaces it on a
+   non-zero exit — psql exits zero. Every bypass probe returned "no result
+   parsed", which defaulted to DENIED, so **every attack looked refused whether
+   it was or not**. Now on `spawnSync`, an unparsed result is a failure, and a
+   negative control proves detection.
+2. **`aria-hidden` read off the CSSStyleDeclaration** instead of the element, so
+   decorative gradient blobs reported as content escaping on every route while
+   `scrollWidth` equalled the viewport.
+3. **`document.body.textContent` includes `<script>`**, and Next.js serializes
+   the RSC payload inline — carrying tour metadata mentioning "Buddy Plus". The
+   dark-pattern detector flagged every route while the visible copy was clean.
+4. **48 sequential browser logins saturated local GoTrue**, timing out later
+   personas on `/login`; the probe read the login form as the app. The same
+   accounts authenticate in ~120ms via the API, verified before adding retries.
+
+## Verification
+
+```
+welcome trigger      9/9     resolver matrix      26/26
+enforcement (unit)  28/28    enforcement (live)   15/15
+admin privilege     28/28    reminders             9/9
+free core           17/17    payment boundary     13/13
+bypass matrix       18/18    (with a negative control)
+visual matrix      552/552   8 personas x 3 viewports x 2 themes x 3 routes
+RLS sweep          134 tables readable, 0 recursing
+```
+
+## Owner-blocked, deliberately
+
+- **The consumer price.** Checkout refuses rather than guessing; the old
+  GHS 4.99/9.99 priced a ladder that no longer exists.
+- **The launch date** for the existing-user backfill. `access_launch` is empty,
+  so the backfill returns 0.
+
+Neither blocks anything else in the entitlement system.

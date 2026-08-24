@@ -80,15 +80,39 @@ const made = new Map();
 async function ensurePerson(spec) {
   const email = `${spec.username}@review.local`;
 
-  const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  let user = (list?.users ?? []).find((u) => u.email === email);
+  /* FIND THE ACCOUNT BY ITS PROFILE, NOT BY PAGING auth.users.
+   *
+   * `listUsers({ perPage: 1000 })` is capped by the server and silently returns
+   * fewer, so on a database with many test accounts an existing review user was
+   * not found -- and the script then failed with "already registered", breaking
+   * the idempotency it advertises. `profiles.username` is unique and indexed,
+   * which makes this both correct and cheap. */
+  const { data: existingProfile } = await admin
+    .from("profiles").select("user_id").eq("username", spec.username).maybeSingle();
+
+  let user = null;
+  if (existingProfile) {
+    const { data } = await admin.auth.admin.getUserById(existingProfile.user_id);
+    user = data?.user ?? null;
+  }
 
   if (!user) {
     const { data, error } = await admin.auth.admin.createUser({
       email, password: PASSWORD, email_confirm: true
     });
-    if (error) throw new Error(`${spec.key}: ${error.message}`);
-    user = data.user;
+    /* Still possible: a profile row was cleaned up but the auth user survived
+       (auth.users rows are deliberately left behind by some harnesses, because
+       deleting one cascades into append-only domain_events). Fall back to
+       paging rather than failing. */
+    if (error) {
+      const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      user = (list?.users ?? []).find((u) => u.email === email) ?? null;
+      if (!user) throw new Error(`${spec.key}: ${error.message}`);
+      const { error: pwErr } = await admin.auth.admin.updateUserById(user.id, { password: PASSWORD });
+      if (pwErr) throw new Error(`${spec.key} password: ${pwErr.message}`);
+    } else {
+      user = data.user;
+    }
   } else {
     // Refresh the password so the documented credential always works.
     const { error } = await admin.auth.admin.updateUserById(user.id, { password: PASSWORD });

@@ -2263,13 +2263,17 @@ function SubscriptionStatusPortal({ plan, hasPremium }: { plan: SubscriptionPlan
     });
     return () => window.cancelAnimationFrame(frame);
   }, []);
-  const label = hasPremium ? (plan === "buddy_pro" ? "Buddy Pro active" : "Buddy Plus active") : "Free plan";
+  /* MONETIZATION RESET. This said "Buddy Pro active" / "Buddy Plus active" /
+     "Free plan" and linked to the three-tier billing UI. There is one boundary
+     now, and "Free plan" was actively misleading -- most of Mad Buddy is free
+     for everybody, so it described the product rather than the person. */
+  const label = hasPremium ? "Mad Buddy Access active" : "Mad Buddy Access";
   if (!target) return null;
   return createPortal(
     <Link
-      href="/billing"
-      aria-label="Membership"
-      title="Membership"
+      href="/settings/access"
+      aria-label="Mad Buddy Access"
+      title={label}
       data-subscription-status={label}
       className="focus-ring grid h-11 w-11 place-items-center rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground dark:hover:bg-white/[0.05]"
     >

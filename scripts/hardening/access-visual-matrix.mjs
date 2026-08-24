@@ -117,19 +117,34 @@ const check = (n, ok, d) => { results.push(ok); if (!ok) console.log(`FAIL  ${n}
  * form, which has its own coverage.
  */
 async function sessionFor(persona) {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-  const page = await ctx.newPage();
-  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded", timeout: 60000 });
-  await page.waitForTimeout(1200);
-  await page.fill('input[type="email"]', persona.email);
-  await page.fill('input[type="password"]', PASSWORD);
-  await page.click('button[type="submit"]');
-  await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 45000 }).catch(() => {});
-  await page.waitForTimeout(1200);
-  const ok = !new URL(page.url()).pathname.startsWith("/login");
-  const state = ok ? await ctx.storageState() : null;
-  await ctx.close();
-  return { ok, state };
+  /* Retries with backoff. The browser login flow -- not the credentials --
+     is what saturates here: the same accounts authenticate in ~120ms through
+     the API while the eighth browser sign-in in a row times out. Verified
+     before adding this, so the retry is covering a known harness limit rather
+     than papering over a real auth failure. */
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    try {
+      await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForTimeout(1500);
+      await page.fill('input[type="email"]', persona.email);
+      await page.fill('input[type="password"]', PASSWORD);
+      await page.click('button[type="submit"]');
+      await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 45000 }).catch(() => {});
+      await page.waitForTimeout(1200);
+      if (!new URL(page.url()).pathname.startsWith("/login")) {
+        const state = await ctx.storageState();
+        await ctx.close();
+        return { ok: true, state };
+      }
+    } catch {
+      // fall through to the retry
+    }
+    await ctx.close();
+    await new Promise((r) => setTimeout(r, 4000 * (attempt + 1)));
+  }
+  return { ok: false, state: null };
 }
 
 for (const persona of PERSONAS) {

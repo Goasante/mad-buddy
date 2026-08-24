@@ -54,15 +54,30 @@ async function person(tag, grants = []) {
   return { id, email };
 }
 
+/**
+ * Sign in, waiting for the navigation and retrying on the way.
+ *
+ * A fixed sleep was not enough: the local GoTrue slows to seconds per request
+ * under repeated browser sign-ins, and a probe that runs while the page is
+ * still /login reads the login form as the app -- reporting "not locked" for an
+ * expired account and "core is broken" for a working one. The same accounts
+ * authenticate in ~120ms through the API, so this covers a known harness limit
+ * rather than a product failure.
+ */
 async function login(ctx, email) {
   const page = await ctx.newPage();
-  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded", timeout: 60000 });
-  await page.waitForTimeout(1200);
-  await page.fill('input[type="email"]', email);
-  await page.fill('input[type="password"]', PASSWORD);
-  await page.click('button[type="submit"]');
-  await page.waitForTimeout(5500);
-  return page;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForTimeout(1500);
+    await page.fill('input[type="email"]', email);
+    await page.fill('input[type="password"]', PASSWORD);
+    await page.click('button[type="submit"]');
+    await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 45000 }).catch(() => {});
+    await page.waitForTimeout(1200);
+    if (!new URL(page.url()).pathname.startsWith("/login")) return page;
+    await new Promise((r) => setTimeout(r, 4000 * (attempt + 1)));
+  }
+  throw new Error(`could not sign in as ${email}`);
 }
 
 /** Everything the page renders, including text the layout has parked off-screen. */

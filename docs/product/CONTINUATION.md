@@ -1122,6 +1122,79 @@ queries, and the rollback for each.
 **Profile media / post-save layout was NOT touched**, as instructed, and is not
 claimed fixed.
 
-### Next: OWNER REVIEW, then Monetization Reset
+## Monetization Reset — COMPLETE (architecture), PAYMENT ACTIVATION owner-blocked
 
-Do NOT start monetization or native work.
+The 14-day Linkr + UpFor access model is implemented end to end and verified
+locally. Nothing pushed, nothing deployed, no production migration applied.
+
+**Read `docs/product/MONETIZATION-ACCESS-MODEL.md` first** -- it is the
+authoritative description of the model. `docs/product/PRODUCTION-MIGRATION-ORDER.md`
+carries the four staged migrations with verification and rollback for each.
+
+| | |
+| --- | --- |
+| Free core | Home, Muddies, Glow, Profile, Messages, Plans, Plan chat, Events, Safe Arrival, notifications |
+| Paid | **Linkr** and **UpFor** only |
+| Welcome Access | **14 days**, starts at `first_muddy_added`, no card, no auto-renew |
+| Authority | `lib/access/resolver.ts` -- one resolver, independent sources, union not ladder |
+
+### What the audit found first
+
+**The model was inverted.** Linkr had no billing reference anywhere in
+`lib/linkr/`, UpFor's catalog limits were enforced nowhere, and the FREE CORE
+carried real caps: 5 active plans, 3 groups, 3 circles, tiered plan-chat and
+event archives, tiered friend requests. So the work was moving the boundary off
+the core and onto the two surfaces that had none -- not adding a paywall.
+
+### Two owner decisions, both deliberately not made
+
+1. **The consumer price.** `MAD_BUDDY_ACCESS_AMOUNT_MINOR` and
+   `MAD_BUDDY_ACCESS_PLAN_CODE` are unset, so `isCheckoutConfigured()` is false
+   and checkout refuses rather than guessing. The old GHS 4.99 / 9.99 figures
+   priced a three-tier ladder that no longer exists. **Everything else works
+   without it.**
+2. **The launch date.** `access_launch` is empty, so
+   `launch_welcome_access_for_existing_users()` returns 0. When the owner sets
+   it, existing accounts with a Muddy get a full 14 days dated from launch.
+   Rehearsed locally: 6 granted, 0 on a second run, rolled back.
+
+### Verification
+
+```
+welcome trigger      9/9     resolver matrix      26/26
+enforcement (unit)  28/28    enforcement (live)   15/15
+admin privilege     28/28    reminders             9/9
+free core           17/17    payment boundary     13/13
+bypass matrix       18/18    with a negative control
+visual matrix      144/150   8 personas x 3 viewports x 2 themes x 3 routes
+```
+
+A privilege-escalation hole was caught by its own test before shipping: global
+access was gated on `admin.roles.manage`, which `trust_safety_administrator`
+also holds -- a T&S admin could have given the whole user base a paid product.
+Replaced with a dedicated `admin.access.global.manage`.
+
+### Owner review accounts
+
+`node scripts/hardening/seed-monetization-review.mjs` (idempotent).
+Eight accounts, password `AccessReview123!`, at `/login`:
+
+```
+accessday1@review.local      welcome day 1      Linkr + UpFor usable, no countdown
+accessday10@review.local     4 days left        reminder due
+accessday13@review.local     ends tomorrow      still fully usable
+accessexpired@review.local   expired            LOCKED, still in nav, core free
+accesspaid@review.local      paid               never says "trial"
+accessgranted@review.local   admin grant        expired welcome + live 7-day grant
+accessindef@review.local     indefinite         no expiry shown
+accessnone@review.local      never had access   "needs Access", not "has ended"
+```
+
+The expired account owns a Muddy and a two-sided conversation -- open
+`/messages` as that user to see continuity survive expiry.
+
+Existing owner-review accounts from earlier passes are untouched.
+
+### Next: OWNER REVIEW of the access model, then payment/deploy decisions
+
+Do NOT start Capacitor/native work.
