@@ -105,14 +105,18 @@ describe("membership usage", () => {
       PLAN_ENTITLEMENTS.free
     );
 
-    // Muddies and Close Friends are unlimited after Phase 0; the usage row
-    // still renders, it simply has no ceiling to count against.
+    /* Every row here is UNLIMITED now. Muddies and Close Friends since Phase 0;
+       personal circles, active plans and private groups since the Monetization
+       Reset moved them to the free core.
+       
+       The rows still RENDER -- a usage figure is useful information even with
+       no ceiling -- which is exactly what this asserts. */
     expect(items.map((item) => [item.label, item.current, item.limit])).toEqual([
       ["Muddies", 4, UNLIMITED],
-      ["Personal circles", 2, 3],
+      ["Personal circles", 2, UNLIMITED],
       ["Close Friends", 1, UNLIMITED],
-      ["Active plans", 3, 5],
-      ["Private groups", 1, 3]
+      ["Active plans", 3, UNLIMITED],
+      ["Private groups", 1, UNLIMITED]
     ]);
   });
 

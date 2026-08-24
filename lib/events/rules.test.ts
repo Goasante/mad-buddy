@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { UNLIMITED } from "@/lib/billing/entitlements";
 import {
   archiveRetentionDaysFor,
   archivesAtMs,
@@ -126,11 +127,27 @@ describe("event circle lifecycle + roles (spec §47, §49, §51)", () => {
   });
 
   it("uses tier archive retention and capacity", () => {
-    expect(archiveRetentionDaysFor("free")).toBe(7);
-    expect(archiveRetentionDaysFor("buddy_plus")).toBe(30);
-    expect(archivesAtMs(NOW, "free")).toBe(NOW + 7 * 24 * 60 * MIN);
-    expect(eventCircleMaxMembersFor("free")).toBe(50);
-    expect(eventCircleMaxMembersFor("buddy_pro")).toBe(5000);
+    /* MONETIZATION RESET: free-core surfaces are UNLIMITED on every tier.
+       Capping them was monetizing the existing social world, which the access
+       model moves entirely onto Linkr and UpFor. The assertion is kept -- the
+       value it asserts is what changed. */
+    /* Every tier now, not just free: the paid overrides were REMOVED rather
+       than raised, because they sat below the new free value and so granted a
+       paying subscriber less than a free account. Events are free core. */
+    for (const plan of ["free", "buddy_plus", "buddy_pro"] as const) {
+      expect(archiveRetentionDaysFor(plan), plan).toBe(UNLIMITED);
+      expect(eventCircleMaxMembersFor(plan), plan).toBe(UNLIMITED);
+    }
+    /* An unlimited retention has NO archive moment, and archivesAtMs must
+       return null rather than Infinity.
+       
+       This is not pedantry. The caller does
+       `new Date(archivesAtMs(...)).toISOString()`, and that THROWS
+       `RangeError: Invalid time value` on a non-finite number -- so closing an
+       event circle would have failed at runtime while every unit test passed,
+       because none of them called the action. */
+    expect(archivesAtMs(NOW, "free")).toBeNull();
+    expect(archivesAtMs(NOW, "buddy_pro")).toBeNull();
   });
 });
 

@@ -212,8 +212,24 @@ export const ARCHIVE_RETENTION_DAYS: Record<SubscriptionPlan, number> = {
   buddy_pro: archiveRetentionDaysFor("buddy_pro")
 };
 
-export function archivesAtMs(closesAtMs: number, plan: SubscriptionPlan): number {
-  return closesAtMs + archiveRetentionDaysFor(plan) * 24 * 60 * 60 * 1000;
+/**
+ * When an archived circle's content stops being retained.
+ *
+ * Returns `null` when retention is UNLIMITED, which it now is on every tier:
+ * the Monetization Reset made event-circle archival free-core, and a tiered
+ * "how long you keep your own history" window was monetizing the past.
+ *
+ * NULL, NOT INFINITY. `archiveRetentionDaysFor` returns `UNLIMITED`
+ * (Infinity), and the caller does `new Date(archivesAtMs(...)).toISOString()`,
+ * which THROWS `RangeError: Invalid time value` on a non-finite input. Closing
+ * a circle would have failed at runtime while every unit test passed, because
+ * none of them called the action. Returning null forces the caller to handle
+ * "never archives" explicitly, and the type makes that unmissable.
+ */
+export function archivesAtMs(closesAtMs: number, plan: SubscriptionPlan): number | null {
+  const days = archiveRetentionDaysFor(plan);
+  if (!Number.isFinite(days)) return null;
+  return closesAtMs + days * 24 * 60 * 60 * 1000;
 }
 
 /** Derived from the central entitlement registry (batch 10, spec §7). */

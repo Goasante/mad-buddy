@@ -112,9 +112,12 @@ export const HEADLINE_LIMITS: { key: NumericEntitlementKey; label: string }[] = 
   // Close Friends, Moments a day and Safe Arrival contacts are all unlimited
   // on every tier now, so advertising them as plan differences would be
   // false. What remains are genuine capacity differences.
-  { key: "max_active_plans", label: "Active plans" },
-  { key: "max_personal_circles", label: "Personal circles" },
-  { key: "max_private_groups", label: "Private groups" }
+  /* Active plans, personal circles and private groups were removed from the
+     headline comparison by the Monetization Reset: they are UNLIMITED on every
+     tier now, and advertising an identical value as a plan benefit would be
+     false. What remains genuinely differs. */
+  { key: "max_active_nearby_moments", label: "Active nearby Moments" },
+  { key: "max_voice_note_seconds", label: "Voice note length (seconds)" }
 ];
 
 export type SpotlightUpgradeCopy = {

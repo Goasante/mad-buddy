@@ -62,8 +62,13 @@ describe("basic safety is never an entitlement (spec §1)", () => {
     expect(free.photo_moments).toBe(true);
     expect(free.public_moments).toBe(true);
     // Genuine capacity differences remain.
-    expect(free.max_personal_circles).toBe(3);
-    expect(free.max_active_plans).toBe(5);
+    /* MONETIZATION RESET: these are UNLIMITED now, not 3 and 5.
+       Circles and Plans are free-core surfaces -- organising people you already
+       know -- so capping them was monetizing the existing social world. The
+       spirit of this assertion ("Free is a real product, not a demo") is
+       stronger than before, so it is kept and the expectations moved. */
+    expect(isUnlimited(free.max_personal_circles)).toBe(true);
+    expect(isUnlimited(free.max_active_plans)).toBe(true);
   });
 });
 
@@ -155,37 +160,37 @@ describe("overrides (spec §10, §11)", () => {
   it("applies an in-window override", () => {
     const resolved = resolveEntitlements({
       state: state({ plan: "free", status: "free" }),
-      overrides: [{ key: "max_personal_circles", value: 25, startsAtMs: null, endsAtMs: NOW + DAY }],
+      overrides: [{ key: "max_active_nearby_moments", value: 25, startsAtMs: null, endsAtMs: NOW + DAY }],
       nowMs: NOW
     });
-    expect(resolved.max_personal_circles).toBe(25);
+    expect(resolved.max_active_nearby_moments).toBe(25);
   });
 
   it("ignores an expired or not-yet-started override", () => {
     const expired = resolveEntitlements({
       state: state({ plan: "free", status: "free" }),
-      overrides: [{ key: "max_personal_circles", value: 25, startsAtMs: null, endsAtMs: NOW - 1 }],
+      overrides: [{ key: "max_active_nearby_moments", value: 25, startsAtMs: null, endsAtMs: NOW - 1 }],
       nowMs: NOW
     });
-    expect(expired.max_personal_circles).toBe(3);
+    expect(expired.max_active_nearby_moments).toBe(5);
 
     const future = resolveEntitlements({
       state: state({ plan: "free", status: "free" }),
-      overrides: [{ key: "max_personal_circles", value: 25, startsAtMs: NOW + DAY, endsAtMs: null }],
+      overrides: [{ key: "max_active_nearby_moments", value: 25, startsAtMs: NOW + DAY, endsAtMs: null }],
       nowMs: NOW
     });
-    expect(future.max_personal_circles).toBe(3);
+    expect(future.max_active_nearby_moments).toBe(5);
   });
 });
 
 describe("checks (spec §12, §14)", () => {
   it("allows within limit and rejects beyond it", () => {
     const entitlements = entitlementsFor("free");
-    expect(checkUsageLimit({ entitlements, key: "max_personal_circles", current: 2 })).toMatchObject({
+    expect(checkUsageLimit({ entitlements, key: "max_active_nearby_moments", current: 4 })).toMatchObject({
       allowed: true,
       remaining: 1
     });
-    expect(checkUsageLimit({ entitlements, key: "max_personal_circles", current: 3 })).toMatchObject({
+    expect(checkUsageLimit({ entitlements, key: "max_active_nearby_moments", current: 5 })).toMatchObject({
       allowed: false,
       remaining: 0
     });
@@ -194,10 +199,10 @@ describe("checks (spec §12, §14)", () => {
   it("validates a requested batch, not just one more", () => {
     const entitlements = entitlementsFor("free");
     expect(
-      checkUsageLimit({ entitlements, key: "max_plan_participants", current: 8, requested: 5 }).allowed
+      checkUsageLimit({ entitlements, key: "max_active_nearby_moments", current: 3, requested: 5 }).allowed
     ).toBe(false);
     expect(
-      checkUsageLimit({ entitlements, key: "max_plan_participants", current: 8, requested: 2 }).allowed
+      checkUsageLimit({ entitlements, key: "max_active_nearby_moments", current: 3, requested: 2 }).allowed
     ).toBe(true);
   });
 
@@ -243,11 +248,30 @@ describe("downgrade safety (spec §45, §48)", () => {
       targetPlan: "free",
       usage: { personal_circles: 8, close_friends: 22, private_groups: 1 }
     });
-    // Phase 0: close_friends is unlimited on every tier, so downgrading no
-    // longer forces anyone to shed friends. Only real capacity differences
-    // can put a user over a limit now.
-    expect(items).toEqual([
-      { resource: "personal_circles", current: 8, newLimit: 3, keepCount: 3, excess: 5 }
+    /* Phase 0 made close_friends unlimited; the Monetization Reset did the same
+       for personal_circles and private_groups, because organising people you
+       already know is the free core.
+       
+       So downgrading now costs NOTHING among these resources -- which is the
+       point, not a gap in coverage. The mechanism is still exercised by the
+       assertion below, against a key that genuinely differs by tier. */
+    expect(items).toEqual([]);
+
+    /* `storage` is the only resource in OverLimitResource that still differs
+       by tier, so it is what keeps this mechanism covered. */
+    const free = entitlementsFor("free");
+    const over = resolveOverLimits({
+      targetPlan: "free",
+      usage: { storage: (free.storage_limit_bytes as number) + 1024 }
+    });
+    expect(over).toEqual([
+      {
+        resource: "storage",
+        current: (free.storage_limit_bytes as number) + 1024,
+        newLimit: free.storage_limit_bytes,
+        keepCount: free.storage_limit_bytes,
+        excess: 1024
+      }
     ]);
   });
 

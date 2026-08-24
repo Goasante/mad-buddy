@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { UNLIMITED } from "@/lib/billing/entitlements";
 import {
   canTransitionHangout,
   canTransitionPlan,
@@ -28,16 +29,25 @@ const NOW = Date.parse("2026-07-16T12:00:00.000Z");
 describe("planTierLimitsFor", () => {
   it("gives free users the documented caps (spec §11)", () => {
     const free = planTierLimitsFor("free");
-    expect(free.maxActivePlans).toBe(5);
-    expect(free.maxPlanParticipants).toBe(10);
-    expect(free.maxPollsPerPlan).toBe(1);
+    /* MONETIZATION RESET: free-core surfaces are UNLIMITED on every tier.
+       Capping them was monetizing the existing social world, which the access
+       model moves entirely onto Linkr and UpFor. The assertion is kept -- the
+       value it asserts is what changed. */
+    expect(free.maxActivePlans).toBe(UNLIMITED);
+    expect(free.maxPlanParticipants).toBe(UNLIMITED);
+    expect(free.maxPollsPerPlan).toBe(UNLIMITED);
     expect(free.maxHangoutCapacity).toBe(5);
   });
 
   it("unlocks larger plans for paid tiers", () => {
-    expect(planTierLimitsFor("buddy_plus").maxPlanParticipants).toBe(50);
-    expect(planTierLimitsFor("buddy_pro").maxPlanParticipants).toBe(500);
-    expect(planTierLimitsFor("buddy_plus").maxActivePlans).toBe(Infinity);
+    /* Plans are free core, so there is nothing left to unlock: every tier is
+       UNLIMITED. The paid overrides were removed rather than raised -- they had
+       fallen BELOW the free value, which would have meant a paying subscriber
+       got fewer participants than a free account. */
+    for (const plan of ["free", "buddy_plus", "buddy_pro"] as const) {
+      expect(planTierLimitsFor(plan).maxPlanParticipants, plan).toBe(UNLIMITED);
+      expect(planTierLimitsFor(plan).maxActivePlans, plan).toBe(UNLIMITED);
+    }
   });
 });
 

@@ -80,16 +80,26 @@ const FREE: Entitlements = {
   // backwards compatibility and returned as UNLIMITED so every existing
   // check fails open.
   max_muddies: UNLIMITED,
-  max_personal_circles: 3,
+  // FREE CORE (Monetization Reset). Circles are a private label you put on
+  // your OWN Muddies -- organising people you already know. Paying to sort
+  // your own friends into more than three groups is the resentment pattern,
+  // and Circles are not one of the two paid surfaces.
+  max_personal_circles: UNLIMITED,
   // Close Friends is an AUDIENCE selector, not a capacity limit: a huge
   // "close" list makes the audience meaningless rather than costing anything
   // to run. No product, privacy, performance or safety reason survived the
   // Phase 0 audit, so it is no longer monetized.
   max_close_friends: UNLIMITED,
-  max_active_plans: 5,
-  max_plan_participants: 10,
-  max_private_groups: 3,
-  max_group_members: 15,
+  // FREE CORE. Plans are explicitly free under the access model: making
+  // arrangements with people you already know is the existing social world.
+  max_active_plans: UNLIMITED,
+  // FREE CORE. A cap here would mean paying to invite the eleventh friend to
+  // something you organised.
+  max_plan_participants: UNLIMITED,
+  // FREE CORE. Group conversations are Messages, which is free forever.
+  max_private_groups: UNLIMITED,
+  // FREE CORE. Same reasoning as max_plan_participants.
+  max_group_members: UNLIMITED,
   // DEPRECATED as a paywall (Phase 0). See max_muddies.
   max_daily_moments: UNLIMITED,
   max_active_nearby_moments: 5,
@@ -102,7 +112,8 @@ const FREE: Entitlements = {
   max_active_safe_arrivals: UNLIMITED,
   max_active_hangouts: 3,
   max_hangout_capacity: 5,
-  max_polls_per_plan: 1,
+  // FREE CORE. A poll is how a Plan gets decided; it belongs to Plans.
+  max_polls_per_plan: UNLIMITED,
   max_voice_note_seconds: 60,
   // DEAD KEY (Phase 0 audit). Real anti-spam enforcement is the rate limiter's
   // "friends.request" rule (10/day, in lib/security/rate-limit.ts), which is
@@ -111,9 +122,14 @@ const FREE: Entitlements = {
   // enforces. Kept in the shape for compatibility and made uniform so it can
   // never be reintroduced as a paid difference.
   max_friend_requests_per_day: 30,
-  max_event_circle_members: 50,
-  event_circle_archive_days: 7,
-  plan_chat_archive_days: 7,
+  // FREE CORE. Events are free under the access model.
+  max_event_circle_members: UNLIMITED,
+  // FREE CORE. A tiered archive window means paying to keep your own history,
+  // which is the same class of pattern as charging to read old messages.
+  event_circle_archive_days: UNLIMITED,
+  // FREE CORE. Plan chat is Messages. Paying to keep a conversation you
+  // already had is exactly what the continuity rule forbids.
+  plan_chat_archive_days: UNLIMITED,
   storage_limit_bytes: 500 * 1024 * 1024,
 
   advanced_visibility_schedules: false,
@@ -140,20 +156,26 @@ const FREE: Entitlements = {
 };
 
 const BUDDY_PLUS: Entitlements = {
+  /*
+   * MONETIZATION RESET. Nine keys that used to be listed here are gone, not
+   * changed: max_personal_circles, max_active_plans, max_plan_participants,
+   * max_private_groups, max_group_members, max_polls_per_plan,
+   * max_event_circle_members, event_circle_archive_days and
+   * plan_chat_archive_days now belong to the FREE CORE and are UNLIMITED on
+   * every tier.
+   *
+   * They had to be REMOVED rather than raised. These objects spread `...FREE`
+   * and then overrode it, so once free became UNLIMITED every one of those
+   * lines granted a paying subscriber LESS than a free account -- which the
+   * "never gives a paid tier less than free" invariant correctly rejected.
+   * Deleting the override makes them inherit UNLIMITED, so nobody loses
+   * anything in the migration.
+   */
   ...FREE,
-  max_personal_circles: UNLIMITED,
-  max_active_plans: UNLIMITED,
-  max_plan_participants: 50,
-  max_private_groups: 20,
-  max_group_members: 50,
   max_active_nearby_moments: 20,
   max_active_drops: 20,
   max_hangout_capacity: 50,
-  max_polls_per_plan: UNLIMITED,
   max_voice_note_seconds: 300,
-  max_event_circle_members: 250,
-  event_circle_archive_days: 30,
-  plan_chat_archive_days: 30,
   storage_limit_bytes: 5 * 1024 * 1024 * 1024,
 
   advanced_visibility_schedules: true,
@@ -172,14 +194,8 @@ const BUDDY_PRO: Entitlements = {
   // watcher is a real person who gets a critical-priority notification on
   // start/extend/arrive/overdue, so an unbounded fan-out is a notification
   // problem, not a feature.
-  max_plan_participants: 500,
-  max_private_groups: 100,
-  max_group_members: 1000,
   max_active_nearby_moments: 50,
   max_active_drops: 100,
-  max_event_circle_members: 5000,
-  event_circle_archive_days: 90,
-  plan_chat_archive_days: 90,
   storage_limit_bytes: 50 * 1024 * 1024 * 1024,
 
   qr_check_in: true,

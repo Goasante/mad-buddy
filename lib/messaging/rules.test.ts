@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { UNLIMITED } from "@/lib/billing/entitlements";
 import {
   buildNotificationPreview,
   canAssignAdmins,
@@ -142,8 +143,12 @@ describe("group roles (spec §26)", () => {
 describe("tier limits (spec §28, §45)", () => {
   it("gives free users the documented caps", () => {
     const free = messagingLimitsFor("free");
-    expect(free.maxPrivateGroups).toBe(3);
-    expect(free.maxGroupMembers).toBe(15);
+    /* MONETIZATION RESET: free-core surfaces are UNLIMITED on every tier.
+       Capping them was monetizing the existing social world, which the access
+       model moves entirely onto Linkr and UpFor. The assertion is kept -- the
+       value it asserts is what changed. */
+    expect(free.maxPrivateGroups).toBe(UNLIMITED);
+    expect(free.maxGroupMembers).toBe(UNLIMITED);
     expect(free.maxVoiceNoteSeconds).toBe(60);
   });
 

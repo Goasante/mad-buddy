@@ -497,7 +497,13 @@ export async function archiveEventCircleAction(circleId: string): Promise<EventA
     .update({
       status: "archived",
       closes_at: new Date(nowMs).toISOString(),
-      archives_at: new Date(archivesAtMs(nowMs, access.plan)).toISOString(),
+      /* null when retention is unlimited, which it now is on every tier. The
+         column is nullable and "no archive date" is the honest value -- the
+         previous expression threw RangeError on a non-finite timestamp. */
+      archives_at: (() => {
+        const at = archivesAtMs(nowMs, access.plan);
+        return at === null ? null : new Date(at).toISOString();
+      })(),
       updated_at: new Date(nowMs).toISOString()
     })
     .eq("id", circleId)

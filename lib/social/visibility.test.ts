@@ -28,7 +28,11 @@ function access(overrides: Partial<FeatureAccessInput> = {}): FeatureAccessInput
 describe("tierLimitsFor", () => {
   it("gives free users the documented caps (spec §4, §38)", () => {
     const free = tierLimitsFor("free");
-    expect(free.maxPersonalCircles).toBe(3);
+    /* MONETIZATION RESET: free-core surfaces are UNLIMITED on every tier.
+       Capping them was monetizing the existing social world, which the access
+       model moves entirely onto Linkr and UpFor. The assertion is kept -- the
+       value it asserts is what changed. */
+    expect(free.maxPersonalCircles).toBe(UNLIMITED);
     expect(free.maxCircleMembers).toBe(20);
     expect(free.maxCloseFriends).toBe(UNLIMITED);
   });
