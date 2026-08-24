@@ -302,6 +302,55 @@ count is above zero.
   `kind`. A literal `isGroup={true}` would put a mention picker in a two-person
   chat.
 
+### Batch 3 reproduction — three of five do NOT reproduce
+
+`scripts/hardening/batch3-repro.mjs` measures all five at 390x844 dark, with
+the viewport asserted before any result counts. **14/17**, and the three
+failures are all one defect.
+
+| Issue | Reproduced? | Measurement |
+| --- | --- | --- |
+| BETA-003 Events blur | **NO** | backdrops always paired with a dialog; after close, open→close→reopen and browser-back: `backdrops=0`, `body pointer-events=auto` |
+| BETA-005 Create Event overflow | **NO** | `doc=390 vw=390` on both open passes; no offending element |
+| BETA-010 duplicate search | **NO** | Muddies: exactly 1 (`"Search Muddies"`); Messages: exactly 1 (`"Search messages"`) |
+| BETA-014 nav overlap | **YES** | see below |
+| BETA-016 touch instability | **NO** | pressing a card moved 0 of 27 sampled elements, during and after |
+
+**This does not mean the testers were wrong.** It means the defects are not
+reproducible in this configuration, and the likely differences are worth
+naming: the screenshots came from a real iOS device where
+`env(safe-area-inset-bottom)` is non-zero (it is 0 in headless Chromium, a
+limit this program has recorded before), on a production build, possibly
+mid-flight during a route transition. BETA-003 in particular reads like a
+transient state during navigation, which a settled-DOM probe cannot see.
+
+Recommended next step for these three: a short screen-recording from the
+tester, or the device's own Safari inspector — not more headless probing.
+
+### BETA-014 — a Quick Action sits underneath the bottom navigation
+- **SEVERITY** P2 · **CATEGORY** BROKEN · **ROUTE** every route with the quick-actions menu
+- **STATUS** **REPRODUCED, root cause found, NOT YET FIXED**
+- **MEASUREMENT** at 390x844, scrolled fully to the bottom of `/friends`:
+
+```
+bottom nav starts at   y = 769
+quick-actions "Events" y = 799, height 44   -> entirely inside the nav band
+document height 888, viewport 844, scrollY 44 (already at the end)
+```
+
+  The control is unreachable: there is no further scroll that can bring it out.
+  Reproduces identically on `/friends`, `/messages` and `/events`.
+- **ROOT CAUSE** `.quick-actions` (the container) correctly reserves
+  `--mobile-nav-height + env(safe-area-inset-bottom) + gap`. The expanded menu
+  items, `.quick-actions-action`, are laid out *above* the trigger and the last
+  one overshoots into the nav band — the reserve accounts for the trigger, not
+  for the menu's own height.
+- **NOTE FOR THE FIX** `env(safe-area-inset-bottom)` is **0 in headless
+  Chromium**, so a real iPhone has *less* usable space than this measurement,
+  not more. The defect is at least as bad on device as it measures here.
+- **NOT FIXED** — reproduced and root-caused within this context; the fix and
+  its verification belong to the next session so it is not left half-applied.
+
 ### Remaining in this batch
 
 Investigated and queued, not yet fixed:
