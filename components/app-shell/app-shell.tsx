@@ -112,6 +112,7 @@ const navigationItems: Array<{
     | "/profile"
     | "/settings"
     | "/billing"
+    | "/settings/access"
     | "/admin";
   label: string;
   icon: LucideIcon;
@@ -131,7 +132,12 @@ const navigationItems: Array<{
   { href: "/linkr", label: "Linkr", icon: Compass, brandIcon: "linkr" },
   { href: "/profile", label: "Profile", icon: UserRound },
   { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/billing", label: "Membership", icon: CircleDollarSign }
+  /* MONETIZATION RESET: "Membership" pointed at /billing, the three-tier
+     Free/Plus/Pro upgrade UI. There is one access boundary now, and the
+     canonical destination is Settings -> Mad Buddy Access. The old route still
+     exists for historical subscription records; it is simply no longer the way
+     a person reaches their access state. */
+  { href: "/settings/access", label: "Mad Buddy Access", icon: CircleDollarSign }
 ];
 
 const PRIMARY_HREFS = ["/dashboard", "/friends", "/notifications", "/messages"] as const;

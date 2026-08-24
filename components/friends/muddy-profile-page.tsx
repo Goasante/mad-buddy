@@ -399,22 +399,13 @@ export function MuddyProfilePage({
             </p>
           ) : null}
         </Card>
-      ) : isMuddy ? (
-        <Card className="flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
-          <div className="flex items-start gap-2.5">
-            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-            <div>
-              <p className="text-sm font-semibold">Custom glow colours</p>
-              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                Give each Muddy their own glow colour with Buddy Plus, so you know who&apos;s near at a glance.
-              </p>
-            </div>
-          </div>
-          <Button type="button" variant="outline" size="sm" asChild>
-            <Link href="/billing#plans">See Buddy Plus</Link>
-          </Button>
-        </Card>
       ) : null}
+      {/* THE "See Buddy Plus" UPSELL IS GONE (Monetization Reset).
+          It advertised a tier that no longer sells, on a free-core surface:
+          Glow and proximity with your Muddies are free forever, and the two
+          paid surfaces are Linkr and UpFor. An upsell here would have been
+          selling something that is not for sale, attached to something that is
+          not paid. */}
 
       {/* The gallery, already filtered by the server for this viewer. A
           visitor with nothing visible sees no section at all rather than an

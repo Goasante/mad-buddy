@@ -1,6 +1,5 @@
 import { NotificationsPageContent } from "@/components/notifications/notifications-page";
 import { toNotificationResponse } from "@/lib/notifications/server";
-import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { birthdayTitle } from "@/lib/profile/birthday-experience";
@@ -14,9 +13,12 @@ export default async function NotificationsPage({
   const params = await searchParams;
   const birthdayPreview = process.env.NODE_ENV !== "production" && params?.birthdayPreview === "1";
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
-  const [access, notificationsResult] = user
+  /* The subscription lookup that used to run here is gone. It existed only to
+     decide `canSendCustomMessages`, which is now free -- so Notifications no
+     longer touches the billing system at all, and one page load stopped doing a
+     tier resolution it never needed. */
+  const [notificationsResult] = user
     ? await Promise.all([
-        getCurrentSubscriptionAccess(user.id),
         supabase
           .from("notifications")
           .select("*")
@@ -44,7 +46,11 @@ export default async function NotificationsPage({
 
   return (
     <NotificationsPageContent
-      canSendCustomMessages={access?.hasPremium ?? false}
+      /* FREE CORE (Monetization Reset). This was `access?.hasPremium`, gating a
+         MESSAGING capability on the old tier authority -- and messaging is free
+         forever under the access model. The two paid surfaces are Linkr and
+         UpFor; writing a message to a Muddy is neither. */
+      canSendCustomMessages
       initialNotifications={initialNotifications}
     />
   );

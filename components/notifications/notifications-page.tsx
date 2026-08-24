@@ -827,8 +827,11 @@ function ConnectionResponses({
           <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             Write a message
           </h3>
-          <span className="text-[11px] font-medium text-primary">Buddy Plus</span>
         </div>
+        {/* The "available with Buddy Plus or Buddy Pro" fallback is gone: writing
+            a message to a Muddy is Messages, which is free forever. The prop is
+            now always true, and the conditional is kept only so a future
+            non-billing reason to disable the composer has somewhere to live. */}
         {canSendCustomMessages ? (
           <form
             /* method="post": without JavaScript a form with no method submits as
@@ -866,14 +869,7 @@ function ConnectionResponses({
               </Button>
             </div>
           </form>
-        ) : (
-          <div className="flex flex-col gap-2 rounded-xl bg-secondary/55 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-muted-foreground">Custom messages are available with Buddy Plus or Buddy Pro.</p>
-            <Button type="button" size="sm" variant="outline" asChild>
-              <Link href="/billing">View plans</Link>
-            </Button>
-          </div>
-        )}
+        ) : null}
       </section>
       <p className="pt-0.5 text-xs text-muted-foreground">No exact location is shared.</p>
     </div>

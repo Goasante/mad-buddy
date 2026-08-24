@@ -1,11 +1,23 @@
-# Production application order — two migrations, owner-approved only
+# Production application order — four migrations, owner-approved only
 
 **NOTHING IN THIS DOCUMENT HAS BEEN APPLIED TO PRODUCTION.**
-Both migrations were applied and verified against the local Docker Supabase
+All four migrations were applied and verified against the local Docker Supabase
 stack only (`http://127.0.0.1:54321`). No `db push` was run.
 
-Apply in the order below. They are independent, but 090000 is the lower-risk of
-the two and makes a good first check that the migration path works.
+Apply in the order below. 090000 and 100000 are independent of each other;
+110000 and 120000 build the Mad Buddy Access model and must go in that order.
+
+| # | Migration | What it does | Coupled to a deploy? |
+| --- | --- | --- | --- |
+| 1 | `20260824090000_first_reply_received_milestone` | stops Home scanning message history | **yes** — before/with the app deploy |
+| 2 | `20260824100000_rls_recursion_repair` | makes RLS protective instead of inert | no |
+| 3 | `20260824110000_access_entitlement_model` | access grants, global windows, Welcome Access trigger | **yes** — the app reads these tables |
+| 4 | `20260824120000_access_reminders_and_launch` | reminder dedupe, launch mechanism | no |
+
+**Applying 3 does NOT start charging anybody.** It creates the tables and the
+Welcome Access trigger. Nothing is gated until the application deploy that
+contains the resolver and the two gates, and nothing can be purchased until a
+price is configured (see below).
 
 ---
 
@@ -128,3 +140,132 @@ forward.
 **No application deploy is coupled to this migration.** Nothing in the app reads
 these tables through the RLS client; the repair restores a defence-in-depth
 layer beneath a boundary that already holds.
+
+
+---
+
+## 3. `20260824110000_access_entitlement_model.sql`
+
+Creates the Mad Buddy Access entitlement model: `access_grants`,
+`access_global_windows`, the `access_source` enum, the Welcome Access trigger on
+`friendships`, and RLS on both tables.
+
+**Coupled to the application deploy.** The resolver and both gates read these
+tables. Apply the migration first; the app tolerates the tables being empty
+(no rows = no access from grants), but not their being absent.
+
+**Applying this does not gate anything on its own.** Linkr and UpFor stay open
+until the deploy that contains `lib/access/guard`, and nothing can be purchased
+until a price is configured.
+
+**The Welcome Access trigger starts firing immediately.** From the moment this
+lands, every new friendship creates a 14-day welcome window for both people.
+That is correct and harmless before the gates ship — they simply have access
+they would have had anyway.
+
+**Verification after applying**
+
+```sql
+-- The once-only guarantee. This index is the entire anti-abuse story.
+select indexdef from pg_indexes
+ where schemaname='public' and indexname='access_grants_one_welcome_per_user';
+
+-- RLS on, and NO write policy on either table.
+select tablename, policyname, cmd from pg_policies
+ where schemaname='public' and tablename in ('access_grants','access_global_windows');
+-- Expect: exactly two rows, both SELECT. Any INSERT/UPDATE/DELETE row is a bug.
+
+-- The trigger exists.
+select tgname from pg_trigger where tgrelid='public.friendships'::regclass
+   and tgname='friendships_start_welcome_access';
+```
+
+Then confirm a user cannot write their own access:
+
+```sql
+set role authenticated;
+select set_config('request.jwt.claims','{"sub":"<any-real-user-id>","role":"authenticated"}',true);
+insert into public.access_grants (user_id, source, expires_at, reason)
+  values ('<same-user-id>','admin_grant', now() + interval '1 year','self grant');
+-- Expect: new row violates row-level security policy
+reset role;
+```
+
+**Verification evidence (local).**
+
+- Welcome trigger: **9/9** — starts at the first Muddy for both people, exactly
+  14 days, survives a second Muddy, survives end-and-remake, and the database
+  refuses a second welcome grant even to `service_role`.
+- Resolver matrix: **26/26** — every persona, source independence, the full
+  global-promotion fallback, and the expiry boundary to the second.
+- Bypass matrix: **18/18 refused**, with a negative control.
+
+**Rollback:** in the migration footer. It drops all access records, and the
+resolver treats "no sources" as no access — so a rollback **locks Linkr and
+UpFor** rather than opening them. It fails closed. Restore from backup if
+grants must survive.
+
+---
+
+## 4. `20260824120000_access_reminders_and_launch.sql`
+
+Creates `access_reminder_log` (reminder dedupe) and `access_launch` plus
+`launch_welcome_access_for_existing_users()`.
+
+**Inert on application.** The backfill function returns 0 until a row exists in
+`access_launch`, and that row is an owner decision. Applying this migration
+changes nothing about anybody's access.
+
+### The existing-user launch — OWNER ACTION, NOT PART OF THIS MIGRATION
+
+When monetization goes live, and only then:
+
+```sql
+-- 1. Record the launch. Exactly one row is possible, ever.
+insert into public.access_launch (launched_at, welcome_days, note)
+values (now(), 14, 'Mad Buddy Access launch');
+
+-- 2. Grant existing accounts their window. Idempotent -- safe to re-run.
+select public.launch_welcome_access_for_existing_users();
+-- Returns the number of accounts granted. A second call returns 0.
+```
+
+Every existing account **with a Muddy** gets a full 14-day window dated from
+launch. Accounts without a Muddy get nothing now and start naturally when they
+make one, exactly like a new signup. Anybody who already has a welcome grant
+keeps theirs untouched.
+
+Rehearsed locally inside a transaction: 6 eligible accounts granted on the first
+call, **0 on the second**, then rolled back. No launch date was written.
+
+**Verification after applying**
+
+```sql
+-- Must return 0 before the owner sets a launch.
+select public.launch_welcome_access_for_existing_users();
+
+-- The dedupe constraint that makes reminders safe under retries.
+select conname from pg_constraint
+ where conrelid='public.access_reminder_log'::regclass
+   and conname='access_reminder_log_once';
+```
+
+**Rollback:** in the migration footer. Dropping `access_reminder_log` loses the
+dedupe history, so already-sent reminders could send once more — harmless, but
+worth knowing.
+
+---
+
+## Payment configuration — separate from every migration above
+
+Checkout is blocked until both are set, and no migration sets them:
+
+```
+MAD_BUDDY_ACCESS_AMOUNT_MINOR   the price in minor units (pesewas for GHS)
+MAD_BUDDY_ACCESS_PLAN_CODE      the Paystack plan code for the product
+```
+
+**The consumer price is an owner decision and was not invented.** The old
+GHS 4.99 / 9.99 figures priced a three-tier ladder that no longer exists.
+Until both variables exist, `isCheckoutConfigured()` is false and checkout
+refuses rather than guessing — everything else in the entitlement system works.
