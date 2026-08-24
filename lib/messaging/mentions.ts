@@ -157,20 +157,46 @@ export type MessageTextRun = { text: string; mentionedUserId: string | null };
 
 export function splitTextWithMentions(
   text: string,
-  mentions: readonly { userId: string; displayName: string }[]
+  mentions: readonly { userId: string; displayName: string; username?: string | null }[]
 ): MessageTextRun[] {
   if (!text || mentions.length === 0) return [{ text, mentionedUserId: null }];
 
+  /**
+   * A mention may have been written as EITHER of the names a person is known
+   * by, so both are candidates for the match.
+   *
+   * The picker inserts whatever it displayed, and the surfaces that host a
+   * picker do not all display the same thing: the inbox offers
+   * `full_name || username`, while a Circle's member list comes from a
+   * projection that can only supply a username for a member whose profile it
+   * could not fully read. The renderer used to search for the projected
+   * display name alone, so a mention inserted as "@ama_s" against a projection
+   * of "Ama Serwaa" stored correctly, notified correctly, and then rendered as
+   * ordinary text -- the name vanished the instant the message came back from
+   * the server.
+   *
+   * Matching either name closes that gap for good, and it cannot over-claim:
+   * every candidate here is an id the SERVER already stored as a mention on
+   * THIS message. An alias is only ever offered for a person who really was
+   * mentioned.
+   */
+  const aliases = mentions.flatMap((mention) => {
+    const names = [mention.displayName, mention.username].filter(
+      (name): name is string => Boolean(name && name.trim())
+    );
+    return [...new Set(names)].map((name) => ({ userId: mention.userId, name }));
+  });
+
   // Longest name first, so "@Ama Serwaa" is not half-matched by "@Ama".
-  const ordered = [...mentions].sort((a, b) => b.displayName.length - a.displayName.length);
+  const ordered = aliases.sort((a, b) => b.name.length - a.name.length);
   const runs: MessageTextRun[] = [];
   let rest = text;
 
   while (rest.length > 0) {
     let bestIndex = -1;
-    let best: { userId: string; displayName: string } | null = null;
+    let best: { userId: string; name: string } | null = null;
     for (const mention of ordered) {
-      const index = rest.indexOf(`@${mention.displayName}`);
+      const index = rest.indexOf(`@${mention.name}`);
       if (index !== -1 && (bestIndex === -1 || index < bestIndex)) {
         bestIndex = index;
         best = mention;
@@ -181,7 +207,7 @@ export function splitTextWithMentions(
       break;
     }
     if (bestIndex > 0) runs.push({ text: rest.slice(0, bestIndex), mentionedUserId: null });
-    const token = `@${best.displayName}`;
+    const token = `@${best.name}`;
     runs.push({ text: token, mentionedUserId: best.userId });
     rest = rest.slice(bestIndex + token.length);
   }

@@ -31,6 +31,18 @@ const ROLE_RANK: Record<string, number> = { owner: 0, admin: 1, moderator: 2, me
  * stable across renders. The incoming array is already ordered by `joined_at`
  * from the query; `localeCompare` on a stable input keeps that deterministic.
  */
+/**
+ * What a member is called when their profile could not be read.
+ *
+ * It is a PLACEHOLDER, not a name, and the distinction matters wherever a
+ * name is used to find something rather than merely to display it. The
+ * mention renderer searches a message for "@" + a member's projected name, so
+ * inserting "@A Muddy" into the text produces a mention that stores and
+ * notifies correctly and then silently fails to highlight. Anywhere a name has
+ * to round-trip, compare against this and fall back to the username instead.
+ */
+export const MEMBER_NAME_PLACEHOLDER = "A Muddy";
+
 export function orderGroupMembers(members: readonly GroupMemberView[]): GroupMemberView[] {
   return [...members].sort((a, b) => {
     const rank = (ROLE_RANK[a.role] ?? 99) - (ROLE_RANK[b.role] ?? 99);

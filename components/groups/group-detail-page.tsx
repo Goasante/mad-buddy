@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, LogOut, MoreHorizontal, UserPlus, Users2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { getMessagesAction } from "@/app/(app)/messaging-actions";
+import { getMessagesAction, markConversationReadAction } from "@/app/(app)/messaging-actions";
+import { MESSAGES_UPDATED_EVENT } from "@/hooks/use-unread-message-count";
 import type { ChatMessageView } from "@/lib/messaging/mobile";
 import {
   demoteGroupAdminAction,
@@ -30,6 +31,7 @@ import { useTransientFeedback } from "@/hooks/use-transient-feedback";
 import type { GroupDetailView, GroupInviteCandidate, GroupMemberView } from "@/lib/groups/types";
 import {
   MEMBER_ACTION_LABELS,
+  MEMBER_NAME_PLACEHOLDER,
   memberActions,
   needsConfirmation,
   orderGroupMembers,
@@ -96,15 +98,37 @@ export function GroupDetailPage({
    *
    * These members have already passed this page's own authorisation, and the
    * server re-validates every id on send regardless.
+   *
+   * THE NAME MUST BE THE ONE THE RENDERER CAN FIND, and that is the whole of
+   * the Circle mention bug. `MessageText` locates a mention by searching the
+   * message for "@" + the displayName that `getMessages` projects, which is
+   * `full_name || username`. This page's member list comes from a different
+   * projection, `loadGroupDetail`, which falls back to the literal placeholder
+   * **"A Muddy"** for a member whose full name it could not read. Picking that
+   * member inserted "@A Muddy" into the text, the server stored the mention row
+   * correctly and notified the right person -- and then the renderer looked for
+   * "@" + their real name, found nothing, and the highlight vanished the moment
+   * the message came back. The name was there while typing and gone after send:
+   * exactly the reported symptom.
+   *
+   * So the placeholder is stripped here rather than passed on. A member the
+   * renderer could not name is not offered at all, which is honest: better to
+   * be unmentionable than to insert a name that silently fails to resolve.
    */
   const mentionCandidates = useMemo(
     () =>
-      orderedMembers.map((member) => ({
-        userId: member.userId,
-        displayName: member.displayName,
-        username: member.username,
-        avatarUrl: member.avatarUrl
-      })),
+      orderedMembers
+        .map((member) => ({
+          userId: member.userId,
+          // Mirrors getMessages: full name, else username. Never a placeholder.
+          displayName:
+            member.displayName && member.displayName !== MEMBER_NAME_PLACEHOLDER
+              ? member.displayName
+              : member.username,
+          username: member.username,
+          avatarUrl: member.avatarUrl
+        }))
+        .filter((member) => Boolean(member.displayName)),
     [orderedMembers]
   );
   const ownershipOptions = useMemo(
@@ -203,6 +227,46 @@ export function GroupDetailPage({
       mountedRef.current = false;
     };
   }, []);
+
+  /**
+   * Opening a Circle marks it read -- the step this page never took.
+   *
+   * A Circle IS a conversation (`group.id` is the conversation id, which is
+   * why `getMessagesAction(group.id)` works), but reading one is not the same
+   * as opening one from the inbox: direct chats and Plan Chat both live inside
+   * `/messages`, which calls `markConversationReadAction` when a thread is
+   * selected. A Circle opens at its own route, so nothing on the path ever
+   * cleared the unread state. The messages were visibly read and the badge
+   * kept counting them.
+   *
+   * The authority is the shared one, not a Circle-specific projection:
+   * `markConversationRead` re-checks `resolveConversationAccess` and writes
+   * only this user's `last_read_message_id`. `MESSAGES_UPDATED_EVENT` is the
+   * same signal `/messages` dispatches, so the nav badge and the inbox both
+   * reconcile against the server without a hard refresh.
+   *
+   * Keyed on the newest message id so it re-marks when a message arrives while
+   * the Circle is already open -- otherwise the badge would start counting
+   * again for messages sitting on screen.
+   */
+  const newestMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
+  useEffect(() => {
+    if (!newestMessageId) return;
+    let disposed = false;
+    void (async () => {
+      try {
+        await markConversationReadAction(group.id);
+      } catch {
+        // A failed mark leaves the server count intact; the badge stays
+        // truthful rather than clearing something that is still unread.
+        return;
+      }
+      if (!disposed) window.dispatchEvent(new Event(MESSAGES_UPDATED_EVENT));
+    })();
+    return () => {
+      disposed = true;
+    };
+  }, [group.id, newestMessageId]);
 
   useEffect(() => {
     let supabase: ReturnType<typeof createSupabaseBrowserClient>;

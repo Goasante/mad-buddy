@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { guardAction } from "@/lib/admin/enforcement";
+import { MEMBER_NAME_PLACEHOLDER } from "@/lib/groups/member-presentation";
 import { assertWithinLimit, loadEffectivePlansForUsers } from "@/lib/billing/service";
 import type {
   GroupDetailView,
@@ -224,7 +225,7 @@ export async function loadGroupsPageDataAction(): Promise<GroupsPageData> {
       const creatorId = creatorByGroupId.get(group.id);
       invitations.push({
         ...group,
-        invitedByName: creatorId ? creatorNameById.get(creatorId)?.trim() || "A Muddy" : "A Muddy"
+        invitedByName: creatorId ? creatorNameById.get(creatorId)?.trim() || MEMBER_NAME_PLACEHOLDER : "A Muddy"
       });
     }
   }
@@ -502,7 +503,7 @@ export async function inviteGroupMemberAction(input: unknown): Promise<GroupActi
     priority: "high",
     type: `group:${parsed.data.groupId}`,
     title: "Group invitation",
-    message: `${inviter?.full_name?.trim() || "A Muddy"} invited you to ${settings?.name || "a group"}.`
+    message: `${inviter?.full_name?.trim() || MEMBER_NAME_PLACEHOLDER} invited you to ${settings?.name || "a group"}.`
   });
   revalidatePath(`/groups/${parsed.data.groupId}`);
   return { ok: true, message: "Circle invitation sent." };
@@ -568,7 +569,7 @@ export async function loadGroupDetailAction(groupId: string): Promise<GroupDetai
     const profile = profileById.get(row.user_id);
     return {
       userId: row.user_id,
-      displayName: profile?.full_name?.trim() || "A Muddy",
+      displayName: profile?.full_name?.trim() || MEMBER_NAME_PLACEHOLDER,
       username: profile?.username || "muddy",
       avatarUrl: profile?.avatar_url ?? null,
       role: row.role,
@@ -596,7 +597,7 @@ export async function loadGroupDetailAction(groupId: string): Promise<GroupDetai
       const { data: candidates } = await admin.from("profiles").select("user_id, full_name, username, avatar_url").in("user_id", candidateIds);
       inviteCandidates = (candidates ?? []).map((profile) => ({
         userId: profile.user_id,
-        displayName: profile.full_name?.trim() || "A Muddy",
+        displayName: profile.full_name?.trim() || MEMBER_NAME_PLACEHOLDER,
         username: profile.username,
         avatarUrl: profile.avatar_url
       })).sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -808,7 +809,7 @@ async function publishGroupRoleEvent(
     admin,
     groupId,
     event,
-    profile?.full_name?.trim() || "A Muddy",
+    profile?.full_name?.trim() || MEMBER_NAME_PLACEHOLDER,
     `${event}:${targetId}`
   );
 }

@@ -16,7 +16,7 @@ export function MessageText({
   mentions
 }: {
   text: string;
-  mentions: ReadonlyArray<{ userId: string; displayName: string }>;
+  mentions: ReadonlyArray<{ userId: string; displayName: string; username?: string | null }>;
 }) {
   if (mentions.length === 0) return <>{text}</>;
 

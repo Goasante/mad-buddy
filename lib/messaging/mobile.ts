@@ -75,7 +75,7 @@ export type ChatMessageView = {
    * persisted. Display names travel with them purely to locate the token in
    * the text; identity is the id.
    */
-  mentions: Array<{ userId: string; displayName: string }>;
+  mentions: Array<{ userId: string; displayName: string; username: string | null }>;
   /** Group role, for the subtle Owner/Admin indicator. Null in direct chats. */
   senderRole: ConversationRole | null;
   /**
@@ -1049,25 +1049,42 @@ export async function listMessages(userId: string, conversationId: string): Prom
    *
    * The name is presentation. If it has changed since the message was sent the
    * token may no longer match, and that mention simply renders as ordinary
-   * text -- the stored id, and therefore who was notified, is unaffected. */
+   * text -- the stored id, and therefore who was notified, is unaffected.
+   *
+   * BOTH names are read, matching `listMentionCandidates`. The renderer
+   * locates a mention by searching the text for "@" + displayName, so the
+   * name the picker INSERTED and the name this projection returns have to be
+   * the same string or the highlight is silently lost. Reading `full_name`
+   * alone here could not name a member the picker had offered by username.
+   *
+   * The invariant: what the picker can offer, the renderer must be able to
+   * name. */
   const mentionedIds = [...new Set((mentionRows ?? []).map((row) => row.mentioned_user_id))];
-  const mentionNameById = new Map<string, string>();
+  const mentionNameById = new Map<string, { displayName: string; username: string | null }>();
   if (mentionedIds.length > 0) {
     const { data: mentionProfiles } = await admin
       .from("profiles")
-      .select("user_id, full_name")
+      .select("user_id, full_name, username")
       .in("user_id", mentionedIds);
     for (const profile of mentionProfiles ?? []) {
-      const name = profile.full_name?.trim();
-      if (name) mentionNameById.set(profile.user_id, name);
+      const name = profile.full_name?.trim() || profile.username?.trim();
+      if (name) {
+        mentionNameById.set(profile.user_id, {
+          displayName: name,
+          username: profile.username?.trim() || null
+        });
+      }
     }
   }
-  const mentionsByMessage = new Map<string, Array<{ userId: string; displayName: string }>>();
+  const mentionsByMessage = new Map<
+    string,
+    Array<{ userId: string; displayName: string; username: string | null }>
+  >();
   for (const row of mentionRows ?? []) {
-    const displayName = mentionNameById.get(row.mentioned_user_id);
-    if (!displayName) continue;
+    const names = mentionNameById.get(row.mentioned_user_id);
+    if (!names) continue;
     const list = mentionsByMessage.get(row.message_id) ?? [];
-    list.push({ userId: row.mentioned_user_id, displayName });
+    list.push({ userId: row.mentioned_user_id, ...names });
     mentionsByMessage.set(row.message_id, list);
   }
 
