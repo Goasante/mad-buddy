@@ -1195,6 +1195,50 @@ The expired account owns a Muddy and a two-sided conversation -- open
 
 Existing owner-review accounts from earlier passes are untouched.
 
-### Next: OWNER REVIEW of the access model, then payment/deploy decisions
+## PRODUCTION LIVE — FRIEND BETA OPEN (2026-08-24)
 
-Do NOT start Capacitor/native work.
+Live at **https://mad-buddy.com**, deployment `g92lhedbv`, from `4cfd394`.
+
+| | |
+| --- | --- |
+| Migrations | all **6** applied, head `20260824130000` |
+| ACCESS_LAUNCH | `2026-08-24 14:23:04 UTC`, 14 days |
+| Existing users initialized | **21 of 21 eligible**, 0 duplicates, reruns granted 0 |
+| Users without a Muddy | 40 — correctly hold nothing; clock starts at their first Muddy |
+| Security | Critical 0 · High 0 |
+| Paystack | plan LIVE (owner-attested), webhook rejects forged signatures |
+
+**Production evidence rule:** every query used as production evidence must
+prove it reached production. `supabase db query` DEFAULTS TO LOCAL — always
+pass `--linked`. See `INCIDENT-2026-08-24-migration-drift.md`.
+
+### Verified in production
+
+- RLS sweep: **134 tables readable, 0 recursing**
+- Self-grant refused: admin_grant, global promo, fake subscription — all denied
+- Cross-user reads refused: grants, subscriptions, linkr profiles, admin directory
+- Client-supplied amount → 401; cross-origin checkout → 403
+- `first_reply_received` backfill exact: 10 rows = 10 users the data proves
+- 45 UpFors unchanged across all 8 pre-existing categories
+- Public smoke 10/10 — corrected product story live
+
+### Beta
+
+- `BETA-ISSUES.md` — the authoritative log, opens empty, with the four known
+  carried items (Profile media, Circles naming, /hangout-mode, quiet moments)
+- `BETA-TESTER-MESSAGE.md` — message to send friends, plus the separate
+  payment-tester note (GHS 5/month, recurring — never spring it on the group)
+
+### Still open
+
+- **Live GHS 5 payment test NOT RUN.** Needs the webhook registered in the
+  Paystack dashboard at `https://mad-buddy.com/api/paystack/webhook` for:
+  `charge.success`, `subscription.create`, `subscription.enable`,
+  `invoice.update`, `subscription.not_renew`, `subscription.disable`,
+  `invoice.payment_failed`
+- Plan mode is **owner-attested**, not machine-verified — my shell has only a
+  throwaway test key, and I did not pull the production secret.
+  `scripts/hardening/paystack-plan-check.mjs` verifies it when run with the
+  real key.
+
+### Next: watch beta feedback. Do NOT start Capacitor/native work.
