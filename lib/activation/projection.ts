@@ -290,22 +290,29 @@ async function loadMaturityEvidence(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   userId: string
 ): Promise<{ twoSidedConversationCount: number; planParticipationCount: number }> {
-  const { data: memberships } = await admin
-    .from("conversation_members")
-    .select("conversation_id")
-    .eq("user_id", userId)
-    .eq("status", "joined");
-
-  const conversationIds = (memberships ?? []).map((row) => row.conversation_id);
-
-  const [{ data: directs }, { count: planParticipationCount }] = await Promise.all([
-    conversationIds.length
-      ? admin
-          .from("conversations")
-          .select("id")
-          .eq("conversation_type", "direct")
-          .in("id", conversationIds)
-      : Promise.resolve({ data: [] as { id: string }[] }),
+  /* THE MILESTONE, not a history scan (MB-GOD-060).
+   *
+   * This used to read `conversation_id, sender_id` for every non-system,
+   * non-deleted message in every direct conversation the user belongs to, then
+   * group them in memory to answer one question: has any conversation ever had
+   * two different senders? That is O(total messages ever exchanged) on EVERY
+   * Home load -- no window, no limit.
+   *
+   * `home-maturity.ts` only ever compares the result `> 0`; the count itself is
+   * never used. And the fact is monotonic -- `looksEstablished` asks what
+   * somebody has EVER experienced -- so it belongs in `activation_milestones`,
+   * written once when it becomes true by the `messages` trigger, and backfilled
+   * for existing accounts by the same migration.
+   *
+   * The return type keeps its shape so nothing downstream changes: 1 stands for
+   * "at least one", which is the only distinction any caller draws. */
+  const [{ data: replyMilestone }, { count: planParticipationCount }] = await Promise.all([
+    admin
+      .from("activation_milestones")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("milestone", "first_reply_received")
+      .limit(1),
     admin
       .from("plan_participants")
       .select("plan_id", { count: "exact", head: true })
@@ -313,30 +320,8 @@ async function loadMaturityEvidence(
       .in("rsvp_status", ["going", "maybe", "invited"])
   ]);
 
-  const directIds = (directs ?? []).map((row) => row.id);
-  if (directIds.length === 0) {
-    return { twoSidedConversationCount: 0, planParticipationCount: planParticipationCount ?? 0 };
-  }
-
-  const { data: messages } = await admin
-    .from("messages")
-    .select("conversation_id, sender_id")
-    .in("conversation_id", directIds)
-    .neq("message_type", "system")
-    .is("deleted_at", null);
-
-  const sendersByConversation = new Map<string, Set<string>>();
-  for (const row of messages ?? []) {
-    if (!row.sender_id) continue;
-    const senders = sendersByConversation.get(row.conversation_id) ?? new Set<string>();
-    senders.add(row.sender_id);
-    sendersByConversation.set(row.conversation_id, senders);
-  }
-
   return {
-    twoSidedConversationCount: [...sendersByConversation.values()].filter(
-      (senders) => senders.size > 1
-    ).length,
+    twoSidedConversationCount: (replyMilestone ?? []).length > 0 ? 1 : 0,
     planParticipationCount: planParticipationCount ?? 0
   };
 }

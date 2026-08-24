@@ -5031,7 +5031,18 @@ export type MilestoneName =
    * Added by 20260816120000_first_message_sent_milestone. Direct only: Plan and
    * Circle chat have their own lifecycle semantics and are a separate decision.
    */
-  | "first_message_sent";
+  | "first_message_sent"
+  /**
+   * Added by 20260824090000_first_reply_received_milestone (MB-GOD-060).
+   *
+   * A DIRECT conversation this person belongs to has had messages from two
+   * different senders -- "somebody replied", the completed loop that
+   * distinguishes a relationship from talking into silence. Written by a
+   * trigger on `messages` at the moment it becomes true, and backfilled for
+   * existing accounts, so Home no longer rediscovers it by scanning message
+   * history on every load.
+   */
+  | "first_reply_received";
 
 export type ProfileFieldName =
   | "bio"

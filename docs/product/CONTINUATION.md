@@ -95,8 +95,10 @@ Current: Free / Plus / Pro feature-tier architecture.
 Target:
 - **Core Mad Buddy is FREE.**
 - **Linkr + UpFor become a paid access entitlement.**
-- New users get roughly **30 days complimentary access, no card required**, after
-  genuine activation.
+- New users get **14 days WELCOME ACCESS, no card required, no auto-renew**,
+  starting at `first_muddy_added` — not at signup, so the clock begins when the
+  product has actually delivered something.
+  (Corrected from "roughly 30 days": 14 is the locked figure.)
 - After that, core stays free; Linkr + UpFor lock unless a valid entitlement
   exists.
 
@@ -1085,8 +1087,13 @@ Security: Critical 0 · High 0 · Medium 1
 - **State tokens now exist** (`--state-transit/extended/overdue/arrived/ended`)
   but **nothing was migrated onto them**. That was deliberate: rewiring 159 call
   sites changes what Safe Arrival and Moments look like.
-- **Landing omits Linkr and UpFor** — the two paid features. The page is already
-  9.46 screens, so this needs a narrative decision, not an addition.
+- ~~**Landing omits Linkr and UpFor**~~ — **FIXED.** Both are now in the public
+  story, and the page got SHORTER: 9.56 → 8.66 screens on a phone, 7.17 → 6.63
+  on desktop. Paid for by compression, not addition — a duplicated step list, the
+  privacy points rendered three times, and a second call to action one screen
+  above the real one. It also corrected a factual error: the page claimed in four
+  places that only approved Muddies can see you nearby, which Linkr makes untrue.
+  About had already been corrected for this; landing had been left behind.
 - **Vercel free does not carry 10,000 users**, let alone 500,000. Fine to ~1,000.
   Currency figures are marked NEEDS CURRENT OFFICIAL DOCS rather than guessed.
 
@@ -1094,6 +1101,26 @@ Security: Critical 0 · High 0 · Medium 1
 
 Five accounts, `ReviewPass123!`, all verified loggable at
 `http://localhost:3200/login`. Re-seed: `node scripts/hardening/seed-owner-review.mjs`.
+
+## Pre-monetization remediation pass — COMPLETE
+
+All four items closed. `TESTS 6983/6983 (351 files) · TSC PASS · ESLINT 0
+errors/45 warnings · BUILD PASS`. Local only: no commit, no push, no `db push`,
+no production mutation.
+
+| Item | Outcome |
+| --- | --- |
+| MB-GOD-060 | **FIXED + VERIFIED** — `first_reply_received` milestone; 0/12 boolean disagreements against the old scan on real data |
+| MB-GOD-058 | **FIXED LOCALLY** — 4 recursion cycles, 15 tables; 0/63 → 63/63 behaviour matrix; migration-ready, NOT applied to production |
+| MB-GOD-059 | **FIXED + VERIFIED** — Linkr/UpFor in the story, 10/10 viewport×theme combinations clean |
+| MB-GOD-056 | **RECOMMENDATION ONLY** — no name chosen; owner decides |
+
+**Two production migrations are staged and unapplied.** See
+`docs/product/PRODUCTION-MIGRATION-ORDER.md` for the order, the verification
+queries, and the rollback for each.
+
+**Profile media / post-save layout was NOT touched**, as instructed, and is not
+claimed fixed.
 
 ### Next: OWNER REVIEW, then Monetization Reset
 

@@ -6,7 +6,6 @@ import { useEffect } from "react";
 import {
   ArrowRight,
   Bell,
-  CalendarDays,
   CalendarCheck2,
   Check,
   Coffee,
@@ -14,10 +13,6 @@ import {
   EyeOff,
   Ghost,
   Hand,
-  History,
-  LockKeyhole,
-  Map,
-  MapPinOff,
   MessageCircle,
   Music2,
   Radio,
@@ -62,6 +57,29 @@ const howItWorksSteps = [
   }
 ];
 
+/*
+ * UpFor, named as itself rather than folded into "Plan".
+ *
+ * It is one of the five bottom-nav destinations and half of the future paid
+ * tier, and the public story did not mention it at all. Its own subtitle in the
+ * product is "See what people are up for", which is the phrasing used here so
+ * the landing page and the screen agree.
+ */
+const upForPitch = {
+  title: "UpFor",
+  description: "Say what you are open to \u2014 coffee, a walk, a match \u2014 and see what your Muddies are up for.",
+  icon: Coffee
+};
+
+/*
+ * Three, not four.
+ *
+ * "Everyday plans -- coffee, food, walks, or spontaneous meetups" said the same
+ * thing as "Easy catch-ups -- turn a quick break into a hello", and on a 390px
+ * phone the four cards stacked one-up to 732px, over a third of the section.
+ * The two that remain are distinct occasions; UpFor is a real capability rather
+ * than a mood, so it earns the third slot.
+ */
 const useCases = [
   {
     title: "Easy catch-ups",
@@ -70,50 +88,59 @@ const useCases = [
   },
   {
     title: "Same event",
-    description: "Notice approved friends at the same venue.",
+    description: "Notice a Muddy at the same venue.",
     icon: Music2
   },
   {
-    title: "Everyday plans",
-    description: "Coffee, food, walks, or spontaneous meetups.",
-    icon: Users
-  },
-  {
-    title: "Privacy-first",
-    description: "Everything is designed around your privacy.",
-    icon: ShieldCheck
+    /* Was "Privacy-first / Everything is designed around your privacy." -- a
+       fourth restatement of a section that already has its own screen. UpFor,
+       a primary nav destination the public story never mentioned, uses the
+       slot instead. */
+    title: upForPitch.title,
+    description: upForPitch.description,
+    icon: upForPitch.icon
   }
 ];
 
-const momentSteps = [
+/*
+ * THE TWO WAYS PEOPLE MEET (MB-GOD-059).
+ *
+ * This list replaces `momentSteps`, which was Glow -> Wave -> Plan -> Meet: a
+ * near-copy of `howItWorksSteps` two sections above it, costing 2.62 screens to
+ * restate what the reader had already been told.
+ *
+ * It also corrects a factual claim. The landing page said, in four places, that
+ * only approved Muddies can see you nearby. Linkr makes that untrue: it shows
+ * you to people you have not met, for as long as a session is switched on. The
+ * About page was corrected for exactly this ("Two ways people find each other")
+ * and the landing page was left behind, so a visitor met the honest version of
+ * the product only after signing up.
+ *
+ * The bounded phrasing is deliberate and matches About word for word: Linkr
+ * exposure exists "only while you have a session switched on", and at the same
+ * rough proximity level as everything else. No coordinates, no distance, no map
+ * -- the locked product principle is unchanged and is stated in both branches.
+ */
+const discoveryModes = [
   {
-    title: "Glow",
-    description: "See an approved Muddy nearby.",
-    icon: Sparkles
+    title: "With your Muddies",
+    tagline: "Mutual, always on your terms",
+    description:
+      "People you have both approved see a rough sense of how close you are \u2014 close, near or far. Never a map, a pin or a distance.",
+    icon: Sparkles,
+    points: ["Both of you approve first", "Close, Near or Far only", "Ghost Mode hides you instantly"]
   },
   {
-    title: "Wave",
-    description: "Start a simple conversation.",
-    icon: Hand
-  },
-  {
-    title: "Plan",
-    description: "Agree on a place and time.",
-    icon: CalendarDays
-  },
-  {
-    title: "Meet",
-    description: "Turn digital proximity into real moments.",
-    icon: Users
+    title: "With Linkr",
+    tagline: "Only while a session is on",
+    description:
+      "Be discoverable to people you have not met yet \u2014 at the same rough level, and only for as long as you keep a session switched on.",
+    icon: Radio,
+    points: ["You choose when it is on", "Same Close, Near or Far detail", "Switch it off at any point"]
   }
 ];
 
-const momentTrustPoints = [
-  { label: "Approved friends only", icon: LockKeyhole },
-  { label: "No exact location", icon: MapPinOff },
-  { label: "No maps", icon: Map },
-  { label: "No location history", icon: History }
-];
+
 
 const muddiesMaySee = [
   "Close, Near, or Far",
@@ -144,21 +171,30 @@ const safetyControls = [
 ];
 
 const featureItems = [
-  {
-    title: "Privacy-safe proximity",
-    description: "See Close, Near, or Far, never an exact distance.",
-    icon: Radio
-  },
+  /* "Privacy-safe proximity -- see Close, Near, or Far, never an exact
+     distance" is now stated by BOTH discovery cards above and by the whole
+     privacy section. Dropped here rather than said a fourth time. */
   {
     title: "Mutual approval",
-    description: "Only Muddies you both approve can appear nearby.",
+    /* Was "Only Muddies you both approve can appear nearby", which Linkr makes
+       untrue. The guarantee that survives is that approval governs the Muddies
+       relationship -- not that nobody else can ever see you. */
+    description: "Muddies see each other only after you both approve.",
     icon: ShieldCheck
   },
   {
-    title: "Visibility controls",
-    description: "Choose when your glow is visible.",
-    icon: Eye
+    title: "Linkr",
+    description: "Meet people you don't know yet \u2014 only while your session is on.",
+    icon: Radio
   },
+  {
+    title: "UpFor",
+    description: "Share what you're open to and see what your Muddies are up for.",
+    icon: Coffee
+  },
+  /* "Visibility controls -- choose when your glow is visible" is the same
+     promise as the Linkr card's "You choose when it is on" and Ghost Mode in
+     the privacy section. */
   {
     title: "Nearby alerts",
     description: "Get optional alerts when selected Muddies are nearby.",
@@ -375,49 +411,49 @@ function RealLifeMomentsSection() {
         />
         <div className="mx-auto mt-12 grid max-w-6xl items-start gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:gap-10">
           <div className="rounded-[1.75rem] border border-border/70 bg-card/45 p-5 shadow-[0_24px_70px_hsl(var(--shadow)/0.1)] sm:p-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Nearby to real life</p>
-            <ol className="mt-6" aria-label="How a nearby moment becomes a real-life meeting">
-              {momentSteps.map((step, index) => (
-                <li key={step.title} className="moment-step relative flex gap-4 pb-5 last:pb-0 sm:gap-5">
-                  <div className="relative z-10 flex w-11 shrink-0 justify-center">
-                    <span className="grid h-11 w-11 place-items-center rounded-full border border-primary/35 bg-primary/10 text-primary shadow-[0_0_24px_hsl(var(--primary)/0.12)]">
-                      <step.icon className="h-5 w-5" aria-hidden="true" />
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Two ways people find each other</p>
+            <ul className="mt-6 grid gap-4" aria-label="The two ways people find each other on Mad Buddy">
+              {discoveryModes.map((mode) => (
+                <li
+                  key={mode.title}
+                  className="moment-step rounded-2xl border border-border/70 bg-background/60 p-4 sm:p-5"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-primary/35 bg-primary/10 text-primary">
+                      <mode.icon className="h-5 w-5" aria-hidden="true" />
                     </span>
-                  </div>
-                  <article className="group min-h-[104px] flex-1 rounded-2xl border border-border/70 bg-background/60 p-4 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_18px_40px_hsl(var(--primary)/0.1)] sm:p-5">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-semibold tabular-nums text-primary">0{index + 1}</span>
-                      <h3 className="text-base font-semibold">{step.title}</h3>
+                    <div className="min-w-0">
+                      <h3 className="text-base font-semibold">{mode.title}</h3>
+                      <p className="text-xs font-medium text-primary">{mode.tagline}</p>
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{step.description}</p>
-                  </article>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">{mode.description}</p>
+                  <ul className="mt-3 grid gap-1.5">
+                    {mode.points.map((point) => (
+                      <li key={point} className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                        {point}
+                      </li>
+                    ))}
+                  </ul>
                 </li>
               ))}
-            </ol>
+            </ul>
 
-            <div className="moment-trust mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                Privacy built in
-              </div>
-              <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                {momentTrustPoints.map((point) => (
-                  <li key={point.label} className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                    {point.label}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {/* The duplicated "Privacy built in" card that sat here is gone: the
+                same four points are rendered again 40 lines below in this very
+                section, and a third time in the dedicated privacy section. */}
           </div>
 
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Made for everyday connection</p>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            {/* Two-up from the narrowest width: at 390px these were stacking
+                one-up and the four of them cost 732px. */}
+            <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-1 xl:grid-cols-2">
               {useCases.map((item) => (
                 <article
                   key={item.title}
-                  className="moment-benefit group relative min-h-[156px] overflow-hidden rounded-2xl border border-border/70 bg-card/60 p-5 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-[0_18px_45px_hsl(var(--primary)/0.1)]"
+                  className="moment-benefit group relative overflow-hidden rounded-2xl border border-border/70 bg-card/60 p-4 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-[0_18px_45px_hsl(var(--primary)/0.1)] sm:min-h-[156px] sm:p-5"
                 >
                   <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full border border-primary/10 transition-transform duration-500 group-hover:scale-125" aria-hidden="true" />
                   <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary transition-colors duration-300 group-hover:bg-primary group-hover:text-primary-foreground">
@@ -431,32 +467,18 @@ function RealLifeMomentsSection() {
           </div>
         </div>
 
-        <ul className="moment-trust mx-auto mt-8 flex max-w-5xl flex-wrap items-center justify-center gap-x-6 gap-y-3 border-y border-border/60 py-4" aria-label="Mad Buddy privacy protections">
-          {momentTrustPoints.map((point) => (
-            <li key={point.label} className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground sm:text-sm">
-              <point.icon className="h-4 w-4 text-primary" aria-hidden="true" />
-              {point.label}
-            </li>
-          ))}
-        </ul>
+        {/* The "Approved friends only / No exact location / No maps / No location
+            history" strip that sat here is gone. It was the THIRD rendering of
+            those four points on this page -- twice inside this section, once in
+            the privacy section that follows it -- and its first item was part of
+            the claim Linkr makes untrue. The two discovery cards above now carry
+            the privacy guarantee where the reader actually needs it: attached to
+            the model it applies to. */}
 
-        <div className="moment-cta mx-auto mt-10 flex max-w-3xl flex-col items-center text-center">
-          <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">Ready to meet naturally?</h3>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-            Join Mad Buddy and turn nearby moments into real connections.
-          </p>
-          <div className="mt-6 flex w-full flex-col justify-center gap-3 sm:w-auto sm:flex-row">
-            <Button asChild size="lg">
-              <Link href="/login" aria-label="Join Mad Buddy">
-                Join Mad Buddy
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline">
-              <a href="#how-it-works" aria-label="See how Mad Buddy works">See how it works</a>
-            </Button>
-          </div>
-        </div>
+        {/* The section's own "Ready to meet naturally?" call to action is gone.
+            `get-started` is one screen further on and says the same thing with
+            the same two buttons; two CTAs a screen apart read as a page that
+            has run out of things to say rather than as urgency. */}
       </div>
     </section>
   );
@@ -472,7 +494,7 @@ function PrivacySection() {
         <SectionHeading
           eyebrow="Privacy and safety"
           title="Nearby, without giving away where."
-          description="Only approved friends can see when you're nearby. No exact location is shared."
+          description="You choose who can see you're nearby, and no exact location is ever shared."
           align="center"
         />
         <div className="mx-auto mt-8 grid max-w-5xl gap-4 lg:grid-cols-2">

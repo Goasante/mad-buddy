@@ -7116,16 +7116,50 @@ security suite        84 / 84
 
 ## Open findings
 
-**P0 = 0 · P1 = 0 · P2 = 4 · P3 = 2**
+**After the pre-monetization remediation pass: P0 = 0 · P1 = 0 · P2 = 1 · P3 = 1**
 
 | ID | P | State | Why it is open |
 | --- | --- | --- | --- |
-| MB-GOD-058 | P2 | DEFERRED | recursive RLS policy; **fails closed**, needs a production migration |
-| MB-GOD-059 | P2 | OPEN | Linkr and UpFor absent from the public story; needs a narrative decision |
-| MB-GOD-060 | P2 | OPEN | unbounded per-Home message scan; fix is a schema change |
+| MB-GOD-060 | P2 | **FIXED + VERIFIED** | milestone replaces the scan; 0 boolean disagreements on real data |
+| MB-GOD-058 | P2 | **FIXED LOCALLY, migration-ready** | 4 cycles repaired (3 were never in this ledger); production apply is owner-approved |
+| MB-GOD-059 | P2 | **FIXED + VERIFIED** | Linkr and UpFor in the public story, page 9.56 → 8.66 screens |
+| MB-GOD-056 | P3 | **RECOMMENDATION READY** | owner names it; see `MB-GOD-056-circles-naming-recommendation.md` |
 | MB-GOD-046 | P2 | **PARTIAL** | state-token vocabulary shipped; migrating 159 call sites is owner review |
-| MB-GOD-056 | P3 | OPEN | "Circles" names two concepts; owner naming decision |
 | MB-GOD-055 | — | RESOLVED | — |
+
+### What the remediation pass changed about the ledger itself
+
+**MB-GOD-058 was recorded as one defect in one family. It was four.**
+
+The finding named `conversation_members` and the six tables joining through it.
+Writing a behavioural test for the repair — rather than trusting the finding —
+failed on its first run against `plans <-> plan_participants`. A live sweep of
+every RLS-protected table then found **15 recursing tables in four families**:
+
+```
+   BEFORE   123 tables readable,  8 recursing
+   AFTER    131 tables readable,  0 recursing
+```
+
+Safe Arrival, Plans and Event Circles would have stayed broken while this ledger
+reported the issue closed. The sweep, not the ledger, defined the scope.
+
+Two related corrections to what the finding assumed:
+
+- **`safe_arrival_sessions` does not depend on `conversation_members`.** It
+  recursed through its own mutual reference with `safe_arrival_contacts`, so
+  fixing the recorded root cause alone would not have touched it.
+- **Copying the `is_friend` grant pattern was wrong.** Revoking from `anon` (the
+  reflex) turned an empty result into `permission denied for function ...` on
+  every signed-out read, because `anon` holds SELECT on these tables and so
+  really does reach these policies. Caught by the behaviour matrix as five
+  failing cells on the `anon` row. The helpers take no user argument and read
+  `auth.uid()` themselves, so granting `anon` gives away nothing.
+
+**MB-GOD-056's cost estimate was backwards.** The finding assumed renaming the
+Muddies side was the smaller change. Counted: 66 user-visible strings there
+versus 32 on the `/groups` side, and only the Muddies side drags the stored
+`selected_circles` enum with it. Option B is cheaper by both measures.
 
 ## Classified / deferred debt
 
