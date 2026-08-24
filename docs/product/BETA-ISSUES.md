@@ -157,6 +157,50 @@ Source: real tester reports and owner screenshots from the friend beta.
   harness passing 21/21 is evidence about the server, and the testers are
   describing something the server is not doing wrong.
 
+#### Client half — REPRODUCED, cause narrowed, not yet fixed
+
+`scripts/hardening/unread-client-sync.mjs` drives two real accounts through two
+real browser sessions and compares the rendered badge against the server's own
+answer at each step. **6/7**, and the single failure is the reported defect:
+
+```
+start                       server=0  badge=0   agree
+A sends a message           server=1  badge=0   DIVERGE  <-- BETA-002
+B opens the conversation    server=0  badge=0   agree
+after route transition      server=0  badge=0   agree
+after hard refresh          server=0  badge=0   agree
+```
+
+So the divergence begins **when the message arrives**, not when it is read. The
+badge is stale from the moment it should have appeared; opening the thread then
+"clears" a badge that was already showing the wrong number. Every path that
+re-runs the count (navigation, refresh, focus) is correct.
+
+**What is confirmed working**, so the next session need not re-check it:
+
+- the read cursor, `markConversationRead`, and the `conversation_previews` RPC
+  (21/21, server harness)
+- `messages` IS in the `supabase_realtime` publication
+- RLS permits a joined member to `SELECT` the message, so Realtime is entitled
+  to deliver it — verified as an authenticated user
+- the messages page DOES dispatch `MESSAGES_UPDATED_EVENT` after mark-read
+- `useUnreadMessageCount` listens for that event, for focus, for
+  visibilitychange, and for a Realtime `INSERT` on `messages`
+
+**Therefore the remaining suspects are narrow**: the Realtime INSERT
+subscription in `useUnreadMessageCount` is not delivering to the client —
+either `authenticateRealtime()` is not completing before `subscribe()`, the
+channel never reaches `SUBSCRIBED`, or the socket is not authenticated for RLS
+so the row is filtered out server-side before broadcast. Next session should
+instrument the channel's status callback and log delivery, rather than reading
+more code.
+
+**Note on the probe.** The first version read the `/messages` link's
+`textContent` and got `""`, which is indistinguishable from "no badge" — a
+false failure waiting to happen. It now reads the badge `<span>` directly and
+treats its absence as an explicit zero, because the badge only renders when the
+count is above zero.
+
 ### Remaining in this batch
 
 Investigated and queued, not yet fixed:
