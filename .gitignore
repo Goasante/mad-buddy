@@ -51,3 +51,4 @@ qa-shots/
 # catches any .env variant a future tool might create. `.env.example` is
 # already tracked, so this does not hide it.
 .env*
+.phasea.json
