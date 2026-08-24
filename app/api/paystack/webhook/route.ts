@@ -9,6 +9,15 @@ import { consumeRateLimit, getClientIpHashFromRequest } from "@/lib/security/rat
 import { loadSubscriptionSnapshot, recordBillingEvent, recordSuccessfulPayment } from "@/lib/revenue/events";
 import { deliverNotification } from "@/lib/notifications/server";
 import { markTrialConverted } from "@/lib/trials/service";
+import {
+  accessPeriodEnd,
+  cancelAccessSubscription,
+  isAccessEvent,
+  recordAccessSubscription,
+  verifyAccessEvent,
+  type AccessPaystackEvent
+} from "@/lib/access/paystack";
+import { MAD_BUDDY_ACCESS } from "@/lib/access/product";
 
 const MAX_WEBHOOK_BYTES = 256 * 1024;
 
@@ -26,6 +35,9 @@ type PaystackWebhookEvent = {
       user_id?: string;
       plan?: "plus" | "pro";
       app_plan?: "buddy_plus" | "buddy_pro";
+      /* Set by /api/access/checkout so the webhook can confirm which product a
+         transaction was for, independently of the plan code. */
+      product?: string;
     };
     customer?: {
       customer_code?: string;
@@ -158,6 +170,29 @@ async function handlePaystackEvent(event: PaystackWebhookEvent, eventId: string)
   const admin = createSupabaseAdminClient();
   const data = event.data;
   const userId = data.metadata?.user_id;
+
+  /* MAD BUDDY ACCESS IS ROUTED FIRST, AND SEPARATELY.
+   *
+   * Access events must not reach `validatePaystackSyncInput`, which resolves a
+   * plan code onto the retired ladder and throws "Unrecognized Paystack plan"
+   * for anything that is not buddy_plus/buddy_pro. Routing on the plan code (or
+   * the `product` metadata we set at checkout) keeps both products verified by
+   * the rules that actually apply to them.
+   *
+   * The signature has already been checked and the event de-duplicated by the
+   * caller, so this is trusted-as-delivered but NOT trusted-as-described:
+   * every field below is still verified against server configuration. */
+  const accessEvent = {
+    amount: data.amount ?? null,
+    currency: data.currency ?? null,
+    planCode: typeof data.plan === "string" ? data.plan : data.plan?.plan_code ?? null,
+    product: typeof data.metadata?.product === "string" ? data.metadata.product : null
+  };
+
+  if (isAccessEvent(accessEvent)) {
+    await handleAccessEvent(admin, event.event, accessEvent, data, userId, eventId);
+    return;
+  }
 
   switch (event.event) {
     case "charge.success":
@@ -336,4 +371,108 @@ function buildEventId(event: PaystackWebhookEvent, rawBody: string) {
     .filter(Boolean)
     .join(":");
   return stableId || `${event.event}:${createHash("sha256").update(rawBody).digest("hex")}`;
+}
+
+/**
+ * Mad Buddy Access webhook events.
+ *
+ * Every branch verifies against server configuration before writing anything.
+ * A refused event is logged and DROPPED -- never retried into a different code
+ * path, and never partially applied.
+ */
+async function handleAccessEvent(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  eventName: string,
+  accessEvent: AccessPaystackEvent,
+  data: PaystackWebhookEvent["data"],
+  userId: string | undefined,
+  eventId: string
+): Promise<void> {
+  /* CANCELLATION IS VERIFIED DIFFERENTLY, and deliberately earlier.
+   *
+   * `subscription.not_renew` and `subscription.disable` carry no amount and
+   * often no user metadata -- they are keyed on the subscription code. Running
+   * them through the full amount check would reject legitimate cancellations,
+   * so they are matched on the subscription code we already stored, which is
+   * itself proof the subscription is ours. */
+  if (eventName === "subscription.not_renew" || eventName === "subscription.disable") {
+    const subscriptionCode = data.subscription_code ?? data.subscription?.subscription_code ?? null;
+    await cancelAccessSubscription(admin, subscriptionCode);
+    return;
+  }
+
+  const verification = verifyAccessEvent(accessEvent);
+  if (!verification.ok) {
+    /* Refused. Logged with the reason so a real misconfiguration is
+       diagnosable, and dropped so a forged or mismatched event cannot
+       activate access. */
+    logBackendEvent("warn", {
+      requestId: eventId,
+      route: "/api/paystack/webhook",
+      statusCode: 200,
+      latencyMs: 0,
+      errorType: `access_event_rejected:${verification.reason}`
+    });
+    return;
+  }
+
+  if (!userId) return;
+
+  if (
+    eventName === "charge.success" ||
+    eventName === "subscription.create" ||
+    eventName === "subscription.enable" ||
+    eventName === "invoice.update"
+  ) {
+    const paidAt = data.paid_at ? new Date(data.paid_at) : new Date();
+    const periodEnd = accessPeriodEnd(
+      data.next_payment_date ?? data.subscription?.next_payment_date ?? null,
+      paidAt
+    );
+
+    await recordAccessSubscription(admin, {
+      userId,
+      status: "active",
+      periodStart: paidAt,
+      periodEnd,
+      customerCode: data.subscription?.customer?.customer_code ?? data.customer?.customer_code ?? null,
+      subscriptionCode: data.subscription?.subscription_code ?? data.subscription_code ?? null,
+      emailToken: data.subscription?.email_token ?? data.email_token ?? null,
+      authorizationCode: data.authorization?.authorization_code ?? null
+    });
+
+    if (eventName === "charge.success" && data.reference && typeof data.amount === "number" && data.currency) {
+      await recordBillingEvent(admin, {
+        event_type: "payment_succeeded",
+        source: "paystack_webhook",
+        user_id: userId,
+        subscription_plan: "mad_buddy_access",
+        amount_minor: data.amount,
+        currency: data.currency,
+        transaction_reference: data.reference,
+        provider_event_id: eventId,
+        dedupe_key: `paystack:access_payment_succeeded:${data.reference}`
+      });
+    }
+    return;
+  }
+
+  if (eventName === "invoice.payment_failed") {
+    /* A failed renewal does NOT revoke access immediately. The resolver
+       honours `grace_ends_at`, and the existing lifecycle already manages the
+       grace window; marking past_due here would duplicate that and risk
+       shortening it. The subscription simply stops renewing, and the period
+       end does the rest. */
+    await recordBillingEvent(admin, {
+      event_type: "payment_failed",
+      source: "paystack_webhook",
+      user_id: userId,
+      subscription_plan: "mad_buddy_access",
+      amount_minor: typeof data.amount === "number" ? data.amount : null,
+      currency: data.currency ?? MAD_BUDDY_ACCESS.currency,
+      transaction_reference: data.reference ?? null,
+      provider_event_id: eventId,
+      dedupe_key: `paystack:access_payment_failed:${data.reference ?? eventId}`
+    });
+  }
 }

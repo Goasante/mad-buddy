@@ -15,24 +15,28 @@ import "server-only";
  * webhook whose amount differs from configuration, so a tampered checkout fails
  * verification even if it somehow reached the provider.
  *
- * ── THE PRICE IS NOT SET, AND IS NOT INVENTED HERE ────────────────────────
+ * ── THE PRICE, AND WHY IT LIVES IN CODE ───────────────────────────────────
  *
- * The old tiers were GHS 4.99 (Buddy Plus) and GHS 9.99 (Buddy Pro). Those are
- * prices for a THREE-TIER FEATURE LADDER that no longer exists; reusing one for
- * a single two-feature product would be picking a consumer price by accident.
- * That is an owner decision with revenue consequences, so:
+ * GHS 5.00 / month, Paystack plan `PLN_pbpn6h7vprirvlu`. An owner decision,
+ * now made.
  *
- *   `MAD_BUDDY_ACCESS.amountMinor` is null until configured
- *   `isCheckoutConfigured()` returns false while it is
- *   `beginAccessCheckout()` refuses rather than guessing
+ * These are DEFAULTS IN SOURCE, not required environment variables, and that is
+ * deliberate. An env-only price fails in the worst direction: a missing or
+ * fat-fingered variable in one environment silently disables checkout, or
+ * disagrees with what Paystack actually charges. The canonical product
+ * definition is a fact about the business, so it is versioned, reviewable and
+ * identical everywhere by default.
  *
- * EVERYTHING ELSE IN THE ENTITLEMENT SYSTEM WORKS WITHOUT IT. Welcome Access,
- * admin grants, global windows, the resolver, both gates and the whole UX are
- * live and testable. Only the act of taking money is blocked, which is the
- * narrowest possible thing to block on a missing price.
+ * The env vars remain as an OVERRIDE for test and staging -- pointing at a
+ * Paystack test-mode plan needs no code change -- but production does not
+ * depend on them being present.
  *
- * Setting `MAD_BUDDY_ACCESS_AMOUNT_MINOR` and `MAD_BUDDY_ACCESS_PLAN_CODE`
- * turns checkout on with no code change.
+ * The old tiers were GHS 4.99 (Buddy Plus) and GHS 9.99 (Buddy Pro). Those
+ * priced a THREE-TIER FEATURE LADDER that no longer exists and are unrelated
+ * to this figure.
+ *
+ * WHAT THE CLIENT MAY SEND: a product identifier, and nothing else. There is no
+ * code path that reads an amount or a plan code from a request.
  */
 
 export type AccessProduct = {
@@ -61,14 +65,37 @@ function parseAmount(raw: string | undefined): number | null {
   return value;
 }
 
+/**
+ * GHS 5.00 in the currency's MINOR unit (pesewas). 500, not 5.
+ *
+ * Paystack charges in minor units, so a value written in cedis here would
+ * charge one hundredth of the intended price -- and every amount check would
+ * still pass, because both sides would agree on the wrong number.
+ */
+const ACCESS_AMOUNT_MINOR = 500;
+
+/** The owner's Paystack monthly plan for Mad Buddy Access. */
+const ACCESS_PLAN_CODE = "PLN_pbpn6h7vprirvlu";
+
 export const MAD_BUDDY_ACCESS: AccessProduct = {
   id: "mad_buddy_access",
   name: "Mad Buddy Access",
-  amountMinor: parseAmount(process.env.MAD_BUDDY_ACCESS_AMOUNT_MINOR),
+  /* Env overrides exist for test/staging Paystack plans. A malformed override
+     falls back to the canonical price rather than disabling checkout: an
+     unparseable env var is a configuration mistake, and failing back to the
+     known-correct value beats failing closed on a live product. */
+  amountMinor: parseAmount(process.env.MAD_BUDDY_ACCESS_AMOUNT_MINOR) ?? ACCESS_AMOUNT_MINOR,
   currency: "GHS",
-  planCode: process.env.MAD_BUDDY_ACCESS_PLAN_CODE ?? null,
+  planCode: process.env.MAD_BUDDY_ACCESS_PLAN_CODE ?? ACCESS_PLAN_CODE,
   interval: "monthly"
 };
+
+/** Display price, derived from the authoritative minor-unit amount. */
+export function accessPriceLabel(): string {
+  const amount = MAD_BUDDY_ACCESS.amountMinor;
+  if (amount === null) return "";
+  return `${MAD_BUDDY_ACCESS.currency} ${(amount / 100).toFixed(2)}`;
+}
 
 /** True only when a real price AND a provider plan both exist. */
 export function isCheckoutConfigured(): boolean {

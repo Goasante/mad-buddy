@@ -12,6 +12,7 @@ import {
   type RevenueReport
 } from "@/lib/revenue/revenue-intelligence";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
+import { legacyTierOf } from "@/lib/supabase/database.types";
 import { PLAN_ENTITLEMENTS, type BooleanEntitlementKey } from "@/lib/billing/entitlements";
 import {
   buildMonthlyRetention,
@@ -97,7 +98,8 @@ async function loadBillingEvents(startIso: string): Promise<RevenueEvent[]> {
     rows.push(...(data ?? []).map((row) => ({
       eventType: row.event_type,
       userId: row.user_id,
-      plan: row.subscription_plan,
+      /* Ladder analytics: Access is off-ladder here. The real product stays recorded on the billing_events row. */
+      plan: legacyTierOf(row.subscription_plan),
       previousPlan: row.previous_plan,
       amountMinor: row.amount_minor,
       providerFeeMinor: row.provider_fee_minor,
@@ -157,7 +159,8 @@ async function loadProductFacts(startDay: string): Promise<RevenueFact[]> {
       userId: row.user_id,
       eventName: row.event_name,
       featureKey: row.feature_key,
-      subscriptionPlan: row.subscription_plan,
+      /* Ladder analytics: Access is off-ladder here. */
+      subscriptionPlan: legacyTierOf(row.subscription_plan),
       actionCount: row.action_count
     })));
     if ((data ?? []).length < PAGE_SIZE) break;

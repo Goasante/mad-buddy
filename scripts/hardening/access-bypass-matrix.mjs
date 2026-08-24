@@ -175,6 +175,19 @@ try {
       where user_id = '${attacker}';`);
   check("cannot flip a subscription to active", r.denied, r.detail);
 
+  // ---- 7b. claim the ACCESS product specifically ------------------------
+  r = attack(attacker, `insert into public.subscriptions (user_id, plan, status, provider, current_period_end)
+      values ('${attacker}', 'mad_buddy_access', 'active', 'paystack', now() + interval '1 year');`);
+  check("cannot self-insert a Mad Buddy Access subscription", r.denied, r.detail);
+
+  r = attack(attacker, `update public.subscriptions set plan = 'mad_buddy_access', status = 'active',
+      current_period_end = now() + interval '1 year' where user_id = '${attacker}';`);
+  check("cannot upgrade themselves to the Access product", r.denied, r.detail);
+
+  r = attack(attacker, `update public.subscriptions set current_period_end = now() + interval '10 years'
+      where user_id = '${attacker}';`);
+  check("cannot extend a paid period", r.denied, r.detail);
+
   // ---- 8. forge the launch record ---------------------------------------
   r = attack(attacker, `insert into public.access_launch (launched_at, welcome_days, note)
       values (now(), 365, 'forged launch');`);

@@ -188,8 +188,9 @@ permissive policy, those commands are denied outright. Self-granting, extending
 one's own expiry and un-revoking are impossible through the RLS client whatever
 the application does.
 
-`scripts/hardening/access-bypass-matrix.mjs` — **18/18 refused**, with a negative
-control proving the harness detects a real hole.
+`scripts/hardening/access-bypass-matrix.mjs` — **21/21 refused**, with a negative
+control proving the harness detects a real hole. Includes self-inserting a Mad
+Buddy Access subscription, self-upgrading to it, and extending a paid period.
 
 ---
 
@@ -300,11 +301,57 @@ cannot revoke a paying customer mid-request.
 identifier; the amount comes from configuration. `lib/paystack/sync.ts` rejects
 any transaction whose amount differs.
 
-**The consumer price is not set.** `MAD_BUDDY_ACCESS.amountMinor` is null until
-`MAD_BUDDY_ACCESS_AMOUNT_MINOR` is configured, and checkout refuses rather than
-guessing. The old GHS 4.99 / 9.99 figures priced a three-tier ladder that no
-longer exists; reusing one would be choosing a consumer price by accident.
-**Everything else in the entitlement system works without it.**
+**The consumer price is set: GHS 5.00 / month, Paystack plan
+`PLN_pbpn6h7vprirvlu`, monthly interval.**
+
+Both live in `lib/access/product.ts` as defaults IN SOURCE, not as required
+environment variables. An env-only price fails in the worst direction: a missing
+or fat-fingered variable in one environment silently disables checkout, or
+disagrees with what Paystack actually charges. `MAD_BUDDY_ACCESS_AMOUNT_MINOR`
+and `MAD_BUDDY_ACCESS_PLAN_CODE` remain as overrides for test and staging.
+
+The amount is **500** — minor units (pesewas), not 5 cedis. A value in cedis
+would charge one hundredth of the price while every amount check still passed,
+because both sides would agree on the wrong number.
+
+### What the webhook verifies, and why each matters
+
+Every field is compared against server configuration; nothing is trusted from
+the payload.
+
+| Check | Why |
+| --- | --- |
+| **plan code** — must equal `PLN_pbpn6h7vprirvlu`, and is REQUIRED | An amount alone is non-specific: GHS 5.00 is an unremarkable sum that could arrive from any transaction. The plan code ties a payment to *this* recurring product. |
+| **amount** — exactly 500, when present | Stops a tampered checkout for GHS 0.01 activating access. Absent on lifecycle events like `subscription.disable`, which is why it is conditional. |
+| **currency** — GHS | GHS 5.00 paid in another currency is a different, smaller payment. |
+| **metadata product** — when present, must not contradict | Set at checkout so the webhook can confirm the product independently of the plan code. |
+
+A single mismatch rejects the whole event. The route still returns 200 (so
+Paystack stops retrying) but **writes nothing**.
+
+### The subscription record
+
+Access rows are written as `plan = "mad_buddy_access"`, never as a legacy tier.
+A tier label would have "worked" — the resolver only asks whether a subscription
+is live — while attributing this product's revenue to one nobody can buy and
+breaking reconciliation against the Paystack plan code.
+
+`SubscriptionPlan` (the retired ladder) and `SubscriptionProduct` (what a row
+may hold) are separate types for this reason. Ladder-shaped consumers —
+wallpaper tiers, tour gating, buddy-score rewards, MRR movement — call
+`legacyTierOf()`, which maps Access to `"free"`. That is the honest answer:
+Access grants nothing *through* the ladder.
+
+### Cancellation keeps the paid period
+
+`subscription.not_renew` sets `cancel_at_period_end` and status `non_renewing`.
+It does **not** revoke access — the customer has paid for time they have not
+used. The resolver counts `non_renewing` as live and lets `current_period_end`
+end it.
+
+This was a real bug, caught by `scripts/hardening/access-payment-matrix.mjs`:
+the resolver's status filter omitted `non_renewing`, so cancelling instantly
+revoked a paid period and punished people for cancelling early.
 
 **Apple and Google are provider-ready only.** They exist as source types with no
 integration behind them — no receipt verification is faked. Store policy will be

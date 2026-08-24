@@ -1,4 +1,4 @@
-# Production application order — four migrations, owner-approved only
+# Production application order — five migrations, owner-approved only
 
 **NOTHING IN THIS DOCUMENT HAS BEEN APPLIED TO PRODUCTION.**
 All four migrations were applied and verified against the local Docker Supabase
@@ -13,6 +13,7 @@ Apply in the order below. 090000 and 100000 are independent of each other;
 | 2 | `20260824100000_rls_recursion_repair` | makes RLS protective instead of inert | no |
 | 3 | `20260824110000_access_entitlement_model` | access grants, global windows, Welcome Access trigger | **yes** — the app reads these tables |
 | 4 | `20260824120000_access_reminders_and_launch` | reminder dedupe, launch mechanism | no |
+| 5 | `20260824130000_access_subscription_plan` | adds `mad_buddy_access` to the `subscription_plan` enum | **yes** — before the deploy that writes it |
 
 **Applying 3 does NOT start charging anybody.** It creates the tables and the
 Welcome Access trigger. Nothing is gated until the application deploy that
@@ -269,3 +270,81 @@ MAD_BUDDY_ACCESS_PLAN_CODE      the Paystack plan code for the product
 GHS 4.99 / 9.99 figures priced a three-tier ladder that no longer exists.
 Until both variables exist, `isCheckoutConfigured()` is false and checkout
 refuses rather than guessing — everything else in the entitlement system works.
+
+
+---
+
+## 5. `20260824130000_access_subscription_plan.sql`
+
+Adds `mad_buddy_access` to the `subscription_plan` enum so Access subscriptions
+are recorded as themselves.
+
+**Additive only.** `alter type ... add value if not exists`. Every existing
+value is untouched, so historical rows keep their meaning and no existing query
+changes behaviour.
+
+**Apply BEFORE the deploy that writes Access subscriptions.** The webhook writes
+`plan = 'mad_buddy_access'`; without the enum value that insert fails and a
+verified payment would not activate access.
+
+**Why not reuse `buddy_plus`.** The resolver only asks whether a subscription is
+live, so a tier label would have worked — and every revenue report, cohort
+analysis and support conversation would attribute Access income to a tier nobody
+can buy, while reconciliation against Paystack's `PLN_pbpn6h7vprirvlu` found no
+correspondence at all. A payments ledger that misnames the product is worse than
+one that fails loudly.
+
+**Verification after applying**
+
+```sql
+select unnest(enum_range(null::subscription_plan));
+-- Expect: free, buddy_plus, buddy_pro, mad_buddy_access
+```
+
+**Rollback:** Postgres cannot drop an enum value. Leaving it in place is
+harmless — nothing reads it unless rows use it. To unwind Access
+subscriptions, update the ROWS instead:
+
+```sql
+update public.subscriptions set status = 'cancelled' where plan = 'mad_buddy_access';
+```
+
+---
+
+## Payment configuration — RESOLVED
+
+The owner has created the Paystack plan. The price and plan code now live in
+`lib/access/product.ts` as source defaults:
+
+```
+Mad Buddy Access    GHS 5.00 / month    PLN_pbpn6h7vprirvlu
+amountMinor = 500   (pesewas, not cedis)
+```
+
+The environment variables remain as OVERRIDES for test and staging only:
+
+```
+MAD_BUDDY_ACCESS_AMOUNT_MINOR   optional -- overrides the price
+MAD_BUDDY_ACCESS_PLAN_CODE      optional -- overrides the plan code
+```
+
+**Production still needs the real Paystack credentials**, which are not in this
+repository and never should be:
+
+```
+PAYSTACK_SECRET_KEY
+PAYSTACK_WEBHOOK_SECRET
+NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY
+```
+
+The webhook route returns 503 unless ALL of these are present — a correct gate
+that caught a missing public key during local testing.
+
+**Register the webhook URL in the Paystack dashboard** to
+`https://<your-domain>/api/paystack/webhook` for these events:
+
+```
+charge.success            subscription.create      subscription.enable
+invoice.update            subscription.not_renew   subscription.disable
+invoice.payment_failed
+```

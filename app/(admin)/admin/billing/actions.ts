@@ -11,6 +11,7 @@ import { paystackRequest } from "@/lib/paystack/client";
 import { getPaystackSecretKey } from "@/lib/paystack/config";
 import { mapPaystackSubscriptionStatus } from "@/lib/paystack/subscriptions";
 import type { AdminPermission } from "@/lib/admin/governance";
+import { legacyTierOf } from "@/lib/supabase/database.types";
 
 export type BillingActionState = { ok: boolean; message: string };
 
@@ -263,7 +264,8 @@ export async function changeSubscriptionPlanAction(input: unknown): Promise<Bill
     subscription_id: sub.id,
     user_id: parsed.data.userId,
     change_type: changeType,
-    from_plan: sub.plan,
+    // legacyTierOf: subscription_changes tracks ladder movement; Access is off-ladder.
+    from_plan: legacyTierOf(sub.plan),
     to_plan: parsed.data.plan,
     effective_at: nowIso,
     applied_at: nowIso,
@@ -331,8 +333,9 @@ export async function setCancelAtPeriodEndAction(input: unknown): Promise<Billin
     subscription_id: sub.id,
     user_id: parsed.data.userId,
     change_type: parsed.data.cancel ? "cancel" : "reactivate",
-    from_plan: sub.plan,
-    to_plan: sub.plan,
+    // legacyTierOf: subscription_changes tracks ladder movement; Access is off-ladder.
+    from_plan: legacyTierOf(sub.plan),
+    to_plan: legacyTierOf(sub.plan),
     effective_at: sub.current_period_end,
     status: "scheduled",
     reason: parsed.data.reason || null

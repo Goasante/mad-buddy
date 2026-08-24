@@ -15,6 +15,7 @@ import {
 import { MANAGED_FEATURES, resolveGlobalFeatureFlag, type ManagedFeatureFlagKey } from "@/lib/features/feature-flags";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
+import { legacyTierOf } from "@/lib/supabase/database.types";
 
 const PAGE_SIZE = 1000;
 
@@ -59,7 +60,8 @@ async function loadFacts(factsStartDay: string): Promise<AnalyticsFact[]> {
         userId: row.user_id,
         eventName: row.event_name,
         featureKey: row.feature_key,
-        subscriptionPlan: row.subscription_plan,
+        /* Ladder analytics: Access is off-ladder, so it reads as no tier here. The real product is recorded on the billing_events row itself. */
+        subscriptionPlan: legacyTierOf(row.subscription_plan),
         actionCount: row.action_count
       }))
     );
@@ -90,7 +92,8 @@ async function loadCurrentPlans(userIds: string[]) {
   for (const ids of chunks(userIds, 200)) {
     const { data, error } = await admin.from("subscriptions").select("user_id, plan").in("user_id", ids);
     if (error) throw new Error(`Could not load subscription segments: ${error.message}`);
-    for (const row of data ?? []) plans.set(row.user_id, row.plan);
+    // legacyTierOf: Access is not a rung on the tier ladder, so it reads as no tier here.
+    for (const row of data ?? []) plans.set(row.user_id, legacyTierOf(row.plan));
   }
   return plans;
 }

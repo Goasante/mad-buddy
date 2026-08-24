@@ -259,7 +259,17 @@ async function loadPaidSubscription(
     .from("subscriptions")
     .select("provider, status, current_period_start, current_period_end, grace_ends_at")
     .eq("user_id", userId)
-    .in("status", ["active", "trialing", "past_due"])
+    /* `non_renewing` IS live access.
+     *
+     * It means "cancelled, but paid through the end of the period" -- the
+     * customer has already paid for time they have not used yet. Omitting it
+     * revoked access the instant somebody cancelled, taking back a paid period
+     * and punishing them for cancelling early rather than at the last minute.
+     * Caught by scripts/hardening/access-payment-matrix.mjs.
+     *
+     * `current_period_end` still bounds it, so access ends when the paid period
+     * genuinely runs out -- no job required. */
+    .in("status", ["active", "trialing", "past_due", "non_renewing"])
     .order("current_period_end", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -275,6 +285,8 @@ async function loadPaidSubscription(
     data.status === "past_due"
       ? graceEnd
       : periodEnd ?? graceEnd;
+  /* A cancelled-but-paid subscription is bounded by its period end, which the
+     line above already selects. Nothing extra is needed for `non_renewing`. */
 
   if (effectiveEnd !== null && effectiveEnd !== undefined && Date.parse(effectiveEnd) <= Date.parse(nowIso)) {
     return null;

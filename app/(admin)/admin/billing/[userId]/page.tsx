@@ -8,6 +8,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
 import { effectivePlan } from "@/lib/billing/entitlements";
 import { entitlementLabel } from "@/lib/admin/billing-admin";
+import { legacyTierOf } from "@/lib/supabase/database.types";
 
 type DetailProps = { params: Promise<{ userId: string }> };
 
@@ -37,7 +38,8 @@ export default async function BillingDetailPage({ params }: DetailProps) {
   const now = new Date().getTime();
   const effective = effectivePlan(
     {
-      plan: sub.plan,
+      // legacyTierOf: subscription_changes tracks ladder movement; Access is off-ladder.
+      plan: legacyTierOf(sub.plan),
       status: sub.status,
       periodEndMs: sub.current_period_end ? Date.parse(sub.current_period_end) : null,
       graceEndsMs: sub.grace_ends_at ? Date.parse(sub.grace_ends_at) : null

@@ -13,6 +13,7 @@ import { resolveEffectivePlanMap } from "@/lib/billing/effective-plans";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SubscriptionPlan, SubscriptionStatus } from "@/lib/supabase/database.types";
 import { loadActiveTrialAccess } from "@/lib/trials/service";
+import { legacyTierOf } from "@/lib/supabase/database.types";
 
 /**
  * Entitlement service (spec §10, §82). The single server-side path from a user
@@ -112,7 +113,10 @@ export async function loadEffectivePlansForUsers(
 
   return resolveEffectivePlanMap(
     uniqueIds,
-    subscriptionsResult.data ?? [],
+    /* Access rows read as no tier here. `resolveEffectivePlanMap` answers
+       "which ladder tier is this person on", and Access is not on the ladder --
+       its entitlement comes from lib/access/resolver instead. */
+    (subscriptionsResult.data ?? []).map((row) => ({ ...row, plan: legacyTierOf(row.plan) })),
     trialsResult.error ? [] : (trialsResult.data ?? []),
     nowMs,
     rewardsResult.error ? [] : (rewardsResult.data ?? [])

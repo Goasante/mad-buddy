@@ -9,6 +9,7 @@ import {
 } from "@/lib/revenue/financial-intelligence";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database, SubscriptionPlan } from "@/lib/supabase/database.types";
+import { legacyTierOf } from "@/lib/supabase/database.types";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 type SnapshotInsert = Database["public"]["Tables"]["financial_snapshots"]["Insert"];
@@ -128,7 +129,8 @@ async function loadMovementEvents(admin: Admin, afterIso: string, throughIso: st
 
   const events: Array<SnapshotMovementEvent & { occurredAt: string }> = (billingResult.data ?? []).map((row) => ({
     eventType: row.event_type,
-    plan: row.subscription_plan,
+    /* Ladder analytics: Access is off-ladder here. The real product stays recorded on the billing_events row. */
+    plan: legacyTierOf(row.subscription_plan),
     previousPlan: row.previous_plan,
     occurredAt: row.occurred_at
   }));

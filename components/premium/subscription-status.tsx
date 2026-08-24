@@ -2,6 +2,10 @@ import { CalendarClock, CreditCard, ShieldCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+/* This is the RETIRED plan-comparison UI. An Access subscriber has no tier
+   on this ladder, so it renders as "Free" here -- their real access lives in
+   Settings -> Mad Buddy Access. */
+import { legacyTierOf } from "@/lib/supabase/database.types";
 
 const planLabels = {
   free: "Free",
@@ -34,7 +38,7 @@ export async function SubscriptionStatus() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Badge variant={plan === "free" ? "green" : "violet"}>{status}</Badge>
-          <h2 className="mt-4 text-2xl font-semibold">Current plan: {planLabels[plan]}</h2>
+          <h2 className="mt-4 text-2xl font-semibold">Current plan: {planLabels[legacyTierOf(plan)]}</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             Premium feature writes are checked on the backend before they save.
           </p>

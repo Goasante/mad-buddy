@@ -8,6 +8,7 @@ import type {
   SubscriptionPlan,
   SubscriptionStatus
 } from "@/lib/supabase/database.types";
+import { legacyTierOf } from "@/lib/supabase/database.types";
 import { verifiedPaymentAmounts } from "@/lib/revenue/financial-intelligence";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -26,7 +27,21 @@ export async function loadSubscriptionSnapshot(admin: Admin, userId: string): Pr
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return data;
+  if (!data) return null;
+
+  /* NARROWED TO THE LADDER, deliberately.
+   *
+   * This snapshot feeds MRR movement (`upgrade` / `downgrade` / `churn`),
+   * which is computed from a RANK over free < buddy_plus < buddy_pro. Mad
+   * Buddy Access has no position in that ordering, and inventing one would
+   * fabricate upgrade/downgrade events between products that are not on the
+   * same scale.
+   *
+   * Access revenue is not lost -- `billing_events.subscription_plan` records
+   * the real product, because that column is the enum and now carries
+   * `mad_buddy_access`. Only this legacy MRR-movement view treats it as
+   * off-ladder. */
+  return { ...data, plan: legacyTierOf(data.plan) };
 }
 
 /**

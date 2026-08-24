@@ -3,6 +3,7 @@ import "server-only";
 import { deliverNotification } from "@/lib/notifications/server";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
+import { legacyTierOf } from "@/lib/supabase/database.types";
 import {
   evaluateTrialEligibility,
   trialEligibilityMessage,
@@ -96,7 +97,8 @@ export async function getTrialEligibility(
     requiresCompletedOnboarding: rules.requires_completed_onboarding ?? true,
     profileCreatedAtMs: profileRes.data?.created_at ? Date.parse(profileRes.data.created_at) : null,
     isOnboarded: profileRes.data?.is_onboarded ?? false,
-    paidPlan: subscription?.plan ?? "free",
+    // legacyTierOf: Access is not a rung on the tier ladder, so it reads as no tier here.
+    paidPlan: subscription ? legacyTierOf(subscription.plan) : "free",
     paidStatus: subscription?.status ?? "free",
     paidPeriodEndMs: subscription?.current_period_end ? Date.parse(subscription.current_period_end) : null,
     paidGraceEndsMs: subscription?.grace_ends_at ? Date.parse(subscription.grace_ends_at) : null,

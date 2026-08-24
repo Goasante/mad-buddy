@@ -30,7 +30,55 @@ export type AccessSourceName =
   | "global_promo";
 export type LocationConfidence = "high" | "medium" | "low";
 export type ProximityLevel = "close" | "near" | "far" | "hidden";
+/**
+ * The RETIRED three-tier ladder.
+ *
+ * Deliberately NOT widened to include `mad_buddy_access`. Around twenty
+ * subsystems are keyed on this ladder -- wallpaper tiers, tour entitlement
+ * gating, buddy-score earned rewards, the per-tier entitlement registry, the
+ * legacy comparison UI -- and Mad Buddy Access is not a rung on it. Widening
+ * this union broke all of them at once, and the only ways to satisfy the
+ * compiler would have been to invent an arbitrary position for Access in each
+ * ladder (a wallpaper tier, a reward threshold) or to loosen those types. Both
+ * would be fabricating product decisions to serve a type.
+ *
+ * What a subscription ROW may hold is `SubscriptionProduct` below.
+ */
 export type SubscriptionPlan = "free" | "buddy_plus" | "buddy_pro";
+
+/**
+ * What `subscriptions.plan` can actually contain.
+ *
+ * The legacy ladder, plus the current product. Access rows are written as
+ * `mad_buddy_access` and never as a tier: the resolver only asks whether a
+ * subscription is live, so a tier label would have worked while quietly
+ * attributing this product's revenue to one nobody can buy, and would break
+ * reconciliation against the Paystack plan code PLN_pbpn6h7vprirvlu.
+ *
+ * Mirrors the `subscription_plan` enum after
+ * 20260824130000_access_subscription_plan.
+ */
+export type SubscriptionProduct = SubscriptionPlan | "mad_buddy_access";
+
+/**
+ * A subscription row's product, seen from the LEGACY TIER LADDER.
+ *
+ * Mad Buddy Access maps to `"free"`, and that is the correct answer rather than
+ * a fudge: Access grants nothing THROUGH the ladder. It does not raise a
+ * wallpaper tier, unlock a tour, or change an entitlement row -- what it
+ * unlocks (Linkr and UpFor) is decided entirely by `lib/access/resolver`.
+ *
+ * So to every ladder-shaped consumer, an Access subscriber genuinely has no
+ * tier. Reporting `buddy_plus` instead would hand them capabilities nobody
+ * bought.
+ *
+ * Revenue and admin surfaces that need to know WHICH PRODUCT sold should read
+ * `subscriptions.plan` directly (a `SubscriptionProduct`) rather than going
+ * through this.
+ */
+export function legacyTierOf(plan: SubscriptionProduct): SubscriptionPlan {
+  return plan === "mad_buddy_access" ? "free" : plan;
+}
 export type SubscriptionStatus =
   | "free"
   | "trialing"
@@ -453,7 +501,7 @@ export type Database = {
           paystack_subscription_code: string | null;
           paystack_email_token: string | null;
           paystack_authorization_code: string | null;
-          plan: SubscriptionPlan;
+          plan: SubscriptionProduct;
           status: SubscriptionStatus;
           current_period_start: string | null;
           current_period_end: string | null;
@@ -477,7 +525,7 @@ export type Database = {
           paystack_subscription_code?: string | null;
           paystack_email_token?: string | null;
           paystack_authorization_code?: string | null;
-          plan?: SubscriptionPlan;
+          plan?: SubscriptionProduct;
           status?: SubscriptionStatus;
           current_period_start?: string | null;
           current_period_end?: string | null;
@@ -631,7 +679,7 @@ export type Database = {
           provider: string;
           user_id: string | null;
           subscription_id: string | null;
-          subscription_plan: SubscriptionPlan;
+          subscription_plan: SubscriptionProduct;
           previous_plan: SubscriptionPlan | null;
           amount_minor: number | null;
           provider_fee_minor: number | null;
@@ -651,7 +699,7 @@ export type Database = {
           provider?: string;
           user_id?: string | null;
           subscription_id?: string | null;
-          subscription_plan?: SubscriptionPlan;
+          subscription_plan?: SubscriptionProduct;
           previous_plan?: SubscriptionPlan | null;
           amount_minor?: number | null;
           provider_fee_minor?: number | null;
@@ -4399,7 +4447,7 @@ export type Database = {
           created_at: string;
           dedupe_key: string | null;
           feature_key: string | null;
-          subscription_plan: SubscriptionPlan;
+          subscription_plan: SubscriptionProduct;
         };
         Insert: {
           id?: string;
@@ -4413,7 +4461,7 @@ export type Database = {
           created_at?: string;
           dedupe_key?: string | null;
           feature_key?: string | null;
-          subscription_plan?: SubscriptionPlan;
+          subscription_plan?: SubscriptionProduct;
         };
         // Append-only: a database trigger rejects UPDATE and DELETE.
         Update: never;
@@ -4426,7 +4474,7 @@ export type Database = {
           user_id: string;
           event_name: string;
           feature_key: string;
-          subscription_plan: SubscriptionPlan;
+          subscription_plan: SubscriptionProduct;
           action_count: number;
           first_occurred_at: string;
           last_occurred_at: string;
@@ -4439,7 +4487,7 @@ export type Database = {
           user_id: string;
           event_name: string;
           feature_key?: string;
-          subscription_plan?: SubscriptionPlan;
+          subscription_plan?: SubscriptionProduct;
           action_count?: number;
           first_occurred_at: string;
           last_occurred_at: string;
@@ -4774,7 +4822,7 @@ export type Database = {
       visibility_status: VisibilityStatus;
       location_confidence: LocationConfidence;
       proximity_level: ProximityLevel;
-      subscription_plan: SubscriptionPlan;
+      subscription_plan: SubscriptionProduct;
       subscription_status: SubscriptionStatus;
       report_status: ReportStatus;
       meetup_status: MeetupStatus;

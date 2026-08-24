@@ -7,6 +7,7 @@ import { invalidMutationOriginResponse } from "@/lib/security/csrf";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { legacyTierOf } from "@/lib/supabase/database.types";
 
 const reasonValues = CANCELLATION_REASONS.map((reason) => reason.value) as [string, ...string[]];
 const schema = z.object({ reason: z.enum(reasonValues).default("prefer_not_to_say") });
@@ -60,8 +61,9 @@ export async function POST(request: Request) {
     subscription_id: subscription.id,
     user_id: user.id,
     change_type: "cancel",
-    from_plan: subscription.plan,
-    to_plan: subscription.plan,
+    // legacyTierOf: subscription_changes tracks ladder movement; Access is off-ladder.
+    from_plan: legacyTierOf(subscription.plan),
+    to_plan: legacyTierOf(subscription.plan),
     effective_at: subscription.current_period_end,
     status: "scheduled",
     reason
