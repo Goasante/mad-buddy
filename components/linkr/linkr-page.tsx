@@ -398,7 +398,12 @@ function LinkrPageContent({
         busy={pending || writing}
         onBack={() => setView("discover")}
         onOpenFilters={() => setView("filters")}
-        onOpenBlocked={() => router.push("/safety-center")}
+        /* The blocked list itself, not the Safety Centre that merely links
+           to it. `hiddenCount` counts `blocked_users`, and discovery excludes
+           on that same table, so this row must land where that list is
+           actually managed. Safety Centre is safety tips and reporting: a
+           different job, one hop further from the list. */
+        onOpenBlocked={() => router.push("/friends?tab=blocked")}
         onToggleEnabled={async (next) => {
           const result = next ? await enableLinkrAction({ intent: profile.intent }) : await disableLinkrAction();
           if (result.ok) setProfile((current) => (current ? { ...current, enabled: next } : current));

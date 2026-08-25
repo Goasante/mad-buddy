@@ -12,7 +12,7 @@ import type { LinkrOwnProfile } from "@/lib/linkr/profile-service";
  * Scoped to Linkr. Account-wide privacy controls are not duplicated here --
  * two switches that both claim to control visibility is how a person ends up
  * believing they are hidden while one of them still says otherwise. Blocking
- * lives in the canonical Safety centre and is linked to, not reimplemented.
+ * lives in the canonical blocked list and is linked to, not reimplemented.
  */
 
 export type LinkrSettingsProps = {
