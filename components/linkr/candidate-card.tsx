@@ -73,6 +73,14 @@ export function CandidateCard({
 
   const photos = candidate.photos.length > 0 ? candidate.photos : [""];
   const total = photos.length;
+  /**
+   * The photos either side of the current one. Recomputed per render rather
+   * than memoised: it is two array lookups, and a stale memo here would defeat
+   * the entire point by warming the wrong images.
+   */
+  const neighbourPhotos = [photos[photoIndex - 1], photos[photoIndex + 1]].filter(
+    (url): url is string => Boolean(url)
+  );
 
   // A new person means a new card, starting at their first photo. This needs
   // no effect: the parent renders this component with key={candidate.userId},
@@ -169,6 +177,16 @@ export function CandidateCard({
           <div className="linkr-card__photo linkr-card__photo--empty" aria-hidden />
         )}
 
+        {/* The neighbouring photos, fetched but not shown. Tapping through a
+            card should not flash a blank frame while the next image loads, and
+            the browser cache is the cheapest possible way to do that -- no
+            preloader, no new pipeline. Only the immediate neighbours, so a
+            four-photo card never fetches more than it needs. */}
+        {neighbourPhotos.map((url) => (
+          // eslint-disable-next-line @next/next/no-img-element -- warming the cache
+          <img key={url} src={url} alt="" aria-hidden className="linkr-card__preload" />
+        ))}
+
         <div className="linkr-card__scrim" aria-hidden />
 
         {/* Photo progress. Reference shows a segmented bar; segments are also
@@ -186,9 +204,13 @@ export function CandidateCard({
 
         <div className="linkr-card__meta">
           {candidate.activeNow ? <span className="linkr-chip linkr-chip--live">Active now</span> : null}
-          <span className="linkr-card__counter">
-            {photoIndex + 1}/{total}
-          </span>
+          {/* Only when there is somewhere to go. "1/1" is chrome that
+              describes nothing and invites a tap that does nothing. */}
+          {total > 1 ? (
+            <span className="linkr-card__counter">
+              {photoIndex + 1}/{total}
+            </span>
+          ) : null}
         </div>
 
         {/* Decision feedback, shown only while a drag is actually committing. */}

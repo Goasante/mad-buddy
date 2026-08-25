@@ -28,8 +28,18 @@ export const PHOTO_VISIBILITY_OPTIONS: ReadonlyArray<{
   label: string;
   hint: string;
 }> = [
-  { id: "everyone", label: "Everyone", hint: "Anyone who can see your profile." },
-  { id: "approved_muddies", label: "My Muddies", hint: "Only people you're connected to." },
+  /**
+   * The hints now say where each setting REACHES, not just who it excludes.
+   *
+   * Linkr shows strangers only `everyone` photos -- a picture kept for your
+   * Muddies is not handed to people you have never met. That is the right
+   * rule, but it was invisible: photos default to `approved_muddies`, so
+   * people added showcase photos, saw them on their own Profile, and could not
+   * work out why their Linkr card still showed one image. Saying so here is
+   * the fix; widening the projection would not be.
+   */
+  { id: "everyone", label: "Everyone", hint: "Anyone who can see your profile, including on Linkr." },
+  { id: "approved_muddies", label: "My Muddies", hint: "Only people you're connected to. Not shown on Linkr." },
   { id: "only_me", label: "Only me", hint: "Nobody else can see it." }
 ];
 
