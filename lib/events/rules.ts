@@ -324,12 +324,9 @@ export type EventAudienceContext = {
  * feed is not unlisted. `link` is reachable by anyone holding the link and
  * must never be browsable; `invite` is private however many people are going.
  *
- * LEGACY `community` IS DELIBERATELY DISCOVERABLE. Every Event created before
- * the audience picker existed is `community` with no target attached, and
- * those are findable today. Hiding them retroactively would remove Events
- * people can currently see, so an untargeted `community` Event keeps behaving
- * as it always has. Once a community target is attached, membership decides --
- * which is what the audience was always supposed to mean.
+ * `community` requires both a selected community and current membership.
+ * Older untargeted rows fail closed: absence of an audience target is not
+ * permission to expose the Event broadly.
  *
  * Fails closed: an audience this function does not recognise gets no
  * discovery, rather than inheriting it by falling through a !== check.
@@ -341,8 +338,7 @@ export function isDiscoverableInFeed(event: EventAudienceContext, viewerId: stri
     case "nearby":
       return true;
     case "community":
-      // Targeted: members only. Untargeted (legacy): as before.
-      return event.hasCommunityTarget ? Boolean(event.isCommunityMember) : true;
+      return Boolean(event.hasCommunityTarget && event.isCommunityMember);
     case "invite":
     case "link":
     default:
@@ -388,7 +384,7 @@ export function canViewEvent(
     case "link":
       return true;
     case "community":
-      return event.hasCommunityTarget ? Boolean(event.isCommunityMember) : true;
+      return Boolean(event.hasCommunityTarget && event.isCommunityMember);
     case "invite":
       return Boolean(event.isInvited);
     default:

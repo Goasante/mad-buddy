@@ -45,7 +45,7 @@ const MATRIX = [
   // visibility   discoverable  viewable  rankable
   ["public",      true,         true,     true],
   ["nearby",      true,         true,     true],
-  ["community",   true,         true,     false], // untargeted (legacy)
+  ["community",   false,        false,    false], // no selected community: fail closed
   ["link",        false,        true,     false],
   ["invite",      false,        false,    false]
 ] as const;
@@ -92,6 +92,12 @@ describe("Event audiences: three authorities, five audiences", () => {
     // But never broadly rankable, member or not: "trending" is a claim about
     // the whole product.
     expect(isBroadlyRankable({ visibility: "community" })).toBe(false);
+  });
+
+  it("an untargeted legacy community Event fails closed", () => {
+    const untargeted = context({ visibility: "community", hasCommunityTarget: false });
+    expect(isDiscoverableInFeed(untargeted, STRANGER)).toBe(false);
+    expect(canViewEvent({ ...untargeted, status: "published" }, STRANGER)).toBe(false);
   });
 
   it("a draft is invisible to everyone except its host, whatever the audience", () => {

@@ -50,11 +50,10 @@ describe("browsing: what shows up in discovery", () => {
     expect(isDiscoverableInFeed(at("community", { ...targeted, isCommunityMember: false }), VIEWER)).toBe(false);
   });
 
-  it("keeps legacy untargeted community Events discoverable", () => {
-    /* Every Event created before the audience picker is `community` with no
-     * target and is findable today. Hiding them retroactively would remove
-     * Events people can currently see. */
-    expect(isDiscoverableInFeed(at("community"), VIEWER)).toBe(true);
+  it("fails closed for an untargeted legacy community Event", () => {
+    /* Community means members of a selected community. A missing target is
+     * incomplete authority, not permission to expose the Event broadly. */
+    expect(isDiscoverableInFeed(at("community"), VIEWER)).toBe(false);
   });
 
   it("always shows a host their own Event", () => {

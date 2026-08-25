@@ -19,8 +19,8 @@ const VIEWER = "viewer-1";
 const ev = (visibility: string, hostId = HOST) => ({ visibility, hostId });
 
 describe("browsing the Events feed", () => {
-  it("shows community Events to anyone", () => {
-    expect(isDiscoverableInFeed(ev("community"), VIEWER)).toBe(true);
+  it("does not expose a community Event without a selected community", () => {
+    expect(isDiscoverableInFeed(ev("community"), VIEWER)).toBe(false);
   });
 
   it("keeps an unlisted link Event out of the feed", () => {

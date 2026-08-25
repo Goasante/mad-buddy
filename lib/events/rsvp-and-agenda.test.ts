@@ -97,8 +97,15 @@ describe("setEventRsvp validates everything a client could lie about", () => {
     expect(service.slice(0, 600)).toContain("rsvpStatusSchema.safeParse(status)");
   });
 
-  it("checks the event exists and respects invite-only visibility", () => {
-    expect(service).toContain('event.visibility === "invite" && event.host_id !== userId');
+  it("uses the direct-access authority for invite and community membership", () => {
+    /* The RSVP path must make the same decision as Event detail. A blanket
+     * invite check rejected real invitees, while a missing community check let
+     * a guessed id mutate an Event the viewer could not open. */
+    expect(service).toContain("getEventForViewer(eventId, userId)");
+    expect(service).toContain("if (!access.ok) return { ok: false, message: \"Event not found.\" };");
+    expect(mobile).toContain('import { getEventForViewer } from "@/lib/events/access";');
+    const rsvpOnly = service.slice(0, service.indexOf("export async function createEvent"));
+    expect(rsvpOnly).not.toContain('event.visibility === "invite" && event.host_id !== userId');
   });
 
   it("refuses a host RSVPing to their own event", () => {
@@ -109,14 +116,11 @@ describe("setEventRsvp validates everything a client could lie about", () => {
     expect(hostCheck.slice(0, 150)).toContain("You're hosting this event.");
   });
 
-  it("checks the block relationship before allowing the mutation", () => {
-    expect(service).toContain("isBlockedEitherDirection(admin, userId, event.host_id)");
-    // Same information-leak avoidance every other blocked-access path in the
-    // product uses: a blocked RSVP attempt gets the identical "not found"
-    // message an actually-missing event would, never a message that confirms
-    // the block exists.
-    const blockCheck = service.slice(service.indexOf("isBlockedEitherDirection(admin, userId, event.host_id)"));
-    expect(blockCheck.slice(0, 200)).toContain("Event not found.");
+  it("inherits block non-disclosure from the direct-access authority", () => {
+    expect(service).toContain("getEventForViewer(eventId, userId)");
+    expect(readFileSync("lib/events/access.ts", "utf8")).toContain(
+      "isBlockedEitherDirection(admin, viewerId, row.host_id)"
+    );
   });
 
   it("refuses a cancelled or draft event", () => {

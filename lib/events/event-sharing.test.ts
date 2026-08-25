@@ -59,14 +59,13 @@ describe("a share URL never widens access", () => {
     expect(targeted(false)).toBe(false);
     expect(targeted(true)).toBe(true);
 
-    // An untargeted community Event is open -- that is a different case, not
-    // an exception to the rule above.
+    // An untargeted community Event has no audience authority and fails closed.
     expect(
       canViewEvent(
         { visibility: "community", hostId: HOST, hasCommunityTarget: false, status: "scheduled" },
         OUTSIDER
       )
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("opens a link Event for whoever holds the link -- that is the audience", () => {

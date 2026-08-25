@@ -2,12 +2,12 @@ import "server-only";
 
 import { z } from "zod";
 import { isDiscoverableInFeed, isPastEvent, resolveCheckInWindow } from "@/lib/events/rules";
+import { getEventForViewer } from "@/lib/events/access";
 import { liveCheckIn } from "@/lib/events/service";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import {
   batchBlockedIds,
-  batchEligibleMuddyIds,
-  isBlockedEitherDirection
+  batchEligibleMuddyIds
 } from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -78,6 +78,35 @@ export type EventResult = { ok: boolean; message: string; eventId?: string; chec
 const uuidSchema = z.string().uuid();
 
 const rsvpStatusSchema = z.enum(["interested", "going", "not_going"]);
+
+type Admin = ReturnType<typeof createSupabaseAdminClient>;
+
+/** Community targets are groups the creator currently belongs to, not ids a
+ * client is trusted to name. Both conditions matter: conversation_members also
+ * contains direct, Plan and Event conversations, none of which is an Event
+ * community audience. */
+async function eligibleCommunityTargetIds(
+  admin: Admin,
+  userId: string,
+  targetIds: readonly string[]
+): Promise<string[]> {
+  if (targetIds.length === 0) return [];
+  const { data: memberships } = await admin
+    .from("conversation_members")
+    .select("conversation_id")
+    .eq("user_id", userId)
+    .eq("status", "joined")
+    .in("conversation_id", [...targetIds]);
+  const joinedIds = [...new Set((memberships ?? []).map((row) => row.conversation_id))];
+  if (joinedIds.length === 0) return [];
+
+  const { data: groups } = await admin
+    .from("conversations")
+    .select("id")
+    .eq("conversation_type", "group")
+    .in("id", joinedIds);
+  return (groups ?? []).map((row) => row.id);
+}
 
 export const createEventSchema = z.object({
   name: z.string().min(2).max(120),
@@ -420,15 +449,17 @@ export async function setEventRsvp(userId: string, eventId: string, status: unkn
   const parsedStatus = rsvpStatusSchema.safeParse(status);
   if (!parsedStatus.success) return { ok: false, message: "Choose Interested, Going or Not Going." };
 
-  const admin = createSupabaseAdminClient();
-  const { data: event } = await admin
-    .from("events")
-    .select("id, name, host_id, visibility, status, starts_at, ends_at")
-    .eq("id", eventId)
-    .maybeSingle();
-  if (!event || (event.visibility === "invite" && event.host_id !== userId)) {
-    return { ok: false, message: "Event not found." };
-  }
+  /* RSVP uses the SAME direct-access authority as opening Event detail.
+   *
+   * The old shortcut rejected every invite-only Event for every non-host,
+   * including people who really were invited, and checked no community
+   * membership at all. That made legitimate invitees unable to answer while
+   * a guessed community Event id could still be mutated. getEventForViewer
+   * resolves invite targets, joined-community membership, draft status and
+   * blocks, and fails closed for every unknown audience. */
+  const access = await getEventForViewer(eventId, userId);
+  if (!access.ok) return { ok: false, message: "Event not found." };
+  const event = access.event;
 
   // Hosting and RSVPing are different concepts. A host does not need to tell
   // themselves they are going to their own event, and a stray RSVP row for
@@ -436,13 +467,6 @@ export async function setEventRsvp(userId: string, eventId: string, status: unkn
   // isHost already answers.
   if (event.host_id === userId) {
     return { ok: false, message: "You're hosting this event." };
-  }
-
-  if (await isBlockedEitherDirection(admin, userId, event.host_id)) {
-    // Same message as "not found": confirming a block exists to the blocked
-    // party is its own small information leak, and every other blocked-access
-    // path in this product already answers this way.
-    return { ok: false, message: "Event not found." };
   }
 
   if (event.status === "cancelled" || event.status === "draft") {
@@ -459,6 +483,7 @@ export async function setEventRsvp(userId: string, eventId: string, status: unkn
   const rateLimit = await consumeRateLimit({ action: "events.rsvp", userId });
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
+  const admin = createSupabaseAdminClient();
   const { error } = await admin
     .from("event_rsvps")
     .upsert(
@@ -504,6 +529,19 @@ export async function createEvent(userId: string, input: unknown): Promise<Event
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
   const admin = createSupabaseAdminClient();
+  const allowedTargetIds =
+    chosenVisibility === "invite"
+      ? [...(await batchEligibleMuddyIds(admin, userId, targetIds))]
+      : chosenVisibility === "community"
+        ? await eligibleCommunityTargetIds(admin, userId, targetIds)
+        : [];
+  const authorizedAudience = validateAudienceRequirements({
+    visibility: chosenVisibility,
+    targetCount: allowedTargetIds.length,
+    hasLocation: Boolean(parsed.data.location)
+  });
+  if (!authorizedAudience.ok) return { ok: false, message: authorizedAudience.message };
+
   const { data: event, error } = await admin
     .from("events")
     .insert({
@@ -539,22 +577,15 @@ export async function createEvent(userId: string, input: unknown): Promise<Event
   /* Targets are written only for the audiences that use them, and only after
      the Event row exists to hang them off. An invited Event stores people; a
      community Event stores the Circle. Nothing else needs a row. */
-  if (targetIds.length > 0 && (chosenVisibility === "invite" || chosenVisibility === "community")) {
+  if (allowedTargetIds.length > 0 && (chosenVisibility === "invite" || chosenVisibility === "community")) {
     const targetType = chosenVisibility === "invite" ? "user" : "community";
-    /* Invitees are filtered to real approved Muddies. A client-supplied id
-       list must never become a way to attach an Event to a stranger, or to
-       somebody on either side of a block. */
-    const allowedIds =
-      targetType === "user" ? [...(await batchEligibleMuddyIds(admin, userId, targetIds))] : targetIds;
-    if (allowedIds.length > 0) {
-      await admin.from("event_audience_targets").insert(
-        allowedIds.map((targetId) => ({
-          event_id: event.id,
-          target_type: targetType,
-          target_id: targetId
-        }))
-      );
-    }
+    await admin.from("event_audience_targets").insert(
+      allowedTargetIds.map((targetId) => ({
+        event_id: event.id,
+        target_type: targetType,
+        target_id: targetId
+      }))
+    );
   }
 
   if (parsed.data.location) {
@@ -591,15 +622,13 @@ export async function checkInToEvent(
   if (!hasServiceRoleEnv()) return { ok: false, message: "This action needs the server database configuration." };
   if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
 
+  /* Arrival cannot be a side door around Event access. This also fixes the
+   * inverse bug in the old invite shortcut: it rejected a legitimate invitee
+   * solely because they were not the host. */
+  const access = await getEventForViewer(eventId, userId);
+  if (!access.ok) return { ok: false, message: "Event not found." };
+  const event = access.event;
   const admin = createSupabaseAdminClient();
-  const { data: event } = await admin
-    .from("events")
-    .select("id, name, host_id, visibility, status, starts_at, ends_at, checkin_opens_minutes_before")
-    .eq("id", eventId)
-    .maybeSingle();
-  if (!event || (event.visibility === "invite" && event.host_id !== userId)) {
-    return { ok: false, message: "Event not found." };
-  }
 
   const window = resolveCheckInWindow({
     eventStatus: event.status,
@@ -911,9 +940,15 @@ export async function updateEventDraft(
     .eq("event_id", eventId)
     .maybeSingle();
 
+  const allowedTargetIds =
+    chosenVisibility === "invite"
+      ? [...(await batchEligibleMuddyIds(admin, userId, targetIds))]
+      : chosenVisibility === "community"
+        ? await eligibleCommunityTargetIds(admin, userId, targetIds)
+        : [];
   const audienceCheck = validateAudienceRequirements({
     visibility: chosenVisibility,
-    targetCount: targetIds.length,
+    targetCount: allowedTargetIds.length,
     hasLocation: Boolean(parsed.data.location) || Boolean(storedLocation)
   });
   if (!audienceCheck.ok) return { ok: false, message: audienceCheck.message };
@@ -938,11 +973,7 @@ export async function updateEventDraft(
    * would silently keep somebody the host had just taken off the list. */
   if (chosenVisibility === "invite" || chosenVisibility === "community") {
     await admin.from("event_audience_targets").delete().eq("event_id", eventId);
-    const eligible =
-      chosenVisibility === "invite"
-        ? await batchEligibleMuddyIds(admin, userId, targetIds)
-        : new Set(targetIds);
-    const rows = [...eligible].map((targetId) => ({
+    const rows = allowedTargetIds.map((targetId) => ({
       event_id: eventId,
       // Literal union, not string: the column is constrained to these two.
       target_type: (chosenVisibility === "invite" ? "user" : "community") as "user" | "community",

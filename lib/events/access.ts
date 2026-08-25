@@ -3,6 +3,7 @@ import "server-only";
 import { canViewEvent, canManageEvent, type EventAudienceContext } from "@/lib/events/rules";
 import { isBlockedEitherDirection } from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { EventStatus } from "@/lib/supabase/database.types";
 
 /**
  * The one authority for "may this viewer open this specific Event".
@@ -39,7 +40,7 @@ export type EventRow = {
   starts_at: string;
   ends_at: string;
   visibility: string;
-  status: string;
+  status: EventStatus;
   checkin_opens_minutes_before: number;
 };
 

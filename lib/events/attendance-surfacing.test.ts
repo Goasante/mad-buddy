@@ -155,8 +155,20 @@ describe("RSVP stays server-authoritative", () => {
   it("keeps block, visibility and terminal-status checks before the write", () => {
     const rsvp = service.slice(service.indexOf("export async function setEventRsvp"));
     const body = rsvp.slice(0, rsvp.indexOf('.from("event_rsvps")'));
-    expect(body).toContain("isBlockedEitherDirection");
-    expect(body).toContain('event.visibility === "invite"');
+    expect(body).toContain("getEventForViewer(eventId, userId)");
     expect(body).toContain('event.status === "cancelled"');
+  });
+});
+
+describe("check-in uses the Event audience authority", () => {
+  it("allows real invitees and rejects non-members without a second audience rule", () => {
+    const checkIn = service.slice(
+      service.indexOf("export async function checkInToEvent"),
+      service.indexOf("export async function checkOutEvent")
+    );
+
+    expect(checkIn).toContain("getEventForViewer(eventId, userId)");
+    expect(checkIn).toContain("if (!access.ok) return { ok: false, message: \"Event not found.\" };");
+    expect(checkIn).not.toContain('event.visibility === "invite"');
   });
 });

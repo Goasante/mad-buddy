@@ -122,6 +122,14 @@ describe("invitees come from real relationships", () => {
     expect(options).toContain('.eq("status", "joined")');
     expect(options).toContain('.eq("conversation_type", "group")');
   });
+
+  it("re-validates community ids on the server before create or edit", () => {
+    expect(service).toContain("eligibleCommunityTargetIds(admin, userId, targetIds)");
+    expect(service).toContain('.eq("user_id", userId)');
+    expect(service).toContain('.eq("status", "joined")');
+    expect(service).toContain('.eq("conversation_type", "group")');
+    expect(service).toContain("targetCount: allowedTargetIds.length");
+  });
 });
 
 describe("Nearby uses Event geography, not Muddy proximity", () => {
