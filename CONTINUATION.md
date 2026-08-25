@@ -1,4 +1,4 @@
-# Events recovery continuation — after Checkpoint 3
+# Events recovery continuation — Checkpoint 4 runtime prepared, Browser blocked
 
 Branch: `fix/events-recovery`
 
@@ -47,3 +47,17 @@ Do not call any of these production-verified. Resume with an available signed-in
 ## Next checkpoint
 
 Event Linkr end to end, then security review and release. Do not push or deploy until the interactive journey and full release gates pass.
+
+## Checkpoint 4 local-runtime preparation (2026-08-25)
+
+- Restored the Docker-backed local Supabase stack at `127.0.0.1:54321`; no production Supabase session or account was used.
+- Applied all pending migrations locally without resetting the database.
+- Verified local Auth for Host (`qa@local.test`), Attendee A (`kofi@local.test`), Attendee B (`ama@local.test`), and the unauthorized outsider (`saa@local.test`).
+- Verified the local Next.js runtime answers `/login` on port 3200.
+- Event authority runtime sequence passed 9/9.
+- The Linkr runtime sequence initially failed its simultaneous reciprocal-connect assertion (6/7): both calls committed private actions but neither created the connection.
+- Added `20260825120000_linkr_connect_race_lock.sql`, which serializes only the canonical user pair with a transaction advisory lock before recording interest.
+- After applying that migration locally, the real Postgres Linkr runtime sequence passed 7/7, including simultaneous reciprocal connects producing exactly one connection.
+- Focused Linkr unit/migration suite passed 62/62; TypeScript passed.
+
+The in-app Browser connector still returns `No browser is available` for `http://127.0.0.1:3200`. That is the single remaining execution blocker for the required interactive Create/Publish/Reopen, RSVP/check-in, Event Linkr UI, canonical chat, end-event persistence, and responsive light/dark screenshot pass. Standalone Playwright was not used because the Browser skill requires the selected Browser surface rather than a fallback browser runtime.
