@@ -19,7 +19,8 @@ const ACHIEVEMENT_CODE_PATTERN = /^[a-z0-9_]+$/;
 
 export type LiveSignal =
   | { kind: "wave"; senderId: string }
-  | { kind: "achievement"; code: string };
+  | { kind: "achievement"; code: string }
+  | { kind: "linkr_mutual"; connectionId: string };
 
 /**
  * The live signal a notification type represents, or null when it is an
@@ -42,6 +43,11 @@ export function parseLiveSignal(type: string | null | undefined): LiveSignal | n
   }
   if (base === "achievement") {
     return ACHIEVEMENT_CODE_PATTERN.test(subject) ? { kind: "achievement", code: subject } : null;
+  }
+  if (base === "linkr_connection") {
+    return UUID_PATTERN.test(subject)
+      ? { kind: "linkr_mutual", connectionId: subject }
+      : null;
   }
   return null;
 }

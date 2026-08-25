@@ -118,6 +118,10 @@ function LinkrPageContent({
     name: string;
     connectionId: string;
   } | null>(null);
+  // The person completing reciprocity already receives the full mutual
+  // screen. Remember that connection so its symmetrical notification cannot
+  // reappear as a redundant first-connector banner after the screen closes.
+  const completedConnectionId = useRef<string | null>(null);
   const [clicked, setClicked] = useState<ClickedPerson[]>([]);
   const [pendingClicks, setPendingClicks] = useState<PendingClick[]>([]);
   const [canUndo, setCanUndo] = useState(false);
@@ -215,6 +219,10 @@ function LinkrPageContent({
       // is indistinguishable from here, which is exactly the intent: there is
       // no state in this component that could render "waiting for them".
       if (result.matched && result.matchedWith) {
+        completedConnectionId.current = result.connectionId ?? null;
+        setMutualBanner((current) =>
+          current?.connectionId === result.connectionId ? null : current
+        );
         setMatch({
           displayName: result.matchedWith.displayName,
           photo: result.matchedWith.photo,
@@ -232,6 +240,7 @@ function LinkrPageContent({
     ]);
     setClicked(clickedPeople);
     setPendingClicks(pending);
+    return { clickedPeople, pending };
   }, []);
 
   /**
@@ -241,7 +250,7 @@ function LinkrPageContent({
    * revisiting an old match does not offer to start what was started.
    */
   const openMutualPerson = useCallback(
-    (connectionId: string) => {
+    (connectionId: string, knownPerson?: ClickedPerson) => {
       void (async () => {
         const resolved = await resolveMutualDestinationAction(connectionId);
         if (resolved.kind === "conversation") {
@@ -256,7 +265,7 @@ function LinkrPageContent({
           void refreshCollections();
           return;
         }
-        const person = clicked.find((entry) => entry.connectionId === connectionId);
+        const person = knownPerson ?? clicked.find((entry) => entry.connectionId === connectionId);
         setMutualBanner(null);
         setMatch({
           displayName: person?.displayName ?? "Someone",
@@ -276,13 +285,44 @@ function LinkrPageContent({
   useEffect(() => {
     if (!requestedConnectionId) return;
     void (async () => {
-      await refreshCollections();
-      openMutualPerson(requestedConnectionId);
+      const { clickedPeople } = await refreshCollections();
+      openMutualPerson(
+        requestedConnectionId,
+        clickedPeople.find((entry) => entry.connectionId === requestedConnectionId)
+      );
     })();
     // Intentionally keyed only on the id: re-resolving on every render would
     // reopen the screen the person just dismissed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestedConnectionId]);
+
+  /**
+   * Live reciprocity for the person who chose first.
+   *
+   * Delivery stays in the app-wide notification subscription. This component
+   * only owns how that already-authorised signal is presented while Linkr is
+   * active. The connection is resolved again before any UI is shown, so a
+   * forged event, stale notification, or newly blocked pair fails closed.
+   */
+  useEffect(() => {
+    const onMutual = (event: Event) => {
+      const connectionId = (event as CustomEvent<{ connectionId?: string }>).detail?.connectionId;
+      if (!connectionId || connectionId === completedConnectionId.current) return;
+
+      void (async () => {
+        const resolved = await resolveMutualDestinationAction(connectionId);
+        if (resolved.kind === "unavailable" || resolved.kind === "conversation") return;
+
+        const { clickedPeople } = await refreshCollections();
+        const person = clickedPeople.find((entry) => entry.connectionId === connectionId);
+        if (!person || connectionId === completedConnectionId.current) return;
+        setMutualBanner({ name: person.displayName, connectionId });
+      })();
+    };
+
+    window.addEventListener("mad-buddy:linkr-mutual", onMutual);
+    return () => window.removeEventListener("mad-buddy:linkr-mutual", onMutual);
+  }, [refreshCollections]);
 
   const handleUndo = useCallback(() => {
     /* Undo REVERSES A RECORDED DECISION, so the write must finish: an

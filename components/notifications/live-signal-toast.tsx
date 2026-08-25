@@ -82,6 +82,19 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
     };
 
     const present = async (id: string, parsed: LiveSignal) => {
+      if (parsed.kind === "linkr_mutual") {
+        // Linkr owns the foreground presentation, but not delivery. Reuse this
+        // one authenticated notification subscription and hand the connection
+        // id to the active Linkr surface. Elsewhere the persisted notification
+        // and its canonical destination remain the experience.
+        window.dispatchEvent(
+          new CustomEvent("mad-buddy:linkr-mutual", {
+            detail: { connectionId: parsed.connectionId }
+          })
+        );
+        return;
+      }
+
       if (parsed.kind === "achievement") {
         // Resolved entirely from the shared client-safe catalog, so an
         // achievement needs no network round trip at all.

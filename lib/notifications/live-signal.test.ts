@@ -12,6 +12,13 @@ describe("parseLiveSignal", () => {
     expect(parseLiveSignal("achievement:first_muddy")).toEqual({ kind: "achievement", code: "first_muddy" });
   });
 
+  it("reads the connection id out of a Linkr mutual notification type", () => {
+    expect(parseLiveSignal(`linkr_connection:${SENDER}`)).toEqual({
+      kind: "linkr_mutual",
+      connectionId: SENDER
+    });
+  });
+
   it("ignores notification types that are not live signals", () => {
     for (const type of [`message:${SENDER}`, `friend_request_received:${SENDER}`, `moment:${SENDER}`]) {
       expect(parseLiveSignal(type)).toBeNull();
@@ -24,7 +31,7 @@ describe("parseLiveSignal", () => {
   });
 
   it("rejects a missing, empty, or malformed subject", () => {
-    for (const type of ["wave", "wave:", "wave:not-a-uuid", "achievement", "achievement:", "", null, undefined]) {
+    for (const type of ["wave", "wave:", "wave:not-a-uuid", "linkr_connection", "linkr_connection:not-a-uuid", "achievement", "achievement:", "", null, undefined]) {
       expect(parseLiveSignal(type)).toBeNull();
     }
   });

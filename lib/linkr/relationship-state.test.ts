@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  PENDING_RESURFACE_MS,
   appearsInDiscover,
-  canResurfacePending,
   resolveRelationshipState,
   type RelationshipInput
 } from "@/lib/linkr/relationship-state";
@@ -166,44 +164,5 @@ describe("mutual people leave the deck but not the product", () => {
 
   it("and never returns as an ordinary candidate", () => {
     expect(appearsInDiscover("MUTUAL_CLICKED")).toBe(false);
-  });
-});
-
-describe("pending resurfacing", () => {
-  it("does not re-offer a fresh interest", () => {
-    expect(
-      canResurfacePending({
-        state: "PENDING_CONNECT",
-        decidedAt: new Date(NOW - DAY).toISOString(),
-        now: NOW
-      })
-    ).toBe(false);
-  });
-
-  it("re-offers only after the window", () => {
-    expect(
-      canResurfacePending({
-        state: "PENDING_CONNECT",
-        decidedAt: new Date(NOW - PENDING_RESURFACE_MS - 1).toISOString(),
-        now: NOW
-      })
-    ).toBe(true);
-  });
-
-  it("never re-offers a state that is not pending", () => {
-    const old = new Date(NOW - 400 * DAY).toISOString();
-    for (const state of ["UNSEEN", "PASSED", "MUTUAL_CLICKED", "BLOCKED_OR_INELIGIBLE"] as const) {
-      expect(canResurfacePending({ state, decidedAt: old, now: NOW })).toBe(false);
-    }
-  });
-
-  it("survives an unparseable timestamp rather than resurfacing wrongly", () => {
-    expect(
-      canResurfacePending({ state: "PENDING_CONNECT", decidedAt: "not-a-date", now: NOW })
-    ).toBe(false);
-  });
-
-  it("uses the same 30 days as the pass cooldown", () => {
-    expect(PENDING_RESURFACE_MS).toBe(30 * DAY);
   });
 });

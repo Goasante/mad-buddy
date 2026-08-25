@@ -87,30 +87,3 @@ export function resolveRelationshipState(input: RelationshipInput): LinkrRelatio
 export function appearsInDiscover(state: LinkrRelationshipState): boolean {
   return state === "UNSEEN";
 }
-
-/**
- * How long a pending, unreturned interest waits before the viewer may be asked
- * about it again. Matches the pass cooldown so Linkr has ONE recycling period
- * rather than two numbers that drift apart.
- */
-export const PENDING_RESURFACE_MS = 30 * 24 * 60 * 60 * 1000;
-
-/**
- * Whether a pending interest may be re-offered as "Still interested?".
- *
- * NOT a new discovery: the person is re-offered in an explicit reaffirm state,
- * because returning them to the deck as though they were new would be a lie
- * the viewer can detect and would quietly invite a second notification.
- *
- * Reaffirming notifies nobody, writes no new row, and changes no ranking -- so
- * this predicate governs presentation only.
- */
-export function canResurfacePending(input: {
-  state: LinkrRelationshipState;
-  decidedAt: string;
-  now: number;
-}): boolean {
-  if (input.state !== "PENDING_CONNECT") return false;
-  const age = input.now - Date.parse(input.decidedAt);
-  return Number.isFinite(age) && age >= PENDING_RESURFACE_MS;
-}
