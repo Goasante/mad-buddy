@@ -34,6 +34,8 @@ export type ModalProps = {
    * heading. The close button stays visible and keeps its position.
    */
   hideTitle?: boolean;
+  /** Stable runtime ownership marker for dialog invariant diagnostics. */
+  owner?: string;
 };
 
 export function Modal({
@@ -46,7 +48,8 @@ export function Modal({
   compact = false,
   widthClassName = "max-w-md",
   variant = "center",
-  hideTitle = false
+  hideTitle = false,
+  owner
 }: ModalProps) {
   /* A scrim is allowed only when there is a foreground payload to put above
    * it. Several resource-driven call sites intentionally render `null` while
@@ -112,6 +115,7 @@ export function Modal({
           )}
         />
         <Dialog.Content
+          data-modal-owner={owner}
           /* THE RING WAS FOCUS, NOT DECORATION.
            *
            * Radix focuses the first focusable element on open, which is the
@@ -141,9 +145,13 @@ export function Modal({
             "max-w-[32rem]",
             isSheet && "sm:w-[calc(100%-1.5rem)]",
             // A hidden-title panel is a content surface, so it may be wider
-            // than the 32rem form cap, and needs relative positioning for the
-            // floated close button.
-            hideTitle && "relative max-w-[36rem]"
+            // than the 32rem form cap. Do not append `relative` here: fixed
+            // positioning already establishes the containing block required
+            // by the floated close button. tailwind-merge treats `relative`
+            // and `fixed` as conflicting position utilities, so the later
+            // `relative` removed `fixed` and placed the whole panel in normal
+            // flow below the page while its overlay remained fixed on screen.
+            hideTitle && "max-w-[36rem]"
           )}
         >
           {/* THE SHEET SHELL MARKER (§13).
@@ -205,6 +213,7 @@ export function Modal({
               so a tall form never hides its own action buttons or clips the
               last invitee row behind them. */}
           <div
+            data-modal-body="true"
             className={cn(
               /* min-w-0 IS WHAT KEEPS THE CONTENTS FROM SLIDING SIDEWAYS.
                  A flex child defaults to min-width:auto -- its intrinsic

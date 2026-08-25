@@ -942,6 +942,7 @@ export function EventsPageContent({
       {/* DETAIL AS A SHEET. Constrained content width on desktop rather than a
           390px column stretched across the viewport. */}
       <Modal
+        owner="EventDetailModal"
         open={Boolean(selectedEvent)}
         onOpenChange={(open) => {
           if (!open) setSelectedId(null);
@@ -992,6 +993,7 @@ export function EventsPageContent({
           inside the detail sheet: each is a place you go to do one thing, and
           nesting them made the detail view scroll past its own actions. */}
       <Modal
+        owner="EventUpdatesModal"
         open={updatesOpen && Boolean(selectedEvent)}
         onOpenChange={setUpdatesOpen}
         variant="sheet"
@@ -1009,6 +1011,7 @@ export function EventsPageContent({
       </Modal>
 
       <Modal
+        owner="EventAdminsModal"
         open={adminsOpen && Boolean(selectedEvent?.isHost)}
         onOpenChange={setAdminsOpen}
         variant="sheet"
@@ -1039,6 +1042,7 @@ export function EventsPageContent({
           is the one moment the host is certainly looking -- and for a Link
           Event it is the only way anybody reaches it. */}
       <Modal
+        owner="EventPublishedModal"
         open={Boolean(publishedEvent)}
         onOpenChange={(open) => {
           if (!open) setPublishedEvent(null);
@@ -1366,6 +1370,7 @@ function CreateEventModal({
 
   return (
     <Modal
+      owner="CreateEventModal"
       open={open}
       onOpenChange={handleOpenChange}
       title={STAGE_TITLE[stage]}

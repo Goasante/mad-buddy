@@ -219,6 +219,7 @@ function ShareToChatSheet({
 
   return (
     <Modal
+      owner="EventShareModal"
       open={open}
       onOpenChange={onOpenChange}
       variant="sheet"

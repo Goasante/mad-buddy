@@ -39,6 +39,7 @@ export function CheckInSuccessSheet({
 
   return (
     <Modal
+      owner="CheckInSuccessSheet"
       open={open}
       onOpenChange={onOpenChange}
       variant="sheet"

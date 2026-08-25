@@ -170,13 +170,14 @@ export function EventUpdates({
       ) : null}
 
       {visible.length === 0 ? (
-        /* Restraint for attendees: an empty noticeboard is not a problem that
-           needs a card. The host is the only one who can act on it. */
-        canPublish ? (
-          <p className="text-sm text-muted-foreground">
-            No updates yet. Post one when attendees need to know something.
-          </p>
-        ) : null
+        /* An open foreground must always explain its state. A heading by
+           itself is not a usable noticeboard and made the sheet look empty to
+           attendees when there were no posts. */
+        <p className="text-sm text-muted-foreground">
+          {canPublish
+            ? "No updates yet. Post one when attendees need to know something."
+            : "No updates yet."}
+        </p>
       ) : (
         <ul className="space-y-3">
           {visible.map((update) => (

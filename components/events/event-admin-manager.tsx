@@ -166,6 +166,7 @@ export function EventAdminManager({ eventId }: { eventId: string }) {
       ) : null}
 
       <Modal
+        owner="EventAdminAddModal"
         open={addOpen}
         onOpenChange={setAddOpen}
         variant="sheet"
@@ -194,6 +195,7 @@ export function EventAdminManager({ eventId }: { eventId: string }) {
           consequence -- "are you sure?" alone tells nobody what they are
           agreeing to. */}
       <Modal
+        owner="EventAdminRemoveModal"
         open={Boolean(removing)}
         onOpenChange={(open) => {
           if (!open) setRemoving(null);

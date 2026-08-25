@@ -13,6 +13,15 @@ describe("Events overlay foreground invariant", () => {
     expect(modal).toContain('useDismissOnBack(variant === "sheet" && rootOpen');
   });
 
+  it("keeps hidden-title Event sheets fixed instead of merging them into off-screen document flow", () => {
+    const modal = read("components/ui/modal.tsx");
+
+    expect(modal).toContain('"modal-sheet-panel fixed inset-x-0 bottom-0');
+    expect(modal).toContain('hideTitle && "max-w-[36rem]"');
+    expect(modal).not.toContain('hideTitle && "relative');
+    expect(modal).toContain('data-modal-body="true"');
+  });
+
   it("keeps one Back sentinel for one opening, even while its body rerenders", () => {
     const hook = read("hooks/use-dismiss-on-back.ts");
 

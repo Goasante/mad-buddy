@@ -59,6 +59,7 @@ export function MeetPeopleSheet({
    * privacy decision with routine navigation. */
   return (
     <Modal
+      owner="MeetPeopleSheet"
       open={open}
       onOpenChange={onOpenChange}
       title={consented ? "Meet people here" : `Meet people at ${eventName}`}
