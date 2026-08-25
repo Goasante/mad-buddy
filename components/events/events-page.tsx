@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarPlus, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
+  canManageEventAction,
   checkInToEventAction,
   checkOutAction,
   createEventAction,
@@ -215,17 +216,18 @@ export function EventsPageContent({
   const [linkrState, setLinkrState] = useState<EventLinkrState | null>(null);
   const [meetPeopleOpen, setMeetPeopleOpen] = useState(false);
 
-  function loadEventContext(eventId: string, isHost: boolean) {
+  function loadEventContext(eventId: string) {
     startTransition(async () => {
-      const [nextUpdates, nextLinkr] = await Promise.all([
+      const [nextUpdates, nextLinkr, canManage] = await Promise.all([
         listEventUpdatesAction(eventId),
         getEventLinkrStateAction(eventId),
+        canManageEventAction(eventId),
       ]);
       setUpdates(nextUpdates);
       setLinkrState(nextLinkr);
       // The composer is gated on the server too; this only decides whether to
-      // render it. Admin delegation is resolved there, not guessed here.
-      setCanPublishUpdates(isHost);
+      // render it. Host and delegated-admin authority are resolved together.
+      setCanPublishUpdates(canManage);
     });
   }
 
@@ -330,7 +332,7 @@ export function EventsPageContent({
     });
 
     if (known) {
-      loadEventContext(known.id, known.isHost);
+      loadEventContext(known.id);
       void (async () => {
         const list = await getEventGlowAction(known.id);
         if (isCurrent()) setGlowList(list);
@@ -363,7 +365,7 @@ export function EventsPageContent({
           ? current
           : [linked, ...current]
       );
-      loadEventContext(linked.id, linked.isHost);
+      loadEventContext(linked.id);
       const list = await getEventGlowAction(linked.id);
       if (isCurrent()) setGlowList(list);
     })();
@@ -396,8 +398,7 @@ export function EventsPageContent({
     setUpdatesOpen(false);
     setAdminsOpen(false);
     setMeetPeopleOpen(false);
-    const target = events.find((event) => event.id === eventId);
-    loadEventContext(eventId, Boolean(target?.isHost));
+    loadEventContext(eventId);
     startTransition(async () => {
       setGlowList(await getEventGlowAction(eventId));
     });

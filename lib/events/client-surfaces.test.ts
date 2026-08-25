@@ -103,6 +103,16 @@ describe("Meet people here is offered only when it is real", () => {
     // A discovery feed does not need every Event's announcements.
     expect(eventsPage).toContain("loadEventContext(");
   });
+
+  it("shows the Updates composer to delegated admins through server authority", () => {
+    expect(eventsPage).toContain("canManageEventAction(eventId)");
+    expect(eventsPage).toContain("setCanPublishUpdates(canManage)");
+    expect(eventsPage).not.toContain("setCanPublishUpdates(isHost)");
+
+    const actions = readFileSync("app/(app)/event-actions.ts", "utf8");
+    expect(actions).toContain("export async function canManageEventAction");
+    expect(actions).toContain("return access.ok && access.canManage;");
+  });
 });
 
 describe("mobile reaches the same authority as web", () => {

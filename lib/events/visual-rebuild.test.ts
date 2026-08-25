@@ -189,9 +189,9 @@ describe("the Event surface shows the right control for the state", () => {
        resolves the Event (from the list or through direct access) and loads its
        context either way. Two effects writing each other's state was itself the
        blank-Event bug. */
-    expect(page).toContain("loadEventContext(known.id, known.isHost);");
-    expect(page).toContain("loadEventContext(linked.id, linked.isHost);");
-    expect(page).toContain("loadEventContext(eventId, Boolean(target?.isHost));");
+    expect(page).toContain("loadEventContext(known.id);");
+    expect(page).toContain("loadEventContext(linked.id);");
+    expect(page).toContain("loadEventContext(eventId);");
   });
 
   it("reads consent from its own stored field, not from eligibility", () => {

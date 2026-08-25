@@ -36,6 +36,7 @@ import {
   type EventDraft,
   type EventView
 } from "@/lib/events/mobile";
+import { getEventForViewer } from "@/lib/events/access";
 import type { CheckInVisibility, EventGlowMuddyList } from "@/lib/events/types";
 import {
   addEventAdmin,
@@ -570,6 +571,16 @@ export async function listEventUpdatesAction(eventId: string): Promise<EventUpda
   const userId = await getAuthedUserId();
   if (!userId) return [];
   return listEventUpdates(eventId, userId);
+}
+
+/** Whether the current viewer may speak for this Event.
+ * Delegated Event admins share this authority with the host. The mutation
+ * re-checks it; this action only decides whether to show the composer. */
+export async function canManageEventAction(eventId: string): Promise<boolean> {
+  const userId = await getAuthedUserId();
+  if (!userId || !uuidSchema.safeParse(eventId).success) return false;
+  const access = await getEventForViewer(eventId, userId);
+  return access.ok && access.canManage;
 }
 
 export async function postEventUpdateAction(input: unknown): Promise<EventActionState> {
