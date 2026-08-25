@@ -455,6 +455,15 @@ export function MessagesPageContent({
     }
   }, []);
 
+  /* A Circle has its own route. Reading it updates the canonical member row
+   * there, while Next can restore this inbox from its client route cache with
+   * the pre-read rows still in memory. Reconcile on every inbox mount so the
+   * row badge and Unread filter return with the same state as the global badge
+   * instead of requiring a hard refresh. */
+  useEffect(() => {
+    void syncConversations();
+  }, [syncConversations]);
+
   // Defensive de-dup by conversation id, a row should never render twice
   // for the same real conversation, whatever produced the raw list.
   const uniqueConversations = useMemo(() => {
