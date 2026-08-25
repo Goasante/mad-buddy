@@ -22,7 +22,11 @@ import {
 } from "@/lib/profile/profile-photos";
 import { Button } from "@/components/ui/button";
 import { ProfilePhotoViewer } from "@/components/profile/profile-photo-viewer";
-import { profilePhotoAltText } from "@/lib/profile/photo-labels";
+import {
+  profilePhotoAltText,
+  profileViewerSequence,
+  showcaseIndexInSequence
+} from "@/lib/profile/photo-labels";
 import { cn } from "@/lib/utils";
 
 /**
@@ -45,6 +49,12 @@ export function ProfilePhotoCarousel({
   photos,
   isOwner,
   ownerName = "this person",
+  /**
+   * The identity photo, so full screen opens ONE gallery -- avatar first, then
+   * the showcases -- instead of a second gallery that happens to look alike.
+   * Optional: a Profile with no avatar simply starts at showcase 1.
+   */
+  avatarUrl = null,
   onChanged
 }: {
   /** Already filtered by the server for this viewer. */
@@ -52,6 +62,8 @@ export function ProfilePhotoCarousel({
   isOwner: boolean;
   /** Whose photos these are, for the full-screen accessible name. */
   ownerName?: string;
+  /** The identity photo that leads the full-screen sequence. */
+  avatarUrl?: string | null;
   /** Called after any mutation, so the page can refetch. */
   onChanged?: () => void;
 }) {
@@ -512,8 +524,10 @@ export function ProfilePhotoCarousel({
       {/* Handed the very photos already rendered above: the server filtered
           them for this viewer, and full screen adds no authority of its own. */}
       <ProfilePhotoViewer
-        photos={photos}
-        activeIndex={active}
+        photos={profileViewerSequence(avatarUrl, photos)}
+        // Offset past the avatar, so tapping showcase 2 opens on showcase 2
+        // rather than on whatever sits at that index once the avatar leads.
+        activeIndex={showcaseIndexInSequence(Boolean(avatarUrl), active)}
         ownerName={ownerName}
         isOwner={isOwner}
         open={fullScreen}

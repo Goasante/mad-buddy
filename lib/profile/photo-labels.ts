@@ -41,3 +41,38 @@ export function rotatePhotosToTapped<T>(photos: readonly T[], tappedIndex: numbe
   const start = Math.min(Math.max(tappedIndex, 0), photos.length - 1);
   return [...photos.slice(start), ...photos.slice(0, start)];
 }
+
+/**
+ * The Profile's full viewable sequence: identity photo first, then showcases.
+ *
+ * ONE sequence, so tapping the avatar and tapping a showcase open the same
+ * gallery at different positions -- "1 of 4" and "3 of 4" -- rather than two
+ * galleries that happen to look alike. The avatar leads because it is the
+ * photo the Profile leads with.
+ *
+ * AUTHORISES NOTHING. It is handed the avatar URL the page is already
+ * rendering and the showcase rows the server already filtered for this viewer
+ * (see visiblePhotosFor). Nothing is fetched, and a caller cannot use this to
+ * reach a photo it was not already given.
+ *
+ * The synthetic id for the avatar is prefixed so it can never collide with a
+ * real `profile_photos` row id, and `position` keeps the avatar at slot 0.
+ */
+export function profileViewerSequence<T extends { id: string; position: number; url: string }>(
+  avatarUrl: string | null,
+  showcase: readonly T[]
+): Array<{ id: string; position: number; url: string }> {
+  const ordered = [...showcase].sort((a, b) => a.position - b.position);
+  const sequence = avatarUrl
+    ? [{ id: "avatar:identity", position: 0, url: avatarUrl }]
+    : [];
+  // Renumbered so positions stay contiguous whether or not an avatar exists.
+  return [...sequence, ...ordered.map((photo) => ({ id: photo.id, url: photo.url, position: 0 }))].map(
+    (photo, index) => ({ ...photo, position: index })
+  );
+}
+
+/** Where a tapped showcase photo sits once the avatar is in front of it. */
+export function showcaseIndexInSequence(hasAvatar: boolean, showcaseIndex: number): number {
+  return hasAvatar ? showcaseIndex + 1 : showcaseIndex;
+}

@@ -2,7 +2,6 @@
 
 import { MomentMediaViewer } from "@/components/content/moment-media-viewer";
 import { profilePhotoAltText, rotatePhotosToTapped } from "@/lib/profile/photo-labels";
-import type { ProfilePhoto } from "@/lib/profile/profile-photos";
 import type { VisibleMoment } from "@/lib/content/service";
 
 /**
@@ -29,8 +28,17 @@ export function ProfilePhotoViewer({
   open,
   onClose
 }: {
-  /** Already filtered by the server for this viewer. */
-  photos: readonly ProfilePhoto[];
+  /**
+   * Already filtered by the server for this viewer.
+   *
+   * Narrowed to the two fields this adapter actually reads. A ProfilePhoto
+   * satisfies it, and so does the combined avatar+showcase sequence, which has
+   * no per-photo visibility of its own to declare -- the avatar is the face the
+   * Profile already shows, and the showcases were filtered before they got
+   * here. Asking for a `visibility` this component never consults would mean
+   * inventing one at every call site.
+   */
+  photos: ReadonlyArray<{ id: string; url: string }>;
   /** Which photo was tapped. */
   activeIndex: number;
   ownerName: string;
@@ -50,7 +58,7 @@ export function ProfilePhotoViewer({
    * (`hideIdentity`), so no name or timestamp is fabricated for a photo that
    * has neither -- the Profile itself is the context.
    */
-  const asViewerItem = (photo: ProfilePhoto): VisibleMoment =>
+  const asViewerItem = (photo: { id: string; url: string }): VisibleMoment =>
     ({
       id: photo.id,
       authorId: "",

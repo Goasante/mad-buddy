@@ -22,6 +22,8 @@ import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { ProfilePhotoCarousel } from "@/components/profile/profile-photo-carousel";
+import { ProfilePhotoViewer } from "@/components/profile/profile-photo-viewer";
+import { profileViewerSequence } from "@/lib/profile/photo-labels";
 import type { ProfilePhoto } from "@/lib/profile/profile-photos";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { GLOW_COLORS } from "@/lib/glow/custom-colors";
@@ -76,6 +78,8 @@ export function MuddyProfilePage({
   photos?: ProfilePhoto[];
 }) {
   const router = useRouter();
+  /** Full screen for the hero photograph and the showcases as one sequence. */
+  const [heroFullScreen, setHeroFullScreen] = useState(false);
   const [waveSent, setWaveSent] = useState(false);
   const [waveFeedback, setWaveFeedback] = useState("");
   const [isWavePending, startWaveTransition] = useTransition();
@@ -182,8 +186,18 @@ export function MuddyProfilePage({
         className="mx-auto w-full max-w-[560px] shadow-[0_18px_48px_-24px_hsl(var(--shadow)/0.55)]"
         media={
           muddy.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- signed avatar URL, matches MomentImage's approach
-            <img src={muddy.avatarUrl} alt="" />
+            /* The hero photograph opens full screen, in the same sequence the
+               showcase photos below use. Handed only the media this Profile is
+               already authorised to show. */
+            <button
+              type="button"
+              onClick={() => setHeroFullScreen(true)}
+              aria-label={`View ${muddy.displayName}'s profile photo`}
+              className="profile-avatar-open focus-ring"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- signed avatar URL, matches MomentImage's approach */}
+              <img src={muddy.avatarUrl} alt="" />
+            </button>
           ) : (
             <div className="grid h-full w-full place-items-center bg-[linear-gradient(135deg,hsl(var(--primary)/0.5),hsl(24_90%_35%/0.9))]">
               <BirthdayAccent active={Boolean(fields?.birthdayToday)}>
@@ -411,7 +425,12 @@ export function MuddyProfilePage({
           visitor with nothing visible sees no section at all rather than an
           empty frame implying something was withheld. Read-only here: only
           the owner's own profile offers the controls. */}
-      <ProfilePhotoCarousel photos={photos} isOwner={false} ownerName={muddy.displayName} />
+      <ProfilePhotoCarousel
+        photos={photos}
+        isOwner={false}
+        ownerName={muddy.displayName}
+        avatarUrl={muddy.avatarUrl ?? null}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-xl border border-border/70 bg-card/50 p-4">
@@ -487,6 +506,15 @@ export function MuddyProfilePage({
           aria-label="Report details"
         />
       </Modal>
+      {/* Hero photograph plus the authorised showcases, as one gallery. */}
+      <ProfilePhotoViewer
+        photos={profileViewerSequence(muddy.avatarUrl ?? null, photos)}
+        activeIndex={0}
+        ownerName={muddy.displayName}
+        isOwner={false}
+        open={heroFullScreen}
+        onClose={() => setHeroFullScreen(false)}
+      />
     </div>
   );
 }

@@ -183,10 +183,31 @@ describe("the carousel", () => {
     expect(remove).toContain('.eq("user_id", userId)');
   });
 
-  it("never renders the avatar inside the gallery", () => {
+  it("never renders the avatar inside the EDITABLE gallery", () => {
     // It is the identity used across the product; mixing them would make
     // "delete this photo" ambiguous.
-    expect(carousel).not.toContain("avatarUrl");
+    //
+    // The avatar IS now allowed into the read-only full-screen sequence, so
+    // that tapping it opens "1 of 4" rather than a second gallery of its own.
+    // A bare "does the file mention avatarUrl" scan can no longer tell those
+    // two apart, so this asserts the thing that actually matters: every
+    // managed photo -- the one on screen, the dots, and everything the
+    // mutation controls act on -- still comes from `photos`, never the avatar.
+    // The RENDER region: from the returned markup to the full-screen viewer.
+    // The avatar is legitimately named above this (a prop) and below it (the
+    // read-only sequence); what must stay avatar-free is everything the person
+    // can act on.
+    const managed = carousel.slice(
+      carousel.indexOf("<section aria-labelledby=\"profile-photos-heading\""),
+      carousel.indexOf("<ProfilePhotoViewer")
+    );
+    expect(managed.length).toBeGreaterThan(0);
+    expect(carousel).toContain("const current = photos[active]");
+    expect(managed).not.toContain("avatarUrl");
+
+    // And the mutations still address a real photo row by id.
+    expect(carousel).toContain("await deleteProfilePhotoAction({ photoId })");
+    expect(carousel).toContain("await setProfilePhotoVisibilityAction({ photoId, visibility })");
   });
 });
 

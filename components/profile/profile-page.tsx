@@ -14,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { AppSelect, type AppSelectOption } from "@/components/ui/app-dropdown";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { ProfilePhotoCarousel } from "@/components/profile/profile-photo-carousel";
+import { ProfilePhotoViewer } from "@/components/profile/profile-photo-viewer";
+import { profileViewerSequence } from "@/lib/profile/photo-labels";
 import { TrustedMemberApplyCard } from "@/components/trust/trusted-member-apply-card";
 import type { ProfilePhoto } from "@/lib/profile/profile-photos";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
@@ -172,6 +174,12 @@ export function ProfilePageContent({
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   const [avatarRevision, setAvatarRevision] = useState(0);
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
+  /**
+   * Full screen for the identity photo. Editing keeps its own control (the
+   * camera badge), so tapping the picture means "show me the picture" and
+   * never ambiguously both.
+   */
+  const [avatarFullScreen, setAvatarFullScreen] = useState(false);
   const [feedback, setFeedback] = useState("");
   /**
    * Saving runs as plain async work, so there is no transition left to report.
@@ -516,6 +524,7 @@ export function ProfilePageContent({
             <ProfilePhotoCarousel
               photos={photos}
               isOwner
+              avatarUrl={avatarUrl ? avatarSrc : null}
               onChanged={() => router.refresh()}
             />
 
@@ -636,6 +645,18 @@ export function ProfilePageContent({
           <Card data-tour-id={TOUR_TARGET_IDS.PROFILE_PHOTO} className="flex flex-col items-center p-5 text-center sm:p-6">
             <p className="self-start text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Identity</p>
             <div className="relative">
+              {/* The picture opens full screen; the camera badge below still
+                  owns changing it. A button rather than a handler on the image
+                  so it is reachable by keyboard and announced as a control.
+                  Disabled while a chosen-but-unsaved photo is previewing --
+                  full screen would show the preview, not the saved photo. */}
+              <button
+                type="button"
+                onClick={() => setAvatarFullScreen(true)}
+                disabled={!avatarUrl || Boolean(selectedAvatarFile)}
+                aria-label="View profile photo"
+                className="profile-avatar-open focus-ring"
+              >
               <BirthdayAccent active={birthdayToday}>
                 <span className="block rounded-full bg-gradient-to-br from-violet-500 via-fuchsia-500 to-primary p-1 shadow-[0_0_36px_hsl(var(--primary)/0.25)]">
                   <UserAvatar
@@ -662,6 +683,7 @@ export function ProfilePageContent({
                   />
                 </span>
               </BirthdayAccent>
+              </button>
               {!selectedAvatarFile ? (
                 <button
                   type="button"
@@ -754,7 +776,12 @@ export function ProfilePageContent({
             <h3 id="profile-showcase-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               My Showcase
             </h3>
-            <ProfilePhotoCarousel photos={photos} isOwner onChanged={() => router.refresh()} />
+            <ProfilePhotoCarousel
+              photos={photos}
+              isOwner
+              avatarUrl={avatarUrl ? avatarSrc : null}
+              onChanged={() => router.refresh()}
+            />
           </section>
 
           {completion ? (
@@ -906,6 +933,19 @@ export function ProfilePageContent({
           ) : null}
         </>
       )}
+
+      {/* The identity photo and the showcases as ONE sequence, so the avatar
+          opens at 1 of N rather than in a gallery of its own. Handed the
+          avatar already on screen and the showcase rows the server already
+          filtered for this viewer: it authorises nothing. */}
+      <ProfilePhotoViewer
+        photos={profileViewerSequence(avatarUrl ? avatarSrc : null, photos)}
+        activeIndex={0}
+        ownerName={savedProfile.displayName}
+        isOwner
+        open={avatarFullScreen}
+        onClose={() => setAvatarFullScreen(false)}
+      />
     </div>
   );
 }

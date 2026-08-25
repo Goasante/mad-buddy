@@ -4146,6 +4146,22 @@ select {
 /* A transparent full-bleed wrapper so the photo can be tapped and focused.
    Purely a hit target: it adds no box of its own, so the frame's rounding,
    ratio and cropping are exactly as they were. */
+/* The identity photo as a hit target. Transparent and full-bleed: the ring,
+   the birthday accent and the hero crop are unchanged, and the camera badge
+   sits outside this button so editing keeps its own control. */
+.profile-avatar-open {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  border-radius: inherit;
+  width: 100%;
+  height: 100%;
+}
+
+.profile-avatar-open:disabled { cursor: default; }
+
 .profile-photos-open {
   display: block;
   height: 100%;
