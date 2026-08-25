@@ -255,19 +255,57 @@ export function GroupDetailPage({
     const measure = () => {
       const node = chatPanelRef.current;
       if (!node) return;
-      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-      const top = node.getBoundingClientRect().top;
-      const styles = getComputedStyle(document.documentElement);
-      const navHeight = parseFloat(styles.getPropertyValue("--mobile-nav-height")) || 0;
-      // --mobile-nav-height is in rem; convert with the root font size.
-      const rootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-      const navPx = navHeight * rootFontSize;
       const isDesktop = window.matchMedia("(min-width: 768px)").matches;
-      // Below md the bottom navigation is what sits under the panel; from md
-      // up the CSS takes over and no measurement is applied.
-      const reserved = isDesktop ? 24 : navPx + 12;
-      const available = viewportHeight - top - reserved;
-      setChatHeight(Number.isFinite(available) && available > 240 ? Math.round(available) : null);
+      if (isDesktop) {
+        setChatHeight(null);
+        return;
+      }
+
+      const visual = window.visualViewport;
+      const visibleTop = visual?.offsetTop ?? 0;
+      const visibleBottom = visibleTop + (visual?.height ?? window.innerHeight);
+      let top = node.getBoundingClientRect().top;
+
+      /* A software keyboard shortens visualViewport without necessarily
+       * changing innerHeight. Move the chat to the top of that visible window
+       * before sizing it; otherwise the preserved Circle header consumes the
+       * entire short viewport and the composer remains below the keyboard. */
+      const keyboardOpen = Boolean(visual && visual.height < window.innerHeight - 120);
+      if (keyboardOpen && top > visibleTop + 8) {
+        node.scrollIntoView({ block: "start", behavior: "auto" });
+        top = node.getBoundingClientRect().top;
+      }
+
+      /* Measure the real rendered bar, including its safe-area padding. A CSS
+       * variable expressed in rem only described its nominal content height;
+       * it could not account for device insets or an app bar translated out
+       * of view. */
+      const mobileNav = document.querySelector<HTMLElement>('[aria-label="Mobile navigation"]');
+      const navRect = mobileNav?.getBoundingClientRect();
+      const navIsVisible = Boolean(
+        mobileNav &&
+        mobileNav.getAttribute("aria-hidden") !== "true" &&
+        navRect &&
+        navRect.height > 0 &&
+        navRect.top < visibleBottom
+      );
+      const lowerBoundary = navIsVisible && navRect ? Math.min(visibleBottom, navRect.top) : visibleBottom;
+      let available = lowerBoundary - top - 12;
+
+      /* Chromium's mobile emulation (and some Android webviews) resize the
+       * layout viewport together with the visual viewport, so the keyboard
+       * ratio above cannot identify the keyboard. The geometry still can: if
+       * even the composer's minimum cannot fit, scroll the chat header out of
+       * the way and recompute against the same visible lower boundary. */
+      if (available < 96 && top > visibleTop + 8) {
+        node.scrollIntoView({ block: "start", behavior: "auto" });
+        top = node.getBoundingClientRect().top;
+        available = lowerBoundary - top - 12;
+      }
+
+      // 96px always keeps the one-row composer usable. Unlike the former
+      // 320px min-height, it cannot push the composer below a short phone.
+      setChatHeight(Number.isFinite(available) ? Math.max(96, Math.round(available)) : 240);
     };
     measure();
     window.addEventListener("resize", measure);
@@ -546,7 +584,7 @@ export function GroupDetailPage({
              that is left. The static calc is the pre-hydration fallback. */
           ref={chatPanelRef}
           style={chatPanelStyle}
-          className="flex h-[var(--chat-height,calc(100svh-22rem))] max-h-[720px] min-h-[320px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/25 md:h-[min(620px,65svh)] md:max-h-none md:min-h-[420px]"
+          className="flex h-[var(--chat-height,15rem)] max-h-[720px] min-h-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/25 md:h-[min(620px,65svh)] md:max-h-none md:min-h-[420px]"
           aria-label={`${group.name} chat`}
         >
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4" aria-live="polite">

@@ -44,6 +44,14 @@ describe("single-row composer", () => {
     expect(css).toContain("padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px))");
   });
 
+  it("does not let a mobile minimum height push the Circle composer below navigation", () => {
+    expect(groupPage).toContain('[aria-label="Mobile navigation"]');
+    expect(groupPage).toContain("Math.max(96, Math.round(available))");
+    expect(groupPage).toContain("h-[var(--chat-height,15rem)]");
+    expect(groupPage).toContain("min-h-0");
+    expect(groupPage).not.toContain("min-h-[320px]");
+  });
+
   it("gives every tool a comfortable touch target", () => {
     const tool = css.slice(css.indexOf(".composer-tool {"), css.indexOf(".composer-tool:hover"));
     expect(tool).toContain("width: 2.75rem");

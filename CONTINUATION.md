@@ -1,3 +1,29 @@
+# Circle/Messaging Tranche 1 — release-ready locally
+
+Head before tranche: `4cd05ec979e8d59f280f882602568b0ecb09cadf`
+
+- Real local Chromium journey: **30/30 PASS**.
+- Circle A/B unread proved 3+2 -> open A -> 0+2; Messages aggregate fell by
+  exactly 3 and the Unread filter reconciled without refresh.
+- Circle mention proved picker, send, sender render, recipient realtime,
+  reload persistence, stable user-id metadata and outsider exclusion.
+- Circle chat short/long and keyboard-resize geometry passed at 360x800,
+  390x844 and 430x932.
+- Fixes in this tranche: reconcile the cached Messages row list whenever the
+  inbox mounts; size mobile Circle chat from the actual visual viewport and
+  rendered mobile navigation rather than a 320px minimum.
+- Security invariants remain canonical: read cursor updates are scoped by both
+  conversation id and signed-in user id; mention enumeration and persistence
+  require joined membership; conversation access is rechecked server-side.
+- Tests: focused 84/84; full suite 7140/7140. Production build, standalone TSC
+  and focused ESLint pass. Focused security review: Critical 0 / High 0.
+- No production data was created or modified for browser evidence.
+
+Release sequence remaining at the time of this note: commit -> push -> deploy
+-> verify the live `/api/version` SHA -> public production smoke. Only then
+move to Linkr Tranche 2 in `C:/mb-linkr-t2`; preserve its existing commits and
+do not rebuild that work from scratch.
+
 # Events recovery continuation — Checkpoint 4 runtime prepared, Browser blocked
 
 Branch: `fix/events-recovery`

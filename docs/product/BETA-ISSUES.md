@@ -398,6 +398,31 @@ session and creating production test accounts is out of bounds.
 | Create Event no sideways shift | PASS (3 widths, 5 audiences) | **UNVERIFIED** |
 | Circle chat fills viewport | PASS (17px clear, was 144px under) | **UNVERIFIED** |
 
+### Circle/Messaging Tranche 1 release gate (2026-08-25)
+
+**STATUS: RELEASE-READY LOCALLY.** A real Chromium journey against local
+Supabase passed **30/30** at 360x800, 390x844 and 430x932.
+
+- Unread state: Circle A started at 3 and Circle B at 2. Opening A cleared only
+  A, preserved B at 2, reduced the Messages aggregate by exactly 3, and removed
+  A from the Unread filter without a hard refresh. The final client defect was
+  a cached `/messages` row list; the inbox now reconciles from its canonical
+  server action whenever the route mounts.
+- Mentions: a joined member was selected, sent and rendered for the sender;
+  the recipient received it in realtime; reload preserved it; the stored
+  metadata was the recipient's stable user id. An outsider was absent from the
+  picker and rejected by the existing joined-member server authority.
+- Mobile chat: short and long histories keep the message viewport attached to
+  the composer and the composer above the real rendered mobile navigation.
+  Keyboard-resize checks passed at all three viewports. The old 320px minimum
+  could force the composer below a short viewport; sizing now uses the actual
+  visual viewport and rendered navigation boundary, with a usable 96px floor.
+- Regression coverage: `conversation-sync.test.ts` pins inbox reconciliation;
+  `composer-layout.test.ts` pins removal of the unsafe mobile minimum.
+- Gates at this checkpoint: browser 30/30; focused tests 84/84; full suite
+  7140/7140; production build PASS; standalone TypeScript PASS; focused ESLint
+  PASS; focused security review Critical 0 / High 0.
+
 ## Beta Recovery Sprint — Phase A (shipped)
 
 Owner instruction: real-device screenshots and video are authoritative. Where

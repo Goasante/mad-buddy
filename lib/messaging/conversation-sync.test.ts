@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mergeConversations, upsertConversation } from "@/lib/messaging/conversation-sync";
+import { readFileSync } from "node:fs";
+import { stripComments } from "@/lib/content/strip-comments";
 
 /**
  * These assert the DEAD ENDS are gone, not that the functions were called.
@@ -42,6 +44,17 @@ describe("a newly created conversation reaches the inbox", () => {
     // The exact reported state -- inbox appeared empty, conversations existed.
     const merged = mergeConversations([], [row("x"), row("y")]);
     expect(merged).toHaveLength(2);
+  });
+});
+
+describe("returning from a Circle reconciles the inbox", () => {
+  const page = stripComments(readFileSync("components/messages/messages-page.tsx", "utf8"));
+
+  it("refreshes canonical rows whenever the inbox mounts", () => {
+    // Next can restore the inbox with the row state from before /groups/:id.
+    // The global nav badge refreshes in the layout, but the row and Unread
+    // filter live here and need their own authoritative reconciliation.
+    expect(page).toMatch(/useEffect\(\(\) => \{\s*void syncConversations\(\);\s*\}, \[syncConversations\]\);/);
   });
 });
 
