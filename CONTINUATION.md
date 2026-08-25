@@ -100,3 +100,59 @@ The in-app Browser connector still returned `No browser is available` for `http:
 - Production was not touched. Nothing was pushed or deployed.
 
 Release decision: Checkpoint 4 is approved locally. Keep the production release on hold until an explicit push/deploy instruction is given.
+
+## Linkr Tranche 2 — continuation and live local verification (2026-08-25)
+
+Resumed the existing `feature/linkr-tranche-2` worktree rather than restarting.
+The worktree was already **clean**: Codex had committed its realtime work as
+`6929cb5` and merged the Circle release (`1c0a41d`) as `e9d7412`. There were no
+uncommitted Codex changes to preserve, and `.vercel/project.json` is gitignored
+and untracked, so no deployment collateral could reach a commit.
+
+Codex's realtime design was reviewed and kept: the Linkr mutual event rides the
+existing authenticated `live-signal` notification subscription (RLS-scoped to
+`auth.uid() = user_id`, channel `live-signal:<userId>`, cleaned up on unmount,
+deduped by notification id across both the realtime and poll-fallback paths).
+`parseLiveSignal` learned `linkr_connection:<uuid>`; the toast dispatches a
+window event; Linkr re-resolves the connection server-side before showing
+anything, so a forged event fails closed.
+
+**Real defect found and fixed during this continuation.** The second-connector
+suppression recorded the completed connection id only *after* the Connect
+request returned. The symmetrical notification is written the moment the
+connection forms, so it could arrive while that request was still in flight —
+leaving the id unset at both guard checks and raising a redundant banner behind
+the mutual screen the same person was already being shown. The connect now
+claims the target id *before* awaiting, and releases it on both the resolve and
+reject paths (holding it would have muted that person's genuine banner for the
+rest of the session). Covered by `lib/linkr/mutual-banner-suppression.test.ts`.
+
+### Live local journey — 17/17
+
+Run against the Docker local stack at `127.0.0.1:54321` through the real
+services, so the SECURITY DEFINER RPC, its advisory lock, block guards,
+notification writes and late-bound resolution all executed for real. Production
+was never contacted. Fixtures: `scripts/hardening/linkr-t2-fixtures.sql`
+(users A/B/C and outsider D); journey: `lib/linkr/live-journey.local.test.ts`,
+which self-skips unless pointed at localhost.
+
+Verified: Pass+Undo restores the candidate; Pass writes exactly 30 days;
+one-sided Connect creates no connection and **zero** notifications for B;
+Your clicks exposes only `userId/displayName/photo/clickedAt`; reciprocity
+creates exactly one connection; both people receive exactly one notification
+each naming the *other* (`You and Kofi clicked!` / `You and Ama clicked!`, same
+connection id, no romantic language); repeat Connects stay idempotent; the
+notification routes to `/linkr?connection=<id>` and parses as a live signal;
+before any message it opens the mutual state, and after a real message the same
+old notification opens that exact conversation for both sides; Clicked flips
+Say hi → Continue chat; an outsider and a bogus id both fail closed; a block
+placed *after* the notification fails it closed and removes the pair from
+Clicked; and the card gallery admits only `everyone` photos.
+
+### Gates
+
+Focused suites 1194 passed / 17 skipped (the local journey, by design);
+TypeScript pass; focused ESLint pass; production build pass. Security
+Critical/High 0/0: viewer identity comes from the session cookie and never the
+`?connection=` parameter, migrations and the RPC are untouched since
+`1c0a41d`, and no code reads the other person's action row.

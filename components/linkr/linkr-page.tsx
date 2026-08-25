@@ -122,6 +122,11 @@ function LinkrPageContent({
   // screen. Remember that connection so its symmetrical notification cannot
   // reappear as a redundant first-connector banner after the screen closes.
   const completedConnectionId = useRef<string | null>(null);
+  /**
+   * The candidate whose Connect is still in flight. Covers the gap between
+   * tapping Connect and learning the connection id.
+   */
+  const connectingTargetId = useRef<string | null>(null);
   const [clicked, setClicked] = useState<ClickedPerson[]>([]);
   const [pendingClicks, setPendingClicks] = useState<PendingClick[]>([]);
   const [canUndo, setCanUndo] = useState(false);
@@ -213,6 +218,19 @@ function LinkrPageContent({
   const handleConnect = useCallback(() => {
     if (!current) return;
     const targetId = current.userId;
+    /**
+     * Claim the reciprocity BEFORE the request, not after it.
+     *
+     * The symmetrical notification is written by the server the moment the
+     * connection forms, so it can reach this tab while connectWithCandidate is
+     * still in flight. Recording the id only in the response left a window in
+     * which the live handler saw an unclaimed connection and raised a banner
+     * for the very match this person is about to be shown full screen.
+     *
+     * The target id is enough to recognise it: the handler resolves the
+     * connection anyway and learns who is on the other side.
+     */
+    connectingTargetId.current = targetId;
     advance();
     void connectWithCandidateAction({ targetId, eventId }).then((result) => {
       // `matched` is the ONLY thing the server tells us. A one-sided Connect
@@ -229,6 +247,14 @@ function LinkrPageContent({
           conversationId: result.conversationId
         });
       }
+      // Release the in-flight claim either way. Holding it would suppress a
+      // genuine later banner from the same person -- a one-sided Connect that
+      // they return tomorrow is exactly the case this must still announce.
+      if (connectingTargetId.current === targetId) connectingTargetId.current = null;
+    }).catch(() => {
+      // A failed request must not leave the claim stuck: that would silently
+      // mute this person's banner for the rest of the session.
+      if (connectingTargetId.current === targetId) connectingTargetId.current = null;
     });
   }, [current, advance, eventId]);
 
@@ -316,6 +342,10 @@ function LinkrPageContent({
         const { clickedPeople } = await refreshCollections();
         const person = clickedPeople.find((entry) => entry.connectionId === connectionId);
         if (!person || connectionId === completedConnectionId.current) return;
+        // The match this tab is completing right now: the full mutual screen
+        // is already on its way, so a banner behind it would be the same news
+        // twice.
+        if (person.userId === connectingTargetId.current) return;
         setMutualBanner({ name: person.displayName, connectionId });
       })();
     };

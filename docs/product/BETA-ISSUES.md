@@ -683,3 +683,44 @@ Only **Linkr** and **UpFor** require Access, and only after Welcome Access ends.
 
 Existing connections, conversations and Plans **survive expiry**. If a tester
 loses access to a conversation or Plan they already had, that is a **P0**.
+
+---
+
+## Linkr: what to try, and what would be a bug
+
+Linkr is for meeting new people — friendship, networking, dating, anything. A
+connection exists only when **both** of you choose each other.
+
+**Choosing someone is private.** If you Connect with someone who has not chosen
+you, they are told nothing at all: no notification, no badge, no hint. You will
+find them under **Your clicks**, which shows only *your own* choices. If you
+ever see Linkr say what someone else did — "waiting for them", "they haven't
+clicked you", "they passed" — that is a **P0**.
+
+**Both of you get the moment.** Whoever clicks second sees the full screen
+straight away. Whoever clicked first gets "You and *name* clicked!" — as a
+banner if they are in Linkr at the time, otherwise as a normal notification. If
+only one of you is ever told, that is a **P0**.
+
+The banner must never interrupt you. It should not cover the card you are
+deciding on, steal a swipe, or take over the screen.
+
+**Tapping the notification should land you in the right place.** Before anyone
+has spoken it opens the clicked state with **Say hi**. Once either of you has
+sent a message it opens **that conversation** — even if the notification is
+hours old. Being offered "Say hi" for a chat already under way is a bug.
+
+**Blocking always wins.** If you block someone after matching, an old
+notification for them must stop working, and they must disappear from Clicked.
+
+**Clicked** keeps everyone you have matched with. They leave the swipe deck —
+you already decided — but they must never vanish from Linkr entirely.
+
+**Photos.** Tap the **left or right side** of a card to move through someone's
+photos; **swipe** left to Pass and right to Connect. If tapping decides for you,
+or swiping changes the photo, that is a bug.
+
+Only photos you have set to **Everyone** can appear on Linkr. Photos kept for
+your Muddies, or for yourself, are never shown to strangers there — that is
+deliberate, not a bug. If a Muddies-only or private photo ever appears on a
+Linkr card, that is a **P0**.
