@@ -1,70 +1,49 @@
-# Continuation checkpoint — after Phase A deploy
+# Events recovery continuation — after Checkpoint 3
 
-**DEPLOYED SHA = 5e66582** (production, `mad-buddy.com`, auto-deployed on push).
-Phase A is live. Phase B was NOT started.
+Branch: `fix/events-recovery`
 
-## Where things stand
+Production baseline observed on 2026-08-25:
 
-Phase A shipped six items: Circle unread (A1), Circle mentions (A2), stranded
-blur (A3), Create Event sideways shift (A4), Circle chat layout (A5), and the
-paused-visibility review (A6, which found no defect and was pinned with tests).
-Detail and evidence are in `docs/product/BETA-ISSUES.md`.
+- `mad-buddy.com/api/version` build `dpl_DWCeEiLaRUGJdPPshWGYSuLMkuzY`
+- commit `42901a6fc19649a9470b45cc0cbe552ffbcaa823`
+- fetched `origin/main` matched that commit exactly
 
-## Phase B, not started — do these in order
+## Completed checkpoints
 
-1. Preview my Linkr card actually works.
-2. "Hide from specific people" stops routing to Safe Center.
-3. Replace the Linkr heart/love mutual icon with a wave/hello.
-4. Both users get the mutual "You clicked" state after reciprocity.
-5. Say hi opens/reuses a working direct conversation.
-6. Fullscreen authorized profile-picture viewing.
-7. Fix Glow geometry around avatars.
-8. Contact matching: a working supported path, or an honest graceful fallback.
-9. Retire PRIVATE Muddy Circles, preserving SHARED Circles/Groups.
+1. Events shell + overlay invariant + Create Event geometry (`b5743c3`)
+   - shared Modal fails closed when its foreground payload is null
+   - sheet Back listener holds one history sentinel per opening, not one per render/keystroke
+   - Create Event time controls use zero-minimum grid tracks; the clipping mask was removed
+2. Publish/discovery audience + RSVP/check-in authority (`c973308`)
+   - RSVP and check-in use `getEventForViewer`, so real invitees work and community outsiders fail closed
+   - Community requires a selected Circle and joined membership; untargeted legacy rows are no longer broad
+   - create/edit revalidate community targets as joined group conversations server-side
+3. Live/Updates admin authority (`2998817`)
+   - delegated Event admins now see the Updates composer through canonical server authority
 
-**Linkr mutuality rule.** One-sided interest stays private. After reciprocity
-BOTH users get the mutual state, may see "You clicked", may press Say hi, and
-share one canonical conversation. No notification may reveal who chose first.
+## Verification completed
 
-**Private Circles retirement, first pass only:** remove the private-circle UI,
-filters and settings, stop new writes, PRESERVE legacy rows. Any destructive
-cleanup is a separate, later decision.
+- Checkpoint 1 targeted tests: 101 passed
+- Original full Events domain before authority changes: 685 passed
+- Audience/RSVP/check-in/sharing affected suite after changes: 214 passed
+- Updates/live affected suite: 108 passed
+- TypeScript: passed
+- focused ESLint: passed
+- production build: passed after every committed checkpoint (81 static pages generated)
 
-## How to pick this up
+One subsequent full-domain Vitest invocation stalled before emitting output and was terminated; focused affected suites passed afterward. Do not report this as a full-suite pass after Checkpoint 2.
 
-The worktree is `C:\mb-god` on `hardening/god-mode-product-pass`, which
-fast-forwards `main`. The local `main` checkout on the Desktop has ~103
-uncommitted files and is stale at `6d07b9e` — do not deploy from it.
+## Runtime blocker
 
-Local review environment (all local, all disposable):
+The Browser runtime exposed no in-app or extension browser (`agent.browsers.list()` returned `[]`). No signed-in interactive session or screenshots were available. Therefore these remain explicitly unverified:
 
-- `node scripts/hardening/seed-phase-a.mjs` — seeds `phasea@review.local`
-  (password `ReviewPass123!`), two Muddies, and a Circle with unread messages.
-- Sign in with Playwright and save storage state to `.phasea.json` (gitignored;
-  it holds live session cookies, so it must never be committed).
-- `npx next build && npx next start -p 3200`, then:
-  - `scripts/hardening/phase-a-runtime.mjs` — 51 checks at 360/390/430
-  - `scripts/hardening/circle-unread-runtime.mjs` — A1 in a real browser
-  - `scripts/hardening/circle-unread-and-mentions.mjs` — A1/A2 against the DB
-  - `scripts/hardening/overlay-orphan-invariant.mjs` — the A3 invariant
+- actual UI Create → Publish → Reopen
+- 360×800, 390×844 and 430×932 screenshots in both themes
+- rapid taps, animation-time Back, background/foreground
+- two-person Event Linkr mutual → Say hi → same direct chat
 
-**Kill any stale server on 3200 before measuring.** A stale process served a
-pre-fix build during this session and produced results that looked like
-failures of the fix.
+Do not call any of these production-verified. Resume with an available signed-in Browser surface and run the existing Events modal/runtime probes plus the controlled Host/A/B/Unauthorized journey.
 
-## Still open — needs the tester, not more headless probing
+## Next checkpoint
 
-BETA-002 and BETA-006 (CSP/realtime; fixed locally, production CSP was always
-correct — confirmed again on this deploy). BETA-003 as a separate report from
-A3, plus BETA-005, BETA-010 and BETA-016. BETA-014 stays retracted: it was a
-rect-only false positive.
-
-Do not spend context proving negatives on the duplicate-search reports or
-BETA-014 unless new evidence arrives.
-
-## The rule this program keeps relearning
-
-A rectangle is not reachability, and clipped is not hidden. Hit-test with
-`elementFromPoint`. Assert the viewport before any measurement counts. And when
-a real-device screenshot disagrees with headless Chromium, the screenshot wins
-— read the code for the defect instead of arguing with the evidence.
+Event Linkr end to end, then security review and release. Do not push or deploy until the interactive journey and full release gates pass.
