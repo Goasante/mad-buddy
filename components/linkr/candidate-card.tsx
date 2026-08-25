@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { BadgeCheck, Heart, RotateCcw, X } from "lucide-react";
+import { BadgeCheck, Hand, RotateCcw, X } from "lucide-react";
 
 import { nextPhotoIndex, previousPhotoIndex, tapZone } from "@/lib/linkr/photos";
 import type { LinkrCandidate } from "@/lib/linkr/candidate-service";
@@ -254,7 +254,7 @@ export function CandidateCard({
           onClick={() => decide("connect")}
           disabled={busy || Boolean(leaving)}
         >
-          <Heart aria-hidden />
+          <Hand aria-hidden />
           <span>Connect</span>
         </button>
       </div>

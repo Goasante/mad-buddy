@@ -7912,7 +7912,7 @@ select {
   background: color-mix(in srgb, var(--color-brand-ember) 60%, transparent);
 }
 
-.linkr-match__heart {
+.linkr-match__wave {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -7927,7 +7927,7 @@ select {
   box-shadow: 0 4px 16px color-mix(in srgb, var(--color-brand-orange) 45%, transparent);
 }
 
-.linkr-match__heart svg { width: 1.25rem; height: 1.25rem; fill: currentColor; }
+.linkr-match__wave svg { width: 1.25rem; height: 1.25rem; fill: none; stroke: currentColor; }
 .linkr-match__title { font-size: 1.875rem; font-weight: 700; letter-spacing: -0.03em; }
 .linkr-match__body { font-size: 0.9375rem; color: hsl(var(--muted-foreground)); max-width: 18rem; }
 

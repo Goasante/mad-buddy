@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Eye, Heart, MapPinOff, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, Eye, Hand, MapPinOff, ShieldCheck, Users } from "lucide-react";
 
 import { HOW_LINKR_WORKS, LINKR_COPY } from "@/lib/linkr/rules";
 import { LinkrOrb } from "@/components/linkr/linkr-orb";
@@ -31,8 +31,8 @@ export function LinkrMatchScreen({ me, them, onSayHi, onKeepDiscovering }: Match
     <section className="linkr-match" role="dialog" aria-modal="true" aria-labelledby="linkr-match-title">
       <div className="linkr-match__faces">
         <MatchFace person={me} />
-        <span className="linkr-match__heart" aria-hidden>
-          <Heart />
+        <span className="linkr-match__wave" aria-hidden>
+          <Hand />
         </span>
         <MatchFace person={them} />
       </div>
@@ -97,7 +97,7 @@ export function LinkrEmptyState({ onWiden, canWiden }: EmptyStateProps) {
 // Screen 14: how Linkr works
 // ---------------------------------------------------------------------------
 
-const HOW_ICONS = [Users, MapPinOff, ShieldCheck, Heart];
+const HOW_ICONS = [Users, MapPinOff, ShieldCheck, Hand];
 
 export function HowLinkrWorks({ onClose }: { onClose: () => void }) {
   return (
