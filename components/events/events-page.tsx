@@ -1388,7 +1388,7 @@ function CreateEventModal({
         Step {stageIndex + 1} of {STAGES.length}: {STAGE_TITLE[stage]}
       </p>
 
-      <div className="-mx-1 min-w-0 max-w-[calc(100%+0.5rem)] space-y-5 overflow-x-hidden px-1 pb-1">
+      <div className="-mx-1 min-w-0 max-w-[calc(100%+0.5rem)] space-y-5 px-1 pb-1">
         {/* STAGE 1 -- AUDIENCE.
             First because it is the decision that changes what the rest of the
             flow means. Its sub-flow (invitees, community, location) renders
@@ -1493,9 +1493,9 @@ function CreateEventModal({
                   className="min-w-0 bg-transparent text-right text-[0.9375rem] font-medium outline-none"
                 />
               </label>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-1.5">
                 <label
-                  className="flex min-h-12 items-center justify-between gap-2 rounded-xl bg-secondary/50 px-3.5 ring-1 ring-inset ring-border/40 focus-within:ring-2 focus-within:ring-primary"
+                  className="flex min-h-12 min-w-0 items-center justify-between gap-2 rounded-xl bg-secondary/50 px-3.5 ring-1 ring-inset ring-border/40 focus-within:ring-2 focus-within:ring-primary"
                   htmlFor="event-start"
                 >
                   <span className="shrink-0 text-sm text-muted-foreground">
@@ -1510,7 +1510,7 @@ function CreateEventModal({
                   />
                 </label>
                 <label
-                  className="flex min-h-12 items-center justify-between gap-2 rounded-xl bg-secondary/50 px-3.5 ring-1 ring-inset ring-border/40 focus-within:ring-2 focus-within:ring-primary"
+                  className="flex min-h-12 min-w-0 items-center justify-between gap-2 rounded-xl bg-secondary/50 px-3.5 ring-1 ring-inset ring-border/40 focus-within:ring-2 focus-within:ring-primary"
                   htmlFor="event-end"
                 >
                   <span className="shrink-0 text-sm text-muted-foreground">

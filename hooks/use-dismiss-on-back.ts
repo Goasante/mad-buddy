@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 /**
  * Makes a hardware/browser Back press dismiss an open overlay (bottom sheet)
@@ -24,11 +24,22 @@ import { useEffect } from "react";
  * See the cleanup below for what it does instead.
  */
 export function useDismissOnBack(open: boolean, onDismiss: () => void) {
+  /* Keep the listener stable while the overlay is open.
+   *
+   * Callers normally pass an inline callback. Depending on that callback made
+   * this effect clean up and push a fresh history sentinel after every render
+   * inside a sheet -- including every keystroke in Create Event and every
+   * loading-state update. Back closed the sheet, but left a trail of inert
+   * same-URL entries behind it. The ref keeps the latest behaviour without
+   * making ordinary renders mutate browser history. */
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+
   useEffect(() => {
     if (!open || typeof window === "undefined") return;
 
     window.history.pushState({ mbSheet: true }, "");
-    const handlePopState = () => onDismiss();
+    const handlePopState = () => onDismissRef.current();
     window.addEventListener("popstate", handlePopState);
 
     return () => {
@@ -51,5 +62,5 @@ export function useDismissOnBack(open: boolean, onDismiss: () => void) {
       // navigations and discarding fresh state.
       if (window.history.state?.mbSheet) window.history.replaceState(null, "");
     };
-  }, [open, onDismiss]);
+  }, [open]);
 }

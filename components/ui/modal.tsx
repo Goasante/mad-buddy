@@ -48,9 +48,18 @@ export function Modal({
   variant = "center",
   hideTitle = false
 }: ModalProps) {
+  /* A scrim is allowed only when there is a foreground payload to put above
+   * it. Several resource-driven call sites intentionally render `null` while
+   * their record is unavailable; treating `open` alone as sufficient lets a
+   * stale flag turn that transient into a dimmed, unusable page. Fail closed:
+   * the caller's state may remain open while data arrives, but Radix does not
+   * mount either overlay or panel until a body exists. */
+  const hasForeground = children !== null && children !== undefined && children !== false;
+  const rootOpen = open && hasForeground;
+
   // Sheets are dismissible with the hardware/browser Back button, like a native
   // mobile sheet. No-op for the centred variant.
-  useDismissOnBack(variant === "sheet" && open, () => onOpenChange(false));
+  useDismissOnBack(variant === "sheet" && rootOpen, () => onOpenChange(false));
 
   /* FOCUS RESTORATION, OWNED BY THE PRIMITIVE (MB-GOD-042).
    *
@@ -71,13 +80,13 @@ export function Modal({
   const wasOpenRef = useRef(false);
 
   useEffect(() => {
-    if (open && !wasOpenRef.current) {
+    if (rootOpen && !wasOpenRef.current) {
       const active = document.activeElement;
       openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
       wasOpenRef.current = true;
       return;
     }
-    if (!open && wasOpenRef.current) {
+    if (!rootOpen && wasOpenRef.current) {
       wasOpenRef.current = false;
       const opener = openerRef.current;
       openerRef.current = null;
@@ -90,11 +99,11 @@ export function Modal({
         opener.focus({ preventScroll: true });
       });
     }
-  }, [open]);
+  }, [rootOpen]);
 
   const isSheet = variant === "sheet";
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={rootOpen} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay
           className={cn(
