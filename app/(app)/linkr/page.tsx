@@ -32,7 +32,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 export default async function LinkrRoute({
   searchParams
 }: {
-  searchParams: Promise<{ eventId?: string; intent?: string }>;
+  searchParams: Promise<{ eventId?: string; intent?: string; connection?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
@@ -55,6 +55,14 @@ export default async function LinkrRoute({
   const requestedEventId =
     params.eventId && UUID_PATTERN.test(params.eventId) ? params.eventId : null;
   const pendingIntent = isLinkrIntent(params.intent) ? params.intent : null;
+  /**
+   * A mutual-connection notification landed here. The id is validated in shape
+   * only; whether this viewer may open it -- and whether it should open the
+   * mutual screen or an already-running chat -- is re-resolved on the client
+   * through resolveMutualDestinationAction, which re-checks blocks.
+   */
+  const requestedConnectionId =
+    params.connection && UUID_PATTERN.test(params.connection) ? params.connection : null;
 
   const [profile, { data: myProfile }, { count: blockedCount }] = await Promise.all([
     loadOwnLinkrProfile(user.id),
@@ -125,6 +133,7 @@ export default async function LinkrRoute({
       blockedCount={blockedCount ?? 0}
       eventContext={eventContext}
       pendingIntent={pendingIntent}
+      requestedConnectionId={requestedConnectionId}
       me={{
         displayName: myProfile?.full_name?.trim() || myProfile?.username || "You",
         photo: myPhoto

@@ -279,6 +279,29 @@ async function ensureConnectionConversation(
  * linkr_record_connect), so a retried or raced connect notifies exactly once
  * without needing a second claim query here.
  */
+/** First name only: the notification is a nudge, not a dossier. */
+function firstName(fullName: string | null | undefined): string {
+  const trimmed = (fullName ?? "").trim();
+  if (!trimmed) return "someone";
+  return trimmed.split(/\s+/)[0] ?? "someone";
+}
+
+/** Canonical display names for a small set of users, in one query. */
+async function displayNamesFor(
+  admin: Admin,
+  userIds: string[]
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  const { data } = await admin
+    .from("profiles")
+    .select("user_id, full_name, username")
+    .in("user_id", userIds);
+  for (const row of data ?? []) {
+    names.set(row.user_id, row.full_name?.trim() || row.username || "Someone");
+  }
+  return names;
+}
+
 async function notifyMutualConnection(
   admin: Admin,
   connectionId: string,
@@ -286,12 +309,27 @@ async function notifyMutualConnection(
   userB: string
 ): Promise<void> {
   try {
-    const rows = [userA, userB].map((userId) => ({
+    /**
+     * Each person is told WHO they clicked with. Both rows carry the
+     * connection id in the `type`, using the product's existing
+     * "<base>:<id>" convention, so tapping either one resolves the pair's
+     * current state rather than landing on a generic Linkr page.
+     *
+     * The id is the ONLY thing stored. Where it leads -- the mutual screen or
+     * an already-running conversation -- is decided at tap time by
+     * resolveMutualDestination, which also re-checks blocks.
+     */
+    const names = await displayNamesFor(admin, [userA, userB]);
+    const rows = [
+      { userId: userA, otherId: userB },
+      { userId: userB, otherId: userA }
+    ].map(({ userId, otherId }) => ({
       user_id: userId,
-      type: "linkr_connection",
-      title: LINKR_COPY.matchTitle,
-      // Symmetric wording. Neither person's copy names who acted first.
-      message: "You both want to connect."
+      type: `linkr_connection:${connectionId}`,
+      // Symmetric wording. Neither person's copy says who acted first -- the
+      // one-sided privacy rule survives the match, it does not expire with it.
+      title: LINKR_COPY.mutualNotificationTitle(firstName(names.get(otherId))),
+      message: LINKR_COPY.mutualNotificationBody
     }));
     await admin.from("notifications").insert(rows);
   } catch {

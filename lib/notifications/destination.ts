@@ -41,6 +41,11 @@ const DESTINATION_BY_BASE: Record<string, Route> = {
   message: "/messages" as Route,
   group_message: "/groups" as Route,
   group: "/groups" as Route,
+  // Linkr mutual connection. The base form lands on Linkr itself; the
+  // id-suffixed form below resolves the pair's CURRENT state instead, so a
+  // notification does not freeze into a "Say hi" screen after the chat has
+  // already started.
+  linkr_connection: "/linkr" as Route,
   // Personal milestones
   achievement: "/badges" as Route,
   birthday: "/notifications" as Route,
@@ -78,6 +83,11 @@ export function resolveNotificationDestination(type: string): NotificationDestin
         return { type: "internal", href: `/groups/${entityId}` as Route };
       case "safe_arrival":
         return { type: "internal", href: withQuery("/safe-arrival", "session", entityId) };
+      case "linkr_connection":
+        // Deliberately NOT a frozen destination. `/linkr?connection=<id>`
+        // re-resolves at open time: blocks and eligibility are re-checked, and
+        // an already-started conversation wins over the mutual screen.
+        return { type: "internal", href: withQuery("/linkr", "connection", entityId) };
     }
   }
 

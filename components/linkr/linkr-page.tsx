@@ -3,14 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { Flag, MoreHorizontal, Settings, SlidersHorizontal, UserRound } from "lucide-react";
+import { Flag, Hand, MoreHorizontal, Settings, SlidersHorizontal, UserRound } from "lucide-react";
 
 import {
   connectWithCandidateAction,
   disableLinkrAction,
   enableLinkrAction,
+  loadClickedPeopleAction,
   loadLinkrCandidatesAction,
+  loadPendingClicksAction,
   passCandidateAction,
+  resolveMutualDestinationAction,
   undoLinkrActionAction,
   updateLinkrProfileAction,
   updateLinkrSettingsAction
@@ -23,14 +26,17 @@ import {
   LinkrEmptyState,
   LinkrMatchScreen
 } from "@/components/linkr/linkr-moments";
+import { LinkrCollections } from "@/components/linkr/linkr-collections";
+import { LinkrMutualBanner } from "@/components/linkr/linkr-mutual-banner";
 import { LinkrOffScreen } from "@/components/linkr/linkr-activation";
 import { LinkrProfileEditor } from "@/components/linkr/linkr-profile-editor";
 import { LinkrSettings } from "@/components/linkr/linkr-settings";
 import type { LinkrCandidate } from "@/lib/linkr/candidate-service";
+import type { ClickedPerson, PendingClick } from "@/lib/linkr/collections-service";
 import type { LinkrOwnProfile } from "@/lib/linkr/profile-service";
 import type { LinkrIntent } from "@/lib/linkr/intent";
 import { profileHandoffHref } from "@/lib/navigation/handoff";
-import { LINKR_DISTANCE_OPTIONS, type LinkrDistancePreference } from "@/lib/linkr/rules";
+import { LINKR_COPY, LINKR_DISTANCE_OPTIONS, type LinkrDistancePreference } from "@/lib/linkr/rules";
 
 /**
  * Linkr 2.0.
@@ -66,9 +72,11 @@ export type LinkrPageProps = {
   } | null;
   /** Unsaved activation choice restored after a Profile handoff. */
   pendingIntent?: LinkrIntent | null;
+  /** From a mutual-connection notification; re-resolved before it opens. */
+  requestedConnectionId?: string | null;
 };
 
-type View = "discover" | "filters" | "profile" | "settings" | "how" | "event-intro";
+type View = "discover" | "filters" | "profile" | "settings" | "how" | "event-intro" | "clicked";
 
 export function LinkrPage({
   ...props
@@ -86,7 +94,8 @@ function LinkrPageContent({
   me,
   blockedCount,
   eventContext,
-  pendingIntent = null
+  pendingIntent = null,
+  requestedConnectionId = null
 }: LinkrPageProps) {
   const router = useRouter();
   const [profile, setProfile] = useState(initialProfile);
@@ -99,7 +108,18 @@ function LinkrPageContent({
     displayName: string;
     photo: string | null;
     conversationId?: string;
+    hasConversation?: boolean;
   } | null>(null);
+  /**
+   * The mutual news for the person who clicked FIRST. A banner, never a modal:
+   * see LinkrMutualBanner for why hijacking an in-flight swipe is unsafe.
+   */
+  const [mutualBanner, setMutualBanner] = useState<{
+    name: string;
+    connectionId: string;
+  } | null>(null);
+  const [clicked, setClicked] = useState<ClickedPerson[]>([]);
+  const [pendingClicks, setPendingClicks] = useState<PendingClick[]>([]);
   const [canUndo, setCanUndo] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -203,6 +223,66 @@ function LinkrPageContent({
       }
     });
   }, [current, advance, eventId]);
+
+  /** Refresh both collections. Cheap, and only when that surface is opened. */
+  const refreshCollections = useCallback(async () => {
+    const [clickedPeople, pending] = await Promise.all([
+      loadClickedPeopleAction(),
+      loadPendingClicksAction()
+    ]);
+    setClicked(clickedPeople);
+    setPendingClicks(pending);
+  }, []);
+
+  /**
+   * Open one mutual person, resolving what that means RIGHT NOW.
+   *
+   * A conversation that has already started wins over the mutual screen, so
+   * revisiting an old match does not offer to start what was started.
+   */
+  const openMutualPerson = useCallback(
+    (connectionId: string) => {
+      void (async () => {
+        const resolved = await resolveMutualDestinationAction(connectionId);
+        if (resolved.kind === "conversation") {
+          router.push(`/messages?conversation=${resolved.conversationId}` as Route);
+          return;
+        }
+        if (resolved.kind === "unavailable") {
+          // Fails closed and says nothing about the other person: a block they
+          // placed is not ours to report.
+          setNotice("That's no longer available.");
+          setMutualBanner(null);
+          void refreshCollections();
+          return;
+        }
+        const person = clicked.find((entry) => entry.connectionId === connectionId);
+        setMutualBanner(null);
+        setMatch({
+          displayName: person?.displayName ?? "Someone",
+          photo: person?.photo ?? null,
+          conversationId: resolved.conversationId ?? undefined,
+          hasConversation: false
+        });
+      })();
+    },
+    [clicked, refreshCollections, router]
+  );
+
+  /**
+   * A mutual-connection notification brought us here. Resolve it once, on
+   * mount, then let the normal surfaces take over.
+   */
+  useEffect(() => {
+    if (!requestedConnectionId) return;
+    void (async () => {
+      await refreshCollections();
+      openMutualPerson(requestedConnectionId);
+    })();
+    // Intentionally keyed only on the id: re-resolving on every render would
+    // reopen the screen the person just dismissed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedConnectionId]);
 
   const handleUndo = useCallback(() => {
     /* Undo REVERSES A RECORDED DECISION, so the write must finish: an
@@ -390,6 +470,17 @@ function LinkrPageContent({
     );
   }
 
+  if (view === "clicked") {
+    return (
+      <LinkrCollections
+        clicked={clicked}
+        pending={pendingClicks}
+        onOpenPerson={(person) => openMutualPerson(person.connectionId)}
+        onBack={() => setView("discover")}
+      />
+    );
+  }
+
   if (view === "settings") {
     return (
       <LinkrSettings
@@ -425,6 +516,17 @@ function LinkrPageContent({
       <header className="linkr-topbar">
         <h1 className="linkr-topbar__title">Linkr</h1>
         <div className="linkr-topbar__actions">
+          {/* Clicked: where mutual people live once they leave the deck. */}
+          <button
+            type="button"
+            onClick={() => {
+              setView("clicked");
+              void refreshCollections();
+            }}
+            aria-label={LINKR_COPY.clickedTitle}
+          >
+            <Hand aria-hidden />
+          </button>
           <button type="button" onClick={() => setView("profile")} aria-label="My Linkr profile">
             <UserRound aria-hidden />
           </button>
@@ -560,6 +662,17 @@ function LinkrPageContent({
             router.push(target);
           }}
           onKeepDiscovering={() => setMatch(null)}
+          hasConversation={Boolean(match.hasConversation)}
+        />
+      ) : null}
+
+      {/* The first connector's signal. Rendered outside the card so it can
+          never intercept a decision gesture in flight. */}
+      {mutualBanner && !match ? (
+        <LinkrMutualBanner
+          name={mutualBanner.name}
+          onOpen={() => openMutualPerson(mutualBanner.connectionId)}
+          onDismiss={() => setMutualBanner(null)}
         />
       ) : null}
 

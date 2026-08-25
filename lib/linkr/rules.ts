@@ -342,7 +342,26 @@ export const LINKR_COPY = {
   matchTitle: "You clicked!",
   matchBody: (name: string) => `You and ${name} both want to connect.`,
   sayHi: "Say hi",
+  /**
+   * Once a real conversation exists, "Say hi" is a lie: the greeting already
+   * happened. The CTA follows the conversation's actual state.
+   */
+  continueChat: "Continue chat",
   keepDiscovering: "Keep discovering",
+  /** Non-blocking in-Linkr signal for the person who clicked FIRST. */
+  mutualBanner: (name: string) => `You and ${name} clicked!`,
+  mutualBannerAction: "Say hello",
+  /** The notification both people receive. Neither says who acted first. */
+  mutualNotificationTitle: (name: string) => `You and ${name} clicked!`,
+  mutualNotificationBody: "Say hi and start the conversation.",
+  /** The persistent list of people the viewer has matched with. */
+  clickedTitle: "Clicked",
+  clickedEmpty: "No one yet. Keep discovering.",
+  /** The viewer's OWN pending choices. Never describes the other person. */
+  yourClicksTitle: "Your clicks",
+  yourClicksHint: "People you chose. We'll let you know if they choose you too.",
+  yourClicksEmpty: "You haven't clicked anyone yet.",
+  stillInterested: "Still interested?",
   emptyTitle: "No one nearby right now",
   emptyBody: "Check back later or widen your search.",
   widenSearch: "Widen search",

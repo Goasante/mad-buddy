@@ -24,9 +24,21 @@ export type MatchScreenProps = {
   them: { displayName: string; photo: string | null };
   onSayHi: () => void;
   onKeepDiscovering: () => void;
+  /**
+   * Whether the pair has already spoken. Offering "Say hi" on a conversation
+   * three messages deep invites someone to start what they already started,
+   * so the CTA follows the conversation rather than the connection.
+   */
+  hasConversation?: boolean;
 };
 
-export function LinkrMatchScreen({ me, them, onSayHi, onKeepDiscovering }: MatchScreenProps) {
+export function LinkrMatchScreen({
+  me,
+  them,
+  onSayHi,
+  onKeepDiscovering,
+  hasConversation = false
+}: MatchScreenProps) {
   return (
     <section className="linkr-match" role="dialog" aria-modal="true" aria-labelledby="linkr-match-title">
       <div className="linkr-match__faces">
@@ -43,7 +55,7 @@ export function LinkrMatchScreen({ me, them, onSayHi, onKeepDiscovering }: Match
       <p className="linkr-match__body">{LINKR_COPY.matchBody(them.displayName)}</p>
 
       <button type="button" className="linkr-primary" onClick={onSayHi}>
-        {LINKR_COPY.sayHi}
+        {hasConversation ? LINKR_COPY.continueChat : LINKR_COPY.sayHi}
       </button>
       <button type="button" className="linkr-secondary" onClick={onKeepDiscovering}>
         {LINKR_COPY.keepDiscovering}

@@ -19,6 +19,8 @@ import {
   type LinkrActionResult,
   type LinkrOwnProfile
 } from "@/lib/linkr/profile-service";
+import { loadClickedPeople, loadPendingClicks } from "@/lib/linkr/collections-service";
+import { resolveMutualDestination } from "@/lib/linkr/mutual-resolution";
 import { resolveViewerEventMode } from "@/lib/linkr/event-mode-adapter";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { checkAccess } from "@/lib/access/guard";
@@ -222,4 +224,44 @@ export async function endLinkrConnectionAction(otherUserId: string): Promise<Lin
   const result = await endLinkrConnection(userId, otherUserId);
   if (result.ok) revalidatePath("/linkr");
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// The persistent Linkr collections
+// ---------------------------------------------------------------------------
+
+/**
+ * People this viewer and that person BOTH chose.
+ *
+ * Return types are written inline rather than imported as named types: a
+ * "use server" file must not export a type (see the note at the top), and
+ * annotating with an imported type is fine but exporting one is not.
+ */
+export async function loadClickedPeopleAction() {
+  const userId = await getAuthedUserId();
+  return userId ? loadClickedPeople(userId) : [];
+}
+
+/**
+ * People this viewer chose, whatever they chose back.
+ *
+ * The service reads only the viewer's own action rows, so this cannot report
+ * anything about the other person's decision.
+ */
+export async function loadPendingClicksAction() {
+  const userId = await getAuthedUserId();
+  return userId ? loadPendingClicks(userId) : [];
+}
+
+/**
+ * Where a mutual-connection notification should go, resolved NOW.
+ *
+ * Re-checks membership and blocks, and prefers a conversation that has already
+ * started over the mutual screen. Fails closed to `unavailable`.
+ */
+export async function resolveMutualDestinationAction(connectionId: string) {
+  const userId = await getAuthedUserId();
+  if (!userId) return { kind: "unavailable" as const };
+  const admin = createSupabaseAdminClient();
+  return resolveMutualDestination(admin, userId, connectionId);
 }
