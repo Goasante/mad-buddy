@@ -354,15 +354,25 @@ export async function undoLastLinkrAction(
   const guard = await guardAction(admin, { userId: viewerId, surface: "linkr" });
   if (!guard.allowed) return { ok: false, message: guard.message };
 
+  /**
+   * ORDER BY updated_at, NOT created_at.
+   *
+   * Decisions are UPSERTED on (actor_id, target_id), so re-deciding somebody
+   * whose pass has lapsed updates a row that was created weeks ago. Ordering
+   * by creation would then call some other, genuinely older decision "your
+   * last one" and undo that instead -- silently restoring the wrong person and
+   * leaving the one just passed still suppressed. `updated_at` is the only
+   * column that tracks when the decision was actually made.
+   */
   const { data: last } = await admin
     .from("linkr_actions")
-    .select("id, target_id, action, created_at")
+    .select("id, target_id, action, created_at, updated_at")
     .eq("actor_id", viewerId)
-    .order("created_at", { ascending: false })
+    .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (!last) return { ok: false, message: "Nothing to undo." };
-  if (Date.now() - Date.parse(last.created_at) > UNDO_WINDOW_MS) {
+  if (Date.now() - Date.parse(last.updated_at ?? last.created_at) > UNDO_WINDOW_MS) {
     return { ok: false, message: "That's too long ago to undo." };
   }
 
