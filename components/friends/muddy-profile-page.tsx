@@ -411,7 +411,7 @@ export function MuddyProfilePage({
           visitor with nothing visible sees no section at all rather than an
           empty frame implying something was withheld. Read-only here: only
           the owner's own profile offers the controls. */}
-      <ProfilePhotoCarousel photos={photos} isOwner={false} />
+      <ProfilePhotoCarousel photos={photos} isOwner={false} ownerName={muddy.displayName} />
 
       <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-xl border border-border/70 bg-card/50 p-4">

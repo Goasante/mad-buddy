@@ -21,6 +21,8 @@ import {
   type ProfilePhoto
 } from "@/lib/profile/profile-photos";
 import { Button } from "@/components/ui/button";
+import { ProfilePhotoViewer } from "@/components/profile/profile-photo-viewer";
+import { profilePhotoAltText } from "@/lib/profile/photo-labels";
 import { cn } from "@/lib/utils";
 
 /**
@@ -42,15 +44,21 @@ import { cn } from "@/lib/utils";
 export function ProfilePhotoCarousel({
   photos,
   isOwner,
+  ownerName = "this person",
   onChanged
 }: {
   /** Already filtered by the server for this viewer. */
   photos: readonly ProfilePhoto[];
   isOwner: boolean;
+  /** Whose photos these are, for the full-screen accessible name. */
+  ownerName?: string;
   /** Called after any mutation, so the page can refetch. */
   onChanged?: () => void;
 }) {
   const [index, setIndex] = useState(0);
+  // Full screen is a pure view state: it authorises nothing and fetches
+  // nothing, it just reopens the photo already on screen at full size.
+  const [fullScreen, setFullScreen] = useState(false);
   const [uploading, setUploading] = useState(false);
   /**
    * The chosen-but-not-yet-uploaded tray.
@@ -269,12 +277,23 @@ export function ProfilePhotoCarousel({
 
       {current ? (
         <div className="profile-photos-frame">
-          {/* eslint-disable-next-line @next/next/no-img-element -- signed URL, not a static asset */}
-          <img
-            src={current.url}
-            alt={isOwner ? `Your photo ${active + 1}` : `Photo ${active + 1} of ${count}`}
-            className="profile-photos-image"
-          />
+          {/* The photo opens full screen. A button, not a click handler on the
+              image, so it is reachable by keyboard and announced as the
+              control it is. The picture itself is unchanged -- same src, same
+              class, same framing -- because sizing is a separate task. */}
+          <button
+            type="button"
+            onClick={() => setFullScreen(true)}
+            aria-label={`${profilePhotoAltText(ownerName, isOwner, active + 1, count)}, view full screen`}
+            className="profile-photos-open focus-ring"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- signed URL, not a static asset */}
+            <img
+              src={current.url}
+              alt={profilePhotoAltText(ownerName, isOwner, active + 1, count)}
+              className="profile-photos-image"
+            />
+          </button>
 
           {/* Arrows only when there is somewhere to go. */}
           {count > 1 ? (
@@ -489,6 +508,17 @@ export function ProfilePhotoCarousel({
       ) : null}
 
       {feedback ? <p className="profile-photos-feedback">{feedback}</p> : null}
+
+      {/* Handed the very photos already rendered above: the server filtered
+          them for this viewer, and full screen adds no authority of its own. */}
+      <ProfilePhotoViewer
+        photos={photos}
+        activeIndex={active}
+        ownerName={ownerName}
+        isOwner={isOwner}
+        open={fullScreen}
+        onClose={() => setFullScreen(false)}
+      />
     </section>
   );
 }

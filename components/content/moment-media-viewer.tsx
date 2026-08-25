@@ -44,7 +44,19 @@ export function MomentMediaViewer({
   /** Playback position (seconds) to resume a video from. */
   initialVideoTime = 0,
   /** Reports the position back so the card can resume where full-screen left off. */
-  onVideoTimeChange
+  onVideoTimeChange,
+  /**
+   * Hides the author/time footer for media that has no author line to show.
+   * A Profile photo is one of these: it belongs to the Profile the viewer is
+   * already looking at, and a relative timestamp for it is meaningless.
+   * Default off, so Moments and chat are untouched.
+   */
+  hideIdentity = false,
+  /**
+   * Overrides the accessible name. Callers whose media is not a Moment supply
+   * their own wording rather than inheriting "Moment from ...".
+   */
+  altText = null
 }: {
   moment: VisibleMoment;
   /**
@@ -60,6 +72,8 @@ export function MomentMediaViewer({
   fullResUrl?: string | null;
   initialVideoTime?: number;
   onVideoTimeChange?: (seconds: number) => void;
+  hideIdentity?: boolean;
+  altText?: string | null;
 }) {
   const reducedMotion = useReducedMotion();
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -236,7 +250,7 @@ export function MomentMediaViewer({
     else setDragY(0);
   }
 
-  const alt = active.caption?.trim() || `Moment from ${active.authorName}`;
+  const alt = altText?.trim() || active.caption?.trim() || `Moment from ${active.authorName}`;
 
   return (
     <div
@@ -345,7 +359,7 @@ export function MomentMediaViewer({
 
           Hidden while zoomed or dragging: both are moments when the viewer
           wants the photograph and nothing on top of it. */}
-      {!zoomed && !isText ? (
+      {!zoomed && !isText && !hideIdentity ? (
         <div
           className="pointer-events-none absolute inset-x-0 bottom-0 z-10"
           style={{

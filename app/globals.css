@@ -4143,6 +4143,19 @@ select {
   aspect-ratio: 4 / 5;
 }
 
+/* A transparent full-bleed wrapper so the photo can be tapped and focused.
+   Purely a hit target: it adds no box of its own, so the frame's rounding,
+   ratio and cropping are exactly as they were. */
+.profile-photos-open {
+  display: block;
+  height: 100%;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
 .profile-photos-image {
   height: 100%;
   width: 100%;
