@@ -319,6 +319,12 @@ export function EventsPageContent({
       setGlowList(null);
       setUpdates([]);
       setLinkrState(null);
+      // Same rule as openDetails: arriving at a different Event ends whatever
+      // sub-sheet the previous one had open, rather than reopening it over
+      // data that has just been cleared.
+      setUpdatesOpen(false);
+      setAdminsOpen(false);
+      setMeetPeopleOpen(false);
       setLinkedEventMissing(false);
       setLinkedEventPending(!known);
     });
@@ -373,6 +379,23 @@ export function EventsPageContent({
     setGlowList(null);
     setUpdates([]);
     setLinkrState(null);
+    /* THE SUB-SHEETS BELONG TO THE EVENT THAT OPENED THEM.
+     *
+     * `updatesOpen`, `adminsOpen` and `meetPeopleOpen` were never reset when
+     * the selected Event changed -- they were set true on the way in and
+     * nothing on any path set them false again. So a person who opened
+     * Updates, closed the detail sheet and opened a DIFFERENT Event got that
+     * second Event's detail sheet with the first Event's Updates sheet still
+     * flagged open on top of it, over data that had just been cleared to []
+     * on the line above. Both those sheets are `hideTitle`, so their only
+     * visible content comes from the body -- which is why the result reads as
+     * a backdrop with a panel and nothing in it rather than an obvious error.
+     *
+     * Closing them here makes the rule explicit: a sub-sheet is scoped to one
+     * Event, and choosing another Event ends it. */
+    setUpdatesOpen(false);
+    setAdminsOpen(false);
+    setMeetPeopleOpen(false);
     const target = events.find((event) => event.id === eventId);
     loadEventContext(eventId, Boolean(target?.isHost));
     startTransition(async () => {

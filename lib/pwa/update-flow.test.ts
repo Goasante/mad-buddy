@@ -67,7 +67,18 @@ describe("existing installed PWA update flow", () => {
   it("serves a public, non-cached deployment identifier", () => {
     const route = source("app/api/version/route.ts");
     expect(route).toContain("resolveBuildId(process.env)");
-    expect(route).toContain('"Cache-Control": "no-store, max-age=0"');
+    /* The commit is what makes a release verifiable FROM THE LIVE DOMAIN.
+       buildId prefers VERCEL_DEPLOYMENT_ID, an opaque id with no relationship
+       to a commit, so "the deployed SHA matches" could only ever be checked
+       through the Vercel API -- never from the site itself, and never from the
+       phone that is showing the old behaviour. */
+    expect(route).toContain("VERCEL_GIT_COMMIT_SHA");
+    expect(route).toContain("commitShort");
+    // Asserts the PROPERTY, not one exact header string: the answer must never
+    // be cached anywhere. The literal was brittle -- strengthening the header
+    // with must-revalidate broke the test while making the behaviour better.
+    expect(route).toMatch(/"Cache-Control":\s*"[^"]*no-store[^"]*"/);
+    expect(route).toMatch(/"Cache-Control":\s*"[^"]*max-age=0[^"]*"/);
   });
 
   it("makes previously installed standalone users eligible for notification onboarding", () => {

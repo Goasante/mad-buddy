@@ -1,6 +1,25 @@
 import { describe, expect, it } from "vitest";
+import type { HomeCompositionInputs } from "@/lib/activation/home-composition";
 import { proximityAllowsNearby } from "@/lib/activation/home-composition";
+import type { ActivationState } from "@/lib/activation/state";
 import { primaryActionFor, resolveActivationState } from "@/lib/activation/state";
+
+/** A complete composition input, so the type checker sees what vitest cannot. */
+function composition(activationState: ActivationState | null): HomeCompositionInputs {
+  return {
+    activationState,
+    acknowledgingFirstMuddy: false,
+    milestones: new Set<string>(),
+    hasSafetyCard: false,
+    upcomingPlanCount: 0,
+    twoSidedConversationCount: 0,
+    planParticipationCount: 0,
+    muddyCount: 3,
+    nextUnspokenMuddy: null,
+    missingProfileItems: [],
+    unreadConversationCount: 0
+  };
+}
 
 /**
  * A6 -- "Visibility is paused" must be resolvable from Home.
@@ -39,7 +58,7 @@ describe("paused visibility is actionable from Home", () => {
   });
 
   it("stands the nearby section down while paused, so one surface owns the fix", () => {
-    expect(proximityAllowsNearby({ activationState: "visibility_off" })).toBe(false);
+    expect(proximityAllowsNearby(composition("visibility_off"))).toBe(false);
   });
 
   it("stops offering the resume once visibility is restored", () => {
@@ -50,6 +69,6 @@ describe("paused visibility is actionable from Home", () => {
 
   it("lets the nearby section speak again once visibility is back", () => {
     const state = resolveActivationState(baseInputs);
-    expect(proximityAllowsNearby({ activationState: state })).toBe(true);
+    expect(proximityAllowsNearby(composition(state))).toBe(true);
   });
 });
