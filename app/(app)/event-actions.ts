@@ -150,13 +150,14 @@ export async function checkInToEventAction(input: unknown): Promise<EventActionS
   const rateLimit = await consumeRateLimit({ action: "checkins.create", userId });
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
+  /* This Server Action is the browser check-in path. It must use the same
+   * direct-access authority as Event detail and the mobile API; a guessed
+   * private/community Event id is not permission to create a check-in. */
+  const access = await getEventForViewer(parsed.data.eventId, userId);
+  if (!access.ok) return { ok: false, message: "Event not found." };
+  const event = access.event;
+
   const admin = createSupabaseAdminClient();
-  const { data: event } = await admin
-    .from("events")
-    .select("id, name, status, starts_at, ends_at, checkin_opens_minutes_before")
-    .eq("id", parsed.data.eventId)
-    .maybeSingle();
-  if (!event) return { ok: false, message: "Event not found." };
 
   // QR check-in: the token must be valid, unexpired, and for THIS event.
   let method: "manual" | "qr" = "manual";

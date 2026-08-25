@@ -18,6 +18,7 @@ const page = stripComments(readFileSync("components/events/events-page.tsx", "ut
 const yours = stripComments(readFileSync("components/events/events-yours.tsx", "utf8"));
 const detail = stripComments(readFileSync("components/events/event-detail.tsx", "utf8"));
 const service = stripComments(readFileSync("lib/events/mobile.ts", "utf8"));
+const eventActions = stripComments(readFileSync("app/(app)/event-actions.ts", "utf8"));
 
 describe("an answered Event comes back to you", () => {
   it("gives what you are attending its own surface", () => {
@@ -170,5 +171,16 @@ describe("check-in uses the Event audience authority", () => {
     expect(checkIn).toContain("getEventForViewer(eventId, userId)");
     expect(checkIn).toContain("if (!access.ok) return { ok: false, message: \"Event not found.\" };");
     expect(checkIn).not.toContain('event.visibility === "invite"');
+  });
+
+  it("guards the browser Server Action with that same authority", () => {
+    const checkIn = eventActions.slice(
+      eventActions.indexOf("export async function checkInToEventAction"),
+      eventActions.indexOf("export async function checkOutAction")
+    );
+
+    expect(checkIn).toContain("getEventForViewer(parsed.data.eventId, userId)");
+    expect(checkIn).toContain('if (!access.ok) return { ok: false, message: "Event not found." };');
+    expect(checkIn.indexOf("getEventForViewer")).toBeLessThan(checkIn.indexOf('.from("check_ins")'));
   });
 });

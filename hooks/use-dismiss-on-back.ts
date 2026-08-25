@@ -33,7 +33,10 @@ export function useDismissOnBack(open: boolean, onDismiss: () => void) {
    * same-URL entries behind it. The ref keeps the latest behaviour without
    * making ordinary renders mutate browser history. */
   const onDismissRef = useRef(onDismiss);
-  onDismissRef.current = onDismiss;
+
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
 
   useEffect(() => {
     if (!open || typeof window === "undefined") return;
