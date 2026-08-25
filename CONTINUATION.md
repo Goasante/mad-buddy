@@ -33,7 +33,7 @@ Production baseline observed on 2026-08-25:
 
 One subsequent full-domain Vitest invocation stalled before emitting output and was terminated; focused affected suites passed afterward. Do not report this as a full-suite pass after Checkpoint 2.
 
-## Runtime blocker
+## Previously blocked interactive scope (resolved below)
 
 The Browser runtime exposed no in-app or extension browser (`agent.browsers.list()` returned `[]`). No signed-in interactive session or screenshots were available. Therefore these remain explicitly unverified:
 
@@ -44,7 +44,7 @@ The Browser runtime exposed no in-app or extension browser (`agent.browsers.list
 
 Do not call any of these production-verified. Resume with an available signed-in Browser surface and run the existing Events modal/runtime probes plus the controlled Host/A/B/Unauthorized journey.
 
-## Next checkpoint
+## Previous next checkpoint (completed below)
 
 Event Linkr end to end, then security review and release. Do not push or deploy until the interactive journey and full release gates pass.
 
@@ -60,4 +60,17 @@ Event Linkr end to end, then security review and release. Do not push or deploy 
 - After applying that migration locally, the real Postgres Linkr runtime sequence passed 7/7, including simultaneous reciprocal connects producing exactly one connection.
 - Focused Linkr unit/migration suite passed 62/62; TypeScript passed.
 
-The in-app Browser connector still returns `No browser is available` for `http://127.0.0.1:3200`. That is the single remaining execution blocker for the required interactive Create/Publish/Reopen, RSVP/check-in, Event Linkr UI, canonical chat, end-event persistence, and responsive light/dark screenshot pass. Standalone Playwright was not used because the Browser skill requires the selected Browser surface rather than a fallback browser runtime.
+The in-app Browser connector still returned `No browser is available` for `http://127.0.0.1:3200` at this preparation checkpoint. The interactive work below supersedes that limitation by using standalone Playwright against the real local application.
+
+## Checkpoint 4 interactive completion (2026-08-25)
+
+- Standalone Playwright drove four independent authenticated browser contexts: Host, Attendee A, Attendee B, and Outsider.
+- The clean built local runtime completed the full Event -> Event Linkr -> canonical chat -> Event end journey: 37/37 assertions passed, with no browser page errors or HTTP 5xx responses.
+- Outsider access failed closed; A's first Connect leaked no one-sided interest to B; reciprocal Connect produced mutual state for both users.
+- `Say hi` opened canonical conversation `082a631e-fa08-42e8-abf4-a868b9537436`; both directions sent successfully; the relationship and both messages survived Event end while Event Linkr discovery ended.
+- Visual evidence includes 22 screenshots at 390x844 plus 360x800 and 430x932 overflow checks, light/dark Create Event coverage, and four Playwright traces under `.hardening/events-e2e/latest/`.
+- Real defects found and repaired: post-publish `View event` was clipped on mobile; check-in left Event Linkr eligibility stale; Turbopack could not resolve the constructed consent-module import; notification relative times could disagree during hydration.
+- Current gates: focused Event/Linkr/notification tests 54/54, TypeScript pass, focused ESLint pass, optimized production build pass.
+- Production was not touched. Nothing was pushed or deployed.
+
+Release decision: Checkpoint 4 is approved locally. Keep the production release on hold until an explicit push/deploy instruction is given.

@@ -1,5 +1,7 @@
 import "server-only";
 
+import * as eventConsentModule from "@/lib/events/linkr-consent";
+
 /**
  * THE LINKR SIDE OF THE EVENT MODE SEAM.
  *
@@ -21,11 +23,11 @@ import "server-only";
  * the Events side, so a change there changes Linkr's behaviour without Linkr
  * being edited.
  *
- * Until that module lands on this branch, the functions below resolve it at
- * runtime and FAIL CLOSED when it is absent -- no consent module means no
- * Event Mode, never "assume everyone consented". See the integration note in
- * the handoff: when Events merges, the dynamic import becomes a static one and
- * nothing else moves.
+ * The Events module has landed, so production imports it statically. The
+ * previous constructed dynamic import could not be bundled by Turbopack: it
+ * caught its own resolution failure and silently disabled Event Mode even when
+ * check-in and consent were valid. Tests may still replace the module through
+ * the explicit seam below, including with null to prove failure stays closed.
  *
  * WHAT THIS ADAPTER MAY NOT DO, and does not:
  *   - decide whether somebody checked in
@@ -61,43 +63,17 @@ type EventLinkrConsentModule = {
   EVENT_LINKR_COUNT_THRESHOLD: number;
 };
 
-let cached: EventLinkrConsentModule | null | undefined;
+let consentModuleOverride: EventLinkrConsentModule | null | undefined;
 
-/**
- * Resolves the Events consent module if this branch has it.
- *
- * Cached including the negative result, so a branch without Events does not
- * pay for a failed module resolution on every discovery request.
- */
-/**
- * The specifier is built rather than written literally, so TypeScript does not
- * try to resolve it at compile time. On this branch `lib/events/linkr-consent`
- * does not exist yet -- it arrives with Events 2.0 -- and a literal import
- * would fail the build for a dependency that is meant to be optional.
- *
- * WHEN EVENTS MERGES this becomes a plain static import and the whole
- * indirection disappears. See the integration note in the handoff.
- */
-const CONSENT_MODULE = ["@/lib/events", "linkr-consent"].join("/");
-
-async function loadConsentModule(): Promise<EventLinkrConsentModule | null> {
-  if (cached !== undefined) return cached;
-  try {
-    const mod = (await import(/* webpackIgnore: false */ CONSENT_MODULE)) as unknown as
-      | EventLinkrConsentModule
-      | undefined;
-    cached = typeof mod?.resolveEventLinkrEligibility === "function" ? mod : null;
-  } catch {
-    // FAILS CLOSED. No consent module means no Event Mode -- never "assume
-    // everybody at the event consented".
-    cached = null;
-  }
-  return cached;
+function loadConsentModule(): EventLinkrConsentModule | null {
+  return consentModuleOverride === undefined
+    ? eventConsentModule
+    : consentModuleOverride;
 }
 
 /** Test seam: lets the suite supply a stub Events module, or clear it. */
 export function __setEventConsentModuleForTests(mod: EventLinkrConsentModule | null | undefined) {
-  cached = mod;
+  consentModuleOverride = mod;
 }
 
 /**

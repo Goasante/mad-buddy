@@ -67,6 +67,20 @@ describe("anyone with the link can be given the link", () => {
     expect(page).toContain("<EventShare");
   });
 
+  it("puts the primary post-publish action before the wrapping share tools", () => {
+    /* At 390x844 the share controls wrap. When View event followed them inside
+     * the sheet, it fell below the clipped mobile panel and the share section
+     * intercepted its pointer target. */
+    const confirmation = page.slice(
+      page.indexOf('title="Event published"'),
+      page.indexOf("{checkedInEvent ?")
+    );
+    expect(confirmation).toContain("View event");
+    expect(confirmation.indexOf("View event")).toBeLessThan(
+      confirmation.indexOf("<EventShare")
+    );
+  });
+
   it("only offers it for a real publish, never a draft", () => {
     /* The rule holds, but it is now decided by the SERVER's answer rather than
      * by the shape of the request. `!input.draft` only said what was asked

@@ -429,7 +429,16 @@ export function EventsPageContent({
               : item
           )
         );
-        setGlowList(await getEventGlowAction(event.id));
+        /* Check-in changes Event Linkr eligibility from `not_checked_in` to
+           `no_consent`. Refresh both pieces of Event context together so the
+           Meet people here invitation appears in this same open sheet instead
+           of requiring a close/reopen or full navigation. */
+        const [nextGlowList, nextLinkrState] = await Promise.all([
+          getEventGlowAction(event.id),
+          getEventLinkrStateAction(event.id),
+        ]);
+        setGlowList(nextGlowList);
+        setLinkrState(nextLinkrState);
         // ONLY after the server confirmed. Never optimistic: claiming
         // "you're checked in" before the row exists would be a lie the user
         // acts on (§14).
@@ -1055,11 +1064,10 @@ export function EventsPageContent({
       >
         {publishedEvent ? (
           <div className="space-y-4">
-            <EventShare
-              eventId={publishedEvent.id}
-              eventName={publishedEvent.name}
-              visibility={publishedEvent.visibility}
-            />
+            {/* The primary next step comes before the optional share tools.
+                At 390px wide those tools wrap into a tall section; putting
+                View event after them left it below the clipped mobile sheet,
+                present in the DOM but impossible to tap. */}
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="secondary"
@@ -1075,6 +1083,11 @@ export function EventsPageContent({
                 Done
               </Button>
             </div>
+            <EventShare
+              eventId={publishedEvent.id}
+              eventName={publishedEvent.name}
+              visibility={publishedEvent.visibility}
+            />
           </div>
         ) : null}
       </Modal>

@@ -24,11 +24,13 @@ import { stripComments } from "@/lib/content/strip-comments";
 const CONSENT = "lib/events/linkr-consent.ts";
 const ADAPTER = "lib/linkr/event-mode-adapter.ts";
 const CANDIDATES = "lib/linkr/candidate-service.ts";
+const EVENTS_PAGE = "components/events/events-page.tsx";
 
 describe("Event Linkr consent wiring", () => {
   const consent = stripComments(readFileSync(CONSENT, "utf8"));
   const adapter = stripComments(readFileSync(ADAPTER, "utf8"));
   const candidates = stripComments(readFileSync(CANDIDATES, "utf8"));
+  const eventsPage = stripComments(readFileSync(EVENTS_PAGE, "utf8"));
 
   function body(source: string, name: string): string {
     const start = source.indexOf(`export async function ${name}`);
@@ -45,6 +47,18 @@ describe("Event Linkr consent wiring", () => {
     expect(resolve).toContain('.from("events")');
     expect(resolve).toContain("liveCheckIn");
     expect(resolve).toContain("hasEventLinkrConsent");
+  });
+
+  it("refreshes eligibility immediately after a successful UI check-in", () => {
+    /* Check-in changes the answer from not_checked_in to no_consent. Keeping
+       the pre-check-in client state hid Meet people here until the Event was
+       closed and reopened, breaking the intended uninterrupted journey. */
+    const checkIn = eventsPage.slice(
+      eventsPage.indexOf("function checkIn("),
+      eventsPage.indexOf("function checkOut(")
+    );
+    expect(checkIn).toContain("getEventLinkrStateAction(event.id)");
+    expect(checkIn).toContain("setLinkrState(nextLinkrState)");
   });
 
   it("checks run in an order where each one can deny", () => {
@@ -81,6 +95,15 @@ describe("Event Linkr consent wiring", () => {
     expect(candidates).toContain("eventModeCandidateIds");
     expect(candidates).not.toContain('from("event_linkr_opt_ins")');
     expect(candidates).not.toContain('from("check_ins")');
+  });
+
+  it("statically binds the merged Events authority in production", () => {
+    /* A constructed runtime import was the pre-merge compatibility path. Once
+       Events landed, Turbopack could not bundle that unknown specifier and the
+       catch path silently disabled every otherwise-valid Event Mode visit. */
+    expect(adapter).toContain('import * as eventConsentModule from "@/lib/events/linkr-consent"');
+    expect(adapter).not.toContain("CONSENT_MODULE");
+    expect(adapter).not.toContain("webpackIgnore");
   });
 
   it("the seam fails CLOSED when the consent module is unavailable", () => {

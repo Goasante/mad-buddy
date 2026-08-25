@@ -81,6 +81,9 @@ type NotificationsPageContentProps = {
    * of behind a client fetch — the client effect below still polls for
    * freshness, this only removes the initial blank/loading shell. */
   initialNotifications?: ApiNotification[];
+  /** One clock for the server render and first client render. Relative-time
+   * labels otherwise cross a minute boundary during hydration and disagree. */
+  initialNowMs?: number;
 };
 
 type PulseCategory = "all" | "nearby" | "social" | "plans" | "safety";
@@ -150,12 +153,14 @@ function categoryIconClass(category: ReturnType<typeof categoryForType>): string
 
 export function NotificationsPageContent({
   canSendCustomMessages = false,
-  initialNotifications = []
+  initialNotifications = [],
+  initialNowMs
 }: NotificationsPageContentProps) {
+  const [initialClockMs] = useState(() => initialNowMs ?? Date.now());
   const [notifications, setNotifications] = useState<NotificationItem[]>(() =>
     initialNotifications
       .filter((notification) => !isConversationMessageNotificationType(notification.type))
-      .map(toNotificationItem)
+      .map((notification) => toNotificationItem(notification, initialClockMs))
   );
   const [nearbyAlerts, setNearbyAlerts] = useState(true);
   const [quietMode, setQuietMode] = useState(false);
@@ -202,8 +207,8 @@ export function NotificationsPageContent({
     toastTimer.current = setTimeout(() => setToast(null), 3500);
   }, []);
   const notificationGroups = useMemo(
-    () => groupNotificationsByDate(visibleNotifications),
-    [visibleNotifications]
+    () => groupNotificationsByDate(visibleNotifications, initialClockMs),
+    [visibleNotifications, initialClockMs]
   );
 
   useEffect(() => {
@@ -233,7 +238,9 @@ export function NotificationsPageContent({
           const pulseNotifications = data.notifications.filter(
             (notification) => !isConversationMessageNotificationType(notification.type)
           );
-          setNotifications(pulseNotifications.map(toNotificationItem));
+          setNotifications(
+            pulseNotifications.map((notification) => toNotificationItem(notification))
+          );
           window.dispatchEvent(
             new CustomEvent("mad-buddy:notifications-updated", {
               detail: { unreadCount: pulseNotifications.filter((notification) => !notification.is_read).length }
@@ -1081,7 +1088,7 @@ function InlineEmptyState({ title, description }: { title: string; description: 
   );
 }
 
-function toNotificationItem(notification: ApiNotification): NotificationItem {
+function toNotificationItem(notification: ApiNotification, nowMs = Date.now()): NotificationItem {
   const meetupRequestId = notification.type.startsWith("meetup_request:")
     ? notification.type.slice("meetup_request:".length)
     : null;
@@ -1093,7 +1100,7 @@ function toNotificationItem(notification: ApiNotification): NotificationItem {
     type: notification.type,
     title: capitalize(notification.title),
     message: notification.message,
-    time: formatNotificationTime(notification.created_at),
+    time: formatNotificationTime(notification.created_at, nowMs),
     createdAt: notification.created_at,
     unread: !notification.is_read,
     icon: iconForType(notification.type),
@@ -1103,13 +1110,13 @@ function toNotificationItem(notification: ApiNotification): NotificationItem {
   };
 }
 
-function groupNotificationsByDate(notifications: NotificationItem[]) {
+function groupNotificationsByDate(notifications: NotificationItem[], nowMs: number) {
   const groups = new Map<string, { key: string; label: string; notifications: NotificationItem[] }>();
 
   notifications.forEach((notification) => {
     const date = new Date(notification.createdAt);
     const key = Number.isNaN(date.getTime()) ? "unknown" : date.toISOString().slice(0, 10);
-    const label = formatNotificationDate(date);
+    const label = formatNotificationDate(date, nowMs);
     const group = groups.get(key);
 
     if (group) {
@@ -1122,10 +1129,10 @@ function groupNotificationsByDate(notifications: NotificationItem[]) {
   return Array.from(groups.values());
 }
 
-function formatNotificationDate(date: Date) {
+function formatNotificationDate(date: Date, nowMs: number) {
   if (Number.isNaN(date.getTime())) return "Earlier";
 
-  const today = new Date();
+  const today = new Date(nowMs);
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   const dayDifference = Math.round((startOfToday - startOfDate) / 86_400_000);
@@ -1158,8 +1165,8 @@ function iconForType(type: string): LucideIcon {
   return iconsByType[type.split(":")[0]] ?? Bell;
 }
 
-function formatNotificationTime(createdAt: string) {
-  const ageMinutes = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000));
+function formatNotificationTime(createdAt: string, nowMs: number) {
+  const ageMinutes = Math.max(0, Math.floor((nowMs - new Date(createdAt).getTime()) / 60000));
 
   if (ageMinutes < 1) {
     return "Just now";

@@ -43,6 +43,11 @@ export default async function NotificationsPage({
       previewOnly: true
     });
   }
+  // Relative labels must use the same instant in the server HTML and the
+  // first client render; even a one-millisecond-independent Date.now() can
+  // cross a minute boundary while the page hydrates.
+  // eslint-disable-next-line react-hooks/purity -- deliberate server-render snapshot passed verbatim to hydration
+  const serverNowMs = Date.now();
 
   return (
     <NotificationsPageContent
@@ -52,6 +57,7 @@ export default async function NotificationsPage({
          UpFor; writing a message to a Muddy is neither. */
       canSendCustomMessages
       initialNotifications={initialNotifications}
+      initialNowMs={serverNowMs}
     />
   );
 }
