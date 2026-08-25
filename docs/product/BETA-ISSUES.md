@@ -327,6 +327,77 @@ transient state during navigation, which a settled-DOM probe cannot see.
 Recommended next step for these three: a short screen-recording from the
 tester, or the device's own Safari inspector — not more headless probing.
 
+## Production Truth Recovery (2026-08-25)
+
+The owner tested mad-buddy.com after the Phase A deploy and found the behaviour
+unchanged. That is a report that outranks every green check in this document,
+so deployment truth was re-established from scratch before any product claim.
+
+### Deployment truth — production IS serving the intended code
+
+| Link | Result |
+| --- | --- |
+| release worktree clean | YES, `bb38488` |
+| origin/main == HEAD | YES |
+| **live domain reports the commit** | **YES — `mad-buddy.com/api/version` returns `bb38488`** |
+| live bundles load | 5/5 sampled, HTTP 200 |
+| service worker can pin an old build | **NO** |
+
+The previous release was verified by matching a git SHA against a Vercel
+deployment id. **That check never tested the claim it was making** — it can
+pass while the site serves something else, and it says nothing at all about
+the device in the owner's hand.
+
+`/api/version` now reports the git commit, so a release is checkable from the
+live domain by anyone with the URL, and `scripts/hardening/verify-release.mjs`
+walks the chain. It ends by naming what it CANNOT prove — that the behaviour
+changed for a real user — rather than implying a green run means the fix works.
+
+**The service worker is not the cause.** It is network-only and precaches only
+`/offline.html` and `/offline.js`; it never writes application bundles to a
+cache, and it calls `clients.claim()`. An installed PWA cannot stay pinned to
+an old build.
+
+### The Events empty modal — status is HONEST, not closed
+
+The owner and an independent developer both observed: backdrop appears, a modal
+IS present, its body is EMPTY. That supersedes the earlier "stranded TourRunner
+scrim" diagnosis, which is hereby **withdrawn as the explanation** for this.
+
+Every Events modal was traced: detail, Updates, Event admins, Meet people, and
+Event published. Each gates its body on the same condition as its `open` prop,
+so none can open with a null payload. The deep-link path handles all three
+states properly — loading ("Opening event…"), missing ("We couldn't open this
+event"), and loaded.
+
+**One real defect found:** the three sub-sheets were set open on the way in and
+NOTHING on any path ever set them closed. Selecting a different Event cleared
+that Event's data while leaving the sheet's open flag standing. Updates and
+Meet people are `hideTitle`, so their only visible content comes from the body.
+Fixed in both `openDetails` and the deep-link effect; pinned by
+`lib/events/sub-sheet-scope.test.ts`, whose first test reproduces the shipped
+behaviour.
+
+**But it is NOT claimed as the cure.** Reverting the fix did not reproduce a
+visibly empty modal in a browser — closing both sheets with Escape resets the
+flag — so the negative control failed to distinguish. It ships as hardening on
+a genuine defect. `scripts/hardening/events-empty-modal.mjs` (33/33, with a
+working negative control) now enforces the invariant: an open modal must
+contain real content, a loading state, or an explicit error state.
+
+**What is still needed:** the exact tap sequence, or a signed-in production
+session. Every Phase A behaviour claim below is LOCAL-only; none has been
+observed on the live domain, because production Events requires a signed-in
+session and creating production test accounts is out of bounds.
+
+| Claim | LOCAL | PRODUCTION WEB |
+| --- | --- | --- |
+| Circle unread clears | PASS (browser, 3→0) | **UNVERIFIED** |
+| Circle mention survives send | PASS (17/17 + control) | **UNVERIFIED** |
+| Events modal never empty | PASS (33/33 + control) | **UNVERIFIED** |
+| Create Event no sideways shift | PASS (3 widths, 5 audiences) | **UNVERIFIED** |
+| Circle chat fills viewport | PASS (17px clear, was 144px under) | **UNVERIFIED** |
+
 ## Beta Recovery Sprint — Phase A (shipped)
 
 Owner instruction: real-device screenshots and video are authoritative. Where
