@@ -933,6 +933,27 @@ html.dark .home-ambient-bg {
  * inverted from the default in one specific way, per the design: closer means
  * BRIGHTER but TIGHTER, further means FAINTER but WIDER — so distance reads as
  * diffuseness rather than as raw size. */
+/* THE NEAR STRIP CLIPS ITS OWN GLOW unless it reserves the bloom.
+ *
+ * `overflow-x: auto` makes this a scroll container, and a scroll container
+ * clips on EVERY side -- there is no "scroll sideways, overflow freely
+ * upwards". The row shipped with py-2 (8px) and a comment claiming that gave
+ * the glow room; measured, the two closest states reach ~15.5px above the
+ * avatar, so the top of the aura was being sliced into a straight edge on
+ * exactly the Muddies whose glow matters most.
+ *
+ * Same fix the Muddies rail already uses (see .muddies-rail-track): reserve
+ * the bloom as block padding, then pull that room back out with a negative
+ * block margin so the row occupies no more vertical space than before. The
+ * inline axis is left alone -- the existing -mx-4/px-4 bleed is what lets the
+ * last avatar scroll fully into view. */
+.near-strip {
+  /* 1.5rem clears the ~15.5px the closest states reach, with headroom; the
+   * -1.25rem pulls it back out so the row is no taller than it was. */
+  padding-block: 1.5rem;
+  margin-block: -1.25rem;
+}
+
 .near-strip .proximity-halo-very-close {
   --halo-blur: 7px;
   --halo-spread: 1px;

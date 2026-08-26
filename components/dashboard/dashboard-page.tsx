@@ -1480,7 +1480,7 @@ function NearbyHero({
         // the row does not resize when data arrives. No large loading card.
         // gap-4 matches the real rail below: a different gap here would shift
         // every avatar sideways the moment data arrives.
-        <div className="near-strip -mx-4 flex items-start gap-4 overflow-hidden px-4 py-2 sm:-mx-6 sm:px-6" aria-hidden="true">
+        <div className="near-strip -mx-4 flex items-start gap-4 overflow-hidden px-4 sm:-mx-6 sm:px-6" aria-hidden="true">
           {[0, 1, 2, 3, 4].map((index) => (
             <div key={index} className="flex w-[4.75rem] shrink-0 flex-col items-center gap-2.5">
               <span className="h-16 w-16 animate-pulse rounded-full bg-secondary/70 motion-reduce:animate-none" />
@@ -1601,11 +1601,14 @@ function NearbyHero({
         //
         // The negative margin + matching padding let the row bleed to the
         // screen edges (so the last avatar scrolls fully into view) while the
-        // first avatar still aligns with the page's content column. The
-        // vertical padding gives the glow room so it is never clipped by the
-        // scroll container.
+        // first avatar still aligns with the page's content column.
+        //
+        // The VERTICAL room for the glow is reserved in `.near-strip` (see
+        // globals.css), not here: `overflow-x: auto` clips on every side, and
+        // the 8px this used to carry was less than half the ~15.5px the two
+        // closest states actually reach.
         <div
-          className="near-strip -mx-4 flex items-start gap-4 overflow-x-auto px-4 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6"
+          className="near-strip -mx-4 flex items-start gap-4 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6"
           aria-label="Nearby Muddies"
         >
           {shown.map((friend) => {
