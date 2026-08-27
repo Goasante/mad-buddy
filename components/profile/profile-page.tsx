@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { CakeSlice, MapPin, CalendarCheck2, CalendarDays, Camera, ChevronRight, Edit3, Images, MessageSquareText, ShieldCheck, Smile, Sparkles, UsersRound } from "lucide-react";
+import { BookOpen, CakeSlice, CalendarCheck2, CalendarDays, Camera, ChevronDown, ChevronRight, Dumbbell, Edit3, Film, Gamepad2, MessageSquareText, MoonStar, Mountain, Music2, Plane, ShieldCheck, Smile, Sparkles, TrendingUp, UtensilsCrossed, UsersRound } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updateProfileAction, uploadAvatarAction } from "@/app/(app)/actions";
 import { FormField } from "@/components/auth/form-field";
@@ -60,16 +60,8 @@ type ProfilePageContentProps = {
    * authority that the rest of the product uses.
    */
   completion?: { percent: number; tasks: CompletionTask[] } | null;
-  /**
-   * Self-reported area, never GPS. Already narrowed by
-   * `resolveFieldVisibility` before it reaches this component.
-   */
+  /** Self-reported area retained for callers and edit/profile projections. */
   generalArea?: string | null;
-  /**
-   * Moments (paused). Server-resolved and passed down rather than looked up
-   * here, so this component adds no database round trip of its own.
-   */
-  momentsEnabled?: boolean;
   /** The owner's own gallery — every photo, including only_me. */
   photos?: ProfilePhoto[];
   /** Trusted Member approval, or null. */
@@ -125,8 +117,6 @@ export function ProfilePageContent({
   identitySummary,
   interests = [],
   completion = null,
-  generalArea = null,
-  momentsEnabled = false,
   photos = [],
   trustedSince = null,
   trustedStanding = null,
@@ -438,7 +428,7 @@ export function ProfilePageContent({
   );
 
   return (
-    <div data-tour-id={TOUR_TARGET_IDS.PROFILE_OVERVIEW} className="mx-auto w-full max-w-[1040px] space-y-6 pb-6 md:pt-5">
+    <div data-tour-id={TOUR_TARGET_IDS.PROFILE_OVERVIEW} className="mx-auto w-full max-w-[1040px] space-y-5 pb-6 md:pt-5">
       {/* Canonical mobile header (mobile only). Me is a bottom-nav root, so
           it keeps Notifications and Add Muddy; Quick Controls is Home's. */}
       <MobilePageHeader
@@ -475,7 +465,7 @@ export function ProfilePageContent({
         </div>
       ) : null}
 
-      <header className="flex items-start justify-between gap-4 pt-1 md:pt-0">
+      <header className="hidden items-start justify-between gap-4 pt-1 md:flex md:pt-0">
         <div className="min-w-0">
           {/* This route is the canonical "Me" hub — identity, progress,
               membership, privacy, preferences and support in one place — so
@@ -642,9 +632,8 @@ export function ProfilePageContent({
       ) : (
         <>
           {/* Identity — avatar with glow ring + camera, name, visibility, stats */}
-          <Card data-tour-id={TOUR_TARGET_IDS.PROFILE_PHOTO} className="flex flex-col items-center p-5 text-center sm:p-6">
-            <p className="self-start text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Identity</p>
-            <div className="relative">
+          <section data-tour-id={TOUR_TARGET_IDS.PROFILE_PHOTO} className="flex items-center gap-4 px-1 py-1 sm:gap-6 sm:px-2">
+            <div className="relative shrink-0">
               {/* The picture opens full screen; the camera badge below still
                   owns changing it. A button rather than a handler on the image
                   so it is reachable by keyboard and announced as a control.
@@ -658,7 +647,7 @@ export function ProfilePageContent({
                 className="profile-avatar-open focus-ring"
               >
               <BirthdayAccent active={birthdayToday}>
-                <span className="block rounded-full bg-gradient-to-br from-violet-500 via-fuchsia-500 to-primary p-1 shadow-[0_0_36px_hsl(var(--primary)/0.25)]">
+                <span className="block rounded-full bg-gradient-to-br from-primary via-amber-400 to-fuchsia-500 p-[3px] shadow-[0_0_28px_hsl(var(--primary)/0.18)]">
                   <UserAvatar
                     src={avatarSrc}
                     name={savedProfile.displayName}
@@ -667,7 +656,7 @@ export function ProfilePageContent({
                     // (loadEffectivePlan), so the ring already reflects paid,
                     // trial, earned or granted access without saying which.
                     membershipTier={publicMembershipTier(initialPlan)}
-                    className="border-4 border-background shadow-[0_14px_36px_hsl(var(--shadow)/0.22)]"
+                    className="h-[7.25rem] w-[7.25rem] border-[3px] border-background shadow-[0_12px_30px_hsl(var(--shadow)/0.24)] [&>span>span]:h-[7.25rem] [&>span>span]:w-[7.25rem] sm:h-32 sm:w-32 sm:[&>span>span]:h-32 sm:[&>span>span]:w-32"
                     onImageError={() => {
                       if (selectedAvatarFile) {
                         setFeedback(
@@ -691,7 +680,7 @@ export function ProfilePageContent({
                   disabled={avatarUploading || returningToLinkr}
                   aria-label={avatarUrl ? "Change profile photo" : "Add profile photo"}
                   title={avatarUrl ? "Change photo" : "Add photo"}
-                  className="focus-ring safe-motion absolute bottom-1 right-1 grid h-11 w-11 place-items-center rounded-full border-2 border-background bg-secondary text-foreground hover:bg-secondary/80"
+                  className="focus-ring safe-motion absolute bottom-0.5 right-0.5 grid h-9 w-9 place-items-center rounded-full border-2 border-background bg-[#242426] text-foreground shadow-lg hover:bg-secondary"
                 >
                   <Camera className="h-4 w-4" aria-hidden="true" />
                 </button>
@@ -699,21 +688,13 @@ export function ProfilePageContent({
             </div>
             {avatarField}
 
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-              <h2 className="text-2xl font-semibold tracking-tight">{savedProfile.displayName}</h2>
-              <PremiumPlanBadge plan={initialPlan} />
-            </div>
-            <p className="mt-0.5 text-sm text-muted-foreground">@{savedProfile.username}</p>
-
-            {/* Self-reported area, never GPS and never a live city. The
-                server has already applied `resolveFieldVisibility`, so this
-                is null for a viewer who may not see it. */}
-            {generalArea ? (
-              <p className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span className="truncate">{generalArea}</span>
-              </p>
-            ) : null}
+            <div className="min-w-0 flex-1 text-left">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="truncate text-[1.4rem] font-semibold leading-tight tracking-tight sm:text-2xl">{savedProfile.displayName}</h2>
+                <PremiumPlanBadge plan={initialPlan} />
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">@{savedProfile.username}</p>
+              <p className="mt-2 line-clamp-2 text-sm leading-5 text-foreground/85">{savedProfile.bio.trim() || "Add a short bio"}</p>
 
             {/* Carries the PROFILE_PRIVACY tour target (MB-GOD-013).
                 The Privacy section this target used to anchor was removed —
@@ -726,13 +707,11 @@ export function ProfilePageContent({
             <Link
               data-tour-id={TOUR_TARGET_IDS.PROFILE_PRIVACY}
               href="/settings/glow-visibility"
-              className="focus-ring safe-motion mt-3 inline-flex min-h-11 items-center gap-2 rounded-full border border-border/70 bg-card/50 px-3.5 py-1.5 text-sm font-medium hover:bg-secondary/40"
+              className="focus-ring safe-motion mt-2 inline-flex max-w-full items-center gap-2 rounded-lg py-1 text-xs text-muted-foreground hover:text-foreground"
             >
               <span className={cn("h-2 w-2 rounded-full", ghostOn ? "bg-muted-foreground" : "bg-emerald-500")} aria-hidden="true" />
-              <span className={ghostOn ? "text-muted-foreground" : "text-emerald-600 dark:text-emerald-300"}>
-                {visibilityLabel(initialVisibilityStatus)}
-              </span>
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              <span className="truncate">{visibilityLabel(initialVisibilityStatus)}</span>
+              <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             </Link>
 
             {avatarUploading ? (
@@ -754,58 +733,54 @@ export function ProfilePageContent({
               </div>
             ) : null}
 
-            {savedProfile.bio.trim() ? (
-              <p className="mt-4 inline-flex max-w-full items-center gap-1.5 text-sm italic text-muted-foreground">
-                <span className="truncate">“{savedProfile.bio.trim()}”</span>
-                <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-              </p>
-            ) : null}
-            <div className="mt-5 flex flex-wrap justify-center gap-2 border-t border-border/60 pt-4">
-              <Button type="button" variant="outline" size="sm" onClick={beginEditing}><Edit3 className="h-4 w-4" aria-hidden="true" />Edit profile</Button>
-              <Button type="button" variant="outline" size="sm" asChild><Link href="/billing">Membership</Link></Button>
-              <Button type="button" variant="outline" size="sm" asChild><Link href="/buddy-score">My Progress</Link></Button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={beginEditing} className="h-10 rounded-full border-border/70 bg-card/50 px-4"><Edit3 className="h-4 w-4" aria-hidden="true" />Edit profile</Button>
             </div>
-          </Card>
+            </div>
+          </section>
 
           {/* MY SHOWCASE.
               Previously reachable only from inside the edit form, which made
               the gallery something you had to go looking for. It is the part
               of a profile people actually revisit, so it sits directly under
               the hero and is manageable in place. */}
-          <section aria-labelledby="profile-showcase-heading">
-            <h3 id="profile-showcase-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              My Showcase
-            </h3>
+          <Card className="p-4 sm:p-5">
             <ProfilePhotoCarousel
               photos={photos}
               isOwner
+              ownerName={savedProfile.displayName}
               avatarUrl={avatarUrl ? avatarSrc : null}
+              presentation="showcase"
               onChanged={() => router.refresh()}
             />
+          </Card>
+
+          <section aria-labelledby="profile-reference-interests-heading">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <h3 id="profile-reference-interests-heading" className="text-sm font-semibold">Interests</h3>
+              <button type="button" onClick={() => setInterestsEditorOpen(true)} className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded px-2 text-xs font-semibold text-primary">View all</button>
+            </div>
+            <Card className="p-3">
+              {interests.length ? (
+                <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
+                  {interests.slice(0, 6).map((interest) => <InterestTile key={interest} interest={interest} />)}
+                </div>
+              ) : (
+                <button type="button" onClick={() => setInterestsEditorOpen(true)} className="focus-ring grid min-h-20 w-full place-items-center rounded-xl text-sm text-muted-foreground">Add your interests</button>
+              )}
+            </Card>
           </section>
 
-          {completion ? (
-            <ProfileCompletionCard
-              percent={completion.percent}
-              tasks={completion.tasks}
-              onEditProfile={beginEditing}
-              onEditInterests={() => setInterestsEditorOpen(true)}
-            />
-          ) : null}
-
-          <ProfileInterestsCard
-            interests={interests}
-            open={interestsEditorOpen}
-            onOpenChange={setInterestsEditorOpen}
-            onSaved={() => router.refresh()}
-          />
+          <div className="hidden" aria-hidden="true">
+            <ProfileInterestsCard interests={interests} open={interestsEditorOpen} onOpenChange={setInterestsEditorOpen} onSaved={() => router.refresh()} />
+          </div>
 
           {/* ABOUT — promoted above Activity (MB-GOD-013).
               Mood and bio are the fields that actually say who this person is,
               and they were the EIGHTH thing on the page, at y=2227 — below two
               full screens of metrics. Identity now precedes statistics. */}
           <section data-tour-id={TOUR_TARGET_IDS.PROFILE_ABOUT} aria-labelledby="profile-about-heading">
-            <h3 id="profile-about-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <h3 id="profile-about-heading" className="mb-2 px-1 text-sm font-semibold">
               About
             </h3>
             <Card className="divide-y divide-border/60 p-0">
@@ -819,7 +794,7 @@ export function ProfilePageContent({
               {birthProfile ? (
                 <ProfileDetailRow
                   icon={CalendarDays}
-                  label="Age and zodiac"
+                  label="Age & Zodiac"
                   value={`${birthProfile.age} · ${birthProfile.zodiacSign}`}
                   onClick={beginEditing}
                 />
@@ -865,19 +840,27 @@ export function ProfilePageContent({
               the surface. */}
           {identitySummary?.activity ? (
             <section aria-labelledby="profile-activity-heading">
-              <h3 id="profile-activity-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Activity</h3>
-              <div className="grid grid-cols-2 gap-3">
+              <h3 id="profile-activity-heading" className="mb-2 px-1 text-sm font-semibold">Activity</h3>
+              <div className="grid grid-cols-3 gap-2.5">
                 <ActivityStat icon={UsersRound} value={identitySummary.activity.muddyCount} label="Muddies" href="/friends" />
-                {/* Paused: the stat would link into a redirecting route and
-                    advertise a feature that is switched off. The count itself is
-                    untouched in the database. */}
-                {momentsEnabled ? (
-                  <ActivityStat icon={Images} value={identitySummary.activity.momentCount} label="Moments" href="/moments" />
-                ) : null}
                 <ActivityStat icon={CalendarCheck2} value={identitySummary.activity.completedPlanCount} label="Plans completed" href="/plans" />
-                <ActivityStat icon={ShieldCheck} value={identitySummary.activity.completedSafeArrivalCount} label="Safe Arrivals" href="/safe-arrival" />
+                <ActivityStat icon={ShieldCheck} value={identitySummary.activity.completedSafeArrivalCount} label="Safe arrivals" href="/safe-arrival" />
               </div>
+              <Link href="/buddy-score" className="focus-ring safe-motion mt-2.5 flex min-h-12 items-center gap-3 rounded-2xl border border-border/70 bg-card/50 px-4 text-sm font-medium hover:bg-secondary/35">
+                <TrendingUp className="h-4 w-4 text-primary" aria-hidden="true" />
+                <span className="flex-1 text-center">View my progress</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              </Link>
             </section>
+          ) : null}
+
+          {completion ? (
+            <ProfileCompletionCard
+              percent={completion.percent}
+              tasks={completion.tasks}
+              onEditProfile={beginEditing}
+              onEditInterests={() => setInterestsEditorOpen(true)}
+            />
           ) : null}
 
           {/* PRIVACY, PREFERENCES and SUPPORT used to sit here (MB-GOD-013).
@@ -972,13 +955,40 @@ function ActivityStat({
   href: "/friends" | "/moments" | "/plans" | "/safe-arrival";
 }) {
   return (
-    <Link href={href} className="focus-ring safe-motion flex min-h-24 flex-col justify-between rounded-2xl border border-border/70 bg-card/50 p-4 hover:bg-secondary/35" aria-label={`${value} ${label}`}>
-      <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
-      <span>
-        <span className="block text-xl font-semibold leading-none tabular-nums">{value}</span>
-        <span className="mt-1 block text-xs text-muted-foreground">{label}</span>
+    <Link href={href} className="focus-ring safe-motion flex min-h-[5.5rem] min-w-0 flex-col rounded-2xl border border-border/70 bg-card/50 p-3 hover:bg-secondary/35" aria-label={`${value} ${label}`}>
+      <span className="flex items-center gap-2">
+        <Icon className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+        <span className="text-xl font-semibold leading-none tabular-nums">{value}</span>
+      </span>
+      <span className="mt-auto block text-[11px] leading-4 text-muted-foreground sm:text-xs">
+        {label}
       </span>
     </Link>
+  );
+}
+
+const INTEREST_ICONS = {
+  nightlife: MoonStar,
+  outdoors: Mountain,
+  books: BookOpen,
+  reading: BookOpen,
+  food: UtensilsCrossed,
+  gaming: Gamepad2,
+  fitness: Dumbbell,
+  music: Music2,
+  travel: Plane,
+  movies: Film,
+  film: Film
+} as const;
+
+function InterestTile({ interest }: { interest: string }) {
+  const key = interest.trim().toLowerCase() as keyof typeof INTEREST_ICONS;
+  const Icon = INTEREST_ICONS[key] ?? Sparkles;
+  return (
+    <div className="flex min-h-[4.75rem] min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-secondary/45 px-1 py-2.5 text-center">
+      <Icon className="h-5 w-5 text-primary" strokeWidth={1.8} aria-hidden="true" />
+      <span className="w-full truncate text-[9px] font-medium sm:text-[10px]" title={interest}>{interest}</span>
+    </div>
   );
 }
 
@@ -996,14 +1006,12 @@ function ProfileDetailRow({
   onClick: () => void;
 }) {
   return (
-    <button type="button" onClick={onClick} className="focus-ring safe-motion flex w-full items-center gap-3.5 p-3.5 text-left hover:bg-secondary/40">
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-violet-500/12 text-violet-600 dark:text-violet-300">
-        <Icon className="h-5 w-5" aria-hidden="true" />
+    <button type="button" onClick={onClick} className="focus-ring safe-motion flex min-h-[3.25rem] w-full items-center gap-3 px-4 py-3 text-left hover:bg-secondary/40">
+      <span className="grid w-6 shrink-0 place-items-center text-violet-400">
+        <Icon className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-xs text-muted-foreground">{label}</span>
-        <span className={cn("mt-0.5 block truncate text-sm font-medium", muted && "text-muted-foreground")}>{value}</span>
-      </span>
+      <span className="w-[5.4rem] shrink-0 text-xs text-muted-foreground">{label}</span>
+      <span className={cn("min-w-0 flex-1 truncate text-sm font-medium", muted && "text-muted-foreground")}>{value}</span>
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </button>
   );

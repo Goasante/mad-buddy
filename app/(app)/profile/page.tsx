@@ -1,5 +1,4 @@
 import { ProfilePageContent } from "@/components/profile/profile-page";
-import { isMomentsEnabled } from "@/lib/features/feature-flags";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { loadEffectivePlan } from "@/lib/billing/service";
@@ -44,8 +43,9 @@ export default async function ProfilePage({
   const { data: profile } = user
     ? await supabase
         .from("profiles")
-        // `institution` and `general_area` feed completion and the hero. Both
-        // are self-reported profile fields; general_area is NOT location.
+        // `institution` feeds completion; `general_area` remains part of the
+        // canonical self-profile projection even though the compact hero does
+        // not surface it.
         .select(
           "full_name, username, bio, mood_status, avatar_url, visibility_status, trusted_member_since, institution, general_area"
         )
@@ -54,7 +54,7 @@ export default async function ProfilePage({
     : { data: null };
 
   const admin = createSupabaseAdminClient();
-  const [effectivePlan, birthDetails, fieldPrivacy, identitySummary, photos, trustedStanding, momentsEnabled, interestRows] = user
+  const [effectivePlan, birthDetails, fieldPrivacy, identitySummary, photos, trustedStanding, interestRows] = user
     ? await Promise.all([
         loadEffectivePlan(admin, user.id),
         loadDateOfBirthState(user.id),
@@ -65,12 +65,11 @@ export default async function ProfilePage({
         // batch rather than as a follow-up request.
         loadVisibleProfilePhotosFor(admin, user.id, { isOwner: true, isApprovedMuddy: false }),
         getTrustedMemberStandingAction(),
-        isMomentsEnabled(admin),
         // The owner's own interests: no privacy narrowing, you always see
         // everything on your own profile.
         admin.from("user_interests").select("interest").eq("user_id", user.id)
       ])
-    : ["free" as const, null, null, null, [], null, false, null];
+    : ["free" as const, null, null, null, [], null, null];
 
   /* Completion comes from the shared authority in lib/profile/rules rather
    * than being counted in the component, so this page and onboarding can
@@ -115,7 +114,6 @@ export default async function ProfilePage({
       interests={interests}
       completion={completion}
       generalArea={profile?.general_area ?? null}
-      momentsEnabled={momentsEnabled}
       photos={photos}
       trustedSince={profile?.trusted_member_since ?? null}
       trustedStanding={trustedStanding}

@@ -53,9 +53,10 @@ export function ProfilePhotoCarousel({
    * The identity photo, so full screen opens ONE gallery -- avatar first, then
    * the showcases -- instead of a second gallery that happens to look alike.
    * Optional: a Profile with no avatar simply starts at showcase 1.
-   */
+  */
   avatarUrl = null,
-  onChanged
+  onChanged,
+  presentation = "carousel"
 }: {
   /** Already filtered by the server for this viewer. */
   photos: readonly ProfilePhoto[];
@@ -66,6 +67,8 @@ export function ProfilePhotoCarousel({
   avatarUrl?: string | null;
   /** Called after any mutation, so the page can refetch. */
   onChanged?: () => void;
+  /** Compact three-up strip used on the Profile overview. */
+  presentation?: "carousel" | "showcase";
 }) {
   const [index, setIndex] = useState(0);
   // Full screen is a pure view state: it authorises nothing and fetches
@@ -273,6 +276,59 @@ export function ProfilePhotoCarousel({
   if (count === 0 && !isOwner) return null;
 
   const current = photos[active];
+
+  if (presentation === "showcase") {
+    return (
+      <section aria-labelledby="profile-showcase-heading">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="profile-showcase-heading" className="text-sm font-semibold">My Showcase</h2>
+          <p className="text-xs tabular-nums text-muted-foreground">{count} of {MAX_PROFILE_PHOTOS}</p>
+        </div>
+
+        {count > 0 ? (
+          <div className="mt-3 grid grid-cols-3 gap-2.5">
+            {photos.map((photo, photoIndex) => (
+              <button
+                key={photo.id}
+                type="button"
+                onClick={() => {
+                  setIndex(photoIndex);
+                  setFullScreen(true);
+                }}
+                className="focus-ring safe-motion group relative aspect-[4/5] overflow-hidden rounded-2xl border border-border/60 bg-secondary/40 shadow-sm"
+                aria-label={`${profilePhotoAltText(ownerName, isOwner, photoIndex + 1, count)}, view full screen`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- signed profile media URL */}
+                <img
+                  src={photo.url}
+                  alt={profilePhotoAltText(ownerName, isOwner, photoIndex + 1, count)}
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
+                />
+                {photoIndex === count - 1 && count > 1 ? (
+                  <span className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-black/45 text-white backdrop-blur-sm" aria-hidden="true">
+                    <ChevronRight className="h-4 w-4" />
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 grid min-h-28 place-items-center rounded-2xl border border-dashed border-border/70 bg-secondary/20 text-sm text-muted-foreground">
+            No showcase photos yet.
+          </p>
+        )}
+
+        <ShowcaseViewer
+          photos={profileViewerSequence(avatarUrl, photos)}
+          activeIndex={showcaseIndexInSequence(Boolean(avatarUrl), active)}
+          ownerName={ownerName}
+          isOwner={isOwner}
+          open={fullScreen}
+          onClose={() => setFullScreen(false)}
+        />
+      </section>
+    );
+  }
 
   return (
     <section aria-labelledby="profile-photos-heading" className="profile-photos">
@@ -534,5 +590,34 @@ export function ProfilePhotoCarousel({
         onClose={() => setFullScreen(false)}
       />
     </section>
+  );
+}
+
+/** Keeps the compact overview on the same approved full-screen viewer as the
+ * editable carousel without mixing avatar media into the owner controls. */
+function ShowcaseViewer({
+  photos,
+  activeIndex,
+  ownerName,
+  isOwner,
+  open,
+  onClose
+}: {
+  photos: ReadonlyArray<{ id: string; url: string }>;
+  activeIndex: number;
+  ownerName: string;
+  isOwner: boolean;
+  open: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <ProfilePhotoViewer
+      photos={photos}
+      activeIndex={activeIndex}
+      ownerName={ownerName}
+      isOwner={isOwner}
+      open={open}
+      onClose={onClose}
+    />
   );
 }
