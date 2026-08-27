@@ -205,16 +205,14 @@ describe("the sheet reveals nothing it should not", () => {
 // ---------------------------------------------------------------------------
 
 describe("opening and closing", () => {
-  it("opens from the card body, with no redundant View button", () => {
-    /* The card moved to its own component; the property did not. The card
-     * BODY is still the target -- a separate "View" button beside a tappable
-     * card is one more thing to aim at -- and the page still supplies the
-     * opener, so the sheet keeps re-reading the live row by id. */
+  it("opens from the card's dedicated View action", () => {
+    /* The compact feed card keeps joining and opening as separate actions.
+     * The page still supplies the opener by id, so the canonical sheet keeps
+     * re-reading the live row rather than holding a stale object. */
     const card = stripComments(read("components/hangout/upfor-card.tsx"));
-    expect(card).toContain("onClick: () => onOpen(upfor.id)");
-    expect(card).not.toContain(">View<");
+    expect(card).toContain("onClick={() => onOpen?.(upfor.id)}");
+    expect(card).toMatch(/>\s*View\s*</);
     expect(page).toContain("onOpen={(id) => setDetailId(id)}");
-    expect(page).not.toContain(">View<");
   });
 
   it("holds an id, so the sheet re-reads the live row", () => {
