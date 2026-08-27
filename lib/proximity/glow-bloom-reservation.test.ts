@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   PROXIMITY_GLOW_LEVELS,
+  PROXIMITY_GLOW_CONFIG,
   PROXIMITY_GLOW_SIZES,
   resolveGlowGeometry,
   type ProximityGlowLevel,
@@ -60,7 +61,7 @@ function bloomOverhangPx(level: ProximityGlowLevel, size: ProximityGlowSize): nu
   return (painted - geometry.avatar) / 2;
 }
 
-/** What `.near-strip` reserves: padding-block 1.75rem at a 16px root. */
+/** What `.near-strip` reserves on every clipped axis: 1.75rem at a 16px root. */
 const NEAR_STRIP_RESERVED_PX = 1.75 * 16;
 
 /**
@@ -74,8 +75,8 @@ function nearStripOutermostPx(level: ProximityGlowLevel): number {
   return (g.outer + g.ring) / 2;
 }
 
-/** The Near strip renders `lg` avatars (4.75rem / 76px columns). */
-const NEAR_STRIP_SIZE: ProximityGlowSize = "lg";
+/** Home renders `md` Glow avatars inside 4.75rem / 76px columns. */
+const NEAR_STRIP_SIZE: ProximityGlowSize = "md";
 
 describe("the Glow overhangs its avatar, and by how much", () => {
   it("every state reaches beyond the avatar at every size", () => {
@@ -104,6 +105,10 @@ describe("the Glow overhangs its avatar, and by how much", () => {
 });
 
 describe("the Near strip reserves enough room for the bloom", () => {
+  it("reserves the Muddies-proven bloom room on block and inline axes", () => {
+    expect(NEAR_STRIP_RESERVED_PX).toBe(28);
+  });
+
   it("clears the widest state it can render", () => {
     const needed = bloomOverhangPx("right-here", NEAR_STRIP_SIZE);
     expect(NEAR_STRIP_RESERVED_PX).toBeGreaterThanOrEqual(needed);
@@ -139,6 +144,18 @@ describe("the Near strip reserves enough room for the bloom", () => {
 });
 
 describe("the Near strip tightens the gap without reordering the states", () => {
+  it("measures the nearest avatar-edge to primary-ring gap at the real Home size", () => {
+    const g = resolveGlowGeometry("right-here", NEAR_STRIP_SIZE);
+    const border = PROXIMITY_GLOW_CONFIG["right-here"].layers.ringWidth;
+    const before = (g.ring - border * 2 - g.avatar) / 2;
+    const tightenedWidth = (g.ring + g.core) / 2;
+    const after = (tightenedWidth - border * 2 - g.avatar) / 2;
+
+    expect(before).toBeCloseTo(11.46, 2);
+    expect(after).toBeCloseTo(6.62, 2);
+    expect(after).toBeLessThan(before);
+  });
+
   it("pulls the ring in toward the avatar", () => {
     for (const level of LEVELS) {
       const g = resolveGlowGeometry(level, NEAR_STRIP_SIZE);

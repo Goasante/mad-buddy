@@ -8,6 +8,7 @@ const css = read("app/globals.css");
 const glowComponent = read("components/glow/proximity-glow.tsx");
 const glowAvatar = read("components/glow/proximity-glow-avatar.tsx");
 const userAvatar = read("components/ui/user-avatar.tsx");
+const nearHarness = read("app/dev/near-surface/page.tsx");
 
 /** The Near section's own markup, isolated from the rest of Home. */
 const nearSection = home.slice(home.indexOf("function NearbyHero"), home.indexOf("// First-time quick actions"));
@@ -82,10 +83,31 @@ describe("Near section layout", () => {
     expect(nearSection).toContain("px-4");
   });
 
+  it("keeps the Muddies-proven inline bloom reservation at the clipped edges", () => {
+    const nearRule = css.slice(css.indexOf(".near-strip {"), css.indexOf(".near-strip .proximity-glow__ring"));
+    expect(nearRule).toContain("padding-inline: 1.75rem");
+  });
+
   it("gives every column a fixed-height avatar slot so labels align across the row", () => {
     // The halo's padding varies by proximity; without this the names and
     // distance labels sit at different baselines per column.
     expect(nearSection).toContain("grid h-[4.5rem] w-full place-items-center");
+  });
+});
+
+describe("Near visual proof harness", () => {
+  it("uses the production scroll-container classes without obsolete extra padding", () => {
+    expect(nearHarness).toContain(
+      'className="near-strip -mx-4 flex items-start gap-4 overflow-x-auto px-4 [-ms-overflow-style:none]'
+    );
+    expect(nearHarness).not.toContain("px-4 py-2");
+  });
+
+  it("renders the real Home size and nearest, mid and farther review states", () => {
+    expect(nearHarness).toContain('size="md"');
+    expect(nearHarness).toContain('level: "right-here"');
+    expect(nearHarness).toContain('level: "in-your-area"');
+    expect(nearHarness).toContain('level: "across-town"');
   });
 });
 

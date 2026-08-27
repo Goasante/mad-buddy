@@ -955,6 +955,11 @@ html.dark .home-ambient-bg {
    * requirement. The -1.5rem pulls the reserved room back out, leaving the
    * row no taller than it was before any of this. */
   padding-block: 1.75rem;
+  /* Match the proven Muddies rail reservation on the inline axis too. The
+   * Tailwind gutter alone leaves the first Right Here sparks outside the
+   * viewport, so the aura is sliced at the screen edge. The existing negative
+   * margin still lets the row bleed; this padding is bloom room, not a panel. */
+  padding-inline: 1.75rem;
   margin-block: -1.5rem;
 }
 
