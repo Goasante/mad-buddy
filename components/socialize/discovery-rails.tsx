@@ -134,7 +134,7 @@ export function GroupsRail({
     <RailSection id="groups-rail-heading" title="Join a Group">
 
       {groups.length > 0 ? (
-        <Rail label="Circles to join">
+        <Rail label="Groups to join">
           {groups.map((group, index) => (
             <li
               key={group.id}

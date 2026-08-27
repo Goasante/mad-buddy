@@ -93,7 +93,7 @@ export async function getRankedUpcomingEvents(
   /* VISIBILITY PRECEDES SCORE, and broad ranking is stricter than browsing.
      "Trending on Mad Buddy" is a claim about the whole product: a private
      wedding with five thousand Going must never make it, and neither should a
-     community Event whose audience is one Circle -- discoverable to its
+     community Event whose audience is one Group -- discoverable to its
      members is not the same as trending for everyone. The host's own Events
      are not exempt; ranking is not a personal shelf. */
   const visibilityFiltered = events.filter((event) => isBroadlyRankable(event));

@@ -7,7 +7,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
  *
  * Deliberately NOT a global user search: a private Event must not become a way
  * to enumerate arbitrary accounts. Invitees come from approved Muddy
- * relationships, and communities from Circles the creator has actually joined.
+ * relationships, and communities from Groups the creator has actually joined.
  */
 
 export type InviteeOption = { userId: string; name: string; avatarUrl: string | null };
@@ -60,9 +60,9 @@ export async function listInviteeOptions(userId: string): Promise<InviteeOption[
 }
 
 /**
- * Circles the creator has actually joined.
+ * Groups the creator has actually joined.
  *
- * A Circle is a group conversation, so membership is conversation_members and
+ * A Group is a group conversation, so membership is conversation_members and
  * only `joined` counts -- an unaccepted invitation is not a community you can
  * publish to.
  */
@@ -100,7 +100,7 @@ export async function listCommunityOptions(userId: string): Promise<CommunityOpt
   return (settings ?? [])
     .map((row) => ({
       conversationId: row.conversation_id,
-      name: row.name?.trim() || "A Circle",
+      name: row.name?.trim() || "A Group",
       memberCount: counts.get(row.conversation_id) ?? 0
     }))
     .sort((a, b) => a.name.localeCompare(b.name));

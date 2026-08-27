@@ -285,11 +285,11 @@ export async function loadGroupsPageDataAction(): Promise<GroupsPageData> {
 }
 
 export async function createGroupAction(input: unknown): Promise<GroupActionState> {
-  if (!serverReady()) return { ok: false, message: "Circles need the server database configuration." };
+  if (!serverReady()) return { ok: false, message: "Groups need the server database configuration." };
   const parsed = createGroupSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Use a Circle name between 2 and 80 characters." };
+  if (!parsed.success) return { ok: false, message: "Use a Group name between 2 and 80 characters." };
   const userId = await getAuthedUserId();
-  if (!userId) return { ok: false, message: "Log in before creating a Circle." };
+  if (!userId) return { ok: false, message: "Log in before creating a Group." };
   const rateLimit = await consumeRateLimit({ action: "groups.create", userId });
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
@@ -305,7 +305,7 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
     .insert({ conversation_type: "group", created_by: userId, status: "active" })
     .select("id")
     .single();
-  if (conversationError || !conversation) return { ok: false, message: "Couldn't create that Circle." };
+  if (conversationError || !conversation) return { ok: false, message: "Couldn't create that Group." };
 
   const now = new Date().toISOString();
   const [settingsResult, memberResult] = await Promise.all([
@@ -335,7 +335,7 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
   ]);
   if (settingsResult.error || memberResult.error) {
     await admin.from("conversations").delete().eq("id", conversation.id);
-    return { ok: false, message: "Couldn't finish creating that Circle." };
+    return { ok: false, message: "Couldn't finish creating that Group." };
   }
 
   {
@@ -343,13 +343,13 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
     await grantAchievement(admin, userId, "group_founder");
   }
   revalidatePath("/groups");
-  return { ok: true, message: "Circle created.", groupId: conversation.id };
+  return { ok: true, message: "Group created.", groupId: conversation.id };
 }
 
 export async function joinDiscoverableGroupAction(groupId: string): Promise<GroupActionState> {
-  if (!uuidSchema.safeParse(groupId).success) return { ok: false, message: "Circle not found." };
+  if (!uuidSchema.safeParse(groupId).success) return { ok: false, message: "Group not found." };
   const userId = await getAuthedUserId();
-  if (!userId) return { ok: false, message: "Log in before joining a Circle." };
+  if (!userId) return { ok: false, message: "Log in before joining a Group." };
   const admin = createSupabaseAdminClient();
   const [{ data: conversation }, { data: settings }] = await Promise.all([
     admin.from("conversations").select("id, created_by, status").eq("id", groupId).eq("conversation_type", "group").maybeSingle(),
@@ -360,7 +360,7 @@ export async function joinDiscoverableGroupAction(groupId: string): Promise<Grou
       .maybeSingle()
   ]);
   if (!conversation || conversation.status !== "active" || settings?.join_mode !== "link" || !conversation.created_by) {
-    return { ok: false, message: "This Circle isn't open to join." };
+    return { ok: false, message: "This Group isn't open to join." };
   }
 
   /**
@@ -376,13 +376,13 @@ export async function joinDiscoverableGroupAction(groupId: string): Promise<Grou
    */
   const isPublic = (settings as { visibility?: string }).visibility === "public";
   const blocked = await isBlockedEitherDirection(admin, userId, conversation.created_by);
-  if (blocked) return { ok: false, message: "This Circle isn't available." };
+  if (blocked) return { ok: false, message: "This Group isn't available." };
   if (!isPublic) {
     const approved = await areApprovedMuddies(admin, userId, conversation.created_by);
-    if (!approved) return { ok: false, message: "This Circle isn't available." };
+    if (!approved) return { ok: false, message: "This Group isn't available." };
   }
   const capacity = await groupCapacityAvailable(admin, groupId, conversation.created_by);
-  if (!capacity.allowed) return { ok: false, message: "This Circle is full." };
+  if (!capacity.allowed) return { ok: false, message: "This Group is full." };
   const now = new Date().toISOString();
   const { error } = await admin.from("conversation_members").upsert({
     conversation_id: groupId,
@@ -393,18 +393,18 @@ export async function joinDiscoverableGroupAction(groupId: string): Promise<Grou
     left_at: null,
     history_visible_from: settings.history_visibility === "full" ? new Date(0).toISOString() : now
   }, { onConflict: "conversation_id,user_id" });
-  if (error) return { ok: false, message: "Couldn't join that Circle." };
+  if (error) return { ok: false, message: "Couldn't join that Group." };
   {
     const { grantAchievement } = await import("@/lib/engagement/achievements");
     await grantAchievement(admin, userId, "group_member");
   }
   revalidatePath("/groups");
-  return { ok: true, message: "Joined Circle.", groupId };
+  return { ok: true, message: "Joined Group.", groupId };
 }
 
 export async function respondToGroupInvitationAction(input: unknown): Promise<GroupActionState> {
   const parsed = invitationResponseSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Circle invitation not found." };
+  if (!parsed.success) return { ok: false, message: "Group invitation not found." };
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in before responding." };
   const rateLimit = await consumeRateLimit({ action: "invites.resolve", userId });
@@ -429,10 +429,10 @@ export async function respondToGroupInvitationAction(input: unknown): Promise<Gr
     admin.from("conversations").select("created_by, status").eq("id", parsed.data.groupId).maybeSingle(),
     admin.from("group_settings").select("history_visibility").eq("conversation_id", parsed.data.groupId).maybeSingle()
   ]);
-  if (!conversation?.created_by || conversation.status !== "active") return { ok: false, message: "This Circle is no longer available." };
+  if (!conversation?.created_by || conversation.status !== "active") return { ok: false, message: "This Group is no longer available." };
   // Invited members already occupy a reserved group seat.
   const capacity = await groupCapacityAvailable(admin, parsed.data.groupId, conversation.created_by, 0);
-  if (!capacity.allowed) return { ok: false, message: "This Circle is full." };
+  if (!capacity.allowed) return { ok: false, message: "This Group is full." };
   const now = new Date().toISOString();
   const { error } = await admin.from("conversation_members").update({
     status: "joined",
@@ -446,7 +446,7 @@ export async function respondToGroupInvitationAction(input: unknown): Promise<Gr
     await grantAchievement(admin, userId, "group_member");
   }
   revalidatePath("/groups");
-  return { ok: true, message: "Circle joined.", groupId: parsed.data.groupId };
+  return { ok: true, message: "Group joined.", groupId: parsed.data.groupId };
 }
 
 export async function inviteGroupMemberAction(input: unknown): Promise<GroupActionState> {
@@ -463,9 +463,9 @@ export async function inviteGroupMemberAction(input: unknown): Promise<GroupActi
     admin.from("group_settings").select("name").eq("conversation_id", parsed.data.groupId).maybeSingle()
   ]);
   if (myMembership?.status !== "joined" || !["owner", "admin"].includes(myMembership.role)) {
-    return { ok: false, message: "Only Circle owners and admins can invite people." };
+    return { ok: false, message: "Only Group owners and admins can invite people." };
   }
-  if (!conversation?.created_by || conversation.status !== "active") return { ok: false, message: "This Circle isn't available." };
+  if (!conversation?.created_by || conversation.status !== "active") return { ok: false, message: "This Group isn't available." };
   const [approved, blocked, recipientPrefs] = await Promise.all([
     areApprovedMuddies(admin, userId, parsed.data.userId),
     isBlockedEitherDirection(admin, userId, parsed.data.userId),
@@ -476,15 +476,15 @@ export async function inviteGroupMemberAction(input: unknown): Promise<GroupActi
   }
   if (recipientPrefs.groupAddPermission === "close_friends") {
     const close = await isCloseFriend(admin, parsed.data.userId, userId);
-    if (!close) return { ok: false, message: "This Muddy only accepts Circle invites from Close Friends." };
+    if (!close) return { ok: false, message: "This Muddy only accepts Group invites from Close Friends." };
   }
   const { data: existing } = await admin.from("conversation_members").select("status")
     .eq("conversation_id", parsed.data.groupId).eq("user_id", parsed.data.userId).maybeSingle();
-  if (existing?.status === "joined") return { ok: true, message: "This Muddy is already in the Circle." };
+  if (existing?.status === "joined") return { ok: true, message: "This Muddy is already in the Group." };
   if (existing?.status === "invited") return { ok: true, message: "Invitation already sent." };
   if (existing?.status === "banned") return { ok: false, message: "This Muddy can't be invited." };
   const capacity = await groupCapacityAvailable(admin, parsed.data.groupId, conversation.created_by);
-  if (!capacity.allowed) return { ok: false, message: "This Circle is full." };
+  if (!capacity.allowed) return { ok: false, message: "This Group is full." };
   const now = new Date().toISOString();
   const { error } = await admin.from("conversation_members").upsert({
     conversation_id: parsed.data.groupId,
@@ -495,7 +495,7 @@ export async function inviteGroupMemberAction(input: unknown): Promise<GroupActi
     left_at: null,
     history_visible_from: now
   }, { onConflict: "conversation_id,user_id" });
-  if (error) return { ok: false, message: "Couldn't send that Circle invitation." };
+  if (error) return { ok: false, message: "Couldn't send that Group invitation." };
   const { data: inviter } = await admin.from("profiles").select("full_name").eq("user_id", userId).maybeSingle();
   await deliverNotification(admin, {
     userId: parsed.data.userId,
@@ -506,24 +506,24 @@ export async function inviteGroupMemberAction(input: unknown): Promise<GroupActi
     message: `${inviter?.full_name?.trim() || MEMBER_NAME_PLACEHOLDER} invited you to ${settings?.name || "a group"}.`
   });
   revalidatePath(`/groups/${parsed.data.groupId}`);
-  return { ok: true, message: "Circle invitation sent." };
+  return { ok: true, message: "Group invitation sent." };
 }
 
 export async function leaveGroupAction(groupId: string): Promise<GroupActionState> {
-  if (!uuidSchema.safeParse(groupId).success) return { ok: false, message: "Circle not found." };
+  if (!uuidSchema.safeParse(groupId).success) return { ok: false, message: "Group not found." };
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
   const admin = createSupabaseAdminClient();
   const { data: membership } = await admin.from("conversation_members").select("role, status")
     .eq("conversation_id", groupId).eq("user_id", userId).maybeSingle();
-  if (membership?.status !== "joined") return { ok: false, message: "You're not in this Circle." };
-  if (membership.role === "owner") return { ok: false, message: "Transfer ownership before leaving this Circle." };
+  if (membership?.status !== "joined") return { ok: false, message: "You're not in this Group." };
+  if (membership.role === "owner") return { ok: false, message: "Transfer ownership before leaving this Group." };
   const { error } = await admin.from("conversation_members").update({ status: "left", left_at: new Date().toISOString() })
     .eq("conversation_id", groupId).eq("user_id", userId);
-  if (error) return { ok: false, message: "Couldn't leave that Circle." };
+  if (error) return { ok: false, message: "Couldn't leave that Group." };
   await publishGroupRoleEvent(admin, groupId, userId, "participant_left");
   revalidatePath("/groups");
-  return { ok: true, message: "You left the Circle." };
+  return { ok: true, message: "You left the Group." };
 }
 
 export async function loadGroupDetailAction(groupId: string): Promise<GroupDetailView | null> {
@@ -778,7 +778,7 @@ async function applyRoleChange(change: GroupRoleChange, input: unknown): Promise
   );
 
   revalidatePath(`/groups/${groupId}`);
-  return { ok: true, message: "Circle updated." };
+  return { ok: true, message: "Group updated." };
 }
 
 /**
@@ -893,7 +893,7 @@ const visibilitySchema = z.object({
  * discoverable group openly joinable.
  */
 export async function setGroupVisibilityAction(input: unknown): Promise<GroupActionState> {
-  if (!serverReady()) return { ok: false, message: "Circles need the server database configuration." };
+  if (!serverReady()) return { ok: false, message: "Groups need the server database configuration." };
   const parsed = visibilitySchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "That change isn't available." };
   const userId = await getAuthedUserId();
@@ -917,7 +917,7 @@ export async function setGroupVisibilityAction(input: unknown): Promise<GroupAct
     .from("group_settings")
     .update({ visibility: parsed.data.visibility, updated_at: new Date().toISOString() })
     .eq("conversation_id", parsed.data.groupId);
-  if (error) return { ok: false, message: "Couldn't update that Circle." };
+  if (error) return { ok: false, message: "Couldn't update that Group." };
 
   revalidatePath(`/groups/${parsed.data.groupId}`);
   revalidatePath("/groups");

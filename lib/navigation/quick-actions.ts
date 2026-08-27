@@ -57,7 +57,7 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
     featureIcon: "safeArrival",
     toneClass: "qa-tone-safe-arrival"
   },
-  { id: "groups", label: "Circles", href: "/groups" as Route, featureIcon: "groups", toneClass: "qa-tone-groups" }
+  { id: "groups", label: "Groups", href: "/groups" as Route, featureIcon: "groups", toneClass: "qa-tone-groups" }
 ];
 
 /**

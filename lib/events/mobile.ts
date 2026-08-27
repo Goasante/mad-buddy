@@ -135,7 +135,7 @@ export const createEventSchema = z.object({
    * older client that omits the field keeps its previous behaviour rather than
    * failing validation -- new clients always send a deliberate choice. */
   visibility: z.enum(["invite", "link", "community", "nearby", "public"]).optional(),
-  /** Muddies for an invited Event; Circle conversation ids for a community one. */
+  /** Muddies for an invited Event; Group conversation ids for a community one. */
   audienceTargetIds: z.array(z.string().uuid()).max(200).optional(),
   /** Required to publish a Nearby Event -- see validateAudienceRequirements. */
   location: z
@@ -221,9 +221,9 @@ async function loadAudienceContext(
 
   const memberCommunityEventIds = new Set<string>();
   if (communityTargets.length > 0) {
-    // Circles are group conversations, so membership is conversation_members --
+    // Groups are group conversations, so membership is conversation_members --
     // there is no second community system to consult. Only `joined` counts: an
-    // invited-but-not-joined member has not accepted the Circle yet, and a
+    // invited-but-not-joined member has not accepted the Group yet, and a
     // removed one must lose the Event with it.
     const conversationIds = [...new Set(communityTargets.map((target) => target.conversationId))];
     const { data: memberships } = await admin
@@ -264,7 +264,7 @@ export async function listEvents(userId: string): Promise<EventView[]> {
   /* AUDIENCE CONTEXT, BATCHED.
    *
    * Two queries for the whole page, never one per Event: the targets attached
-   * to these Events, and the Circles this viewer belongs to. isDiscoverableInFeed
+   * to these Events, and the Groups this viewer belongs to. isDiscoverableInFeed
    * is pure and needs the answers handed to it -- which is what lets the same
    * rule serve the feed, the mobile API and a test without three lookups. */
   const audience = await loadAudienceContext(
@@ -576,7 +576,7 @@ export async function createEvent(userId: string, input: unknown): Promise<Event
 
   /* Targets are written only for the audiences that use them, and only after
      the Event row exists to hang them off. An invited Event stores people; a
-     community Event stores the Circle. Nothing else needs a row. */
+     community Event stores the Group. Nothing else needs a row. */
   if (allowedTargetIds.length > 0 && (chosenVisibility === "invite" || chosenVisibility === "community")) {
     const targetType = chosenVisibility === "invite" ? "user" : "community";
     await admin.from("event_audience_targets").insert(

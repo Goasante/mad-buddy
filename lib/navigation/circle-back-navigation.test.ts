@@ -5,12 +5,12 @@ import { stripComments } from "@/lib/content/strip-comments";
 /**
  * Back goes where the person came from.
  *
- * THE REPORTED DEFECT. A Circle chat's Back control was a hardcoded
- * <Link href="/groups">, so opening a Circle from the Messages inbox and
- * pressing Back dropped you on the Circles list -- somewhere you had never
- * been. The label also still read "Groups", the pre-rename word.
+ * THE REPORTED DEFECT. A Group chat's Back control was a hardcoded
+ * <Link href="/groups">, so opening a Group from the Messages inbox and
+ * pressing Back dropped you on the Groups list -- somewhere you had never
+ * been.
  *
- * A Circle chat is reachable from the Messages inbox, the Circles list, a
+ * A Group chat is reachable from the Messages inbox, the Groups list, a
  * notification and a cold deep link. Only one of those wants /groups.
  */
 
@@ -31,8 +31,8 @@ const backHandler = (() => {
   return circle.slice(open, start);
 })();
 
-describe("Circle chat back navigation", () => {
-  it("does not hardcode a link to the Circles list", () => {
+describe("Group chat back navigation", () => {
+  it("does not hardcode a link to the Groups list", () => {
     expect(circle).not.toContain('<Link href="/groups"');
   });
 
@@ -47,12 +47,13 @@ describe("Circle chat back navigation", () => {
     expect(backHandler).toContain('router.push("/groups")');
   });
 
-  it("does not send everyone to the Circles list unconditionally", () => {
+  it("does not send everyone to the Groups list unconditionally", () => {
     // The original defect, stated directly: a push with no history branch.
     expect(backHandler).not.toMatch(/onClick=\{\(\) => \{\s*router\.push\("\/groups"\);\s*\}\}/);
   });
 
   it("decides entry context once, on mount", () => {
+<<<<<<< HEAD
     /* history.length grows as the person moves around inside the Circle, so
      * reading it at click time answers a different question.
      *
@@ -64,10 +65,14 @@ describe("Circle chat back navigation", () => {
     expect(circle).toMatch(/useState\(\(\) =>\s*(\{|enteredFromInsideApp\(\))/);
     // And never re-read at click time.
     expect(backHandler).not.toContain("window.history.length");
+=======
+    // history.length grows as the person moves around inside the Group, so
+    // reading it at click time answers a different question.
+    expect(circle).toContain("useState(() => {");
+>>>>>>> 6839711 (fix(product): distinguish private Circles from shared Groups)
   });
 
-  it("uses the renamed vocabulary", () => {
-    // "Groups" is the pre-rename product word; the control is now neutral.
+  it("keeps the neutral Back label", () => {
     const backControl = circle.slice(circle.indexOf("<ChevronLeft") - 700, circle.indexOf("<ChevronLeft") + 200);
     expect(backControl).not.toContain(">\n          Groups");
   });

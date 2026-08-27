@@ -121,12 +121,12 @@ describe("deliberate re-engagement clears the flag", () => {
   });
 });
 
-describe("Circles keep their own semantics", () => {
+describe("Groups keep their own semantics", () => {
   const page = stripComments(readFileSync("components/messages/messages-page.tsx", "utf8"));
   const actions = page.slice(page.indexOf("<LongPressActions"), page.indexOf("</LongPressActions>"));
 
   it("offers Hide chat only for direct conversations", () => {
-    // A Circle offers Leave Circle, which is a different act with
+    // A Group offers Leave Group, which is a different act with
     // consequences for other people.
     const circleBranch = actions.slice(actions.indexOf('conversation.kind === "group"'), actions.indexOf('id: "hide"'));
     expect(circleBranch).toContain('id: "open-circle"');

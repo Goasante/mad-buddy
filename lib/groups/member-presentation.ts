@@ -147,11 +147,11 @@ export const MEMBER_ACTION_LABELS: Record<MemberAction, string> = {
   view_profile: "View profile",
   promote_to_admin: "Make admin",
   demote_to_member: "Remove admin",
-  remove_member: "Remove from Circle",
+  remove_member: "Remove from Group",
   transfer_ownership: "Transfer ownership",
   // The KEY stays `leave_group`: it is a stable internal identifier matching
   // the server action and the database. Only what the person reads changes.
-  leave_group: "Leave Circle"
+  leave_group: "Leave Group"
 };
 
 /** Actions that need a confirmation step before they run. */

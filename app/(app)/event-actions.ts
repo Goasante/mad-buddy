@@ -746,8 +746,8 @@ export async function updateEventDraftAction(eventId: string, input: unknown): P
  * that works today and it opens through the same access authority.
  *
  * SHARING IS TRANSPORT, NOT PERMISSION. The recipient still meets whatever
- * canViewEvent says: forwarding an invite-only Event into a Circle does not
- * invite the Circle. Only Events the SENDER may see can be shared, so this is
+ * canViewEvent says: forwarding an invite-only Event into a Group does not
+ * invite the Group. Only Events the SENDER may see can be shared, so this is
  * not a way to discover an Event id either.
  */
 export async function shareEventToConversationAction(
@@ -804,7 +804,7 @@ export async function shareEventToConversationAction(
     : { ok: false, message: result.message };
 }
 
-/** Eligible Muddies and Circles for the audience pickers. */
+/** Eligible Muddies and Groups for the audience pickers. */
 export async function getAudienceOptionsAction(): Promise<{
   invitees: InviteeOption[];
   communities: CommunityOption[];

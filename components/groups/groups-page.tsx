@@ -24,7 +24,7 @@ import { PageHeader } from "@/components/app-shell/page-header";
 type GroupTab = "mine" | "discover" | "requests";
 
 const groupTabs: Array<{ id: GroupTab; label: string }> = [
-  { id: "mine", label: "My Circles" },
+  { id: "mine", label: "My Groups" },
   { id: "discover", label: "Discover" },
   { id: "requests", label: "Invitations" }
 ];
@@ -123,17 +123,17 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
 
   return (
     <div className="mx-auto max-w-[1200px] space-y-6 md:pt-6">
-      <PageHeader title="Circles" />
+      <PageHeader title="Groups" />
 
       <header className="flex flex-col gap-4 pt-1 sm:flex-row sm:items-center sm:justify-between md:pt-0">
         <div>
           {/* Hidden on mobile: the shared header carries the title there. */}
-          <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Circles</h1>
+          <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Groups</h1>
           <p className="mt-2 text-sm text-muted-foreground">Private spaces for conversations and shared plans.</p>
         </div>
         <Button type="button" onClick={() => setCreateOpen(true)} data-tour-id={TOUR_TARGET_IDS.GROUPS_CREATE}>
           <Plus className="h-4 w-4" aria-hidden="true" />
-          Create Circle
+          Create Group
         </Button>
       </header>
 
@@ -142,7 +142,7 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
       <nav
         data-tour-id={TOUR_TARGET_IDS.GROUPS_TABS}
         className="overflow-x-auto border-b border-border/70"
-        aria-label="Circles tabs"
+        aria-label="Groups tabs"
       >
         <div className="flex min-w-max gap-1">
           {groupTabs.map((tab) => (
@@ -173,7 +173,7 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={activeTab === "mine" ? "Search your Circles" : "Search discoverable Circles"}
+            placeholder={activeTab === "mine" ? "Search your Groups" : "Search discoverable Groups"}
             className="pl-9"
           />
         </div>
@@ -208,7 +208,7 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
             <EmptyState
               icon={Inbox}
               className="!min-h-0 !shadow-none p-5"
-              title="No Circle invitations"
+              title="No Group invitations"
               description="Invitations from approved Muddies will appear here."
             />
           </div>
@@ -243,13 +243,13 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
           <EmptyState
             icon={activeTab === "discover" ? Search : Users2}
             className="!min-h-0 !shadow-none p-5"
-            title={query ? "No matching Circles" : activeTab === "discover" ? "No Circles to discover" : "No Circles yet"}
+            title={query ? "No matching Groups" : activeTab === "discover" ? "No Groups to discover" : "No Groups yet"}
             description={
               query
                 ? "Try another search."
                 : activeTab === "discover"
-                  ? "Discoverable Circles created by approved Muddies will appear here."
-                  : "Create a private Circle or accept an invitation to get started."
+                  ? "Discoverable Groups created by approved Muddies will appear here."
+                  : "Create a private Group or accept an invitation to get started."
             }
           />
         </div>
@@ -258,8 +258,8 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
       <Modal
         open={createOpen}
         onOpenChange={setCreateOpen}
-        title="Create Circle"
-        description="Circles are private by default."
+        title="Create Group"
+        description="Groups are private by default."
         footer={
           <>
             <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} disabled={isPending}>Cancel</Button>
@@ -271,17 +271,17 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
         }
       >
         <div className="grid gap-4">
-          <FormField htmlFor="group-name" label="Circle name">
+          <FormField htmlFor="group-name" label="Group name">
             <Input id="group-name" value={name} maxLength={80} onChange={(event) => setName(event.target.value)} placeholder="Weekend Crew" />
           </FormField>
           <FormField htmlFor="group-description" label="Description (optional)">
-            <Textarea id="group-description" value={description} maxLength={500} onChange={(event) => setDescription(event.target.value)} placeholder="What is this Circle for?" />
+            <Textarea id="group-description" value={description} maxLength={500} onChange={(event) => setDescription(event.target.value)} placeholder="What is this Group for?" />
           </FormField>
           {/* THE GROUP IMAGE. Becomes the group's avatar and its card art on
               Linkr, so one upload serves both. Optional: without it the card
               falls back to a stable generated cover rather than a grey box. */}
           <div>
-            <span className="mb-1.5 block text-sm font-medium">Circle image (optional)</span>
+            <span className="mb-1.5 block text-sm font-medium">Group image (optional)</span>
             <label className="focus-ring flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3 hover:bg-secondary/40">
               <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-secondary/60">
                 {imagePreview ? (
@@ -399,7 +399,7 @@ function GroupCard({
       </div>
       <h2 className="mt-3 truncate text-base font-semibold">{group.name}</h2>
       <p className="mt-1 text-xs text-muted-foreground">{group.memberCount} {group.memberCount === 1 ? "member" : "members"}</p>
-      <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">{group.description || "A private Mad Buddy Circle."}</p>
+      <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">{group.description || "A private Mad Buddy Group."}</p>
       {group.lastMessagePreview ? <p className="mt-2 truncate text-xs text-muted-foreground">{group.lastMessagePreview}</p> : null}
       {group.lastMessageAt ? <p className="mt-1 text-[11px] text-muted-foreground">Active {formatRelativeTime(group.lastMessageAt)}</p> : null}
       <div className="mt-auto pt-4">

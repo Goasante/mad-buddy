@@ -259,7 +259,7 @@ export function SettingsPageContent({
           <SettingsLinkRow
             icon={MessageSquare}
             title="Messaging privacy"
-            description="Who can message you, Circle adds, read receipts, previews."
+            description="Who can message you, Group adds, read receipts, previews."
             href="/settings/communication"
           />
           <SettingsLinkRow

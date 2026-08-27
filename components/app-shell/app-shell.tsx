@@ -128,7 +128,7 @@ const navigationItems: Array<{
   { href: "/plans", label: "Plans", icon: CalendarCheck2, featureIcon: "plans" },
   { href: "/moments", label: "Moments", icon: Sparkles, featureIcon: "moments" },
   { href: "/events", label: "Events", icon: PartyPopper, featureIcon: "events" },
-  { href: "/groups", label: "Circles", icon: Users2, featureIcon: "groups" },
+  { href: "/groups", label: "Groups", icon: Users2, featureIcon: "groups" },
   { href: "/linkr", label: "Linkr", icon: Compass, brandIcon: "linkr" },
   { href: "/profile", label: "Profile", icon: UserRound },
   { href: "/settings", label: "Settings", icon: Settings },

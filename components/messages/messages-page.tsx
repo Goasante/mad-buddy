@@ -82,7 +82,7 @@ import { MESSAGES_UPDATED_EVENT } from "@/hooks/use-unread-message-count";
 const tabs: Array<{ id: "all" | "unread" | "groups" | "plans"; label: string; icon: LucideIcon | null }> = [
   { id: "all", label: "All", icon: null },
   { id: "unread", label: "Unread", icon: null },
-  { id: "groups", label: "Circles", icon: UsersRound },
+  { id: "groups", label: "Groups", icon: UsersRound },
   { id: "plans", label: "Plans", icon: CalendarCheck2 }
 ];
 
@@ -371,11 +371,11 @@ export function MessagesPageContent({
       try {
         /* Mentions carried through unchanged.
          *
-         * This pane only ever opens DIRECT conversations -- a Circle routes to
+         * This pane only ever opens DIRECT conversations -- a Group routes to
          * its own page -- so these messages have no mentions to reconcile.
          * Passing what the message already names, rather than the empty
          * default, means the edit cannot silently un-mention anyone if a
-         * Circle thread is ever opened here. */
+         * Group thread is ever opened here. */
         const existingMentions = messages.find((message) => message.id === messageId)?.mentions ?? [];
         const result = await withTimeout(
           editMessageAction(
@@ -455,7 +455,7 @@ export function MessagesPageContent({
     }
   }, []);
 
-  /* A Circle has its own route. Reading it updates the canonical member row
+  /* A Group has its own route. Reading it updates the canonical member row
    * there, while Next can restore this inbox from its client route cache with
    * the pre-read rows still in memory. Reconcile on every inbox mount so the
    * row badge and Unread filter return with the same state as the global badge
@@ -509,7 +509,7 @@ export function MessagesPageContent({
      * The server resolves planPhase() against the Plan's own start and end and
      * sends the answer; this maps it onto the coordination vocabulary. A
      * conversation with no Plan behind it has a null phase -- an Event or a
-     * Circle carries its own context and is treated as ongoing coordination
+     * Group carries its own context and is treated as ongoing coordination
      * rather than borrowing a Plan's lifecycle. */
     const phase: MeetingPhase =
       selected?.planPhase === "upcoming"
@@ -733,11 +733,11 @@ export function MessagesPageContent({
    * Opening a conversation is an event, not a render side effect, so the load
    * lives in the handler. Loads the thread, then marks it read.
    *
-   * A CIRCLE IS NOT A DIRECT CHAT. This inline pane is the direct-message
-   * thread: one peer, no member list, no Circle management. Opening a Circle
+   * A GROUP IS NOT A DIRECT CHAT. This inline pane is the direct-message
+   * thread: one peer, no member list, no Group management. Opening a Group
    * here presented a shared multi-person space as if it were a DM -- the
    * conversation's own `kind` was carried all the way to the client and then
-   * used only for tab filtering, never for routing. Circles have a canonical
+   * used only for tab filtering, never for routing. Groups have a canonical
    * page that knows about members and roles, so they go there.
    */
   function openConversation(conversationId: string) {
@@ -970,12 +970,12 @@ export function MessagesPageContent({
             <MessagesSquare className="h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
             Messages
           </h1>
-          {/* This page holds Circles and Plan Chats as well as direct
+          {/* This page holds Groups and Plan Chats as well as direct
               messages, so "privately with your approved Muddies" was making a
               promise the group rooms below it do not keep. It now names what
               is actually here. */}
           <p className="mt-1 text-sm text-muted-foreground">
-            Your conversations with Muddies, Circles and Plans.
+            Your conversations with Muddies, Groups and Plans.
           </p>
         </div>
         <Button
@@ -1154,8 +1154,8 @@ export function MessagesPageContent({
                     conversation.otherUsername && duplicateTitles.has(conversation.title.trim().toLowerCase());
                   return (
                     <li key={conversation.id}>
-                      {/* Type-aware, because a Circle and a direct chat do not
-                          offer the same things. A Circle opens its own page,
+                      {/* Type-aware, because a Group and a direct chat do not
+                          offer the same things. A Group opens its own page,
                           which owns members and roles; a direct chat offers the
                           other person's profile.
 
@@ -1184,7 +1184,7 @@ export function MessagesPageContent({
                             ? [
                                 {
                                   id: "open-circle",
-                                  label: "View Circle",
+                                  label: "View Group",
                                   onSelect: () => router.push(`/groups/${conversation.id}` as Route)
                                 }
                               ]
@@ -1202,8 +1202,8 @@ export function MessagesPageContent({
                                 /* DIRECT CHATS ONLY, and it is not a delete.
                                    The conversation is shared: this hides it
                                    from your inbox and leaves the other
-                                   person's untouched. A Circle offers Leave
-                                   Circle instead, which is a different act
+                                   person's untouched. A Group offers Leave
+                                   Group instead, which is a different act
                                    with consequences for other people. */
                                 {
                                   id: "hide",
@@ -1708,7 +1708,7 @@ export function MessagesPageContent({
                   * and "Running late" -- arrival language for a meeting that
                   * did not exist. They now appear only in conversations that
                   * are ABOUT a dated thing: a Plan Chat, an Event, an Event
-                  * Circle or a Safe Arrival thread.
+                  * Group or a Safe Arrival thread.
                   *
                   * KNOWN LIMITATION, deliberately not faked: the conversation
                   * projection carries no start time, so this cannot yet tell

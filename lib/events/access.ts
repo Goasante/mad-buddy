@@ -68,8 +68,8 @@ async function audienceContextFor(
   const communityIds = targets.filter((t) => t.target_type === "community").map((t) => t.target_id);
   if (communityIds.length === 0) return { ...base, isInvited };
 
-  // Circles are group conversations; `joined` is the only status that counts.
-  // An invited-but-unjoined member has not accepted the Circle, and a removed
+  // Groups are group conversations; `joined` is the only status that counts.
+  // An invited-but-unjoined member has not accepted the Group, and a removed
   // one must lose the Event along with it.
   const { data: memberships } = await admin
     .from("conversation_members")

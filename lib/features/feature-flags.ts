@@ -143,7 +143,7 @@ export const ANALYTICS_FEATURE_CATALOG = [
   { key: "hangout", title: "UpFor", flagKey: null, eventNames: ["hangout_created", "hangout_joined"] },
   { key: "plans", title: "Plans", flagKey: null, eventNames: ["plan_created"] },
   { key: "events", title: "Events", flagKey: null, eventNames: ["event_created"] },
-  { key: "groups", title: "Circles", flagKey: null, eventNames: ["group_created"] },
+  { key: "groups", title: "Groups", flagKey: null, eventNames: ["group_created"] },
   { key: "wave", title: "Wave", flagKey: null, eventNames: ["wave_sent"] },
   { key: "ping", title: "Ping", flagKey: null, eventNames: ["ping_sent"] },
   { key: "safe_arrival", title: "Safe Arrival", flagKey: null, eventNames: ["safe_arrival_started", "safe_arrival_completed"] },

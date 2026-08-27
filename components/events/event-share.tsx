@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  *
  * TRANSPORT, NOT PERMISSION. Sending somebody a link does not grant them
  * anything: whoever opens it still meets canViewEvent, so an invite-only Event
- * forwarded into a Circle stays invite-only and refuses everybody who was not
+ * forwarded into a Group stays invite-only and refuses everybody who was not
  * invited. That separation is the whole reason this can be offered on every
  * Event rather than only on public ones.
  *
@@ -169,8 +169,8 @@ export function EventShare({
 /**
  * Choosing where to send it.
  *
- * Lists the conversations this person already has -- chats and Circles alike,
- * since a Circle IS a group conversation here. Posting an Event into a Circle
+ * Lists the conversations this person already has -- chats and Groups alike,
+ * since a Group IS a group conversation here. Posting an Event into a Group
  * changes nothing about who may open it.
  */
 function ShareToChatSheet({
@@ -237,7 +237,7 @@ function ShareToChatSheet({
 
         {[
           { label: "Chats", rows: direct, icon: MessageCircle },
-          { label: "Circles", rows: groups, icon: Users2 }
+          { label: "Groups", rows: groups, icon: Users2 }
         ]
           .filter((section) => section.rows.length > 0)
           .map((section) => {

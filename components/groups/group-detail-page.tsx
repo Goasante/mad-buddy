@@ -90,7 +90,7 @@ export function GroupDetailPage({
   );
   const orderedMembers = useMemo(() => orderGroupMembers(group.members), [group.members]);
   /**
-   * Who can be mentioned: this Circle's current members.
+   * Who can be mentioned: this Group's current members.
    *
    * INCLUDING YOURSELF. "@me" reads naturally in a sentence -- "I'll bring it,
    * @Ama and I are driving" -- and excluding it would make the picker
@@ -102,7 +102,7 @@ export function GroupDetailPage({
    * server re-validates every id on send regardless.
    *
    * THE NAME MUST BE THE ONE THE RENDERER CAN FIND, and that is the whole of
-   * the Circle mention bug. `MessageText` locates a mention by searching the
+   * the Group mention bug. `MessageText` locates a mention by searching the
    * message for "@" + the displayName that `getMessages` projects, which is
    * `full_name || username`. This page's member list comes from a different
    * projection, `loadGroupDetail`, which falls back to the literal placeholder
@@ -269,7 +269,7 @@ export function GroupDetailPage({
 
       /* A software keyboard shortens visualViewport without necessarily
        * changing innerHeight. Move the chat to the top of that visible window
-       * before sizing it; otherwise the preserved Circle header consumes the
+       * before sizing it; otherwise the preserved Group header consumes the
        * entire short viewport and the composer remains below the keyboard. */
       const keyboardOpen = Boolean(visual && visual.height < window.innerHeight - 120);
       if (keyboardOpen && top > visibleTop + 8) {
@@ -325,24 +325,24 @@ export function GroupDetailPage({
   );
 
   /**
-   * Opening a Circle marks it read -- the step this page never took.
+   * Opening a Group marks it read -- the step this page never took.
    *
-   * A Circle IS a conversation (`group.id` is the conversation id, which is
+   * A Group IS a conversation (`group.id` is the conversation id, which is
    * why `getMessagesAction(group.id)` works), but reading one is not the same
    * as opening one from the inbox: direct chats and Plan Chat both live inside
    * `/messages`, which calls `markConversationReadAction` when a thread is
-   * selected. A Circle opens at its own route, so nothing on the path ever
+   * selected. A Group opens at its own route, so nothing on the path ever
    * cleared the unread state. The messages were visibly read and the badge
    * kept counting them.
    *
-   * The authority is the shared one, not a Circle-specific projection:
+   * The authority is the shared one, not a Group-specific projection:
    * `markConversationRead` re-checks `resolveConversationAccess` and writes
    * only this user's `last_read_message_id`. `MESSAGES_UPDATED_EVENT` is the
    * same signal `/messages` dispatches, so the nav badge and the inbox both
    * reconcile against the server without a hard refresh.
    *
    * Keyed on the newest message id so it re-marks when a message arrives while
-   * the Circle is already open -- otherwise the badge would start counting
+   * the Group is already open -- otherwise the badge would start counting
    * again for messages sitting on screen.
    */
   const newestMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
@@ -388,7 +388,7 @@ export function GroupDetailPage({
         });
         if (!disposed) setMessages(loaded);
       } catch {
-        if (!disposed) setFeedback("Circle messages could not be refreshed.");
+        if (!disposed) setFeedback("Group messages could not be refreshed.");
       } finally {
         refreshInFlight = false;
         if (refreshQueued && !disposed) {
@@ -414,7 +414,7 @@ export function GroupDetailPage({
      * A dropped socket replays nothing, so reaching SUBSCRIBED again is the
      * only signal that messages may have been missed.
      *
-     * Without this a Circle chat went quietly stale: the phone sleeps, the
+     * Without this a Group chat went quietly stale: the phone sleeps, the
      * WebSocket dies without ever reporting CLOSED, and the thread keeps
      * showing whatever it had when the screen went off. Reopening the app was
      * the only cure -- the same restart-to-see-your-messages problem the direct
@@ -466,17 +466,17 @@ export function GroupDetailPage({
     <div className="mx-auto max-w-[1000px] space-y-5 pt-6">
       <div className="flex items-center justify-between gap-3">
         {/* Back goes where the person actually came from.
-            This was a hardcoded link to /groups, so opening a Circle from the
-            Messages inbox and pressing Back dropped you on the Circles list --
+            This was a hardcoded link to /groups, so opening a Group from the
+            Messages inbox and pressing Back dropped you on the Groups list --
             a place you had not been -- and the label still said "Groups", the
-            pre-rename word. A Circle chat is reachable from Messages, from the
-            Circles list, from a notification and from a deep link; only one of
+            pre-rename word. A Group chat is reachable from Messages, from the
+            Groups list, from a notification and from a deep link; only one of
             those wants /groups.
 
             router.back() when this page was pushed from somewhere inside the
             app, which is the same history-first convention the direct thread
             uses. A cold deep link has no in-app entry to return to, so it
-            falls back to the canonical Circles list rather than leaving the
+            falls back to the canonical Groups list rather than leaving the
             browser. */}
         <button
           type="button"
@@ -501,8 +501,8 @@ export function GroupDetailPage({
               type="button"
               size="icon"
               variant="ghost"
-              aria-label="Leave Circle"
-              title="Leave Circle"
+              aria-label="Leave Group"
+              title="Leave Group"
               disabled={isPending}
               onClick={() => {
                 startTransition(async () => {
@@ -533,7 +533,7 @@ export function GroupDetailPage({
 
       {feedback ? <p className="rounded-xl bg-secondary/60 px-4 py-3 text-sm" role="status">{feedback}</p> : null}
 
-      <nav className="border-b border-border/70" aria-label="Circle sections">
+      <nav className="border-b border-border/70" aria-label="Group sections">
         <div className="flex gap-1">
           {(["chat", "members", "media"] as const).map((item) => (
             <button
@@ -765,7 +765,7 @@ export function GroupDetailPage({
                 icon={Users2}
                 className="!border-0 !bg-transparent !shadow-none"
                 title="Start the conversation"
-                description="Messages in this Circle are visible only to joined members."
+                description="Messages in this Group are visible only to joined members."
               />
             )}
           </div>
@@ -774,11 +774,11 @@ export function GroupDetailPage({
             voiceRecorderConfig={voiceRecorderConfig}
             // A group is exactly where "who did you mean" is a real question.
             isGroup
-            /* The Circle's own member list, already loaded and authorised by
+            /* The Group's own member list, already loaded and authorised by
                this page. Not a second query, and not a second authority --
                the server re-validates every mentioned id on send regardless. */
             mentionCandidates={mentionCandidates}
-            placeholder="Message the Circle"
+            placeholder="Message the Group"
             onFeedback={setFeedback}
             onSent={async () => {
               const loaded = await withTimeout(getMessagesAction(group.id), {
@@ -818,7 +818,7 @@ export function GroupDetailPage({
               icon={Users2}
               className="!border-0 !bg-transparent !shadow-none"
               title="No media yet"
-              description="Photos shared in this Circle will appear here."
+              description="Photos shared in this Group will appear here."
             />
           )}
         </section>
@@ -1065,7 +1065,7 @@ export function GroupDetailPage({
           if (!next) setTransferTarget(null);
         }}
         title="Transfer ownership"
-        description="Choose who takes over this Circle."
+        description="Choose who takes over this Group."
         variant="sheet"
       >
         {transferTarget ? (
