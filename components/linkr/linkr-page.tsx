@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { Flag, Hand, MoreHorizontal, Settings, SlidersHorizontal, UserRound } from "lucide-react";
+import { ArrowLeft, Flag, Hand, MoreHorizontal, Settings, SlidersHorizontal, UserRound } from "lucide-react";
 
 import {
   connectWithCandidateAction,
@@ -35,6 +35,7 @@ import type { LinkrCandidate } from "@/lib/linkr/candidate-service";
 import type { ClickedPerson, PendingClick } from "@/lib/linkr/collections-service";
 import type { LinkrOwnProfile } from "@/lib/linkr/profile-service";
 import type { LinkrIntent } from "@/lib/linkr/intent";
+import { cameFromInsideApp } from "@/lib/navigation/entry-origin";
 import { profileHandoffHref } from "@/lib/navigation/handoff";
 import { LINKR_COPY, LINKR_DISTANCE_OPTIONS, type LinkrDistancePreference } from "@/lib/linkr/rules";
 
@@ -354,6 +355,20 @@ function LinkrPageContent({
     return () => window.removeEventListener("mad-buddy:linkr-mutual", onMutual);
   }, [refreshCollections]);
 
+  /**
+   * Page-level Back.
+   *
+   * History first, which is what makes Linkr return to wherever it was opened
+   * from -- Home, Messages, a notification -- rather than to one hardcoded
+   * place that is only correct for one of them. A cold entry has nothing
+   * behind it, so it falls back to Home instead of leaving the app.
+   */
+  const [enteredFromInsideApp] = useState(() => cameFromInsideApp());
+  const goBack = useCallback(() => {
+    if (enteredFromInsideApp) router.back();
+    else router.push("/dashboard" as Route);
+  }, [enteredFromInsideApp, router]);
+
   const handleUndo = useCallback(() => {
     /* Undo REVERSES A RECORDED DECISION, so the write must finish: an
      * abandoned request leaves the deck showing the person again while the
@@ -584,6 +599,22 @@ function LinkrPageContent({
   return (
     <div className="linkr-shell">
       <header className="linkr-topbar">
+        {/* Linkr had no way out but the bottom nav. This is the page-level
+            Back, and it only exists on the Discover root: every inner view
+            (filters, profile, settings, Clicked) returns earlier with its own
+            `linkr-back`, so an internal state always dismisses first.
+
+            Reuses `.linkr-back` -- the same 44px control those inner views
+            already use -- so it matches the surface rather than introducing a
+            second back style. */}
+        <button
+          type="button"
+          className="linkr-back"
+          onClick={goBack}
+          aria-label="Back"
+        >
+          <ArrowLeft aria-hidden />
+        </button>
         <h1 className="linkr-topbar__title">Linkr</h1>
         <div className="linkr-topbar__actions">
           {/* Clicked: where mutual people live once they leave the deck. */}
