@@ -11,6 +11,7 @@ import {
   canonicalPlanErrorIdentifier,
   mapCanonicalPlanError,
   toCanonicalPlanLimit,
+  toCanonicalParticipantLimit,
   type PlanServiceCode
 } from "@/lib/plans/canonical-contract";
 import type { PlanCategory } from "@/lib/supabase/database.types";
@@ -329,7 +330,7 @@ export async function createPlan(userId: string, input: unknown): Promise<Servic
     p_initial_going_ids: [],
     p_source_hangout_id: null,
     p_effective_max_active_plans: toCanonicalPlanLimit(limits.maxActivePlans),
-    p_effective_max_participants: toCanonicalPlanLimit(limits.maxPlanParticipants)
+    p_effective_max_participants: toCanonicalParticipantLimit(limits.maxPlanParticipants)
   });
 
   if (error || !data?.[0]) {
@@ -413,7 +414,7 @@ export async function addPlanParticipants(
     p_actor_id: userId,
     p_plan_id: parsed.data.planId,
     p_participant_ids: [...new Set(parsed.data.participantIds)],
-    p_effective_max_participants: toCanonicalPlanLimit(limits.maxPlanParticipants)
+    p_effective_max_participants: toCanonicalParticipantLimit(limits.maxPlanParticipants)
   });
   if (error || !data?.[0]) return mapCanonicalPlanError(error, "Couldn't add those people.");
 
@@ -478,7 +479,7 @@ export async function convertHangoutToPlan(
     p_initial_going_ids: [],
     p_source_hangout_id: hangoutId,
     p_effective_max_active_plans: toCanonicalPlanLimit(limits.maxActivePlans),
-    p_effective_max_participants: toCanonicalPlanLimit(limits.maxPlanParticipants)
+    p_effective_max_participants: toCanonicalParticipantLimit(limits.maxPlanParticipants)
   });
   if (error || !data?.[0]) return mapCanonicalPlanError(error, "Couldn't create the plan.");
 

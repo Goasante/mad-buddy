@@ -18,9 +18,35 @@ export type CanonicalPlanError = {
 
 const POSTGRES_INT_MAX = 2_147_483_647;
 
+/**
+ * The largest participant count `create_plan_lifecycle` will accept.
+ *
+ * The RPC raises PLAN_PARTICIPANT_LIMIT_INVALID for anything above this, and
+ * stores the value it is given as the plan's own `max_participants`. It is a
+ * server-side safety ceiling on the size of one plan, NOT a paywall.
+ */
+export const CANONICAL_MAX_PLAN_PARTICIPANTS = 500;
+
 /** Converts product-level Infinity into a server-controlled PostgreSQL int. */
 export function toCanonicalPlanLimit(value: number): number {
   return Number.isFinite(value) ? Math.trunc(value) : POSTGRES_INT_MAX;
+}
+
+/**
+ * The participant limit, in the range the canonical RPC actually accepts.
+ *
+ * WHY THIS EXISTS. `max_plan_participants` is deliberately UNLIMITED -- a cap
+ * would mean paying to invite the eleventh friend to something you organised.
+ * `toCanonicalPlanLimit` turned that Infinity into POSTGRES_INT_MAX, and the
+ * RPC rejects anything over 500, so EVERY plan creation failed with
+ * "Check the plan details and try again" -- direct and UpFor conversion alike.
+ *
+ * Clamping here keeps the entitlement unlimited (nobody is being sold a bigger
+ * plan) while sending the RPC a value inside its own contract. A finite tier
+ * value below the ceiling is passed through untouched.
+ */
+export function toCanonicalParticipantLimit(value: number): number {
+  return Math.min(toCanonicalPlanLimit(value), CANONICAL_MAX_PLAN_PARTICIPANTS);
 }
 
 const RPC_ERROR_CODE: Record<string, PlanServiceCode> = {
