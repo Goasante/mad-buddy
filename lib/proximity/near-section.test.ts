@@ -153,12 +153,35 @@ describe("Near section glow", () => {
     expect(nearSection).not.toMatch(/--glow-(ring|outer|blur|strength)/);
   });
 
-  it("needs no Home-scoped Glow CSS at all", () => {
-    // The old halo needed `.near-strip .proximity-halo-*` overrides per state.
-    // A surface-scoped override is a second state authority by another name, so
-    // the redesign leaves none behind and must not grow new ones.
-    expect(css).not.toContain(".near-strip .proximity-glow");
-    expect(css).not.toMatch(/\.near-strip[^{]*\{[^}]*--glow-/);
+  it("keeps no PER-STATE Glow override on Home", () => {
+    /* The old halo needed `.near-strip .proximity-halo-very-close|-nearby|
+     * -around` -- one rule per state, which is a second state authority by
+     * another name: Home could disagree with the rest of the app about what
+     * "Close By" looks like.
+     *
+     * That is the thing to forbid, and it is narrower than "no scoped CSS at
+     * all". Home now pulls its ring and ring2 toward the avatar so the Glow
+     * starts at the photo instead of a ring's distance away, and that rule is
+     * UNIFORM: it names no state, reads the same shared vars every surface
+     * reads, and applies one transform to all six. The ordering it must not
+     * break is asserted directly in glow-bloom-reservation.test.ts.
+     *
+     * So: no state-named selector, and no redefinition of the state variables
+     * themselves -- but a uniform geometric adjustment is allowed. */
+    for (const level of [
+      "right-here",
+      "just-around",
+      "close-by",
+      "in-your-area",
+      "around-town",
+      "across-town"
+    ]) {
+      expect(css).not.toContain(`.near-strip .proximity-glow-${level}`);
+      expect(css).not.toContain(`.near-strip .proximity-halo-${level}`);
+    }
+    // Redefining a --glow-* value per surface would let Home restate the
+    // scale; recomputing a layer's width from those values does not.
+    expect(css).not.toMatch(/\.near-strip[^{]*\{[^}]*--glow-[a-z0-9-]+\s*:/);
   });
 
   it("clamps intensity so no surface can flatten the top of the scale", () => {

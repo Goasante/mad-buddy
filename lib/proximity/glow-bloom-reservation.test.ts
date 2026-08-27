@@ -60,8 +60,19 @@ function bloomOverhangPx(level: ProximityGlowLevel, size: ProximityGlowSize): nu
   return (painted - geometry.avatar) / 2;
 }
 
-/** What `.near-strip` reserves: padding-block 1.5rem at a 16px root. */
-const NEAR_STRIP_RESERVED_PX = 1.5 * 16;
+/** What `.near-strip` reserves: padding-block 1.75rem at a 16px root. */
+const NEAR_STRIP_RESERVED_PX = 1.75 * 16;
+
+/**
+ * The Near strip draws its ring and ring2 pulled in to the midpoint of the
+ * layer outside them, so the glow starts at the avatar rather than a ring's
+ * distance away. Mirrors the `calc()` in `.near-strip .proximity-glow__ring`
+ * and `__ring2`, and is what the reservation actually has to clear here.
+ */
+function nearStripOutermostPx(level: ProximityGlowLevel): number {
+  const g = resolveGlowGeometry(level, NEAR_STRIP_SIZE);
+  return (g.outer + g.ring) / 2;
+}
 
 /** The Near strip renders `lg` avatars (4.75rem / 76px columns). */
 const NEAR_STRIP_SIZE: ProximityGlowSize = "lg";
@@ -98,6 +109,18 @@ describe("the Near strip reserves enough room for the bloom", () => {
     expect(NEAR_STRIP_RESERVED_PX).toBeGreaterThanOrEqual(needed);
   });
 
+  it("clears ring2 at its STATIC size, which is what reduced motion shows", () => {
+    /* A reduced-motion viewer sees ring2 held at full size and 0.65 opacity
+     * rather than mid-animation, so their reading sets the requirement. This
+     * is the case an earlier pass measured mid-animation and under-reserved. */
+    for (const level of LEVELS) {
+      const overhang =
+        (nearStripOutermostPx(level) - PROXIMITY_GLOW_SIZES[NEAR_STRIP_SIZE].avatarPx) / 2;
+      expect(NEAR_STRIP_RESERVED_PX, `${level} needs ${overhang.toFixed(2)}px`)
+        .toBeGreaterThanOrEqual(overhang);
+    }
+  });
+
   it("clears EVERY state, not just the one that was measured", () => {
     for (const level of LEVELS) {
       expect(
@@ -112,6 +135,36 @@ describe("the Near strip reserves enough room for the bloom", () => {
     // to a spacing-sized value, the numbers above stop clearing.
     const oldPadding = 8;
     expect(oldPadding).toBeLessThan(bloomOverhangPx("right-here", NEAR_STRIP_SIZE));
+  });
+});
+
+describe("the Near strip tightens the gap without reordering the states", () => {
+  it("pulls the ring in toward the avatar", () => {
+    for (const level of LEVELS) {
+      const g = resolveGlowGeometry(level, NEAR_STRIP_SIZE);
+      const tightened = (g.ring + g.core) / 2;
+      expect(tightened, `${level}`).toBeLessThan(g.ring);
+      // ...but never inside the core, which would invert the layer order.
+      expect(tightened).toBeGreaterThan(g.core);
+    }
+  });
+
+  it("keeps the six states ordered after tightening", () => {
+    const gaps = LEVELS.map((level) => {
+      const g = resolveGlowGeometry(level, NEAR_STRIP_SIZE);
+      return (g.ring + g.core) / 2;
+    });
+    for (let i = 1; i < gaps.length; i += 1) {
+      expect(gaps[i - 1], `${LEVELS[i - 1]} vs ${LEVELS[i]}`).toBeGreaterThan(gaps[i]!);
+    }
+  });
+
+  it("roughly halves the dead band between the core and the ring", () => {
+    const g = resolveGlowGeometry("right-here", NEAR_STRIP_SIZE);
+    const before = (g.ring - g.core) / 2;
+    const after = ((g.ring + g.core) / 2 - g.core) / 2;
+    expect(after).toBeLessThan(before);
+    expect(after / before).toBeCloseTo(0.5, 1);
   });
 });
 

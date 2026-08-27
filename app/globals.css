@@ -948,10 +948,69 @@ html.dark .home-ambient-bg {
  * inline axis is left alone -- the existing -mx-4/px-4 bleed is what lets the
  * last avatar scroll fully into view. */
 .near-strip {
-  /* 1.5rem clears the ~15.5px the closest states reach, with headroom; the
-   * -1.25rem pulls it back out so the row is no taller than it was. */
-  padding-block: 1.5rem;
-  margin-block: -1.25rem;
+  /* 1.75rem (28px) clears the furthest layer this row paints -- ring2 at
+   * 27.59px on Right Here, once tightened below. Sized against the STATIC
+   * size, not a mid-animation snapshot: a reduced-motion viewer sees ring2
+   * held at full size and 0.65 opacity, so it is their reading that sets the
+   * requirement. The -1.5rem pulls the reserved room back out, leaving the
+   * row no taller than it was before any of this. */
+  padding-block: 1.75rem;
+  margin-block: -1.5rem;
+}
+
+/* THE NEAR STRIP'S GLOW STARTS AT THE AVATAR, not a ring's distance away.
+ *
+ * The shared geometry is correct and stays correct everywhere else. What was
+ * wrong was specific to this row's reading: the core draws a bright 2px edge
+ * ~5px off the photo, the ring sits 7-18px out, and between them the soft
+ * halo has already fallen off far enough to read as a transparent void. The
+ * eye saw photo, thin bright circle, empty band, then a detached ring.
+ *
+ * Two changes, and neither shrinks the aura:
+ *
+ *  1. The ring is drawn closer -- half of its distance PAST the core, so the
+ *     spread that separates the six states is compressed rather than removed.
+ *     Ordering survives because every state keeps half of its own offset.
+ *  2. The core gains a tight inner bloom that hugs the avatar edge, filling
+ *     the band the falloff left empty. The wide outer halo is untouched, so
+ *     the aura reaches exactly as far as it did.
+ *
+ * Scoped to `.near-strip` because this is the surface where the defect reads.
+ * The rail, grid, profile and modal render the same component at their own
+ * sizes and are deliberately left alone. */
+.near-strip .proximity-glow__ring {
+  /* calc on the inline var: the component sets --glow-ring inline, so this
+   * cannot be overridden by redeclaring the variable -- the PROPERTY has to
+   * be recomputed instead. Midpoint between the core and the original ring. */
+  width: calc((var(--glow-ring) + var(--glow-core)) / 2);
+  height: calc((var(--glow-ring) + var(--glow-core)) / 2);
+}
+
+/* ring2 is the outermost layer that paints an edge, and on this row it is the
+ * one that reaches past the container. Pulled in on the same midpoint rule as
+ * the ring, which both serves the tightening and brings it inside the room the
+ * strip reserves -- including for reduced-motion users, who see it static at
+ * full size and 0.65 opacity rather than mid-animation. */
+.near-strip .proximity-glow__ring2 {
+  width: calc((var(--glow-outer) + var(--glow-ring)) / 2);
+  height: calc((var(--glow-outer) + var(--glow-ring)) / 2);
+}
+
+.near-strip .proximity-glow__core {
+  /* The extra first stop is the tight bloom: dense, short-reach, sitting
+   * right on the avatar edge. The two wide stops are the originals, so the
+   * outer aura keeps its full expansive falloff. */
+  box-shadow:
+    0 0 6px 2px rgb(var(--glow-highlight) / 0.55),
+    0 0 8px rgb(var(--glow-highlight) / 0.95),
+    0 0 var(--glow-blur) rgb(var(--glow-brand) / 0.75),
+    0 0 calc(var(--glow-blur) * 2.1) rgb(var(--glow-brand) / 0.34);
+}
+
+/* Across Town keeps its faint remnant: a tight bloom on the weakest state
+ * would make somebody across town read as nearly present. */
+.near-strip .proximity-glow[data-core-bloom="faint"] .proximity-glow__core {
+  box-shadow: 0 0 7px rgb(var(--glow-brand) / 0.18);
 }
 
 .near-strip .proximity-halo-very-close {
