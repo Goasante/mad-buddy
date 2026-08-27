@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { BadgeCheck, Hand, RotateCcw, X } from "lucide-react";
+import { BadgeCheck, ChevronLeft, ChevronRight, Hand, RotateCcw, X } from "lucide-react";
 
 import { nextPhotoIndex, previousPhotoIndex, tapZone } from "@/lib/linkr/photos";
 import type { LinkrCandidate } from "@/lib/linkr/candidate-service";
@@ -71,7 +71,9 @@ export function CandidateCard({
   const pointerStart = useRef<{ x: number; y: number; id: number } | null>(null);
   const moved = useRef(false);
 
-  const photos = candidate.photos.length > 0 ? candidate.photos : [""];
+  // Discovery is intentionally a maximum three-photo sequence. Profile owns
+  // the source order; this surface simply consumes its first three safe items.
+  const photos = candidate.photos.length > 0 ? candidate.photos.slice(0, 3) : [""];
   const total = photos.length;
   /**
    * The photos either side of the current one. Recomputed per render rather
@@ -202,16 +204,44 @@ export function CandidateCard({
           </div>
         ) : null}
 
-        <div className="linkr-card__meta">
-          {candidate.activeNow ? <span className="linkr-chip linkr-chip--live">Active now</span> : null}
-          {/* Only when there is somewhere to go. "1/1" is chrome that
-              describes nothing and invites a tap that does nothing. */}
-          {total > 1 ? (
-            <span className="linkr-card__counter">
-              {photoIndex + 1}/{total}
-            </span>
-          ) : null}
-        </div>
+        {candidate.activeNow ? (
+          <div className="linkr-card__meta">
+            <span className="linkr-chip linkr-chip--live">Active now</span>
+          </div>
+        ) : null}
+
+        {total > 1 ? (
+          <div className="linkr-card__edge-nav">
+            <button
+              type="button"
+              className="linkr-card__edge linkr-card__edge--previous"
+              disabled={photoIndex === 0}
+              aria-label={`Previous photo of ${candidate.displayName}`}
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                setPhotoIndex((current) => previousPhotoIndex(current));
+              }}
+            >
+              <ChevronLeft aria-hidden />
+            </button>
+            <button
+              type="button"
+              className="linkr-card__edge linkr-card__edge--next"
+              disabled={photoIndex === total - 1}
+              aria-label={`Next photo of ${candidate.displayName}`}
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                setPhotoIndex((current) => nextPhotoIndex(current, total));
+              }}
+            >
+              <ChevronRight aria-hidden />
+            </button>
+          </div>
+        ) : null}
 
         {/* Decision feedback, shown only while a drag is actually committing. */}
         {intent ? (
@@ -234,17 +264,17 @@ export function CandidateCard({
             {candidate.eventName ? `${candidate.proximityLabel} · ${candidate.eventName}` : candidate.proximityLabel}
           </p>
 
+          {candidate.bio ? <p className="linkr-card__bio">{candidate.bio}</p> : null}
+
           {candidate.interests.length > 0 ? (
             <ul className="linkr-card__interests">
-              {candidate.interests.slice(0, 3).map((interest) => (
+              {candidate.interests.slice(0, 4).map((interest) => (
                 <li key={interest} className="linkr-chip">
                   {interest}
                 </li>
               ))}
             </ul>
           ) : null}
-
-          {candidate.bio ? <p className="linkr-card__bio">{candidate.bio}</p> : null}
         </div>
       </div>
 
@@ -262,16 +292,6 @@ export function CandidateCard({
 
         <button
           type="button"
-          className="linkr-action linkr-action--undo"
-          onClick={onUndo}
-          disabled={!canUndo || busy || Boolean(leaving)}
-        >
-          <RotateCcw aria-hidden />
-          <span>Undo</span>
-        </button>
-
-        <button
-          type="button"
           className="linkr-action linkr-action--connect"
           onClick={() => decide("connect")}
           disabled={busy || Boolean(leaving)}
@@ -279,6 +299,21 @@ export function CandidateCard({
           <Hand aria-hidden />
           <span>Connect</span>
         </button>
+      </div>
+
+      <div className="linkr-card-helper">
+        <p>Swipe to decide <span aria-hidden>&bull;</span> Tap edges for more photos</p>
+        {canUndo ? (
+          <button
+            type="button"
+            className="linkr-action linkr-action--undo"
+            onClick={onUndo}
+            disabled={busy || Boolean(leaving)}
+          >
+            <RotateCcw aria-hidden />
+            <span>Undo pass</span>
+          </button>
+        ) : null}
       </div>
 
       {/* Keyboard-only photo navigation. The card surface handles pointers;

@@ -7467,6 +7467,217 @@ select {
 
 .linkr-photo-nav button:disabled { opacity: 0.35; }
 
+/* Approved portrait-card recovery. The candidate remains the entire visual
+   centre of the screen; controls read as one quiet/one decisive pair. */
+.linkr-shell {
+  --linkr-card-max: min(27rem, 100%);
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem 1.25rem;
+}
+
+.linkr-card-stage { gap: 0.75rem; }
+
+.linkr-card-stage > .linkr-card {
+  width: 100%;
+  aspect-ratio: 6 / 7;
+  max-height: min(58dvh, 34rem);
+  border-radius: 1.75rem;
+  clip-path: inset(0 round 1.75rem);
+  box-shadow: 0 16px 38px rgb(78 4 1 / 0.16);
+}
+
+.linkr-card__scrim {
+  background:
+    linear-gradient(to top, rgb(0 0 0 / 0.92) 0%, rgb(0 0 0 / 0.68) 25%, rgb(0 0 0 / 0.2) 52%, transparent 72%),
+    linear-gradient(to bottom, rgb(0 0 0 / 0.22), transparent 24%);
+}
+
+.linkr-card__progress {
+  top: 0.9rem;
+  left: 1rem;
+  right: 1rem;
+  gap: 0.4rem;
+}
+
+.linkr-card__progress-seg {
+  height: 0.25rem;
+  background: rgb(255 255 255 / 0.38);
+  box-shadow: 0 1px 5px rgb(0 0 0 / 0.2);
+}
+
+.linkr-card__progress-seg.is-active { background: var(--color-brand-orange); }
+
+.linkr-card__meta { top: 1.65rem; left: 1rem; right: 1rem; }
+.linkr-card__counter { display: none; }
+
+.linkr-card__edge-nav { display: contents; }
+.linkr-card__edge {
+  position: absolute;
+  z-index: 3;
+  top: 46%;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(28 18 12 / 0.34);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.16);
+  backdrop-filter: blur(8px);
+  transform: translateY(-50%);
+  transition: opacity 140ms ease, background-color 140ms ease;
+}
+.linkr-card__edge svg { width: 1.5rem; height: 1.5rem; }
+.linkr-card__edge--previous { left: 0.8rem; }
+.linkr-card__edge--next { right: 0.8rem; }
+.linkr-card__edge:disabled { opacity: 0; pointer-events: none; }
+
+.linkr-card__body {
+  gap: 0.55rem;
+  padding: 1.25rem 1.35rem 1.4rem;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.42);
+}
+
+.linkr-card__name {
+  min-width: 0;
+  font-size: clamp(1.65rem, 7vw, 2rem);
+  line-height: 1.05;
+  font-weight: 760;
+}
+.linkr-card__verified { color: #fff; filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.35)); }
+
+/* Proximity still gates and ranks the canonical candidate payload, but the
+   approved card's lower hierarchy ends at identity, bio and interests. */
+.linkr-card__proximity { display: none; }
+
+.linkr-card__bio {
+  order: 1;
+  max-width: 34ch;
+  font-size: 0.93rem;
+  line-height: 1.42;
+  color: rgb(255 255 255 / 0.94);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.linkr-card__interests {
+  order: 2;
+  max-height: 4.75rem;
+  overflow: hidden;
+  gap: 0.45rem;
+}
+.linkr-card__interests .linkr-chip {
+  min-height: 2rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: #fff;
+  background: rgb(255 255 255 / 0.16);
+  text-shadow: none;
+}
+
+.linkr-actions {
+  justify-content: stretch;
+  gap: 0.75rem;
+}
+.linkr-actions .linkr-action {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 3.25rem;
+  flex-direction: row;
+  justify-content: center;
+  gap: 0.55rem;
+  border-radius: 999px;
+  font-size: 1rem;
+  font-weight: 750;
+}
+.linkr-actions .linkr-action svg {
+  width: 1.45rem;
+  height: 1.45rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.linkr-action--pass {
+  border: 1.5px solid var(--color-brand-orange);
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+}
+.linkr-action--pass svg { color: var(--color-brand-orange); }
+.linkr-action--connect {
+  border: 1.5px solid var(--color-brand-orange);
+  color: #fff;
+  background: var(--color-brand-orange);
+  box-shadow: 0 8px 20px rgb(232 140 43 / 0.28);
+}
+.linkr-action--connect svg { color: #fff; }
+
+.linkr-card-helper {
+  display: flex;
+  min-height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  text-align: center;
+  font-size: 0.78rem;
+  color: hsl(var(--muted-foreground));
+}
+.linkr-card-helper p span { color: var(--color-brand-orange); }
+.linkr-card-helper .linkr-action--undo {
+  flex-direction: row;
+  gap: 0.3rem;
+  color: var(--color-brand-orange);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.linkr-card-helper .linkr-action--undo svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* Photo navigation now lives on the image edges, where it is both visible and
+   keyboard reachable. The old duplicate row would compete with helper copy. */
+.linkr-photo-nav { display: none; }
+
+@media (max-width: 370px), (max-height: 820px) {
+  .linkr-shell { gap: 0.5rem; padding-top: 0.375rem; }
+  .linkr-card-stage > .linkr-card { max-height: min(55dvh, 29rem); }
+  .linkr-card__body { padding: 1rem 1.1rem 1.15rem; }
+  .linkr-card__name { font-size: 1.55rem; }
+  .linkr-card__bio { font-size: 0.85rem; }
+  .linkr-actions .linkr-action { min-height: 3rem; }
+}
+
+.linkr-review-screen { min-height: 100dvh; padding-bottom: 5.5rem; background: hsl(var(--background)); }
+.linkr-review-subtitle { margin-top: 0.08rem; font-size: 0.78rem; color: hsl(var(--muted-foreground)); }
+.linkr-review-nav {
+  position: fixed;
+  z-index: 50;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  min-height: 5rem;
+  align-items: center;
+  border-top: 1px solid hsl(var(--border) / 0.7);
+  background: hsl(var(--background) / 0.96);
+  backdrop-filter: blur(18px);
+}
+.linkr-review-nav span { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 0.25rem; font-size: 0.58rem; color: hsl(var(--muted-foreground)); }
+.linkr-review-nav span svg { width: 1.35rem; height: 1.35rem; }
+.linkr-review-nav span.is-active { color: var(--color-brand-orange); }
+.linkr-review-nav strong { display: grid; width: 3.2rem; height: 3.2rem; place-items: center; justify-self: center; border-radius: 999px; color: #fff; background: var(--color-brand-orange); box-shadow: 0 5px 18px rgb(232 140 43 / 0.32); font-size: 0.75rem; }
+
 .linkr-safety {
   display: flex;
   justify-content: center;
