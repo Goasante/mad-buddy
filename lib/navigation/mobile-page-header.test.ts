@@ -320,8 +320,29 @@ describe("mobile page header variants", () => {
   });
 
   it("prefers a real link for Back so it survives a cold load", () => {
+    /* Still an anchor, deliberately. Back now prefers real history over its
+     * parent route, but it must NOT become a <button> to do that: an <a href>
+     * works before hydration, survives a cold load, and keeps middle-click and
+     * "open in new tab". The history preference is a click interceptor on top
+     * of the link, not a replacement for it. */
     expect(header).toContain("backHref?: Route");
-    expect(header).toContain('<HeaderLink href={backHref} label="Back">');
+    expect(header).toMatch(/<HeaderLink\s+href=\{backHref\}\s+label="Back"/);
+    expect(header).not.toMatch(/<HeaderButton label="Back" onClick=\{goBack\}/);
+  });
+
+  it("Back prefers real history and keeps backHref as the cold-entry fallback", () => {
+    // The app-wide rule: history when there is any, the parent route only
+    // when this screen was opened cold. See lib/navigation/entry-origin.ts.
+    expect(header).toContain("resolveBack(");
+    expect(header).toContain("cameFromInsideApp()");
+    expect(header).toContain("fallbackHref: backHref");
+  });
+
+  it("does not hijack a modified click on Back", () => {
+    // Cmd/ctrl/shift/alt and non-primary buttons keep the anchor's behaviour.
+    for (const guard of ["metaKey", "ctrlKey", "shiftKey", "altKey", "event.button !== 0"]) {
+      expect(header).toContain(guard);
+    }
   });
 
   it("lets a screen turn off trailing actions that do not apply to it", () => {

@@ -45,3 +45,31 @@ function isSameOrigin(referrer: string, origin: string): boolean {
     return false;
   }
 }
+
+/**
+ * What a visible Back control should actually do.
+ *
+ * ONE RULE, EVERY SURFACE. Back means "return to where I just was", so history
+ * wins whenever there is real in-app history to unwind. A hardcoded parent is
+ * only correct for a cold entry -- a fresh tab, a notification, a shared link
+ * -- where there is nothing behind this screen at all.
+ *
+ * The defect this replaces: Back controls were plain links to an assumed
+ * parent, so UpFor -> Linkr -> Back went Home rather than to UpFor, and
+ * Profile -> Settings -> Privacy -> Back skipped Settings entirely. The parent
+ * route is still useful, but as a FALLBACK rather than as the destination.
+ */
+export type BackDecision =
+  /** Unwind real history: the previous in-app surface. */
+  | { kind: "history" }
+  /** Nothing behind this screen; go to the surface's safest parent. */
+  | { kind: "fallback"; href: string };
+
+export function resolveBack(input: {
+  /** Whether this screen was reached from inside the app. */
+  fromInsideApp: boolean;
+  /** The surface's safest parent, used only on a cold entry. */
+  fallbackHref: string;
+}): BackDecision {
+  return input.fromInsideApp ? { kind: "history" } : { kind: "fallback", href: input.fallbackHref };
+}

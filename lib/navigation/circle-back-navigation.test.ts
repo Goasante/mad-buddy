@@ -53,9 +53,17 @@ describe("Circle chat back navigation", () => {
   });
 
   it("decides entry context once, on mount", () => {
-    // history.length grows as the person moves around inside the Circle, so
-    // reading it at click time answers a different question.
-    expect(circle).toContain("useState(() => {");
+    /* history.length grows as the person moves around inside the Circle, so
+     * reading it at click time answers a different question.
+     *
+     * The rule now lives in lib/navigation/entry-origin.ts and is shared with
+     * every other Back control, so this asserts the PROPERTY that matters --
+     * the decision is made inside a useState initialiser, i.e. once -- rather
+     * than the brace style of one inlined copy. entry-origin.test.ts covers
+     * what the rule itself decides. */
+    expect(circle).toMatch(/useState\(\(\) =>\s*(\{|enteredFromInsideApp\(\))/);
+    // And never re-read at click time.
+    expect(backHandler).not.toContain("window.history.length");
   });
 
   it("uses the renamed vocabulary", () => {

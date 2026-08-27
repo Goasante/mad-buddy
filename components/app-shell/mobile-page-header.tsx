@@ -3,8 +3,10 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { Bell, ChevronLeft, Menu, MoreHorizontal, UserPlus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { useHasScrolled } from "@/hooks/use-has-scrolled";
+import { cameFromInsideApp, resolveBack } from "@/lib/navigation/entry-origin";
 import { cn } from "@/lib/utils";
 
 /**
@@ -83,6 +85,21 @@ export function MobilePageHeader({
   const hasRequests = incomingRequestCount > 0;
   const hasUnread = unreadNotificationCount > 0;
   const scrolled = useHasScrolled();
+  const router = useRouter();
+
+  /**
+   * Entry context, read ONCE on mount.
+   *
+   * history.length grows as the person moves around this screen, so asking at
+   * click time answers a different question than "how did I get here".
+   */
+  const [fromInsideApp] = useState(() => cameFromInsideApp());
+
+  const goBack = useCallback(() => {
+    const decision = resolveBack({ fromInsideApp, fallbackHref: backHref ?? "/dashboard" });
+    if (decision.kind === "history") router.back();
+    else router.push(decision.href as Route);
+  }, [fromInsideApp, backHref, router]);
 
   return (
     <header
@@ -121,7 +138,20 @@ export function MobilePageHeader({
           <Menu className={ICON} strokeWidth={STROKE} aria-hidden="true" />
         </HeaderButton>
       ) : leadingAction === "back" && backHref ? (
-        <HeaderLink href={backHref} label="Back">
+        /* BACK MEANS BACK -- but it stays a real <Link>.
+           This was a plain link to `backHref`, so every screen returned to an
+           assumed parent no matter where the person came from: UpFor -> Linkr
+           -> Back went Home, and Profile -> Settings -> Privacy -> Back
+           skipped Settings.
+
+           The anchor is KEPT rather than swapped for a button, because it is
+           load-bearing for the reason the guard test gives: an <a href> works
+           before hydration, survives a cold load, and still supports
+           middle-click and "open in new tab". The click is intercepted only
+           when there is real in-app history to unwind; `backHref` remains the
+           href, and becomes the genuine destination on a cold entry.
+           See lib/navigation/entry-origin.ts. */
+        <HeaderLink href={backHref} label="Back" onNavigate={goBack}>
           <ChevronLeft className={ICON} strokeWidth={STROKE} aria-hidden="true" />
         </HeaderLink>
       ) : leadingAction === "back" && onBack ? (
@@ -237,12 +267,21 @@ function HeaderLink({
   href,
   label,
   title,
+  onNavigate,
   children
 }: {
   href: Route;
   label: string;
   /** Tooltip text. Defaults to `label`, which the badge makes too verbose. */
   title?: string;
+  /**
+   * Handles an ordinary click instead of following `href`.
+   *
+   * Used by Back to prefer real history over its fallback parent. Modified
+   * clicks (new tab, new window) and non-primary buttons are left alone, so
+   * the anchor keeps behaving like an anchor.
+   */
+  onNavigate?: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -250,6 +289,24 @@ function HeaderLink({
       href={href}
       aria-label={label}
       title={title ?? label}
+      onClick={
+        onNavigate
+          ? (event) => {
+              if (
+                event.defaultPrevented ||
+                event.button !== 0 ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+              ) {
+                return;
+              }
+              event.preventDefault();
+              onNavigate();
+            }
+          : undefined
+      }
       className={cn(HIT_TARGET, "relative text-foreground hover:bg-secondary dark:hover:bg-white/[0.06]")}
     >
       {children}

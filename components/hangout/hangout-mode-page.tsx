@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { Route } from "next";
+import { cameFromInsideApp, resolveBack } from "@/lib/navigation/entry-origin";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   AlertTriangle,
@@ -613,6 +615,14 @@ export function HangoutModePage({
     }
   }
 
+  /** Back to wherever UpFor was opened from; Home only on a cold entry. */
+  const [fromInsideApp] = useState(() => cameFromInsideApp());
+  const goBack = useCallback(() => {
+    const decision = resolveBack({ fromInsideApp, fallbackHref: "/dashboard" });
+    if (decision.kind === "history") router.back();
+    else router.push(decision.href as Route);
+  }, [fromInsideApp, router]);
+
   function convertToPlan() {
     if (!activeHangout) return;
     void convertToPlanById(activeHangout.id);
@@ -631,9 +641,12 @@ export function HangoutModePage({
           this screen's header carries a subtitle and its own actions.
           ------------------------------------------------------------------ */}
       <header className={cn("upfor-header", scrolled && "upfor-header-scrolled")}>
-        <Link href="/dashboard" aria-label="Back" className="upfor-back">
+        {/* History first: UpFor is reached from Home, from a notification and
+            from Linkr, and only one of those wants /dashboard. A cold entry
+            has nothing behind it and falls back to Home. */}
+        <button type="button" onClick={goBack} aria-label="Back" className="upfor-back">
           <ArrowLeft className="h-6 w-6" aria-hidden="true" />
-        </Link>
+        </button>
 
         <div className="min-w-0 flex-1">
           <h1 className="upfor-title">UpFor</h1>

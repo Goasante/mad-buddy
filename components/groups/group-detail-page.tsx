@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { cameFromInsideApp as enteredFromInsideApp } from "@/lib/navigation/entry-origin";
 import { ChevronLeft, LogOut, MoreHorizontal, UserPlus, Users2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { getMessagesAction, markConversationReadAction } from "@/app/(app)/messaging-actions";
@@ -215,12 +216,12 @@ export function GroupDetailPage({
    * in-app referrer, and that is the only case that needs a fallback
    * destination -- everything else has a real place to go back to.
    */
-  const [cameFromInsideApp] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const sameOriginReferrer =
-      Boolean(document.referrer) && document.referrer.startsWith(window.location.origin);
-    return window.history.length > 1 || sameOriginReferrer;
-  });
+  /* The shared rule (lib/navigation/entry-origin.ts), which this screen
+     originally established. Consolidating also drops the old
+     `referrer.startsWith(origin)` check, which read
+     "https://mad-buddy.com.evil.test" as our own host. Same behaviour for
+     every real entry; still decided once, on mount. */
+  const [cameFromInsideApp] = useState(() => enteredFromInsideApp());
 
   useEffect(() => {
     mountedRef.current = true;
