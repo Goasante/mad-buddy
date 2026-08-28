@@ -39,25 +39,32 @@ export function ChatCollectionsV4({
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [data, setData] = useState<ChatCollectionsView>({ folders: [], saved: [], pinned: [] });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [folderName, setFolderName] = useState("");
   const [folderFilter, setFolderFilter] = useState<string | "all" | "unfiled">("all");
   const [isPending, startTransition] = useTransition();
 
-  async function refresh() {
-    setLoading(true);
+  async function refresh(showSpinner = false) {
+    if (showSpinner) setLoading(true);
     try {
       setData(await getChatCollectionsAction(conversationId));
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }
 
   useEffect(() => {
     if (!open) return;
-    setTab(initialTab);
-    void refresh();
-  }, [conversationId, initialTab, open]);
+    let disposed = false;
+    void getChatCollectionsAction(conversationId).then((next) => {
+      if (disposed) return;
+      setData(next);
+      setLoading(false);
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [conversationId, open]);
 
   const visibleSaved = useMemo(() => {
     if (folderFilter === "all") return data.saved;
