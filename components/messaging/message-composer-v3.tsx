@@ -102,6 +102,7 @@ export function MessageComposerV3({
   const clientMessageIdRef = useRef<string | null>(null);
 
   const voice = useVoiceRecorder(conversationId, voiceRecorderConfig);
+  const getVoiceState = voice.getState;
   const voiceUpload = useVoiceUpload(conversationId);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -121,17 +122,20 @@ export function MessageComposerV3({
    */
   const pointerStartRef = useRef<{ x: number; y: number; id: number; startedAt: number } | null>(null);
   const gestureRef = useRef<VoiceGesture>("idle");
-  const voiceStateKindRef = useRef(voice.state.kind);
-  const lockedRef = useRef(locked);
+  const lockedRef = useRef(false);
   const deferredReleaseRef = useRef<DeferredRelease | null>(null);
   const permissionPromptLikelyRef = useRef(false);
   const permissionPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendOnNextTakeRef = useRef(false);
   const sendingRef = useRef(false);
 
-  gestureRef.current = gesture;
-  voiceStateKindRef.current = voice.state.kind;
-  lockedRef.current = locked;
+  useEffect(() => {
+    gestureRef.current = gesture;
+  }, [gesture]);
+
+  useEffect(() => {
+    lockedRef.current = locked;
+  }, [locked]);
 
   useEffect(() => {
     const field = textareaRef.current;
@@ -290,7 +294,9 @@ export function MessageComposerV3({
         onCancelReply?.();
         voiceUpload.reset();
         voice.cancel();
+        lockedRef.current = false;
         setLocked(false);
+        gestureRef.current = "idle";
         setGesture("idle");
         setMicHint(null);
         await onSent();
@@ -328,7 +334,9 @@ export function MessageComposerV3({
     sendOnNextTakeRef.current = false;
     voiceUpload.reset();
     voice.cancel();
+    lockedRef.current = false;
     setLocked(false);
+    gestureRef.current = "idle";
     setGesture("idle");
     setMicHint(null);
     pointerStartRef.current = null;
@@ -341,6 +349,7 @@ export function MessageComposerV3({
       permissionPromptLikelyRef.current = false;
       deferredReleaseRef.current = null;
       pointerStartRef.current = null;
+      gestureRef.current = "idle";
       setGesture("idle");
 
       if (mode === "cancel") {
@@ -348,6 +357,7 @@ export function MessageComposerV3({
         return;
       }
       if (mode === "tap" || mode === "lock") {
+        lockedRef.current = true;
         setLocked(true);
         setMicHint(mode === "tap" ? "Recording hands-free. Tap Send when you’re done." : null);
         softHaptic(10);
@@ -364,8 +374,14 @@ export function MessageComposerV3({
 
   const cancelRecordingRef = useRef(cancelRecording);
   const applyReleaseRef = useRef(applyRelease);
-  cancelRecordingRef.current = cancelRecording;
-  applyReleaseRef.current = applyRelease;
+
+  useEffect(() => {
+    cancelRecordingRef.current = cancelRecording;
+  }, [cancelRecording]);
+
+  useEffect(() => {
+    applyReleaseRef.current = applyRelease;
+  }, [applyRelease]);
 
   /**
    * Window-level pointer tracking survives both React branch changes and the
@@ -393,7 +409,7 @@ export function MessageComposerV3({
       if (!start || start.id !== event.pointerId) return;
       const currentGesture = gestureRef.current;
       const durationMs = performance.now() - start.startedAt;
-      const stateKind = voiceStateKindRef.current;
+      const stateKind = getVoiceState().kind;
 
       pointerStartRef.current = null;
       clearPermissionPromptTimer();
@@ -444,7 +460,7 @@ export function MessageComposerV3({
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onCancel);
     };
-  }, [clearPermissionPromptTimer]);
+  }, [clearPermissionPromptTimer, getVoiceState]);
 
   /**
    * Resolve a release that occurred while getUserMedia/permission was still
@@ -458,6 +474,7 @@ export function MessageComposerV3({
       permissionPromptLikelyRef.current = false;
       clearPermissionPromptTimer();
       pointerStartRef.current = null;
+      gestureRef.current = "idle";
       setGesture("idle");
       return;
     }
@@ -478,7 +495,9 @@ export function MessageComposerV3({
       pointerStartRef.current = null;
       clearPermissionPromptTimer();
       permissionPromptLikelyRef.current = false;
+      lockedRef.current = true;
       setLocked(true);
+      gestureRef.current = "idle";
       setGesture("idle");
       setMicHint("Microphone approved. Recording is hands-free — tap Send when you’re done.");
       softHaptic(10);
@@ -501,13 +520,14 @@ export function MessageComposerV3({
       id: event.pointerId,
       startedAt: performance.now()
     };
+    lockedRef.current = false;
     gestureRef.current = "holding";
     setGesture("holding");
     softHaptic(6);
 
     permissionPromptTimerRef.current = setTimeout(() => {
       if (!pointerStartRef.current) return;
-      if (voiceStateKindRef.current === "requesting_permission") {
+      if (getVoiceState().kind === "requesting_permission") {
         permissionPromptLikelyRef.current = true;
       }
     }, PERMISSION_PROMPT_LIKELY_MS);
@@ -518,13 +538,15 @@ export function MessageComposerV3({
   }
 
   function stopAndSendRecording() {
-    if (voice.state.kind !== "recording") return;
+    if (getVoiceState().kind !== "recording") return;
     pointerStartRef.current = null;
     deferredReleaseRef.current = null;
     clearPermissionPromptTimer();
     permissionPromptLikelyRef.current = false;
     sendOnNextTakeRef.current = true;
+    lockedRef.current = false;
     setLocked(false);
+    gestureRef.current = "idle";
     setGesture("idle");
     setMicHint(null);
     voice.stop();
