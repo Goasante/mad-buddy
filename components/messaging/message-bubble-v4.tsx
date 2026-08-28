@@ -13,6 +13,7 @@ import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import type { AttachmentView } from "@/lib/messaging/attachments";
 import type { ChatMessageView } from "@/lib/messaging/mobile";
+import type { ReactionAggregate } from "@/lib/messaging/reaction-summary-types";
 import type { ChatPollView } from "@/lib/messaging/ultimate-types";
 import { DELETED_MESSAGE_PLACEHOLDER } from "@/lib/messaging/rules";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,10 @@ const REACTIONS = [
   ["fire", "🔥"],
   ["wow", "😮"]
 ] as const;
+
+function reactionEmoji(id: string) {
+  return REACTIONS.find(([reaction]) => reaction === id)?.[1] ?? "•";
+}
 
 function haptic(pattern: number | number[]) {
   try {
@@ -57,8 +62,10 @@ export function MessageBubbleV4({
   pinned,
   highlighted,
   voiceInitialSeconds = 0,
+  reactionAggregates = [],
   onReply,
   onReact,
+  onShowReactors,
   onCopy,
   onEdit,
   onDelete,
@@ -79,8 +86,10 @@ export function MessageBubbleV4({
   pinned: boolean;
   highlighted?: boolean;
   voiceInitialSeconds?: number;
+  reactionAggregates?: ReactionAggregate[];
   onReply: () => void;
   onReact: (reaction: string) => void;
+  onShowReactors?: (aggregate: ReactionAggregate) => void;
   onCopy: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -228,7 +237,21 @@ export function MessageBubbleV4({
         </div>
       </div>
 
-      {myReaction ? <button type="button" onClick={() => onReact(message.myReaction as string)} className="focus-ring -mt-2 mx-2 grid h-7 min-w-7 place-items-center rounded-full border border-black/[0.06] bg-white px-1.5 text-sm shadow-sm transition-transform hover:scale-110 active:scale-95 dark:border-white/[0.08] dark:bg-[#241f1c]">{myReaction}</button> : null}
+      {reactionAggregates.length > 0 ? (
+        <div className={cn("-mt-2 mx-2 flex max-w-[90%] flex-wrap gap-1", message.isMine && "justify-end")}>
+          {reactionAggregates.map((aggregate) => (
+            <button
+              key={aggregate.reaction}
+              type="button"
+              onClick={() => onShowReactors?.(aggregate)}
+              className="focus-ring inline-flex min-h-7 items-center gap-1 rounded-full border border-black/[0.06] bg-white px-2 text-[11px] font-bold shadow-sm transition-transform hover:scale-105 active:scale-95 dark:border-white/[0.08] dark:bg-[#241f1c]"
+              aria-label={`${aggregate.count} ${aggregate.reaction} reactions`}
+            >
+              <span aria-hidden="true">{reactionEmoji(aggregate.reaction)}</span><span>{aggregate.count}</span>
+            </button>
+          ))}
+        </div>
+      ) : myReaction ? <button type="button" onClick={() => onReact(message.myReaction as string)} className="focus-ring -mt-2 mx-2 grid h-7 min-w-7 place-items-center rounded-full border border-black/[0.06] bg-white px-1.5 text-sm shadow-sm transition-transform hover:scale-110 active:scale-95 dark:border-white/[0.08] dark:bg-[#241f1c]">{myReaction}</button> : null}
     </div>
   );
 
