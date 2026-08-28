@@ -11,6 +11,7 @@ import {
   useConversationReactionSummaries
 } from "@/components/messaging/reaction-summary-cache-v4";
 import { RichMediaMessageV4 } from "@/components/messaging/rich-media-message-v4";
+import { StructuredMessageCardV4 } from "@/components/messaging/structured-message-card-v4";
 import { VoiceMessageBubbleV4 } from "@/components/messaging/voice-message-bubble-v4";
 import { SafeMessageText } from "@/components/messages/safe-message-text";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -127,9 +128,6 @@ export function MessageBubbleV4({
   useEffect(() => () => clearTimer(), []);
 
   useEffect(() => {
-    // The page reloads the canonical message after our own reaction action
-    // finishes. myReaction changing is therefore a reliable point to refresh
-    // the shared aggregate projection without guessing at network timing.
     invalidateConversationReactionSummaries(conversationId);
   }, [conversationId, message.myReaction]);
 
@@ -188,8 +186,6 @@ export function MessageBubbleV4({
   function react(reaction: string) {
     onReact(reaction);
     haptic(5);
-    // Periodic shared refresh is the safety net for another member reacting;
-    // this eager invalidation keeps the local interaction feeling immediate.
     window.setTimeout(() => invalidateConversationReactionSummaries(conversationId), 250);
   }
 
@@ -255,6 +251,9 @@ export function MessageBubbleV4({
             ) : null}
             {!message.deleted && (message.messageType === "video" || message.messageType === "file") ? (
               <RichMediaMessageV4 conversationId={conversationId} messageId={message.id} kind={message.messageType} mine={message.isMine} />
+            ) : null}
+            {!message.deleted && (message.messageType === "contact" || message.messageType === "place" || message.messageType === "event") ? (
+              <StructuredMessageCardV4 conversationId={conversationId} messageId={message.id} messageType={message.messageType} mine={message.isMine} />
             ) : null}
             {!message.deleted && message.messageType === "poll" && poll ? (
               <ChatPollCard poll={poll} mine={message.isMine} onChanged={onPollChanged} />
