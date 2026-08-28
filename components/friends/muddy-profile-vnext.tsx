@@ -1,7 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { Award, BadgeCheck, Ban, CalendarPlus, ChevronLeft, Flag, Hand, MapPin, MessageCircle, School, ShieldCheck, Sparkles, UserPlus, UsersRound } from "lucide-react";
+import {
+  Award,
+  BadgeCheck,
+  Ban,
+  CalendarPlus,
+  ChevronLeft,
+  Flag,
+  Hand,
+  MapPin,
+  MessageCircle,
+  School,
+  ShieldCheck,
+  Sparkles,
+  UserPlus,
+  UsersRound
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -60,11 +75,8 @@ export function MuddyProfileVNext({
     if (isPending) return;
     startTransition(async () => {
       const result = await openDirectConversationAction(muddy.friendId);
-      if (result.ok && result.conversationId) {
-        router.push(conversationHref(result.conversationId));
-      } else {
-        setFeedback(result.message);
-      }
+      if (result.ok && result.conversationId) router.push(conversationHref(result.conversationId));
+      else setFeedback(result.message);
     });
   }
 
@@ -126,13 +138,10 @@ export function MuddyProfileVNext({
     });
   }
 
-  const avatarSrc = muddy.avatarUrl;
-  const relationshipCopy = isMuddy
-    ? trust?.mutualCount
-      ? `${trust.mutualCount} mutual ${trust.mutualCount === 1 ? "Muddy" : "Muddies"}`
-      : "You are Muddies"
-    : trust?.mutualCount
-      ? `${trust.mutualCount} mutual ${trust.mutualCount === 1 ? "Muddy" : "Muddies"}`
+  const relationshipCopy = trust?.mutualCount
+    ? `${trust.mutualCount} mutual ${trust.mutualCount === 1 ? "Muddy" : "Muddies"}`
+    : isMuddy
+      ? "You are Muddies"
       : "Not yet a Muddy";
   const activity = identitySummary?.activity;
   const achievements = identitySummary?.achievements;
@@ -156,7 +165,7 @@ export function MuddyProfileVNext({
         <div className="relative flex flex-col items-center text-center">
           <div className="rounded-full bg-gradient-to-br from-[#E88C2B] to-[#4E0401] p-[3px] shadow-[0_16px_42px_rgba(78,4,1,0.18)]">
             <UserAvatar
-              src={avatarSrc}
+              src={muddy.avatarUrl}
               name={muddy.displayName}
               size="profile"
               membershipTier={publicMembershipTier(muddy.plan)}
@@ -193,7 +202,9 @@ export function MuddyProfileVNext({
                 <Button type="button" variant="outline" disabled={isPending || waveSent} onClick={wave} aria-label={waveSent ? "Wave sent" : "Wave"}>
                   <Hand className="h-4 w-4" aria-hidden="true" /> {waveSent ? "Sent" : "Wave"}
                 </Button>
-                <Button variant="outline" asChild><Link href="/plans?create=1"><CalendarPlus className="h-4 w-4" aria-hidden="true" /> Plan</Link></Button>
+                <Button variant="outline" asChild>
+                  <Link href="/plans?create=1"><CalendarPlus className="h-4 w-4" aria-hidden="true" /> Plan</Link>
+                </Button>
               </>
             ) : (
               <Button type="button" variant="primary" className="min-w-48" disabled={isPending || requestSent} onClick={becomeMuddies}>
@@ -222,7 +233,7 @@ export function MuddyProfileVNext({
               <p className="mt-0.5 text-xs text-muted-foreground">Photos this person chose to share with you.</p>
             </div>
             <Card className="border-border/60 bg-card/75 p-4 shadow-sm sm:p-5">
-              <ProfilePhotoCarousel photos={photos} ownerName={muddy.displayName} avatarUrl={avatarSrc} presentation="showcase" />
+              <ProfilePhotoCarousel photos={photos} isOwner={false} ownerName={muddy.displayName} avatarUrl={muddy.avatarUrl} presentation="showcase" />
             </Card>
           </section>
         ) : null}
@@ -246,14 +257,19 @@ export function MuddyProfileVNext({
           </Card>
           {fields?.interests?.length ? (
             <div className="mt-3 flex flex-wrap gap-2">
-              {fields.interests.slice(0, 10).map((interest) => <span key={interest} className="rounded-full border border-[#E88C2B]/20 bg-[#E88C2B]/[0.07] px-3 py-1.5 text-xs font-medium">{interest}</span>)}
+              {fields.interests.slice(0, 10).map((interest) => (
+                <span key={interest} className="rounded-full border border-[#E88C2B]/20 bg-[#E88C2B]/[0.07] px-3 py-1.5 text-xs font-medium">{interest}</span>
+              ))}
             </div>
           ) : null}
         </section>
 
         {(buddyScore || achievements) ? (
           <section aria-labelledby="person-progress-heading">
-            <div className="mb-2 px-1"><h2 id="person-progress-heading" className="text-base font-semibold">Identity & progress</h2><p className="mt-0.5 text-xs text-muted-foreground">Earned signals, not vanity claims.</p></div>
+            <div className="mb-2 px-1">
+              <h2 id="person-progress-heading" className="text-base font-semibold">Identity & progress</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">Earned signals, not vanity claims.</p>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {buddyScore ? (
                 <Card className="border-border/60 bg-card/75 p-4 shadow-sm">
@@ -268,7 +284,11 @@ export function MuddyProfileVNext({
                   <span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#4E0401]/8 text-[#4E0401] dark:text-[#F1A28E]"><Award className="h-5 w-5" aria-hidden="true" /></span>
                   <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Achievements</p>
                   <p className="mt-1 text-xl font-semibold">{achievements.unlockedCount} unlocked</p>
-                  <div className="mt-3 flex flex-wrap gap-1.5">{achievements.featured.slice(0, 3).map((achievement) => <span key={achievement.code} className="rounded-full bg-secondary/60 px-2.5 py-1 text-[11px] font-medium">{achievement.name}</span>)}</div>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {achievements.featured.slice(0, 3).map((achievement) => (
+                      <span key={achievement.code} className="rounded-full bg-secondary/60 px-2.5 py-1 text-[11px] font-medium">{achievement.name}</span>
+                    ))}
+                  </div>
                 </Card>
               ) : null}
             </div>
@@ -277,12 +297,24 @@ export function MuddyProfileVNext({
 
         {canCustomizeGlow ? (
           <section aria-labelledby="person-glow-heading">
-            <div className="mb-2 px-1"><h2 id="person-glow-heading" className="text-base font-semibold">Their Glow, your colour</h2><p className="mt-0.5 text-xs text-muted-foreground">A private visual preference that only changes how this Muddy looks to you.</p></div>
+            <div className="mb-2 px-1">
+              <h2 id="person-glow-heading" className="text-base font-semibold">Their Glow, your colour</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">A private visual preference that only changes how this Muddy looks to you.</p>
+            </div>
             <Card className="border-border/60 bg-card/75 p-4 shadow-sm">
               <div className="flex flex-wrap gap-3">
                 <button type="button" onClick={() => setGlow(null)} disabled={isGlowPending} className={`focus-ring grid h-11 min-w-16 place-items-center rounded-full border px-3 text-xs font-semibold ${glowColorId === null ? "border-[#E88C2B] bg-[#E88C2B]/10" : "border-border"}`}>Default</button>
                 {GLOW_COLORS.map((color) => (
-                  <button key={color.id} type="button" onClick={() => setGlow(color.id)} disabled={isGlowPending} aria-label={`Use ${color.label} glow`} title={color.label} className={`focus-ring h-11 w-11 rounded-full border-2 ${glowColorId === color.id ? "border-foreground" : "border-transparent"}`} style={{ backgroundColor: color.css }} />
+                  <button
+                    key={color.id}
+                    type="button"
+                    onClick={() => setGlow(color.id)}
+                    disabled={isGlowPending}
+                    aria-label={`Use ${color.label} glow`}
+                    title={color.label}
+                    className={`focus-ring h-11 w-11 rounded-full border-2 ${glowColorId === color.id ? "border-foreground" : "border-transparent"}`}
+                    style={{ backgroundColor: color.swatch }}
+                  />
                 ))}
               </div>
             </Card>
@@ -292,7 +324,10 @@ export function MuddyProfileVNext({
         <section className="rounded-[1.6rem] border border-border/60 bg-card/65 p-5">
           <div className="flex items-start gap-3">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"><ShieldCheck className="h-5 w-5" aria-hidden="true" /></span>
-            <div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">Privacy-respecting profile</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">This page only receives profile fields and Showcase photos the server has already authorised for your relationship. Hidden details are not sent to the browser.</p></div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold">Privacy-respecting profile</h2>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">This page only receives profile fields and Showcase photos the server has already authorised for your relationship. Hidden details are not sent to the browser.</p>
+            </div>
           </div>
         </section>
 
@@ -302,11 +337,14 @@ export function MuddyProfileVNext({
         </div>
       </div>
 
-      <Modal open={reportOpen} onClose={() => setReportOpen(false)} title={`Report ${muddy.displayName}`}>
+      <Modal open={reportOpen} onOpenChange={setReportOpen} title={`Report ${muddy.displayName}`}>
         <div className="grid gap-4">
           <p className="text-sm text-muted-foreground">Tell the safety team what happened. Do not include private information you do not need to share.</p>
           <Textarea value={reportDescription} onChange={(event) => setReportDescription(event.target.value)} maxLength={500} rows={5} placeholder="Optional details" />
-          <div className="flex justify-end gap-2"><Button variant="outline" type="button" onClick={() => setReportOpen(false)}>Cancel</Button><Button variant="primary" type="button" disabled={isPending} onClick={reportPerson}>Submit report</Button></div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" type="button" onClick={() => setReportOpen(false)}>Cancel</Button>
+            <Button variant="primary" type="button" disabled={isPending} onClick={reportPerson}>Submit report</Button>
+          </div>
         </div>
       </Modal>
     </main>
@@ -314,9 +352,22 @@ export function MuddyProfileVNext({
 }
 
 function Stat({ value, label, bordered = false }: { value: number; label: string; bordered?: boolean }) {
-  return <div className={`px-2 py-4 text-center ${bordered ? "border-l border-border/60" : ""}`}><p className="text-lg font-semibold">{value.toLocaleString()}</p><p className="mt-0.5 text-[11px] font-medium text-muted-foreground">{label}</p></div>;
+  return (
+    <div className={`px-2 py-4 text-center ${bordered ? "border-l border-border/60" : ""}`}>
+      <p className="text-lg font-semibold">{value.toLocaleString()}</p>
+      <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">{label}</p>
+    </div>
+  );
 }
 
 function InfoRow({ icon: Icon, label, value }: { icon: typeof MapPin; label: string; value: string }) {
-  return <div className="flex min-h-[4.25rem] items-start gap-3 border-b border-border/55 px-4 py-3.5 last:border-0"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#E88C2B]/10 text-[#A65A17]"><Icon className="h-5 w-5" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block text-xs font-medium text-muted-foreground">{label}</span><span className="mt-1 block text-sm font-semibold leading-5">{value}</span></span></div>;
+  return (
+    <div className="flex min-h-[4.25rem] items-start gap-3 border-b border-border/55 px-4 py-3.5 last:border-0">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#E88C2B]/10 text-[#A65A17]"><Icon className="h-5 w-5" aria-hidden="true" /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-medium text-muted-foreground">{label}</span>
+        <span className="mt-1 block text-sm font-semibold leading-5">{value}</span>
+      </span>
+    </div>
+  );
 }
