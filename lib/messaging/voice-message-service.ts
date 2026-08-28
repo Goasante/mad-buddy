@@ -103,7 +103,7 @@ export async function resolveSendableMessageMedia(
     const waveform = validateVoiceWaveform(asset.waveform_data);
     if (!waveform.valid) return null;
     const entitlements = await resolveUserEntitlements(admin, userId);
-    if (!entitlements.voice_notes || durationMs > entitlements.max_voice_note_seconds * 1_000) return null;
+    if (!entitlements.voice_notes || asset.duration_ms > entitlements.max_voice_note_seconds * 1_000) return null;
     resolved = {
       kind: "voice_note",
       durationMs,
@@ -117,7 +117,7 @@ export async function resolveSendableMessageMedia(
   const { data: claimed, error: claimError } = await admin.from("media_assets")
     .update({ updated_at: claimedAt })
     .eq("id", mediaId)
-    .eq("updated_at", String(asset.updated_at))
+    .eq("updated_at", asset.updated_at)
     .eq("processing_status", "ready")
     .eq("moderation_status", "active")
     .is("deleted_at", null)
