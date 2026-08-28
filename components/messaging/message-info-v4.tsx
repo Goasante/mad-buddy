@@ -29,24 +29,20 @@ export function MessageInfoV4({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [info, setInfo] = useState<MessageInfoView | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [info, setInfo] = useState<MessageInfoView | null | undefined>(undefined);
 
   useEffect(() => {
     if (!open) return;
     let disposed = false;
-    setLoading(true);
-    void getMessageInfoAction(messageId)
-      .then((next) => {
-        if (!disposed) setInfo(next);
-      })
-      .finally(() => {
-        if (!disposed) setLoading(false);
-      });
+    void getMessageInfoAction(messageId).then((next) => {
+      if (!disposed) setInfo(next);
+    });
     return () => {
       disposed = true;
     };
   }, [messageId, open]);
+
+  const loading = info === undefined;
 
   return (
     <Modal open={open} onOpenChange={onOpenChange} title="Message info" variant="sheet">
