@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -88,6 +87,8 @@ const REACTIONS = [
 ] as const;
 
 const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MESSAGE_LONG_PRESS_MS = 430;
+const MESSAGE_LONG_PRESS_CANCEL_PX = 12;
 
 function isConversationId(value: string | null): value is string {
   return Boolean(value) && CONVERSATION_ID.test(value as string);
@@ -115,6 +116,14 @@ function previewText(message: ChatMessageView) {
   if (message.voice) return "Voice message";
   if (message.attachment) return "Photo";
   return message.text?.trim() || "Message";
+}
+
+function messageHaptic() {
+  try {
+    navigator.vibrate?.(8);
+  } catch {
+    // Gesture feedback is optional and unavailable on some PWA engines.
+  }
 }
 
 export function MessagesPageV3({
@@ -156,6 +165,8 @@ export function MessagesPageV3({
   const pendingConversationIds = useRef<Set<string>>(new Set());
   const threadRef = useRef<HTMLDivElement | null>(null);
   const swipeStartRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const longPressTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const longPressTriggeredRef = useRef<Set<string>>(new Set());
 
   useImmersiveWhile(Boolean(selectedId));
 
@@ -270,6 +281,14 @@ export function MessagesPageV3({
       if (node) node.scrollTop = node.scrollHeight;
     });
   }, [loadingMessages, messages.length, selectedId]);
+
+  useEffect(() => {
+    const timers = longPressTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
 
   const uniqueConversations = useMemo(() => {
     const seen = new Set<string>();
@@ -437,17 +456,55 @@ export function MessagesPageV3({
     });
   }
 
+  function clearLongPress(messageId: string) {
+    const timer = longPressTimersRef.current.get(messageId);
+    if (timer) clearTimeout(timer);
+    longPressTimersRef.current.delete(messageId);
+  }
+
   function handleBubblePointerDown(messageId: string, event: React.PointerEvent<HTMLDivElement>) {
+    clearLongPress(messageId);
+    longPressTriggeredRef.current.delete(messageId);
     swipeStartRef.current.set(messageId, { x: event.clientX, y: event.clientY });
+    const timer = setTimeout(() => {
+      longPressTimersRef.current.delete(messageId);
+      longPressTriggeredRef.current.add(messageId);
+      setReactingId(messageId);
+      messageHaptic();
+    }, MESSAGE_LONG_PRESS_MS);
+    longPressTimersRef.current.set(messageId, timer);
+  }
+
+  function handleBubblePointerMove(messageId: string, event: React.PointerEvent<HTMLDivElement>) {
+    const start = swipeStartRef.current.get(messageId);
+    if (!start) return;
+    if (
+      Math.abs(event.clientX - start.x) > MESSAGE_LONG_PRESS_CANCEL_PX ||
+      Math.abs(event.clientY - start.y) > MESSAGE_LONG_PRESS_CANCEL_PX
+    ) {
+      clearLongPress(messageId);
+    }
   }
 
   function handleBubblePointerUp(messageId: string, event: React.PointerEvent<HTMLDivElement>) {
+    clearLongPress(messageId);
     const start = swipeStartRef.current.get(messageId);
     swipeStartRef.current.delete(messageId);
+    if (longPressTriggeredRef.current.delete(messageId)) return;
     if (!start) return;
     const dx = event.clientX - start.x;
     const dy = event.clientY - start.y;
-    if (dx > 62 && Math.abs(dy) < 54) setReplyingToId(messageId);
+    if (dx > 62 && Math.abs(dy) < 54) {
+      setReplyingToId(messageId);
+      setReactingId(null);
+      messageHaptic();
+    }
+  }
+
+  function handleBubblePointerCancel(messageId: string) {
+    clearLongPress(messageId);
+    swipeStartRef.current.delete(messageId);
+    longPressTriggeredRef.current.delete(messageId);
   }
 
   const updateMessageAttachment = useCallback((messageId: string, attachment: AttachmentView) => {
@@ -582,6 +639,12 @@ export function MessagesPageV3({
                 ) : null}
               </header>
 
+              {messages.length > 0 && !loadingMessages ? (
+                <div className="shrink-0 border-b border-black/[0.035] bg-[#FFFDFC]/90 px-3 py-1.5 text-center text-[10px] font-medium text-muted-foreground dark:border-white/[0.05] dark:bg-background/90 lg:hidden">
+                  Swipe a message right to reply · press & hold for reactions and actions
+                </div>
+              ) : null}
+
               {selected.contextBadge ? (
                 <div className="shrink-0 px-3 pt-2 md:px-4">
                   <button type="button" onClick={() => selected.kind === "group" ? router.push(`/groups/${selected.id}` as Route) : router.push("/plans" as Route)} className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-[#E88C2B]/16 bg-[#E88C2B]/8 px-3.5 py-2.5 text-left hover:bg-[#E88C2B]/12">
@@ -612,11 +675,13 @@ export function MessagesPageV3({
                             <div className={cn("max-w-[84%] sm:max-w-[76%]", message.isMine && "flex flex-col items-end")}>
                               {!message.isMine && isGroup && startsRun ? <div className="mb-1 flex items-center gap-2 px-1"><UserAvatar src={message.senderAvatarUrl} name={message.senderName} size="xs" decorative /><span className="text-[11px] font-semibold text-muted-foreground">{message.senderName}</span></div> : null}
                               <div
-                                className="touch-pan-y"
+                                className="touch-pan-y select-none"
                                 onPointerDown={(event) => handleBubblePointerDown(message.id, event)}
+                                onPointerMove={(event) => handleBubblePointerMove(message.id, event)}
                                 onPointerUp={(event) => handleBubblePointerUp(message.id, event)}
+                                onPointerCancel={() => handleBubblePointerCancel(message.id)}
                                 onDoubleClick={() => setReactingId(message.id)}
-                                onContextMenu={(event) => { event.preventDefault(); setReactingId(message.id); }}
+                                onContextMenu={(event) => { event.preventDefault(); clearLongPress(message.id); setReactingId(message.id); }}
                               >
                                 <div className={cn("relative overflow-hidden rounded-[21px] px-3.5 py-2.5 text-[0.94rem] leading-[1.42] shadow-[0_1px_2px_rgba(78,4,1,0.07)] transition", message.isMine ? "rounded-br-[7px] bg-[#4E0401] text-[#FEFBF3]" : "rounded-bl-[7px] border border-black/[0.035] bg-white text-foreground dark:border-white/[0.055] dark:bg-white/[0.07]", matchingIds.has(message.id) && "ring-2 ring-[#E88C2B]/70") }>
                                   {reply ? <div className={cn("mb-2 rounded-xl border-l-2 border-[#E88C2B] px-2.5 py-1.5 text-xs", message.isMine ? "bg-white/10" : "bg-[#E88C2B]/8")}><strong className={message.isMine ? "text-orange-200" : "text-[#E88C2B]"}>{reply.senderName}</strong><div className="mt-0.5 line-clamp-2 opacity-75">{reply.text}</div></div> : null}
@@ -729,7 +794,7 @@ function ChatSettingsModal({ open, onOpenChange, conversation, onToggleFavorite,
         <button type="button" onClick={onToggleFavorite} className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-border/60 p-3 text-left hover:bg-secondary/50"><Star className={cn("h-5 w-5 text-[#E88C2B]", conversation.pinned && "fill-[#E88C2B]")} /><span className="min-w-0 flex-1"><strong className="block">{conversation.pinned ? "Remove favorite" : "Favorite chat"}</strong><span className="text-xs text-muted-foreground">Keep important chats easy to reach</span></span></button>
         <button type="button" onClick={onSearch} className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-border/60 p-3 text-left hover:bg-secondary/50"><Search className="h-5 w-5 text-[#E88C2B]" /><span className="min-w-0 flex-1"><strong className="block">Search in chat</strong><span className="text-xs text-muted-foreground">Find messages in this conversation</span></span><ChevronRight className="h-4 w-4 text-muted-foreground" /></button>
         {conversation.kind === "group" ? <button type="button" onClick={onGroupDetails} className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-border/60 p-3 text-left hover:bg-secondary/50"><UsersRound className="h-5 w-5 text-[#E88C2B]" /><span className="min-w-0 flex-1"><strong className="block">Group details</strong><span className="text-xs text-muted-foreground">Members, roles and group information</span></span><ChevronRight className="h-4 w-4 text-muted-foreground" /></button> : null}
-        <div className="rounded-2xl border border-[#E88C2B]/15 bg-[#E88C2B]/7 p-3 text-xs leading-relaxed text-muted-foreground">More prototype settings such as chat themes, disappearing-message lifetimes, saved-message folders and generic chat polls require durable server contracts before they are switched on here. They are intentionally not fake toggles in production.</div>
+        <div className="rounded-2xl border border-[#E88C2B]/15 bg-[#E88C2B]/7 p-3 text-xs leading-relaxed text-muted-foreground">Coming next in Chats: richer pinned content, group polls, video and documents, saved messages and conversation lifetime controls. They stay visible in the product direction, but none will be presented as working until its server contract is durable.</div>
       </div>
     </Modal>
   );
