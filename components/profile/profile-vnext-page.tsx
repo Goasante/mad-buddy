@@ -104,7 +104,6 @@ export function ProfileVNextPage({
 
   return (
     <main className="mx-auto w-full max-w-3xl pb-24 pt-2 sm:pb-12">
-      {/* Hero: social identity first, settings second. */}
       <section className="relative overflow-hidden rounded-[2rem] border border-[#E88C2B]/20 bg-[#FEFBF3] px-5 pb-6 pt-7 shadow-[0_22px_60px_rgba(78,4,1,0.08)] dark:bg-card sm:px-8 sm:pt-9">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[radial-gradient(circle_at_18%_22%,rgba(232,140,43,0.18),transparent_38%),radial-gradient(circle_at_82%_12%,rgba(78,4,1,0.10),transparent_35%)]" />
         <div className="pointer-events-none absolute -right-10 top-24 h-32 w-32 rounded-full border border-dashed border-[#E88C2B]/25" />
@@ -116,9 +115,9 @@ export function ProfileVNextPage({
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">This is how you show up.</h1>
           </div>
           <Link
-            href="/settings/privacy"
+            href="/profile-lab/privacy"
             className="focus-ring safe-motion grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border/70 bg-background/80 shadow-sm hover:bg-secondary"
-            aria-label="Open privacy settings"
+            aria-label="Open Profile Privacy"
           >
             <ShieldCheck className="h-5 w-5" aria-hidden="true" />
           </Link>
@@ -163,7 +162,7 @@ export function ProfileVNextPage({
 
           <div className="mt-5 flex flex-wrap justify-center gap-2">
             <Link
-              href="/profile?section=identity"
+              href="/profile-lab/edit"
               className="focus-ring safe-motion inline-flex min-h-11 items-center gap-2 rounded-full bg-[#4E0401] px-5 text-sm font-semibold text-white shadow-sm hover:opacity-92"
             >
               <Pencil className="h-4 w-4" aria-hidden="true" /> Edit profile
@@ -187,14 +186,13 @@ export function ProfileVNextPage({
       </section>
 
       <div className="mt-5 grid gap-5">
-        {/* Existing canonical extra photos become the expressive showcase. */}
         <section aria-labelledby="profile-showcase-vnext-heading">
           <div className="mb-2 flex items-end justify-between gap-3 px-1">
             <div>
               <h2 id="profile-showcase-vnext-heading" className="text-base font-semibold">Showcase</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">The photos people see beyond your main profile photo.</p>
             </div>
-            <span className="shrink-0 text-xs font-medium text-muted-foreground">{photos.length}/3</span>
+            <Link href="/profile-lab/media" className="focus-ring shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-[#A65A17]">Manage {photos.length}/3</Link>
           </div>
           <Card className="overflow-hidden border-border/60 bg-card/75 p-4 shadow-sm sm:p-5">
             <ProfilePhotoCarousel
@@ -216,9 +214,9 @@ export function ProfileVNextPage({
             </div>
           </div>
           <Card className="overflow-hidden border-border/60 bg-card/75 p-0 shadow-sm">
-            <InfoRow icon={MessageCircleMore} label="About" value={bio.trim() || "Add a bio"} href="/profile?section=identity" />
-            {generalArea ? <InfoRow icon={Eye} label="Area" value={generalArea} href="/profile?section=identity" /> : null}
-            {birth ? <InfoRow icon={CakeSlice} label="Age & zodiac" value={`${birth.age} · ${birth.zodiacSign}`} href="/profile?section=identity" /> : null}
+            <InfoRow icon={MessageCircleMore} label="About" value={bio.trim() || "Add a bio"} />
+            {generalArea ? <InfoRow icon={Eye} label="Area" value={generalArea} /> : null}
+            {birth ? <InfoRow icon={CakeSlice} label="Age & zodiac" value={`${birth.age} · ${birth.zodiacSign}`} /> : null}
           </Card>
 
           <div className="mt-3 flex flex-wrap gap-2">
@@ -227,7 +225,7 @@ export function ProfileVNextPage({
                 {interest}
               </span>
             )) : (
-              <Link href="/profile?section=identity" className="text-sm font-medium text-[#A65A17] underline-offset-4 hover:underline">Add interests</Link>
+              <Link href="/profile-lab/edit" className="text-sm font-medium text-[#A65A17] underline-offset-4 hover:underline">Add interests</Link>
             )}
           </div>
         </section>
@@ -275,14 +273,13 @@ export function ProfileVNextPage({
           </section>
         ) : null}
 
-        {/* Profile-level privacy summary. Every control still lives in its canonical Settings surface. */}
         <section aria-labelledby="profile-privacy-vnext-heading">
           <div className="mb-2 flex items-end justify-between gap-3 px-1">
             <div>
               <h2 id="profile-privacy-vnext-heading" className="text-base font-semibold">Privacy at a glance</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">A readable summary, not a second settings system.</p>
             </div>
-            <Link href="/settings/privacy" className="focus-ring rounded-lg px-2 py-1 text-xs font-semibold text-[#A65A17]">Manage</Link>
+            <Link href="/profile-lab/privacy" className="focus-ring rounded-lg px-2 py-1 text-xs font-semibold text-[#A65A17]">Manage</Link>
           </div>
           <Card className="overflow-hidden border-border/60 bg-card/75 p-0 shadow-sm">
             <PrivacyRow
@@ -297,14 +294,14 @@ export function ProfileVNextPage({
               title="Showcase photos"
               value="Set per photo"
               detail="Each extra photo can be Everyone, Muddies, or Only me."
-              href="/profile?section=identity"
+              href="/profile-lab/media"
             />
             <PrivacyRow
               icon={CakeSlice}
               title="Birthday / age / zodiac"
               value={`${audienceLabel(birthdayVisibility)} · ${audienceLabel(ageVisibility)} · ${audienceLabel(zodiacVisibility)}`}
               detail="Your full date of birth is not displayed here."
-              href="/profile?section=identity"
+              href="/profile-lab/edit"
             />
             <PrivacyRow
               icon={MessageCircleMore}
@@ -318,7 +315,7 @@ export function ProfileVNextPage({
 
         {completion && completion.percent < 100 ? (
           <Link
-            href="/profile?section=identity"
+            href="/profile-lab/edit"
             className="focus-ring safe-motion flex items-center gap-4 rounded-[1.4rem] border border-[#E88C2B]/25 bg-[#E88C2B]/[0.07] p-4 hover:bg-[#E88C2B]/[0.11]"
           >
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full border-[3px] border-[#E88C2B]/30 bg-background text-sm font-bold text-[#A65A17]">{completion.percent}%</span>
@@ -332,7 +329,7 @@ export function ProfileVNextPage({
 
         <section aria-label="Profile shortcuts" className="grid grid-cols-2 gap-3">
           <Shortcut href="/linkr" icon={UsersRound} title="Linkr profile" detail="See how discovery uses your identity." />
-          <Shortcut href="/settings/privacy" icon={LockKeyhole} title="Privacy" detail="Control who can see what." />
+          <Shortcut href="/profile-lab/privacy" icon={LockKeyhole} title="Privacy" detail="Control who can see what." />
           <Shortcut href="/buddy-score" icon={Award} title="Progress" detail="Achievements and Buddy Score." />
           <Shortcut href="/settings" icon={ShieldCheck} title="Settings" detail="Account, preferences and safety." />
         </section>
@@ -350,19 +347,9 @@ function HeroStat({ value, label, bordered = false }: { value: number; label: st
   );
 }
 
-function InfoRow({
-  icon: Icon,
-  label,
-  value,
-  href
-}: {
-  icon: typeof Eye;
-  label: string;
-  value: string;
-  href: "/profile?section=identity";
-}) {
+function InfoRow({ icon: Icon, label, value }: { icon: typeof Eye; label: string; value: string }) {
   return (
-    <Link href={href} className="focus-ring safe-motion flex min-h-14 items-center gap-3 border-b border-border/55 px-4 py-3 last:border-0 hover:bg-secondary/30">
+    <Link href="/profile-lab/edit" className="focus-ring safe-motion flex min-h-14 items-center gap-3 border-b border-border/55 px-4 py-3 last:border-0 hover:bg-secondary/30">
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#E88C2B]/10 text-[#A65A17]"><Icon className="h-4.5 w-4.5" aria-hidden="true" /></span>
       <span className="w-24 shrink-0 text-xs text-muted-foreground">{label}</span>
       <span className="min-w-0 flex-1 truncate text-sm font-medium">{value}</span>
@@ -382,7 +369,7 @@ function PrivacyRow({
   title: string;
   value: string;
   detail: string;
-  href: "/settings/glow-visibility" | "/profile?section=identity" | "/settings/communication";
+  href: "/settings/glow-visibility" | "/profile-lab/media" | "/profile-lab/edit" | "/settings/communication";
 }) {
   return (
     <Link href={href} className="focus-ring safe-motion flex items-start gap-3 border-b border-border/55 px-4 py-4 last:border-0 hover:bg-secondary/30">
@@ -405,7 +392,7 @@ function Shortcut({
   title,
   detail
 }: {
-  href: "/linkr" | "/settings/privacy" | "/buddy-score" | "/settings";
+  href: "/linkr" | "/profile-lab/privacy" | "/buddy-score" | "/settings";
   icon: typeof Eye;
   title: string;
   detail: string;
