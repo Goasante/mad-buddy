@@ -133,8 +133,8 @@ export function ProfilePrivacyVNext({
             <div className="min-w-0 flex-1">
               <h2 className="text-base font-semibold">Your safety. Your control.</h2>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">Profile privacy, messaging privacy and proximity privacy are separate on purpose. One setting should never silently weaken another.</p>
-              <Link href="/privacy/setup" className="focus-ring mt-4 inline-flex min-h-10 items-center gap-2 rounded-full border border-[#E88C2B]/25 bg-background/70 px-4 text-sm font-semibold text-[#8F4C13] hover:bg-background">
-                Review privacy setup <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              <Link href="/settings/privacy" className="focus-ring mt-4 inline-flex min-h-10 items-center gap-2 rounded-full border border-[#E88C2B]/25 bg-background/70 px-4 text-sm font-semibold text-[#8F4C13] hover:bg-background">
+                Open privacy settings <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </div>
           </div>
