@@ -1,4 +1,4 @@
-import { MessagesPageV2 } from "@/components/messages/messages-page-v2";
+import { MessagesPageV3 } from "@/components/messages/messages-page-v3";
 import { getConversationsAction, getVoiceRecorderConfigAction } from "@/app/(app)/messaging-actions";
 
 export const dynamic = "force-dynamic";
@@ -8,5 +8,5 @@ export default async function MessagesPage() {
     getConversationsAction(),
     getVoiceRecorderConfigAction()
   ]);
-  return <MessagesPageV2 initialConversations={conversations} voiceRecorderConfig={voiceRecorderConfig} />;
+  return <MessagesPageV3 initialConversations={conversations} voiceRecorderConfig={voiceRecorderConfig} />;
 }
