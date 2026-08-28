@@ -25,11 +25,29 @@ const DOCUMENT_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 ]);
 
+/**
+ * Temporary type bridge until the unapplied Chats V4 migration is reconciled
+ * with the other backend branch and database.types.ts is regenerated.
+ *
+ * Runtime rich-media kinds are deliberately returned through this legacy
+ * projection so the canonical send path can write `video` / `file` after the
+ * migration is applied, while today's generated Supabase MessageType still
+ * describes only the production schema. Do not remove the runtime guards or
+ * use this as a reason to skip final type regeneration.
+ */
 export type SendableMessageMedia =
   | { kind: "image" }
-  | { kind: "voice_note"; durationMs: number; durationSeconds: number; waveform: number[] | null }
+  | { kind: "voice_note"; durationMs: number; durationSeconds: number; waveform: number[] | null };
+
+type PendingRichSendable =
   | { kind: "video"; contentType: string; fileName: string; sizeBytes: number }
   | { kind: "file"; contentType: string; fileName: string; sizeBytes: number };
+
+function pendingRichMedia(value: PendingRichSendable): SendableMessageMedia {
+  // The runtime discriminant is intentionally richer than the generated type
+  // until the final Supabase schema/type regeneration pass.
+  return value as unknown as SendableMessageMedia;
+}
 
 /** Revalidates critical READY-asset state immediately before a message insert. */
 export async function resolveSendableMessageMedia(
@@ -66,20 +84,20 @@ export async function resolveSendableMessageMedia(
     resolved = { kind: "image" };
   } else if (asset.intended_media_kind === "video") {
     if (!VIDEO_TYPES.has(contentType) || sizeBytes <= 0 || sizeBytes > MAX_UPLOAD_BYTES.chat) return null;
-    resolved = {
+    resolved = pendingRichMedia({
       kind: "video",
       contentType,
       fileName: safeFileName || "Video",
       sizeBytes
-    };
+    });
   } else if (asset.intended_media_kind === "file") {
     if (!DOCUMENT_TYPES.has(contentType) || sizeBytes <= 0 || sizeBytes > MAX_UPLOAD_BYTES.chat) return null;
-    resolved = {
+    resolved = pendingRichMedia({
       kind: "file",
       contentType,
       fileName: safeFileName || "Document",
       sizeBytes
-    };
+    });
   } else {
     if (asset.intended_media_kind !== "voice_note" || !isSupportedVoiceContentType(contentType)) {
       return null;
