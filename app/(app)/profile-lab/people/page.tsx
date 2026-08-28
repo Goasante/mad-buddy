@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Metadata } from "next";
+import type { Metadata, Route } from "next";
 import { ChevronLeft, ChevronRight, UsersRound } from "lucide-react";
 import { redirect } from "next/navigation";
 
@@ -61,7 +61,7 @@ export default async function ProfileLabPeopleIndexPage() {
           {result.muddies.map((muddy) => (
             <Link
               key={muddy.id}
-              href={`/profile-lab/people/${muddy.username}`}
+              href={`/profile-lab/people/${muddy.username}` as Route}
               className="focus-ring safe-motion group flex min-h-[4.75rem] items-center gap-3 rounded-[1.25rem] border border-border/60 bg-card/75 px-4 py-3 shadow-sm hover:-translate-y-0.5 hover:bg-secondary/30 motion-reduce:hover:translate-y-0"
             >
               <UserAvatar src={muddy.avatarUrl} name={muddy.displayName} size="md" membershipTier={publicMembershipTier(muddy.plan)} />
