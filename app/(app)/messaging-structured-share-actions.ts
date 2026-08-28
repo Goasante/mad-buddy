@@ -195,10 +195,11 @@ export async function sendStructuredChatMessageAction(input: unknown) {
 
   let option: StructuredShareOption | null = null;
   if (parsed.data.kind === "agenda") {
+    const agendaInput = parsed.data;
     const agenda = await loadUpcomingAgenda(userId, 40);
     option = agenda.items
       .map(optionFromAgenda)
-      .find((item) => item.kind === parsed.data.refKind && item.id === parsed.data.refId) ?? null;
+      .find((item) => item.kind === agendaInput.refKind && item.id === agendaInput.refId) ?? null;
     if (!option) return fail("That Plan or Event is no longer available to share.");
   }
 
@@ -293,12 +294,13 @@ export async function getStructuredMessagePayloadAction(input: unknown): Promise
   const db = admin as unknown as SupabaseClient;
   const { data: message } = await db
     .from("messages")
-    .select("id, conversation_id, message_type, status, deleted_at, created_at")
+    .select("id, conversation_id, message_type, status, deleted_at, created_at, expires_at, kept_at")
     .eq("id", parsed.data.messageId)
     .eq("conversation_id", parsed.data.conversationId)
     .maybeSingle();
   if (!message || message.deleted_at || message.status === "deleted") return null;
   if (access.historyVisibleFrom && Date.parse(String(message.created_at)) < Date.parse(access.historyVisibleFrom)) return null;
+  if (!message.kept_at && message.expires_at && Date.parse(String(message.expires_at)) <= Date.now()) return null;
 
   if (message.message_type === "contact") {
     const { data } = await db.from("message_contacts").select("display_name, phone, email, organization").eq("message_id", message.id).maybeSingle();
