@@ -1,6 +1,7 @@
 "use client";
 
 import { Bookmark, FolderPlus, Loader2, Pin, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import {
@@ -186,7 +187,7 @@ export function ChatCollectionsV4({
   );
 }
 
-function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return <button type="button" onClick={onClick} className={cn("focus-ring min-h-9 shrink-0 rounded-full border px-3 text-[11px] font-semibold transition", active ? "border-[#E88C2B] bg-[#E88C2B] text-white" : "border-border/70 bg-background")}>{children}</button>;
 }
 
