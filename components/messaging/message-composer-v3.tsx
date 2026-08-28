@@ -52,13 +52,28 @@ type Props = {
   onCancelReply?: () => void;
 };
 
+type VoiceGesture = "idle" | "holding" | "cancel" | "lock";
+type DeferredRelease = "tap" | "send" | "lock" | "cancel";
+
 const MAX_FIELD_PX = 148;
 const CANCEL_DISTANCE = 76;
 const LOCK_DISTANCE = 72;
+/** A quick press enters hands-free mode. A longer press sends on release. */
+const TAP_TO_LOCK_MS = 280;
+/** Past this point the browser is probably showing a permission surface. */
+const PERMISSION_PROMPT_LIKELY_MS = 450;
 
 function formatDuration(seconds: number) {
   const whole = Math.max(0, Math.floor(seconds));
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+}
+
+function softHaptic(pattern: number | number[]) {
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    // Cosmetic only. Haptics are not available on every PWA/browser.
+  }
 }
 
 export function MessageComposerV3({
@@ -87,15 +102,40 @@ export function MessageComposerV3({
   const clientMessageIdRef = useRef<string | null>(null);
 
   const voice = useVoiceRecorder(conversationId, voiceRecorderConfig);
+  const getVoiceState = voice.getState;
   const voiceUpload = useVoiceUpload(conversationId);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [playedSeconds, setPlayedSeconds] = useState(0);
   const [locked, setLocked] = useState(false);
-  const [gesture, setGesture] = useState<"idle" | "holding" | "cancel" | "lock">("idle");
-  const pointerStartRef = useRef<{ x: number; y: number; id: number } | null>(null);
+  const [gesture, setGesture] = useState<VoiceGesture>("idle");
+  const [micHint, setMicHint] = useState<string | null>(null);
+
+  /**
+   * Pointer ownership deliberately lives OUTSIDE the mic button.
+   *
+   * The v3 regression came from storing pointerup/move on a button that
+   * disappeared as soon as `voice.state` became requesting_permission or
+   * recording. Installed PWAs make that especially visible because the OS
+   * permission prompt interrupts the original gesture. Window-level tracking
+   * keeps release/cancel/lock alive across that render transition.
+   */
+  const pointerStartRef = useRef<{ x: number; y: number; id: number; startedAt: number } | null>(null);
+  const gestureRef = useRef<VoiceGesture>("idle");
+  const lockedRef = useRef(false);
+  const deferredReleaseRef = useRef<DeferredRelease | null>(null);
+  const permissionPromptLikelyRef = useRef(false);
+  const permissionPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendOnNextTakeRef = useRef(false);
   const sendingRef = useRef(false);
+
+  useEffect(() => {
+    gestureRef.current = gesture;
+  }, [gesture]);
+
+  useEffect(() => {
+    lockedRef.current = locked;
+  }, [locked]);
 
   useEffect(() => {
     const field = textareaRef.current;
@@ -254,8 +294,11 @@ export function MessageComposerV3({
         onCancelReply?.();
         voiceUpload.reset();
         voice.cancel();
+        lockedRef.current = false;
         setLocked(false);
+        gestureRef.current = "idle";
         setGesture("idle");
+        setMicHint(null);
         await onSent();
       } catch (error) {
         onOptimisticSettled?.(clientMessageId, "failed");
@@ -279,52 +322,235 @@ export function MessageComposerV3({
     return () => clearTimeout(handle);
   }, [sendVoice, voice.state]);
 
-  function cancelRecording() {
+  const clearPermissionPromptTimer = useCallback(() => {
+    if (permissionPromptTimerRef.current) clearTimeout(permissionPromptTimerRef.current);
+    permissionPromptTimerRef.current = null;
+  }, []);
+
+  const cancelRecording = useCallback(() => {
+    clearPermissionPromptTimer();
+    deferredReleaseRef.current = null;
+    permissionPromptLikelyRef.current = false;
     sendOnNextTakeRef.current = false;
     voiceUpload.reset();
     voice.cancel();
+    lockedRef.current = false;
     setLocked(false);
+    gestureRef.current = "idle";
     setGesture("idle");
+    setMicHint(null);
     pointerStartRef.current = null;
-  }
+    softHaptic(6);
+  }, [clearPermissionPromptTimer, voice, voiceUpload]);
 
-  async function startHold(event: React.PointerEvent<HTMLButtonElement>) {
-    if (attachment || uploadBusy || isPending) return;
-    pointerStartRef.current = { x: event.clientX, y: event.clientY, id: event.pointerId };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    setGesture("holding");
-    voiceUpload.reset();
-    await voice.start();
-  }
+  const applyRelease = useCallback(
+    (mode: DeferredRelease) => {
+      clearPermissionPromptTimer();
+      permissionPromptLikelyRef.current = false;
+      deferredReleaseRef.current = null;
+      pointerStartRef.current = null;
+      gestureRef.current = "idle";
+      setGesture("idle");
 
-  function moveHold(event: React.PointerEvent<HTMLButtonElement>) {
-    const start = pointerStartRef.current;
-    if (!start || locked) return;
-    const dx = event.clientX - start.x;
-    const dy = event.clientY - start.y;
-    if (dx <= -CANCEL_DISTANCE) setGesture("cancel");
-    else if (dy <= -LOCK_DISTANCE) setGesture("lock");
-    else setGesture("holding");
-  }
+      if (mode === "cancel") {
+        cancelRecording();
+        return;
+      }
+      if (mode === "tap" || mode === "lock") {
+        lockedRef.current = true;
+        setLocked(true);
+        setMicHint(mode === "tap" ? "Recording hands-free. Tap Send when you’re done." : null);
+        softHaptic(10);
+        return;
+      }
 
-  function finishHold(event: React.PointerEvent<HTMLButtonElement>) {
-    const start = pointerStartRef.current;
-    if (!start || start.id !== event.pointerId) return;
-    pointerStartRef.current = null;
-    if (gesture === "cancel") {
-      cancelRecording();
-      return;
-    }
-    if (gesture === "lock") {
-      setLocked(true);
+      setMicHint(null);
+      sendOnNextTakeRef.current = true;
+      voice.stop();
+      softHaptic(8);
+    },
+    [cancelRecording, clearPermissionPromptTimer, voice]
+  );
+
+  const cancelRecordingRef = useRef(cancelRecording);
+  const applyReleaseRef = useRef(applyRelease);
+
+  useEffect(() => {
+    cancelRecordingRef.current = cancelRecording;
+  }, [cancelRecording]);
+
+  useEffect(() => {
+    applyReleaseRef.current = applyRelease;
+  }, [applyRelease]);
+
+  /**
+   * Window-level pointer tracking survives both React branch changes and the
+   * installed-PWA microphone permission dialog. This is the core release fix.
+   */
+  useEffect(() => {
+    const onMove = (event: PointerEvent) => {
+      const start = pointerStartRef.current;
+      if (!start || start.id !== event.pointerId || lockedRef.current) return;
+      const dx = event.clientX - start.x;
+      const dy = event.clientY - start.y;
+      let next: VoiceGesture = "holding";
+      if (dx <= -CANCEL_DISTANCE) next = "cancel";
+      else if (dy <= -LOCK_DISTANCE) next = "lock";
+      if (gestureRef.current !== next) {
+        gestureRef.current = next;
+        setGesture(next);
+        if (next === "cancel" || next === "lock") softHaptic(7);
+      }
+      if (event.cancelable) event.preventDefault();
+    };
+
+    const finish = (event: PointerEvent, cancelled: boolean) => {
+      const start = pointerStartRef.current;
+      if (!start || start.id !== event.pointerId) return;
+      const currentGesture = gestureRef.current;
+      const durationMs = performance.now() - start.startedAt;
+      const stateKind = getVoiceState().kind;
+
+      pointerStartRef.current = null;
+      clearPermissionPromptTimer();
+      gestureRef.current = "idle";
+      setGesture("idle");
+
+      let mode: DeferredRelease;
+      if (cancelled) {
+        // A permission dialog can dispatch pointercancel even though the user
+        // did nothing wrong. In that state hands-free is the only honest
+        // continuation: do not delete a recording the user just approved.
+        mode = stateKind === "requesting_permission" ? "lock" : "cancel";
+      } else if (currentGesture === "cancel") {
+        mode = "cancel";
+      } else if (currentGesture === "lock") {
+        mode = "lock";
+      } else if (durationMs < TAP_TO_LOCK_MS) {
+        // Quick tap = the familiar tap-to-record mode. It keeps recording and
+        // exposes Send, which is also a reliable accessibility/PWA fallback.
+        mode = "tap";
+      } else {
+        // Real hold = release-to-send.
+        mode = "send";
+      }
+
+      if (stateKind === "recording") {
+        applyReleaseRef.current(mode);
+        return;
+      }
+      if (stateKind === "requesting_permission") {
+        // `getUserMedia()` is asynchronous even when permission was already
+        // granted. Carry the release intent across that gap instead of losing
+        // it when the original mic button disappears.
+        deferredReleaseRef.current = permissionPromptLikelyRef.current && mode === "send" ? "lock" : mode;
+        return;
+      }
+      if (mode === "cancel") cancelRecordingRef.current();
+    };
+
+    const onUp = (event: PointerEvent) => finish(event, false);
+    const onCancel = (event: PointerEvent) => finish(event, true);
+
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+    };
+  }, [clearPermissionPromptTimer, getVoiceState]);
+
+  /**
+   * Resolve a release that occurred while getUserMedia/permission was still
+   * pending. If the permission surface swallowed the release entirely, the
+   * timer below marks that session and we safely convert it to locked mode as
+   * soon as capture begins, so a visible Send button is always available.
+   */
+  useEffect(() => {
+    if (voice.state.kind === "failed") {
+      deferredReleaseRef.current = null;
+      permissionPromptLikelyRef.current = false;
+      clearPermissionPromptTimer();
+      pointerStartRef.current = null;
+      gestureRef.current = "idle";
       setGesture("idle");
       return;
     }
-    if (voice.state.kind === "recording") {
-      sendOnNextTakeRef.current = true;
-      voice.stop();
+    if (voice.state.kind !== "recording") return;
+
+    const deferred = deferredReleaseRef.current;
+    if (deferred) {
+      if (permissionPromptLikelyRef.current && deferred === "send") {
+        setMicHint("Microphone approved. Recording is hands-free — tap Send when you’re done.");
+        applyRelease("lock");
+      } else {
+        applyRelease(deferred);
+      }
+      return;
     }
+
+    if (permissionPromptLikelyRef.current && pointerStartRef.current) {
+      pointerStartRef.current = null;
+      clearPermissionPromptTimer();
+      permissionPromptLikelyRef.current = false;
+      lockedRef.current = true;
+      setLocked(true);
+      gestureRef.current = "idle";
+      setGesture("idle");
+      setMicHint("Microphone approved. Recording is hands-free — tap Send when you’re done.");
+      softHaptic(10);
+    }
+  }, [applyRelease, clearPermissionPromptTimer, voice.state.kind]);
+
+  useEffect(() => () => clearPermissionPromptTimer(), [clearPermissionPromptTimer]);
+
+  function startHold(event: React.PointerEvent<HTMLButtonElement>) {
+    if (attachment || uploadBusy || isPending) return;
+    event.preventDefault();
+    clearPermissionPromptTimer();
+    setMicHint(null);
+    voiceUpload.reset();
+    permissionPromptLikelyRef.current = false;
+    deferredReleaseRef.current = null;
+    pointerStartRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      id: event.pointerId,
+      startedAt: performance.now()
+    };
+    lockedRef.current = false;
+    gestureRef.current = "holding";
+    setGesture("holding");
+    softHaptic(6);
+
+    permissionPromptTimerRef.current = setTimeout(() => {
+      if (!pointerStartRef.current) return;
+      if (getVoiceState().kind === "requesting_permission") {
+        permissionPromptLikelyRef.current = true;
+      }
+    }, PERMISSION_PROMPT_LIKELY_MS);
+
+    // Do not await here. The pointer lifecycle is owned globally and must stay
+    // responsive while getUserMedia / the PWA permission UI is pending.
+    void voice.start();
+  }
+
+  function stopAndSendRecording() {
+    if (getVoiceState().kind !== "recording") return;
+    pointerStartRef.current = null;
+    deferredReleaseRef.current = null;
+    clearPermissionPromptTimer();
+    permissionPromptLikelyRef.current = false;
+    sendOnNextTakeRef.current = true;
+    lockedRef.current = false;
+    setLocked(false);
+    gestureRef.current = "idle";
     setGesture("idle");
+    setMicHint(null);
+    voice.stop();
+    softHaptic(8);
   }
 
   const voiceError =
@@ -337,6 +563,16 @@ export function MessageComposerV3({
   if (recording || preparing || awaitingPermission) {
     const elapsed = voice.state.kind === "recording" ? voice.state.elapsedSeconds : 0;
     const busy = preparing || awaitingPermission;
+    const statusText = awaitingPermission
+      ? "Allow microphone access…"
+      : locked
+        ? "Hands-free recording"
+        : gesture === "cancel"
+          ? "Release to cancel"
+          : gesture === "lock"
+            ? "Release to lock"
+            : "Release to send · ← cancel · ↑ lock";
+
     return (
       <div className={cn("border-t border-border/60 bg-[#FFFDFC]/96 backdrop-blur-xl dark:bg-background/96", className)}>
         {replyPreview ? <ReplyStrip preview={replyPreview} onCancel={onCancelReply} /> : null}
@@ -346,34 +582,27 @@ export function MessageComposerV3({
           </button>
           <span className="voice-bar-time">{formatDuration(elapsed)}</span>
           <LiveVoiceWaveform stream={voice.captureStream} />
-          {locked ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#E88C2B]/12 px-2 py-1 text-[11px] font-semibold text-[#E88C2B]">
-              <Lock className="h-3.5 w-3.5" /> Locked
-            </span>
-          ) : (
-            <span className={cn("hidden text-[11px] font-medium sm:inline", gesture === "cancel" ? "text-destructive" : gesture === "lock" ? "text-[#E88C2B]" : "text-muted-foreground")}>
-              {gesture === "cancel" ? "Release to cancel" : gesture === "lock" ? "Release to lock" : "← cancel · ↑ lock"}
-            </span>
-          )}
-          {locked ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                sendOnNextTakeRef.current = true;
-                voice.stop();
-              }}
-              className="voice-bar-send"
-              aria-label="Send locked voice message"
-            >
-              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
-            </button>
-          ) : (
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-[#E88C2B]/12 text-[#E88C2B]">
-              <Mic className="h-5 w-5" />
-            </span>
-          )}
+          <span
+            className={cn(
+              "min-w-0 shrink truncate text-[10px] font-semibold sm:text-[11px]",
+              gesture === "cancel" ? "text-destructive" : locked || gesture === "lock" ? "text-[#E88C2B]" : "text-muted-foreground"
+            )}
+          >
+            {locked && !awaitingPermission ? <Lock className="mr-1 inline h-3.5 w-3.5 align-[-2px]" /> : null}
+            {statusText}
+          </span>
+          <button
+            type="button"
+            disabled={busy || voice.state.kind !== "recording"}
+            onClick={stopAndSendRecording}
+            className="voice-bar-send"
+            aria-label="Send voice message"
+            title="Send voice message"
+          >
+            {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
+          </button>
         </div>
+        {micHint ? <p className="px-4 pb-1 text-center text-[10px] font-medium text-[#E88C2B]">{micHint}</p> : null}
       </div>
     );
   }
@@ -521,22 +750,21 @@ export function MessageComposerV3({
         ) : (
           <button
             type="button"
-            onPointerDown={(event) => void startHold(event)}
-            onPointerMove={moveHold}
-            onPointerUp={finishHold}
-            onPointerCancel={cancelRecording}
+            onPointerDown={startHold}
             onContextMenu={(event) => event.preventDefault()}
             disabled={uploadBusy || isPending}
-            aria-label="Hold to record. Slide left to cancel or up to lock."
+            aria-label="Tap to record hands-free. Hold to record and release to send. Slide left to cancel or up to lock."
             className="composer-action touch-none select-none"
-            title="Hold to record · slide left to cancel · slide up to lock"
+            title="Tap: record hands-free · Hold: release to send · ← cancel · ↑ lock"
           >
             <Mic className="h-5 w-5" />
           </button>
         )}
       </form>
       {!canSendText && voiceSupported ? (
-        <p className="px-4 pb-1 text-center text-[10px] font-medium text-muted-foreground/75">Hold mic to record · slide ← to cancel · slide ↑ to lock</p>
+        <p className="px-4 pb-1 text-center text-[10px] font-medium text-muted-foreground/75">
+          {micHint ?? "Tap mic for hands-free · hold & release to send · ← cancel · ↑ lock"}
+        </p>
       ) : null}
       {voiceError ? <p className="voice-bar-error" role="alert">{voiceError}</p> : null}
     </div>

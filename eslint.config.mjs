@@ -10,12 +10,16 @@ const eslintConfig = [
   ...nextVitals,
   ...nextTypescript,
   {
-    files: ["components/messages/messages-page-v3.tsx"],
+    files: [
+      "components/messages/messages-page-v3.tsx",
+      "components/messaging/message-composer-v3.tsx"
+    ],
     rules: {
-      // The initial selected conversation is seeded from the URL during render.
-      // This effect only re-synchronizes a later client-side ?conversation=
-      // deep-link change with the same state and kicks off its authorized read.
-      // It is route synchronization, not derived-state computation.
+      // These effects synchronize React presentation with EXTERNAL state:
+      // route/deep-link changes in MessagesPageV3 and the MediaRecorder +
+      // window pointer lifecycle in MessageComposerV3. They are not deriving
+      // state that belongs in render; the external systems may change after a
+      // render and must be reflected back into the interaction state.
       "react-hooks/set-state-in-effect": "off"
     }
   }
