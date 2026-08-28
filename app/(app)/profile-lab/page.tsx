@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -69,25 +70,32 @@ export default async function ProfileLabPage() {
   };
 
   return (
-    <ProfileVNextPage
-      displayName={profile?.full_name ?? user.user_metadata?.full_name ?? "Your name"}
-      username={profile?.username ?? user.user_metadata?.username ?? "username"}
-      bio={profile?.bio ?? ""}
-      moodStatus={profile?.mood_status ?? ""}
-      avatarUrl={profile?.avatar_url ?? null}
-      visibilityStatus={profile?.visibility_status ?? "visible"}
-      identitySummary={identitySummary}
-      interests={interests}
-      completion={{ percent: profileCompletionPercent(completionInput) }}
-      generalArea={profile?.general_area ?? null}
-      photos={photos}
-      trustedSince={profile?.trusted_member_since ?? null}
-      plan={plan}
-      dateOfBirth={birthDetails?.dateOfBirth ?? ""}
-      birthdayVisibility={fieldPrivacy?.birthday === "approved_muddies" ? "approved_muddies" : "only_me"}
-      ageVisibility={fieldPrivacy?.age === "approved_muddies" ? "approved_muddies" : "only_me"}
-      zodiacVisibility={fieldPrivacy?.zodiac === "approved_muddies" ? "approved_muddies" : "only_me"}
-      serverBirthdayDayKey={dateKeyInTimeZone(new Date(), DEFAULT_RECIPIENT_TIMEZONE)}
-    />
+    <>
+      <nav className="mx-auto mb-4 flex w-full max-w-3xl items-center justify-center gap-2 px-1" aria-label="Profile Lab sections">
+        <span className="rounded-full bg-[#4E0401] px-4 py-2 text-xs font-semibold text-white">Overview</span>
+        <Link href="/profile-lab/edit" className="focus-ring rounded-full border border-border/70 bg-card px-4 py-2 text-xs font-semibold shadow-sm hover:bg-secondary">Edit Profile</Link>
+        <Link href="/profile-lab/privacy" className="focus-ring rounded-full border border-border/70 bg-card px-4 py-2 text-xs font-semibold shadow-sm hover:bg-secondary">Privacy</Link>
+      </nav>
+      <ProfileVNextPage
+        displayName={profile?.full_name ?? user.user_metadata?.full_name ?? "Your name"}
+        username={profile?.username ?? user.user_metadata?.username ?? "username"}
+        bio={profile?.bio ?? ""}
+        moodStatus={profile?.mood_status ?? ""}
+        avatarUrl={profile?.avatar_url ?? null}
+        visibilityStatus={profile?.visibility_status ?? "visible"}
+        identitySummary={identitySummary}
+        interests={interests}
+        completion={{ percent: profileCompletionPercent(completionInput) }}
+        generalArea={profile?.general_area ?? null}
+        photos={photos}
+        trustedSince={profile?.trusted_member_since ?? null}
+        plan={plan}
+        dateOfBirth={birthDetails?.dateOfBirth ?? ""}
+        birthdayVisibility={fieldPrivacy?.birthday === "approved_muddies" ? "approved_muddies" : "only_me"}
+        ageVisibility={fieldPrivacy?.age === "approved_muddies" ? "approved_muddies" : "only_me"}
+        zodiacVisibility={fieldPrivacy?.zodiac === "approved_muddies" ? "approved_muddies" : "only_me"}
+        serverBirthdayDayKey={dateKeyInTimeZone(new Date(), DEFAULT_RECIPIENT_TIMEZONE)}
+      />
+    </>
   );
 }
