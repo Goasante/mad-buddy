@@ -211,7 +211,7 @@ export function AttachmentPicker({
       />
 
       <AppMenu
-        label="Add to this chat"
+        label="Add an attachment"
         side="top"
         align="start"
         items={[
@@ -260,7 +260,7 @@ export function AttachmentPicker({
         trigger={
           <button
             type="button"
-            aria-label="Add to this chat"
+            aria-label="Add an attachment"
             disabled={busy}
             className={cn(
               "focus-ring safe-motion grid h-11 w-11 shrink-0 place-items-center rounded-full",
