@@ -325,10 +325,10 @@ describe("Conversation Mode", () => {
   });
 
   it("reclaims the navigation height instead of leaving a dead strip", () => {
-    // Asserted as single tokens: the source wraps these across lines, and the
-    // file's line endings are not this test's business.
-    expect(shell).toContain('? "pb-0"');
-    expect(shell).toContain('"pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px))]"');
+    const shellRoot = shell.slice(shell.indexOf("<div"), shell.indexOf("<main"));
+    expect(shellRoot).not.toContain("--mobile-nav-height");
+    expect(shell).toContain("const reservesQuickActions = !immersive");
+    expect(shell).toContain('"pb-5"');
   });
 
   it("slides rather than jumping, and respects reduced motion", () => {

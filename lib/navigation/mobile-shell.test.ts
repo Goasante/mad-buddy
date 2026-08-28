@@ -119,9 +119,18 @@ describe("mobile bottom navigation", () => {
 
 describe("mobile content clearance", () => {
   it("reserves the bottom bar's real footprint so the last section is reachable", () => {
-    expect(shell).toContain(
-      "pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px))]"
+    const main = shell.slice(shell.indexOf('<main'));
+    expect(main).toContain(
+      "pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)"
     );
+  });
+
+  it("reserves the bottom bar on the scroll owner only", () => {
+    const beforeMain = shell.slice(0, shell.indexOf('<main'));
+    expect(beforeMain).not.toContain(
+      'pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px))]'
+    );
+    expect(shell).toContain("data-app-scroll-owner");
   });
 
   it("defines the bar height once, next to the header height", () => {
@@ -139,8 +148,13 @@ describe("mobile scrolling", () => {
   });
 
   it("uses dynamic viewport units so browser chrome cannot crop the shell", () => {
-    expect(shell).toContain("min-h-[100svh]");
-    expect(shell).toContain("min-h-[100dvh]");
+    expect(shell).toContain("h-[100svh]");
+    expect(shell).toContain("h-[100dvh]");
+  });
+
+  it("keeps the document fixed while main owns mobile vertical scrolling", () => {
+    expect(shell).toContain("min-h-0 flex-1 overflow-y-auto overscroll-y-contain");
+    expect(shell).toContain("flex h-[100svh] h-[100dvh] min-h-0 flex-col overflow-hidden");
   });
 });
 
@@ -230,6 +244,8 @@ describe("pull to refresh states", () => {
 describe("pull to refresh guard rails", () => {
   it("only arms at the very top of the page", () => {
     expect(ptr).toContain("const atTop = ()");
+    expect(ptr).toContain('[data-app-scroll-owner]');
+    expect(ptr).toContain("scrollOwner.scrollTop <= 0");
     expect(ptr).toContain("if (!atTop()");
   });
 

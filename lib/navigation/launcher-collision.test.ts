@@ -117,6 +117,7 @@ describe("the exclusion rule still holds", () => {
     // Safety controls must never be under a floating shortcut.
     expect(showsQuickActions("/safe-arrival")).toBe(false);
     expect(showsQuickActions("/scan")).toBe(false);
+    expect(showsQuickActions("/linkr")).toBe(false);
     expect(showsQuickActions("/messages/abc")).toBe(false);
   });
 

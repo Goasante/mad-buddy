@@ -202,7 +202,9 @@ describe("mobile composition", () => {
     const rule = css.slice(ruleStart);
     expect(rule).toMatch(/^\.linkr-activate \{[\s\S]*?min-height: auto/);
     expect(rule).toMatch(/^\.linkr-activate \{[\s\S]*?justify-content: flex-start/);
-    expect(rule).toContain("scroll-padding-bottom: var(--mobile-nav-height");
+    const activation = rule.slice(0, rule.indexOf("/* The match screen"));
+    expect(activation).not.toContain("--mobile-nav-height");
+    expect(activation).not.toContain("safe-area-inset-bottom");
   });
 
   it("lays the intent choices out deliberately", () => {

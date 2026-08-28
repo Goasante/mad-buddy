@@ -49,6 +49,7 @@ describe("the launcher appears throughout the app", () => {
     // /safe-arrival is a safety surface; nothing floats over check-in controls.
     expect(showsQuickActions("/scan")).toBe(false);
     expect(showsQuickActions("/safe-arrival")).toBe(false);
+    expect(showsQuickActions("/linkr")).toBe(false);
   });
 
   it("stays off focused configuration surfaces", () => {

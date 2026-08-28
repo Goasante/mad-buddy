@@ -17,12 +17,14 @@ export function useHasScrolled(threshold = 4): boolean {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const read = () => setScrolled(window.scrollY > threshold);
+    const scrollOwner = document.querySelector<HTMLElement>("[data-app-scroll-owner]");
+    const read = () => setScrolled((scrollOwner?.scrollTop ?? window.scrollY) > threshold);
     read();
     // Passive: this never calls preventDefault, and saying so keeps scrolling
     // off the main thread's critical path.
-    window.addEventListener("scroll", read, { passive: true });
-    return () => window.removeEventListener("scroll", read);
+    const target: HTMLElement | Window = scrollOwner ?? window;
+    target.addEventListener("scroll", read, { passive: true });
+    return () => target.removeEventListener("scroll", read);
   }, [threshold]);
 
   return scrolled;

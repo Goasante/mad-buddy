@@ -206,7 +206,15 @@ const PAGES_WITH_OWN_HEADER = [
 const IMMERSIVE_HEADER_PAGES: readonly string[] = ["/discover", "/linkr", "/hangout-mode"];
 
 function hasOwnHeader(pathname: string): boolean {
-  return PAGES_WITH_OWN_HEADER.some((href) => pathname === href || pathname.startsWith(`${href}/`));
+  /* Most entries are exact screens. Treating every entry as a prefix made
+     /friends/:username, /groups/:id and /settings/access inherit a fixed
+     MobilePageHeader they do not render. The shell then reserved an empty
+     header band and stood the real AppHeader down. Settings descendants and
+     the ranked Events screen are the only current nested routes that render
+     PageHeader themselves. */
+  if (PAGES_WITH_OWN_HEADER.some((href) => pathname === href)) return true;
+  if (pathname.startsWith("/settings/") && pathname !== "/settings/access") return true;
+  return pathname === "/events/top";
 }
 
 /**
@@ -374,19 +382,12 @@ function AppShellInner({
     // --app-header-height on <main> below) or, for pages with their own
     // in-page header, by <main>'s own env(safe-area-inset-top) padding — never
     // both, and never as a blanket guess applied regardless of route.
-    // Bottom padding reserves the fixed nav's real footprint so the last
-    // section of any page stays fully reachable. --mobile-nav-height is the
-    // bar's own height (content only); the safe-area inset is added here
-    // because the bar pads itself by that same amount internally.
+    // The mobile shell is exactly the visual viewport. <main> is the one
+    // vertical scroll owner and reserves fixed chrome inside that scrolling
+    // box; the outer shell must not add either chrome footprint again.
     <div
       className={cn(
-        "flex min-h-[100svh] min-h-[100dvh] flex-col bg-background dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]",
-        // Immersive (a conversation is open): the bar is gone, so the page
-        // must not keep reserving its height or a dead strip is left behind.
-        immersive
-          ? "pb-0"
-          : "pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px))]",
-        "md:pb-4"
+        "flex h-[100svh] h-[100dvh] min-h-0 flex-col overflow-hidden bg-background dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]"
       )}
     >
       <a
@@ -435,13 +436,14 @@ function AppShellInner({
         />
           <main
           id="app-main-content"
+          data-app-scroll-owner
           className={cn(
             /* The bottom inset belongs HERE, on the element that scrolls.
              *
-             * The outer shell already reserves the bar's footprint, but <main>
-             * is flex-1 and owns the scroll on mobile -- so that reservation
-             * sits outside the scrolling box and the final card still slides
-             * under the fixed bar. `pb-5` alone was 1.25rem against a 5rem bar
+             * The outer shell is exactly one visual viewport and reserves no
+             * chrome. Keeping the fixed bar's footprint inside this scrolling
+             * box lets the final card clear the bar without increasing the
+             * document height. `pb-5` alone was 1.25rem against a 5rem bar
              * plus the device inset.
              *
              * Computed from the same canonical variables the bar itself uses,
@@ -460,7 +462,7 @@ function AppShellInner({
              * collision was noticed. --quick-actions-reserve carries the
              * pill's own geometry, and collapses to ordinary spacing on
              * desktop where the pill sits clear of the content column. */
-            "relative flex-1 px-4 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:overflow-y-auto md:pt-0",
+            "relative min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)+1rem)] px-4 sm:px-6 lg:px-8 lg:pb-6 md:scroll-pb-6 md:pt-0",
             immersive
               ? // The bar has stepped aside, so reserving its height would
                 // leave a dead strip under an open conversation. The launcher

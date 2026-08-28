@@ -53,8 +53,7 @@ describe("Group chat back navigation", () => {
   });
 
   it("decides entry context once, on mount", () => {
-<<<<<<< HEAD
-    /* history.length grows as the person moves around inside the Circle, so
+    /* history.length grows as the person moves around inside the Group, so
      * reading it at click time answers a different question.
      *
      * The rule now lives in lib/navigation/entry-origin.ts and is shared with
@@ -65,11 +64,6 @@ describe("Group chat back navigation", () => {
     expect(circle).toMatch(/useState\(\(\) =>\s*(\{|enteredFromInsideApp\(\))/);
     // And never re-read at click time.
     expect(backHandler).not.toContain("window.history.length");
-=======
-    // history.length grows as the person moves around inside the Group, so
-    // reading it at click time answers a different question.
-    expect(circle).toContain("useState(() => {");
->>>>>>> 6839711 (fix(product): distinguish private Circles from shared Groups)
   });
 
   it("keeps the neutral Back label", () => {

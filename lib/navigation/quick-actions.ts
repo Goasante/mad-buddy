@@ -89,6 +89,10 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
  *   /safe-arrival  An active journey is a safety surface. Anything floating
  *                  over the share and check-in controls is unacceptable when
  *                  the whole point is reaching them quickly.
+ *   /linkr         A viewport-fit discovery surface. Its Pass/Connect row
+ *                  owns the same lower-right band as the launcher; on short
+ *                  phones the fixed pill otherwise rests on Connect before
+ *                  the user scrolls to the final safety links.
  *   /settings      Rows of toggles down the right edge -- exactly where the
  *                  pill sits. Reserving space at the FOOT of the page cannot
  *                  fix a control the user meets mid-scroll, and a shortcut to
@@ -102,7 +106,7 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
  * shell already knows it is immersive -- the message composer owns the
  * lower-right corner there.
  */
-const EXCLUDED_SURFACES: readonly string[] = ["/scan", "/safe-arrival", "/settings"];
+const EXCLUDED_SURFACES: readonly string[] = ["/scan", "/safe-arrival", "/linkr", "/settings"];
 
 /**
  * Detail routes that keep their own corner.

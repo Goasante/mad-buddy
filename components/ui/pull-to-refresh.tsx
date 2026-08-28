@@ -159,7 +159,12 @@ export function PullToRefresh({
       return false;
     };
 
-    const atTop = () => window.scrollY <= 0 && document.documentElement.scrollTop <= 0;
+    const atTop = () => {
+      const scrollOwner = document.querySelector<HTMLElement>("[data-app-scroll-owner]");
+      return scrollOwner
+        ? scrollOwner.scrollTop <= 0
+        : window.scrollY <= 0 && document.documentElement.scrollTop <= 0;
+    };
 
     const onTouchStart = (event: TouchEvent) => {
       // Single touch only, so pinch-zoom is never hijacked.

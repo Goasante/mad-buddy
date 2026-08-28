@@ -126,7 +126,8 @@ describe("pull-to-refresh is one reusable system", () => {
   });
 
   it("only arms at the top of the page, for a single touch", () => {
-    expect(ptr).toContain("window.scrollY <= 0");
+    expect(ptr).toContain('[data-app-scroll-owner]');
+    expect(ptr).toContain("scrollOwner.scrollTop <= 0");
     expect(ptr).toContain("event.touches.length !== 1");
   });
 

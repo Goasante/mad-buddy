@@ -1268,8 +1268,8 @@ html.dark {
   --app-header-height: calc(env(safe-area-inset-top, 0px) + var(--app-header-content-height));
   /* The mobile bottom bar's own height, EXCLUDING the safe-area inset (the bar
      pads itself by that internally). One source of truth consumed by both the
-     bar and the shell's bottom padding, so the last section of a page is never
-     left underneath it.
+     bar and the content scroll viewport's bottom padding, so the last section
+     of a page is never left underneath it.
      56px tab hit target + 2 x 8px ul padding + 1px top border = 73px, plus a
      little breathing room so the last card never sits flush against the bar.
      This was 4.5rem (72px), which was 1px short of the bar's measured height
@@ -8781,11 +8781,9 @@ button.linkr-photo-row:disabled { opacity: 0.6; }
 .linkr-activate {
   min-height: auto;
   justify-content: flex-start;
-  /* Room INSIDE the scrollable section, so its last control still clears the
-     fixed bar once the page has scrolled to its own end. The shell's padding
-     sits on an ancestor and cannot do this job. */
-  padding-bottom: calc(var(--mobile-nav-height, 5rem) + env(safe-area-inset-bottom, 0px));
-  scroll-padding-bottom: var(--mobile-nav-height, 5rem);
+  /* The app scroll owner reserves the fixed nav once for every route. This
+     section keeps only its ordinary composition spacing. */
+  padding-bottom: 2rem;
 }
 
 /* The match screen is a fixed full-viewport overlay above the nav, so it needs

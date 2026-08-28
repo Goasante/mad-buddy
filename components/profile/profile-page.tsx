@@ -952,7 +952,7 @@ function ActivityStat({
   icon: typeof UsersRound;
   value: number;
   label: string;
-  href: "/friends" | "/moments" | "/plans" | "/safe-arrival";
+  href: "/friends" | "/plans" | "/safe-arrival";
 }) {
   return (
     <Link href={href} className="focus-ring safe-motion flex min-h-[5.5rem] min-w-0 flex-col rounded-2xl border border-border/70 bg-card/50 p-3 hover:bg-secondary/35" aria-label={`${value} ${label}`}>

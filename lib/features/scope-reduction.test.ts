@@ -189,9 +189,10 @@ describe("Moments when paused", () => {
 
   it("removes the Moments stat from Profile", () => {
     const profile = stripComments(read("components/profile/profile-page.tsx"));
-    expect(profile).toContain("{momentsEnabled ? (");
-    // Resolved server-side and passed down: no extra flag lookup per render.
-    expect(stripComments(read("app/(app)/profile/page.tsx"))).toContain("isMomentsEnabled(admin)");
+    // The stat was removed entirely. Absence is stronger than retaining a
+    // dormant branch and avoids a per-render feature lookup for no UI.
+    expect(profile).not.toContain('href="/moments"');
+    expect(profile).not.toContain('label="Moments"');
   });
 
   it("blocks the mobile API write paths too", () => {
