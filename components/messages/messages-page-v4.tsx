@@ -328,7 +328,7 @@ export function MessagesPageV4({
       .channel(`chats-v4:${selectedId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `conversation_id=eq.${selectedId}` }, refreshAll)
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_presence", filter: `conversation_id=eq.${selectedId}` }, () => void refreshUltimate(selectedId))
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversation_pins", filter: `conversation_id=eq.${selectedId}` }, () => void refreshUltimate(selectedId))
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversation_message_pins", filter: `conversation_id=eq.${selectedId}` }, () => void refreshUltimate(selectedId))
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_polls", filter: `conversation_id=eq.${selectedId}` }, refreshAll)
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_poll_votes" }, () => void refreshUltimate(selectedId));
     void authenticateRealtime(supabase).then(() => {

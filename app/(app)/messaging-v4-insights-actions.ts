@@ -165,7 +165,7 @@ export async function getChatCollectionsAction(conversationId: string): Promise<
       .select("message_id, folder_id, saved_at")
       .eq("user_id", userId),
     untyped
-      .from("conversation_pins")
+      .from("conversation_message_pins")
       .select("message_id, pinned_at")
       .eq("conversation_id", conversationId)
       .order("pinned_at", { ascending: false })

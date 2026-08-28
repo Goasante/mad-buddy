@@ -140,7 +140,7 @@ export async function getUltimateConversationStateAction(
         .eq("conversation_id", conversationId)
         .gt("present_until", new Date(Date.now() - 5 * 60_000).toISOString()),
       db
-        .from("conversation_pins")
+        .from("conversation_message_pins")
         .select("id, message_id, pinned_by, pinned_at")
         .eq("conversation_id", conversationId)
         .order("pinned_at", { ascending: false })
@@ -408,14 +408,14 @@ export async function setPinnedMessageAction(input: unknown) {
 
   if (!parsed.data.pinned) {
     const { error } = await db
-      .from("conversation_pins")
+      .from("conversation_message_pins")
       .delete()
       .eq("conversation_id", message.conversation_id)
       .eq("message_id", message.id);
     return error ? actionError("Pin could not be removed.") : { ok: true as const, message: "Unpinned." };
   }
 
-  const { error } = await db.from("conversation_pins").upsert(
+  const { error } = await db.from("conversation_message_pins").upsert(
     {
       conversation_id: message.conversation_id,
       message_id: message.id,

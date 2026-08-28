@@ -228,10 +228,27 @@ create policy "saved messages owner update" on public.saved_messages
   for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------------------
--- 5. Pinned conversation content.
+-- 5. Pinned MESSAGES inside a conversation.
+--
+-- NAMED conversation_message_pins, NOT conversation_pins.
+--
+-- public.conversation_pins ALREADY EXISTS and means something completely
+-- different: it is the inbox feature where a user pins a CONVERSATION to the
+-- top of their own list (20260728140000_conversation_pins.sql, primary key
+-- (user_id, conversation_id), no message_id). It is live in production and
+-- lib/messaging/mobile.ts reads it on every inbox load.
+--
+-- Reusing that name here was a silent, total failure rather than a loud one:
+-- `create table if not exists` sees the existing table, creates NOTHING, and
+-- every message-pin read and write then runs against a table with no
+-- message_id column. Verified against the real schema before renaming --
+-- `select id, message_id from conversation_pins` errors with
+-- "column id does not exist".
+--
+-- Two distinct product features, two distinct tables. Neither is weakened.
 -- ---------------------------------------------------------------------------
 
-create table if not exists public.conversation_pins (
+create table if not exists public.conversation_message_pins (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references public.conversations(id) on delete cascade,
   message_id uuid not null references public.messages(id) on delete cascade,
@@ -240,11 +257,11 @@ create table if not exists public.conversation_pins (
   unique (conversation_id, message_id)
 );
 
-create index if not exists conversation_pins_conversation_idx
-  on public.conversation_pins(conversation_id, pinned_at desc);
+create index if not exists conversation_message_pins_conversation_idx
+  on public.conversation_message_pins(conversation_id, pinned_at desc);
 
-alter table public.conversation_pins enable row level security;
-create policy "conversation pins visible to members" on public.conversation_pins
+alter table public.conversation_message_pins enable row level security;
+create policy "conversation message pins visible to members" on public.conversation_message_pins
   for select using (public.is_conversation_member(conversation_id));
 -- Pin/unpin writes are server-authorized against conversation settings + role.
 

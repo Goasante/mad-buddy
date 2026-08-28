@@ -176,6 +176,20 @@ export function ConversationRowV4({
             <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact />
             {conversation.pinned ? <Star className="h-3 w-3 shrink-0 fill-[#E88C2B] text-[#E88C2B]" /> : null}
           </div>
+          {/* WHAT KIND OF CHAT THIS IS.
+              Without this line an Event Room, a Plan Chat and a Group are
+              indistinguishable in the inbox -- the projection already carries
+              contextBadge ("Event Room" / "Plan" / "Event" / "Safe Arrival")
+              and the Room's parent Event name, and nothing was reading them.
+              A Room is temporary and belongs to one Event, so the inbox has to
+              say which; it is deliberately NOT presented as a Group. */}
+          {conversation.contextBadge ? (
+            <p className="mt-0.5 truncate text-[0.7rem] text-muted-foreground">
+              {conversation.roomEventName
+                ? `${conversation.roomEventName} · ${conversation.contextBadge}`
+                : conversation.contextBadge}
+            </p>
+          ) : null}
           <p className={cn("mt-1 truncate text-[0.82rem]", conversation.unreadCount > 0 ? "font-medium text-foreground/80" : "text-muted-foreground")}>{conversation.lastMessagePreview ?? "No messages yet"}</p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5 pl-1">
