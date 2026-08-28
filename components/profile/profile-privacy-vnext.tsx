@@ -120,9 +120,9 @@ export function ProfilePrivacyVNext({
             <p className="mt-0.5 text-xs text-muted-foreground">Everything important remains reachable without turning Profile into a settings dump.</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <SafetyCard href="/settings/blocked" icon={Ban} title="Blocked people" detail="Manage people you have blocked." tone="rose" />
+            <SafetyCard href="/friends?tab=blocked" icon={Ban} title="Blocked people" detail="Manage people you have blocked." tone="rose" />
             <SafetyCard href="/settings/contact-discovery" icon={ContactRound} title="Contact discovery" detail="Control how people can find you." tone="orange" />
-            <SafetyCard href="/settings/account-access" icon={KeyRound} title="Login & sessions" detail="Review account access and active sessions." tone="green" />
+            <SafetyCard href="/settings/sessions" icon={KeyRound} title="Login & sessions" detail="Review account access and active sessions." tone="green" />
             <SafetyCard href="/account" icon={Download} title="Data & account" detail="Manage your data and account controls." tone="neutral" />
           </div>
         </section>
@@ -199,7 +199,7 @@ function SafetyCard({
   detail,
   tone
 }: {
-  href: "/settings/blocked" | "/settings/contact-discovery" | "/settings/account-access" | "/account";
+  href: "/friends?tab=blocked" | "/settings/contact-discovery" | "/settings/sessions" | "/account";
   icon: typeof Eye;
   title: string;
   detail: string;
