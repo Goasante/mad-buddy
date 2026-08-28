@@ -1,6 +1,7 @@
 export type ChatCapabilityRule = "all_members" | "admins" | "owner" | "disabled";
 
 export type ChatMediaMode = "keep" | "view_once" | "24h";
+export type ChatViewerRole = "owner" | "admin" | "moderator" | "member" | null;
 
 export type ConversationChatSettingsView = {
   messageLifetimeSeconds: number | null;
@@ -63,6 +64,7 @@ export type ChatPollView = {
 };
 
 export type UltimateConversationState = {
+  viewerRole: ChatViewerRole;
   settings: ConversationChatSettingsView;
   preferences: ConversationUserPreferencesView;
   presence: ConversationPresencePerson[];
