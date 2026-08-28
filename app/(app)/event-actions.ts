@@ -1,10 +1,11 @@
 "use server";
 
 import { z } from "zod";
+import type { Database } from "@/lib/supabase/database.types";
 import { guardFeature } from "@/lib/admin/enforcement";
 import { deliverNotification } from "@/lib/notifications/server";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
-import { verifyEventToken } from "@/lib/events/qr";
+import { createEventToken, verifyEventToken } from "@/lib/events/qr";
 import {
   archivesAtMs,
   canSendAnnouncement,
@@ -17,11 +18,19 @@ import {
 } from "@/lib/events/rules";
 import {
   buildEventGlowList,
-  eventCircleMemberCount,
   eventTokenSecret,
   liveCheckIn,
   resolveEventCircleAccess
 } from "@/lib/events/service";
+import {
+  canManageRoom,
+  gatherJoinFacts,
+  getEventRoom,
+  isEventOperator,
+  listEventRooms,
+  listRoomMembers,
+  listRoomNotices
+} from "@/lib/events/rooms";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -72,6 +81,18 @@ export type EventActionState = {
 };
 
 const uuidSchema = z.string().uuid();
+
+/**
+ * Retention cut-off for an archived Room, or null when it never expires.
+ *
+ * Wrapped because archivesAtMs deliberately returns `number | null` --
+ * unlimited retention is null, never Infinity, since new Date(Infinity)
+ * throws. Every caller has to make the same null decision, so it is made once.
+ */
+function archivesAtNullable(plan: Parameters<typeof archivesAtMs>[1]): string | null {
+  const ms = archivesAtMs(Date.now(), plan);
+  return ms === null ? null : new Date(ms).toISOString();
+}
 
 function missingEnvState(): EventActionState | null {
   const env = getSupabaseServerEnv();
@@ -297,13 +318,29 @@ export async function getEventGlowAction(eventId: string): Promise<EventGlowMudd
 // Event circles (spec §48, §54)
 // ---------------------------------------------------------------------------
 
+/**
+ * Join an Event Room.
+ *
+ * WHAT CHANGED AND WHY. This used to decide eligibility from a token and then
+ * upsert a membership row, which meant:
+ *   - "invite only" was satisfied by anyone holding a forwarded QR, and
+ *   - "community" (Group members) was not checked AT ALL, so those Rooms
+ *     admitted everybody.
+ * Both are now decided by resolveJoinEventCircle from real facts gathered by
+ * gatherJoinFacts, and the write itself goes through join_event_room, which
+ * takes the Room's row lock, enforces capacity inside it, and reconciles Room
+ * membership with conversation membership in one transaction.
+ *
+ * A token still matters -- for `qr` mode, which is the mode that is about
+ * holding a code -- and is still verified for signature, purpose and context.
+ */
 export async function joinEventCircleAction(
   circleId: string,
   token?: string
 ): Promise<EventActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
-  if (!uuidSchema.safeParse(circleId).success) return { ok: false, message: "Circle not found." };
+  if (!uuidSchema.safeParse(circleId).success) return { ok: false, message: "Room not found." };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
@@ -312,13 +349,13 @@ export async function joinEventCircleAction(
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
   const admin = createSupabaseAdminClient();
-  const { data: circle } = await admin
-    .from("event_circles")
-    .select("id, event_id, name, status, join_mode, opens_at, max_members")
-    .eq("id", circleId)
-    .maybeSingle();
-  if (!circle) return { ok: false, message: "Circle not found." };
+  const facts = await gatherJoinFacts(admin, userId, circleId);
+  if (!facts.room) return { ok: false, message: "Room not found." };
+  const room = facts.room;
 
+  // The token is verified for signature, expiry, purpose AND context. A
+  // check_in token can never be replayed as a room join, and a token for
+  // another Room does not open this one.
   let hasValidToken = false;
   if (token) {
     const secret = eventTokenSecret();
@@ -329,29 +366,18 @@ export async function joinEventCircleAction(
       verified.payload.contextId === circleId;
   }
 
-  const [{ data: member }, memberCount] = await Promise.all([
-    admin
-      .from("event_circle_members")
-      .select("status")
-      .eq("event_circle_id", circleId)
-      .eq("user_id", userId)
-      .maybeSingle(),
-    eventCircleMemberCount(admin, circleId)
-  ]);
-
-  const hasEventCheckIn = circle.event_id
-    ? Boolean(await liveCheckIn(admin, userId, "event", circle.event_id))
-    : false;
-
   const decision = resolveJoinEventCircle({
-    status: circle.status,
-    joinMode: circle.join_mode,
-    memberStatus: member?.status ?? null,
-    memberCount,
-    maxMembers: circle.max_members,
-    hasEventCheckIn,
+    status: room.status,
+    joinMode: room.join_mode,
+    memberStatus: facts.memberStatus,
+    memberCount: facts.memberCount,
+    maxMembers: room.max_members,
+    hasEventCheckIn: facts.hasEventCheckIn,
     hasValidToken,
-    opensAtMs: circle.opens_at ? Date.parse(circle.opens_at) : null,
+    hasInvitation: facts.hasInvitation,
+    hasGroupTargets: facts.hasGroupTargets,
+    isEligibleGroupMember: facts.isEligibleGroupMember,
+    opensAtMs: room.opens_at ? Date.parse(room.opens_at) : null,
     nowMs: Date.now()
   });
 
@@ -359,49 +385,58 @@ export async function joinEventCircleAction(
     const messages: Record<JoinCircleReason, string> = {
       allowed: "",
       // Deliberately generic: a banned user is never told they were banned.
-      banned: "You can't join this circle.",
-      already_joined: `You're already in ${circle.name}.`,
-      closed: "This circle is closed.",
-      not_open_yet: "This circle hasn't opened yet.",
-      full: "This circle is full.",
+      banned: "You can't join this room.",
+      already_joined: `You're already in ${room.name}.`,
+      closed: "This room is closed.",
+      not_open_yet: "This room hasn't opened yet.",
+      full: "This room is full.",
       needs_check_in: "Check in to the event first.",
-      needs_token: "You need an invite or QR code to join."
+      needs_token: "Scan the room QR code to join.",
+      needs_invitation: "This room is invite only.",
+      needs_group_membership: "This room is for members of selected groups."
     };
-    return { ok: decision.reason === "already_joined", message: messages[decision.reason] };
+    return { ok: decision.reason === "already_joined", message: messages[decision.reason], circleId };
   }
 
-  const { error } = await admin.from("event_circle_members").upsert(
-    {
-      event_circle_id: circleId,
-      user_id: userId,
-      role: "member",
-      status: "joined",
-      joined_at: new Date().toISOString(),
-      left_at: null
-    },
-    { onConflict: "event_circle_id,user_id" }
-  );
-  if (error) return { ok: false, message: "Couldn't join the circle." };
-  return { ok: true, message: `Joined ${circle.name}.`, circleId };
+  const { error } = await admin.rpc("join_event_room", {
+    p_room_id: circleId,
+    p_user_id: userId
+  });
+  if (error) {
+    // The RPC re-checks capacity and ban status under the row lock, so a race
+    // that slips past the read above still fails safely here.
+    const message = String(error.message ?? "");
+    if (message.includes("ROOM_FULL")) return { ok: false, message: "This room is full." };
+    if (message.includes("ROOM_BANNED")) return { ok: false, message: "You can't join this room." };
+    if (message.includes("ROOM_CLOSED")) return { ok: false, message: "This room is closed." };
+    return { ok: false, message: "Couldn't join the room." };
+  }
+
+  // eventId travels back so a QR scan can open the Room inside its Event.
+  return { ok: true, message: `Joined ${room.name}.`, circleId, eventId: room.event_id ?? undefined };
 }
 
+/**
+ * Leave a Room. Membership and chat access move together, through the one
+ * lifecycle authority -- leaving a Room must not leave the person sitting in
+ * its conversation.
+ */
 export async function leaveEventCircleAction(circleId: string): Promise<EventActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
-  if (!uuidSchema.safeParse(circleId).success) return { ok: false, message: "Circle not found." };
+  if (!uuidSchema.safeParse(circleId).success) return { ok: false, message: "Room not found." };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
-  const { error } = await admin
-    .from("event_circle_members")
-    .update({ status: "left", left_at: new Date().toISOString() })
-    .eq("event_circle_id", circleId)
-    .eq("user_id", userId)
-    .eq("status", "joined");
-  if (error) return { ok: false, message: "Couldn't leave the circle." };
-  return { ok: true, message: "You've left this circle." };
+  const { error } = await admin.rpc("set_event_room_membership", {
+    p_room_id: circleId,
+    p_user_id: userId,
+    p_status: "left"
+  });
+  if (error) return { ok: false, message: "Couldn't leave the room." };
+  return { ok: true, message: "You've left this room." };
 }
 
 const announcementSchema = z.object({
@@ -416,7 +451,7 @@ export async function sendEventAnnouncementAction(input: unknown): Promise<Event
   if (missing) return missing;
 
   const parsed = announcementSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Check the announcement and try again." };
+  if (!parsed.success) return { ok: false, message: "Check the notice and try again." };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
@@ -426,18 +461,18 @@ export async function sendEventAnnouncementAction(input: unknown): Promise<Event
 
   const admin = createSupabaseAdminClient();
   const access = await resolveEventCircleAccess(admin, userId, parsed.data.circleId);
-  if (!access.exists) return { ok: false, message: "Circle not found." };
+  if (!access.exists) return { ok: false, message: "Room not found." };
   if (!access.role || !canSendAnnouncement(access.role)) {
-    return { ok: false, message: "Only the host can send announcements." };
+    return { ok: false, message: "Only the host can post notices." };
   }
 
   const { data: circle } = await admin
     .from("event_circles")
-    .select("status, name")
+    .select("status, name, event_id")
     .eq("id", parsed.data.circleId)
     .maybeSingle();
   if (!circle || !isEventCircleWritable(circle.status)) {
-    return { ok: false, message: "This circle is read-only now." };
+    return { ok: false, message: "This room is read-only now." };
   }
 
   const { error } = await admin.from("event_announcements").insert({
@@ -447,7 +482,7 @@ export async function sendEventAnnouncementAction(input: unknown): Promise<Event
     body: parsed.data.body.trim(),
     priority: parsed.data.priority ?? "normal"
   });
-  if (error) return { ok: false, message: "Couldn't send the announcement." };
+  if (error) return { ok: false, message: "Couldn't post the notice." };
 
   const { data: members } = await admin
     .from("event_circle_members")
@@ -462,20 +497,29 @@ export async function sendEventAnnouncementAction(input: unknown): Promise<Event
         userId: member.user_id,
         senderId: userId,
         category: "plans",
-        type: "event:announcement",
+        // The Room this notice belongs to, so the notification opens it.
+        type: `event_room:${circle.event_id ?? ""}:${parsed.data.circleId}`,
         title: circle.name,
         message: parsed.data.title.trim()
       })
     )
   );
 
-  return { ok: true, message: `Announcement sent to ${(members ?? []).length} members.` };
+  return { ok: true, message: `Notice posted to ${(members ?? []).length} members.` };
 }
 
+/**
+ * Archive a Room: read-only, nothing deleted.
+ *
+ * Archiving keeps every member and every message and sets the conversation to
+ * 'archived', which the existing canSendMessage authority already refuses to
+ * write to. Read-only therefore comes from the messaging rules that already
+ * exist rather than from a second rule that could be forgotten.
+ */
 export async function archiveEventCircleAction(circleId: string): Promise<EventActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
-  if (!uuidSchema.safeParse(circleId).success) return { ok: false, message: "Circle not found." };
+  if (!uuidSchema.safeParse(circleId).success) return { ok: false, message: "Room not found." };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
@@ -486,35 +530,39 @@ export async function archiveEventCircleAction(circleId: string): Promise<EventA
     .select("id, owner_id, status")
     .eq("id", circleId)
     .maybeSingle();
-  if (!circle) return { ok: false, message: "Circle not found." };
-  if (circle.owner_id !== userId) return { ok: false, message: "Only the host can archive this circle." };
+  if (!circle) return { ok: false, message: "Room not found." };
+
+  const manage = await canManageRoom(admin, userId, circleId);
+  if (!manage.allowed || manage.role !== "host") {
+    return { ok: false, message: "Only the host can archive this room." };
+  }
   if (!canTransitionEventCircle(circle.status, "archived")) {
-    return { ok: false, message: "This circle can't be archived." };
+    return { ok: false, message: "This room can't be archived." };
   }
 
   const access = await getCurrentSubscriptionAccess(userId);
-  const nowMs = Date.now();
-  await admin
-    .from("event_circles")
-    .update({
-      status: "archived",
-      closes_at: new Date(nowMs).toISOString(),
-      /* null when retention is unlimited, which it now is on every tier. The
-         column is nullable and "no archive date" is the honest value -- the
-         previous expression threw RangeError on a non-finite timestamp. */
-      archives_at: (() => {
-        const at = archivesAtMs(nowMs, access.plan);
-        return at === null ? null : new Date(at).toISOString();
-      })(),
-      updated_at: new Date(nowMs).toISOString()
-    })
-    .eq("id", circleId)
-    .eq("owner_id", userId);
+  const { error } = await admin.rpc("archive_event_room", {
+    p_room_id: circleId,
+    // archivesAtMs returns null when retention is unlimited, which it now is on
+    // every tier. new Date(null) would be the epoch, silently marking the room
+    // as already past its retention date, so null passes through as "never".
+    p_archives_at: archivesAtNullable(access.plan)
+  });
+  if (error) return { ok: false, message: "Couldn't archive the room." };
 
-  return { ok: true, message: "Circle archived. Content is read-only now." };
+  return { ok: true, message: "Room archived. Content is read-only now." };
 }
 
-/** Host-only: capacity is bounded by the host's tier (spec §62). */
+/**
+ * Create an Event Room.
+ *
+ * Three writes became one RPC: the Room, its host membership and its canonical
+ * conversation are created in a single transaction. Previously a failure
+ * between them could leave a Room with no host, or (once chat existed) a Room
+ * nobody could talk in.
+ *
+ * Capacity is bounded by the host's tier (spec §62).
+ */
 export async function createEventCircleAction(input: unknown): Promise<EventActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
@@ -523,50 +571,54 @@ export async function createEventCircleAction(input: unknown): Promise<EventActi
     name: z.string().min(1).max(80),
     description: z.string().max(500).optional(),
     eventId: uuidSchema.optional(),
-    joinMode: z.enum(["invite", "check_in", "qr", "community"]).optional()
+    joinMode: z.enum(["invite", "check_in", "qr", "community"]).optional(),
+    listed: z.boolean().optional(),
+    maxMembers: z.number().int().min(1).max(5000).optional(),
+    groupConversationIds: z.array(uuidSchema).max(20).optional()
   });
   const parsed = schema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Check the circle details and try again." };
+  if (!parsed.success) return { ok: false, message: "Check the room details and try again." };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
+
+  // Only someone who operates the Event may create Rooms in it. Holding an
+  // event id is not authority to attach a Room to it.
+  if (parsed.data.eventId && !(await isEventOperator(admin, parsed.data.eventId, userId))) {
+    return { ok: false, message: "Only the host can create rooms for this event." };
+  }
+
   const access = await getCurrentSubscriptionAccess(userId);
+  const tierCap = eventCircleMaxMembersFor(access.plan);
+  // A host may set a SMALLER limit than their tier allows, never a larger one.
+  const maxMembers = Math.min(parsed.data.maxMembers ?? tierCap, tierCap);
 
-  const { data: circle, error } = await admin
-    .from("event_circles")
-    .insert({
-      owner_id: userId,
-      event_id: parsed.data.eventId ?? null,
-      name: parsed.data.name.trim(),
-      description: parsed.data.description?.trim() || null,
-      join_mode: parsed.data.joinMode ?? "invite",
-      status: "open",
-      max_members: eventCircleMaxMembersFor(access.plan)
-    })
-    .select("id")
-    .single();
-  if (error || !circle) return { ok: false, message: "Couldn't create the circle." };
-
-  await admin.from("event_circle_members").insert({
-    event_circle_id: circle.id,
-    user_id: userId,
-    role: "host",
-    status: "joined"
+  const { data: roomId, error } = await admin.rpc("create_event_room", {
+    p_owner_id: userId,
+    p_event_id: parsed.data.eventId ?? null,
+    p_name: parsed.data.name.trim(),
+    p_description: parsed.data.description?.trim() || null,
+    p_join_mode: parsed.data.joinMode ?? "invite",
+    p_max_members: maxMembers,
+    p_listed: parsed.data.listed ?? true,
+    p_group_conversation_ids: parsed.data.groupConversationIds ?? []
   });
 
-  return { ok: true, message: `${parsed.data.name.trim()} created.`, circleId: circle.id };
-}
+  if (error || !roomId) {
+    const message = String(error?.message ?? "");
+    if (message.includes("ROOM_GROUP_TARGET_REQUIRED")) {
+      return { ok: false, message: "Choose at least one group for a group-only room." };
+    }
+    if (message.includes("ROOM_GROUP_TARGET_FORBIDDEN")) {
+      return { ok: false, message: "You can only choose groups you're in." };
+    }
+    return { ok: false, message: "Couldn't create the room." };
+  }
 
-// ---------------------------------------------------------------------------
-// Events 2.0: Updates, reactions, admins
-//
-// Thin wrappers. Every rule lives in lib/events/updates.ts so the web actions,
-// the mobile API and the tests all reach the same authority -- a permission
-// re-implemented per transport is a permission that will eventually disagree
-// with itself.
-// ---------------------------------------------------------------------------
+  return { ok: true, message: `${parsed.data.name.trim()} created.`, circleId: String(roomId) };
+}
 
 export async function listEventUpdatesAction(eventId: string): Promise<EventUpdateView[]> {
   const userId = await getAuthedUserId();
@@ -816,4 +868,658 @@ export async function getAudienceOptionsAction(): Promise<{
     listCommunityOptions(userId)
   ]);
   return { invitees, communities };
+}
+
+// ---------------------------------------------------------------------------
+// EVENT ROOMS -- read surfaces
+//
+// "Event Room" is what the product calls an event_circle. These actions are the
+// only way the client reaches Room state, and every one of them re-derives
+// authority from the session rather than trusting an id from the caller.
+// ---------------------------------------------------------------------------
+
+export async function listEventRoomsAction(eventId: string, includeUnlisted = false) {
+  if (missingEnvState()) return [];
+  if (!uuidSchema.safeParse(eventId).success) return [];
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+
+  const admin = createSupabaseAdminClient();
+  // Unlisted Rooms are only ever included for someone who operates the Event.
+  // A client asking for them is not permission to receive them.
+  const allowUnlisted = includeUnlisted && (await isEventOperator(admin, eventId, userId));
+  return listEventRooms(admin, userId, eventId, { includeUnlisted: allowUnlisted });
+}
+
+export async function getEventRoomAction(roomId: string) {
+  if (missingEnvState()) return null;
+  if (!uuidSchema.safeParse(roomId).success) return null;
+  const userId = await getAuthedUserId();
+  if (!userId) return null;
+  return getEventRoom(createSupabaseAdminClient(), userId, roomId);
+}
+
+export async function listRoomMembersAction(roomId: string) {
+  if (missingEnvState()) return [];
+  if (!uuidSchema.safeParse(roomId).success) return [];
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+  return listRoomMembers(createSupabaseAdminClient(), userId, roomId);
+}
+
+export async function listRoomNoticesAction(roomId: string) {
+  if (missingEnvState()) return [];
+  if (!uuidSchema.safeParse(roomId).success) return [];
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+  return listRoomNotices(createSupabaseAdminClient(), userId, roomId);
+}
+
+// ---------------------------------------------------------------------------
+// EVENT ROOMS -- settings
+// ---------------------------------------------------------------------------
+
+/**
+ * Save Room Settings.
+ *
+ * Every control on the Settings screen persists here. "Show in event" is a real
+ * column (listed_in_event) rather than local state, and it controls LISTING
+ * only -- an unlisted Room is still reachable by the people already in it and
+ * by anyone holding its QR or an invitation. Hiding is not revoking.
+ */
+export async function updateEventRoomAction(input: unknown): Promise<EventActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+
+  const schema = z.object({
+    roomId: uuidSchema,
+    name: z.string().min(1).max(80).optional(),
+    description: z.string().max(500).nullable().optional(),
+    joinMode: z.enum(["invite", "check_in", "qr", "community"]).optional(),
+    maxMembers: z.number().int().min(1).max(5000).optional(),
+    status: z.enum(["draft", "open", "active", "closing", "archived"]).optional(),
+    listed: z.boolean().optional(),
+    groupConversationIds: z.array(uuidSchema).max(20).optional()
+  });
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check the room settings and try again." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  const manage = await canManageRoom(admin, userId, parsed.data.roomId);
+  if (!manage.allowed) return { ok: false, message: "You cannot manage this room." };
+
+  const { data: room } = await admin
+    .from("event_circles")
+    .select("id, owner_id, status, max_members, join_mode")
+    .eq("id", parsed.data.roomId)
+    .maybeSingle();
+  if (!room) return { ok: false, message: "Room not found." };
+
+  // Typed against the table rather than Record<string, unknown>, so a typo in a
+  // column name is a compile error instead of a silently ignored update.
+  const update: Database["public"]["Tables"]["event_circles"]["Update"] = {
+    updated_at: new Date().toISOString()
+  };
+  if (parsed.data.name !== undefined) update.name = parsed.data.name.trim();
+  if (parsed.data.description !== undefined) {
+    update.description = parsed.data.description?.trim() || null;
+  }
+  if (parsed.data.listed !== undefined) update.listed_in_event = parsed.data.listed;
+
+  // The member limit is still bounded by the Room owner's tier. A host may
+  // lower it below the current member count -- existing members are never
+  // ejected by a settings change, the Room simply stops admitting new ones.
+  if (parsed.data.maxMembers !== undefined) {
+    const ownerAccess = await getCurrentSubscriptionAccess(room.owner_id);
+    update.max_members = Math.min(parsed.data.maxMembers, eventCircleMaxMembersFor(ownerAccess.plan));
+  }
+
+  if (parsed.data.joinMode !== undefined) {
+    // Switching TO group-gated without targets would produce a Room nobody can
+    // join. Refuse rather than silently create a dead Room.
+    if (parsed.data.joinMode === "community") {
+      const targets = parsed.data.groupConversationIds;
+      const { count } = await admin
+        .from("event_circle_group_targets")
+        .select("id", { count: "exact", head: true })
+        .eq("event_circle_id", parsed.data.roomId);
+      if ((targets?.length ?? count ?? 0) === 0) {
+        return { ok: false, message: "Choose at least one group for a group-only room." };
+      }
+    }
+    update.join_mode = parsed.data.joinMode;
+  }
+
+  // Status changes follow the same server-authoritative transition table as
+  // everything else; archiving goes through its own RPC so chat closes with it.
+  if (parsed.data.status !== undefined && parsed.data.status !== room.status) {
+    if (!canTransitionEventCircle(room.status, parsed.data.status)) {
+      return { ok: false, message: "That status change is not allowed." };
+    }
+    if (parsed.data.status === "archived") {
+      const access = await getCurrentSubscriptionAccess(room.owner_id);
+      const { error: archiveError } = await admin.rpc("archive_event_room", {
+        p_room_id: parsed.data.roomId,
+        p_archives_at: archivesAtNullable(access.plan)
+      });
+      if (archiveError) return { ok: false, message: "Couldn't archive the room." };
+    } else {
+      update.status = parsed.data.status;
+    }
+  }
+
+  if (parsed.data.groupConversationIds !== undefined) {
+    // Replace the target set, but only with Groups the actor is actually in --
+    // otherwise a host could grant Room access to a Group they have no standing
+    // in using nothing but its id.
+    const wanted = parsed.data.groupConversationIds;
+    if (wanted.length > 0) {
+      const { data: mine } = await admin
+        .from("conversation_members")
+        .select("conversation_id")
+        .eq("user_id", userId)
+        .eq("status", "joined")
+        .in("conversation_id", wanted);
+      const allowed = new Set((mine ?? []).map((row) => row.conversation_id));
+      if (wanted.some((id) => !allowed.has(id))) {
+        return { ok: false, message: "You can only choose groups you are in." };
+      }
+    }
+    await admin.from("event_circle_group_targets").delete().eq("event_circle_id", parsed.data.roomId);
+    if (wanted.length > 0) {
+      await admin.from("event_circle_group_targets").insert(
+        wanted.map((groupId) => ({
+          event_circle_id: parsed.data.roomId,
+          group_conversation_id: groupId
+        }))
+      );
+    }
+  }
+
+  if (Object.keys(update).length > 1) {
+    const { error } = await admin.from("event_circles").update(update).eq("id", parsed.data.roomId);
+    if (error) return { ok: false, message: "Couldn't save the room settings." };
+  }
+
+  // Names and roles surface in the conversation, so reconcile after any change.
+  await admin.rpc("reconcile_event_room_conversation", { p_room_id: parsed.data.roomId });
+  return { ok: true, message: "Room settings saved.", circleId: parsed.data.roomId };
+}
+
+// ---------------------------------------------------------------------------
+// EVENT ROOMS -- invitations
+//
+// The row IS the invitation. This is what makes "invite only" mean invited
+// rather than "holding a token somebody forwarded".
+// ---------------------------------------------------------------------------
+
+export async function inviteToEventRoomAction(input: unknown): Promise<EventActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+
+  const schema = z.object({ roomId: uuidSchema, userIds: z.array(uuidSchema).min(1).max(50) });
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check who you are inviting and try again." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  const manage = await canManageRoom(admin, userId, parsed.data.roomId);
+  if (!manage.allowed) return { ok: false, message: "You cannot invite people to this room." };
+
+  const { data: room } = await admin
+    .from("event_circles")
+    .select("id, name, status")
+    .eq("id", parsed.data.roomId)
+    .maybeSingle();
+  if (!room) return { ok: false, message: "Room not found." };
+  if (!isEventCircleWritable(room.status)) return { ok: false, message: "This room is closed." };
+
+  // A banned person must not be invitable back in by a co-host who did not
+  // know. The ban outranks the invitation.
+  const { data: banned } = await admin
+    .from("event_circle_members")
+    .select("user_id")
+    .eq("event_circle_id", parsed.data.roomId)
+    .eq("status", "banned")
+    .in("user_id", parsed.data.userIds);
+  const bannedIds = new Set((banned ?? []).map((row) => row.user_id));
+  const invitable = parsed.data.userIds.filter((id) => !bannedIds.has(id));
+  if (invitable.length === 0) return { ok: false, message: "Those people cannot be invited." };
+
+  const { error } = await admin.from("event_circle_invitations").upsert(
+    invitable.map((invitedId) => ({
+      event_circle_id: parsed.data.roomId,
+      invited_user_id: invitedId,
+      invited_by: userId,
+      status: "pending",
+      updated_at: new Date().toISOString()
+    })),
+    { onConflict: "event_circle_id,invited_user_id" }
+  );
+  if (error) return { ok: false, message: "Couldn't send the invitations." };
+
+  await Promise.all(
+    invitable.map((invitedId) =>
+      deliverNotification(admin, {
+        userId: invitedId,
+        senderId: userId,
+        category: "plans",
+        // Deep link carrying both ids, so tapping opens THIS Room rather than
+        // generic Events Home.
+        type: `event_room:${manage.eventId ?? ""}:${parsed.data.roomId}`,
+        title: room.name,
+        message: `You have been invited to ${room.name}.`
+      })
+    )
+  );
+
+  return { ok: true, message: `Invited ${invitable.length}.`, circleId: parsed.data.roomId };
+}
+
+// ---------------------------------------------------------------------------
+// EVENT ROOMS -- moderation
+// ---------------------------------------------------------------------------
+
+export async function setEventRoomMemberStatusAction(input: unknown): Promise<EventActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+
+  const schema = z.object({
+    roomId: uuidSchema,
+    userId: uuidSchema,
+    status: z.enum(["removed", "banned"])
+  });
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check the request and try again." };
+
+  const actorId = await getAuthedUserId();
+  if (!actorId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  const manage = await canManageRoom(admin, actorId, parsed.data.roomId);
+  if (!manage.allowed) return { ok: false, message: "You cannot manage this room." };
+
+  const { data: room } = await admin
+    .from("event_circles")
+    .select("owner_id")
+    .eq("id", parsed.data.roomId)
+    .maybeSingle();
+  // The Room owner cannot be removed from their own Room by anyone.
+  if (!room || room.owner_id === parsed.data.userId) {
+    return { ok: false, message: "You cannot remove the host." };
+  }
+
+  const { error } = await admin.rpc("set_event_room_membership", {
+    p_room_id: parsed.data.roomId,
+    p_user_id: parsed.data.userId,
+    p_status: parsed.data.status
+  });
+  if (error) return { ok: false, message: "Couldn't update that member." };
+
+  return {
+    ok: true,
+    message: parsed.data.status === "banned" ? "Member banned." : "Member removed.",
+    circleId: parsed.data.roomId
+  };
+}
+
+export async function setEventRoomRoleAction(input: unknown): Promise<EventActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+
+  const schema = z.object({
+    roomId: uuidSchema,
+    userId: uuidSchema,
+    role: z.enum(["co_host", "moderator", "member"])
+  });
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check the request and try again." };
+
+  const actorId = await getAuthedUserId();
+  if (!actorId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  const manage = await canManageRoom(admin, actorId, parsed.data.roomId);
+  // Only the Room host promotes. A co-host managing members must not be able to
+  // mint more co-hosts.
+  if (!manage.allowed || manage.role !== "host") {
+    return { ok: false, message: "Only the room host can change roles." };
+  }
+
+  const { error } = await admin.rpc("set_event_room_role", {
+    p_room_id: parsed.data.roomId,
+    p_user_id: parsed.data.userId,
+    p_role: parsed.data.role
+  });
+  if (error) return { ok: false, message: "Couldn't change that role." };
+  return { ok: true, message: "Role updated.", circleId: parsed.data.roomId };
+}
+
+// ---------------------------------------------------------------------------
+// EVENT ROOMS -- Notice reactions
+//
+// The reference shows reactions on a Room notice, so they are real. One per
+// person per notice, changeable, tapping the same one again clears it.
+// ---------------------------------------------------------------------------
+
+export async function setRoomNoticeReactionAction(input: unknown): Promise<EventActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+
+  const schema = z.object({
+    noticeId: uuidSchema,
+    reaction: z.enum(["heart", "fire", "applause", "wow"]).nullable()
+  });
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Couldn't react to that." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  const { data: notice } = await admin
+    .from("event_announcements")
+    .select("id, event_circle_id")
+    .eq("id", parsed.data.noticeId)
+    .maybeSingle();
+  if (!notice) return { ok: false, message: "That notice is gone." };
+
+  // Only a joined member of the Room may react. Holding a notice id is not
+  // membership.
+  const access = await resolveEventCircleAccess(admin, userId, notice.event_circle_id);
+  if (!access.isMember) return { ok: false, message: "Join the room first." };
+
+  const { data: room } = await admin
+    .from("event_circles")
+    .select("status")
+    .eq("id", notice.event_circle_id)
+    .maybeSingle();
+  if (!room || !isEventCircleWritable(room.status)) {
+    return { ok: false, message: "This room is read-only now." };
+  }
+
+  if (parsed.data.reaction === null) {
+    await admin
+      .from("event_announcement_reactions")
+      .delete()
+      .eq("event_announcement_id", parsed.data.noticeId)
+      .eq("user_id", userId);
+    return { ok: true, message: "Reaction removed." };
+  }
+
+  // The unique constraint is what stops a double tap inflating the count: the
+  // second tap updates the same row rather than adding one.
+  const { error } = await admin.from("event_announcement_reactions").upsert(
+    {
+      event_announcement_id: parsed.data.noticeId,
+      user_id: userId,
+      reaction_type: parsed.data.reaction,
+      updated_at: new Date().toISOString()
+    },
+    { onConflict: "event_announcement_id,user_id" }
+  );
+  if (error) return { ok: false, message: "Couldn't react to that." };
+  return { ok: true, message: "Reaction saved." };
+}
+
+// ---------------------------------------------------------------------------
+// EVENT + ROOM QR
+//
+// A QR carries a signed, expiring, purpose-bound, context-bound token and
+// NOTHING else -- no user data, no secrets, no database ids beyond the context
+// the token is for. Minting is server-side and authorized; the client renders
+// the string it is given and can neither forge nor extend one.
+//
+// The 5-minute lifetime is what makes a photographed QR stop working. Refresh
+// mints a fresh token rather than extending the old one, because extending
+// would mean the token said one expiry and meant another.
+// ---------------------------------------------------------------------------
+
+const QR_TOKEN_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Mint an Event check-in QR. Host and Event admins only: a check-in code is the
+ * authority to mark people present at someone else's Event.
+ */
+export async function createEventCheckInQrAction(
+  eventId: string
+): Promise<{ ok: boolean; message: string; token?: string; expiresAtMs?: number; eventName?: string }> {
+  const missing = missingEnvState();
+  if (missing) return { ok: false, message: missing.message };
+  if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const secret = eventTokenSecret();
+  if (!secret) return { ok: false, message: "This action needs the server database configuration." };
+
+  const admin = createSupabaseAdminClient();
+  if (!(await isEventOperator(admin, eventId, userId))) {
+    return { ok: false, message: "Only the host can show the check-in code." };
+  }
+
+  const { data: event } = await admin.from("events").select("name, status").eq("id", eventId).maybeSingle();
+  if (!event) return { ok: false, message: "Event not found." };
+  // A cancelled or ended Event must not mint codes that would check people in.
+  if (event.status === "cancelled" || event.status === "ended") {
+    return { ok: false, message: "This event is over." };
+  }
+
+  const expiresAtMs = Date.now() + QR_TOKEN_TTL_MS;
+  return {
+    ok: true,
+    message: "Code ready.",
+    token: createEventToken({ contextId: eventId, purpose: "check_in", expiresAtMs }, secret),
+    expiresAtMs,
+    eventName: event.name
+  };
+}
+
+/**
+ * Mint a Room join QR. Anyone who may manage the Room -- its host or co-host,
+ * or an operator of the Event it belongs to.
+ */
+export async function createRoomJoinQrAction(
+  roomId: string
+): Promise<{ ok: boolean; message: string; token?: string; expiresAtMs?: number; roomName?: string }> {
+  const missing = missingEnvState();
+  if (missing) return { ok: false, message: missing.message };
+  if (!uuidSchema.safeParse(roomId).success) return { ok: false, message: "Room not found." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const secret = eventTokenSecret();
+  if (!secret) return { ok: false, message: "This action needs the server database configuration." };
+
+  const admin = createSupabaseAdminClient();
+  const manage = await canManageRoom(admin, userId, roomId);
+  if (!manage.allowed) return { ok: false, message: "You cannot share this room." };
+
+  const { data: room } = await admin
+    .from("event_circles")
+    .select("name, status")
+    .eq("id", roomId)
+    .maybeSingle();
+  if (!room) return { ok: false, message: "Room not found." };
+  // A closed Room must not mint join codes. The scan would be refused anyway;
+  // refusing to mint means the host is told now rather than the guest later.
+  if (!isEventCircleWritable(room.status)) return { ok: false, message: "This room is closed." };
+
+  const expiresAtMs = Date.now() + QR_TOKEN_TTL_MS;
+  return {
+    ok: true,
+    message: "Code ready.",
+    token: createEventToken({ contextId: roomId, purpose: "circle_join", expiresAtMs }, secret),
+    expiresAtMs,
+    roomName: room.name
+  };
+}
+
+// ---------------------------------------------------------------------------
+// HOST TOOLS -- Guest List
+//
+// Built from existing participation truth: RSVPs and live check-ins. No new
+// attendance store, and deliberately no contact details -- a host needs to know
+// who is coming and who has arrived, which is display identity, not an export
+// of their guests' account records.
+// ---------------------------------------------------------------------------
+
+export async function listEventGuestsAction(eventId: string) {
+  if (missingEnvState()) return { going: 0, checkedIn: 0, interested: 0, guests: [] };
+  if (!uuidSchema.safeParse(eventId).success) {
+    return { going: 0, checkedIn: 0, interested: 0, guests: [] };
+  }
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { going: 0, checkedIn: 0, interested: 0, guests: [] };
+
+  const admin = createSupabaseAdminClient();
+  // The guest list is operational information for whoever runs the Event.
+  if (!(await isEventOperator(admin, eventId, userId))) {
+    return { going: 0, checkedIn: 0, interested: 0, guests: [] };
+  }
+
+  const [{ data: rsvps }, { data: checkIns }, { data: invites }] = await Promise.all([
+    admin.from("event_rsvps").select("user_id, status").eq("event_id", eventId),
+    admin
+      .from("check_ins")
+      .select("user_id, checked_in_at")
+      .eq("context_type", "event")
+      .eq("context_id", eventId)
+      .eq("status", "checked_in"),
+    admin.from("event_audience_targets").select("target_id").eq("event_id", eventId).eq("target_type", "user")
+  ]);
+
+  const checkedInIds = new Map((checkIns ?? []).map((row) => [row.user_id, row.checked_in_at] as const));
+  const rsvpById = new Map((rsvps ?? []).map((row) => [row.user_id, row.status] as const));
+  const invitedIds = new Set((invites ?? []).map((row) => row.target_id));
+
+  const userIds = Array.from(
+    new Set([...rsvpById.keys(), ...checkedInIds.keys(), ...invitedIds])
+  ).filter(Boolean);
+  if (userIds.length === 0) return { going: 0, checkedIn: 0, interested: 0, guests: [] };
+
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("user_id, full_name, avatar_url")
+    .in("user_id", userIds);
+  const byId = new Map((profiles ?? []).map((profile) => [profile.user_id, profile] as const));
+
+  const guests = userIds
+    .map((id) => {
+      const profile = byId.get(id);
+      return {
+        userId: id,
+        displayName: profile?.full_name ?? "Someone",
+        avatarUrl: profile?.avatar_url ?? null,
+        rsvp: rsvpById.get(id) ?? null,
+        invited: invitedIds.has(id),
+        checkedIn: checkedInIds.has(id),
+        checkedInAt: checkedInIds.get(id) ?? null
+      };
+    })
+    // Arrived first, then going, then everyone else: the list is read during an
+    // Event, when who is actually here is the useful ordering.
+    .sort((a, b) => {
+      if (a.checkedIn !== b.checkedIn) return a.checkedIn ? -1 : 1;
+      const rank = (status: string | null) => (status === "going" ? 0 : status === "interested" ? 1 : 2);
+      return rank(a.rsvp) - rank(b.rsvp) || a.displayName.localeCompare(b.displayName);
+    });
+
+  return {
+    going: guests.filter((guest) => guest.rsvp === "going").length,
+    interested: guests.filter((guest) => guest.rsvp === "interested").length,
+    checkedIn: guests.filter((guest) => guest.checkedIn).length,
+    guests
+  };
+}
+
+// ---------------------------------------------------------------------------
+// HOST TOOLS -- End Event
+//
+// Not decorative. Ends the Event, and moves its Rooms to 'closing' rather than
+// deleting them: an after-party conversation should not be destroyed because
+// the calendar says the Event finished. Nothing attendees wrote is deleted.
+// ---------------------------------------------------------------------------
+
+export async function endEventAction(eventId: string): Promise<EventActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  const { data: event } = await admin
+    .from("events")
+    .select("id, host_id, status, name")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event) return { ok: false, message: "Event not found." };
+  // Ending an Event is the host's call alone, not an Event admin's.
+  if (event.host_id !== userId) return { ok: false, message: "Only the host can end this event." };
+  if (event.status === "ended") return { ok: true, message: "This event has already ended." };
+  if (event.status === "cancelled") return { ok: false, message: "This event was cancelled." };
+
+  const { error } = await admin
+    .from("events")
+    .update({ status: "ended", updated_at: new Date().toISOString() })
+    .eq("id", eventId)
+    .eq("host_id", userId);
+  if (error) return { ok: false, message: "Couldn't end the event." };
+
+  // Deterministic Room transition: open/active Rooms move to closing. History
+  // stays readable and existing members keep talking; no new members join.
+  await admin.rpc("close_event_rooms_for_event", { p_event_id: eventId });
+
+  return { ok: true, message: `${event.name} has ended.`, eventId };
+}
+
+/**
+ * The Groups the viewer may point a Group-gated Room at.
+ *
+ * Only Groups they are a joined member of: targeting a Group you have no
+ * standing in would let a host grant Room access to somebody else's community
+ * using nothing but its id. The RPCs enforce the same rule again on write --
+ * this list is a convenience, never the authorization.
+ */
+export async function listRoomGroupOptionsAction() {
+  if (missingEnvState()) return [];
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+
+  const admin = createSupabaseAdminClient();
+  const { data: memberships } = await admin
+    .from("conversation_members")
+    .select("conversation_id")
+    .eq("user_id", userId)
+    .eq("status", "joined");
+  const ids = (memberships ?? []).map((row) => row.conversation_id);
+  if (ids.length === 0) return [];
+
+  const { data: groups } = await admin
+    .from("conversations")
+    .select("id")
+    .eq("conversation_type", "group")
+    .eq("status", "active")
+    .in("id", ids);
+  const groupIds = (groups ?? []).map((row) => row.id);
+  if (groupIds.length === 0) return [];
+
+  const { data: settings } = await admin
+    .from("group_settings")
+    .select("conversation_id, name")
+    .in("conversation_id", groupIds);
+
+  return (settings ?? [])
+    .map((row) => ({ id: row.conversation_id, name: row.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }

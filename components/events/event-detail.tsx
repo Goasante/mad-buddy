@@ -13,6 +13,8 @@ import { describeEvent } from "@/lib/events/presentation";
 import type { EventView } from "@/lib/events/mobile";
 import type { EventGlowMuddyList } from "@/lib/events/types";
 import type { EventUpdateView } from "@/lib/events/updates";
+import type { RoomView } from "@/lib/events/rooms";
+import { EventRoomsSection } from "@/components/events/event-rooms";
 import type { EventRsvpStatus } from "@/lib/supabase/database.types";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { cn } from "@/lib/utils";
@@ -225,6 +227,12 @@ export function EventDetail({
   onTurnOffLinkr,
   onOpenUpdates,
   onManageAdmins,
+  rooms,
+  onJoinRoom,
+  onOpenRoom,
+  onSeeAllRooms,
+  onCreateRoom,
+  onOpenHostTools,
   draftCover = null
 }: {
   event: EventView;
@@ -243,6 +251,14 @@ export function EventDetail({
   onTurnOffLinkr: () => void;
   onOpenUpdates: () => void;
   onManageAdmins: () => void;
+  /* EVENT ROOMS. Passed in rather than fetched here so the detail stays a
+     presentational surface and the page keeps one loader for Event context. */
+  rooms: RoomView[];
+  onJoinRoom: (roomId: string) => void;
+  onOpenRoom: (roomId: string) => void;
+  onSeeAllRooms: () => void;
+  onCreateRoom: () => void;
+  onOpenHostTools: () => void;
   /* Draft publishing, host-only. Absent for anyone who cannot publish, which
    * keeps the cover uploader from mounting for a viewer who has no use for
    * it. */
@@ -547,6 +563,23 @@ export function EventDetail({
           moment a link could be obtained, so a host who closed that sheet had
           published an unlisted Event with no way to invite anybody. A DRAFT is
           excluded: it has no shareable identity yet. */}
+      {/* EVENT ROOMS -- the reference treats Rooms as a primary tab, so the
+          section sits directly under the participation block, above sharing and
+          the Event info table. At a live Event, joining a room is the thing
+          people came to do; the venue address is reference material. */}
+      <EventRoomsSection
+        rooms={rooms}
+        eventCoverUrl={event.coverUrl}
+        eventFocalX={event.focalX ?? 0.5}
+        eventFocalY={event.focalY ?? 0.5}
+        canCreate={event.isHost}
+        onJoin={onJoinRoom}
+        onOpen={onOpenRoom}
+        onSeeAll={onSeeAllRooms}
+        onCreate={onCreateRoom}
+        pending={pending}
+      />
+
       <EventShare
         eventId={event.id}
         eventName={event.name}
@@ -599,6 +632,16 @@ export function EventDetail({
       </section>
 
       <div className="flex flex-col gap-1">
+        {/* HOST TOOLS. The single door to everything a host operates -- QR
+            check-in, Rooms, Updates, Guest list, Admins, Settings, End Event.
+            Shown only to the host, whose authority the server re-checks on
+            every action behind it. */}
+        {event.isHost ? (
+          <Button variant="ghost" onClick={onOpenHostTools} className="justify-between">
+            <span>Host tools</span>
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        ) : null}
         <Button variant="ghost" onClick={onOpenUpdates} className="justify-between">
           <span>Updates{updates.length > 0 ? ` (${updates.length})` : ""}</span>
           <ChevronRight className="h-4 w-4" aria-hidden="true" />

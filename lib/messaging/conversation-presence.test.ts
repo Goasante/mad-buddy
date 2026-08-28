@@ -47,6 +47,12 @@ function conversation(overrides: Partial<ConversationView> = {}): ConversationVi
     planId: null,
     planCategory: null,
     planStartAt: null,
+    // Not an Event Room either: a Room chat has its own identity fields, and a
+    // direct conversation must never be mistaken for one.
+    roomId: null,
+    roomEventId: null,
+    roomEventName: null,
+    roomStatus: null,
     ...overrides
   };
 }

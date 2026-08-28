@@ -4,6 +4,16 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarPlus, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
+  archiveEventCircleAction,
+  createEventCheckInQrAction,
+  createEventCircleAction,
+  createRoomJoinQrAction,
+  endEventAction,
+  joinEventCircleAction,
+  leaveEventCircleAction,
+  listEventRoomsAction,
+  listRoomGroupOptionsAction,
+  updateEventRoomAction,
   canManageEventAction,
   checkInToEventAction,
   checkOutAction,
@@ -38,6 +48,12 @@ import { EventsDiscover } from "@/components/events/events-discover";
 import { EventsYours } from "@/components/events/events-yours";
 import { EventsHosting } from "@/components/events/events-hosting";
 import { EventDetail } from "@/components/events/event-detail";
+import { EventRoomsSection, CreateRoomForm } from "@/components/events/event-rooms";
+import { EventRoomDetail } from "@/components/events/event-room-detail";
+import { EventRoomSettings } from "@/components/events/event-room-settings";
+import { EventHostTools, EventGuestList, type HostToolsRow } from "@/components/events/event-host-tools";
+import { QrPanel, JoinedRoomSuccess } from "@/components/events/event-qr";
+import type { RoomView } from "@/lib/events/rooms";
 import { EventShare } from "@/components/events/event-share";
 import { AudienceChip } from "@/components/events/event-badges";
 import { focalObjectPosition } from "@/lib/events/cover";
@@ -99,6 +115,11 @@ export function EventsPageContent({
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedId = searchParams.get("event");
+  /* DEEP LINK to a specific Room inside an Event: /events?event=<id>&room=<id>.
+     Extends the existing query-driven opening rather than inventing a second
+     navigation model. Authorization is re-checked when the Room is read, so a
+     link to a Room the viewer was removed from opens nothing. */
+  const requestedRoomId = searchParams.get("room");
   /* The discovery list is only the FIRST place to look for a linked Event.
    *
    * listEvents is discovery-filtered, so an unlisted "anyone with the link"
@@ -216,15 +237,166 @@ export function EventsPageContent({
   const [linkrState, setLinkrState] = useState<EventLinkrState | null>(null);
   const [meetPeopleOpen, setMeetPeopleOpen] = useState(false);
 
+  /* EVENT ROOMS state.
+   *
+   * Loaded with the rest of the Event context when a detail opens, on the same
+   * principle as updates: a discovery feed has no business fetching every
+   * Event's rooms. */
+  const [rooms, setRooms] = useState<RoomView[]>([]);
+  const [hostToolsOpen, setHostToolsOpen] = useState(false);
+  const [roomsOpen, setRoomsOpen] = useState(false);
+  const [createRoomOpen, setCreateRoomOpen] = useState(false);
+  const [guestsOpen, setGuestsOpen] = useState(false);
+  const [eventQrOpen, setEventQrOpen] = useState(false);
+  const [roomQrId, setRoomQrId] = useState<string | null>(null);
+  const [openRoomId, setOpenRoomId] = useState<string | null>(null);
+  const [roomSettingsId, setRoomSettingsId] = useState<string | null>(null);
+  const [joinedRoom, setJoinedRoom] = useState<RoomView | null>(null);
+  const [roomError, setRoomError] = useState("");
+  /* Groups the viewer may target a Room at. Fetched only when a Room form is
+     actually opened -- an Event page has no reason to know the viewer's groups
+     until they are choosing between them. */
+  const [groupOptions, setGroupOptions] = useState<Array<{ id: string; name: string }>>([]);
+
+  /* Loaded when a Room form is opened, not with the Event: an Event page has no
+     business knowing the viewer's Groups until they are choosing between them.
+     Fetched once per session of the form rather than on every keystroke. */
+  useEffect(() => {
+    if (!createRoomOpen && !roomSettingsId) return;
+    if (groupOptions.length > 0) return;
+    let cancelled = false;
+    void listRoomGroupOptionsAction().then((options) => {
+      if (!cancelled) setGroupOptions(options);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [createRoomOpen, roomSettingsId, groupOptions.length]);
+
+  const openRoom = rooms.find((room) => room.id === openRoomId) ?? null;
+  const settingsRoom = rooms.find((room) => room.id === roomSettingsId) ?? null;
+  const qrRoom = rooms.find((room) => room.id === roomQrId) ?? null;
+
+  /* JOIN.
+   *
+   * The list only ever offers Join where the server already said yes, so this
+   * is the happy path -- but the action re-decides from scratch anyway, and a
+   * refusal is surfaced rather than swallowed. On success the Room's own row is
+   * re-read so member count and membership come from the server, never from an
+   * optimistic guess. */
+  function joinRoom(roomId: string) {
+    if (!selectedEvent) return;
+    setRoomError("");
+    startTransition(async () => {
+      const result = await joinEventCircleAction(roomId);
+      if (!result.ok) {
+        setRoomError(result.message);
+        return;
+      }
+      const next = await listEventRoomsAction(selectedEvent.id, Boolean(selectedEvent.isHost));
+      setRooms(next);
+      setJoinedRoom(next.find((room) => room.id === roomId) ?? null);
+    });
+  }
+
+  function leaveRoom(roomId: string) {
+    if (!selectedEvent) return;
+    startTransition(async () => {
+      const result = await leaveEventCircleAction(roomId);
+      if (!result.ok) {
+        setRoomError(result.message);
+        return;
+      }
+      setOpenRoomId(null);
+      setRooms(await listEventRoomsAction(selectedEvent.id, Boolean(selectedEvent.isHost)));
+    });
+  }
+
+  function createRoom(input: {
+    name: string;
+    description: string;
+    joinMode: "invite" | "check_in" | "qr" | "community";
+    maxMembers: number;
+    listed: boolean;
+    groupConversationIds: string[];
+  }) {
+    if (!selectedEvent) return;
+    setRoomError("");
+    startTransition(async () => {
+      const result = await createEventCircleAction({ ...input, eventId: selectedEvent.id });
+      if (!result.ok) {
+        setRoomError(result.message);
+        return;
+      }
+      setCreateRoomOpen(false);
+      setRooms(await listEventRoomsAction(selectedEvent.id, true));
+    });
+  }
+
+  function saveRoomSettings(input: Parameters<typeof updateEventRoomAction>[0]) {
+    if (!selectedEvent) return;
+    setRoomError("");
+    startTransition(async () => {
+      const result = await updateEventRoomAction(input);
+      if (!result.ok) {
+        setRoomError(result.message);
+        return;
+      }
+      setRoomSettingsId(null);
+      setRooms(await listEventRoomsAction(selectedEvent.id, Boolean(selectedEvent.isHost)));
+    });
+  }
+
+  function archiveRoom(roomId: string) {
+    if (!selectedEvent) return;
+    startTransition(async () => {
+      const result = await archiveEventCircleAction(roomId);
+      if (!result.ok) {
+        setRoomError(result.message);
+        return;
+      }
+      setRoomSettingsId(null);
+      setOpenRoomId(null);
+      setRooms(await listEventRoomsAction(selectedEvent.id, Boolean(selectedEvent.isHost)));
+    });
+  }
+
+  function endEvent() {
+    if (!selectedEvent) return;
+    startTransition(async () => {
+      const result = await endEventAction(selectedEvent.id);
+      if (!result.ok) {
+        setRoomError(result.message);
+        return;
+      }
+      setHostToolsOpen(false);
+      // Re-read just this Event through the direct-access authority: ending it
+      // changes its status, and the list projection must not be guessed at.
+      const refreshed = await getEventByIdAction(selectedEvent.id);
+      if (refreshed) {
+        setEvents((current) =>
+          current.map((event) => (event.id === refreshed.id ? refreshed : event))
+        );
+      }
+      setRooms(await listEventRoomsAction(selectedEvent.id, true));
+    });
+  }
+
   function loadEventContext(eventId: string) {
     startTransition(async () => {
-      const [nextUpdates, nextLinkr, canManage] = await Promise.all([
+      const [nextUpdates, nextLinkr, canManage, nextRooms] = await Promise.all([
         listEventUpdatesAction(eventId),
         getEventLinkrStateAction(eventId),
         canManageEventAction(eventId),
+        /* Rooms come with the Event context, in the SAME batch. Unlisted rooms
+           are requested only for someone who might operate the Event; the
+           server independently refuses to include them for anyone else, so
+           this flag is a hint, never the authorization. */
+        listEventRoomsAction(eventId, true),
       ]);
       setUpdates(nextUpdates);
       setLinkrState(nextLinkr);
+      setRooms(nextRooms);
       // The composer is gated on the server too; this only decides whether to
       // render it. Host and delegated-admin authority are resolved together.
       setCanPublishUpdates(canManage);
@@ -327,6 +499,19 @@ export function EventsPageContent({
       setUpdatesOpen(false);
       setAdminsOpen(false);
       setMeetPeopleOpen(false);
+      setRooms([]);
+      setRoomSettingsId(null);
+      setRoomQrId(null);
+      setJoinedRoom(null);
+      setHostToolsOpen(false);
+      setRoomsOpen(false);
+      setCreateRoomOpen(false);
+      setGuestsOpen(false);
+      setEventQrOpen(false);
+      setRoomError("");
+      // The requested Room, if the link named one. Cleared otherwise, so a
+      // link without a room never reopens the previous one.
+      setOpenRoomId(requestedRoomId);
       setLinkedEventMissing(false);
       setLinkedEventPending(!known);
     });
@@ -372,7 +557,7 @@ export function EventsPageContent({
     // initialEvents is intentionally absent: it is a fresh array on every
     // render, and depending on it re-runs this per render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestedId]);
+  }, [requestedId, requestedRoomId]);
 
   const selectedEvent = events.find((event) => event.id === selectedId) ?? null;
 
@@ -381,6 +566,19 @@ export function EventsPageContent({
     setGlowList(null);
     setUpdates([]);
     setLinkrState(null);
+    // Room state belongs to the Event that opened it, exactly like the
+    // sub-sheets below: one Event's rooms must never appear under another.
+    setRooms([]);
+    setOpenRoomId(null);
+    setRoomSettingsId(null);
+    setRoomQrId(null);
+    setJoinedRoom(null);
+    setHostToolsOpen(false);
+    setRoomsOpen(false);
+    setCreateRoomOpen(false);
+    setGuestsOpen(false);
+    setEventQrOpen(false);
+    setRoomError("");
     /* THE SUB-SHEETS BELONG TO THE EVENT THAT OPENED THEM.
      *
      * `updatesOpen`, `adminsOpen` and `meetPeopleOpen` were never reset when
@@ -970,6 +1168,12 @@ export function EventsPageContent({
             onTurnOffLinkr={() => setMeetPeopleOpen(true)}
             onOpenUpdates={() => setUpdatesOpen(true)}
             onManageAdmins={() => setAdminsOpen(true)}
+            rooms={rooms}
+            onJoinRoom={joinRoom}
+            onOpenRoom={(roomId) => setOpenRoomId(roomId)}
+            onSeeAllRooms={() => setRoomsOpen(true)}
+            onCreateRoom={() => setCreateRoomOpen(true)}
+            onOpenHostTools={() => setHostToolsOpen(true)}
             draftCover={
               selectedEvent.isHost && selectedEvent.status === "draft"
                 ? {
@@ -1019,6 +1223,248 @@ export function EventsPageContent({
       >
         {selectedEvent?.isHost ? (
           <EventAdminManager eventId={selectedEvent.id} />
+        ) : null}
+      </Modal>
+
+
+      {/* ------------------------------------------------------------------
+          EVENT ROOMS surfaces.
+
+          Each is its own sheet rather than an accordion inside the detail, on
+          the same principle as Updates and Admins above: a Room is a place you
+          go, not a section you scroll past. Nesting order is deliberate --
+          Host Tools -> Rooms -> Room -> Settings/QR -- so closing one returns
+          to the one that opened it rather than dumping the user on /events.
+          ------------------------------------------------------------------ */}
+
+      <Modal
+        owner="EventHostToolsModal"
+        open={hostToolsOpen && Boolean(selectedEvent?.isHost)}
+        onOpenChange={setHostToolsOpen}
+        variant="sheet"
+        title="Host Tools"
+      >
+        {selectedEvent?.isHost ? (
+          <EventHostTools
+            eventId={selectedEvent.id}
+            eventName={selectedEvent.name}
+            eventWhen={new Date(selectedEvent.startsAt).toLocaleString([], {
+              weekday: "short",
+              day: "numeric",
+              month: "short",
+              hour: "numeric",
+              minute: "2-digit"
+            })}
+            eventCoverUrl={selectedEvent.coverUrl}
+            eventFocalX={selectedEvent.focalX ?? 0.5}
+            eventFocalY={selectedEvent.focalY ?? 0.5}
+            roomCount={rooms.length}
+            updateCount={updates.length}
+            adminCount={0}
+            goingCount={selectedEvent.goingCount ?? 0}
+            checkedInCount={0}
+            canEndEvent={selectedEvent.isHost}
+            eventEnded={selectedEvent.status === "ended"}
+            pending={busy}
+            onEndEvent={endEvent}
+            onOpen={(row: HostToolsRow) => {
+              // Each row opens a REAL surface. Updates and Admins deliberately
+              // reuse the existing Event architecture rather than duplicating
+              // it inside Host Tools.
+              if (row === "qr") setEventQrOpen(true);
+              else if (row === "rooms") setRoomsOpen(true);
+              else if (row === "updates") setUpdatesOpen(true);
+              else if (row === "guests") setGuestsOpen(true);
+              else if (row === "admins") setAdminsOpen(true);
+              // Reuses the EXISTING Event draft/edit authority. No shadow settings store.
+              else if (row === "settings") continueDraft(selectedEvent.id);
+            }}
+          />
+        ) : null}
+      </Modal>
+
+      {/* EVENT CHECK-IN QR. A real server-minted, signed, expiring token. */}
+      <Modal
+        owner="EventCheckInQrModal"
+        open={eventQrOpen && Boolean(selectedEvent?.isHost)}
+        onOpenChange={setEventQrOpen}
+        variant="center"
+        title="QR Check-in"
+        hideTitle
+      >
+        {selectedEvent?.isHost ? (
+          <QrPanel
+            title="QR Check-in"
+            subtitle="Show this QR code for people to check in to the event"
+            caption={selectedEvent.name}
+            mint={() => createEventCheckInQrAction(selectedEvent.id)}
+            onClose={() => setEventQrOpen(false)}
+          />
+        ) : null}
+      </Modal>
+
+      {/* ROOM QR. Same guarantees, bound to one Room rather than the Event. */}
+      <Modal
+        owner="EventRoomQrModal"
+        open={Boolean(qrRoom)}
+        onOpenChange={(open) => {
+          if (!open) setRoomQrId(null);
+        }}
+        variant="center"
+        title="Room QR"
+        hideTitle
+      >
+        {qrRoom ? (
+          <QrPanel
+            title="Room QR"
+            subtitle="Share this QR code for people to join this room"
+            caption={qrRoom.name}
+            mint={() => createRoomJoinQrAction(qrRoom.id)}
+            onClose={() => setRoomQrId(null)}
+          />
+        ) : null}
+      </Modal>
+
+      {/* FULL ROOM LIST -- "See all (N)" and the host's Room manager. */}
+      <Modal
+        owner="EventRoomsModal"
+        open={roomsOpen && Boolean(selectedEvent)}
+        onOpenChange={setRoomsOpen}
+        variant="sheet"
+        title="Event Rooms"
+      >
+        {selectedEvent ? (
+          <div className="space-y-3">
+            {roomError ? (
+              <p role="alert" className="text-sm text-destructive">
+                {roomError}
+              </p>
+            ) : null}
+            <EventRoomsSection
+              rooms={rooms}
+              eventCoverUrl={selectedEvent.coverUrl}
+              eventFocalX={selectedEvent.focalX ?? 0.5}
+              eventFocalY={selectedEvent.focalY ?? 0.5}
+              canCreate={selectedEvent.isHost}
+              onJoin={joinRoom}
+              onOpen={(roomId) => setOpenRoomId(roomId)}
+              onSeeAll={() => undefined}
+              onCreate={() => setCreateRoomOpen(true)}
+              pending={busy}
+              limit={rooms.length}
+            />
+            {selectedEvent.isHost ? (
+              <Button
+                variant="secondary"
+                onClick={() => setCreateRoomOpen(true)}
+                className="min-h-[2.75rem] w-full"
+              >
+                Create room
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        owner="CreateEventRoomModal"
+        open={createRoomOpen && Boolean(selectedEvent?.isHost)}
+        onOpenChange={setCreateRoomOpen}
+        variant="sheet"
+        title="Create room"
+      >
+        {selectedEvent?.isHost ? (
+          <CreateRoomForm
+            onSubmit={createRoom}
+            onCancel={() => setCreateRoomOpen(false)}
+            pending={busy}
+            error={roomError}
+            groupOptions={groupOptions}
+          />
+        ) : null}
+      </Modal>
+
+      {/* ROOM DETAIL. Chat, Members, Notices and (for a manager) Settings. */}
+      <Modal
+        owner="EventRoomDetailModal"
+        open={Boolean(openRoom)}
+        onOpenChange={(open) => {
+          if (!open) setOpenRoomId(null);
+        }}
+        variant="sheet"
+        title={openRoom?.name ?? "Room"}
+        hideTitle
+        widthClassName="sm:max-w-xl"
+      >
+        {openRoom && selectedEvent ? (
+          <EventRoomDetail
+            room={openRoom}
+            eventCoverUrl={selectedEvent.coverUrl}
+            eventFocalX={selectedEvent.focalX ?? 0.5}
+            eventFocalY={selectedEvent.focalY ?? 0.5}
+            onOpenSettings={() => setRoomSettingsId(openRoom.id)}
+            onOpenQr={() => setRoomQrId(openRoom.id)}
+            onLeave={() => leaveRoom(openRoom.id)}
+          />
+        ) : null}
+      </Modal>
+
+      <Modal
+        owner="EventRoomSettingsModal"
+        open={Boolean(settingsRoom)}
+        onOpenChange={(open) => {
+          if (!open) setRoomSettingsId(null);
+        }}
+        variant="sheet"
+        title="Room Settings"
+      >
+        {settingsRoom ? (
+          <EventRoomSettings
+            room={settingsRoom}
+            groupOptions={groupOptions}
+            selectedGroupIds={settingsRoom.groupTargetIds}
+            onSave={saveRoomSettings}
+            onArchive={() => archiveRoom(settingsRoom.id)}
+            onCancel={() => setRoomSettingsId(null)}
+            pending={busy}
+            error={roomError}
+          />
+        ) : null}
+      </Modal>
+
+      {/* GUEST LIST -- built from RSVP and live check-in truth. */}
+      <Modal
+        owner="EventGuestListModal"
+        open={guestsOpen && Boolean(selectedEvent?.isHost)}
+        onOpenChange={setGuestsOpen}
+        variant="sheet"
+        title="Guest list"
+      >
+        {selectedEvent?.isHost ? <EventGuestList eventId={selectedEvent.id} /> : null}
+      </Modal>
+
+      {/* JOINED SUCCESS. Says what happened and offers the two real next steps,
+          rather than mutating silently and leaving the user somewhere. */}
+      <Modal
+        owner="EventRoomJoinedModal"
+        open={Boolean(joinedRoom)}
+        onOpenChange={(open) => {
+          if (!open) setJoinedRoom(null);
+        }}
+        variant="center"
+        title="Joined"
+        hideTitle
+        compact
+      >
+        {joinedRoom ? (
+          <JoinedRoomSuccess
+            roomName={joinedRoom.name}
+            onOpenRoom={() => {
+              setOpenRoomId(joinedRoom.id);
+              setJoinedRoom(null);
+            }}
+            onDismiss={() => setJoinedRoom(null)}
+          />
         ) : null}
       </Modal>
 

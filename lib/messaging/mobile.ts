@@ -17,7 +17,7 @@ import { deliverNotification } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import type { ConversationRole, QuickActionType, SubscriptionPlan } from "@/lib/supabase/database.types";
+import type { ConversationRole, EventCircleStatus, QuickActionType, SubscriptionPlan } from "@/lib/supabase/database.types";
 import { hasVerifiedAccountStatus, type VerificationRow } from "@/lib/trust/verified-account";
 import { isConversationVisible } from "@/lib/messaging/conversation-visibility";
 import { planPhase, type PlanPhase } from "@/lib/social/plans";
@@ -153,6 +153,20 @@ export type ConversationView = {
    * and Events, so nothing else can be mistaken for a Plan.
    */
   planPhase: PlanPhase | null;
+  /**
+   * The Event Room this conversation IS, or null when it is not a Room chat.
+   *
+   * Present so Messages can label a Room correctly and lead back to it inside
+   * its Event. Deliberately distinct from a Group: a Room is temporary and
+   * belongs to one Event, which is why conversation_type "event" exists.
+   */
+  roomId: string | null;
+  /** The Event a Room belongs to, for the way back. Null for non-Room chats. */
+  roomEventId: string | null;
+  /** The Event's name, for the "<Event> · Event Room" context line. */
+  roomEventName: string | null;
+  /** Room lifecycle status, so an archived Room can present as read-only. */
+  roomStatus: EventCircleStatus | null;
 };
 
 export type MessageableFriend = {
@@ -766,6 +780,20 @@ export async function listConversations(userId: string): Promise<ConversationVie
     )
   ];
 
+  /* Event Rooms, on exactly the same principle as Plan Chats above.
+   *
+   * Keyed on context_type === "event_circle", the STORED authority. Without
+   * this an Event Room conversation fell through to the group branch and was
+   * called "Group" in the inbox -- naming the wrong product. A Room is not a
+   * Group: it is temporary, it belongs to one Event, and it says so. */
+  const roomContextIds = [
+    ...new Set(
+      (conversations ?? [])
+        .filter((conversation) => conversation.context_type === "event_circle" && conversation.context_id)
+        .map((conversation) => conversation.context_id as string)
+    )
+  ];
+
   const [
     { data: pins },
     { data: otherProfiles },
@@ -773,7 +801,8 @@ export async function listConversations(userId: string): Promise<ConversationVie
     { data: groupSettings },
     { data: previews },
     plans,
-    { data: planTimings }
+    { data: planTimings },
+    { data: roomRows }
   ] = await Promise.all([
     admin.from("conversation_pins").select("conversation_id").eq("user_id", userId).in("conversation_id", conversationIds),
     otherIds.length > 0
@@ -800,6 +829,16 @@ export async function listConversations(userId: string): Promise<ConversationVie
      * same single round trip as one. */
     planContextIds.length > 0
       ? admin.from("plans").select("id, title, category, status, start_at, end_at").in("id", planContextIds)
+      : Promise.resolve({ data: [] }),
+    /* Event Room identity: the Room's own name, and the Event it belongs to.
+     * Batched exactly like the Plan query above -- one round trip for the whole
+     * page. Read live from event_circles so renaming a Room renames its chat
+     * with no synchronisation step. */
+    roomContextIds.length > 0
+      ? admin
+          .from("event_circles")
+          .select("id, name, status, event_id, events(name)")
+          .in("id", roomContextIds)
       : Promise.resolve({ data: [] })
   ]);
 
@@ -828,6 +867,25 @@ export async function listConversations(userId: string): Promise<ConversationVie
       { title: plan.title?.trim() || null, category: plan.category ?? null, startAt: plan.start_at ?? null }
     ])
   );
+  /* Canonical Room identity, read straight from event_circles. Same principle
+   * as Plan identity: never copied onto the conversation row, so a rename needs
+   * no migration, and identity is presentation only -- it never stands in for
+   * membership. */
+  const roomIdentityByRoomId = new Map(
+    (roomRows ?? []).map((room) => {
+      const event = room.events as { name?: string } | Array<{ name?: string }> | null;
+      const eventName = Array.isArray(event) ? event[0]?.name ?? null : event?.name ?? null;
+      return [
+        room.id,
+        {
+          name: room.name?.trim() || null,
+          eventName: eventName?.trim() || null,
+          status: room.status
+        }
+      ] as const;
+    })
+  );
+
   const planPhaseByPlanId = new Map(
     (planTimings ?? []).map((plan) => [
       plan.id,
@@ -866,6 +924,13 @@ export async function listConversations(userId: string): Promise<ConversationVie
         groupNameByConversation.get(conversation.id) ??
         (planId ? planIdentityByPlanId.get(planId)?.title : null) ??
         "Plan chat";
+    } else if (conversation.context_type === "event_circle" && conversation.context_id) {
+      /* THE ROOM'S OWN NAME.
+       *
+       * Without this branch an Event Room fell through to the group fallback
+       * and was titled "Group" -- naming a different product entirely. A Room
+       * is temporary and belongs to one Event; the inbox has to say which. */
+      title = roomIdentityByRoomId.get(conversation.context_id)?.name ?? "Event room";
     } else {
       title = groupNameByConversation.get(conversation.id) ?? "Group";
     }
@@ -898,14 +963,21 @@ export async function listConversations(userId: string): Promise<ConversationVie
       unreadCount: preview?.unread_count ?? 0,
       muted: Boolean(membership?.muted_until && membership.muted_until > nowIso),
       pinned: pinnedIds.has(conversation.id),
+      /* An Event Room is labelled as one rather than as a generic "Event", so
+       * the inbox distinguishes a Room from the Event it hangs off. It is
+       * deliberately NOT labelled or filtered as a Group: conversation_type
+       * "event" exists precisely so a temporary Room is not mistaken for a
+       * persistent Group. */
       contextBadge:
         conversation.context_type === "plan"
           ? "Plan"
-          : conversation.context_type === "event" || conversation.context_type === "event_circle"
-            ? "Event"
-            : conversation.context_type === "safe_arrival"
-              ? "Safe Arrival"
-              : null,
+          : conversation.context_type === "event_circle"
+            ? "Event Room"
+            : conversation.context_type === "event"
+              ? "Event"
+              : conversation.context_type === "safe_arrival"
+                ? "Safe Arrival"
+                : null,
       otherPlan:
         conversation.conversation_type === "direct"
           ? plans.get(otherIdByConversation.get(conversation.id) ?? "") ?? "free"
@@ -941,7 +1013,29 @@ export async function listConversations(userId: string): Promise<ConversationVie
       planStartAt:
         conversation.context_type === "plan" && conversation.context_id
           ? planIdentityByPlanId.get(conversation.context_id)?.startAt ?? null
-          : null    });
+          : null,
+      /* The Room this chat IS, and the Event it belongs to -- enough for the
+       * inbox to show "Midnight Rooftop - Event Room" and for opening it from
+       * Messages to lead back to the Room inside its Event. Identity only;
+       * authorization remains the membership check that got this conversation
+       * into the list at all. */
+      roomId:
+        conversation.context_type === "event_circle" && conversation.context_id
+          ? conversation.context_id
+          : null,
+      roomEventId:
+        conversation.context_type === "event_circle" && conversation.context_id
+          ? roomRows?.find((room) => room.id === conversation.context_id)?.event_id ?? null
+          : null,
+      roomEventName:
+        conversation.context_type === "event_circle" && conversation.context_id
+          ? roomIdentityByRoomId.get(conversation.context_id)?.eventName ?? null
+          : null,
+      roomStatus:
+        conversation.context_type === "event_circle" && conversation.context_id
+          ? roomIdentityByRoomId.get(conversation.context_id)?.status ?? null
+          : null
+    });
   }
 
   return views;

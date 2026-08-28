@@ -258,6 +258,26 @@ export type JoinCircleInput = {
   hasEventCheckIn: boolean;
   /** True when a valid, unexpired invite/QR token was presented. */
   hasValidToken: boolean;
+  /**
+   * True when a real invitation row names this user for this Room.
+   *
+   * SEPARATE FROM hasValidToken ON PURPOSE. "Invite only" used to be satisfied
+   * by any valid circle_join token, which meant anyone who had been forwarded a
+   * QR could join a Room whose whole promise was that they could not. An
+   * invitation is a fact about a person; a token is a fact about a string.
+   */
+  hasInvitation?: boolean;
+  /**
+   * True when the user is a current joined member of at least one Group this
+   * Room admits. Evaluated live at join time -- leaving the Group ends
+   * eligibility, so this is never cached.
+   */
+  isEligibleGroupMember?: boolean;
+  /**
+   * True when the Room has at least one Group target configured. A
+   * Group-gated Room with no targets admits nobody, rather than everybody.
+   */
+  hasGroupTargets?: boolean;
   opensAtMs: number | null;
   nowMs: number;
 };
@@ -270,13 +290,34 @@ export type JoinCircleReason =
   | "not_open_yet"
   | "full"
   | "needs_check_in"
-  | "needs_token";
+  | "needs_token"
+  | "needs_invitation"
+  | "needs_group_membership";
 
 export type JoinCircleResult = {
   allowed: boolean;
   reason: JoinCircleReason;
 };
 
+/**
+ * TWO AUTHORIZATION HOLES THIS CLOSES, both of which let the UI promise
+ * something the backend did not enforce:
+ *
+ * 1. `community` had NO BRANCH AT ALL. It fell through every check to
+ *    `allowed`, so a Room whose join mode said "Group members" admitted the
+ *    entire internet. It now requires live membership of a Group the Room
+ *    actually targets, and a Room with no targets admits nobody rather than
+ *    everybody -- absence of configuration is not permission.
+ *
+ * 2. `invite` accepted any valid circle_join token, making "invite only" mean
+ *    "anyone holding a QR". It now requires a real invitation naming this user.
+ *    A token still satisfies `qr`, which is the mode that is *about* holding a
+ *    code.
+ *
+ * Order matters: ban, then membership, then Room state, then capacity, then
+ * mode. Someone banned is never told which of the later gates they would also
+ * have failed.
+ */
 export function resolveJoinEventCircle(input: JoinCircleInput): JoinCircleResult {
   // A ban is terminal, rejoining is never allowed (spec §59).
   if (input.memberStatus === "banned") return { allowed: false, reason: "banned" };
@@ -289,8 +330,18 @@ export function resolveJoinEventCircle(input: JoinCircleInput): JoinCircleResult
   if (input.joinMode === "check_in" && !input.hasEventCheckIn) {
     return { allowed: false, reason: "needs_check_in" };
   }
-  if ((input.joinMode === "qr" || input.joinMode === "invite") && !input.hasValidToken) {
+  if (input.joinMode === "qr" && !input.hasValidToken) {
     return { allowed: false, reason: "needs_token" };
+  }
+  if (input.joinMode === "invite" && !input.hasInvitation) {
+    return { allowed: false, reason: "needs_invitation" };
+  }
+  if (input.joinMode === "community") {
+    // Fails closed on both counts: an unconfigured Room and a non-member are
+    // refused identically, so a probe cannot map a Room's target Groups.
+    if (!input.hasGroupTargets || !input.isEligibleGroupMember) {
+      return { allowed: false, reason: "needs_group_membership" };
+    }
   }
   return { allowed: true, reason: "allowed" };
 }

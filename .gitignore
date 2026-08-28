@@ -52,3 +52,6 @@ qa-shots/
 # already tracked, so this does not hide it.
 .env*
 .phasea.json
+
+# Local visual-verification output (see scripts/shoot-event-rooms.mjs).
+/screenshots/

@@ -2,7 +2,9 @@
 
 import { Camera, CameraOff, KeyRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { resolveScannedCodeAction } from "@/app/(app)/scan-actions";
+import type { ScanResultState } from "@/lib/scan/types";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormField } from "@/components/auth/form-field";
@@ -51,7 +53,10 @@ export function ScanPageContent() {
   const handledRef = useRef(false);
   const [cameraState, setCameraState] = useState<"idle" | "running" | "denied" | "unsupported">("idle");
   const [manualCode, setManualCode] = useState("");
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  /* The ids come back with the outcome so a successful scan can OFFER THE WAY
+     IN. Scanning a room QR and being left on a camera screen is the dead end
+     this avoids -- the user is told what happened and handed the door. */
+  const [result, setResult] = useState<ScanResultState | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const submitCode = useCallback(
@@ -151,7 +156,30 @@ export function ScanPageContent() {
               : "border-orange-400/20 bg-orange-400/10 text-orange-800 dark:text-orange-50"
           )}
         >
-          {result.message}
+          <p>{result.message}</p>
+          {/* WHAT NOW. A successful scan mutated something real, so it offers
+              the surface that mutation created: the Room just joined, or the
+              Event just checked into. Authorization is re-checked when that
+              surface loads -- the link is a shortcut, never a grant. */}
+          {result.ok && result.kind === "circle_join" && result.roomId && result.eventId ? (
+            <Link
+              href={{ pathname: "/events", query: { event: result.eventId, room: result.roomId } }}
+              className="mt-2 inline-block font-semibold underline underline-offset-2"
+            >
+              Open room
+            </Link>
+          ) : result.ok && result.kind === "circle_join" && result.roomId ? (
+            <Link href="/events" className="mt-2 inline-block font-semibold underline underline-offset-2">
+              Open events
+            </Link>
+          ) : result.ok && result.kind === "event_check_in" && result.eventId ? (
+            <Link
+              href={{ pathname: "/events", query: { event: result.eventId } }}
+              className="mt-2 inline-block font-semibold underline underline-offset-2"
+            >
+              View event
+            </Link>
+          ) : null}
         </div>
       ) : null}
 

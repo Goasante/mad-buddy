@@ -2160,6 +2160,8 @@ export type Database = {
           closes_at: string | null;
           archives_at: string | null;
           max_members: number;
+          /** Event Rooms productization: the "Show in event" switch. */
+          listed_in_event: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -2176,10 +2178,69 @@ export type Database = {
           closes_at?: string | null;
           archives_at?: string | null;
           max_members?: number;
+          listed_in_event?: boolean;
           created_at?: string;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["event_circles"]["Insert"]>;
+        Relationships: [];
+      };
+      event_circle_invitations: {
+        Row: {
+          id: string;
+          event_circle_id: string;
+          invited_user_id: string;
+          invited_by: string;
+          status: "pending" | "accepted" | "revoked";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_circle_id: string;
+          invited_user_id: string;
+          invited_by: string;
+          status?: "pending" | "accepted" | "revoked";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_circle_invitations"]["Insert"]>;
+        Relationships: [];
+      };
+      event_circle_group_targets: {
+        Row: {
+          id: string;
+          event_circle_id: string;
+          group_conversation_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_circle_id: string;
+          group_conversation_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_circle_group_targets"]["Insert"]>;
+        Relationships: [];
+      };
+      event_announcement_reactions: {
+        Row: {
+          id: string;
+          event_announcement_id: string;
+          user_id: string;
+          reaction_type: EventUpdateReactionType;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_announcement_id: string;
+          user_id: string;
+          reaction_type: EventUpdateReactionType;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_announcement_reactions"]["Insert"]>;
         Relationships: [];
       };
       event_circle_members: {
@@ -4567,6 +4628,44 @@ export type Database = {
       reconcile_plan_conversation_members: {
         Args: { p_plan_id: string };
         Returns: string;
+      };
+      // Event Rooms lifecycle authority (20260827120000_event_rooms_productization).
+      reconcile_event_room_conversation: {
+        Args: { p_room_id: string };
+        Returns: string;
+      };
+      create_event_room: {
+        Args: {
+          p_owner_id: string;
+          p_event_id: string | null;
+          p_name: string;
+          p_description: string | null;
+          p_join_mode: string;
+          p_max_members: number;
+          p_listed: boolean;
+          p_group_conversation_ids?: string[];
+        };
+        Returns: string;
+      };
+      join_event_room: {
+        Args: { p_room_id: string; p_user_id: string };
+        Returns: string;
+      };
+      set_event_room_membership: {
+        Args: { p_room_id: string; p_user_id: string; p_status: string };
+        Returns: string;
+      };
+      set_event_room_role: {
+        Args: { p_room_id: string; p_user_id: string; p_role: string };
+        Returns: string;
+      };
+      archive_event_room: {
+        Args: { p_room_id: string; p_archives_at: string | null };
+        Returns: string;
+      };
+      close_event_rooms_for_event: {
+        Args: { p_event_id: string };
+        Returns: number;
       };
       queue_stale_unattached_chat_media: {
         Args: {

@@ -161,6 +161,12 @@ describe("join event circle (spec §48, §57)", () => {
       maxMembers: 50,
       hasEventCheckIn: false,
       hasValidToken: true,
+      // An invite-mode Room now requires a real invitation, so the base
+      // fixture carries one. Before Event Rooms productization this field did
+      // not exist and a token alone was accepted -- see the hole tests below.
+      hasInvitation: true,
+      isEligibleGroupMember: false,
+      hasGroupTargets: false,
       opensAtMs: null,
       nowMs: NOW,
       ...overrides
@@ -187,12 +193,68 @@ describe("join event circle (spec §48, §57)", () => {
     expect(resolveJoinEventCircle(join({ memberCount: 50, maxMembers: 50 })).reason).toBe("full");
   });
 
-  it("requires a check-in for check_in mode and a token for qr/invite", () => {
+  it("requires a check-in for check_in mode and a token for qr", () => {
     expect(resolveJoinEventCircle(join({ joinMode: "check_in", hasEventCheckIn: false })).reason).toBe(
       "needs_check_in"
     );
     expect(resolveJoinEventCircle(join({ joinMode: "check_in", hasEventCheckIn: true })).allowed).toBe(true);
     expect(resolveJoinEventCircle(join({ joinMode: "qr", hasValidToken: false })).reason).toBe("needs_token");
+  });
+
+  /**
+   * THE HOLE: "invite only" accepted any valid circle_join token, so anyone who
+   * had a Room QR forwarded to them could join a Room whose entire promise was
+   * that they could not. A token proves possession of a string; an invitation
+   * is a fact about a person.
+   */
+  it("refuses invite-only joins backed by a token instead of an invitation", () => {
+    expect(
+      resolveJoinEventCircle(join({ joinMode: "invite", hasInvitation: false, hasValidToken: true })).reason
+    ).toBe("needs_invitation");
+    expect(
+      resolveJoinEventCircle(join({ joinMode: "invite", hasInvitation: true, hasValidToken: false })).allowed
+    ).toBe(true);
+  });
+
+  /**
+   * THE WORSE HOLE: `community` had no branch at all and fell through to
+   * `allowed`. A Room advertising "Group members" admitted everybody.
+   */
+  it("requires live membership of a targeted Group for community mode", () => {
+    expect(
+      resolveJoinEventCircle(
+        join({ joinMode: "community", hasGroupTargets: true, isEligibleGroupMember: false })
+      ).reason
+    ).toBe("needs_group_membership");
+    expect(
+      resolveJoinEventCircle(
+        join({ joinMode: "community", hasGroupTargets: true, isEligibleGroupMember: true })
+      ).allowed
+    ).toBe(true);
+  });
+
+  it("admits nobody to a group-gated room with no targets configured", () => {
+    // Absence of configuration is not permission. A token must not rescue it
+    // either -- community is not a token mode.
+    expect(
+      resolveJoinEventCircle(
+        join({ joinMode: "community", hasGroupTargets: false, isEligibleGroupMember: true, hasValidToken: true })
+      ).reason
+    ).toBe("needs_group_membership");
+  });
+
+  it("keeps a ban terminal regardless of invitation or group standing", () => {
+    expect(
+      resolveJoinEventCircle(
+        join({
+          memberStatus: "banned",
+          joinMode: "community",
+          hasGroupTargets: true,
+          isEligibleGroupMember: true,
+          hasInvitation: true
+        })
+      ).reason
+    ).toBe("banned");
   });
 
   it("lets a member who left rejoin", () => {

@@ -7,12 +7,8 @@ import { qrSecret } from "@/lib/discovery/service";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { ScanResultState } from "@/lib/scan/types";
 
-export type ScanResultState = {
-  ok: boolean;
-  message: string;
-  kind?: "personal" | "event_check_in" | "circle_join";
-};
 
 /**
  * One scanner, three token kinds (batch 5 + batch 8 share the surface):
@@ -56,11 +52,30 @@ export async function resolveScannedCodeAction(raw: string): Promise<ScanResultS
 
     if (payload.purpose === "check_in") {
       const result = await checkInToEventAction({ eventId: payload.contextId, token: code });
-      return { ok: result.ok, message: result.message, kind: "event_check_in" };
+      // The event id comes back so the scanner can say WHICH event and offer a
+      // way to open it, rather than a bare confirmation.
+      return {
+        ok: result.ok,
+        message: result.message,
+        kind: "event_check_in",
+        eventId: result.eventId ?? payload.contextId
+      };
     }
     if (payload.purpose === "circle_join") {
+      /* The room id travels back so the scanner can OPEN what it just joined.
+       * A silent mutation that leaves the user staring at a camera is the
+       * failure this avoids -- the caller shows "You joined <Room>" and a way
+       * in. joinEventCircleAction re-verifies the token itself (signature,
+       * expiry, purpose, context) plus every join rule; the decode above is
+       * routing only and grants nothing. */
       const result = await joinEventCircleAction(payload.contextId, code);
-      return { ok: result.ok, message: result.message, kind: "circle_join" };
+      return {
+        ok: result.ok,
+        message: result.message,
+        kind: "circle_join",
+        roomId: result.circleId ?? payload.contextId,
+        eventId: result.eventId
+      };
     }
   }
 

@@ -36,6 +36,9 @@ const DESTINATION_BY_BASE: Record<string, Route> = {
   hangout: "/hangout-mode" as Route,
   safe_arrival: "/safe-arrival" as Route,
   event: "/events" as Route,
+  // An Event Room notification lands on its Event, and with both ids on the
+  // Room itself. Never on generic Events Home.
+  event_room: "/events" as Route,
   moment: "/moments" as Route,
   drop: "/drops" as Route,
   message: "/messages" as Route,
@@ -66,6 +69,24 @@ export function resolveNotificationDestination(type: string): NotificationDestin
   const separator = type.indexOf(":");
   const base = separator === -1 ? type : type.slice(0, separator);
   const entityId = separator === -1 ? null : type.slice(separator + 1);
+
+  /* EVENT ROOM: "event_room:<eventId>:<roomId>".
+   *
+   * Two ids, because a Room is only reachable THROUGH its Event -- the Events
+   * surface is query-driven and opens a Room inside the Event that owns it.
+   * Both halves are validated; a malformed pair falls through to the Event
+   * rather than producing a broken URL. Authorization is re-checked when the
+   * Room is read, so a link held by someone since removed opens nothing. */
+  if (base === "event_room" && entityId) {
+    const [eventId, roomId] = entityId.split(":");
+    if (eventId && roomId && UUID_PATTERN.test(eventId) && UUID_PATTERN.test(roomId)) {
+      const params = new URLSearchParams({ event: eventId, room: roomId });
+      return { type: "internal", href: `/events?${params.toString()}` as Route };
+    }
+    if (eventId && UUID_PATTERN.test(eventId)) {
+      return { type: "internal", href: withQuery("/events", "event", eventId) };
+    }
+  }
 
   if (entityId && UUID_PATTERN.test(entityId)) {
     switch (base) {
