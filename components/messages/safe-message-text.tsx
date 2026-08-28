@@ -12,7 +12,7 @@ type SafeMessageTextProps = {
    * keeps shared message surfaces type-safe while mention-specific styling is
    * layered in separately.
    */
-  mentions?: readonly Array<{
+  mentions?: ReadonlyArray<{
     userId: string;
     displayName: string;
     username: string | null;
