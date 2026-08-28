@@ -76,6 +76,7 @@ export default async function ProfileLabPage() {
         <Link href="/profile-lab/edit" className="focus-ring rounded-full border border-border/70 bg-card px-4 py-2 text-xs font-semibold shadow-sm hover:bg-secondary">Edit Profile</Link>
         <Link href="/profile-lab/media" className="focus-ring rounded-full border border-border/70 bg-card px-4 py-2 text-xs font-semibold shadow-sm hover:bg-secondary">Media</Link>
         <Link href="/profile-lab/privacy" className="focus-ring rounded-full border border-border/70 bg-card px-4 py-2 text-xs font-semibold shadow-sm hover:bg-secondary">Privacy</Link>
+        <Link href="/profile-lab/people" className="focus-ring rounded-full border border-border/70 bg-card px-4 py-2 text-xs font-semibold shadow-sm hover:bg-secondary">People preview</Link>
       </nav>
       <ProfileVNextPage
         displayName={profile?.full_name ?? user.user_metadata?.full_name ?? "Your name"}
