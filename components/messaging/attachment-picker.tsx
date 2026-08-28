@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, FileText, Image as ImageIcon, ImagePlus, Loader2, Plus, RotateCcw, UserRound, Video, X } from "lucide-react";
+import { Camera, FileText, Image as ImageIcon, ImagePlus, Loader2, Plus, RotateCcw, Video, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   createMessageAttachmentUploadIntentAction,
@@ -377,14 +377,6 @@ export function AttachmentPicker({
             icon: <FileText className="h-4.5 w-4.5" />,
             onSelect: () => documentRef.current?.click(),
             disabled: busy
-          },
-          {
-            id: "contact",
-            label: "Contact · Later",
-            description: "Structured contact sharing is the next completion slice",
-            icon: <UserRound className="h-4.5 w-4.5" />,
-            onSelect: () => undefined,
-            disabled: true
           }
         ]}
         trigger={
@@ -450,9 +442,15 @@ export function AttachmentPreview({
                 {kind === "video" ? <Video className="h-5 w-5 text-[#E88C2B]" /> : kind === "file" ? <FileText className="h-5 w-5 text-[#E88C2B]" /> : <ImagePlus className="h-5 w-5 text-muted-foreground" />}
               </div>
             )}
-            <button type="button" onClick={onRemove} aria-label={`Remove ${kind === "file" ? "document" : kind}`} className="focus-ring absolute -right-2 -top-2 grid h-7 w-7 place-items-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground">
-              <X className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
+            {kind === "image" ? (
+              <button type="button" onClick={onRemove} aria-label="Remove photo" className="focus-ring absolute -right-2 -top-2 grid h-7 w-7 place-items-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground">
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            ) : (
+              <button type="button" onClick={onRemove} aria-label={kind === "file" ? "Remove document" : "Remove video"} className="focus-ring absolute -right-2 -top-2 grid h-7 w-7 place-items-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground">
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
           </div>
           <div className="min-w-0 flex-1">
             {attachment.fileName ? <strong className="block truncate text-xs">{attachment.fileName}</strong> : null}
