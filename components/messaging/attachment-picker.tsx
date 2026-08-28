@@ -1,6 +1,6 @@
 "use client";
 
-import { ImagePlus, Loader2, RotateCcw, X } from "lucide-react";
+import { Camera, FileText, Image as ImageIcon, ImagePlus, Loader2, Plus, RotateCcw, UserRound, Video, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   createMessageAttachmentUploadIntentAction,
@@ -20,9 +20,10 @@ import { cn } from "@/lib/utils";
  * knows which kind of conversation it is attached to, which is what stops a
  * second attachment UI appearing the first time another surface needs one.
  *
- * IMAGES ONLY in this phase. Two entries and no more: Photo Library and
- * Camera. A menu of greyed-out Document / Video / Voice rows would advertise
- * things the pipeline cannot do — dead buttons are worse than absent ones.
+ * The durable upload pipeline is still IMAGES ONLY today. The product menu,
+ * however, deliberately shows the approved future architecture instead of
+ * making those capabilities look forgotten. Unsupported types are labelled
+ * "Later" and disabled; they never pretend to upload or silently drop data.
  */
 
 export type SelectedAttachment = {
@@ -210,17 +211,56 @@ export function AttachmentPicker({
       />
 
       <AppMenu
-        label="Add an attachment"
+        label="Add to this chat"
         side="top"
         align="start"
         items={[
-          { id: "library", label: "Photo Library", onSelect: () => libraryRef.current?.click(), disabled: busy },
-          { id: "camera", label: "Camera", onSelect: () => cameraRef.current?.click(), disabled: busy }
+          {
+            id: "camera",
+            label: "Camera",
+            description: "Take a photo now",
+            icon: <Camera className="h-4.5 w-4.5" />,
+            onSelect: () => cameraRef.current?.click(),
+            disabled: busy
+          },
+          {
+            id: "library",
+            label: "Photos",
+            description: "Choose from your photo library",
+            icon: <ImageIcon className="h-4.5 w-4.5" />,
+            onSelect: () => libraryRef.current?.click(),
+            disabled: busy
+          },
+          {
+            id: "video",
+            label: "Video · Later",
+            description: "Kept in the product architecture; upload support comes next",
+            icon: <Video className="h-4.5 w-4.5" />,
+            onSelect: () => undefined,
+            disabled: true,
+            separatorBefore: true
+          },
+          {
+            id: "document",
+            label: "Document · Later",
+            description: "Durable file messages need their own verified storage contract",
+            icon: <FileText className="h-4.5 w-4.5" />,
+            onSelect: () => undefined,
+            disabled: true
+          },
+          {
+            id: "contact",
+            label: "Contact · Later",
+            description: "Structured contact sharing will be added without exposing hidden fields",
+            icon: <UserRound className="h-4.5 w-4.5" />,
+            onSelect: () => undefined,
+            disabled: true
+          }
         ]}
         trigger={
           <button
             type="button"
-            aria-label="Add an attachment"
+            aria-label="Add to this chat"
             disabled={busy}
             className={cn(
               "focus-ring safe-motion grid h-11 w-11 shrink-0 place-items-center rounded-full",
@@ -230,7 +270,7 @@ export function AttachmentPicker({
             {state.status === "uploading" ? (
               <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
             ) : (
-              <ImagePlus className="h-5 w-5" aria-hidden="true" />
+              <Plus className="h-5 w-5" aria-hidden="true" />
             )}
           </button>
         }
