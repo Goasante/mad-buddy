@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock3, Keep, Loader2 } from "lucide-react";
+import { BookmarkCheck, Clock3, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import {
@@ -63,7 +63,7 @@ export function MessageRetentionV4({
   if (state.keptAt) {
     return (
       <div className={cn("mt-1.5 inline-flex min-h-7 items-center gap-1.5 rounded-full px-2.5 text-[10px] font-semibold", mine ? "bg-white/10 text-white/70" : "bg-[#E88C2B]/8 text-[#9a5b16]")}>
-        <Keep className="h-3 w-3" />
+        <BookmarkCheck className="h-3 w-3" />
         Kept in chat{state.keptByName ? ` · ${state.keptByName}` : ""}
       </div>
     );
@@ -77,7 +77,7 @@ export function MessageRetentionV4({
         if (!result.ok) return;
         const next = await getMessageRetentionAction({ conversationId, messageId });
         setState(next);
-      })} className={cn("focus-ring inline-flex min-h-7 items-center gap-1 rounded-full px-2.5 text-[10px] font-bold transition active:scale-95 disabled:opacity-50", mine ? "bg-white/12 text-[#FEFBF3]" : "bg-[#E88C2B]/10 text-[#E88C2B]")}><Keep className="h-3 w-3" />{isPending ? "Keeping…" : "Keep in Chat"}</button> : null}
+      })} className={cn("focus-ring inline-flex min-h-7 items-center gap-1 rounded-full px-2.5 text-[10px] font-bold transition active:scale-95 disabled:opacity-50", mine ? "bg-white/12 text-[#FEFBF3]" : "bg-[#E88C2B]/10 text-[#E88C2B]")}><BookmarkCheck className="h-3 w-3" />{isPending ? "Keeping…" : "Keep in Chat"}</button> : null}
     </div>
   );
 }
