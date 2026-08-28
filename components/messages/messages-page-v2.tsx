@@ -916,7 +916,7 @@ export function MessagesPageV2({
                             trigger={
                               <button
                                 type="button"
-                                className="focus-ring mr-1 grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-black/[0.05] dark:hover:bg-white/[0.06] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+                                className="focus-ring mr-1 grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-black/[0.05] dark:hover:bg-white/[0.06]"
                                 aria-label={`Actions for ${conversation.title}`}
                               >
                                 <EllipsisVertical className="h-4 w-4" aria-hidden="true" />
