@@ -234,3 +234,68 @@ for each row
 execute function public.apply_chat_message_retention_defaults();
 
 revoke all on function public.apply_chat_message_retention_defaults() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Automatic expiry retirement + private-media cleanup.
+-- ---------------------------------------------------------------------------
+-- Read paths already deny expired, unkept messages. This sweep makes that
+-- lifecycle durable by retiring the message row and queuing any attached
+-- private media for the existing media-deletion worker. Message rows remain as
+-- tombstones so reply/read anchors stay valid, but their text is removed.
+create schema if not exists private;
+revoke all on schema private from anon, authenticated;
+
+create or replace function private.expire_chat_messages()
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  retired_count integer := 0;
+begin
+  with retired as (
+    update public.messages
+    set
+      status = 'deleted',
+      deleted_at = coalesce(deleted_at, now()),
+      text_content = null,
+      updated_at = now()
+    where expires_at is not null
+      and expires_at <= now()
+      and kept_at is null
+      and deleted_at is null
+    returning id, media_id
+  ), queued as (
+    insert into public.media_deletion_queue (media_asset_id, reason)
+    select media_id, 'parent_expired'
+    from retired
+    where media_id is not null
+    on conflict (media_asset_id) do nothing
+    returning media_asset_id
+  )
+  select count(*)::integer into retired_count from retired;
+
+  return retired_count;
+end;
+$$;
+
+revoke all on function private.expire_chat_messages() from public, anon, authenticated;
+grant execute on function private.expire_chat_messages() to service_role;
+grant usage on schema private to service_role;
+
+-- pg_cron is already installed/configured by the existing scheduler migration.
+-- Keep this database-local lifecycle task independent of web traffic so an
+-- expired private attachment is retired even during a quiet period.
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'chats-expire-messages-15min') then
+    perform cron.unschedule('chats-expire-messages-15min');
+  end if;
+  perform cron.schedule(
+    'chats-expire-messages-15min',
+    '*/15 * * * *',
+    'select private.expire_chat_messages()'
+  );
+end
+$$;
