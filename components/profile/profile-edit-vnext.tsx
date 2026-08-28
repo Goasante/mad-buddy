@@ -1,8 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { Camera, CakeSlice, ChevronLeft, Eye, Images, Save, ShieldCheck, Sparkles, UserRound } from "lucide-react";
-import { ChangeEvent, useRef, useState, useTransition } from "react";
+import {
+  Camera,
+  CakeSlice,
+  Check,
+  ChevronLeft,
+  Eye,
+  Images,
+  Save,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+  X
+} from "lucide-react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { updateProfileAction, uploadAvatarAction } from "@/app/(app)/actions";
@@ -12,9 +24,10 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { publicMembershipTier } from "@/lib/billing/premium-identity";
+import { validateImageSelection } from "@/lib/media/validation";
 import type { ProfilePhoto } from "@/lib/profile/profile-photos";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 
 type BirthVisibility = "only_me" | "approved_muddies";
 
@@ -59,19 +72,52 @@ export function ProfileEditVNext({
   const [ageVisibility, setAgeVisibility] = useState<BirthVisibility>(initialAgeVisibility);
   const [zodiacVisibility, setZodiacVisibility] = useState<BirthVisibility>(initialZodiacVisibility);
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
-  const [isSaving, startSaving] = useTransition();
-  const [isUploadingAvatar, startAvatarUpload] = useTransition();
+  const [saving, setSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
-  function saveProfile() {
-    if (isSaving) return;
+  useEffect(() => {
+    return () => {
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    };
+  }, [avatarPreviewUrl]);
+
+  async function saveProfile() {
+    if (saving || avatarUploading) return;
+
+    const nextDisplayName = displayName.trim();
+    const nextUsername = username.trim().toLowerCase();
+    const nextBio = bio.trim();
+    const nextMood = moodStatus.trim();
+
+    if (nextDisplayName.length < 2) {
+      setFeedback("Enter a display name with at least 2 characters.");
+      return;
+    }
+    if (!/^[a-z0-9_]{3,24}$/.test(nextUsername)) {
+      setFeedback("Use 3 to 24 lowercase letters, numbers, or underscores for your username.");
+      return;
+    }
+    if (
+      initialDateOfBirth &&
+      dateOfBirth !== initialDateOfBirth &&
+      !window.confirm(
+        "Change your date of birth? This uses your one self-serve correction and can affect age, zodiac, birthday status, and eligibility."
+      )
+    ) {
+      return;
+    }
+
     setFeedback("");
-    startSaving(async () => {
+    setSaving(true);
+    try {
       const result = await updateProfileAction({
-        fullName: displayName,
-        username,
-        bio,
-        moodStatus,
+        fullName: nextDisplayName,
+        username: nextUsername,
+        bio: nextBio,
+        moodStatus: nextMood,
         dateOfBirth,
         birthdayVisibility,
         ageVisibility,
@@ -79,33 +125,73 @@ export function ProfileEditVNext({
       });
       setFeedback(result.message);
       if (result.ok) {
+        setDisplayName(nextDisplayName);
+        setUsername(nextUsername);
+        setBio(nextBio);
+        setMoodStatus(nextMood);
         if (typeof result.dateOfBirthCanCorrect === "boolean") {
           setDateOfBirthCanCorrect(result.dateOfBirthCanCorrect);
         }
         router.refresh();
       }
-    });
+    } catch {
+      setFeedback("Your profile could not be saved. Check your connection and try again.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function uploadAvatar(event: ChangeEvent<HTMLInputElement>) {
+  function selectAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (!file || isUploadingAvatar) return;
+    if (!file || avatarUploading) return;
+
+    const selectionError = validateImageSelection(file, "profile");
+    if (selectionError) {
+      setFeedback(selectionError);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    setSelectedAvatarFile(file);
+    setAvatarPreviewUrl(URL.createObjectURL(file));
+    setFeedback("Preview ready. Save the photo when it looks right.");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function cancelAvatarPreview() {
+    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    setSelectedAvatarFile(null);
+    setAvatarPreviewUrl(null);
     setFeedback("");
-    startAvatarUpload(async () => {
-      const form = new FormData();
-      form.set("avatar", file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function saveAvatar() {
+    if (!selectedAvatarFile || avatarUploading || saving) return;
+    const form = new FormData();
+    form.set("avatar", selectedAvatarFile);
+    setAvatarUploading(true);
+    setFeedback("Optimizing and uploading your profile photo…");
+    try {
       const result = await uploadAvatarAction(form);
       setFeedback(result.message);
       if (result.ok && result.avatarUrl) {
         setAvatarUrl(result.avatarUrl);
+        if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+        setAvatarPreviewUrl(null);
+        setSelectedAvatarFile(null);
         router.refresh();
       }
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    });
+    } catch {
+      setFeedback("Your photo could not be uploaded. Check your connection and try again.");
+    } finally {
+      setAvatarUploading(false);
+    }
   }
 
   const birthLocked = Boolean(initialDateOfBirth && !dateOfBirthCanCorrect);
-  const avatarSrc = avatarUrl ? "/api/profile/avatar" : null;
+  const avatarSrc = avatarPreviewUrl ?? (avatarUrl ? "/api/profile/avatar" : null);
 
   return (
     <main className="mx-auto w-full max-w-3xl pb-28 pt-2 sm:pb-12">
@@ -117,9 +203,9 @@ export function ProfileEditVNext({
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Profile VNext</p>
           <h1 className="text-xl font-semibold tracking-tight">Edit Profile</h1>
         </div>
-        <Button type="button" variant="primary" size="sm" onClick={saveProfile} disabled={isSaving || isUploadingAvatar}>
+        <Button type="button" variant="primary" size="sm" onClick={() => void saveProfile()} disabled={saving || avatarUploading}>
           <Save className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden sm:inline">Save</span>
+          <span className="hidden sm:inline">{saving ? "Saving…" : "Save"}</span>
         </Button>
       </header>
 
@@ -139,16 +225,26 @@ export function ProfileEditVNext({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={isUploadingAvatar}
+              disabled={avatarUploading || saving}
               className="focus-ring absolute bottom-1 right-0 grid h-11 w-11 place-items-center rounded-full border-[3px] border-[#FEFBF3] bg-[#4E0401] text-white shadow-lg disabled:opacity-60"
-              aria-label="Change profile photo"
+              aria-label="Choose a new profile photo"
             >
               <Camera className="h-5 w-5" aria-hidden="true" />
             </button>
-            <input ref={fileInputRef} type="file" accept="image/*" className="sr-only" onChange={uploadAvatar} />
+            <input ref={fileInputRef} type="file" accept="image/*" className="sr-only" onChange={selectAvatar} />
           </div>
           <h2 className="mt-4 text-xl font-semibold">Your main photo</h2>
-          <p className="mt-1 max-w-sm text-sm leading-6 text-muted-foreground">This is the identity photo used across Profile, Muddies, Chats and Linkr. Uploads keep the existing metadata-stripping and image-validation pipeline.</p>
+          <p className="mt-1 max-w-sm text-sm leading-6 text-muted-foreground">This is the identity photo used across Profile, Muddies, Chats and Linkr. Uploads keep the existing validation, metadata stripping and safe re-encoding pipeline.</p>
+          {selectedAvatarFile ? (
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <Button type="button" variant="primary" onClick={() => void saveAvatar()} disabled={avatarUploading || saving}>
+                <Check className="h-4 w-4" aria-hidden="true" /> {avatarUploading ? "Saving photo…" : "Save photo"}
+              </Button>
+              <Button type="button" variant="outline" onClick={cancelAvatarPreview} disabled={avatarUploading || saving}>
+                <X className="h-4 w-4" aria-hidden="true" /> Cancel
+              </Button>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -187,7 +283,7 @@ export function ProfileEditVNext({
         </section>
 
         <EditSection icon={CakeSlice} title="Birthday & derived identity" description="Your date of birth is private. Age and zodiac are derived from it, never entered separately.">
-          <Field label="Date of birth" helper={birthLocked ? "Locked after your allowed correction. Contact support if it is wrong." : initialDateOfBirth ? "You have one self-serve correction available." : "Used for age gating and birthday experiences."}>
+          <Field label="Date of birth" helper={birthLocked ? "Locked after your allowed correction. Contact support if it is wrong." : initialDateOfBirth ? "You have one self-serve correction available. Changing it will ask for confirmation." : "Used for age gating and birthday experiences."}>
             <Input type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} disabled={birthLocked} />
           </Field>
           <AudienceRow icon={CakeSlice} title="Birthday" value={birthdayVisibility} onChange={setBirthdayVisibility} />
@@ -208,8 +304,8 @@ export function ProfileEditVNext({
       </div>
 
       <div className="fixed inset-x-0 bottom-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom))] z-30 border-t border-border/60 bg-background/92 p-3 backdrop-blur-xl md:hidden">
-        <Button type="button" variant="primary" className="w-full" onClick={saveProfile} disabled={isSaving || isUploadingAvatar}>
-          <Save className="h-4 w-4" aria-hidden="true" /> {isSaving ? "Saving…" : "Save changes"}
+        <Button type="button" variant="primary" className="w-full" onClick={() => void saveProfile()} disabled={saving || avatarUploading}>
+          <Save className="h-4 w-4" aria-hidden="true" /> {saving ? "Saving…" : "Save changes"}
         </Button>
       </div>
     </main>
