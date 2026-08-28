@@ -158,8 +158,9 @@ export function ChatSettingsV4({
               <div className="border-t border-border/50 px-3 py-3 animate-in slide-in-from-top-1 fade-in">
                 <p className="mb-2 text-xs leading-relaxed text-muted-foreground">New messages use this lifetime. Keeping a message in chat prevents its normal expiry.</p>
                 <Segmented value={String(settings?.messageLifetimeSeconds ?? "forever")} options={LIFETIMES.map((item) => ({ id: String(item.seconds ?? "forever"), label: item.label }))} onChange={(value) => setLifetime(value === "forever" ? null : Number(value))} />
-                <p className="mb-2 mt-4 text-xs font-semibold">Default photo behaviour</p>
-                <Segmented value={settings?.defaultMediaMode ?? "keep"} options={[{id:"keep",label:"Keep"},{id:"view_once",label:"View once"},{id:"24h",label:"24h"}]} onChange={(value) => run(() => updateConversationChatSettingsAction({ conversationId: conversation.id, defaultMediaMode: value }))} />
+                <p className="mb-2 mt-4 text-xs font-semibold">Default media behaviour</p>
+                <Segmented value={settings?.defaultMediaMode === "24h" ? "24h" : "keep"} options={[{id:"keep",label:"Keep"},{id:"24h",label:"24h"}]} onChange={(value) => run(() => updateConversationChatSettingsAction({ conversationId: conversation.id, defaultMediaMode: value }))} />
+                <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">View-once is intentionally not offered until Mad Buddy has a dedicated one-view authorization ledger. We do not label 24-hour media as view-once.</p>
               </div>
             ) : null}
 
