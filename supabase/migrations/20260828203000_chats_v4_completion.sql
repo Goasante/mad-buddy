@@ -43,10 +43,6 @@ create index if not exists conversation_members_read_anchor_idx
 -- Rich private chat media: video + documents.
 -- ---------------------------------------------------------------------------
 
--- Keep the sender-visible filename on the canonical private asset so a file
--- message can still render a useful label if its auxiliary message_files row
--- is delayed. Never a path: slashes/control characters are stripped by the
--- server before this value is written.
 alter table public.media_assets
   add column if not exists original_file_name text;
 
@@ -58,8 +54,6 @@ alter table public.media_assets
     or (char_length(original_file_name) between 1 and 180 and original_file_name !~ '[\x00-\x1F\x7F]')
   );
 
--- The earlier voice migration intentionally allowed only image/voice upload
--- intents. V4 now has independently verified video and document finalizers.
 alter table public.media_assets
   drop constraint if exists media_assets_intended_media_kind_check;
 alter table public.media_assets
@@ -180,3 +174,63 @@ end;
 $$;
 
 revoke all on function public.validate_message_media_attachment() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Canonical retention defaults + Keep in Chat.
+-- ---------------------------------------------------------------------------
+-- Conversation lifetime and the media default must be applied at the database
+-- boundary, not only by the web composer. That keeps web, Capacitor/native API,
+-- retries and future workers consistent. The dormant `view_once` foundation
+-- value is deliberately NOT activated here: V4 will not claim view-once until
+-- a dedicated one-view authorization ledger exists. If encountered, it is
+-- normalized to the implemented 24-hour ephemeral mode rather than pretending.
+create or replace function public.apply_chat_message_retention_defaults()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  settings public.conversation_chat_settings%rowtype;
+  lifetime_expiry timestamptz;
+begin
+  select * into settings
+  from public.conversation_chat_settings
+  where conversation_id = new.conversation_id;
+
+  if found and settings.message_lifetime_seconds is not null and new.expires_at is null then
+    lifetime_expiry := now() + make_interval(secs => settings.message_lifetime_seconds);
+    new.expires_at := lifetime_expiry;
+  end if;
+
+  if new.message_type in ('image', 'video', 'file', 'drawing') then
+    if found and new.media_mode = 'keep' then
+      if settings.default_media_mode = '24h' then
+        new.media_mode := '24h';
+      elsif settings.default_media_mode = 'view_once' then
+        -- View-once is not surfaced until one-view authorization is real.
+        new.media_mode := '24h';
+      end if;
+    end if;
+
+    if new.media_mode = 'view_once' then
+      new.media_mode := '24h';
+    end if;
+
+    if new.media_mode = '24h' then
+      if new.expires_at is null or new.expires_at > now() + interval '24 hours' then
+        new.expires_at := now() + interval '24 hours';
+      end if;
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists chats_v4_message_retention_defaults on public.messages;
+create trigger chats_v4_message_retention_defaults
+before insert on public.messages
+for each row
+execute function public.apply_chat_message_retention_defaults();
+
+revoke all on function public.apply_chat_message_retention_defaults() from public, anon, authenticated;
