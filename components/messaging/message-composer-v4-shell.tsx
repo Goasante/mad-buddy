@@ -11,6 +11,7 @@ import {
   MessageComposerV3,
   type OptimisticSendDraftV3
 } from "@/components/messaging/message-composer-v3";
+import { StructuredShareV4 } from "@/components/messaging/structured-share-v4";
 import type { MentionCandidate } from "@/lib/messaging/mentions";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 
@@ -155,6 +156,11 @@ export function MessageComposerV4Shell({
           Offline · draft stays on this screen
         </div>
       ) : null}
+      <StructuredShareV4
+        conversationId={conversationId}
+        onFeedback={onFeedback}
+        onSent={handleSent}
+      />
       <MessageComposerV3
         conversationId={conversationId}
         isGroup={isGroup}
