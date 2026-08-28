@@ -4,7 +4,22 @@ import type { Route } from "next";
 import Link from "next/link";
 import { tokenizeMessageText } from "@/lib/messaging/linkify";
 
-export function SafeMessageText({ text }: { text: string }) {
+type SafeMessageTextProps = {
+  text: string;
+  /**
+   * Structured mention identity already validated by the messaging service.
+   * The current renderer remains text/link focused, but accepting the context
+   * keeps shared message surfaces type-safe while mention-specific styling is
+   * layered in separately.
+   */
+  mentions?: ReadonlyArray<{
+    userId: string;
+    displayName: string;
+    username: string | null;
+  }>;
+};
+
+export function SafeMessageText({ text }: SafeMessageTextProps) {
   return tokenizeMessageText(text).map((token, index) =>
     token.kind === "text" ? (
       token.value
