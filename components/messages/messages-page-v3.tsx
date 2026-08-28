@@ -679,7 +679,7 @@ export function MessagesPageV3({
       <NewChatModal open={newMessageOpen} onOpenChange={setNewMessageOpen} onSelect={(friendId) => {
         setNewMessageOpen(false);
         startTransition(async () => {
-          const result = await openDirectConversationAction(friendId).catch(() => ({ ok: false, message: "Could not open chat." }));
+          const result = await openDirectConversationAction(friendId).catch(() => ({ ok: false, message: "Could not open chat.", conversationId: undefined }));
           if (!result.ok || !result.conversationId) {
             setFeedback(result.message);
             return;
