@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { messageAttachmentCanBeSigned } from "@/lib/messaging/attachment-retention";
 import { canCreateDirectConversation, resolveConversationAccess } from "@/lib/messaging/service";
 import {
@@ -10,7 +12,7 @@ import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
-/** One canonical TTL, shared with every other private-media signer. */
+/** One canonical TTL, shared with every other private media signer. */
 export const ATTACHMENT_SIGNED_TTL_SECONDS = MEDIA_SIGNED_URL_TTL_SECONDS;
 
 export const ATTACHMENT_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -76,8 +78,6 @@ export async function signAttachmentsForMessages(
   const access = await resolveConversationAccess(admin, viewerId, conversationId);
   if (!access.canView || access.status !== "active") return byId;
 
-  // A direct thread remains archived after a block while its old membership
-  // rows remain joined. Re-evaluate the live relationship before minting URLs.
   if (access.conversationType === "direct") {
     const otherId = access.directKey?.split(":").find((id) => id !== viewerId);
     if (!otherId) return byId;
@@ -85,25 +85,31 @@ export async function signAttachmentsForMessages(
     if (!eligibility.allowed) return byId;
   }
 
-  const { data: messages } = await admin
+  // expires_at / kept_at arrive with the unapplied V4 foundation, so this
+  // projection uses the same temporary untyped bridge as the other V4 reads.
+  const db = admin as unknown as SupabaseClient;
+  const { data: messages } = await db
     .from("messages")
-    .select("id, sender_id, media_id, status, deleted_at, created_at")
+    .select("id, sender_id, media_id, status, deleted_at, created_at, expires_at, kept_at")
     .eq("conversation_id", conversationId)
     .in("id", uniqueMessageIds)
     .gte("created_at", access.historyVisibleFrom ?? new Date(0).toISOString());
 
-  let authorisedMessages = (messages ?? []).filter(
+  const nowMs = Date.now();
+  let authorisedMessages = ((messages ?? []) as Array<Record<string, unknown>>).filter(
     (message) =>
       Boolean(message.media_id) &&
-      messageAttachmentCanBeSigned({ status: message.status, deletedAt: message.deleted_at })
+      messageAttachmentCanBeSigned({
+        status: String(message.status),
+        deletedAt: typeof message.deleted_at === "string" ? message.deleted_at : null
+      }) &&
+      (typeof message.kept_at === "string" || typeof message.expires_at !== "string" || Date.parse(message.expires_at) > nowMs)
   );
 
-  // In a shared conversation, blocking somebody hides their attachment bytes
-  // even though both people may remain legitimate members of the group.
   const senderIds = [
     ...new Set(
       authorisedMessages
-        .map((message) => message.sender_id)
+        .map((message) => (typeof message.sender_id === "string" ? message.sender_id : null))
         .filter((id): id is string => Boolean(id) && id !== viewerId)
     )
   ];
@@ -120,12 +126,16 @@ export async function signAttachmentsForMessages(
       })
     );
     authorisedMessages = authorisedMessages.filter(
-      (message) => !message.sender_id || !blockedSenderIds.has(message.sender_id)
+      (message) => typeof message.sender_id !== "string" || !blockedSenderIds.has(message.sender_id)
     );
   }
 
   const mediaIds = [
-    ...new Set(authorisedMessages.map((message) => message.media_id).filter((id): id is string => Boolean(id)))
+    ...new Set(
+      authorisedMessages
+        .map((message) => (typeof message.media_id === "string" ? message.media_id : null))
+        .filter((id): id is string => Boolean(id))
+    )
   ];
   if (mediaIds.length === 0) return byId;
 
