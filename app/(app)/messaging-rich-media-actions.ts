@@ -68,8 +68,8 @@ export async function finalizeChatRichMediaUploadAction(input: unknown) {
 
 /**
  * Mints a short-lived URL only after re-checking the message, conversation,
- * relationship, block state and canonical media asset. The browser never gets
- * a storage path or a reusable public URL.
+ * relationship, block state, retention state and canonical media asset. The
+ * browser never gets a storage path or a reusable public URL.
  */
 export async function getRichMediaMessageAction(input: unknown): Promise<RichMediaMessageView | null> {
   if (!configured()) return null;
@@ -85,24 +85,21 @@ export async function getRichMediaMessageAction(input: unknown): Promise<RichMed
   const untyped = admin as unknown as SupabaseClient;
   const { data: message } = await untyped
     .from("messages")
-    .select("id, conversation_id, sender_id, media_id, message_type, status, deleted_at, created_at")
+    .select("id, conversation_id, sender_id, media_id, message_type, status, deleted_at, created_at, expires_at, kept_at")
     .eq("id", parsed.data.messageId)
     .eq("conversation_id", parsed.data.conversationId)
     .maybeSingle();
   if (!message || !message.media_id || (message.message_type !== "video" && message.message_type !== "file")) return null;
   if (!messageAttachmentCanBeSigned({ status: String(message.status), deletedAt: message.deleted_at as string | null })) return null;
   if (access.historyVisibleFrom && Date.parse(String(message.created_at)) < Date.parse(access.historyVisibleFrom)) return null;
+  if (!message.kept_at && message.expires_at && Date.parse(String(message.expires_at)) <= Date.now()) return null;
 
-  // A direct conversation may remain archived after a block while historical
-  // membership rows still exist. Never let that stale row mint fresh media URLs.
   if (access.conversationType === "direct") {
     const otherId = access.directKey?.split(":").find((id) => id !== viewerId);
     if (!otherId) return null;
     const eligibility = await canCreateDirectConversation(admin, viewerId, otherId);
     if (!eligibility.allowed) return null;
   } else if (message.sender_id && message.sender_id !== viewerId) {
-    // In shared conversations, blocking hides the blocked sender's media bytes
-    // while keeping the rest of the group history available.
     const { data: block } = await admin
       .from("blocked_users")
       .select("blocker_id")
