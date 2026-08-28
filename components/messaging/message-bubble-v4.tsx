@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { ChatPollCard } from "@/components/messaging/chat-poll-card";
 import { MessageAttachmentImage } from "@/components/messaging/message-attachment-image";
-import { VoiceMessageBubble } from "@/components/messaging/voice-message-bubble";
+import { VoiceMessageBubbleV4 } from "@/components/messaging/voice-message-bubble-v4";
 import { SafeMessageText } from "@/components/messages/safe-message-text";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
@@ -56,6 +56,7 @@ export function MessageBubbleV4({
   saved,
   pinned,
   highlighted,
+  voiceInitialSeconds = 0,
   onReply,
   onReact,
   onCopy,
@@ -77,6 +78,7 @@ export function MessageBubbleV4({
   saved: boolean;
   pinned: boolean;
   highlighted?: boolean;
+  voiceInitialSeconds?: number;
   onReply: () => void;
   onReact: (reaction: string) => void;
   onCopy: () => void;
@@ -209,7 +211,7 @@ export function MessageBubbleV4({
               <MessageAttachmentImage conversationId={conversationId} message={message} onOpen={onOpenMedia} onRefreshed={onAttachmentRefresh} />
             ) : null}
             {!message.deleted && message.voice ? (
-              <VoiceMessageBubble conversationId={conversationId} messageId={message.id} senderName={message.isMine ? "you" : message.senderName} asset={message.voice} />
+              <VoiceMessageBubbleV4 conversationId={conversationId} messageId={message.id} senderName={message.isMine ? "you" : message.senderName} asset={message.voice} initialSeconds={voiceInitialSeconds} />
             ) : null}
             {!message.deleted && message.messageType === "poll" && poll ? (
               <ChatPollCard poll={poll} mine={message.isMine} onChanged={onPollChanged} />
