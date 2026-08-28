@@ -97,7 +97,7 @@ type InboxPreference = {
   draftText: string | null;
   draftUpdatedAt: string | null;
 };
-type InboxPreferenceMap = Record<string, InboxPreference>;
+type InboxPreferenceMap = Record<string, Partial<InboxPreference>>;
 type DeleteTarget = { message: ChatMessageView } | null;
 type ForwardTarget = { message: ChatMessageView } | null;
 
