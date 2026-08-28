@@ -21,7 +21,6 @@ import { Card } from "@/components/ui/card";
 import type { CommunicationPreferences } from "@/lib/messaging/service";
 import type { VisibilityStatus } from "@/lib/supabase/database.types";
 
-
 type BirthVisibility = "only_me" | "approved_muddies";
 
 type ProfilePrivacyVNextProps = {
@@ -51,6 +50,37 @@ const notificationPreviewLabels: Record<CommunicationPreferences["notificationPr
   generic: "Generic",
   none: "Hidden"
 };
+
+const safetyCards = [
+  {
+    href: "/friends?tab=blocked",
+    icon: Ban,
+    title: "Blocked people",
+    detail: "Manage people you have blocked.",
+    tone: "rose"
+  },
+  {
+    href: "/settings/contact-discovery",
+    icon: ContactRound,
+    title: "Contact discovery",
+    detail: "Control how people can find you.",
+    tone: "orange"
+  },
+  {
+    href: "/settings/sessions",
+    icon: KeyRound,
+    title: "Login & sessions",
+    detail: "Review account access and active sessions.",
+    tone: "green"
+  },
+  {
+    href: "/account",
+    icon: Download,
+    title: "Data & account",
+    detail: "Manage your data and account controls.",
+    tone: "neutral"
+  }
+] as const;
 
 function audience(value: BirthVisibility) {
   return value === "approved_muddies" ? "Muddies" : "Only me";
@@ -120,10 +150,24 @@ export function ProfilePrivacyVNext({
             <p className="mt-0.5 text-xs text-muted-foreground">Everything important remains reachable without turning Profile into a settings dump.</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <SafetyCard href="/friends?tab=blocked" icon={Ban} title="Blocked people" detail="Manage people you have blocked." tone="rose" />
-            <SafetyCard href="/settings/contact-discovery" icon={ContactRound} title="Contact discovery" detail="Control how people can find you." tone="orange" />
-            <SafetyCard href="/settings/sessions" icon={KeyRound} title="Login & sessions" detail="Review account access and active sessions." tone="green" />
-            <SafetyCard href="/account" icon={Download} title="Data & account" detail="Manage your data and account controls." tone="neutral" />
+            {safetyCards.map((card) => {
+              const toneClass = {
+                rose: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+                orange: "bg-[#E88C2B]/12 text-[#A65A17]",
+                green: "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400",
+                neutral: "bg-secondary text-foreground"
+              }[card.tone];
+              const Icon = card.icon;
+
+              return (
+                <Link key={card.href} href={card.href} className="focus-ring safe-motion rounded-[1.3rem] border border-border/60 bg-card/75 p-4 shadow-sm hover:-translate-y-0.5 hover:bg-secondary/30 motion-reduce:hover:translate-y-0">
+                  <span className={`grid h-10 w-10 place-items-center rounded-xl ${toneClass}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
+                  <p className="mt-3 text-sm font-semibold">{card.title}</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{card.detail}</p>
+                  <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">Open <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" /></span>
+                </Link>
+              );
+            })}
           </div>
         </section>
 
@@ -188,36 +232,6 @@ function PrivacySettingRow({
         <span className="mt-1 block text-xs leading-5 text-muted-foreground">{detail}</span>
       </span>
       <ChevronRight className="mt-2.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-    </Link>
-  );
-}
-
-function SafetyCard({
-  href,
-  icon: Icon,
-  title,
-  detail,
-  tone
-}: {
-  href: "/friends?tab=blocked" | "/settings/contact-discovery" | "/settings/sessions" | "/account";
-  icon: typeof Eye;
-  title: string;
-  detail: string;
-  tone: "rose" | "orange" | "green" | "neutral";
-}) {
-  const toneClass = {
-    rose: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
-    orange: "bg-[#E88C2B]/12 text-[#A65A17]",
-    green: "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400",
-    neutral: "bg-secondary text-foreground"
-  }[tone];
-
-  return (
-    <Link href={href} className="focus-ring safe-motion rounded-[1.3rem] border border-border/60 bg-card/75 p-4 shadow-sm hover:-translate-y-0.5 hover:bg-secondary/30 motion-reduce:hover:translate-y-0">
-      <span className={`grid h-10 w-10 place-items-center rounded-xl ${toneClass}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
-      <p className="mt-3 text-sm font-semibold">{title}</p>
-      <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
-      <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">Open <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" /></span>
     </Link>
   );
 }
