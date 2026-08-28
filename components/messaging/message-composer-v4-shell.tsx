@@ -62,10 +62,26 @@ export function MessageComposerV4Shell({
   const lastDraftRef = useRef("");
   const [online, setOnline] = useState(true);
 
-  const localKey = `mb:chat-draft:${conversationId}`;
+  const syncDraftToServer = useCallback(
+    (value: string) => {
+      void updateConversationUserPreferencesAction({
+        conversationId,
+        draftText: value || null
+      }).catch(() => {
+        // The current textarea keeps the draft in memory if the network drops.
+      });
+    },
+    [conversationId]
+  );
 
   useEffect(() => {
-    const update = () => setOnline(navigator.onLine);
+    const update = () => {
+      const nextOnline = navigator.onLine;
+      setOnline(nextOnline);
+      if (nextOnline && lastDraftRef.current) {
+        syncDraftToServer(lastDraftRef.current);
+      }
+    };
     update();
     window.addEventListener("online", update);
     window.addEventListener("offline", update);
@@ -73,47 +89,34 @@ export function MessageComposerV4Shell({
       window.removeEventListener("online", update);
       window.removeEventListener("offline", update);
     };
-  }, []);
+  }, [syncDraftToServer]);
 
   useEffect(() => {
     if (hydratedConversationRef.current === conversationId) return;
     const textarea = shellRef.current?.querySelector("textarea");
     if (!textarea) return;
-    let local = "";
-    try {
-      local = localStorage.getItem(localKey) ?? "";
-    } catch {
-      // Storage can be unavailable in strict/private browser modes.
-    }
-    const value = local || initialDraft || "";
+    const value = initialDraft || "";
     lastDraftRef.current = value;
     hydratedConversationRef.current = conversationId;
     if (value && !textarea.value) setControlledTextareaValue(textarea, value);
-  }, [conversationId, initialDraft, localKey]);
+  }, [conversationId, initialDraft]);
 
   const persistDraft = useCallback(
     (value: string) => {
       lastDraftRef.current = value;
-      try {
-        if (value) localStorage.setItem(localKey, value);
-        else localStorage.removeItem(localKey);
-      } catch {
-        // Server persistence below remains the durable fallback.
-      }
       if (serverTimerRef.current) clearTimeout(serverTimerRef.current);
       serverTimerRef.current = setTimeout(() => {
-        void updateConversationUserPreferencesAction({
-          conversationId,
-          draftText: value || null
-        });
+        syncDraftToServer(value);
       }, SERVER_DRAFT_DEBOUNCE_MS);
     },
-    [conversationId, localKey]
+    [syncDraftToServer]
   );
 
   const publishTyping = useCallback(
     (typing: boolean) => {
-      void heartbeatConversationPresenceAction({ conversationId, typing });
+      void heartbeatConversationPresenceAction({ conversationId, typing }).catch(() => {
+        // Presence is transient and must never block composing a message.
+      });
     },
     [conversationId]
   );
@@ -123,14 +126,9 @@ export function MessageComposerV4Shell({
       if (serverTimerRef.current) clearTimeout(serverTimerRef.current);
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
       const pending = lastDraftRef.current;
-      if (pending) {
-        void updateConversationUserPreferencesAction({
-          conversationId,
-          draftText: pending
-        });
-      }
+      if (pending) syncDraftToServer(pending);
     };
-  }, [conversationId]);
+  }, [syncDraftToServer]);
 
   function onInputCapture(event: React.FormEvent<HTMLDivElement>) {
     const target = event.target;
@@ -154,7 +152,7 @@ export function MessageComposerV4Shell({
       {!online ? (
         <div className="absolute bottom-full left-1/2 z-20 mb-1 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border/70 bg-card/95 px-3 py-1 text-[10px] font-semibold text-muted-foreground shadow-sm backdrop-blur-md animate-in fade-in slide-in-from-bottom-1">
           <CloudOff className="h-3 w-3" />
-          Offline · draft saved
+          Offline · draft stays on this screen
         </div>
       ) : null}
       <MessageComposerV3
