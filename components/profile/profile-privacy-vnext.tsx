@@ -140,10 +140,10 @@ export function ProfilePrivacyVNext({
               <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">Open <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" /></span>
             </Link>
 
-            <Link href="/account" className="focus-ring safe-motion rounded-[1.3rem] border border-border/60 bg-card/75 p-4 shadow-sm hover:-translate-y-0.5 hover:bg-secondary/30 motion-reduce:hover:translate-y-0">
+            <Link href="/settings/data-storage" className="focus-ring safe-motion rounded-[1.3rem] border border-border/60 bg-card/75 p-4 shadow-sm hover:-translate-y-0.5 hover:bg-secondary/30 motion-reduce:hover:translate-y-0">
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-secondary text-foreground"><Download className="h-5 w-5" aria-hidden="true" /></span>
-              <p className="mt-3 text-sm font-semibold">Data & account</p>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">Manage your data and account controls.</p>
+              <p className="mt-3 text-sm font-semibold">Data & storage</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">Review your media storage and data usage.</p>
               <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">Open <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" /></span>
             </Link>
           </div>
