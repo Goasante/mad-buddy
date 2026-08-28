@@ -10,6 +10,7 @@ import {
   invalidateConversationReactionSummaries,
   useConversationReactionSummaries
 } from "@/components/messaging/reaction-summary-cache-v4";
+import { RichMediaMessageV4 } from "@/components/messaging/rich-media-message-v4";
 import { VoiceMessageBubbleV4 } from "@/components/messaging/voice-message-bubble-v4";
 import { SafeMessageText } from "@/components/messages/safe-message-text";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -251,6 +252,9 @@ export function MessageBubbleV4({
             ) : null}
             {!message.deleted && message.voice ? (
               <VoiceMessageBubbleV4 conversationId={conversationId} messageId={message.id} senderName={message.isMine ? "you" : message.senderName} asset={message.voice} initialSeconds={voiceInitialSeconds} />
+            ) : null}
+            {!message.deleted && (message.messageType === "video" || message.messageType === "file") ? (
+              <RichMediaMessageV4 conversationId={conversationId} messageId={message.id} kind={message.messageType} mine={message.isMine} />
             ) : null}
             {!message.deleted && message.messageType === "poll" && poll ? (
               <ChatPollCard poll={poll} mine={message.isMine} onChanged={onPollChanged} />
