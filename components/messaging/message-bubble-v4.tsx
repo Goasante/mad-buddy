@@ -1,13 +1,19 @@
 "use client";
 
-import { Bookmark, Check, CheckCheck, Copy, Forward, Pin, Reply, Trash2, Pencil, X } from "lucide-react";
+import { Bookmark, Check, CheckCheck, Copy, Forward, Info, Pin, Reply, Trash2, Pencil, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { ChatPollCard } from "@/components/messaging/chat-poll-card";
 import { MessageAttachmentImage } from "@/components/messaging/message-attachment-image";
+import { MessageInfoV4 } from "@/components/messaging/message-info-v4";
+import {
+  invalidateConversationReactionSummaries,
+  useConversationReactionSummaries
+} from "@/components/messaging/reaction-summary-cache-v4";
 import { VoiceMessageBubbleV4 } from "@/components/messaging/voice-message-bubble-v4";
 import { SafeMessageText } from "@/components/messages/safe-message-text";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { Modal } from "@/components/ui/modal";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
@@ -104,9 +110,13 @@ export function MessageBubbleV4({
   const [dragging, setDragging] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [thresholdHit, setThresholdHit] = useState(false);
+  const [reactorAggregate, setReactorAggregate] = useState<ReactionAggregate | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
   const startRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressedRef = useRef(false);
+  const reactionMap = useConversationReactionSummaries(conversationId);
+  const liveAggregates = reactionAggregates.length > 0 ? reactionAggregates : reactionMap[message.id] ?? [];
 
   function clearTimer() {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -114,6 +124,13 @@ export function MessageBubbleV4({
   }
 
   useEffect(() => () => clearTimer(), []);
+
+  useEffect(() => {
+    // The page reloads the canonical message after our own reaction action
+    // finishes. myReaction changing is therefore a reliable point to refresh
+    // the shared aggregate projection without guessing at network timing.
+    invalidateConversationReactionSummaries(conversationId);
+  }, [conversationId, message.myReaction]);
 
   function begin(event: React.PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
@@ -167,6 +184,19 @@ export function MessageBubbleV4({
     if (shouldReply) onReply();
   }
 
+  function react(reaction: string) {
+    onReact(reaction);
+    haptic(5);
+    // Periodic shared refresh is the safety net for another member reacting;
+    // this eager invalidation keeps the local interaction feeling immediate.
+    window.setTimeout(() => invalidateConversationReactionSummaries(conversationId), 250);
+  }
+
+  function showReactors(aggregate: ReactionAggregate) {
+    if (onShowReactors) onShowReactors(aggregate);
+    else setReactorAggregate(aggregate);
+  }
+
   const myReaction = REACTIONS.find(([id]) => id === message.myReaction)?.[1] ?? null;
   const bubble = (
     <div className={cn("relative", message.isMine && "flex flex-col items-end", actionsOpen && "z-50") }>
@@ -195,7 +225,7 @@ export function MessageBubbleV4({
             clearTimer();
             setActionsOpen(true);
           }}
-          onDoubleClick={() => onReact("heart")}
+          onDoubleClick={() => react("heart")}
           className={cn(
             "touch-pan-y select-none",
             !dragging && "transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)]",
@@ -237,13 +267,13 @@ export function MessageBubbleV4({
         </div>
       </div>
 
-      {reactionAggregates.length > 0 ? (
+      {liveAggregates.length > 0 ? (
         <div className={cn("-mt-2 mx-2 flex max-w-[90%] flex-wrap gap-1", message.isMine && "justify-end")}>
-          {reactionAggregates.map((aggregate) => (
+          {liveAggregates.map((aggregate) => (
             <button
               key={aggregate.reaction}
               type="button"
-              onClick={() => onShowReactors?.(aggregate)}
+              onClick={() => showReactors(aggregate)}
               className="focus-ring inline-flex min-h-7 items-center gap-1 rounded-full border border-black/[0.06] bg-white px-2 text-[11px] font-bold shadow-sm transition-transform hover:scale-105 active:scale-95 dark:border-white/[0.08] dark:bg-[#241f1c]"
               aria-label={`${aggregate.count} ${aggregate.reaction} reactions`}
             >
@@ -251,7 +281,7 @@ export function MessageBubbleV4({
             </button>
           ))}
         </div>
-      ) : myReaction ? <button type="button" onClick={() => onReact(message.myReaction as string)} className="focus-ring -mt-2 mx-2 grid h-7 min-w-7 place-items-center rounded-full border border-black/[0.06] bg-white px-1.5 text-sm shadow-sm transition-transform hover:scale-110 active:scale-95 dark:border-white/[0.08] dark:bg-[#241f1c]">{myReaction}</button> : null}
+      ) : myReaction ? <button type="button" onClick={() => react(message.myReaction as string)} className="focus-ring -mt-2 mx-2 grid h-7 min-w-7 place-items-center rounded-full border border-black/[0.06] bg-white px-1.5 text-sm shadow-sm transition-transform hover:scale-110 active:scale-95 dark:border-white/[0.08] dark:bg-[#241f1c]">{myReaction}</button> : null}
     </div>
   );
 
@@ -262,7 +292,7 @@ export function MessageBubbleV4({
         {actionsOpen ? (
           <div className={cn("mb-2 flex w-fit max-w-[95vw] items-center gap-0.5 rounded-full border border-black/[0.06] bg-white p-1 shadow-[0_15px_50px_rgba(78,4,1,.18)] animate-in zoom-in-90 slide-in-from-bottom-2 duration-180 dark:border-white/[0.08] dark:bg-[#241f1c]", message.isMine && "ml-auto")}>
             {REACTIONS.map(([id, emoji], index) => (
-              <button key={id} type="button" onClick={() => { onReact(id); setActionsOpen(false); }} className="focus-ring grid h-10 w-10 place-items-center rounded-full text-lg transition-transform hover:scale-125 active:scale-90" style={{ animationDelay: `${index * 18}ms` }} aria-label={`React ${emoji}`}>{emoji}</button>
+              <button key={id} type="button" onClick={() => { react(id); setActionsOpen(false); }} className="focus-ring grid h-10 w-10 place-items-center rounded-full text-lg transition-transform hover:scale-125 active:scale-90" style={{ animationDelay: `${index * 18}ms` }} aria-label={`React ${emoji}`}>{emoji}</button>
             ))}
             <button type="button" onClick={() => setActionsOpen(false)} className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground" aria-label="Close"><X className="h-4 w-4" /></button>
           </div>
@@ -277,11 +307,31 @@ export function MessageBubbleV4({
             <Action icon={Bookmark} label={saved ? "Unsave" : "Save"} onClick={() => { onSave(); setActionsOpen(false); }} active={saved} />
             <Action icon={Pin} label={pinned ? "Unpin" : "Pin"} onClick={() => { onPin(); setActionsOpen(false); }} active={pinned} />
             <Action icon={Forward} label="Forward" onClick={() => { onForward(); setActionsOpen(false); }} />
+            {message.isMine ? <Action icon={Info} label="Info" onClick={() => { setInfoOpen(true); setActionsOpen(false); }} /> : null}
             {message.isMine && message.text && !message.deleted ? <Action icon={Pencil} label="Edit" onClick={() => { onEdit(); setActionsOpen(false); }} /> : null}
             <Action icon={Trash2} label="Delete" destructive onClick={() => { onDelete(); setActionsOpen(false); }} />
           </div>
         ) : null}
       </div>
+
+      {message.isMine ? <MessageInfoV4 messageId={message.id} open={infoOpen} onOpenChange={setInfoOpen} /> : null}
+
+      <Modal open={Boolean(reactorAggregate)} onOpenChange={(next) => { if (!next) setReactorAggregate(null); }} title={reactorAggregate ? `${reactionEmoji(reactorAggregate.reaction)} Reactions` : "Reactions"} variant="sheet">
+        {reactorAggregate ? (
+          <div className="pb-[max(.5rem,env(safe-area-inset-bottom))]">
+            <div className="mb-3 flex items-center justify-between rounded-2xl bg-[#E88C2B]/8 px-3 py-2 text-xs"><span className="font-semibold">{reactionEmoji(reactorAggregate.reaction)} {reactorAggregate.count}</span><span className="text-muted-foreground">People who reacted</span></div>
+            <ul className="divide-y divide-border/45 overflow-hidden rounded-[20px] border border-border/60 bg-card/60">
+              {reactorAggregate.reactors.map((person) => (
+                <li key={person.userId} className="flex min-h-[62px] items-center gap-3 px-3 py-2.5">
+                  <UserAvatar src={person.avatarUrl} name={person.displayName} size="sm" />
+                  <div className="min-w-0 flex-1"><strong className="block truncate text-sm">{person.displayName}</strong>{person.username ? <span className="block truncate text-[11px] text-muted-foreground">@{person.username}</span> : null}</div>
+                  <span className="text-lg" aria-hidden="true">{reactionEmoji(reactorAggregate.reaction)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </Modal>
     </>
   );
 }
