@@ -8,5 +8,10 @@ export default async function MessagesPage() {
     getConversationsAction(),
     getVoiceRecorderConfigAction()
   ]);
-  return <MessagesPageV3 initialConversations={conversations} voiceRecorderConfig={voiceRecorderConfig} />;
+
+  return (
+    <div className="-mt-[var(--mobile-header-height)] md:mt-0">
+      <MessagesPageV3 initialConversations={conversations} voiceRecorderConfig={voiceRecorderConfig} />
+    </div>
+  );
 }
