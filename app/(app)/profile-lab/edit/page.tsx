@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { ProfileEditVNext } from "@/components/profile/profile-edit-vnext";
+import { ProfileInterestsVNextSection } from "@/components/profile/profile-interests-vnext-section";
 import { loadEffectivePlan } from "@/lib/billing/service";
 import { loadDateOfBirthState } from "@/lib/profile/date-of-birth-service";
 import { loadVisibleProfilePhotosFor } from "@/lib/profile/photo-service";
@@ -34,27 +35,32 @@ export default async function ProfileLabEditPage() {
     .maybeSingle();
 
   const admin = createSupabaseAdminClient();
-  const [plan, birthDetails, fieldPrivacy, photos] = await Promise.all([
+  const [plan, birthDetails, fieldPrivacy, photos, interestRows] = await Promise.all([
     loadEffectivePlan(admin, user.id),
     loadDateOfBirthState(user.id),
     loadFieldPrivacy(admin, user.id),
-    loadVisibleProfilePhotosFor(admin, user.id, { isOwner: true, isApprovedMuddy: false })
+    loadVisibleProfilePhotosFor(admin, user.id, { isOwner: true, isApprovedMuddy: false }),
+    admin.from("user_interests").select("interest").eq("user_id", user.id)
   ]);
+  const interests = (interestRows.data ?? []).map((row) => row.interest);
 
   return (
-    <ProfileEditVNext
-      initialDisplayName={profile?.full_name ?? user.user_metadata?.full_name ?? "Your name"}
-      initialUsername={profile?.username ?? user.user_metadata?.username ?? "username"}
-      initialBio={profile?.bio ?? ""}
-      initialMoodStatus={profile?.mood_status ?? ""}
-      initialAvatarUrl={profile?.avatar_url ?? null}
-      initialDateOfBirth={birthDetails?.dateOfBirth ?? ""}
-      initialDateOfBirthCanCorrect={birthDetails?.canCorrect ?? true}
-      initialBirthdayVisibility={fieldPrivacy?.birthday === "approved_muddies" ? "approved_muddies" : "only_me"}
-      initialAgeVisibility={fieldPrivacy?.age === "approved_muddies" ? "approved_muddies" : "only_me"}
-      initialZodiacVisibility={fieldPrivacy?.zodiac === "approved_muddies" ? "approved_muddies" : "only_me"}
-      photos={photos}
-      plan={plan}
-    />
+    <>
+      <ProfileEditVNext
+        initialDisplayName={profile?.full_name ?? user.user_metadata?.full_name ?? "Your name"}
+        initialUsername={profile?.username ?? user.user_metadata?.username ?? "username"}
+        initialBio={profile?.bio ?? ""}
+        initialMoodStatus={profile?.mood_status ?? ""}
+        initialAvatarUrl={profile?.avatar_url ?? null}
+        initialDateOfBirth={birthDetails?.dateOfBirth ?? ""}
+        initialDateOfBirthCanCorrect={birthDetails?.canCorrect ?? true}
+        initialBirthdayVisibility={fieldPrivacy?.birthday === "approved_muddies" ? "approved_muddies" : "only_me"}
+        initialAgeVisibility={fieldPrivacy?.age === "approved_muddies" ? "approved_muddies" : "only_me"}
+        initialZodiacVisibility={fieldPrivacy?.zodiac === "approved_muddies" ? "approved_muddies" : "only_me"}
+        photos={photos}
+        plan={plan}
+      />
+      <ProfileInterestsVNextSection interests={interests} />
+    </>
   );
 }
