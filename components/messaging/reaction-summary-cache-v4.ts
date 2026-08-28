@@ -14,13 +14,14 @@ type Entry = {
 };
 
 const entries = new Map<string, Entry>();
+const EMPTY_SUMMARY: MessageReactionSummaryMap = {};
 const FRESH_MS = 2_500;
 const POLL_MS = 5_000;
 
 function entryFor(conversationId: string): Entry {
   let entry = entries.get(conversationId);
   if (!entry) {
-    entry = { data: {}, fetchedAt: 0, inFlight: null, listeners: new Set(), timer: null };
+    entry = { data: EMPTY_SUMMARY, fetchedAt: 0, inFlight: null, listeners: new Set(), timer: null };
     entries.set(conversationId, entry);
   }
   return entry;
@@ -74,7 +75,7 @@ export function useConversationReactionSummaries(conversationId: string) {
   const snapshot = useSyncExternalStore(
     (listener) => subscribe(conversationId, listener),
     () => entry.data,
-    () => ({})
+    () => EMPTY_SUMMARY
   );
 
   useEffect(() => {
