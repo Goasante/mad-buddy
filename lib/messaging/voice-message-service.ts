@@ -1,7 +1,10 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { resolveUserEntitlements } from "@/lib/billing/service";
 import { isSupportedVoiceContentType } from "@/lib/media/audio-inspection";
+import { MAX_UPLOAD_BYTES } from "@/lib/media/validation";
 import { messageAttachmentCanBeSigned } from "@/lib/messaging/attachment-retention";
 import { canCreateDirectConversation, resolveConversationAccess } from "@/lib/messaging/service";
 import type { PreparedVoiceAsset } from "@/lib/messaging/voice-playback";
@@ -10,9 +13,23 @@ import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
+const VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
+const DOCUMENT_TYPES = new Set([
+  "application/pdf",
+  "text/plain",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+]);
+
 export type SendableMessageMedia =
   | { kind: "image" }
-  | { kind: "voice_note"; durationMs: number; durationSeconds: number; waveform: number[] | null };
+  | { kind: "voice_note"; durationMs: number; durationSeconds: number; waveform: number[] | null }
+  | { kind: "video"; contentType: string; fileName: string; sizeBytes: number }
+  | { kind: "file"; contentType: string; fileName: string; sizeBytes: number };
 
 /** Revalidates critical READY-asset state immediately before a message insert. */
 export async function resolveSendableMessageMedia(
@@ -21,9 +38,13 @@ export async function resolveSendableMessageMedia(
   conversationId: string,
   mediaId: string
 ): Promise<SendableMessageMedia | null> {
-  const { data: asset } = await admin
+  // `original_file_name` is an unapplied V4 completion column, so this one
+  // projection intentionally uses an untyped client until the final schema
+  // reconciliation/regeneration pass. All authorization remains explicit here.
+  const untyped = admin as unknown as SupabaseClient;
+  const { data: asset } = await untyped
     .from("media_assets")
-    .select("owner_id, context_type, intended_conversation_id, intended_media_kind, content_type, processing_status, moderation_status, duration_ms, waveform_data, updated_at, deleted_at")
+    .select("owner_id, context_type, intended_conversation_id, intended_media_kind, content_type, size_bytes, original_file_name, processing_status, moderation_status, duration_ms, waveform_data, updated_at, deleted_at")
     .eq("id", mediaId)
     .maybeSingle();
   if (!asset || asset.owner_id !== userId || asset.context_type !== "chat") return null;
@@ -37,21 +58,42 @@ export async function resolveSendableMessageMedia(
   if (queued || attached) return null;
 
   let resolved: SendableMessageMedia;
-  if (asset.intended_media_kind === "image" && asset.content_type.startsWith("image/")) {
+  const contentType = String(asset.content_type ?? "");
+  const sizeBytes = Number(asset.size_bytes ?? 0);
+  const safeFileName = String(asset.original_file_name ?? "").trim();
+
+  if (asset.intended_media_kind === "image" && contentType.startsWith("image/")) {
     resolved = { kind: "image" };
+  } else if (asset.intended_media_kind === "video") {
+    if (!VIDEO_TYPES.has(contentType) || sizeBytes <= 0 || sizeBytes > MAX_UPLOAD_BYTES.chat) return null;
+    resolved = {
+      kind: "video",
+      contentType,
+      fileName: safeFileName || "Video",
+      sizeBytes
+    };
+  } else if (asset.intended_media_kind === "file") {
+    if (!DOCUMENT_TYPES.has(contentType) || sizeBytes <= 0 || sizeBytes > MAX_UPLOAD_BYTES.chat) return null;
+    resolved = {
+      kind: "file",
+      contentType,
+      fileName: safeFileName || "Document",
+      sizeBytes
+    };
   } else {
-    if (asset.intended_media_kind !== "voice_note" || !isSupportedVoiceContentType(asset.content_type)) {
+    if (asset.intended_media_kind !== "voice_note" || !isSupportedVoiceContentType(contentType)) {
       return null;
     }
-    if (!asset.duration_ms || asset.duration_ms <= 0) return null;
+    const durationMs = Number(asset.duration_ms ?? 0);
+    if (durationMs <= 0) return null;
     const waveform = validateVoiceWaveform(asset.waveform_data);
     if (!waveform.valid) return null;
     const entitlements = await resolveUserEntitlements(admin, userId);
-    if (!entitlements.voice_notes || asset.duration_ms > entitlements.max_voice_note_seconds * 1_000) return null;
+    if (!entitlements.voice_notes || durationMs > entitlements.max_voice_note_seconds * 1_000) return null;
     resolved = {
       kind: "voice_note",
-      durationMs: asset.duration_ms,
-      durationSeconds: Math.max(1, Math.ceil(asset.duration_ms / 1_000)),
+      durationMs,
+      durationSeconds: Math.max(1, Math.ceil(durationMs / 1_000)),
       waveform: waveform.waveform
     };
   }
@@ -59,12 +101,12 @@ export async function resolveSendableMessageMedia(
   // Compare-and-swap the existing lifecycle timestamp as an atomic send
   // claim. This closes the different-client-id race without a new table or
   // state: one contender updates the observed timestamp, all others fail.
-  const previousUpdatedAtMs = Date.parse(asset.updated_at);
+  const previousUpdatedAtMs = Date.parse(String(asset.updated_at));
   const claimedAt = new Date(Math.max(Date.now(), Number.isFinite(previousUpdatedAtMs) ? previousUpdatedAtMs + 1 : 0)).toISOString();
   const { data: claimed, error: claimError } = await admin.from("media_assets")
     .update({ updated_at: claimedAt })
     .eq("id", mediaId)
-    .eq("updated_at", asset.updated_at)
+    .eq("updated_at", String(asset.updated_at))
     .eq("processing_status", "ready")
     .eq("moderation_status", "active")
     .is("deleted_at", null)
