@@ -72,7 +72,7 @@ export function ProfilePrivacyVNext({
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Profile VNext</p>
           <h1 className="text-xl font-semibold tracking-tight">Privacy</h1>
         </div>
-        <Link href="/settings/privacy" className="focus-ring grid h-11 w-11 place-items-center rounded-full border border-border/70 bg-card shadow-sm" aria-label="Open current privacy settings">
+        <Link href="/settings/privacy" className="focus-ring grid h-11 w-11 place-items-center rounded-full border border-border/70 bg-card shadow-sm" aria-label="Open canonical privacy settings">
           <UserRoundCog className="h-5 w-5" aria-hidden="true" />
         </Link>
       </header>
@@ -86,7 +86,7 @@ export function ProfilePrivacyVNext({
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="text-xl font-semibold">Your profile visibility</h2>
-            <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">See the important privacy decisions in one place. The real controls still live in the settings surfaces that enforce them.</p>
+            <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">See the important privacy decisions in one place. Profile-owned controls stay in VNext; proximity and communication controls still open the settings surfaces that enforce them.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <StatusChip icon={Radar} label={`Glow: ${glowLabels[visibilityStatus]}`} />
               <StatusChip icon={MessageCircleMore} label={`Messages: ${messagePermissionLabels[communication.messagePermission]}`} />
@@ -99,10 +99,10 @@ export function ProfilePrivacyVNext({
       <div className="mt-5 grid gap-5">
         <PrivacySection title="Profile visibility" description="What someone can learn from your identity before they ever message you.">
           <PrivacySettingRow icon={Radar} title="Glow discoverability" value={glowLabels[visibilityStatus]} detail="Mad Buddy uses broad nearby ranges, never an exact public distance." href="/settings/glow-visibility" />
-          <PrivacySettingRow icon={Images} title="Showcase photos" value="Per photo" detail="Each extra photo can be Everyone, Muddies, or Only me." href="/profile?section=identity" />
-          <PrivacySettingRow icon={CakeSlice} title="Birthday" value={audience(birthdayVisibility)} detail="Your full date of birth remains private." href="/profile?section=identity" />
-          <PrivacySettingRow icon={Sparkles} title="Age" value={audience(ageVisibility)} detail="Age is derived from your private date of birth." href="/profile?section=identity" />
-          <PrivacySettingRow icon={Sparkles} title="Zodiac" value={audience(zodiacVisibility)} detail="Zodiac is derived automatically and can stay private." href="/profile?section=identity" />
+          <PrivacySettingRow icon={Images} title="Showcase photos" value="Per photo" detail="Each extra photo can be Everyone, Muddies, or Only me." href="/profile-lab/media" />
+          <PrivacySettingRow icon={CakeSlice} title="Birthday" value={audience(birthdayVisibility)} detail="Your full date of birth remains private." href="/profile-lab/edit" />
+          <PrivacySettingRow icon={Sparkles} title="Age" value={audience(ageVisibility)} detail="Age is derived from your private date of birth." href="/profile-lab/edit" />
+          <PrivacySettingRow icon={Sparkles} title="Zodiac" value={audience(zodiacVisibility)} detail="Zodiac is derived automatically and can stay private." href="/profile-lab/edit" />
         </PrivacySection>
 
         <PrivacySection title="Messaging privacy" description="The WhatsApp-like communication controls already enforced by Chats.">
@@ -156,7 +156,7 @@ export function ProfilePrivacyVNext({
               <h2 className="text-base font-semibold">Your safety. Your control.</h2>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">Profile privacy, messaging privacy and proximity privacy are separate on purpose. One setting should never silently weaken another.</p>
               <Link href="/settings/privacy" className="focus-ring mt-4 inline-flex min-h-10 items-center gap-2 rounded-full border border-[#E88C2B]/25 bg-background/70 px-4 text-sm font-semibold text-[#8F4C13] hover:bg-background">
-                Open privacy settings <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                Open all privacy settings <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </div>
           </div>
@@ -197,7 +197,7 @@ function PrivacySettingRow({
   title: string;
   value: string;
   detail: string;
-  href: "/settings/glow-visibility" | "/profile?section=identity" | "/settings/communication";
+  href: "/settings/glow-visibility" | "/profile-lab/media" | "/profile-lab/edit" | "/settings/communication";
 }) {
   return (
     <Link href={href} className="focus-ring safe-motion flex min-h-[4.5rem] items-start gap-3 border-b border-border/55 px-4 py-4 last:border-0 hover:bg-secondary/30">
