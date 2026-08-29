@@ -330,6 +330,13 @@ export function EventsPageContent({
       }
       setCreateRoomOpen(false);
       setRooms(await listEventRoomsAction(selectedEvent.id, true));
+      /* STRAIGHT INTO THE ROOM.
+       *
+       * Creating a Room already creates its canonical conversation, but the
+       * sheet used to just close and refresh the list, leaving the host to hunt
+       * for the chat they had only just made. The action already returns the new
+       * room id; opening it is the one-step path. */
+      if (result.circleId) setOpenRoomId(result.circleId);
     });
   }
 
