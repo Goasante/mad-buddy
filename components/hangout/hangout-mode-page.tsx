@@ -57,6 +57,7 @@ import { cn } from "@/lib/utils";
 import { countActiveRequests } from "@/lib/social/hangout-requests";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
 import { UPFOR_QUICK_IDEAS } from "@/lib/social/upfor";
+import { conversationHref } from "@/lib/messaging/open-conversation";
 import { withTimeout } from "@/lib/network/resilience";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import type {
@@ -587,15 +588,36 @@ export function HangoutModePage({
    * Plan path.
    */
   async function convertToPlanById(hangoutId: string) {
+    /* The fallback is shaped like the action's own result so the success branch
+       can read conversationId. Deliberately NOT `import type` from
+       hangout-actions: that module is "use server", where Turbopack turns every
+       export into a server reference and a type import becomes a runtime
+       ReferenceError tsc cannot catch. */
     const result = await convertHangoutToPlanAction(hangoutId).catch(() => ({
       ok: false,
-      message: "Couldn't create the Plan yet. Try again."
+      message: "Couldn't create the Plan yet. Try again.",
+      conversationId: undefined as string | undefined
     }));
     showToast(result.message, !result.ok);
     if (result.ok) {
       if (activeHangout?.id === hangoutId) {
         setActiveHangout(null);
         setRequests([]);
+      }
+      /* STRAIGHT INTO THE PLAN CHAT.
+       *
+       * The conversion already created the Plan, its conversation and the
+       * accepted participants' membership; the action now returns that
+       * conversation id. Previously this only refreshed the UpFor list, leaving
+       * the owner to go and find the chat they had just made.
+       *
+       * conversationHref is the one canonical spelling of the destination, so
+       * this lands in the same conversation the participants' notifications
+       * open. router.refresh() stays as the fallback for the unlikely case
+       * where the lifecycle returned no conversation. */
+      if (result.conversationId) {
+        router.push(conversationHref(result.conversationId));
+        return;
       }
       router.refresh();
     }

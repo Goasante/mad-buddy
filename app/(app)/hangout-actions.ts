@@ -34,6 +34,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { checkAccess } from "@/lib/access/guard";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
+import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
 import type { HangoutActivityType, HangoutAudienceType, HangoutRequestStatus, SubscriptionPlan } from "@/lib/supabase/database.types";
 
 export type HangoutActionState = {
@@ -41,6 +42,14 @@ export type HangoutActionState = {
   message: string;
   hangoutId?: string;
   planId?: string;
+  /**
+   * The Plan Chat produced by a conversion.
+   *
+   * Returned so the caller can open the exact conversation the canonical
+   * lifecycle created, rather than guessing a route or dropping the owner back
+   * on the UpFor list to hunt for it.
+   */
+  conversationId?: string;
 };
 
 const uuidSchema = z.string().uuid();
@@ -1171,6 +1180,30 @@ export async function requestHangoutAction(
 
 const respondSchema = z.enum(["accepted", "maybe", "declined"]);
 
+/** The host's first name, for notification copy. Never their full identity. */
+async function hangoutOwnerFirstName(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  ownerId: string
+): Promise<string> {
+  const { data } = await admin.from("profiles").select("full_name").eq("user_id", ownerId).maybeSingle();
+  const full = data?.full_name?.trim() ?? "";
+  return full.split(/\s+/)[0] || "Your host";
+}
+
+/** What the UpFor is FOR, in the words the product already uses for it. */
+async function hangoutActivityLabel(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  hangoutId: string
+): Promise<string> {
+  const { data } = await admin
+    .from("hangout_sessions")
+    .select("activity_type")
+    .eq("id", hangoutId)
+    .maybeSingle();
+  const activity = data?.activity_type as HangoutActivityType | undefined;
+  return activity ? HANGOUT_ACTIVITY_LABELS[activity] ?? "this UpFor" : "this UpFor";
+}
+
 export async function respondHangoutRequestAction(
   requestId: string,
   response: string
@@ -1213,25 +1246,44 @@ export async function respondHangoutRequestAction(
     }
   }
 
-  const { error } = await admin
+  /* THE UPDATE IS THE DEDUPE.
+   *
+   * Scoped to rows still 'pending', so a replayed Accept matches zero rows.
+   * `select` makes that observable: previously the update was fire-and-forget
+   * and the notification was sent unconditionally underneath it, so every retry
+   * -- a double tap, a lost response, a refetch -- delivered another "You're in".
+   * Only a decision that actually moved the row notifies. */
+  const { data: transitioned, error } = await admin
     .from("hangout_requests")
     .update({ status: parsedResponse.data, responded_at: new Date().toISOString() })
     .eq("id", requestId)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .select("id");
   if (error) return { ok: false, message: "Couldn't respond to the request." };
+
+  const decided = (transitioned ?? []).length > 0;
+  if (!decided) {
+    // Already answered. Report success -- the caller's intent holds -- but do
+    // not emit a second notification for the same decision.
+    return { ok: true, message: "Response sent." };
+  }
+
+  const ownerName = await hangoutOwnerFirstName(admin, userId);
+  const activityLabel = await hangoutActivityLabel(admin, request.hangout_session_id);
 
   await deliverNotification(admin, {
     userId: request.requester_id,
     senderId: userId,
     category: "plans",
     type: `hangout:${request.hangout_session_id}`,
-    title: "Hangout update",
+    /* Names the outcome and the thing it is about. "Hangout update" told the
+       recipient nothing they could act on, and read identically for an accept
+       and a decline. */
+    title: parsedResponse.data === "accepted" ? "You're in" : "Not this time",
     message:
       parsedResponse.data === "accepted"
-        ? "You're in, the host accepted your request."
-        : parsedResponse.data === "maybe"
-          ? "The host marked your request as Maybe."
-          : "The host can't make this one."
+        ? `${ownerName} accepted you for ${activityLabel}.`
+        : `${ownerName} can't make this one.`
   });
   return { ok: true, message: "Response sent." };
 }
@@ -1249,7 +1301,74 @@ export async function convertHangoutToPlanAction(
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
-  return convertHangoutToPlan(userId, hangoutId, title);
+  const result = await convertHangoutToPlan(userId, hangoutId, title);
+  if (!result.ok) return result;
+
+  /* NOTIFY AFTER MEMBERSHIP EXISTS, NEVER BEFORE.
+   *
+   * create_plan_lifecycle creates the Plan, its conversation AND the accepted
+   * participants' conversation membership in one transaction, and it has
+   * already returned. So by the time this runs, every recipient below can
+   * actually open the chat the notification points at. Emitting inside or
+   * before the transaction would deep-link somebody into a conversation they
+   * are not yet authorized to read.
+   *
+   * `created` is the RPC's own idempotency answer, keyed on the source UpFor.
+   * A replayed conversion returns created=false, so retries -- a double tap, a
+   * lost response, a refresh -- reuse the same Plan and send nothing again. */
+  if (result.created && result.conversationId) {
+    await notifyPlanChatReady(userId, hangoutId, result.conversationId);
+  }
+  return result;
+}
+
+/**
+ * Tell the accepted participants their Plan Chat exists.
+ *
+ * RECIPIENTS COME FROM THE DATABASE, not from anything the client sent: the
+ * same `status = 'accepted'` truth create_plan_lifecycle used to decide who
+ * joined the conversation. A pending or declined requester is therefore never
+ * notified, and a caller cannot promote someone by claiming they were accepted.
+ *
+ * The creator is deliberately not notified -- they are navigated straight into
+ * the chat instead.
+ */
+async function notifyPlanChatReady(
+  actorId: string,
+  hangoutId: string,
+  conversationId: string
+): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  const [{ data: accepted }, activityLabel] = await Promise.all([
+    admin
+      .from("hangout_requests")
+      .select("requester_id")
+      .eq("hangout_session_id", hangoutId)
+      .eq("status", "accepted"),
+    hangoutActivityLabel(admin, hangoutId)
+  ]);
+
+  const recipients = (accepted ?? [])
+    .map((row) => row.requester_id)
+    .filter((id) => id && id !== actorId);
+  if (recipients.length === 0) return;
+
+  await Promise.all(
+    recipients.map((recipientId) =>
+      deliverNotification(admin, {
+        userId: recipientId,
+        senderId: actorId,
+        category: "plans",
+        /* Routes to the exact conversation: resolveNotificationDestination maps
+           `message:<id>` to /messages?conversation=<id>, which is Chats V4 now.
+           A generic /plans or /messages link would land the recipient back in a
+           list, which is the thing this fixes. */
+        type: `message:${conversationId}`,
+        title: "The plan is ready",
+        message: `${activityLabel} now has a Plan Chat.`
+      })
+    )
+  );
 }
 
 // ---------------------------------------------------------------------------

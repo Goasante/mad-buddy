@@ -85,8 +85,16 @@ describe("canonical Plans application contract", () => {
   });
 
   it("eliminates the UpFor and participant split-write paths", () => {
-    expect(hangouts).toContain("return convertHangoutToPlan(userId, hangoutId, title)");
+    /* Asserted as the CONTRACT -- conversion goes through the canonical service
+       and there is no second Plan write -- rather than as the literal line
+       `return convertHangoutToPlan(...)`. That spelling broke when the action
+       started capturing the result to return the conversation id and notify
+       accepted participants, neither of which introduces another Plan path. */
+    expect(hangouts).toContain("convertHangoutToPlan(userId, hangoutId, title)");
     expect(hangouts).not.toContain("source_hangout_id: hangoutId");
+    // No hand-rolled Plan or plan-participant writes anywhere in the action.
+    expect(hangouts).not.toContain('.from("plans")');
+    expect(hangouts).not.toContain('.from("plan_participants")');
     expect(actions).toContain("return addPlanParticipants(userId, planId, participantIds)");
     expect(actions).toContain('rsvp(userId, planId, "not_going")');
     expect(actions).not.toContain('.from("plan_participants").upsert(');
