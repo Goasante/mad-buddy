@@ -64,10 +64,17 @@ describe("Muddies has exactly one Add control", () => {
   });
 
   it("wears person-plus, beside the search field", () => {
-    const searchRow = page.slice(
-      page.indexOf('className="muddies-search-row"'),
-      page.indexOf('className="muddies-search-row"') + 1600
-    );
+    /* SLICED TO THE ROW'S OWN END, not to a byte count.
+     *
+     * This took a fixed 1600 characters after the search row opened, which
+     * held on a LF checkout and broke on a CRLF one: the extra carriage
+     * returns pushed the icon past the window, so the test reported a missing
+     * control on a file it had not touched. Ending the slice at the row's
+     * closing tag makes it independent of line endings and of any comment
+     * length inside it. */
+    const start = page.indexOf('className="muddies-search-row"');
+    const end = page.indexOf("</div>", page.indexOf("</button>", start));
+    const searchRow = page.slice(start, end);
     expect(searchRow).toContain('aria-label="Add a Muddy"');
     expect(searchRow).toContain("<UserPlus");
     // The control that opens Add must not depict a filter.

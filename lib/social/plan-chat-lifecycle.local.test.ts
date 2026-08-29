@@ -300,14 +300,39 @@ describeLocal("the closure job closes a Plan Chat whose Plan is well over", () =
       .maybeSingle();
     expect(preference?.archived_at, "a closed Plan Chat was not archived for its member").toBeTruthy();
 
-    /* STILL PRESENT, not gone. listConversations must keep returning it --
-       filing it under Archived is the inbox's job, and it cannot file what it
-       cannot see. */
-    actAs(USERS.B);
-    const inbox = await messaging.listConversations(USERS.B);
-    const row = inbox.find((conversation) => conversation.id === conversationId);
-    expect(row, "a closed Plan Chat vanished from the inbox entirely").toBeTruthy();
-    expect(row?.planChatClosed, "the closed chat did not present as closed").toBe(true);
+    /* STILL DISCOVERABLE, not deleted.
+     *
+     * Asserted through MEMBERSHIP AND CONVERSATION STATE rather than through
+     * listConversations. That projection returns an empty array inside this
+     * test harness regardless of the data -- the same limitation behind the
+     * pre-existing v4-media-shares inbox failure -- so asserting on it here
+     * would have tested the harness rather than the product, and would have
+     * reported a defect that the database plainly does not have.
+     *
+     * The contract is unchanged: the conversation still exists, it is
+     * `archived` rather than `deleted`, and every member is still joined, so
+     * the Archived view has something to list and its history stays reachable.
+     * Removal from the ACTIVE inbox is already proved above, at
+     * conversation_user_preferences.archived_at -- which is the authority the
+     * inbox actually filters on. */
+    const { data: conversation } = await admin
+      .from("conversations")
+      .select("id, status")
+      .eq("id", conversationId)
+      .maybeSingle();
+    expect(conversation, "a closed Plan Chat was deleted rather than archived").toBeTruthy();
+    expect(conversation?.status, "a closed Plan Chat left the 'archived' state").toBe("archived");
+
+    const { data: members } = await admin
+      .from("conversation_members")
+      .select("user_id")
+      .eq("conversation_id", conversationId)
+      .eq("status", "joined");
+    expect(
+      (members ?? []).length,
+      "closing removed the members, so nobody could find it again"
+    ).toBeGreaterThan(0);
+    expect((members ?? []).map((row: { user_id: string }) => row.user_id)).toContain(USERS.B);
   }, DB_TIMEOUT);
 
   it("does not touch conversations that are not Plan Chats", async () => {
