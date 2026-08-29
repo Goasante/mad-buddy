@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Flag, Hand, MoreHorizontal, Settings, SlidersHorizontal, UserRound } from "lucide-react";
+import { ArrowLeft, Flag, Hand, MoreHorizontal } from "lucide-react";
 
 import {
   connectWithCandidateAction,
@@ -18,6 +18,7 @@ import {
   updateLinkrProfileAction,
   updateLinkrSettingsAction
 } from "@/app/(app)/linkr-actions";
+import { AppMenu } from "@/components/ui/app-dropdown";
 import { CandidateCard } from "@/components/linkr/candidate-card";
 import { LinkrFilters, type LinkrFilterValues } from "@/components/linkr/linkr-filters";
 import {
@@ -632,6 +633,15 @@ function LinkrPageContent({
           <ArrowLeft aria-hidden />
         </button>
         <h1 className="linkr-topbar__title">Linkr</h1>
+        {/* TWO CONTROLS, NOT FOUR.
+            The bar carried Back plus four icon buttons -- Clicked, profile,
+            filters, settings -- four ambiguous glyphs competing at the top of a
+            surface whose entire job is to show one person's face. Every
+            destination was real, so nothing is removed: the rarely-used three
+            move behind one named menu, and Clicked stays out because it is the
+            one people reach for repeatedly (it is where their mutuals live).
+
+            Back stays separate, as its own affordance. */}
         <div className="linkr-topbar__actions">
           {/* Clicked: where mutual people live once they leave the deck. */}
           <button
@@ -644,15 +654,38 @@ function LinkrPageContent({
           >
             <Hand aria-hidden />
           </button>
-          <button type="button" onClick={() => setView("profile")} aria-label="My Linkr profile">
-            <UserRound aria-hidden />
-          </button>
-          <button type="button" onClick={() => setView("filters")} aria-label="Filters">
-            <SlidersHorizontal aria-hidden />
-          </button>
-          <button type="button" onClick={() => setView("settings")} aria-label="Linkr settings">
-            <Settings aria-hidden />
-          </button>
+          <AppMenu
+            label="Linkr controls"
+            align="end"
+            trigger={
+              <button type="button" aria-label="Linkr controls">
+                <MoreHorizontal aria-hidden />
+              </button>
+            }
+            items={[
+              {
+                id: "preview",
+                label: "Preview my Linkr card",
+                onSelect: () => setView("preview")
+              },
+              {
+                id: "filters",
+                label: "Discovery preferences",
+                onSelect: () => setView("filters")
+              },
+              {
+                id: "profile",
+                label: "Edit Linkr profile",
+                onSelect: () => setView("profile")
+              },
+              {
+                id: "settings",
+                label: "Linkr settings",
+                separatorBefore: true,
+                onSelect: () => setView("settings")
+              }
+            ]}
+          />
         </div>
       </header>
 
