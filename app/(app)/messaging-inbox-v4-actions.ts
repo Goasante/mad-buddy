@@ -1,6 +1,5 @@
 "use server";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -17,7 +16,7 @@ export async function getInboxConversationPreferencesAction() {
   if (!env.url || !env.serviceRoleKey) return {};
   const userId = await currentUserId();
   if (!userId) return {};
-  const db = createSupabaseAdminClient() as unknown as SupabaseClient;
+  const db = createSupabaseAdminClient();
   const { data } = await db
     .from("conversation_user_preferences")
     .select("conversation_id, archived_at, marked_unread_at, favorite_rank, draft_text, draft_updated_at")

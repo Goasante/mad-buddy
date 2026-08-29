@@ -2665,6 +2665,542 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["conversations"]["Insert"]>;
         Relationships: [];
       };
+      // ---------------------------------------------------------------
+      // Chats V4 + Event Rooms tables, taken verbatim from
+      // `supabase gen types typescript --linked` against PRODUCTION after
+      // the coordinated migration. MERGED into this curated file rather than
+      // replacing it: the generated output omits the named aliases and helpers
+      // (SubscriptionPlan, legacyTierOf, ...) the rest of the codebase imports
+      // from here, and swapping wholesale produced 308 type errors.
+      // ---------------------------------------------------------------
+      conversation_message_pins: {
+        Row: {
+          conversation_id: string
+          id: string
+          message_id: string
+          pinned_at: string
+          pinned_by: string | null
+        }
+        Insert: {
+          conversation_id: string
+          id?: string
+          message_id: string
+          pinned_at?: string
+          pinned_by?: string | null
+        }
+        Update: {
+          conversation_id?: string
+          id?: string
+          message_id?: string
+          pinned_at?: string
+          pinned_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_message_pins_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_message_pins_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_polls: {
+        Row: {
+          allow_multiple: boolean
+          closed_at: string | null
+          conversation_id: string
+          created_at: string
+          created_by: string | null
+          is_anonymous: boolean
+          message_id: string
+          question: string
+        }
+        Insert: {
+          allow_multiple?: boolean
+          closed_at?: string | null
+          conversation_id: string
+          created_at?: string
+          created_by?: string | null
+          is_anonymous?: boolean
+          message_id: string
+          question: string
+        }
+        Update: {
+          allow_multiple?: boolean
+          closed_at?: string | null
+          conversation_id?: string
+          created_at?: string
+          created_by?: string | null
+          is_anonymous?: boolean
+          message_id?: string
+          question?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_polls_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_polls_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_poll_options: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          poll_message_id: string
+          position: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          poll_message_id: string
+          position: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          poll_message_id?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_poll_options_poll_message_id_fkey"
+            columns: ["poll_message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_polls"
+            referencedColumns: ["message_id"]
+          },
+        ]
+      }
+      chat_poll_votes: {
+        Row: {
+          created_at: string
+          option_id: string
+          poll_message_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          option_id: string
+          poll_message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          option_id?: string
+          poll_message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_poll_votes_option_id_fkey"
+            columns: ["option_id"]
+            isOneToOne: false
+            referencedRelation: "chat_poll_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_poll_votes_poll_message_id_fkey"
+            columns: ["poll_message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_polls"
+            referencedColumns: ["message_id"]
+          },
+        ]
+      }
+      saved_messages: {
+        Row: {
+          folder_id: string | null
+          message_id: string
+          saved_at: string
+          user_id: string
+        }
+        Insert: {
+          folder_id?: string | null
+          message_id: string
+          saved_at?: string
+          user_id: string
+        }
+        Update: {
+          folder_id?: string | null
+          message_id?: string
+          saved_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_messages_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "saved_message_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_messages_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_message_folders: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      conversation_presence: {
+        Row: {
+          conversation_id: string
+          last_active_at: string
+          presence_state: string
+          present_until: string
+          typing_until: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          last_active_at?: string
+          presence_state?: string
+          present_until: string
+          typing_until?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          last_active_at?: string
+          presence_state?: string
+          present_until?: string
+          typing_until?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_presence_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_chat_settings: {
+        Row: {
+          conversation_id: string
+          default_media_mode: string
+          message_lifetime_seconds: number | null
+          updated_at: string
+          updated_by: string | null
+          who_can_add_members: string
+          who_can_create_polls: string
+          who_can_edit_info: string
+          who_can_pin: string
+          who_can_use_everyone: string
+        }
+        Insert: {
+          conversation_id: string
+          default_media_mode?: string
+          message_lifetime_seconds?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          who_can_add_members?: string
+          who_can_create_polls?: string
+          who_can_edit_info?: string
+          who_can_pin?: string
+          who_can_use_everyone?: string
+        }
+        Update: {
+          conversation_id?: string
+          default_media_mode?: string
+          message_lifetime_seconds?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          who_can_add_members?: string
+          who_can_create_polls?: string
+          who_can_edit_info?: string
+          who_can_pin?: string
+          who_can_use_everyone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_chat_settings_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_user_preferences: {
+        Row: {
+          archived_at: string | null
+          conversation_id: string
+          draft_text: string | null
+          draft_updated_at: string | null
+          favorite_rank: number | null
+          marked_unread_at: string | null
+          notification_preview: string
+          notify_mentions_when_muted: boolean
+          notify_replies_when_muted: boolean
+          reading_anchor_message_id: string | null
+          reading_anchor_offset: number
+          theme_key: string
+          updated_at: string
+          user_id: string
+          voice_playback_message_id: string | null
+          voice_playback_seconds: number
+        }
+        Insert: {
+          archived_at?: string | null
+          conversation_id: string
+          draft_text?: string | null
+          draft_updated_at?: string | null
+          favorite_rank?: number | null
+          marked_unread_at?: string | null
+          notification_preview?: string
+          notify_mentions_when_muted?: boolean
+          notify_replies_when_muted?: boolean
+          reading_anchor_message_id?: string | null
+          reading_anchor_offset?: number
+          theme_key?: string
+          updated_at?: string
+          user_id: string
+          voice_playback_message_id?: string | null
+          voice_playback_seconds?: number
+        }
+        Update: {
+          archived_at?: string | null
+          conversation_id?: string
+          draft_text?: string | null
+          draft_updated_at?: string | null
+          favorite_rank?: number | null
+          marked_unread_at?: string | null
+          notification_preview?: string
+          notify_mentions_when_muted?: boolean
+          notify_replies_when_muted?: boolean
+          reading_anchor_message_id?: string | null
+          reading_anchor_offset?: number
+          theme_key?: string
+          updated_at?: string
+          user_id?: string
+          voice_playback_message_id?: string | null
+          voice_playback_seconds?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_user_preferences_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_user_preferences_reading_anchor_message_id_fkey"
+            columns: ["reading_anchor_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_user_preferences_voice_playback_message_id_fkey"
+            columns: ["voice_playback_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_contacts: {
+        Row: {
+          display_name: string
+          email: string | null
+          message_id: string
+          organization: string | null
+          phone: string | null
+        }
+        Insert: {
+          display_name: string
+          email?: string | null
+          message_id: string
+          organization?: string | null
+          phone?: string | null
+        }
+        Update: {
+          display_name?: string
+          email?: string | null
+          message_id?: string
+          organization?: string | null
+          phone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_contacts_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_places: {
+        Row: {
+          address_label: string | null
+          area_label: string | null
+          message_id: string
+          place_kind: string
+          place_name: string
+        }
+        Insert: {
+          address_label?: string | null
+          area_label?: string | null
+          message_id: string
+          place_kind?: string
+          place_name: string
+        }
+        Update: {
+          address_label?: string | null
+          area_label?: string | null
+          message_id?: string
+          place_kind?: string
+          place_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_places_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_files: {
+        Row: {
+          byte_size: number
+          file_name: string
+          media_id: string
+          message_id: string
+          mime_type: string
+          page_count: number | null
+        }
+        Insert: {
+          byte_size: number
+          file_name: string
+          media_id: string
+          message_id: string
+          mime_type: string
+          page_count?: number | null
+        }
+        Update: {
+          byte_size?: number
+          file_name?: string
+          media_id?: string
+          message_id?: string
+          mime_type?: string
+          page_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_files_media_id_fkey"
+            columns: ["media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_files_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_event_refs: {
+        Row: {
+          event_id: string | null
+          message_id: string
+          plan_id: string | null
+        }
+        Insert: {
+          event_id?: string | null
+          message_id: string
+          plan_id?: string | null
+        }
+        Update: {
+          event_id?: string | null
+          message_id?: string
+          plan_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_event_refs_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_event_refs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_event_refs_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_pins: {
         Row: {
           user_id: string;
@@ -2766,6 +3302,14 @@ export type Database = {
           created_at: string;
           edited_at: string | null;
           deleted_at: string | null;
+          /* Chats V4 retention, added by 20260828203000 and confirmed present
+             in production. media_mode drives Keep vs 24h; expires_at is the
+             canonical expiry the authorization path checks BEFORE cleanup runs;
+             kept_at/kept_by record a Keep in Chat. */
+          media_mode: string | null;
+          expires_at: string | null;
+          kept_at: string | null;
+          kept_by: string | null;
         };
         Insert: {
           id?: string;
@@ -2784,6 +3328,10 @@ export type Database = {
           created_at?: string;
           edited_at?: string | null;
           deleted_at?: string | null;
+          media_mode?: string | null;
+          expires_at?: string | null;
+          kept_at?: string | null;
+          kept_by?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
         Relationships: [];

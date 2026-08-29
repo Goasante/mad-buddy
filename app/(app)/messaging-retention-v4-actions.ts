@@ -1,6 +1,5 @@
 "use server";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { resolveConversationAccess } from "@/lib/messaging/service";
@@ -43,7 +42,7 @@ export async function getMessageRetentionAction(input: unknown): Promise<Message
   const access = await resolveConversationAccess(admin, viewerId, parsed.data.conversationId);
   if (!access.canView || access.status !== "active") return null;
 
-  const db = admin as unknown as SupabaseClient;
+  const db = admin;
   const { data: message } = await db
     .from("messages")
     .select("id, conversation_id, media_mode, expires_at, kept_at, kept_by, deleted_at, status, created_at")
@@ -82,7 +81,7 @@ export async function keepMessageInChatAction(input: unknown) {
   const access = await resolveConversationAccess(admin, viewerId, parsed.data.conversationId);
   if (!access.canView || access.status !== "active") return { ok: false as const, message: "Message not found." };
 
-  const db = admin as unknown as SupabaseClient;
+  const db = admin;
   const now = new Date().toISOString();
   const { data: kept, error } = await db
     .from("messages")
