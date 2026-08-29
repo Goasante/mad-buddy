@@ -2143,7 +2143,20 @@ function CreateEventModal({
           is a CTA nobody finds. Continue carries the flow forward; Publish
           exists only at Review, so it cannot be pressed before the person has
           seen what they are publishing. */}
-      <div className="mt-5 space-y-3 pb-[max(0px,env(safe-area-inset-bottom))]">
+      {/* STICKY, SO THE ACTION AREA REALLY DOES NOT SCROLL AWAY.
+          The comment above has always claimed this, and it was not true:
+          everything passed to Modal as `children` lands inside its single
+          scroll owner, so the CTA scrolled with the form. Measured at 360x640
+          on the first stage -- 217px of overflow in the scroller, Continue at
+          y=740 in a 640px viewport, below the fold with nothing indicating it
+          was there.
+
+          `sticky bottom-0` pins it to the foot of that scroller instead of
+          moving it out of the tree: the form body keeps exactly one internal
+          scroll owner, the panel itself still never moves, and the primary
+          action stays on screen at every height. The backdrop is opaque so
+          content cannot be read through it as it passes underneath. */}
+      <div className="sticky bottom-0 z-10 -mx-4 mt-5 space-y-3 border-t border-border/60 bg-card px-4 pt-3 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
         {/* PUBLISH FAILED (4L §7). The sheet stays open with everything the
             person entered, the draft is safe, and the message says what
             actually went wrong -- rate limit, storage, validation, permission.
