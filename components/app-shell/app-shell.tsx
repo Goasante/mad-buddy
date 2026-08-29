@@ -15,11 +15,11 @@ import {
   Hand,
   HelpCircle,
   Home,
+  Images,
   LogOut,
   MessagesSquare,
   MoreHorizontal,
   PartyPopper,
-  Sparkles,
   MessageCircle,
   Plus,
   Settings,
@@ -126,7 +126,11 @@ const navigationItems: Array<{
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/messages", label: "Messages", icon: MessagesSquare },
   { href: "/plans", label: "Plans", icon: CalendarCheck2, featureIcon: "plans" },
-  { href: "/moments", label: "Moments", icon: Sparkles, featureIcon: "moments" },
+  /* A Moment is a photo shared for a day. `Images` says that; Sparkles said
+     "something magical happens here", which is the AI-flavoured decoration
+     being removed product-wide. The route stays -- it is still reachable from
+     navigation when the feature is on -- only the glyph changes. */
+  { href: "/moments", label: "Moments", icon: Images, featureIcon: "moments" },
   { href: "/events", label: "Events", icon: PartyPopper, featureIcon: "events" },
   { href: "/groups", label: "Groups", icon: Users2, featureIcon: "groups" },
   { href: "/linkr", label: "Linkr", icon: Compass, brandIcon: "linkr" },
@@ -1200,13 +1204,14 @@ const createActionDefinitions: Array<{
     icon: Hand,
     featureIcon: "ping"
   },
-  {
-    href: "/moments",
-    title: "Share a Moment",
-    description: "Post a moment for your Muddies",
-    icon: Sparkles,
-    featureIcon: "moments"
-  }
+  /* "Share a Moment" REMOVED.
+   *
+   * Moments is paused: app/(app)/moments/page.tsx redirects to /dashboard when
+   * isMomentsEnabled is false, so this Quick Action promised a destination
+   * that bounces the person straight back to Home. A menu item whose only
+   * outcome is landing where you already were is a dead action, not a
+   * shortcut -- and this one also carried the decorative Sparkles the product
+   * is removing. */
 ];
 
 /**

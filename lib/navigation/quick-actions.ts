@@ -47,7 +47,16 @@ export type QuickAction = {
  * would give one feature two competing entry points with different gestures.
  */
 export const QUICK_ACTIONS: readonly QuickAction[] = [
-  { id: "moments", label: "Moments", href: "/moments" as Route, featureIcon: "moments", toneClass: "qa-tone-moments" },
+  /* MOMENTS REMOVED.
+   *
+   * Not a taste decision: the destination does not exist. Moments is paused,
+   * and app/(app)/moments/page.tsx redirects to /dashboard when
+   * isMomentsEnabled is false -- so tapping this shortcut took somebody from
+   * wherever they were, to Home. A menu item whose only outcome is landing
+   * where you already were is a dead action wearing a shortcut's clothes.
+   *
+   * The route itself is untouched and the feature can return here the day it
+   * is unpaused; what is removed is the promise that it works today. */
   { id: "plans", label: "Plans", href: "/plans" as Route, featureIcon: "plans", toneClass: "qa-tone-plans" },
   { id: "events", label: "Events", href: "/events" as Route, featureIcon: "events", toneClass: "qa-tone-events" },
   {

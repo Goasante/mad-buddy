@@ -112,9 +112,13 @@ describe("the launcher appears throughout the app", () => {
 // ---------------------------------------------------------------------------
 
 describe("every action opens its canonical route", () => {
-  it("carries exactly the five features the brief names", () => {
+  it("carries only features that are actually live", () => {
+    /* MOMENTS IS GONE, and not on taste. It is paused, and
+       app/(app)/moments/page.tsx redirects to /dashboard when isMomentsEnabled
+       is false -- so the shortcut took somebody from wherever they were, to
+       Home. A menu item whose only outcome is landing where you already were
+       is a dead action wearing a shortcut's clothes. */
     expect(QUICK_ACTIONS.map((action) => action.id)).toEqual([
-      "moments",
       "plans",
       "events",
       "safe_arrival",
@@ -122,9 +126,14 @@ describe("every action opens its canonical route", () => {
     ]);
   });
 
+  it("offers no route that only redirects away", () => {
+    const ids = QUICK_ACTIONS.map((action) => action.id);
+    expect(ids, "a paused feature is back in Quick Actions").not.toContain("moments");
+    expect(QUICK_ACTIONS.every((action) => action.href !== "/moments")).toBe(true);
+  });
+
   it("points at the real feature pages, never a duplicate", () => {
     const routes = Object.fromEntries(QUICK_ACTIONS.map((action) => [action.id, action.href]));
-    expect(routes.moments).toBe("/moments");
     expect(routes.plans).toBe("/plans");
     expect(routes.events).toBe("/events");
     expect(routes.safe_arrival).toBe("/safe-arrival");

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronUp, Plus, X } from "lucide-react";
+import { ChevronUp, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -159,13 +159,24 @@ export function QuickActionsLauncher() {
           aria-label={open ? "Close quick actions" : "Open quick actions"}
           className="quick-actions-trigger focus-ring"
         >
-          {/* Two glyphs, not one rotating: the collapsed state reads as "more
-              here" and the open state as "dismiss", which a single rotated
-              chevron communicates less clearly at this size. */}
+          {/* THE REDUNDANT PLUS IS GONE.
+              The collapsed trigger carried a Plus AND a ChevronUp -- two
+              glyphs saying the same "there is more here", and Plus in
+              particular reads as "create something", which this control does
+              not do: it opens a menu. The chevron alone carries the affordance,
+              and it points up because the panel rises from the bar.
+
+              X is kept for the open state: "dismiss" is a different meaning
+              from "there is more", and a rotated chevron communicates it less
+              clearly at this size. The control keeps its position, its shape
+              and its accessible name, so its identity is unchanged. */}
           <span className="quick-actions-trigger-icon" aria-hidden="true">
-            {open ? <X className="h-[18px] w-[18px]" /> : <Plus className="h-[18px] w-[18px]" />}
+            {open ? (
+              <X className="h-[18px] w-[18px]" />
+            ) : (
+              <ChevronUp className="quick-actions-chevron h-[18px] w-[18px]" />
+            )}
           </span>
-          <ChevronUp className="quick-actions-chevron h-3.5 w-3.5" aria-hidden="true" />
         </button>
       </div>
 
