@@ -29,6 +29,7 @@ import {
 import { LinkrCollections } from "@/components/linkr/linkr-collections";
 import { LinkrMutualBanner } from "@/components/linkr/linkr-mutual-banner";
 import { LinkrOffScreen } from "@/components/linkr/linkr-activation";
+import { LinkrPreview } from "@/components/linkr/linkr-preview";
 import { LinkrProfileEditor } from "@/components/linkr/linkr-profile-editor";
 import { LinkrSettings } from "@/components/linkr/linkr-settings";
 import type { LinkrCandidate } from "@/lib/linkr/candidate-service";
@@ -77,7 +78,7 @@ export type LinkrPageProps = {
   requestedConnectionId?: string | null;
 };
 
-type View = "discover" | "filters" | "profile" | "settings" | "how" | "event-intro" | "clicked";
+type View = "discover" | "filters" | "profile" | "settings" | "how" | "event-intro" | "clicked" | "preview";
 
 export function LinkrPage({
   ...props
@@ -535,13 +536,28 @@ function LinkrPageContent({
     );
   }
 
+  if (view === "preview" && profile) {
+    return (
+      <LinkrPreview
+        profile={profile}
+        onBack={() => setView("profile")}
+        onEditProfile={goToProfile}
+      />
+    );
+  }
+
   if (view === "profile") {
     return (
       <LinkrProfileEditor
         profile={profile}
         busy={pending || writing}
         onBack={() => setView("discover")}
-        onPreview={() => setNotice("Your card is what other people see on the left.")}
+        /* OPENS THE PREVIEW. This used to be
+           `setNotice("...what other people see on the left")`, set from inside
+           this very view -- which returns early, before the notice element
+           renders -- so the tap displayed nothing, and described a left-hand
+           pane that does not exist on a phone. */
+        onPreview={() => setView("preview")}
         onSave={async (input) => {
           const result = await updateLinkrProfileAction(input);
           setNotice(result.message);

@@ -8094,6 +8094,45 @@ select {
 }
 
 /* --- Sheets: filters, settings, profile, education ------------------------- */
+/* --- Linkr preview -------------------------------------------------------
+   Your own card, rendered by the real CandidateCard. Only the surrounding
+   explanation is styled here: the card itself must look exactly as it does in
+   the deck, so nothing in this block touches it. */
+.linkr-preview__headline {
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: hsl(var(--muted-foreground));
+}
+
+/* What still blocks discoverability. Stated, not decorated: this is the
+   difference between "people are seeing this" and "nobody is". */
+.linkr-preview__missing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.75rem 0.875rem;
+  list-style: none;
+  border-radius: 0.875rem;
+  border: 1px solid color-mix(in srgb, var(--color-brand-amber) 35%, transparent);
+  background: color-mix(in srgb, var(--color-brand-amber) 10%, transparent);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.linkr-preview__missing li::before {
+  content: "2";
+  margin-inline-end: 0.5rem;
+  color: var(--color-brand-amber);
+}
+
+/* The card keeps its own geometry; this only centres it. */
+.linkr-preview__stage {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .linkr-sheet {
   display: flex;
   flex-direction: column;
