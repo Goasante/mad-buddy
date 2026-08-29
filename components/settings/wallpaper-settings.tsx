@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ImagePlus, Lock, Sparkles } from "lucide-react";
+import { Check, ImagePlus, Lock } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
 import { cn } from "@/lib/utils";
@@ -179,7 +179,10 @@ export function WallpaperSettings({ data }: { data: WallpaperPickerData; plan: S
               <span className="flex items-center gap-1.5 text-sm font-semibold">
                 Use your own photo
                 <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                  <Sparkles className="h-2.5 w-2.5" aria-hidden="true" /> PLUS
+                  {/* The word PLUS is the badge. A 10px glyph beside it added
+                      decoration, not meaning, in the AI/magic vocabulary being
+                      removed product-wide. */}
+                  PLUS
                 </span>
               </span>
               <span className="mt-0.5 block text-xs text-muted-foreground">Upgrade to set a personal wallpaper.</span>

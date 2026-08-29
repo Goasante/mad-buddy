@@ -1,6 +1,6 @@
 "use client";
 
-import { Ghost, ShieldCheck, Sparkles, UserCheck, Users, UsersRound } from "lucide-react";
+import { Ghost, RadioTower, ShieldCheck, UserCheck, Users, UsersRound } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import {
   endVisibilitySessionAction,
@@ -110,7 +110,12 @@ export function GlowVisibilityPage({
 
       <div className="flex items-center justify-between rounded-xl border border-border/70 bg-card/50 px-4 py-3">
         <span className={cn("inline-flex items-center gap-1.5 text-sm font-semibold", isPaused ? "text-muted-foreground" : "text-primary")}>
-          <Sparkles className="h-4 w-4" aria-hidden="true" />
+          {/* REPLACED, not removed: this is a live state indicator, so the
+              icon earns its place. Sparkles said "magic"; a Glow is proximity
+              presence being broadcast, so a signal glyph is the literal
+              concept. The active/paused distinction is already carried by the
+              parent's text colour, so one glyph is enough. */}
+          <RadioTower className="h-4 w-4" aria-hidden="true" />
           {isPaused ? "Glow paused" : "Glow active"}
         </span>
         <Button

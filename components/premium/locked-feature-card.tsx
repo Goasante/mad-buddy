@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Lock, Sparkles } from "lucide-react";
+import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -23,10 +23,10 @@ export function LockedFeatureCard({ title, description, requiredPlan }: LockedFe
         </div>
       </div>
       <Button type="button" variant="outline" className="mt-5 w-full" asChild>
-        <Link href="/upgrade">
-          <Sparkles className="h-4 w-4" aria-hidden="true" />
-          View upgrade
-        </Link>
+        {/* "View upgrade" already says what this does. The sparkle beside it
+            was decoration in the AI/magic vocabulary being removed
+            product-wide, and carried no meaning a reader needed. */}
+        <Link href="/upgrade">View upgrade</Link>
       </Button>
     </Card>
   );

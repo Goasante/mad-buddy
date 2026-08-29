@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, Crown, Sparkles } from "lucide-react";
+import { Check, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CheckoutButton } from "@/components/premium/checkout-button";
@@ -37,10 +37,9 @@ export function PricingCard({ plan }: PricingCardProps) {
 
       {plan.id === "free" ? (
         <Button type="button" className="mt-5 w-full" variant="outline" asChild>
-          <Link href="/signup">
-            <Sparkles className="h-4 w-4" aria-hidden="true" />
-            Start free
-          </Link>
+          {/* "Start free" is the whole message. The sparkle was decoration in
+              the AI/magic vocabulary being removed product-wide. */}
+          <Link href="/signup">Start free</Link>
         </Button>
       ) : (
         <CheckoutButton
