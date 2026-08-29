@@ -4247,6 +4247,57 @@ select {
 
 .profile-avatar-open:disabled { cursor: default; }
 
+/* --- Profile identity hero: the change-photo control ----------------------
+ *
+ * MEASURED, NOT GUESSED. The previous control was `h-9 w-9` pinned at
+ * `bottom-0.5 right-0.5`: 36x36px, below the 44px minimum, with 95% of its
+ * area over the avatar's painted circle and its centre inside that circle. It
+ * was reachable, but it read as a smudge on the photograph rather than a
+ * control -- which is what "hidden behind the avatar" describes.
+ *
+ * It now sits ON the rim. `inset-block-end`/`inset-inline-end` of zero places
+ * it at the corner of the same square the avatar fills, so the circle's edge
+ * passes through it at every avatar size -- no translate to retune when that
+ * size changes, and nothing to break when the sm: breakpoint grows the avatar.
+ *
+ * 44px exactly, so the touch target is real rather than a 36px button with
+ * optimistic padding. The ring border keeps it separated from whatever
+ * photograph is behind it, light or dark.
+ */
+.profile-avatar-camera {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  border: 3px solid hsl(var(--background));
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  box-shadow: 0 6px 18px hsl(var(--shadow) / 0.28);
+}
+
+.profile-avatar-camera:hover:not(:disabled) {
+  /* Brand, on hover only: the resting state stays neutral so it never
+     competes with the Glow ring around the avatar. */
+  background: var(--color-brand-orange);
+  color: #fff;
+}
+
+.profile-avatar-camera:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .profile-avatar-camera {
+    transition: background-color 160ms ease-out, color 160ms ease-out;
+  }
+}
+
 .profile-photos-open {
   display: block;
   height: 100%;

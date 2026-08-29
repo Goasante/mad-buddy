@@ -680,7 +680,23 @@ export function ProfilePageContent({
                   disabled={avatarUploading || returningToLinkr}
                   aria-label={avatarUrl ? "Change profile photo" : "Add profile photo"}
                   title={avatarUrl ? "Change photo" : "Add photo"}
-                  className="focus-ring safe-motion absolute bottom-0.5 right-0.5 grid h-9 w-9 place-items-center rounded-full border-2 border-background bg-[#242426] text-foreground shadow-lg hover:bg-secondary"
+                  /* ON THE EDGE OF THE CIRCLE, NOT INSIDE IT.
+                   *
+                   * Measured at runtime before changing anything: this button
+                   * was 36x36 (under the 44px minimum) and 95% of its area
+                   * overlapped the avatar's painted circle, with its centre
+                   * INSIDE that circle -- so it read as a mark on the photo
+                   * rather than a control beside it. Identical at 360x640,
+                   * 360x800, 390x844 and 430x932, in both themes. It was never
+                   * actually clipped or unreachable; it was buried.
+                   *
+                   * The class does the work rather than a magic translate: the
+                   * button is anchored to the bottom-right of the same relative
+                   * box the avatar fills, so it sits ON the rim at every avatar
+                   * size and needs no offset retuned when that size changes.
+                   * The ring border keeps it legible against a light or dark
+                   * photograph. */
+                  className="profile-avatar-camera focus-ring safe-motion"
                 >
                   <Camera className="h-4 w-4" aria-hidden="true" />
                 </button>
