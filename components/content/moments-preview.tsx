@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Camera, Radio, ShieldCheck, Sparkles } from "lucide-react";
+import { Camera, Radio, ShieldCheck } from "lucide-react";
 import type { VisibleMoment } from "@/lib/content/service";
 import { PageSectionHeader } from "@/components/app-shell/page-section-header";
 import { MomentTile } from "@/components/content/moment-tile";
@@ -141,7 +141,11 @@ const ONBOARDING_CARDS = [
   },
   {
     id: "create",
-    icon: Sparkles,
+    /* A Moment is a photo shared for a day, and this file already imports the
+       camera for exactly that idea. P2 rather than dead code: the surface
+       renders whenever `momentsEnabled && showMoments`, so it is worth being
+       right, and it matches the Images glyph the Moments nav item now uses. */
+    icon: Camera,
     title: "Create your first Moment",
     body: "Share something small. It only lasts a day.",
     tone: "bg-pink-500/[0.09] dark:bg-pink-400/[0.12]",

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { BookOpen, CakeSlice, CalendarCheck2, CalendarDays, Camera, ChevronDown, ChevronRight, Dumbbell, Edit3, Film, Gamepad2, MessageSquareText, MoonStar, Mountain, Music2, Plane, ShieldCheck, Smile, Sparkles, TrendingUp, UtensilsCrossed, UsersRound } from "lucide-react";
+import { BookOpen, CakeSlice, CalendarCheck2, CalendarDays, Camera, ChevronDown, ChevronRight, Dumbbell, Edit3, Film, Gamepad2, MessageSquareText, MoonStar, Mountain, Music2, Plane, ShieldCheck, Smile, TrendingUp, UtensilsCrossed, UsersRound } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updateProfileAction, uploadAvatarAction } from "@/app/(app)/actions";
 import { FormField } from "@/components/auth/form-field";
@@ -999,10 +999,14 @@ const INTEREST_ICONS = {
 
 function InterestTile({ interest }: { interest: string }) {
   const key = interest.trim().toLowerCase() as keyof typeof INTEREST_ICONS;
-  const Icon = INTEREST_ICONS[key] ?? Sparkles;
+  /* NO GENERIC FALLBACK ICON.
+     An interest with no mapped glyph used to get a sparkle -- a mark that said
+     nothing about the interest, on a tile that already prints its name. The
+     tile keeps its shape either way; only the mapped interests carry art. */
+  const Icon = INTEREST_ICONS[key] ?? null;
   return (
     <div className="flex min-h-[4.75rem] min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-secondary/45 px-1 py-2.5 text-center">
-      <Icon className="h-5 w-5 text-primary" strokeWidth={1.8} aria-hidden="true" />
+      {Icon ? <Icon className="h-5 w-5 text-primary" strokeWidth={1.8} aria-hidden="true" /> : null}
       <span className="w-full truncate text-[9px] font-medium sm:text-[10px]" title={interest}>{interest}</span>
     </div>
   );

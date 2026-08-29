@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Sparkles, Users } from "lucide-react";
+import { CheckCircle2, Users } from "lucide-react";
 import { eventModeHref } from "@/lib/social/event-mode";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -66,7 +66,9 @@ export function CheckInSuccessSheet({
           {/* Opens the existing Stage E presence experience. Not a second
               attendee list -- all its privacy rules stay authoritative. */}
           <Button type="button" variant="outline" className="justify-start" onClick={onSeeMuddies}>
-            <Sparkles className="h-4 w-4" aria-hidden="true" />
+            {/* This opens a list of PEOPLE at the event. The file already
+                imports Users for exactly that, and the label says it too. */}
+            <Users className="h-4 w-4" aria-hidden="true" />
             See Muddies here
           </Button>
 

@@ -4,7 +4,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { conversationHref } from "@/lib/messaging/open-conversation";
 import Image from "next/image";
-import { Award, BadgeCheck, Ban, CalendarPlus, Check, ChevronLeft, Flag, Hand, MessageCircle, Sparkles, UserPlus } from "lucide-react";
+import { Award, BadgeCheck, Ban, CalendarPlus, Check, ChevronLeft, Flag, Hand, MessageCircle, Palette, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
@@ -377,7 +377,12 @@ export function MuddyProfilePage({
       {canCustomizeGlow ? (
         <Card className="p-5 sm:p-6">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
+            {/* APPEARANCE, not signal -- choosing how a Glow looks. Same
+                decision as "Glow styles" on the landing page. RadioTower is
+                reserved for the proximity signal itself; blurring the two
+                would undo the distinction this pass established. Geometry is
+                untouched -- this is a card heading, not the Glow. */}
+            <Palette className="h-4 w-4 text-primary" aria-hidden="true" />
             <h2 className="text-sm font-semibold">Glow colour</h2>
           </div>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">

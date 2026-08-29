@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowUpRight, Award, CheckCircle2, CircleDashed, Clock3, ShieldCheck, Sparkles, UserRound } from "lucide-react";
+import { ArrowUpRight, Award, BadgeCheck, CheckCircle2, CircleDashed, Clock3, ShieldCheck, Trophy, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
@@ -28,7 +28,7 @@ export function BuddyScorePage({ progress }: { progress: MyProgressData }) {
       <section aria-labelledby="progress-identity-title">
         <SectionHeading id="progress-identity-title" title="Identity" description="The essentials that shape your Mad Buddy identity." />
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <IdentityCard label="Membership" value={membership.planLabel} icon={Sparkles} accessory={<PremiumPlanBadge plan={membership.plan} compact />} />
+          <IdentityCard label="Membership" value={membership.planLabel} icon={BadgeCheck} accessory={<PremiumPlanBadge plan={membership.plan} compact />} />
           <IdentityCard label="Reputation" value={score.level.label} icon={ShieldCheck} />
           <IdentityCard label="Buddy Score" value={String(score.total)} icon={Award} hint="Visible only to you" />
           <IdentityCard label="Profile completion" value={`${profileCompletion.percent}%`} icon={UserRound} hint={`${profileCompletion.completed} of ${profileCompletion.total} essentials`} />
@@ -50,7 +50,7 @@ export function BuddyScorePage({ progress }: { progress: MyProgressData }) {
                 <div className="flex items-end justify-between gap-4"><div><p className="font-semibold">Progress to {score.nextLevel.label}</p><p className="mt-1 text-sm text-muted-foreground">{score.pointsToNext} points to go</p></div><span className="text-sm font-semibold tabular-nums">{score.progressPercent}%</span></div>
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-label={`Progress to ${score.nextLevel.label}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={score.progressPercent}><span className="block h-full rounded-full bg-primary transition-[width] duration-500 ease-in-out motion-reduce:transition-none" style={{ width: `${score.progressPercent}%` }} /></div>
               </>
-            ) : <div><Sparkles className="h-6 w-6 text-primary" aria-hidden="true" /><p className="mt-3 font-semibold">Legend status earned</p><p className="mt-1 text-sm text-muted-foreground">A rare level reflecting long-term trusted participation.</p></div>}
+            ) : <div><Trophy className="h-6 w-6 text-primary" aria-hidden="true" /><p className="mt-3 font-semibold">Legend status earned</p><p className="mt-1 text-sm text-muted-foreground">A rare level reflecting long-term trusted participation.</p></div>}
             <div className="mt-6 border-t border-border/60 pt-4">
               <p className="text-sm font-semibold">Recent score activity</p>
               {score.recentActivity.length ? <div className="mt-2 divide-y divide-border/50">{score.recentActivity.slice(0, 3).map((item) => <div key={item.id} className="flex items-center justify-between gap-4 py-2.5"><div className="min-w-0"><p className="truncate text-sm font-medium">{item.label}</p><p className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</p></div><PointDelta points={item.points} /></div>)}</div> : <p className="mt-2 text-sm text-muted-foreground">Your first trusted activity will appear here.</p>}

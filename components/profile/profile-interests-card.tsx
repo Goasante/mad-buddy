@@ -1,6 +1,5 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { setProfileInterestsAction } from "@/app/(app)/profile-interests-actions";
@@ -137,9 +136,9 @@ export function ProfileInterestsCard({
                here, not smaller ones. */
             className="focus-ring flex min-h-11 w-full items-center gap-3 rounded-xl text-left"
           >
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-              <Sparkles className="h-5 w-5" aria-hidden="true" />
-            </span>
+            {/* "Add your interests" is the whole prompt. The decorated circle
+                beside it carried a sparkle that said nothing about interests,
+                so the prompt now stands on its words. */}
             <span className="min-w-0">
               <span className="block text-sm font-semibold">Add your interests</span>
               <span className="mt-0.5 block text-xs text-muted-foreground">

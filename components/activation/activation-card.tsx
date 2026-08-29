@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { CalendarCheck2, Hand, MapPin, MessageCircle, Sparkles, UserPlus } from "lucide-react";
+/* Glow wears one glyph across the product now: the Glow settings page, the
+   settings row, the public pages and these activation prompts all use
+   RadioTower -- proximity presence being broadcast, rather than "magic". */
+import { CalendarCheck2, Hand, MapPin, MessageCircle, RadioTower, UserPlus } from "lucide-react";
 import type { ActivationAction, ActivationState } from "@/lib/activation/state";
 import { primaryActionFor } from "@/lib/activation/state";
 import Image from "next/image";
@@ -88,7 +91,7 @@ const COPY: Record<Exclude<ActivationState, "activated">, Copy> = {
     body: "Choose when your Muddies can see your Glow. You can turn it off again whenever you like.",
     actionLabel: "Turn on visibility",
     href: "/settings" as Route,
-    icon: Sparkles,
+    icon: RadioTower,
     privacyNote: "Only approved Muddies. Never your exact location."
   },
   muddies_no_location: {
@@ -106,7 +109,7 @@ const COPY: Record<Exclude<ActivationState, "activated">, Copy> = {
     body: "Mad Buddy uses your location privately to know when approved Muddies are close by.",
     actionLabel: "Turn on Glow",
     href: "/settings" as Route,
-    icon: Sparkles,
+    icon: RadioTower,
     privacyNote: "Only approved Muddies. Never your exact location. You stay in control."
   },
   location_stale: {
@@ -163,7 +166,7 @@ const ACTION_ICON: Record<ActivationAction, typeof UserPlus> = {
   find_muddies: UserPlus,
   enable_location: MapPin,
   refresh_location: MapPin,
-  enable_visibility: Sparkles,
+  enable_visibility: RadioTower,
   say_hi: MessageCircle,
   wave: Hand,
   message: MessageCircle,
