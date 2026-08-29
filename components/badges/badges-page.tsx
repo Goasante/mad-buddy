@@ -1,6 +1,6 @@
 "use client";
 
-import { Award, Flame, HandHeart, PauseCircle, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { Award, Flame, HandHeart, PauseCircle, Scale, ShieldCheck, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
@@ -23,7 +23,11 @@ const categoryIcons: Record<string, LucideIcon> = {
   connection: HandHeart,
   community: Users,
   privacy: ShieldCheck,
-  balance: Sparkles,
+  /* "Balance" is an achievement category alongside connection, community,
+     privacy and safety -- healthy, sustainable use. Scale says equilibrium
+     literally; Sparkles said the category was magical, which told a reader
+     nothing about what earns a badge in it. */
+  balance: Scale,
   safety: Award
 };
 

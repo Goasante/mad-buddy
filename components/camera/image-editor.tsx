@@ -5,10 +5,10 @@ import {
   Crop,
   FlipHorizontal2,
   Loader2,
+  Palette,
   Pencil,
   Redo2,
   RotateCw,
-  Sparkles,
   SlidersHorizontal,
   Trash2,
   Type,
@@ -609,7 +609,11 @@ export default function ImageEditor({
 
       <nav className="mad-cam-editor-tools" aria-label="Photo editing tools">
         {([
-          ["looks", Sparkles, "Looks"],
+          /* "Looks" are photo filters, sitting beside Crop, Adjust, Text and
+             Draw -- every one of which wears its literal tool. Palette keeps
+             it in that family; Sparkles was the odd one out, implying the tab
+             did something automatic rather than applying a look you pick. */
+          ["looks", Palette, "Looks"],
           ["crop", Crop, "Crop"],
           ["adjust", SlidersHorizontal, "Adjust"],
           ["text", Type, "Text"],

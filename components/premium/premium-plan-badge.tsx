@@ -1,4 +1,4 @@
-import { Crown, Sparkles } from "lucide-react";
+import { BadgeCheck, Crown } from "lucide-react";
 import { premiumBadgeIdentity } from "@/lib/billing/premium-identity";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,12 @@ export function PremiumPlanBadge({
   const identity = premiumBadgeIdentity(plan);
   if (!identity) return null;
 
-  const Icon = identity.tier === "pro" ? Crown : Sparkles;
+  /* ONE FAMILY, TWO TIERS. Pro wore a Crown and Plus wore Sparkles -- two
+     unrelated vocabularies for two rungs of the same ladder, one saying
+     "highest" and the other "magical". BadgeCheck keeps Plus in the membership
+     family: a mark of standing, a step below the crown rather than a different
+     kind of thing. The colour already separates the tiers. */
+  const Icon = identity.tier === "pro" ? Crown : BadgeCheck;
 
   return (
     <span
