@@ -4,10 +4,10 @@ import {
   CalendarClock,
   CheckCircle2,
   CircleGauge,
+  Clock3,
   CreditCard,
   Gift,
-  ShieldCheck,
-  Sparkles
+  ShieldCheck
 } from "lucide-react";
 import { BillingPortalButton } from "@/components/premium/billing-portal-button";
 import { CheckoutButton } from "@/components/premium/checkout-button";
@@ -126,7 +126,10 @@ export async function BillingPageContent() {
                 </div>
                 <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
                   {identity.source === "earned" ? <Gift className="h-4 w-4 text-primary" aria-hidden="true" /> : null}
-                  {identity.source === "trial" ? <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" /> : null}
+                  {/* A trial is time-limited access, so a clock is the literal
+                      idea -- and it sits beside Gift, CreditCard and
+                      ShieldCheck, each naming how the access was obtained. */}
+                  {identity.source === "trial" ? <Clock3 className="h-4 w-4 text-primary" aria-hidden="true" /> : null}
                   {identity.source === "subscription" ? <CreditCard className="h-4 w-4 text-primary" aria-hidden="true" /> : null}
                   {identity.source === "free" ? <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" /> : null}
                   {identity.sourceLabel}
@@ -157,7 +160,9 @@ export async function BillingPageContent() {
 
         <Card className="p-5 sm:p-6">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
+            {/* A list of what the plan includes. The heading already says so
+                and every item below carries its own check, so the decoration
+                beside the title added nothing a reader needed. */}
             <h2 className="text-lg font-semibold">Included with {identity.planLabel}</h2>
           </div>
           <ul className="mt-4 grid gap-3 text-sm">

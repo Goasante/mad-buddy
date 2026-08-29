@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   Bell,
   Blocks,
+  BookOpen,
   CalendarClock,
   ChevronRight,
   CreditCard,
@@ -20,7 +21,7 @@ import {
   PartyPopper,
   Shield,
   ShieldCheck,
-  Sparkles,
+  RadioTower,
   Trash2,
   Trophy,
   UserPlus,
@@ -172,7 +173,10 @@ export function SettingsPageContent({
         <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_PRIVACY}>
         <SettingsSection title="Privacy & safety">
           <SettingsLinkRow
-            icon={Sparkles}
+            /* Same concept, same glyph as the Glow settings page itself and
+               the public pages: Glow is proximity presence being broadcast, so
+               a signal mark rather than a sparkle. */
+            icon={RadioTower}
             title="Glow & Visibility"
             description="Control who can see you and for how long."
             href="/settings/glow-visibility"
@@ -314,7 +318,10 @@ export function SettingsPageContent({
             href="/help"
           />
           <SettingsLinkRow
-            icon={Sparkles}
+            /* Guides are documentation -- something to read. A book says
+               that; a sparkle implied the guides were themselves some kind of
+               magic feature. */
+            icon={BookOpen}
             title="Feature guides"
             description="Learn or replay any Mad Buddy feature."
             href="/settings/walkthrough"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { Clock3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchWithTimeout, isRequestTimeoutError } from "@/lib/network/resilience";
 
@@ -78,7 +78,10 @@ export function TrialOffer() {
     <section className="mb-6 rounded-2xl border border-primary/30 bg-primary/5 p-4 text-left sm:flex sm:items-center sm:justify-between sm:gap-5 sm:p-5">
       <div className="flex gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-          <Sparkles className="h-5 w-5" aria-hidden="true" />
+          {/* A free trial is time-limited access, so the clock is the literal
+              idea -- and it matches how a trial is marked on the billing page,
+              rather than being a second vocabulary for one concept. */}
+          <Clock3 className="h-5 w-5" aria-hidden="true" />
         </span>
         <div>
           <h2 className="font-semibold">

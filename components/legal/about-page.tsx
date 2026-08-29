@@ -9,8 +9,8 @@ import {
   Hand,
   MapPin,
   MessageCircle,
+  Radio,
   ShieldCheck,
-  Sparkles,
   Users,
   UsersRound
 } from "lucide-react";
@@ -70,7 +70,10 @@ const features = [
     title: "Linkr",
     description:
       "Meet people you don't know yet. It only runs while you switch it on, and it stops when you stop it.",
-    icon: Sparkles
+    /* The landing page already gives Linkr a Radio -- a discovery session you
+       switch on and off. Two public pages describing the same feature should
+       not wear two different glyphs, and neither of them should be a sparkle. */
+    icon: Radio
   },
   {
     title: "Moments",

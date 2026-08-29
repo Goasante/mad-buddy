@@ -15,10 +15,11 @@ import {
   Hand,
   MessageCircle,
   Music2,
+  Palette,
   Radio,
+  RadioTower,
   ShieldAlert,
   ShieldCheck,
-  Sparkles,
   Users,
   X
 } from "lucide-react";
@@ -33,7 +34,10 @@ const howItWorksSteps = [
   {
     title: "Glow",
     description: "See Muddies around you through broad proximity signals.",
-    icon: Sparkles
+    /* Glow is proximity presence being broadcast, so the signal glyph is the
+       literal concept -- and it is the same one the Glow settings page now
+       uses, so the marketing page and the product agree about what Glow is. */
+    icon: RadioTower
   },
   {
     title: "Wave",
@@ -127,7 +131,8 @@ const discoveryModes = [
     tagline: "Mutual, always on your terms",
     description:
       "People you have both approved see a rough sense of how close you are \u2014 close, near or far. Never a map, a pin or a distance.",
-    icon: Sparkles,
+    // Mutual proximity, described in bands. Same concept, same glyph.
+    icon: RadioTower,
     points: ["Both of you approve first", "Close, Near or Far only", "Ghost Mode hides you instantly"]
   },
   {
@@ -208,7 +213,10 @@ const featureItems = [
   {
     title: "Glow styles",
     description: "Personalise your profile without sharing additional location detail.",
-    icon: Sparkles
+    /* This one is about APPEARANCE, not the signal -- choosing how your Glow
+       looks. Palette says that; reusing the signal glyph here would blur the
+       two ideas the page is carefully keeping apart. */
+    icon: Palette
   }
 ];
 
