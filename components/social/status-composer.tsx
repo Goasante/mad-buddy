@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { useState, useTransition, type ReactNode } from "react";
 import { clearStatusAction, setStatusAction } from "@/app/(app)/social-actions";
 import { Button } from "@/components/ui/button";
@@ -176,7 +176,10 @@ export function StatusComposer({
       </div>
 
       <p className="flex items-start gap-2 text-xs text-muted-foreground">
-        <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+        {/* REPLACED: this is a privacy assurance -- who can see the status and
+            when it hides. A sparkle said "magic"; a shield says "protected",
+            which is what the sentence beside it actually promises. */}
+        <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
         Only approved Muddies can see your status. It&apos;s hidden while Ghost Mode is on.
       </p>
 

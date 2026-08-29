@@ -128,8 +128,16 @@ const navigationItems: Array<{
   { href: "/plans", label: "Plans", icon: CalendarCheck2, featureIcon: "plans" },
   /* A Moment is a photo shared for a day. `Images` says that; Sparkles said
      "something magical happens here", which is the AI-flavoured decoration
-     being removed product-wide. The route stays -- it is still reachable from
-     navigation when the feature is on -- only the glyph changes. */
+     being removed product-wide.
+
+     THE ENTRY IS FEATURE-GATED, so replacing the glyph rather than deleting
+     the row is the right call here. app/(app)/layout.tsx computes
+     hiddenNavigationHrefs and drops "/moments" whenever the Moments flag is
+     off -- "a paused feature stops existing in navigation rather than
+     appearing as a dead or 'coming soon' entry" -- and enabledNavigationItems
+     filters on it before anything renders. So this row is only ever shown when
+     the destination genuinely works. That is different from the Quick Action,
+     which had no such gate and was therefore removed outright. */
   { href: "/moments", label: "Moments", icon: Images, featureIcon: "moments" },
   { href: "/events", label: "Events", icon: PartyPopper, featureIcon: "events" },
   { href: "/groups", label: "Groups", icon: Users2, featureIcon: "groups" },

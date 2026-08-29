@@ -24,7 +24,8 @@ import {
   Moon,
   PartyPopper,
   Plus,
-  Sparkles,
+  ShieldCheck,
+  Shuffle,
   Trophy,
   Users,
   UtensilsCrossed,
@@ -101,7 +102,11 @@ const durationOptions: Array<{ id: Duration; label: string; ms: number }> = [
 
 const ACTIVITY_ICONS: Record<HangoutActivityType, typeof Hand> = {
   // The original eight.
-  anything: Sparkles,
+  /* "Anything" is an OPEN CHOICE -- the person has not picked an activity and
+     is up for whatever fits. Shuffle says that literally; Sparkles said the
+     option was somehow special, which it is not: it sits alongside food, gym
+     and study as one ordinary choice among them. */
+  anything: Shuffle,
   food: UtensilsCrossed,
   study: BookOpen,
   sports: Trophy,
@@ -1134,7 +1139,10 @@ UpFors are temporary and disappear when they end. Jump in while you can!
             </p>
           ) : (
             <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-              <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+              {/* REPLACED: a privacy assurance about location, so a shield is
+                  the literal concept. A sparkle beside "your exact location
+                  stays private" decorated a promise rather than signalling it. */}
+              <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
               Only your availability is shared. Your exact location stays private.
             </p>
           )}

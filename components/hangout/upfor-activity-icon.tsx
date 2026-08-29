@@ -9,7 +9,7 @@ import {
   Hand,
   Moon,
   PartyPopper,
-  Sparkles,
+  Shuffle,
   Trophy,
   UtensilsCrossed,
   Wine,
@@ -19,7 +19,10 @@ import type { HangoutActivityType } from "@/lib/supabase/database.types";
 
 /** The existing UpFor category art, shared by compact feed cards. */
 export const UPFOR_ACTIVITY_ICONS: Record<HangoutActivityType, LucideIcon> = {
-  anything: Sparkles,
+  /* Matches ACTIVITY_ICONS in hangout-mode-page: "anything" is an open choice,
+     not a special one, so Shuffle rather than a sparkle. The two maps must
+     agree or the same activity wears two different faces. */
+  anything: Shuffle,
   food: UtensilsCrossed,
   study: BookOpen,
   sports: Trophy,

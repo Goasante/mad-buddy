@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Check, MapPin, Search, ShieldCheck, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Check, MapPin, Search, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useId, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -343,7 +343,11 @@ export function SafeArrivalSetup({
             {limitNotice ? (
               <div className="rounded-xl border border-orange-400/25 bg-orange-400/10 p-3">
                 <p className="flex items-start gap-2 text-xs font-semibold text-orange-800 dark:text-orange-100">
-                  <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {/* REMOVED, not replaced. This states a plan limit -- how
+                      many Muddies may watch a journey -- inside a bordered,
+                      tinted callout that already marks it as a notice. The
+                      sentence names the plan itself, so an icon adds nothing a
+                      reader needs. */}
                   {maxWatchers === 1
                     ? `${PLAN_LABEL[plan]} lets one Muddy check in on a journey.`
                     : `${PLAN_LABEL[plan]} lets ${maxWatchers} Muddies check in on a journey.`}
