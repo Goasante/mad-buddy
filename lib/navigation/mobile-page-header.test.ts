@@ -57,11 +57,34 @@ describe("mobile page header controls", () => {
     expect(iconUsages.length).toBe(5);
   });
 
-  it("uses only the specified Lucide icons", () => {
+  it("uses only a small, deliberate icon set", () => {
+    /* THE CONTRACT, not the literal import line.
+     *
+     * This pinned the exact `import { ... } from "lucide-react"` string, so it
+     * failed the moment one glyph was corrected -- while the property it
+     * exists to protect (no icon sprawl in the header) was untouched. What
+     * matters is that the header imports FEW icons and each has a job.
+     *
+     * UserPlus is deliberately absent now. It was the Add Muddy glyph on a
+     * control that navigated to `/friends?tab=requests`, so person-plus meant
+     * "incoming requests" -- an icon lying about its destination. Adding a
+     * Muddy is a single control beside the search field on Muddies itself. */
+    const imported = /import \{([^}]+)\} from "lucide-react"/.exec(header)?.[1] ?? "";
+    const icons = imported
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
+
     // ChevronLeft is the Back affordance for the nested-screen variant.
-    expect(header).toContain(
-      'import { Bell, ChevronLeft, Menu, MoreHorizontal, UserPlus } from "lucide-react"'
-    );
+    for (const required of ["Bell", "ChevronLeft", "Menu", "MoreHorizontal"]) {
+      expect(icons, `${required} is no longer imported`).toContain(required);
+    }
+    // A header with a dozen glyphs is the failure this guards against.
+    expect(icons.length, "the header grew an icon menagerie").toBeLessThanOrEqual(6);
+    expect(
+      icons,
+      "person-plus is back in the header, where it would read as Add rather than Requests"
+    ).not.toContain("UserPlus");
   });
 
   it("gives each control a press animation that respects reduced motion", () => {

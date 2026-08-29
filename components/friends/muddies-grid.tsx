@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, MoreHorizontal } from "lucide-react";
 
 import { AppMenu, type AppMenuItem } from "@/components/ui/app-dropdown";
 import { useState } from "react";
@@ -199,8 +199,28 @@ function MuddyCardIdentity({
           open={menuOpen}
           onOpenChange={setMenuOpen}
           label={`Actions for ${person.displayName}`}
+          /* A REAL CONTROL, not a zero-height aria-hidden span.
+           *
+           * The trigger used to be invisible to everything except the
+           * press-and-hold gesture: `aria-hidden`, `pointer-events-none` and
+           * `h-0`. Press-and-hold is a pointer gesture and useLongPress binds
+           * no key handlers, so View profile, Close Friends, Remove Muddy and
+           * Block were reachable ONLY with a finger or mouse. A keyboard user
+           * could not remove or block anybody from this grid, which is not a
+           * cosmetic gap -- Block is a safety control.
+           *
+           * This keeps press-and-hold exactly as it was and adds the
+           * equivalent affordance beside it: focusable, named, and a full
+           * 44px target. It is visually quiet (it only gains ink on hover or
+           * focus) so the card still reads as identity plus one action. */
           trigger={
-            <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 block h-0" />
+            <button
+              type="button"
+              aria-label={`More actions for ${person.displayName}`}
+              className="muddies-card-more focus-ring"
+            >
+              <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+            </button>
           }
           items={actions ?? []}
         />

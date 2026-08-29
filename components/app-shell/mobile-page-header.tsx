@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { Bell, ChevronLeft, Menu, MoreHorizontal, UserPlus } from "lucide-react";
+import { Bell, ChevronLeft, Menu, MoreHorizontal, UserRoundCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useHasScrolled } from "@/hooks/use-has-scrolled";
@@ -165,7 +165,7 @@ export function MobilePageHeader({
       <h1 className="truncate text-center text-[1.125rem] font-semibold tracking-tight">{title}</h1>
 
       <div className="flex items-center gap-2.5">
-        {/* Bell badge = unread app notifications. The UserPlus badge below is
+        {/* Bell badge = unread app notifications. The requests badge below is
             pending incoming Muddy requests. Two streams, two counts, never
             combined. */}
         {showNotifications ? (
@@ -187,17 +187,29 @@ export function MobilePageHeader({
           </HeaderLink>
         ) : null}
 
-        {/* Add Muddy → the Requests tab, which already owns accept/decline
-            plus the Add panel for search, send and invite. */}
+        {/* MUDDY REQUESTS. The icon now tells the truth about the
+            destination.
+            
+            This was a UserPlus glyph labelled "Add Muddy" that navigated to
+            `/friends?tab=requests` -- person-plus, the universal "add someone"
+            affordance, used to mean "incoming requests", and carrying a pending
+            badge that made the mismatch worse. Three separate Add controls sat
+            within one viewport of it, so the one that was not an Add control
+            was the one that looked most like one.
+            
+            Adding a Muddy is now a single canonical control beside the search
+            field on Muddies itself. This is the inbox: an envelope-style glyph,
+            named for what it opens, with its badge still meaning what a badge
+            should mean. */}
         {showAddMuddy ? (
           <Link
             href="/friends?tab=requests"
             aria-label={
               hasRequests
-                ? `Add Muddy, ${incomingRequestCount} pending ${incomingRequestCount === 1 ? "request" : "requests"}`
-                : "Add Muddy"
+                ? `Muddy requests, ${incomingRequestCount} pending ${incomingRequestCount === 1 ? "request" : "requests"}`
+                : "Muddy requests"
             }
-            title="Add Muddy"
+            title="Muddy requests"
             className={cn(
               HIT_TARGET,
               "relative bg-primary text-primary-foreground transition-transform hover:bg-primary/90 active:scale-95 motion-reduce:active:scale-100"
@@ -205,7 +217,7 @@ export function MobilePageHeader({
           >
             {/* Slightly heavier stroke so the glyph holds its weight against a
                 filled background at the same optical size as its neighbours. */}
-            <UserPlus className="h-[21px] w-[21px]" strokeWidth={2} aria-hidden="true" />
+            <UserRoundCheck className="h-[21px] w-[21px]" strokeWidth={2} aria-hidden="true" />
             {hasRequests ? <HeaderBadge count={incomingRequestCount} /> : null}
           </Link>
         ) : null}

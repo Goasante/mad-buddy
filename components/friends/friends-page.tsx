@@ -12,7 +12,6 @@ import {
   BookUser,
   ChevronRight,
   Search,
-  SlidersHorizontal,
   UserMinus,
   UserPlus,
   Users,
@@ -788,12 +787,13 @@ export function FriendsPageContent({
         unreadNotificationCount={unreadNotificationCount}
       />
 
+      {/* ONE ADD CONTROL, not three. This header carried a second "Add Muddy"
+          button a few hundred pixels above the one beside the search field,
+          while the page header carried a third affordance that actually opened
+          Requests. Adding a Muddy now happens in exactly one place on this
+          page; the subtitle stays, because it says what the page is for. */}
       <header className="flex min-w-0 items-center justify-between gap-3 pt-1 md:pt-5">
         <p className="muddies-subtitle min-w-0">Find and connect with Muddies near you</p>
-        <Button data-tour-id={TOUR_TARGET_IDS.MUDDIES_ADD} type="button" size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAddOpen(true)}>
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Add Muddy
-        </Button>
       </header>
 
       {/* The rail sits ABOVE the pill row, so the pills read as controls
@@ -927,14 +927,26 @@ export function FriendsPageContent({
                 className="muddies-search-input focus-ring"
               />
             </div>
+            {/* THE ONE CANONICAL ADD CONTROL.
+                It sat here already, in the right place, wearing the wrong
+                face: a SlidersHorizontal glyph -- the universal filter/settings
+                affordance -- whose onClick was setAddOpen. An icon that opens
+                something other than what it depicts is worse than no icon, and
+                this page had three Add entry points besides it, so the lie was
+                not even buying anything.
+                
+                Person-plus, beside the search field: search for someone you
+                know, or add someone you do not. The tour target moves here with
+                it, because this is now the control that step is about. */}
             <button
+              data-tour-id={TOUR_TARGET_IDS.MUDDIES_ADD}
               type="button"
               onClick={() => setAddOpen(true)}
-              aria-label="Find and add Muddies"
-              title="Find and add Muddies"
+              aria-label="Add a Muddy"
+              title="Add a Muddy"
               className="muddies-search-tune focus-ring"
             >
-              <SlidersHorizontal className="h-[18px] w-[18px]" aria-hidden="true" />
+              <UserPlus className="h-[18px] w-[18px]" aria-hidden="true" />
             </button>
           </div>
 

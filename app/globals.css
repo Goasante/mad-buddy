@@ -5622,6 +5622,9 @@ select {
 }
 
 .muddies-card {
+  /* `relative` so the actions control can sit in the card's own top corner
+     rather than in the document flow, where it would push identity down. */
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -5630,6 +5633,39 @@ select {
   border: 1px solid hsl(var(--border) / 0.8);
   border-radius: 1.25rem;
   background: hsl(var(--card) / 0.6);
+}
+
+/* The keyboard-reachable twin of press-and-hold.
+   The actions menu -- View profile, Close Friends, Remove Muddy, Block -- hung
+   off an aria-hidden, pointer-events-none, zero-height trigger opened solely
+   by press-and-hold, and useLongPress binds no key handlers. A keyboard or
+   screen-reader user could not remove or block anybody from this grid, and
+   Block is a safety control. Quiet by default so the card still reads as
+   identity plus one action, and fully visible on hover or focus. The 44px
+   target is the point: it is the only route to those actions without a
+   pointer. */
+.muddies-card-more {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  color: hsl(var(--muted-foreground));
+  opacity: 0.55;
+}
+
+.muddies-card-more:hover,
+.muddies-card-more:focus-visible {
+  opacity: 1;
+  background: hsl(var(--secondary) / 0.6);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .muddies-card-more { transition: opacity 160ms ease-out, background-color 160ms ease-out; }
 }
 
 .muddies-card-identity {

@@ -162,7 +162,12 @@ describe("adoption", () => {
     expect(heroBlock).toContain("isMuddy ? (");
     // The Muddy branch's secondaries are icon-only, so nothing competes with
     // Message: they carry an aria-label instead of a visible text label.
-    expect(heroBlock).toContain('aria-label="Create a plan"');
+    /* The plan action is icon-only and named by its aria-label. The literal
+       was pinned as `aria-label="Create a plan"`, which broke when the label
+       gained the person's name -- "Create a plan with Ama" -- while the
+       property this asserts (icon-only, so it carries an accessible name
+       rather than visible text) held throughout. */
+    expect(heroBlock).toMatch(/aria-label=\{?[`"]Create a plan/);
     expect(heroBlock).toContain('aria-label={waveSent ? "Wave sent" : "Wave"}');
   });
 

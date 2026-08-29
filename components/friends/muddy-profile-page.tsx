@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import Link from "next/link";
 import { conversationHref } from "@/lib/messaging/open-conversation";
 import Image from "next/image";
@@ -272,7 +273,22 @@ export function MuddyProfilePage({
                 asChild
                 className="shrink-0 border-white/30 bg-white/10 text-white hover:bg-white/20"
               >
-                <Link href="/plans?create=1" aria-label="Create a plan" title="Create a plan">
+                {/* CARRY THE PERSON THROUGH.
+                    This linked to a bare `/plans?create=1`, so tapping "Create
+                    a plan" on somebody's profile opened an empty form with no
+                    trace of them -- the exact forgetting the create sheet's
+                    own `contextMuddyId` contract was written to prevent
+                    ("Tapping Make a Plan on Kofi and then being asked to
+                    search for Kofi again"). The Plans page has read `?with=`
+                    and seeded the invitee from it all along; this simply sends
+                    it. An id only, never a location payload, and the sheet
+                    still validates it against the real invitee list, so a
+                    stale or unauthorised id selects nobody. */}
+                <Link
+                  href={`/plans?create=1&with=${encodeURIComponent(muddy.friendId)}` as Route}
+                  aria-label={`Create a plan with ${muddy.displayName}`}
+                  title="Create a plan"
+                >
                   <CalendarPlus className="h-4 w-4" aria-hidden="true" />
                 </Link>
               </Button>
