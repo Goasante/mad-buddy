@@ -92,7 +92,12 @@ export function LinkrEmptyState({ onWiden, canWiden }: EmptyStateProps) {
       <h1 id="linkr-empty-title" className="linkr-empty__title">
         {LINKR_COPY.emptyTitle} <span aria-hidden>👀</span>
       </h1>
-      <p className="linkr-empty__body">{LINKR_COPY.emptyBody}</p>
+      {/* The sentence follows the button. When the viewer is already at the
+          widest setting there is nothing to widen, so promising it would send
+          them looking for a control that is not there. */}
+      <p className="linkr-empty__body">
+        {canWiden ? LINKR_COPY.emptyBody : LINKR_COPY.emptyBodyWidest}
+      </p>
       {/* Deliberately nothing else. The old Linkr filled this space with Groups
           and Plans; an empty discovery deck is not an opportunity to advertise
           a different product. */}

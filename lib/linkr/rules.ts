@@ -363,7 +363,13 @@ export const LINKR_COPY = {
   yourClicksEmpty: "You haven't clicked anyone yet.",
   stillInterested: "Still interested?",
   emptyTitle: "No one nearby right now",
-  emptyBody: "Check back later or widen your search.",
+  /* TWO BODIES, because one sentence cannot be honest in both states.
+     "Check back later or widen your search" was shown even at the WIDEST
+     setting, where there is nothing left to widen and no button is offered --
+     the copy named an action the screen could not perform, which is the soft
+     dead end §10 exists to prevent. */
+  emptyBody: "Check back later, or widen your search to see more people.",
+  emptyBodyWidest: "You have seen everyone nearby for now. New people appear as they join.",
   widenSearch: "Widen search",
   connectedThroughLinkr: "Connected through Linkr",
   connectedAtEvent: (eventName: string) => `Connected at ${eventName}`,

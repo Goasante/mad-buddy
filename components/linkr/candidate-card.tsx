@@ -4,6 +4,8 @@ import { useCallback, useRef, useState } from "react";
 import { BadgeCheck, ChevronLeft, ChevronRight, Hand, RotateCcw, X } from "lucide-react";
 
 import { nextPhotoIndex, previousPhotoIndex, tapZone } from "@/lib/linkr/photos";
+import { MAX_LINKR_CARD_PHOTOS } from "@/lib/linkr/media-projection-limits";
+import { LINKR_INTENT_LABELS } from "@/lib/linkr/intent";
 import type { LinkrCandidate } from "@/lib/linkr/candidate-service";
 import { cn } from "@/lib/utils";
 
@@ -71,9 +73,22 @@ export function CandidateCard({
   const pointerStart = useRef<{ x: number; y: number; id: number } | null>(null);
   const moved = useRef(false);
 
-  // Discovery is intentionally a maximum three-photo sequence. Profile owns
-  // the source order; this surface simply consumes its first three safe items.
-  const photos = candidate.photos.length > 0 ? candidate.photos.slice(0, 3) : [""];
+  /* EVERY PHOTO THE PROJECTION ALREADY CHOSE.
+   *
+   * This used to `slice(0, 3)`, which silently discarded the fourth. The Linkr
+   * media projection deliberately assembles up to MAX_LINKR_CARD_PHOTOS
+   * (avatar + three showcase slots, and profile_photos.position is constrained
+   * to 0..2, so four is the real ceiling) -- and it has already applied the
+   * privacy rule that admits only `everyone` photos to strangers. Re-clamping
+   * here meant somebody who filled all three showcase slots never saw their
+   * last one in Linkr, and the progress bar under-reported the set.
+   *
+   * The bound belongs in the projection, which owns it; this consumes what it
+   * is given. The slice remains only as a defence against a future projection
+   * change, and is set to the projection's own constant rather than a
+   * different number invented here. */
+  const photos =
+    candidate.photos.length > 0 ? candidate.photos.slice(0, MAX_LINKR_CARD_PHOTOS) : [""];
   const total = photos.length;
   /**
    * The photos either side of the current one. Recomputed per render rather
@@ -259,16 +274,50 @@ export function CandidateCard({
             ) : null}
           </h2>
 
-          <p className="linkr-card__proximity">
-            <span className="linkr-card__proximity-dot" aria-hidden />
-            {candidate.eventName ? `${candidate.proximityLabel} · ${candidate.eventName}` : candidate.proximityLabel}
+          {/* ONE CONTEXT LINE: what they are here for, and roughly where.
+              Intent was fetched into LinkrCandidate and then never shown, so
+              the single most decision-relevant fact on the card was invisible
+              -- a person browsing "Anything" could not tell whether the face
+              in front of them wanted a coffee or a date. It leads the line
+              because it is the thing that changes the meaning of Connect.
+
+              Proximity stays a COARSE LABEL and shares the row rather than
+              taking one of its own: it is context, not identity, and it never
+              carries a distance, a place or a time. */}
+          {/* INTENT, and the Event when there is one.
+              Intent was fetched into LinkrCandidate and then never shown, so
+              the single most decision-relevant fact on the card was invisible
+              -- a person browsing "Anything" could not tell whether the face
+              in front of them wanted a coffee or a date. It leads the line
+              because it is what changes the meaning of Connect.
+
+              PROXIMITY IS DELIBERATELY NOT HERE. It still gates and ranks the
+              candidate payload server-side, but an earlier product decision
+              ended the card's lower hierarchy at identity, bio and interests
+              (see `.linkr-card__proximity { display: none }` in globals.css).
+              That decision stands; only the Event name, which is a place a
+              person chose to be rather than where they physically are, joins
+              intent on this line. */}
+          <p className="linkr-card__context">
+            <span className="linkr-card__intent">{LINKR_INTENT_LABELS[candidate.intent]}</span>
+            {candidate.eventName ? (
+              <>
+                <span className="linkr-card__context-sep" aria-hidden />
+                <span className="linkr-card__event">{candidate.eventName}</span>
+              </>
+            ) : null}
           </p>
 
           {candidate.bio ? <p className="linkr-card__bio">{candidate.bio}</p> : null}
 
+          {/* THREE, on one line, never wrapping.
+              Four chips wrapped to a second row on a 390px screen and a third
+              on 320px, and each extra row pushes the photograph further behind
+              text. The card is a reason to decide, not a resume (brief §2), so
+              it shows a taste of the person and stops. */}
           {candidate.interests.length > 0 ? (
             <ul className="linkr-card__interests">
-              {candidate.interests.slice(0, 4).map((interest) => (
+              {candidate.interests.slice(0, 3).map((interest) => (
                 <li key={interest} className="linkr-chip">
                   {interest}
                 </li>

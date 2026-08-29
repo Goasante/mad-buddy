@@ -92,7 +92,18 @@ describe("the projection is stranger-safe", () => {
   });
 
   it("caps the gallery at four", () => {
-    expect(projection).toContain("MAX_LINKR_CARD_PHOTOS = 4");
+    /* The constant now lives in lib/linkr/media-projection-limits.ts -- a
+       client-safe module -- because the candidate card needs the same number
+       and cannot import this `server-only` file. Two copies of one number is
+       exactly how the card came to clamp at three while this assembled four,
+       so the value is asserted where it is DEFINED, and this file is checked
+       to re-export rather than redefine it. */
+    const limits = read("lib/linkr/media-projection-limits.ts");
+    expect(limits).toContain("MAX_LINKR_CARD_PHOTOS = 4");
+    expect(projection).toContain("MAX_LINKR_CARD_PHOTOS");
+    expect(projection, "the projection redefined a constant it should import").not.toMatch(
+      /MAX_LINKR_CARD_PHOTOS\s*=\s*\d/
+    );
     expect(projection).toMatch(/showcaseAssetIds\.length >= MAX_LINKR_CARD_PHOTOS - 1/);
   });
 

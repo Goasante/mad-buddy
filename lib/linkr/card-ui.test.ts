@@ -7,8 +7,25 @@ const card = read("components/linkr/candidate-card.tsx");
 const css = read("app/globals.css");
 
 describe("approved Linkr candidate card composition", () => {
-  it("caps the visual sequence at three projected photos", () => {
-    expect(card).toContain("candidate.photos.slice(0, 3)");
+  it("shows every photo the projection chose, and bounds it there", () => {
+    /* THE BOUND LIVES IN ONE PLACE, and the card follows it.
+     *
+     * This previously pinned the literal `candidate.photos.slice(0, 3)`. That
+     * number was never a product decision -- it was the implementation as
+     * found, and it silently discarded the fourth photo while the media
+     * projection deliberately assembles up to MAX_LINKR_CARD_PHOTOS (avatar
+     * plus the three showcase slots the schema allows, profile_photos.position
+     * being constrained to 0..2). Somebody who filled every showcase slot
+     * never saw their last photo in Linkr, and the progress bar under-reported
+     * the set.
+     *
+     * What matters is that the card does not invent its own ceiling: it reads
+     * the projection's constant. Asserting THAT survives a future change to
+     * the number, which pinning a literal cannot. */
+    expect(card).toContain("MAX_LINKR_CARD_PHOTOS");
+    expect(card, "the card re-invented its own photo ceiling").not.toMatch(
+      /photos\.slice\(0,\s*\d/
+    );
     expect(card).toContain("total > 1");
     expect(card).toContain("linkr-card__progress-seg");
   });
@@ -23,7 +40,11 @@ describe("approved Linkr candidate card composition", () => {
 
   it("presents bio before bounded interests and no shared-group row", () => {
     expect(card.indexOf("linkr-card__bio")).toBeLessThan(card.indexOf("linkr-card__interests"));
-    expect(card).toContain("candidate.interests.slice(0, 4)");
+    /* Bounded, without pinning the exact number. Four chips wrapped onto a
+       second row at 390px and a third at 320px, pushing the photograph behind
+       text; three fit on one line at every width the app supports. The
+       contract is "a bounded taste of the person", not a specific integer. */
+    expect(card).toMatch(/candidate\.interests\.slice\(0,\s*[1-4]\)/);
     expect(card).not.toMatch(/Both in|shared.group/i);
   });
 

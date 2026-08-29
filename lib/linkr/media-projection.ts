@@ -1,5 +1,6 @@
 import "server-only";
 
+import { MAX_LINKR_CARD_PHOTOS } from "@/lib/linkr/media-projection-limits";
 import { signMediaUrls } from "@/lib/linkr/profile-service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
@@ -41,8 +42,14 @@ import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
-/** The most images a Linkr card will ever show: avatar + three showcases. */
-export const MAX_LINKR_CARD_PHOTOS = 4;
+/**
+ * The most images a Linkr card will ever show: avatar + three showcases.
+ *
+ * Re-exported from the client-safe module so the candidate card can read the
+ * same constant without importing this `server-only` file. Defined once, in
+ * lib/linkr/media-projection-limits.ts.
+ */
+export { MAX_LINKR_CARD_PHOTOS } from "@/lib/linkr/media-projection-limits";
 
 /** Only this visibility is safe to show a stranger. */
 const STRANGER_SAFE = "everyone";
