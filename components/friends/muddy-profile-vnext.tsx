@@ -323,7 +323,7 @@ export function MuddyProfileVNext({
 
         <section className="rounded-[1.6rem] border border-border/60 bg-card/65 p-5">
           <div className="flex items-start gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"><ShieldCheck className="h-5 w-5" aria-hidden="true" /></span>
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#E88C2B]/12 text-[#A65A17] dark:text-orange-200"><ShieldCheck className="h-5 w-5" aria-hidden="true" /></span>
             <div className="min-w-0 flex-1">
               <h2 className="text-sm font-semibold">Privacy-respecting profile</h2>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">This page only receives profile fields and Showcase photos the server has already authorised for your relationship. Hidden details are not sent to the browser.</p>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { ProfileMediaVNext } from "@/components/profile/profile-media-vnext";
+import { isMomentsEnabled } from "@/lib/features/feature-flags";
 import { loadProfileIdentitySummary } from "@/lib/profile/identity-service";
 import { loadVisibleProfilePhotosFor } from "@/lib/profile/photo-service";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
@@ -32,9 +33,14 @@ export default async function ProfileLabMediaPage() {
     .maybeSingle();
 
   const admin = createSupabaseAdminClient();
-  const [photos, identitySummary] = await Promise.all([
+  const [photos, identitySummary, momentsEnabled] = await Promise.all([
     loadVisibleProfilePhotosFor(admin, user.id, { isOwner: true, isApprovedMuddy: false }),
-    loadProfileIdentitySummary(admin, user.id, "self")
+    loadProfileIdentitySummary(admin, user.id, "self"),
+    /* Moments is a PAUSED feature: with no flag row, /moments redirects to
+       /dashboard. Linking to it unconditionally would hand the user a dead end,
+       which is exactly what the scope-reduction rules forbid. Resolved here and
+       passed down, matching how the dashboard loader already gates it. */
+    isMomentsEnabled(admin)
   ]);
 
   return (
@@ -43,6 +49,7 @@ export default async function ProfileLabMediaPage() {
       avatarUrl={profile?.avatar_url ?? null}
       photos={photos}
       momentCount={identitySummary?.activity?.momentCount ?? 0}
+      momentsEnabled={momentsEnabled}
     />
   );
 }

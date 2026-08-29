@@ -56,7 +56,7 @@ const visibilityCopy: Record<VisibilityStatus, { label: string; detail: string; 
   visible: {
     label: "Visible to Muddies",
     detail: "Your approved nearby range can appear in Glow.",
-    tone: "bg-emerald-500"
+    tone: "bg-[#E88C2B]"
   },
   ghost: {
     label: "Ghost Mode",

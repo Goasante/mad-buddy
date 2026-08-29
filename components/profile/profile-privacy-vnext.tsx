@@ -77,11 +77,11 @@ export function ProfilePrivacyVNext({
         </Link>
       </header>
 
-      <section className="relative overflow-hidden rounded-[2rem] border border-emerald-600/15 bg-[#FEFBF3] p-5 shadow-[0_22px_60px_rgba(78,4,1,0.07)] dark:bg-card sm:p-7">
-        <div className="pointer-events-none absolute -left-10 -top-12 h-40 w-40 rounded-full bg-emerald-500/10 blur-3xl" />
+      <section className="relative overflow-hidden rounded-[2rem] border border-[#E88C2B]/20 bg-[#FEFBF3] p-5 shadow-[0_22px_60px_rgba(78,4,1,0.07)] dark:bg-card sm:p-7">
+        <div className="pointer-events-none absolute -left-10 -top-12 h-40 w-40 rounded-full bg-[#E88C2B]/10 blur-3xl" />
         <div className="pointer-events-none absolute -right-8 top-2 h-32 w-32 rounded-full bg-[#E88C2B]/12 blur-3xl" />
         <div className="relative flex items-start gap-4">
-          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[1.2rem] bg-emerald-600 text-white shadow-lg shadow-emerald-900/10">
+          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[1.2rem] bg-[#E88C2B] text-white shadow-lg shadow-[#4E0401]/10">
             <ShieldCheck className="h-7 w-7" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
@@ -134,7 +134,7 @@ export function ProfilePrivacyVNext({
             </Link>
 
             <Link href="/settings/sessions" className="focus-ring safe-motion rounded-[1.3rem] border border-border/60 bg-card/75 p-4 shadow-sm hover:-translate-y-0.5 hover:bg-secondary/30 motion-reduce:hover:translate-y-0">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"><KeyRound className="h-5 w-5" aria-hidden="true" /></span>
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#E88C2B]/12 text-[#A65A17] dark:text-orange-200"><KeyRound className="h-5 w-5" aria-hidden="true" /></span>
               <p className="mt-3 text-sm font-semibold">Login & sessions</p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">Review account access and active sessions.</p>
               <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">Open <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" /></span>
@@ -181,7 +181,7 @@ function PrivacySection({ title, description, children }: { title: string; descr
 function StatusChip({ icon: Icon, label }: { icon: typeof Eye; label: string }) {
   return (
     <span className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/75 px-3 py-1.5 text-xs font-semibold">
-      <Icon className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" /> {label}
+      <Icon className="h-3.5 w-3.5 text-[#E88C2B]" aria-hidden="true" /> {label}
     </span>
   );
 }
@@ -201,7 +201,7 @@ function PrivacySettingRow({
 }) {
   return (
     <Link href={href} className="focus-ring safe-motion flex min-h-[4.5rem] items-start gap-3 border-b border-border/55 px-4 py-4 last:border-0 hover:bg-secondary/30">
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400"><Icon className="h-5 w-5" aria-hidden="true" /></span>
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#E88C2B]/[0.08] text-[#A65A17] dark:text-orange-200"><Icon className="h-5 w-5" aria-hidden="true" /></span>
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <span className="text-sm font-semibold">{title}</span>

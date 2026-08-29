@@ -203,7 +203,15 @@ const PAGES_WITH_OWN_HEADER = [
 // /hangout-mode joined when UpFor took an inline header carrying a subtitle
 // and its own actions. It was already in PAGES_WITH_OWN_HEADER but not here,
 // which is precisely the gap that produced the blank band above the title.
-const IMMERSIVE_HEADER_PAGES: readonly string[] = ["/discover", "/linkr", "/hangout-mode"];
+const IMMERSIVE_HEADER_PAGES: readonly string[] = [
+  "/discover",
+  "/linkr",
+  "/hangout-mode",
+  // Profile VNext's headers are inline rather than the fixed canonical bar, so
+  // reserving --mobile-header-height for them would pay the inset twice and
+  // leave an empty band under the notch.
+  "/profile-lab"
+];
 
 function hasOwnHeader(pathname: string): boolean {
   /* Most entries are exact screens. Treating every entry as a prefix made
@@ -214,6 +222,11 @@ function hasOwnHeader(pathname: string): boolean {
      PageHeader themselves. */
   if (PAGES_WITH_OWN_HEADER.some((href) => pathname === href)) return true;
   if (pathname.startsWith("/settings/") && pathname !== "/settings/access") return true;
+  /* Profile VNext draws its own inline header on EVERY /profile-lab screen,
+     including the nested ones, so the whole subtree stands the global header
+     down. Without this each lab screen carried two bars stacked on top of each
+     other and lost roughly 130px of viewport to the duplicate. */
+  if (pathname === "/profile-lab" || pathname.startsWith("/profile-lab/")) return true;
   return pathname === "/events/top";
 }
 

@@ -12,12 +12,15 @@ export function ProfileMediaVNext({
   displayName,
   avatarUrl,
   photos,
-  momentCount
+  momentCount,
+  momentsEnabled = false
 }: {
   displayName: string;
   avatarUrl: string | null;
   photos: ProfilePhoto[];
   momentCount: number;
+  /** Moments is pausable. When off, /moments redirects, so the card must not appear. */
+  momentsEnabled?: boolean;
 }) {
   const router = useRouter();
   const avatarSrc = avatarUrl ? "/api/profile/avatar" : null;
@@ -66,6 +69,7 @@ export function ProfileMediaVNext({
           </Card>
         </section>
 
+        {momentsEnabled ? (
         <section aria-labelledby="profile-media-moments-heading">
           <div className="mb-2 px-1">
             <h2 id="profile-media-moments-heading" className="flex items-center gap-2 text-base font-semibold"><Sparkles className="h-4 w-4 text-[#E88C2B]" aria-hidden="true" /> Moments</h2>
@@ -80,6 +84,7 @@ export function ProfileMediaVNext({
             <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
           </Link>
         </section>
+        ) : null}
 
         <section className="rounded-[1.5rem] border border-[#4E0401]/10 bg-[#4E0401]/[0.035] p-5 dark:bg-card">
           <h2 className="text-sm font-semibold">Why there is no fake Highlights section</h2>

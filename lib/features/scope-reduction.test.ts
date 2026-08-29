@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -229,13 +229,39 @@ describe("no Moments residue in visible UI while paused", () => {
    * Surfaces that render ONLY inside /moments (moments-page and its parts)
    * are exempt: the route guard already stops them being reachable.
    */
-  const BEHIND_THE_ROUTE = ["components/content/moments-page.tsx", "components/content/moments-preview.tsx"];
-
-  const linkingFiles = [
-    "components/app-shell/app-shell.tsx",
-    "components/dashboard/dashboard-page.tsx",
-    "components/profile/profile-page.tsx"
+  const BEHIND_THE_ROUTE = [
+    "components/content/moments-page.tsx",
+    "components/content/moments-preview.tsx",
+    // Reachable only through moments-page / the /moments route itself, which
+    // already redirects while the feature is paused. Verified by import graph,
+    // not assumed: each is imported solely by moments-page.tsx (and
+    // moment-parts additionally by tuned-in-strip, itself moments-only).
+    "components/content/moment-composer.tsx",
+    "components/content/moment-parts.tsx",
+    "components/content/tuned-in-strip.tsx"
   ];
+
+  /* DISCOVERED, NOT HARDCODED.
+   *
+   * This list used to be three literal paths, which meant the sweep could not
+   * do the job its comment claims: Profile VNext added an ungated /moments CTA
+   * in a fourth file and the test stayed green. Walking components/ finds every
+   * linking file, including ones that do not exist yet. */
+  function componentsLinkingToMoments(dir = "components"): string[] {
+    const entries = readdirSync(join(process.cwd(), dir), { withFileTypes: true });
+    const found: string[] = [];
+    for (const entry of entries) {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) {
+        found.push(...componentsLinkingToMoments(path));
+      } else if (entry.name.endsWith(".tsx") && stripComments(read(path)).includes("/moments")) {
+        found.push(path);
+      }
+    }
+    return found;
+  }
+
+  const linkingFiles = componentsLinkingToMoments().filter((path) => !BEHIND_THE_ROUTE.includes(path));
 
   it.each(linkingFiles)("gates every /moments link in %s", (path) => {
     const source = stripComments(read(path));
