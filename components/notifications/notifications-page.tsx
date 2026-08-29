@@ -45,6 +45,12 @@ import {
   resolveNotificationDestination,
   type NotificationDestination
 } from "@/lib/notifications/destination";
+import {
+  hasStaleTarget,
+  NOTIFICATION_STALE_TARGET_MESSAGE,
+  notificationSourceLabel,
+  notificationTimestampLabel
+} from "@/lib/notifications/detail";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 import { cn } from "@/lib/utils";
 import { BIRTHDAY_WISHES } from "@/lib/profile/birthday-experience";
@@ -173,6 +179,9 @@ export function NotificationsPageContent({
   useDismissOnBack(optionsOpen, () => setOptionsOpen(false));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<NotificationItem | null>(null);
+  /* The notification being read in full. Informational rows have nowhere to
+     navigate, so this is their destination. */
+  const [detailNotification, setDetailNotification] = useState<NotificationItem | null>(null);
   const [selectedBirthday, setSelectedBirthday] = useState<NotificationItem | null>(null);
   const [category, setCategory] = useState<PulseCategory>("all");
   const [selectionMode, setSelectionMode] = useState(false);
@@ -689,13 +698,22 @@ export function NotificationsPageContent({
                         selected={selectedIds.has(notification.id)}
                         onToggleSelect={() => toggleSelected(notification.id)}
                         onDelete={() => deleteNotifications([notification.id])}
-                        onActivate={() =>
-                          notification.meetupRequestId
-                            ? openMeetupRequest(notification)
-                            : notification.birthdayUserId
-                              ? (setSelectedBirthday(notification), markNotificationRead(notification))
-                            : markNotificationRead(notification)
-                        }
+                        onActivate={() => {
+                          if (notification.meetupRequestId) return openMeetupRequest(notification);
+                          if (notification.birthdayUserId) {
+                            setSelectedBirthday(notification);
+                            return markNotificationRead(notification);
+                          }
+                          /* A row with a destination is a <Link>: this fires
+                             alongside the navigation and only records the
+                             read. A row WITHOUT one used to stop here, which
+                             is the dead tap -- it now opens the notification
+                             so its full text can actually be read. */
+                          if (!resolveNotificationDestination(notification.type)) {
+                            setDetailNotification(notification);
+                          }
+                          markNotificationRead(notification);
+                        }}
                       />
                     ))}
                   </div>
@@ -739,6 +757,60 @@ export function NotificationsPageContent({
               });
             }}
           />
+        ) : null}
+      </Modal>
+
+      {/* NOTIFICATION DETAIL.
+          Where an informational notification is actually readable: full title,
+          full body (wrapping and scrolling, never clipped to one line), the
+          absolute date rather than "2h", and the surface it came from. A
+          call-to-action appears ONLY when a destination genuinely resolves --
+          otherwise the sheet says plainly that there is nowhere to go, which
+          is better than a button that lands on an error. */}
+      <Modal
+        open={Boolean(detailNotification)}
+        onOpenChange={(open) => {
+          if (!open) setDetailNotification(null);
+        }}
+        title={detailNotification?.title ?? "Notification"}
+        compact
+      >
+        {detailNotification ? (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              {notificationTimestampLabel(detailNotification.createdAt) ? (
+                <span>{notificationTimestampLabel(detailNotification.createdAt)}</span>
+              ) : null}
+              {notificationSourceLabel(detailNotification.type) ? (
+                <>
+                  <span aria-hidden>&middot;</span>
+                  <span>{notificationSourceLabel(detailNotification.type)}</span>
+                </>
+              ) : null}
+            </div>
+
+            {detailNotification.message ? (
+              /* The whole point: wraps, and scrolls if it is genuinely long.
+                 No truncation, no line clamp. */
+              <p className="max-h-[50dvh] overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-foreground">
+                {detailNotification.message}
+              </p>
+            ) : null}
+
+            {/* Stated only when this notification looked like it should lead
+                somewhere. A purely informational alert never pointed anywhere,
+                so telling its reader that something is "no longer available"
+                would invent a loss that never happened. */}
+            {hasStaleTarget(detailNotification.type) ? (
+              <p className="text-xs text-muted-foreground">{NOTIFICATION_STALE_TARGET_MESSAGE}</p>
+            ) : null}
+
+            <div className="flex justify-end">
+              <Button type="button" variant="outline" onClick={() => setDetailNotification(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
         ) : null}
       </Modal>
 
@@ -952,11 +1024,15 @@ function NotificationCard({
 }: NotificationCardProps) {
   const actionable = Boolean(notification.meetupRequestId || notification.birthdayUserId);
   const iconClass = categoryIconClass(categoryForType(notification.type));
-  // Three mutually exclusive shapes: an in-place reply (button), a deep link
-  // (anchor), or a static informational row. meetup_request never has a
-  // resolver destination, so these never collide.
+  /* Three mutually exclusive shapes: an in-place reply (button), a deep link
+     (anchor), or -- the case that used to be a dead end -- a row that opens
+     its own detail. meetup_request never has a resolver destination, so these
+     never collide.
+
+     EVERY ROW IS NOW A CONTROL. The informational branch used to render a
+     plain <article>: not focusable, not tappable, and with its message clipped
+     to one line, so the text could neither be opened nor finished. */
   const isLink = !actionable && destination !== null;
-  const clickable = actionable || isLink;
 
   const body = (
     <>
@@ -981,8 +1057,16 @@ function NotificationCard({
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-label="Unread" />
           ) : null}
         </div>
+        {/* TWO LINES ON THE ROW, the whole thing in the detail.
+            `truncate` clipped every message to a single line, and for an
+            informational notification -- which has no destination -- that
+            single line was the ONLY thing its reader would ever see. The row
+            still has to stay scannable, so it clamps rather than growing
+            without limit; the full text now lives one tap away. */}
         {notification.message ? (
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">{notification.message}</p>
+          <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
+            {notification.message}
+          </p>
         ) : null}
         {actionable ? (
           <p className="mt-1 text-xs font-medium text-primary">
@@ -1066,9 +1150,18 @@ function NotificationCard({
     );
   }
 
+  /* INFORMATIONAL. No destination, nothing inline -- so the row opens the
+     notification itself, where the full text is readable. */
   return (
     <div className={wrapperClass}>
-      <article className={cn(baseClass, !clickable && "cursor-default")}>{body}</article>
+      <button
+        type="button"
+        onClick={onActivate}
+        aria-label={`Read: ${notification.title}`}
+        className={cn(baseClass, interactiveClass, "w-full")}
+      >
+        {body}
+      </button>
       {deleteControl}
     </div>
   );
