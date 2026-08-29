@@ -9733,6 +9733,31 @@ html.dark .proximity-glow {
 .upfor-card__view:disabled { opacity: 0.55; }
 .upfor-card__state { color: hsl(var(--muted-foreground)); background: hsl(var(--secondary) / 0.5); }
 
+/* The waiting/accepted pair stacked above the withdraw control, so the rail
+   still reads as one column. Pending is deliberately quiet and Accepted carries
+   the brand: the difference between "asked" and "you're in" should be legible
+   at a glance without reading the button underneath. */
+.upfor-card__decision {
+  display: grid;
+  gap: 0.3rem;
+  width: 100%;
+}
+
+.upfor-card__state[data-request-state="pending"] {
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--secondary) / 0.6);
+}
+
+.upfor-card__state[data-request-state="accepted"] {
+  color: #a65a17;
+  background: rgb(232 140 43 / 0.14);
+}
+
+:root[data-theme="dark"] .upfor-card__state[data-request-state="accepted"],
+:root:not([data-theme="light"]) .upfor-card__state[data-request-state="accepted"] {
+  color: rgb(253 213 173);
+}
+
 .upfor-card__momentum {
   grid-column: 1 / -1;
   display: flex;

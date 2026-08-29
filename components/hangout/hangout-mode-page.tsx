@@ -56,10 +56,7 @@ import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 import { countActiveRequests } from "@/lib/social/hangout-requests";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
-import {
-  UPFOR_QUICK_IDEAS,
-  upForTitle
-} from "@/lib/social/upfor";
+import { UPFOR_QUICK_IDEAS } from "@/lib/social/upfor";
 import { withTimeout } from "@/lib/network/resilience";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import type {
@@ -221,25 +218,14 @@ export function HangoutModePage({
     }
   }
 
-  /**
-   * Answer "maybe".
+  /* ANSWER "MAYBE" REMOVED (owner decision).
    *
-   * Same row and same unique constraint as joining -- the server moves the
-   * existing response rather than stacking a second one, so a person always
-   * has exactly one answer.
+   * The decision vocabulary is Accept or Decline. The 'maybe' value stays in
+   * hangout_requests for rows that already carry it -- deleting a schema value
+   * that historic data uses would be destructive for no benefit -- but nothing
+   * in the UI can create a new one. UpForCard reads an existing 'maybe' as
+   * still-waiting rather than stranding it in an unrenderable state.
    */
-  async function markMaybe(hangoutId: string) {
-    const result = await requestHangoutAction(hangoutId, undefined, "maybe").catch(() => ({
-      ok: false,
-      message: "Couldn't update that. Try again."
-    }));
-    showToast(result.message, !result.ok);
-    if (result.ok) {
-      setFeed((current) =>
-        current.map((item) => (item.id === hangoutId ? { ...item, myRequestStatus: "maybe" } : item))
-      );
-    }
-  }
 
   // Setup form draft state (only meaningful while the sheet is open).
   const [setupOpen, setSetupOpen] = useState(false);
@@ -581,12 +567,12 @@ export function HangoutModePage({
     });
   }
 
-  function respond(requestId: string, response: "accepted" | "maybe" | "declined") {
+  function respond(requestId: string, response: "accepted" | "declined") {
     startTransition(async () => {
       const result = await respondHangoutRequestAction(requestId, response);
       showToast(result.message, !result.ok);
       // Re-derive the list from the database rather than trusting a local edit,
-      // so the count stays canonical after accept/maybe/decline.
+      // so the count stays canonical after accept/decline.
       if (result.ok) await refreshRequests();
     });
   }
@@ -756,9 +742,6 @@ UpFors are temporary and disappear when they end. Jump in while you can!
                         <Button type="button" size="sm" onClick={() => respond(request.id, "accepted")} disabled={isPending}>
                           Accept
                         </Button>
-                        <Button type="button" size="sm" variant="outline" onClick={() => respond(request.id, "maybe")} disabled={isPending}>
-                          Maybe
-                        </Button>
                         <Button type="button" size="sm" variant="ghost" onClick={() => respond(request.id, "declined")} disabled={isPending}>
                           Decline
                         </Button>
@@ -821,7 +804,6 @@ UpFors are temporary and disappear when they end. Jump in while you can!
           error={feedError}
           onRetry={() => void refreshFeed()}
           onJoin={requestToJoin}
-          onMaybe={(id) => markMaybe(id)}
           onWithdraw={leaveUpFor}
           onCreatePlan={convertToPlanById}
           onOpen={(id) => setDetailId(id)}

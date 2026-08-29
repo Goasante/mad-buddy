@@ -33,15 +33,39 @@ import type { HangoutActivityType } from "@/lib/supabase/database.types";
  */
 export type UpForMode = "for_you" | "muddies" | "around" | "groups";
 
+/* GROUPS IS NOT AN UPFOR MODE (owner decision).
+ *
+ * The tab is gone from discovery. `UpForMode` keeps "groups" in the type and
+ * the filter keeps its branch, because audience and viewing surface are
+ * deliberately separate ideas here and a Group-audienced UpFor still exists --
+ * it simply appears under For You / Muddies / Around like anything else.
+ * Removing the value outright would have deleted that distinction too.
+ *
+ * This only changes UpFor's discovery modes. The standalone Groups product is
+ * untouched. */
 export const UPFOR_MODES: ReadonlyArray<{ id: UpForMode; label: string }> = [
   { id: "for_you", label: "For You" },
   { id: "muddies", label: "Muddies" },
-  { id: "around", label: "Around" },
-  { id: "groups", label: "Groups" }
+  { id: "around", label: "Around" }
 ];
 
+/** The mode a surface falls back to when none was given or the given one is gone. */
+export const DEFAULT_UPFOR_MODE: UpForMode = "for_you";
+
+/**
+ * Whether a string names a mode a user can currently be shown.
+ *
+ * "groups" deliberately returns false now: a bookmarked `?tab=groups` must not
+ * strand somebody on a tab that no longer exists. Callers pair this with
+ * resolveUpForMode so a stale link lands on For You instead of an empty page.
+ */
 export function isUpForMode(value: string): value is UpForMode {
   return UPFOR_MODES.some((mode) => mode.id === value);
+}
+
+/** Coerce any incoming mode string to one that can actually be rendered. */
+export function resolveUpForMode(value: string | null | undefined): UpForMode {
+  return value && isUpForMode(value) ? value : DEFAULT_UPFOR_MODE;
 }
 
 // ---------------------------------------------------------------------------

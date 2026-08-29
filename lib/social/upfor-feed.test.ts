@@ -8,6 +8,7 @@ import {
   isUpForMode,
   planConversionSummary,
   rankForYou,
+  resolveUpForMode,
   shouldOfferPlanConversion,
   upForEmptyCopy,
   upForMomentum,
@@ -84,11 +85,22 @@ describe("proximity never becomes a distance", () => {
 });
 
 describe("discovery modes narrow, they do not widen", () => {
-  it("names the four approved tabs", () => {
-    expect(UPFOR_MODES.map((m) => m.id)).toEqual(["for_you", "muddies", "around", "groups"]);
-    expect(UPFOR_MODES.map((m) => m.label)).toEqual(["For You", "Muddies", "Around", "Groups"]);
+  it("names the three approved tabs", () => {
+    // Groups was removed from UpFor discovery by owner decision. The standalone
+    // Groups product is untouched; a Group-audienced UpFor still appears under
+    // the remaining tabs.
+    expect(UPFOR_MODES.map((m) => m.id)).toEqual(["for_you", "muddies", "around"]);
+    expect(UPFOR_MODES.map((m) => m.label)).toEqual(["For You", "Muddies", "Around"]);
     expect(isUpForMode("for_you")).toBe(true);
     expect(isUpForMode("popular")).toBe(false);
+  });
+
+  it("lands a stale ?tab=groups link on a tab that exists", () => {
+    // A bookmarked Groups URL must not strand somebody on a tab that is gone.
+    expect(isUpForMode("groups")).toBe(false);
+    expect(resolveUpForMode("groups")).toBe("for_you");
+    expect(resolveUpForMode(null)).toBe("for_you");
+    expect(resolveUpForMode("muddies")).toBe("muddies");
   });
 
   it("Muddies shows only Muddies", () => {

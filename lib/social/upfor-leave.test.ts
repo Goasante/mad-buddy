@@ -188,9 +188,16 @@ describe("the card offers the right withdrawal", () => {
      * control could never return. Only pending and accepted count as being
      * in; every other status -- cancelled included -- falls through to the
      * join controls. */
+    /* Asserted as a CONTRACT rather than as a literal source line: the original
+       check pinned the exact text `const joined = requested || accepted;`, so
+       adding the legitimate historic "maybe" case broke it without anything
+       being wrong. What must hold is which statuses count as being in. */
     expect(card).toContain('const requested = upfor.myRequestStatus === "pending";');
     expect(card).toContain('const accepted = upfor.myRequestStatus === "accepted";');
-    expect(card).toContain("const joined = requested || accepted;");
+    // cancelled / null fall through to the join control ...
+    expect(card).not.toMatch(/joined\s*=\s*[^;]*"cancelled"/);
+    // ... and a declined answer gets its own outcome rather than re-offering.
+    expect(card).toContain('const declined = upfor.myRequestStatus === "declined";');
   });
 
   it("reverts optimistically on failure rather than claiming success", () => {

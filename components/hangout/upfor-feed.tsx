@@ -39,7 +39,6 @@ export type UpForFeedProps = {
   error?: string | null;
   onRetry?: () => void;
   onJoin: (id: string) => Promise<void> | void;
-  onMaybe: (id: string) => Promise<void> | void;
   onWithdraw: (id: string) => Promise<void> | void;
   onOpenChat?: (id: string) => void;
   onCreatePlan?: (id: string) => Promise<void> | void;
@@ -55,7 +54,6 @@ export function UpForFeed({
   error = null,
   onRetry,
   onJoin,
-  onMaybe,
   onWithdraw,
   onOpenChat,
   onCreatePlan,
@@ -80,8 +78,7 @@ export function UpForFeed({
     () => ({
       for_you: filterForMode(items, "for_you", nowMs).length,
       muddies: filterForMode(items, "muddies", nowMs).length,
-      around: filterForMode(items, "around", nowMs).length,
-      groups: filterForMode(items, "groups", nowMs).length
+      around: filterForMode(items, "around", nowMs).length
     }),
     [items, nowMs]
   );
@@ -137,7 +134,6 @@ export function UpForFeed({
                 nowMs={nowMs}
                 responseState={pendingId === item.id ? "pending" : "idle"}
                 onJoin={(id) => run(id, onJoin)}
-                onMaybe={(id) => run(id, onMaybe)}
                 onWithdraw={(id) => run(id, onWithdraw)}
                 onOpenChat={onOpenChat}
                 onOpen={onOpen}

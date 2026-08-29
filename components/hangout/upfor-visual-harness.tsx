@@ -78,7 +78,6 @@ export function UpForVisualHarness() {
           viewerId="viewer"
           nowMs={NOW}
           onJoin={() => undefined}
-          onMaybe={() => undefined}
           onWithdraw={() => undefined}
           onOpen={() => undefined}
           onCreatePlan={() => undefined}

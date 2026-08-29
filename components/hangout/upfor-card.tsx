@@ -55,7 +55,6 @@ export const UpForCard = memo(function UpForCard({
   nowMs: number;
   responseState: UpForResponseState;
   onJoin: (id: string) => void;
-  onMaybe: (id: string) => void;
   onWithdraw: (id: string) => void;
   onOpenChat?: (id: string) => void;
   onCreatePlan?: (id: string) => void;
@@ -80,7 +79,13 @@ export const UpForCard = memo(function UpForCard({
 
   const requested = upfor.myRequestStatus === "pending";
   const accepted = upfor.myRequestStatus === "accepted";
-  const joined = requested || accepted;
+  /* A declined answer needs its own branch. Folding it in with "no answer yet"
+     made the card offer "I'm in" again to somebody the owner had already
+     turned down. Historic "maybe" rows are read as still-waiting rather than
+     migrated: the value stays in the schema for existing data, but no new UI
+     transition can create one. */
+  const declined = upfor.myRequestStatus === "declined";
+  const joined = requested || accepted || upfor.myRequestStatus === "maybe";
   const busy = responseState === "pending";
   const expired = Date.parse(upfor.endsAt) <= nowMs;
 
@@ -127,16 +132,34 @@ export const UpForCard = memo(function UpForCard({
 
         {isOwner ? null : expired ? (
           <span className="upfor-card__state">Closed</span>
+        ) : declined ? (
+          /* A declined answer is an outcome, not silence. Without this the card
+             fell back to "I'm in", inviting the person to ask again and be
+             declined again. */
+          <span className="upfor-card__state">Not this time</span>
         ) : joined ? (
-            <button
-              type="button"
-              className="upfor-card__action upfor-card__action--joined"
-              onClick={() => onWithdraw(upfor.id)}
-              disabled={busy}
-            >
-              {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden /> : null}
-              {accepted ? "Leave" : "Cancel request"}
-            </button>
+            <div className="upfor-card__decision">
+              {/* THE WAITING STATE, NAMED.
+                  "Interested" is the action; Pending is what the person is in
+                  afterwards. Previously the card showed only "Cancel request",
+                  so a submitted answer looked identical to no answer and the
+                  user could not tell an accepted request from a waiting one. */}
+              <span
+                className="upfor-card__state"
+                data-request-state={accepted ? "accepted" : "pending"}
+              >
+                {accepted ? "Accepted" : "Pending"}
+              </span>
+              <button
+                type="button"
+                className="upfor-card__action upfor-card__action--joined"
+                onClick={() => onWithdraw(upfor.id)}
+                disabled={busy}
+              >
+                {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden /> : null}
+                {accepted ? "Leave" : "Cancel request"}
+              </button>
+            </div>
         ) : (
           <button
             type="button"
