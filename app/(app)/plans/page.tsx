@@ -59,7 +59,7 @@ async function loadPlans(): Promise<{
         // end_at and created_at feed planPhase: end_at so a plan stays
         // upcoming until it actually ends, created_at so an undated plan's
         // grace window can be measured.
-        "id, creator_id, title, description, plan_type, status, start_at, end_at, created_at, custom_place_text, place_type, category, cover_image_url"
+        "id, creator_id, title, description, plan_type, status, start_at, end_at, created_at, custom_place_text, place_type, category, cover_image_url, chat_close_days"
       )
       .in("id", planIds),
     admin
@@ -189,7 +189,8 @@ async function loadPlans(): Promise<{
       myRsvp,
       attendees: participantsByPlan.get(plan.id) ?? [],
       polls: pollsByPlan.get(plan.id) ?? [],
-      myConversationId: myConversationByPlan.get(plan.id) ?? null
+      myConversationId: myConversationByPlan.get(plan.id) ?? null,
+      chatCloseDays: plan.chat_close_days
     };
   });
 

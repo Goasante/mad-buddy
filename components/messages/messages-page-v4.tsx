@@ -54,6 +54,7 @@ import { ChatSettingsV4 } from "@/components/messaging/chat-settings-v4";
 import { ConversationRowV4 } from "@/components/messaging/conversation-row-v4";
 import { MessageBubbleV4 } from "@/components/messaging/message-bubble-v4";
 import { MessageComposerV4Shell } from "@/components/messaging/message-composer-v4-shell";
+import { planChatClosedNotice } from "@/lib/messaging/plan-chat-closure";
 import { MessageMediaViewer } from "@/components/messaging/message-media-viewer";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -728,6 +729,36 @@ export function MessagesPageV4({
 
               {unseenIncoming > 0 ? <button type="button" onClick={() => scrollToBottom()} className="absolute bottom-[calc(76px+env(safe-area-inset-bottom))] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-[#4E0401] px-3.5 py-2 text-xs font-bold text-[#FEFBF3] shadow-[0_12px_34px_rgba(78,4,1,.24)] animate-in zoom-in-85 slide-in-from-bottom-3"><ArrowDown className="h-4 w-4" />{unseenIncoming} new {unseenIncoming === 1 ? "message" : "messages"}</button> : null}
 
+              {/* A CLOSED PLAN CHAT KEEPS ITS HISTORY AND LOSES ITS COMPOSER.
+                  Everything above this line still renders: the whole message
+                  list, scrollable and searchable exactly as before. Only the
+                  ability to add to it goes away, and it is replaced by a
+                  sentence saying so rather than a disabled box, which reads as
+                  a fault rather than a state.
+
+                  THIS IS PRESENTATION ONLY. `planChatClosed` is the server's
+                  own resolved answer, and the server refuses the send
+                  regardless -- conversations.status is re-checked inside
+                  canSendMessage on every path. Removing the composer is a
+                  courtesy to the person, never the thing that stops the
+                  message. */}
+              {selected.planChatClosed ? (
+                (() => {
+                  const notice = planChatClosedNotice(selected.planEndedAt);
+                  return (
+                    <div
+                      data-plan-chat-closed="true"
+                      role="status"
+                      className="border-t border-black/[0.06] bg-white/60 px-4 pb-[calc(16px+env(safe-area-inset-bottom))] pt-4 text-center dark:border-white/[0.08] dark:bg-white/[0.03]"
+                    >
+                      <p className="text-sm font-semibold text-[#4E0401] dark:text-orange-100">{notice.title}</p>
+                      {notice.detail ? (
+                        <p className="mt-1 text-xs text-muted-foreground">{notice.detail}</p>
+                      ) : null}
+                    </div>
+                  );
+                })()
+              ) : (
               <MessageComposerV4Shell
                 key={selected.id}
                 conversationId={selected.id}
@@ -744,6 +775,7 @@ export function MessagesPageV4({
                 onOptimisticSettled={settleOptimistic}
                 onSent={async () => { await refreshSelected(); scrollToBottom(); }}
               />
+              )}
             </>
           )}
         </main>

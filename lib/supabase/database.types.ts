@@ -1484,6 +1484,12 @@ export type Database = {
           category: PlanCategory | null;
           /** User-uploaded cover; outranks the canonical illustration. */
           cover_image_url: string | null;
+          /**
+           * Days after the Plan ends that its chat closes. One of 1/3/7/14.
+           * The close INSTANT is derived from this plus the Plan's live
+           * timing, never stored, so a rescheduled Plan moves its own closure.
+           */
+          chat_close_days: number;
         };
         Insert: {
           id?: string;
@@ -1491,6 +1497,7 @@ export type Database = {
           title: string;
           description?: string | null;
           plan_type: PlanType;
+          chat_close_days?: number;
           category?: PlanCategory | null;
           cover_image_url?: string | null;
           visibility_type?: PlanVisibilityType;

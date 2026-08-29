@@ -475,3 +475,127 @@ export const HANGOUT_ACTIVITY_LABELS: Record<string, string> = {
   chill: "Chill",
   anything: "Open to anything"
 };
+
+// ---------------------------------------------------------------------------
+// Plan Chat closure (Plan Chat lifecycle)
+// ---------------------------------------------------------------------------
+
+/**
+ * How long after a Plan ends its chat stays open.
+ *
+ * A CLOSED PLAN CHAT IS NOT A DELETED ONE. Closing stops new messages; every
+ * message already sent stays readable to every member, forever, exactly as it
+ * was. This is a lifecycle, not a retention policy, and it is deliberately
+ * kept away from the 24h-message / Keep-in-Chat / media-expiry machinery --
+ * those decide whether CONTENT survives, this decides whether the ROOM is
+ * still open. Reusing one for the other would mean a retention change could
+ * silently reopen a closed Plan, or a closure could silently delete history.
+ *
+ * FOUR WINDOWS, and only four. The owner picks one; the server accepts nothing
+ * else. A day count rather than an instant, because the instant has to be
+ * recomputed whenever the Plan itself moves (see planChatClosesAtMs).
+ */
+export const PLAN_CHAT_CLOSE_DAY_OPTIONS = [1, 3, 7, 14] as const;
+export type PlanChatCloseDays = (typeof PLAN_CHAT_CLOSE_DAY_OPTIONS)[number];
+
+/**
+ * The default: three days after the Plan ends.
+ *
+ * Long enough for the "that was fun" messages and the photo everyone was
+ * promised, short enough that the inbox is not a graveyard of last month's
+ * dinners.
+ */
+export const DEFAULT_PLAN_CHAT_CLOSE_DAYS: PlanChatCloseDays = 3;
+
+/** Narrows an untrusted value to one of the four offered windows. */
+export function isPlanChatCloseDays(value: unknown): value is PlanChatCloseDays {
+  return (PLAN_CHAT_CLOSE_DAY_OPTIONS as readonly number[]).includes(value as number);
+}
+
+/**
+ * The instant a Plan's chat closes, or null when it has no end to count from.
+ *
+ * DERIVED, NEVER STORED. A Plan's start time can still move after creation --
+ * confirmPollAction writes the winning option into plans.start_at when a
+ * time/date poll resolves -- so a close instant frozen at creation would be
+ * wrong for exactly the plans that most needed the poll. Computing it from the
+ * Plan's CURRENT timing means a resolved poll reschedules the closure for
+ * free, with nothing to migrate and nothing to keep in sync.
+ *
+ * THE PLAN'S END, RESOLVED THE ONE CANONICAL WAY. `end_at` when it exists,
+ * otherwise `start_at + PLAN_DEFAULT_ACTIVE_MS` -- the same fallback planPhase
+ * uses to decide a plan is over. The number is not re-typed here; if the
+ * fallback ever changes, closure follows it automatically. Inventing a
+ * separate duration is what makes two surfaces disagree about when a plan
+ * ended.
+ *
+ * UNDATED PLANS (quick and poll plans may legitimately carry no start) have no
+ * end to count from, so they get their close time from the grace deadline
+ * instead -- the same UNSCHEDULED_PLAN_GRACE_DAYS boundary at which the Plans
+ * page already sets them aside. Returns null only when even that is
+ * unknowable, and a null close time means "never close", which is the safe
+ * direction: the chat stays open rather than shutting on a guess.
+ *
+ * A CANCELLED PLAN CLOSES PROMPTLY. Terminal status wins, as it does in
+ * planPhase: the chat closes at the moment the plan became terminal, so
+ * cancelling a plan closes its chat now rather than three days after a party
+ * that will not happen. It still closes rather than deleting: people need to
+ * read "sorry, called it off" afterwards.
+ */
+export function planChatClosesAtMs(
+  plan: PlanTiming & {
+    /** The owner's chosen window. Undefined/invalid falls back to the default. */
+    closeDays?: number | null;
+    /** When the plan reached a terminal status, for cancelled/completed plans. */
+    terminalAt?: string | null;
+  },
+  nowMs = Date.now()
+): number | null {
+  const days = isPlanChatCloseDays(plan.closeDays) ? plan.closeDays : DEFAULT_PLAN_CHAT_CLOSE_DAYS;
+
+  // Terminal first, matching planPhase's ordering: a cancelled plan is over
+  // whatever its clock says, and its chat should not outlive it by days.
+  if (isTerminalPlanStatus(plan.status)) {
+    // `completed` is reached by the sweep at the plan's natural end, so the
+    // window still applies to it -- the difference is that `cancelled` and
+    // `expired` mean the plan never happened, and there is nothing to talk
+    // about afterwards.
+    if (plan.status === "completed") {
+      const endMs = resolvePlanEndMs(plan);
+      // A completed plan always has a resolvable end; the terminal stamp is
+      // the fallback for older rows completed before end times were reliable.
+      const base = endMs ?? parseMs(plan.terminalAt) ?? nowMs;
+      return base + days * DAY_MS;
+    }
+    return parseMs(plan.terminalAt) ?? nowMs;
+  }
+
+  const endMs = resolvePlanEndMs(plan);
+  if (endMs !== null) return endMs + days * DAY_MS;
+
+  // Undated: count from the same deadline at which the plan is set aside.
+  const deadline = unscheduledDeadlineMs(plan);
+  return deadline === null ? null : deadline + days * DAY_MS;
+}
+
+/** The Plan's end instant by the canonical rule, or null when it has no date. */
+function resolvePlanEndMs(plan: PlanTiming): number | null {
+  const startMs = parseMs(plan.startAt);
+  if (startMs === null) return null;
+  return parseMs(plan.endAt) ?? startMs + PLAN_DEFAULT_ACTIVE_MS;
+}
+
+/**
+ * Whether a Plan's chat should be closed by now.
+ *
+ * THE ONE RULE, read by the closure job and by anything that wants to explain
+ * the state. A null close time (an undated plan with no creation date) means
+ * the chat stays open -- never closed on the strength of a missing field.
+ */
+export function isPlanChatClosed(
+  plan: Parameters<typeof planChatClosesAtMs>[0],
+  nowMs = Date.now()
+): boolean {
+  const closesAt = planChatClosesAtMs(plan, nowMs);
+  return closesAt !== null && nowMs >= closesAt;
+}

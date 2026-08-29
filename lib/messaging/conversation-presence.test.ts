@@ -44,6 +44,8 @@ function conversation(overrides: Partial<ConversationView> = {}): ConversationVi
     // Not a Plan Chat by default: a direct conversation has no Plan lifecycle,
     // no Plan identity and no RSVP of its own.
     planPhase: null,
+    planChatClosed: null,
+    planEndedAt: null,
     planId: null,
     planCategory: null,
     planStartAt: null,

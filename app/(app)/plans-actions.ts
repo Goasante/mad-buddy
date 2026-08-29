@@ -6,7 +6,9 @@ import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { deliverNotification } from "@/lib/notifications/server";
 import {
   canTransitionPlan,
+  isPlanChatCloseDays,
   maxVotesPerUser,
+  planChatClosesAtMs,
   planTierLimitsFor,
   resolvePollWinner,
   validatePollOptions,
@@ -71,6 +73,57 @@ export async function rsvpAction(planId: string, status: string): Promise<PlanAc
 // Cancel / leave (spec §15, §16)
 // ---------------------------------------------------------------------------
 
+/**
+ * Archives a Plan's chat and files it under every member's Archived view.
+ *
+ * The same two switches the scheduled closure job flips, and for the same
+ * reason: conversations.status = 'archived' is what canSendMessage refuses, and
+ * conversation_user_preferences.archived_at is what moves a chat out of the
+ * active inbox. Nothing is deleted and membership is untouched, so the history
+ * stays readable to exactly the people who could read it before.
+ */
+async function closePlanChatNow(admin: ReturnType<typeof createSupabaseAdminClient>, planId: string) {
+  const nowIso = new Date().toISOString();
+  const { data: closed } = await admin
+    .from("conversations")
+    .update({ status: "archived", updated_at: nowIso })
+    .eq("context_type", "plan")
+    .eq("context_id", planId)
+    .eq("status", "active")
+    .select("id");
+  if (!closed?.length) return;
+
+  const { data: members } = await admin
+    .from("conversation_members")
+    .select("conversation_id, user_id")
+    .in(
+      "conversation_id",
+      closed.map((row) => row.id)
+    )
+    .eq("status", "joined");
+
+  for (const member of members ?? []) {
+    await admin
+      .from("conversation_user_preferences")
+      .upsert(
+        {
+          conversation_id: member.conversation_id,
+          user_id: member.user_id,
+          archived_at: nowIso,
+          updated_at: nowIso
+        },
+        { onConflict: "conversation_id,user_id", ignoreDuplicates: true }
+      );
+    // Fills only an empty archived_at, so a member's own earlier choice stands.
+    await admin
+      .from("conversation_user_preferences")
+      .update({ archived_at: nowIso, updated_at: nowIso })
+      .eq("conversation_id", member.conversation_id)
+      .eq("user_id", member.user_id)
+      .is("archived_at", null);
+  }
+}
+
 export async function cancelPlanAction(planId: string): Promise<PlanActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
@@ -98,6 +151,22 @@ export async function cancelPlanAction(planId: string): Promise<PlanActionState>
     .eq("creator_id", userId);
   if (error) return { ok: false, message: "Couldn't cancel the plan." };
 
+  /* A CANCELLED PLAN CLOSES ITS CHAT NOW.
+   *
+   * Cancelling used to leave the Plan Chat fully open forever: the plan
+   * vanished from Upcoming, everyone was notified it was off, and the chat
+   * stayed live indefinitely with nothing left to arrange. The hourly closure
+   * job would eventually catch it -- planChatClosesAtMs returns the terminal
+   * instant for a cancelled plan -- but making the host wait up to an hour to
+   * see the consequence of their own action is the wrong shape. Doing it here
+   * as well is safe precisely because both paths apply the same rule: the job
+   * re-filters on status = 'active' and simply finds nothing to do.
+   *
+   * CLOSED, NOT DELETED. Every message stays exactly where it was, and every
+   * member keeps reading it -- people need to see "sorry, called it off" and
+   * whatever was said afterwards. Only new messages stop. */
+  await closePlanChatNow(admin, planId);
+
   // Notify everyone who was going or maybe (not the host).
   const { data: participants } = await admin
     .from("plan_participants")
@@ -120,6 +189,103 @@ export async function cancelPlanAction(planId: string): Promise<PlanActionState>
   );
 
   return { ok: true, message: "This plan has been cancelled." };
+}
+
+// ---------------------------------------------------------------------------
+// Plan Chat closure window
+// ---------------------------------------------------------------------------
+
+/**
+ * The four windows a client may ask for. Anything else is refused before a
+ * single row is read.
+ *
+ * A NUMBER, NOT A TIMESTAMP. The client never proposes when the chat closes;
+ * it picks one of four durations and the server derives the instant from the
+ * Plan's own timing. There is nothing on the wire to forge -- a caller cannot
+ * push the close time out to next year, because no close time is transmitted.
+ */
+const closeWindowSchema = z.object({
+  planId: uuidSchema,
+  days: z.number().int().refine(isPlanChatCloseDays, "Choose 1, 3, 7 or 14 days.")
+});
+
+/**
+ * Sets how long a Plan's chat stays open after the Plan ends.
+ *
+ * HOST ONLY. Checked against plans.creator_id on the server, and enforced
+ * again by the `.eq("creator_id", userId)` on the write itself, so a
+ * participant calling this action directly changes nothing even if the first
+ * check were somehow passed. Being in the Plan Chat is not authorization to
+ * govern it.
+ *
+ * WORKS BEFORE AND AFTER THE SCHEDULED CLOSE. Extending a chat that has
+ * already closed reopens it, because closure state is derived from the window
+ * -- so a host who meant 14 days and picked 1 is not stuck with a dead chat.
+ * The reopen is deliberate and explicit rather than a side effect: the
+ * conversation goes back to 'active' only when the new window actually puts
+ * the close time in the future.
+ */
+export async function setPlanChatCloseWindowAction(input: unknown): Promise<PlanActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+
+  const parsed = closeWindowSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Choose 1, 3, 7 or 14 days." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  const { data: plan } = await admin
+    .from("plans")
+    .select("id, creator_id, status, start_at, end_at, created_at, cancelled_at, completed_at")
+    .eq("id", parsed.data.planId)
+    .maybeSingle();
+  if (!plan) return { ok: false, message: "Plan not found." };
+  if (plan.creator_id !== userId) {
+    return { ok: false, message: "Only the host can change this." };
+  }
+
+  const { error } = await admin
+    .from("plans")
+    .update({ chat_close_days: parsed.data.days, updated_at: new Date().toISOString() })
+    .eq("id", parsed.data.planId)
+    // Belt and braces: the authorization above already refused a non-host, and
+    // this makes a non-host write impossible rather than merely unreachable.
+    .eq("creator_id", userId);
+  if (error) return { ok: false, message: "Couldn't update the chat window." };
+
+  /* REOPEN, WHEN THE NEW WINDOW ACTUALLY SAYS SO.
+   *
+   * The closure job archives the conversation; nothing else would ever undo
+   * that, so a host lengthening the window after the chat closed would see no
+   * effect at all. Re-deriving the close time with the NEW window and
+   * reopening only when it lands in the future keeps one rule in charge of the
+   * state -- and shortening the window still leaves the chat closed, because
+   * the derived time is then in the past. */
+  const closesAtMs = planChatClosesAtMs(
+    {
+      status: plan.status,
+      startAt: plan.start_at,
+      endAt: plan.end_at,
+      createdAt: plan.created_at,
+      closeDays: parsed.data.days,
+      terminalAt: plan.cancelled_at ?? plan.completed_at
+    },
+    Date.now()
+  );
+  if (closesAtMs !== null && closesAtMs > Date.now()) {
+    await admin
+      .from("conversations")
+      .update({ status: "active", updated_at: new Date().toISOString() })
+      .eq("context_type", "plan")
+      .eq("context_id", parsed.data.planId)
+      // Only a chat this job closed. A conversation restricted or deleted for
+      // moderation reasons is never reopened by a scheduling choice.
+      .eq("status", "archived");
+  }
+
+  return { ok: true, message: `Chat closes ${parsed.data.days} day${parsed.data.days === 1 ? "" : "s"} after the plan.` };
 }
 
 export async function leavePlanAction(planId: string): Promise<PlanActionState> {

@@ -18,6 +18,7 @@ import {
   createPlanAction,
   createPollAction,
   rsvpAction,
+  setPlanChatCloseWindowAction,
   votePollAction
 } from "@/app/(app)/plans-actions";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +31,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
-import { isArchivedUnscheduledPlan, planPhase } from "@/lib/social/plans";
+import {
+  isArchivedUnscheduledPlan,
+  planPhase,
+  PLAN_CHAT_CLOSE_DAY_OPTIONS
+} from "@/lib/social/plans";
 import type { PlanCategory, PlanStatus, SubscriptionPlan } from "@/lib/supabase/database.types";
 import { PLAN_CATEGORIES, planCategoryLabel } from "@/lib/plans/plan-covers";
 import { PlanCover } from "@/components/plans/plan-cover";
@@ -74,6 +79,14 @@ export type PlanSummary = {
   myRsvp: string;
   attendees: Array<{ name: string; avatarUrl: string | null; rsvp: string; isMe: boolean; plan: SubscriptionPlan }>;
   polls: PlanPollSummary[];
+  /**
+   * How many days after the Plan ends its chat closes: one of 1/3/7/14.
+   *
+   * The WINDOW, not a close instant. The close time is derived from the Plan's
+   * live timing, so a plan whose date moves (a resolved time poll) moves its
+   * own closure with it and there is no stored timestamp to go stale.
+   */
+  chatCloseDays: number;
   /**
    * The Plan conversation, present ONLY when the viewer is a joined member.
    * Null for an invitee who has not responded yet, which is why the Plan Chat
@@ -315,6 +328,16 @@ export function PlansPageContent({
     });
   }
 
+  function setChatWindow(planId: string, days: number) {
+    startTransition(async () => {
+      /* The server validates the number again and re-checks that the caller is
+         the host. This call is a convenience, never the authorization. */
+      const result = await setPlanChatCloseWindowAction({ planId, days });
+      setFeedback(result.message);
+      if (result.ok) router.refresh();
+    });
+  }
+
   function cancelPlan(planId: string) {
     startTransition(async () => {
       const result = await cancelPlanAction(planId);
@@ -518,6 +541,7 @@ export function PlansPageContent({
         onVote={(pollId, optionId) => vote(pollId, optionId)}
         onCancel={() => selectedPlan && cancelPlan(selectedPlan.id)}
         onAddPoll={(question, pollType, options) => selectedPlan && addPoll(selectedPlan.id, question, pollType, options)}
+        onSetChatWindow={(days) => selectedPlan && setChatWindow(selectedPlan.id, days)}
         // The canonical Plan conversation on the Messages surface -- the same
         // route a Plan Chat opened from anywhere else lands on. Deliberately
         // NOT a DM with the organiser: a Plan has one conversation, and this is
@@ -1158,6 +1182,7 @@ function PlanDetailsModal({
   onVote,
   onCancel,
   onAddPoll,
+  onSetChatWindow,
   onOpenChat
 }: {
   plan: PlanSummary | null;
@@ -1167,6 +1192,7 @@ function PlanDetailsModal({
   onVote: (pollId: string, optionId: string) => void;
   onCancel: () => void;
   onAddPoll: (question: string, pollType: string, options: string[]) => void;
+  onSetChatWindow: (days: number) => void;
   onOpenChat: (conversationId: string) => void;
 }) {
   return (
@@ -1310,6 +1336,11 @@ function PlanDetailsModal({
           {plan.isHost && !TERMINAL.has(plan.status) ? (
             <div className="space-y-4 border-t border-border/70 pt-4">
               <AddPollForm pending={pending} onSubmit={onAddPoll} />
+              <ChatWindowChooser
+                value={plan.chatCloseDays}
+                pending={pending}
+                onChange={onSetChatWindow}
+              />
               <Button type="button" variant="danger" size="sm" onClick={onCancel} disabled={pending}>
                 Cancel plan
               </Button>
@@ -1318,6 +1349,50 @@ function PlanDetailsModal({
         </div>
       ) : null}
     </Modal>
+  );
+}
+
+/**
+ * Host-only choice of how long the Plan Chat stays open after the plan.
+ *
+ * FOUR OPTIONS, matching PLAN_CHAT_CLOSE_DAY_OPTIONS exactly. The list is
+ * short and closed on purpose: a free-form duration would be a timestamp the
+ * client proposes, and the whole point of the window is that it never is one.
+ * The server re-validates the number and re-checks the host, so this control
+ * is a convenience and never the authorization.
+ *
+ * A dropdown rather than a modal, matching how the rest of the app offers a
+ * short list of options.
+ */
+function ChatWindowChooser({
+  value,
+  pending,
+  onChange
+}: {
+  value: number;
+  pending: boolean;
+  onChange: (days: number) => void;
+}) {
+  return (
+    <AppSelect
+      id="plan-chat-window"
+      label="Chat closes after the plan"
+      value={String(value)}
+      disabled={pending}
+      size="form"
+      /* Says what closing does AND what it does not do. The fear this answers
+         is "will I lose the photos", so the answer is on screen before the
+         choice is made rather than after it. */
+      helperText="Everyone keeps the messages. The chat just stops taking new ones."
+      options={PLAN_CHAT_CLOSE_DAY_OPTIONS.map((days) => ({
+        value: String(days),
+        label: days === 1 ? "1 day later" : `${days} days later`
+      }))}
+      onChange={(next) => {
+        const days = Number(next);
+        if (Number.isFinite(days) && days !== value) onChange(days);
+      }}
+    />
   );
 }
 

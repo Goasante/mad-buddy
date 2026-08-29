@@ -15,7 +15,7 @@ import {
   READY_CHAT_ORPHAN_AGE_MS
 } from "@/lib/media/constants";
 import { deliverBirthdayNotifications } from "@/lib/profile/birthday-service";
-import { PLAN_DEFAULT_ACTIVE_MS } from "@/lib/social/plans";
+import { isPlanChatClosed, PLAN_DEFAULT_ACTIVE_MS } from "@/lib/social/plans";
 
 /**
  * Job handlers (feature architecture batch 14). Each returns a count of work
@@ -37,6 +37,10 @@ export class JobError extends Error {
 }
 
 export type JobHandler = (admin: Admin, payload: Record<string, unknown>) => Promise<number>;
+
+/** How many Plan Chats one closure tick may close. Bounds the transaction;
+ *  a backlog drains over successive hourly ticks rather than one long run. */
+const PLAN_CHAT_CLOSE_BATCH = 200;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -604,6 +608,144 @@ export const handleCompletePastPlans: JobHandler = async (admin) => {
   return completed.length;
 };
 
+/**
+ * Closes Plan Chats whose Plan ended long enough ago.
+ *
+ * CLOSE, NEVER DELETE. This job flips two switches and writes nothing else:
+ *
+ *   1. conversations.status -> 'archived', which is what actually stops new
+ *      messages. Every send path in the product (text, quick actions, media,
+ *      forwards, structured shares, polls, voice) resolves through
+ *      canSendMessage -> resolveCanSendMessage, and that refuses any
+ *      conversation whose status is not 'active'. Closing here therefore
+ *      closes all of them at once, and cannot be bypassed by calling a server
+ *      action directly -- there is no send path that does not pass it.
+ *   2. conversation_user_preferences.archived_at for each member, which is the
+ *      authority the inbox already uses to move a conversation out of the
+ *      active list and into the existing "Archived" filter, where it stays
+ *      readable and findable.
+ *
+ * No message is touched. No conversation is deleted. Membership is untouched,
+ * so exactly the people who could read the chat before can still read it.
+ *
+ * ONE RULE, SHARED. Whether a chat is due is decided by isPlanChatClosed in
+ * lib/social/plans.ts -- the same function the read path uses to explain the
+ * state. The job does not re-derive timing in SQL, which is how
+ * handleCompletePastPlans came to disagree with the Plans page for weeks.
+ *
+ * IDEMPOTENT BY CONSTRUCTION. The conversation query filters on
+ * status = 'active', so a second run sees nothing it already closed. The
+ * per-member preference write is an upsert keyed on (conversation_id, user_id)
+ * that only fills a null archived_at, so it never overwrites the timestamp
+ * from the first run and never re-archives a chat a member deliberately
+ * un-archived after closure.
+ *
+ * BOUNDED. It starts from the partial index on active Plan Chats rather than
+ * scanning conversations, resolves their Plans in one batched read, and caps
+ * the batch -- a backlog drains over several ticks instead of one long
+ * transaction.
+ */
+export const handleClosePlanChats: JobHandler = async (admin) => {
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+
+  // Active Plan Chats only: anything already archived is done, and a
+  // restricted or deleted conversation is not this job's business.
+  const { data: chats, error: chatsError } = await admin
+    .from("conversations")
+    .select("id, context_id")
+    .eq("context_type", "plan")
+    .eq("status", "active")
+    .limit(PLAN_CHAT_CLOSE_BATCH);
+  if (chatsError) throw new JobError("DATABASE_TIMEOUT", chatsError.message);
+  if (!chats?.length) return 0;
+
+  const planIds = [...new Set(chats.map((chat) => chat.context_id).filter((id): id is string => Boolean(id)))];
+  if (planIds.length === 0) return 0;
+
+  const { data: plans, error: plansError } = await admin
+    .from("plans")
+    .select("id, status, start_at, end_at, created_at, cancelled_at, completed_at, chat_close_days")
+    .in("id", planIds);
+  if (plansError) throw new JobError("DATABASE_TIMEOUT", plansError.message);
+
+  const planById = new Map((plans ?? []).map((plan) => [plan.id, plan]));
+
+  const dueConversationIds = chats
+    .filter((chat) => {
+      const plan = chat.context_id ? planById.get(chat.context_id) : undefined;
+      /* NO PLAN, NO CLOSURE. A Plan Chat whose Plan row is missing is left
+         open on purpose. Closing on the strength of an absent record would
+         mean a failed read, a replication lag or a hard-deleted fixture could
+         silently shut a live conversation -- and this job runs unattended
+         every hour. Leaving it open is visible and reversible; closing it is
+         neither. */
+      if (!plan) return false;
+      return isPlanChatClosed(
+        {
+          status: plan.status,
+          startAt: plan.start_at,
+          endAt: plan.end_at,
+          createdAt: plan.created_at,
+          closeDays: plan.chat_close_days,
+          terminalAt: plan.cancelled_at ?? plan.completed_at
+        },
+        nowMs
+      );
+    })
+    .map((chat) => chat.id);
+
+  if (dueConversationIds.length === 0) return 0;
+
+  // THE CLOSURE ITSELF. Re-filtered on status = 'active' so two overlapping
+  // workers cannot both count the same chat as work done.
+  const { data: closed, error: closeError } = await admin
+    .from("conversations")
+    .update({ status: "archived", updated_at: nowIso })
+    .in("id", dueConversationIds)
+    .eq("status", "active")
+    .select("id");
+  if (closeError) throw new JobError("DATABASE_TIMEOUT", closeError.message);
+  if (!closed?.length) return 0;
+
+  const closedIds = closed.map((row) => row.id);
+
+  // Move it out of every member's active inbox. Joined members only: someone
+  // who left or was removed has no inbox row to tidy.
+  const { data: members } = await admin
+    .from("conversation_members")
+    .select("conversation_id, user_id")
+    .in("conversation_id", closedIds)
+    .eq("status", "joined");
+
+  for (const member of members ?? []) {
+    /* Only fills an empty archived_at. A member who had already archived this
+       chat keeps their own timestamp, and -- more importantly -- a member who
+       un-archives a closed chat later is not re-archived by the next tick,
+       because the conversation is no longer 'active' and never reaches this
+       code again. */
+    await admin
+      .from("conversation_user_preferences")
+      .upsert(
+        {
+          conversation_id: member.conversation_id,
+          user_id: member.user_id,
+          archived_at: nowIso,
+          updated_at: nowIso
+        },
+        { onConflict: "conversation_id,user_id", ignoreDuplicates: true }
+      );
+    await admin
+      .from("conversation_user_preferences")
+      .update({ archived_at: nowIso, updated_at: nowIso })
+      .eq("conversation_id", member.conversation_id)
+      .eq("user_id", member.user_id)
+      .is("archived_at", null);
+  }
+
+  return closed.length;
+};
+
 export const handleExpireStatuses: JobHandler = async (admin) => {
   const nowIso = new Date().toISOString();
   const { data, error } = await admin.from("user_statuses").delete().lt("expires_at", nowIso).select("id");
@@ -952,6 +1094,7 @@ export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
     return processEarnedRewards(admin);
   },
   "expiry.plans": handleCompletePastPlans,
+  "plans.close_chats": handleClosePlanChats,
   "expiry.statuses": handleExpireStatuses,
   "expiry.visibility_sessions": handleExpireVisibilitySessions,
   "expiry.pings": handleExpirePings,

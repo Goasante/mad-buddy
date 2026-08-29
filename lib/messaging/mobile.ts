@@ -20,7 +20,12 @@ import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import type { ConversationRole, EventCircleStatus, QuickActionType, SubscriptionPlan } from "@/lib/supabase/database.types";
 import { hasVerifiedAccountStatus, type VerificationRow } from "@/lib/trust/verified-account";
 import { isConversationVisible } from "@/lib/messaging/conversation-visibility";
-import { planPhase, type PlanPhase } from "@/lib/social/plans";
+import {
+  isPlanChatClosed,
+  planPhase,
+  PLAN_DEFAULT_ACTIVE_MS,
+  type PlanPhase
+} from "@/lib/social/plans";
 import type { PlanCategory, PlanStatus } from "@/lib/supabase/database.types";
 
 /**
@@ -153,6 +158,24 @@ export type ConversationView = {
    * and Events, so nothing else can be mistaken for a Plan.
    */
   planPhase: PlanPhase | null;
+  /**
+   * Whether this Plan Chat has closed. Null when the conversation is not a
+   * Plan Chat.
+   *
+   * DERIVED SERVER-SIDE from the Plan's live timing and the host's chosen
+   * window, exactly like planPhase above -- the client is told the answer, not
+   * the ingredients, so no browser clock and no client-side threshold can
+   * disagree with the server about whether the chat is open. A HINT FOR
+   * RENDERING ONLY: what actually stops a message is
+   * conversations.status = 'archived', re-checked on the server on every send.
+   */
+  planChatClosed: boolean | null;
+  /**
+   * When the Plan ended, for the closed-chat notice ("The plan ended on
+   * 30 Aug"). Null when this is not a Plan Chat or the Plan has no resolvable
+   * end.
+   */
+  planEndedAt: string | null;
   /**
    * The Event Room this conversation IS, or null when it is not a Room chat.
    *
@@ -828,7 +851,12 @@ export async function listConversations(userId: string): Promise<ConversationVie
      * One batched query keyed by plan id, so a hundred Plan Chats cost the
      * same single round trip as one. */
     planContextIds.length > 0
-      ? admin.from("plans").select("id, title, category, status, start_at, end_at").in("id", planContextIds)
+      ? admin
+          .from("plans")
+          .select(
+            "id, title, category, status, start_at, end_at, created_at, cancelled_at, completed_at, chat_close_days"
+          )
+          .in("id", planContextIds)
       : Promise.resolve({ data: [] }),
     /* Event Room identity: the Room's own name, and the Event it belongs to.
      * Batched exactly like the Plan query above -- one round trip for the whole
@@ -894,6 +922,36 @@ export async function listConversations(userId: string): Promise<ConversationVie
         planNowMs
       )
     ])
+  );
+  /* Closure, resolved by the same shared rule the closure job uses.
+   *
+   * WHY THIS IS DERIVED AS WELL AS STORED. conversations.status is the
+   * authority and is what refuses a send; this derived answer exists because
+   * the hourly job may not have run yet, and a chat that is due to close should
+   * present as closed immediately rather than looking open for up to an hour.
+   * Either being true is enough to render the closed state, so the UI is never
+   * MORE permissive than the server -- only ever equally or less. */
+  const planClosureByPlanId = new Map(
+    (planTimings ?? []).map((plan) => {
+      const closed = isPlanChatClosed(
+        {
+          status: plan.status as PlanStatus,
+          startAt: plan.start_at,
+          endAt: plan.end_at,
+          createdAt: plan.created_at,
+          closeDays: plan.chat_close_days,
+          terminalAt: plan.cancelled_at ?? plan.completed_at
+        },
+        planNowMs
+      );
+      // The Plan's end by the canonical rule, so the notice can name a date.
+      const endedAt =
+        plan.end_at ??
+        (plan.start_at
+          ? new Date(Date.parse(plan.start_at) + PLAN_DEFAULT_ACTIVE_MS).toISOString()
+          : null);
+      return [plan.id, { closed, endedAt }] as const;
+    })
   );
   const nowIso = new Date().toISOString();
   const views: ConversationView[] = [];
@@ -995,6 +1053,19 @@ export async function listConversations(userId: string): Promise<ConversationVie
       planPhase:
         conversation.context_type === "plan" && conversation.context_id
           ? planPhaseByPlanId.get(conversation.context_id) ?? null
+          : null,
+      /* CLOSED IF EITHER SAYS SO. The stored status is what the server
+         enforces; the derived rule covers the window between a Plan ending and
+         the hourly job running. Taking the OR means the composer is never
+         offered when a send would be refused. */
+      planChatClosed:
+        conversation.context_type === "plan" && conversation.context_id
+          ? conversation.status === "archived" ||
+            (planClosureByPlanId.get(conversation.context_id)?.closed ?? false)
+          : null,
+      planEndedAt:
+        conversation.context_type === "plan" && conversation.context_id
+          ? planClosureByPlanId.get(conversation.context_id)?.endedAt ?? null
           : null,
       /* The Plan this chat belongs to, for the cover treatment and the way
        * back to the Plan itself. Identity only -- authorization is still the

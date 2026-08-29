@@ -43,6 +43,8 @@ export type JobType =
   | "birthdays.notify"
   | "rewards.earned_premium"
   | "plans.lifecycle_side_effect"
+  // Plan Chat closure: read-only + archived once the Plan is well over.
+  | "plans.close_chats"
   | "events.update_fanout"
   // Expiry sweeps (spec §31).
   | "expiry.plans"
@@ -190,6 +192,12 @@ export const SCHEDULE: readonly ScheduleSpec[] = [
   { jobType: "birthdays.notify", everyMinutes: 60, priority: 5 },
   { jobType: "rewards.earned_premium", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "expiry.plans", everyMinutes: 60, priority: 5 },
+  /* Plan Chat closure. Hourly, alongside the plan completion sweep it depends
+     on: a plan reaches `completed` there, and its chat closes here. Priority 6
+     because nothing is unsafe about a chat closing an hour late -- unlike the
+     safety alert at priority 1 -- and the batch is bounded so a backlog simply
+     drains over the next few ticks. */
+  { jobType: "plans.close_chats", everyMinutes: 60, priority: 6 },
   { jobType: "expiry.statuses", everyMinutes: 15, priority: 5 },
   { jobType: "expiry.visibility_sessions", everyMinutes: 15, priority: 2 },
   { jobType: "expiry.pings", everyMinutes: 15, priority: 5 },

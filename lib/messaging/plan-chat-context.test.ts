@@ -42,6 +42,8 @@ function conversation(overrides: Partial<ConversationView> = {}): ConversationVi
     otherTrustedSince: null,
     otherIsVerifiedAccount: false,
     planPhase: "upcoming",
+    planChatClosed: false,
+    planEndedAt: null,
     ...overrides
   };
 }
@@ -65,7 +67,28 @@ describe("a Plan Chat is named after its Plan", () => {
   });
 
   it("reads the title from plans, so a renamed Plan renames its chat", () => {
-    expect(mobile).toContain('admin.from("plans").select("id, title, category, status, start_at, end_at")');
+    /* THE CONTRACT, not the exact select string.
+     *
+     * This pinned the literal `.select("id, title, category, status, start_at,
+     * end_at")` and broke the moment a column was added for an unrelated
+     * feature -- while the behaviour it exists to protect was completely
+     * intact. What actually matters is that the title comes from a live read
+     * of `plans` keyed by id, and is never copied onto the conversation row
+     * (which is what would make a rename need a migration). */
+    const from = mobile.indexOf('.from("plans")');
+    expect(from, "mobile.ts no longer reads the plans table at all").toBeGreaterThan(-1);
+    // Just the query: from `.from("plans")` to the end of its `.in(...)` call,
+    // so the assertion cannot be satisfied by the word "title" appearing
+    // somewhere else entirely in the file.
+    const planQuery = mobile.slice(from, mobile.indexOf('planContextIds)', from) + 'planContextIds)'.length);
+    expect(planQuery, "the Plan title is no longer selected from plans").toContain("title");
+    expect(planQuery, "the Plan query is no longer keyed by the conversation's plan ids").toContain(
+      'in("id", planContextIds)'
+    );
+    // And the title still reaches the view through that live read.
+    expect(mobile).toContain("planIdentityByPlanId");
+    // Never denormalised onto conversations: that is the thing this protects.
+    expect(mobile).not.toContain('conversations").update({ title');
   });
 
   it("leaves direct and Circle naming alone", () => {
