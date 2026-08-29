@@ -99,6 +99,25 @@ async function conversationMembers(conversationId: string) {
 beforeAll(async () => {
   if (!isLocal) return;
   admin = (await import("@/lib/supabase/admin")).createSupabaseAdminClient();
+
+  /* SELF-CLEANING FIXTURE.
+   *
+   * Every case here converts an UpFor into a Plan, and the canonical lifecycle
+   * enforces a per-creator active-Plan limit. Left to accumulate, the suite
+   * eventually caps its own fixture user and then fails with
+   * PLAN_ACTIVE_LIMIT_REACHED -- a test-data problem that reads exactly like a
+   * product regression, which cost a diagnosis on the release run. Clearing the
+   * Plans this suite created keeps it re-runnable against a persistent
+   * database. Scoped to Plans converted from THIS user's test UpFors. */
+  const { data: sessions } = await admin
+    .from("hangout_sessions")
+    .select("id")
+    .eq("owner_id", USERS.A);
+  const sessionIds = (sessions ?? []).map((row: { id: string }) => row.id);
+  if (sessionIds.length > 0) {
+    await admin.from("plans").delete().in("source_hangout_id", sessionIds);
+    await admin.from("hangout_sessions").delete().in("id", sessionIds);
+  }
 });
 
 describeLocal("UpFor conversion puts the right people in the Plan Chat", () => {
