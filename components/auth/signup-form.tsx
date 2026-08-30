@@ -81,10 +81,6 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
     setTurnstileToken(token);
   }, []);
 
-  /* method="post" is a safety fallback for when the page's JavaScript has not
-   * run: a form with no method defaults to GET and would put every field in the
-   * URL (browser history, access logs, proxies). Submission normally goes
-   * through onSubmit. Full note in login-form.tsx. */
   return (
     <form className="space-y-4" method="post" onSubmit={handleSubmit(onSubmit)} noValidate>
       <FormField htmlFor="email" label="Email address" error={errors.email?.message}>
@@ -112,7 +108,7 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
             onClick={() => setShowPassword((current) => !current)}
             aria-label={showPassword ? "Hide password" : "Show password"}
             title={showPassword ? "Hide password" : "Show password"}
-            className="focus-ring absolute right-0.5 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+            className="focus-ring absolute right-0.5 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
           >
             {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
           </button>
@@ -130,18 +126,13 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
           />
           <span>
             I agree to the{" "}
-            <Link href="/terms" className="font-semibold text-foreground underline underline-offset-2 hover:text-accent">
-              Terms
-            </Link>{" "}
+            <Link href="/terms" className="font-semibold text-foreground underline underline-offset-2 hover:text-accent">Terms</Link>{" "}
             and acknowledge the{" "}
-            <Link href="/privacy" className="font-semibold text-foreground underline underline-offset-2 hover:text-accent">
-              Privacy Policy
-            </Link>
-            .
+            <Link href="/privacy" className="font-semibold text-foreground underline underline-offset-2 hover:text-accent">Privacy Policy</Link>.
           </span>
         </label>
         {errors.acceptedPolicy?.message ? (
-          <p className="mt-1.5 text-sm text-red-300" role="alert">
+          <p className="mt-1.5 text-sm text-red-700 dark:text-red-300" role="alert">
             {errors.acceptedPolicy.message}
           </p>
         ) : null}
@@ -156,17 +147,17 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
 
       {actionState ? (
         <div
-          className={`flex items-center gap-2 rounded-xl border p-3 text-sm ${
+          className={`flex items-start gap-2 rounded-xl border p-3 text-sm leading-6 ${
             actionState.ok
-              ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-50"
-              : "border-amber-300/20 bg-amber-300/10 text-amber-50"
+              ? "border-emerald-600/20 bg-emerald-600/10 text-emerald-900 dark:text-emerald-100"
+              : "border-amber-500/20 bg-amber-500/10 text-amber-900 dark:text-amber-100"
           }`}
           role="status"
         >
           {actionState.ok ? (
-            <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           ) : (
-            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           )}
           {actionState.message}
         </div>
@@ -183,9 +174,7 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
 
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-foreground hover:text-accent">
-          Log in
-        </Link>
+        <Link href="/login" className="font-semibold text-foreground hover:text-accent">Log in</Link>
       </p>
     </form>
   );
