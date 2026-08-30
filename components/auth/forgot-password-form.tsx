@@ -30,9 +30,7 @@ export function ForgotPasswordForm() {
     formState: { errors }
   } = useForm<ForgotPasswordFormValues>({
     resolver: zodResolver(forgotPasswordSchema),
-    defaultValues: {
-      email: ""
-    }
+    defaultValues: { email: "" }
   });
 
   function onSubmit(values: ForgotPasswordFormValues) {
@@ -50,13 +48,9 @@ export function ForgotPasswordForm() {
     setTurnstileToken(token);
   }, []);
 
-  /* method="post" is a safety fallback for when the page's JavaScript has not
-   * run: a form with no method defaults to GET and would put every field in the
-   * URL (browser history, access logs, proxies). Submission normally goes
-   * through onSubmit. Full note in login-form.tsx. */
   return (
     <form className="space-y-4" method="post" onSubmit={handleSubmit(onSubmit)}>
-      <FormField htmlFor="email" label="Email" error={errors.email?.message}>
+      <FormField htmlFor="email" label="Email address" error={errors.email?.message}>
         <Input id="email" type="email" autoComplete="email" placeholder="you@example.com" {...register("email")} />
       </FormField>
       <TurnstileWidget
@@ -66,11 +60,11 @@ export function ForgotPasswordForm() {
         resetKey={turnstileResetKey}
       />
       {actionState ? (
-        <div className={`flex items-center gap-2 rounded-md border p-3 text-sm ${actionState.ok ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-50" : "border-amber-300/20 bg-amber-300/10 text-amber-50"}`}>
+        <div className={`flex items-start gap-2 rounded-xl border p-3 text-sm leading-6 ${actionState.ok ? "border-emerald-600/20 bg-emerald-600/10 text-emerald-900 dark:text-emerald-100" : "border-amber-500/20 bg-amber-500/10 text-amber-900 dark:text-amber-100"}`} role="status">
           {actionState.ok ? (
-            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           ) : (
-            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           )}
           {actionState.message}
         </div>
@@ -80,16 +74,12 @@ export function ForgotPasswordForm() {
         className="w-full"
         disabled={isPending || Boolean(turnstileSiteKey && !turnstileToken)}
       >
-        {isPending ? (
-          <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-        ) : null}
-        Send reset link
+        {isPending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
+        {isPending ? "Sending..." : "Send reset link"}
       </Button>
       <p className="text-center text-sm text-muted-foreground">
         Remembered it?{" "}
-        <Link href="/login" className="font-semibold text-foreground hover:text-accent">
-          Back to login
-        </Link>
+        <Link href="/login" className="font-semibold text-foreground hover:text-accent">Back to login</Link>
       </p>
     </form>
   );
