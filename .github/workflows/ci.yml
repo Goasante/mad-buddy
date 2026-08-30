@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, feat/landing-god-mode-redesign]
+    branches: [main]
   pull_request:
     branches: [main]
 
