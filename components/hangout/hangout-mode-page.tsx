@@ -19,7 +19,6 @@ import {
 import {
   convertHangoutToPlanAction,
   endHangoutAction,
-  getOwnerHangoutRequestsAction,
   getOwnerRequestsByUpForAction,
   leaveHangoutAction,
   getVisibleHangoutsAction,
@@ -276,7 +275,6 @@ export function HangoutModePage({
   const [isPending, startTransition] = useTransition();
 
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const requestRefreshRef = useRef<Promise<void> | null>(null);
 
   /* The feed is no longer narrowed here. UpForFeed owns discovery now: the
    * four modes are the only filter, and they are applied by the tested rules
@@ -289,7 +287,6 @@ export function HangoutModePage({
 
   // Derive activation straight from the source of truth so an expired session
   // flips the orb back to inactive without a manual refresh.
-  const isActive = activeHangout !== null && Date.parse(activeHangout.endsAt) > nowMs;
 
   /* The clock now also re-reads on visibilitychange/pageshow, so a phone that
      spent forty minutes in a pocket shows the correct countdown on the first
@@ -310,51 +307,43 @@ export function HangoutModePage({
   // Canonical refetch of the owner's join requests — the database is the source
   // of truth, never client-side arithmetic. Adopts the server list only for the
   // current active Hangout, so requests from an unrelated session never leak in.
-  const activeHangoutId = activeHangout?.id ?? null;
-  const refreshRequests = useCallback(async () => {
-    if (requestRefreshRef.current) return requestRefreshRef.current;
-
-    const refresh = (async () => {
-      try {
-        const state = await withTimeout(getOwnerHangoutRequestsAction(), {
-          operation: "refresh hangout requests"
-        });
-        if (state.hangoutId && state.hangoutId === activeHangoutId) {
-          setRequests(state.requests);
-        } else if (!state.hangoutId) {
-          setRequests([]);
-        }
-      } catch {
-        // A failed refetch simply leaves the last known canonical state in place.
-      } finally {
-        requestRefreshRef.current = null;
-      }
-    })();
-
-    requestRefreshRef.current = refresh;
-    return refresh;
-  }, [activeHangoutId]);
 
   // Live count updates for the owner: refetch on an interval while the Hangout
   // is active and whenever the tab regains focus. Reuses the project's server-
   // action data pattern rather than introducing a new realtime framework. The
   // interval and listener are cleaned up on unmount or when the Hangout ends.
+  /* ONE loader for the per-session request map. Used on mount, by the 15s
+     poll, and by every post-mutation refresh, so there is a single way the
+     counts and lists become current. */
+  const loadOwnerRequests = useCallback(async () => {
+    try {
+      const byUpFor = await withTimeout(getOwnerRequestsByUpForAction(), {
+        operation: "load owner UpFor requests"
+      });
+      setRequestsByUpFor(byUpFor);
+    } catch {
+      // Leaves the last known map in place.
+    }
+  }, []);
+
+  /* Keep the per-session request counts fresh while the owner is looking.
+
+     Repointed from refreshRequests to the shared seam: the old one maintained
+     `requests`, which only the removed owner hero read, so this interval was
+     polling every 15 seconds to update state nothing rendered. It now feeds
+     the map the rows and the management sheet actually read. */
   useEffect(() => {
-    if (!isActive) return;
-    // Initial refetch is scheduled (not called synchronously in the effect body)
-    // so it never triggers a cascading render on mount.
-    const initial = setTimeout(() => void refreshRequests(), 0);
+    if (ownedUpFors.length === 0) return;
     const interval = setInterval(() => {
-      if (!document.hidden) void refreshRequests();
+      if (!document.hidden) void loadOwnerRequests();
     }, 15_000);
-    const onFocus = () => void refreshRequests();
+    const onFocus = () => void loadOwnerRequests();
     window.addEventListener("focus", onFocus);
     return () => {
-      clearTimeout(initial);
       clearInterval(interval);
       window.removeEventListener("focus", onFocus);
     };
-  }, [isActive, refreshRequests]);
+  }, [ownedUpFors.length, loadOwnerRequests]);
 
   useEffect(() => {
     return () => {
@@ -609,40 +598,21 @@ export function HangoutModePage({
    * same state, plus a network round trip.
    */
   const refreshOwnedUpFors = useCallback(async () => {
-    try {
-      const byUpFor = await withTimeout(getOwnerRequestsByUpForAction(), {
-        operation: "refresh owner UpFor requests"
-      });
-      setRequestsByUpFor(byUpFor);
-      // The owner collection itself is a server prop, so the canonical list is
-      // re-resolved by the route rather than reassembled here.
-      router.refresh();
-    } catch {
-      // A failed refetch leaves the last known canonical state in place.
-    }
-  }, [router]);
+    await loadOwnerRequests();
+    // The owner collection itself is a server prop, so the canonical list is
+    // re-resolved by the route rather than reassembled here.
+    router.refresh();
+  }, [router, loadOwnerRequests]);
 
-  /* Load the per-session requests once on mount.
-     Without this the map starts empty and is only ever filled by a mutation,
-     so a plain page load showed "Requests to join (0)" on every sheet even
-     when requests existed -- caught by driving the real screen, not by any
-     test. Owner-scoped and read-only, so it is safe to run on arrival. */
+  /* Load the per-session requests on arrival. Without this the map started
+     empty and was only filled by a mutation, so a plain page load showed
+     "Requests to join (0)" on every sheet even when requests existed. */
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const byUpFor = await withTimeout(getOwnerRequestsByUpForAction(), {
-          operation: "load owner UpFor requests"
-        });
-        if (!cancelled) setRequestsByUpFor(byUpFor);
-      } catch {
-        // Leaves the empty map; the sheet simply shows no requests yet.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    // Scheduled rather than called in the effect body, so the first paint
+    // is never followed by a synchronous cascading render.
+    const t = setTimeout(() => void loadOwnerRequests(), 0);
+    return () => clearTimeout(t);
+  }, [loadOwnerRequests]);
 
   /**
    * End one specific UpFor.
@@ -678,9 +648,15 @@ export function HangoutModePage({
     startTransition(async () => {
       const result = await respondHangoutRequestAction(requestId, response);
       showToast(result.message, !result.ok);
-      // Re-derive the list from the database rather than trusting a local edit,
-      // so the count stays canonical after accept/decline.
-      if (result.ok) await refreshRequests();
+      /* Re-derive from the database rather than trusting a local edit, so the
+         count stays canonical after accept/decline.
+
+         Through the SHARED seam, not the legacy single-session refresher:
+         refreshRequests writes `requests`, which only the removed owner hero
+         read. The management sheet reads requestsByUpFor, so accepting left
+         the open sheet showing the request still pending even though the row
+         had already changed in the database. */
+      if (result.ok) await refreshOwnedUpFors();
     });
   }
 
