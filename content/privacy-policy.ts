@@ -1,6 +1,6 @@
 export { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
 export const PRIVACY_POLICY_EFFECTIVE_DATE = "23 July 2026";
-export const PRIVACY_POLICY_LAST_UPDATED = "23 July 2026";
+export const PRIVACY_POLICY_LAST_UPDATED = "30 August 2026";
 
 export const legalContact = {
   companyName: "Godfred Ofosu Asante",
@@ -9,47 +9,67 @@ export const legalContact = {
   supportEmail: "godfredasante004@gmail.com"
 } as const;
 
+/**
+ * SUBSTANTIVE POLICY CHANGE — OWNER APPROVED 30 AUGUST 2026.
+ *
+ * The policy now distinguishes Muddy proximity from deliberately enabled Linkr
+ * discovery. This is not a styling-only edit and should remain visible in the
+ * release review. The approved product truth is that neither mode exposes
+ * exact GPS coordinates, street location, exact numerical distance, a live map
+ * position, or location history to the other user.
+ */
 export const privacyPolicyMarkdown = `
 # Mad Buddy Privacy Policy
 
 ## Introduction
 
-Mad Buddy ("we", "us") is a private social proximity app operated by ${legalContact.companyName}, ${legalContact.businessAddress}. It lets friends you have mutually approved ("Muddies") know roughly when you are nearby without ever sharing your exact location. This policy explains what we collect, why, what your friends can and cannot see, and what control you have.
+Mad Buddy ("we", "us") is a private social proximity app operated by ${legalContact.companyName}, ${legalContact.businessAddress}. It helps mutually approved friends ("Muddies") notice roughly when they are nearby and also lets you deliberately enable Linkr when you want to discover someone new. In both cases, the ordinary proximity experience is designed not to reveal your exact location to another user. This policy explains what we collect, why, what other people can and cannot see, and what control you have.
 
 ## What we collect
 
 * **Account information:** your email address, display name, username, and password (stored as a hash by our authentication provider; we never see your plain-text password).
 * **Profile information you choose to add:** a bio, a mood status, and a profile photo.
 * **A single location signal:** when your glow is on, your device sends your current coordinates over an encrypted connection. We store only your most recent signal: each update overwrites the previous one. We do not keep a location history.
-* **Derived proximity signals:** short-lived records of which proximity tier (Close, Near, or Far) applied between you and a Muddy, kept for the app's recent-activity features and designed to expire after 15 minutes.
+* **Derived proximity signals:** short-lived records of broad proximity used by Mad Buddy's proximity features, designed to expire after 15 minutes.
 * **Notifications and social activity:** friend requests, waves, meet-up pings, and in-app notifications you send or receive.
 * **Billing information:** if you subscribe, our payment provider (Paystack) processes your payment. We store a reference to your subscription status and plan, never your card number.
 
 ## How location actually works
 
 * Location is collected only in the foreground, when the app is open and your glow is on. There is no background tracking.
-* Your raw coordinates are processed on our servers only. They are converted into a broad proximity tier before anything is shared.
-* **Your Muddies never receive your coordinates, a map position, your exact distance, your direction of travel, or your street address.** Our server code enforces this with an automated check that rejects any response containing location-precise fields.
-* Turning on Ghost Mode removes you from every Muddy's nearby view immediately. This is enforced on the server, not just hidden in the interface.
+* Your raw coordinates are processed on our servers only. They are converted into broad proximity information before anything is shared with another user.
+* **Other users do not receive your coordinates, a live map position, your exact numerical distance, your direction of travel, your street address, or your location history through Mad Buddy's ordinary proximity experience.**
+* Turning on Ghost Mode removes you from nearby visibility immediately. This is enforced on the server, not just hidden in the interface.
 
-## What your Muddies can see
+## Muddy proximity
 
-* A privacy-safe proximity tier: Close, Near, or Far.
-* Your chosen display name, username, profile photo, bio, and mood status.
-* Whether you have chosen to be visible right now.
+* Muddies are people you have mutually approved.
+* Approved Muddies may receive privacy-preserving proximity information according to your visibility settings.
+* They may see a broad sense that you are nearby together with the profile information you have chosen to make available in that relationship.
+* Removing a Muddy or blocking someone ends their Muddy proximity access.
 
-## What your Muddies can never see
+## Linkr discovery
 
-* Exact coordinates or a map pin.
-* Exact distance or direction.
-* Street addresses.
-* Any location history.
+* Linkr is different from Muddy proximity. It is a discovery mode you deliberately enable when you want to meet someone new.
+* While you have Linkr enabled, eligible people who are not yet Muddies may receive a privacy-safe approximate proximity signal as part of discovery.
+* Linkr does not give another person your exact GPS coordinates, street address or street-level location, exact numerical distance, live map position, direction of travel, or location history.
+* A Linkr discovery does not make someone a Muddy automatically. A continuing connection still requires mutual choice.
+* When you stop your Linkr session, Linkr discovery stops.
 
-## Who can see you at all
+## What other users can never see through proximity
 
-* Only people you have both approved as Muddies can ever appear in each other's nearby view. There is no public discovery of your location signal.
+* Exact GPS coordinates.
+* A live map position or map pin showing where you are.
+* Exact numerical distance or direction of travel.
+* Street addresses or street-level location.
+* Location history.
+
+## Who can see proximity information
+
+* For Muddy proximity, only people you have mutually approved as Muddies can receive your Muddy proximity signal, subject to your visibility settings.
+* For Linkr, eligible people who are not yet Muddies may receive a privacy-safe approximate proximity signal only while you have deliberately enabled Linkr discovery.
 * Blocking someone removes proximity visibility and interaction in both directions.
-* Removing a Muddy ends their access to your proximity signal.
+* Removing a Muddy ends their Muddy proximity access.
 
 ## How long we keep data
 
@@ -73,6 +93,7 @@ Our server logs record request metadata (route, status, timing, error category) 
 ## Your rights and choices
 
 * Pause your visibility or turn on Ghost Mode at any time.
+* Stop a Linkr discovery session when you no longer want discovery active.
 * Export a copy of your account data from Settings.
 * Delete your account from Settings at any time.
 * Contact us about your data at ${legalContact.privacyEmail}.
