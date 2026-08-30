@@ -1,5 +1,7 @@
 "use client";
 
+import type { Route } from "next";
+import { upForCountdownLabel } from "@/lib/social/upfor-countdown";
 import { motion, useMotionValue, useTransform } from "framer-motion";
 import Link from "next/link";
 import { CalendarDays, MapPin } from "lucide-react";
@@ -36,12 +38,34 @@ const VISIBLE = 3;
 /** Drag distance, in px, that advances the stack. */
 const ADVANCE_AT = 90;
 
+/**
+ * What Coming Up can render.
+ *
+ * The UpFor shape is declared HERE rather than added to UpcomingAgendaItem,
+ * which is the shared contract message sharing depends on. Widening that type
+ * broke sharing the first time it was tried, and sharing has no business
+ * learning about UpFor because Home wanted a third card.
+ */
+export type ComingUpUpForItem = {
+  kind: "upfor";
+  id: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  href: Route;
+};
+
+type ComingUpRenderItem = HomeUpcomingPlan | EventAgendaItem | ComingUpUpForItem;
+
 export function PlanStack({
   plans,
   onJoin,
-  pending = false
+  pending = false,
+  nowMs = Date.now()
 }: {
-  plans: readonly (HomeUpcomingPlan | EventAgendaItem)[];
+  plans: readonly ComingUpRenderItem[];
+  /** Clock for countdown labels; supplied by the surface that already ticks. */
+  nowMs?: number;
   onJoin: (plan: HomeUpcomingPlan) => void;
   pending?: boolean;
 }) {
@@ -69,7 +93,7 @@ export function PlanStack({
 
   // One card needs no stack, no drag and no counter.
   if (count === 1) {
-    return <AgendaCard item={plans[0]} onJoin={onJoin} pending={pending} />;
+    return <AgendaCard nowMs={nowMs} item={plans[0]} onJoin={onJoin} pending={pending} />;
   }
 
   const visible = Array.from({ length: Math.min(VISIBLE, count) }, (_, depth) => ({
@@ -122,7 +146,7 @@ export function PlanStack({
                 }}
                 aria-hidden={!isTop}
               >
-                <AgendaCard item={item} onJoin={onJoin} pending={pending} />
+                <AgendaCard nowMs={nowMs} item={item} onJoin={onJoin} pending={pending} />
               </motion.div>
             );
           })}
@@ -154,19 +178,22 @@ export function PlanStack({
   );
 }
 
-function isEventAgendaItem(item: HomeUpcomingPlan | EventAgendaItem): item is EventAgendaItem {
+function isEventAgendaItem(item: ComingUpRenderItem): item is EventAgendaItem {
   return "kind" in item && item.kind === "event";
 }
 
 function AgendaCard({
+  nowMs,
   item,
   onJoin,
   pending
 }: {
-  item: HomeUpcomingPlan | EventAgendaItem;
+  item: ComingUpRenderItem;
   onJoin: (plan: HomeUpcomingPlan) => void;
+  nowMs: number;
   pending: boolean;
 }) {
+  if ("kind" in item && item.kind === "upfor") return <UpForAgendaCard upfor={item} nowMs={nowMs} />;
   if (isEventAgendaItem(item)) return <EventAgendaCard event={item} />;
   return <SocializePlanCard plan={item} onJoin={onJoin} pending={pending} />;
 }
@@ -252,6 +279,57 @@ function EventAgendaCard({ event }: { event: EventAgendaItem }) {
 
         <div className="linkr-plan-actions">
           <span className="home-agenda-rsvp">{state}</span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+
+/**
+ * A scheduled UpFor in Coming Up, using the Plan card's exact shell.
+ *
+ * Same article, same radius, spacing, title hierarchy and date rail as a Plan
+ * or an Event -- only the type cue and the one line of copy differ. Coming Up
+ * is one component family containing different kinds of future commitment, not
+ * three card designs sharing a heading.
+ *
+ * No gradient of its own, no badge stack, no "Scheduled" chip beside a
+ * countdown beside a date. One line of time, from the canonical helper.
+ */
+function UpForAgendaCard({ upfor, nowMs }: { upfor: ComingUpUpForItem; nowMs: number }) {
+  const date = planDateParts(upfor.startsAt);
+  const countdown = upForCountdownLabel(
+    { status: "active", startsAt: upfor.startsAt, endsAt: upfor.endsAt },
+    nowMs
+  );
+
+  return (
+    <article
+      className="linkr-plan home-agenda-event"
+      style={
+        {
+          "--linkr-plan-from": "#9d1268",
+          "--linkr-plan-to": "#b81a5c"
+        } as CSSProperties
+      }
+      aria-label={`UpFor: ${upfor.title}${countdown ? `, ${countdown}` : ""}`}
+    >
+      <div className="linkr-plan-body">
+        {date ? (
+          <span className="linkr-plan-date" aria-hidden="true">
+            <span className="linkr-plan-date-weekday">{date.weekday}</span>
+            <span className="linkr-plan-date-day">{date.day}</span>
+            <span className="linkr-plan-date-month">{date.month}</span>
+          </span>
+        ) : null}
+
+        <div className="linkr-plan-detail">
+          <span className="home-agenda-type">UpFor</span>
+          <Link href={upfor.href} className="focus-ring linkr-plan-title min-w-0">
+            {upfor.title}
+          </Link>
+          {countdown ? <div className="linkr-plan-meta">{countdown}</div> : null}
         </div>
       </div>
     </article>

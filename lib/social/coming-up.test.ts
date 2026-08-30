@@ -94,3 +94,34 @@ describe("bad data degrades quietly", () => {
     ).toEqual([]);
   });
 });
+
+describe("a real mixed sequence renders strictly by time", () => {
+  it("interleaves UpFors and Plans rather than grouping by type", () => {
+    // 15:00 UpFor · 16:30 Plan · 18:00 UpFor · 20:00 Plan
+    const items = buildComingUp(
+      [plan("p-1630", 150), plan("p-2000", 360)],
+      [upfor("u-1500", 60), upfor("u-1800", 240)],
+      NOW
+    );
+    expect(items.map((i) => i.id)).toEqual([
+      "upfor:u-1500",
+      "plan:p-1630",
+      "upfor:u-1800",
+      "plan:p-2000"
+    ]);
+    // Explicitly NOT grouped: the two kinds alternate.
+    expect(items.map((i) => i.kind)).toEqual(["upfor", "agenda", "upfor", "agenda"]);
+  });
+
+  it("leaves exactly one item after the first UpFor converts", () => {
+    // The 15:00 UpFor becomes a 15:00 Plan. One thing at 15:00, not two.
+    const after = buildComingUp(
+      [plan("p-1500", 60)],
+      [upfor("u-1500", 60, "converted_to_plan")],
+      NOW
+    );
+    expect(after).toHaveLength(1);
+    expect(after[0]!.kind).toBe("agenda");
+    expect(after.filter((i) => i.kind === "upfor")).toHaveLength(0);
+  });
+});
