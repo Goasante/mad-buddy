@@ -115,6 +115,7 @@ describe("landing accessibility and discovery", () => {
     expect(navigation).toContain("inline-flex min-h-11 items-center");
     expect(navigation).toContain('footer nav[aria-label="Footer navigation"] a');
     expect(navigation).toContain("min-height: 44px");
+    expect(navigation).toContain("padding-inline: 0.5rem");
   });
 
   it("describes the real product in route metadata and structured data", () => {

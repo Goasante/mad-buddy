@@ -59,6 +59,7 @@ export function LandingNav() {
 
         footer nav[aria-label="Footer navigation"] a {
           padding-block: 0.625rem;
+          padding-inline: 0.5rem;
         }
       `}</style>
       <nav
