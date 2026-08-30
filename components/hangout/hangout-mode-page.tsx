@@ -8,28 +8,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import {
   AlertTriangle,
   ArrowLeft,
-  BookOpen,
   CheckCircle2,
-  ChevronRight,
   Clock,
-  Coffee,
-  Dumbbell,
-  Footprints,
-  Gamepad2,
-  Car,
-  Clapperboard,
-  Hand,
   Loader2,
   Lock,
-  Moon,
-  PartyPopper,
   Plus,
   ShieldCheck,
-  Shuffle,
-  Trophy,
-  Users,
-  UtensilsCrossed,
-  Wine,
   X
 } from "lucide-react";
 import {
@@ -46,7 +30,6 @@ import {
 } from "@/app/(app)/hangout-actions";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { UserAvatar } from "@/components/ui/user-avatar";
 import { UpForFeed } from "@/components/hangout/upfor-feed";
 import { UpForDetailSheet } from "@/components/hangout/upfor-detail-sheet";
 import { PlanStack } from "@/components/socialize/plan-stack";
@@ -105,31 +88,6 @@ const durationOptions: Array<{ id: Duration; label: string; ms: number }> = [
   { id: "3h", label: "3 hours", ms: 3 * 60 * 60 * 1000 }
 ];
 
-const ACTIVITY_ICONS: Record<HangoutActivityType, typeof Hand> = {
-  // The original eight.
-  /* "Anything" is an OPEN CHOICE -- the person has not picked an activity and
-     is up for whatever fits. Shuffle says that literally; Sparkles said the
-     option was somehow special, which it is not: it sits alongside food, gym
-     and study as one ordinary choice among them. */
-  anything: Shuffle,
-  food: UtensilsCrossed,
-  study: BookOpen,
-  sports: Trophy,
-  gym: Dumbbell,
-  walk: Footprints,
-  gaming: Gamepad2,
-  chill: Moon,
-  /* Added with the 20260822120000 migration. `chill` moves to a moon so
-   * `coffee` can take the cup it always should have had -- the label was
-   * already "Chill 🌙" everywhere else, so this aligns the icon with the word
-   * rather than changing what the category means. */
-  coffee: Coffee,
-  football: Trophy,
-  drinks: Wine,
-  movie: Clapperboard,
-  drive: Car,
-  party: PartyPopper
-};
 
 const audienceLabel: Record<HangoutAudienceType, string> = {
   all_muddies: "all your Muddies",
@@ -144,23 +102,7 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-/** Human "1h 20m remaining" from an end time (empty once elapsed). */
-function remainingLabel(endsAt: string, nowMs: number): string {
-  const totalMinutes = Math.max(0, Math.round((Date.parse(endsAt) - nowMs) / 60000));
-  if (totalMinutes === 0) return "ending now";
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours > 0) return `${hours}h ${minutes}m remaining`;
-  return `${minutes}m remaining`;
-}
 
-/** Short audience label for the "Visible to …" pill. */
-function visibleToLabel(audience: HangoutAudienceType, muddyCount: number): string {
-  if (audience === "all_muddies") return `${muddyCount} ${muddyCount === 1 ? "Muddy" : "Muddies"}`;
-  if (audience === "close_friends") return "Close Friends";
-  if (audience === "selected_circles") return "selected circles";
-  return "selected Muddies";
-}
 
 type Toast = { title?: string; message: string; error: boolean } | null;
 
@@ -169,9 +111,6 @@ export function HangoutModePage({
   initialOwnedUpFors = [],
   initialRequests = [],
   initialFeed = [],
-  avatarUrl = null,
-  displayName = "",
-  muddyCount = 0,
   viewerId = null,
   initialPlans = []
 }: {
@@ -180,9 +119,6 @@ export function HangoutModePage({
   initialOwnedUpFors?: OwnedUpFor[];
   initialRequests?: HangoutRequestSummary[];
   initialFeed?: VisibleHangout[];
-  avatarUrl?: string | null;
-  displayName?: string;
-  muddyCount?: number;
   /** The signed-in user, so the sheet can recognise their own UpFor. */
   viewerId?: string | null;
   /** Upcoming plans, from the same projection Home and Linkr read. */
@@ -491,26 +427,9 @@ export function HangoutModePage({
     setSetupOpen(true);
   }
 
-  function openSetup(preset?: HangoutActivityType) {
-    if (isActive && activeHangout) {
-      setActivity(preset ?? activeHangout.activityType);
-      setAudience(activeHangout.audienceType);
-      setMessage(activeHangout.message ?? "");
-      setBroadArea("");
-      setDiscoveryScope("muddies");
-      setDuration("1h");
-    } else {
-      setActivity(preset ?? null);
-      setAudience("all_muddies");
-      setMessage("");
-      setBroadArea("");
-      setDiscoveryScope("muddies");
-      setDuration("1h");
-    }
-    setAttempted(false);
-    setSetupError("");
-    setSetupOpen(true);
-  }
+  /* openSetup is gone: it prefilled the form from whichever session existed,
+     which is precisely how creating B came to mean editing A. Creation now
+     goes through openCreate and editing through openEdit(id). */
 
   /**
    * Join an UpFor.
@@ -534,7 +453,6 @@ export function HangoutModePage({
     }
   }
 
-  const acceptedCount = requests.filter((request) => request.status === "accepted").length;
 
   /**
    * Withdraw: cancel a pending request, or leave after being accepted.
@@ -797,15 +715,8 @@ export function HangoutModePage({
     else router.push(decision.href as Route);
   }, [fromInsideApp, router]);
 
-  function convertToPlan() {
-    if (!activeHangout) return;
-    void convertToPlanById(activeHangout.id);
-  }
 
-  const activityType = activeHangout?.activityType ?? "anything";
-  const OrbIcon = isActive ? ACTIVITY_ICONS[activityType] ?? Hand : Hand;
 
-  const remaining = isActive && activeHangout ? remainingLabel(activeHangout.endsAt, nowMs) : "";
 
   return (
     <div className="upfor-page">
@@ -833,7 +744,7 @@ export function HangoutModePage({
           <button
             type="button"
             data-tour-id={TOUR_TARGET_IDS.HANGOUT_TOGGLE}
-            onClick={() => openSetup()}
+            onClick={() => openCreate()}
             disabled={isPending}
             aria-label={isActive ? "Edit your UpFor" : "Create an UpFor"}
             className="upfor-create-button"
@@ -868,100 +779,6 @@ UpFors are temporary and disappear when they end. Jump in while you can!
         onCreate={() => openCreate()}
         onManage={(id) => setManagingId(id)}
       />
-
-      {/* --------------------------- YOUR OWN UPFOR ---------------------- */}
-      {isActive && activeHangout ? (
-        <section data-tour-id={TOUR_TARGET_IDS.HANGOUT_ACTIVE} className="upfor-mine">
-          <div className="upfor-mine-head">
-            <span className="upfor-mine-avatar">
-              <UserAvatar src={avatarUrl} name={displayName || "You"} size="lg" decorative />
-              <span className="upfor-mine-glyph" aria-hidden="true">
-                <OrbIcon className="h-3.5 w-3.5" />
-              </span>
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="upfor-mine-label">You&rsquo;re up for</p>
-              <p className="upfor-mine-activity">
-                {HANGOUT_ACTIVITY_LABELS[activeHangout.activityType] ?? "Anything"}
-              </p>
-              {activeHangout.message ? (
-                <p className="upfor-mine-message">&ldquo;{activeHangout.message}&rdquo;</p>
-              ) : null}
-            </div>
-            <span className="upfor-mine-timer" suppressHydrationWarning>
-              <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-              {remaining}
-            </span>
-          </div>
-
-          <button type="button" onClick={() => openSetup()} className="upfor-mine-audience">
-            <Users className="h-4 w-4" aria-hidden="true" />
-            Visible to {visibleToLabel(activeHangout.audienceType, muddyCount)}
-            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-
-          <div className="upfor-mine-actions">
-            <Button type="button" variant="outline" className="flex-1" onClick={() => openSetup()} disabled={isPending}>
-              Update
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1 border-primary/40 text-primary"
-              onClick={turnOff}
-              disabled={isPending}
-            >
-              End UpFor
-            </Button>
-          </div>
-
-          {/* Requests to join. Unchanged behaviour — accept, maybe, decline,
-              and the existing route into a group plan. */}
-          <div className="upfor-requests">
-            <p className="upfor-requests-title">Requests to join ({countActiveRequests(requests)})</p>
-            {requests.length === 0 ? (
-              <p className="upfor-requests-empty">No requests yet. We&apos;ll let you know.</p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {requests.map((request) => (
-                  <li
-                    key={request.id}
-                    id={`hangout-${request.id}`}
-                    className={cn(
-                      "upfor-request",
-                      requestedHangoutId === request.id && "ring-2 ring-primary/35"
-                    )}
-                  >
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                      {request.requesterName}
-                      {request.message ? (
-                        <span className="ml-1 text-xs font-normal text-muted-foreground">: {request.message}</span>
-                      ) : null}
-                    </span>
-                    {request.status === "pending" ? (
-                      <span className="flex gap-1.5">
-                        <Button type="button" size="sm" onClick={() => respond(request.id, "accepted")} disabled={isPending}>
-                          Accept
-                        </Button>
-                        <Button type="button" size="sm" variant="ghost" onClick={() => respond(request.id, "declined")} disabled={isPending}>
-                          Decline
-                        </Button>
-                      </span>
-                    ) : (
-                      <span className="text-xs font-medium capitalize text-muted-foreground">{request.status}</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {acceptedCount > 0 ? (
-              <Button type="button" variant="primary" className="mt-3 w-full" onClick={convertToPlan} disabled={isPending}>
-                Create a group plan with {acceptedCount} {acceptedCount === 1 ? "person" : "people"}
-              </Button>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
 
       {/* ------------------------- THE UPFOR FEED -------------------------
           The approved "Live Social Pulse" feed. Four real discovery modes over
@@ -1008,7 +825,7 @@ UpFors are temporary and disappear when they end. Jump in while you can!
           onWithdraw={leaveUpFor}
           onCreatePlan={convertToPlanById}
           onOpen={(id) => setDetailId(id)}
-          onStart={() => openSetup()}
+          onStart={() => openCreate()}
         />
       </section>
 
@@ -1029,7 +846,7 @@ UpFors are temporary and disappear when they end. Jump in while you can!
             <li key={idea.id}>
               <button
                 type="button"
-                onClick={() => openSetup(idea.id)}
+                onClick={() => openCreate(idea.id)}
                 disabled={isPending}
                 className="upfor-idea"
                 aria-label={`Start an UpFor for ${idea.label}`}
