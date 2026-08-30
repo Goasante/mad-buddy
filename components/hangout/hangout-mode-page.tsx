@@ -1049,7 +1049,7 @@ UpFors are temporary and disappear when they end. Jump in while you can!
       <Modal
         open={setupOpen}
         onOpenChange={setSetupOpen}
-        title={isActive ? "Update your UpFor" : "What are you up for?"}
+        title={editingUpForId ? "Update your UpFor" : "What are you up for?"}
         description="Let your Muddies know what you're open to."
         variant="sheet"
         compact
