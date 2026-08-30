@@ -6,10 +6,17 @@ import { stripComments } from "@/lib/content/strip-comments";
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const source = (path: string) => stripComments(read(path));
 
-const landing = source("components/landing/landing-page.tsx");
-const navigation = source("components/landing/landing-nav.tsx");
+const rawLanding = read("components/landing/landing-page.tsx");
+const rawNavigation = read("components/landing/landing-nav.tsx");
+const landing = stripComments(rawLanding);
+const navigation = stripComments(rawNavigation);
 const mobileMenu = source("components/landing/landing-mobile-menu.tsx");
 const homePage = source("app/page.tsx");
+
+const imageTags = [rawLanding, rawNavigation].flatMap((rawSource) => rawSource.match(/<Image\b[\s\S]*?\/>/g) ?? []);
+const eagerImageTags = imageTags.filter(
+  (tag) => /\bpriority(?:\s|=|\/|>)/.test(tag) || /\bloading\s*=\s*["']eager["']/.test(tag)
+);
 
 describe("landing rendering architecture", () => {
   it("keeps the marketing body server-rendered", () => {
@@ -45,10 +52,9 @@ describe("landing visual and image contract", () => {
     expect(navigation).not.toMatch(/purple|violet/i);
   });
 
-  it("has one LCP-priority image and no footer image payload", () => {
-    expect((landing.match(/\bpriority\b/g) ?? []).length).toBe(1);
-    expect(navigation).not.toContain("priority");
-    expect(landing).toContain('src="/brand/mad-buddy-hero-mockup-v2.png"');
+  it("has exactly one landing LCP image marked priority/eager", () => {
+    expect(eagerImageTags).toHaveLength(1);
+    expect(eagerImageTags[0]).toContain('src="/brand/mad-buddy-hero-mockup-v2.png"');
     expect(landing).not.toContain("BrandSymbol");
     expect(landing).not.toContain("BrandMark");
   });
