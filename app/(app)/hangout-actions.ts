@@ -33,6 +33,7 @@ import { announceUpForToAudience } from "@/lib/social/upfor-announce";
 import { resolveHangoutAudience } from "@/lib/social/upfor-audience";
 import { validateLaterToday } from "@/lib/time/timezone";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { checkAccess } from "@/lib/access/guard";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -384,8 +385,17 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
    * so no caller can create an UpFor for somebody else or spend their
    * allowance. `status` is not passed either -- the function always writes
    * 'active', so a caller cannot forge a lifecycle state.
+   *
+   * CALLED WITH THE REQUEST-SCOPED CLIENT, NOT THE ADMIN ONE. This is the whole
+   * reason the function can be trusted: `auth.uid()` is NULL under the
+   * service-role key, so invoking it through `admin` made every creation raise
+   * `not authenticated` and surface as "Couldn't start your UpFor". The admin
+   * client stays for the server-authoritative work around it -- the area
+   * derivation above, the audience targets and announcement below -- where
+   * there is no user context to honour and RLS must not apply.
    */
-  const { data: created, error } = await admin.rpc("create_upfor_session", {
+  const authed = await createSupabaseServerClient();
+  const { data: created, error } = await authed.rpc("create_upfor_session", {
     p_activity_type: parsed.data.activityType as HangoutActivityType,
     p_message: parsed.data.message ?? null,
     p_audience_type: parsed.data.audienceType as HangoutAudienceType,
@@ -420,6 +430,17 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
         message: `You already have ${MAX_ACTIVE_UPFORS} current or scheduled UpFors. When one ends, you can start another.`
       };
     }
+    /* Log the real reason SERVER-SIDE, show the calm one to the person.
+       This exact failure shipped invisibly once: the RPC raised
+       `not authenticated` and every user saw only "Couldn't start your UpFor",
+       with nothing in the logs to say why. The message is recorded, never
+       returned -- a database error is not something to put in front of
+       somebody trying to meet a friend. */
+    console.error("[upfor] create_upfor_session failed", {
+      code: error?.code,
+      message: error?.message,
+      userId
+    });
     return { ok: false, message: "Couldn't start your UpFor." };
   }
 
