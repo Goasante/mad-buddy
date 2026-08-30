@@ -178,7 +178,37 @@ grant execute on function public.create_upfor_session(
   boolean, boolean, text, timestamptz, integer
 ) to authenticated, service_role;
 
+-- 4. Idempotency marker for the audience notification.
+--
+-- Creation used to notify the audience immediately, with present-tense copy:
+-- "<name> is open to hang out". For an UpFor scheduled at 14:00 to start at
+-- 18:00 that is false for four hours, and it is a publication -- it tells other
+-- people the owner is available right now. So the fan-out moves to when the
+-- session actually starts.
+--
+-- NULL means "the audience has not been told yet". Set once, by the job that
+-- sends, so a retry or an overlapping tick cannot notify the same audience
+-- twice. Existing rows are backfilled below rather than left NULL, because a
+-- NULL on an already-running session would make the job announce every UpFor
+-- created before this migration.
+alter table public.hangout_sessions
+  add column if not exists audience_notified_at timestamptz;
+
+comment on column public.hangout_sessions.audience_notified_at is
+  'When the audience fan-out was sent. NULL = not yet sent. Set once, so a retry cannot double-notify.';
+
+-- Backfill: everything that already exists has, by definition, already had its
+-- notification sent at creation time under the old behaviour.
+update public.hangout_sessions
+  set audience_notified_at = created_at
+  where audience_notified_at is null;
+
 -- Supports both the allowance count and the "Coming Up" read, which are the
 -- two hot per-owner lookups this change introduces.
 create index if not exists hangout_sessions_owner_window_idx
   on public.hangout_sessions (owner_id, status, ends_at, starts_at);
+
+-- The notification job's due-work lookup: started, not yet announced.
+create index if not exists hangout_sessions_pending_announce_idx
+  on public.hangout_sessions (starts_at)
+  where audience_notified_at is null and status = 'active';

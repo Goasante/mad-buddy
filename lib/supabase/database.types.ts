@@ -1641,6 +1641,8 @@ export type Database = {
           allow_friend_invites: boolean;
           status: HangoutStatus;
           converted_plan_id: string | null;
+          timezone: string;
+          audience_notified_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1661,6 +1663,8 @@ export type Database = {
           allow_friend_invites?: boolean;
           status?: HangoutStatus;
           converted_plan_id?: string | null;
+          timezone?: string;
+          audience_notified_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -5143,6 +5147,25 @@ export type Database = {
       linkr_record_connect: {
         Args: { p_actor: string; p_target: string; p_event_id?: string | null };
         Returns: Array<{ matched: boolean; connection_id: string | null; created: boolean }>;
+      };
+      create_upfor_session: {
+        Args: {
+          p_activity_type: string;
+          p_message: string | null;
+          p_audience_type: string;
+          p_broad_area_text: string | null;
+          p_discovery_scope: string;
+          p_starts_at: string;
+          p_ends_at: string;
+          p_timezone: string;
+          p_max_participants: number;
+          p_allow_pings: boolean;
+          p_allow_friend_invites: boolean;
+          p_area_tier: string | null;
+          p_area_derived_at: string | null;
+          p_limit: number;
+        };
+        Returns: Database["public"]["Tables"]["hangout_sessions"]["Row"];
       };
       create_plan_lifecycle: {
         Args: {

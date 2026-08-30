@@ -29,7 +29,7 @@ import {
   isHangoutJoinable,
   validateHangoutDuration
 } from "@/lib/social/plans";
-import { activeHangoutCount } from "@/lib/social/planning";
+import { validateLaterToday } from "@/lib/time/timezone";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { checkAccess } from "@/lib/access/guard";
 import { getCurrentUser } from "@/lib/supabase/auth";
@@ -204,6 +204,24 @@ const startHangoutSchema = z.object({
    */
   discoveryScope: z.enum(["muddies", "nearby"]).default("muddies"),
   endsAt: z.string().datetime({ offset: true }),
+  /**
+   * When the UpFor begins. "now" keeps the original behaviour exactly; "later"
+   * requires `startsAt` and is constrained to the creator's current local day.
+   *
+   * There is deliberately no future-DATE input anywhere in this contract: the
+   * only thing a client can move is a clock time, and the server checks it
+   * lands on today in the supplied zone.
+   */
+  when: z.enum(["now", "later"]).default("now"),
+  startsAt: z.string().datetime({ offset: true }).optional(),
+  /**
+   * The creator's IANA zone, used ONLY to decide what "today" means.
+   *
+   * It has to come from the client because the account has no timezone of its
+   * own, but it is never trusted raw: it is validated as a real zone, and it
+   * cannot buy anything -- the concurrency ceiling counts rows, not clocks.
+   */
+  timezone: z.string().max(60).optional(),
   maxParticipants: z.number().int().min(1).max(50).optional(),
   allowPings: z.boolean().optional(),
   allowFriendInvites: z.boolean().optional(),
@@ -221,6 +239,8 @@ const startHangoutSchema = z.object({
  * previously had Access loses capability.
  */
 const MAX_ACTIVE_UPFORS = 3;
+/** Fallback when a client sends no zone. Only decides what "today" means. */
+const DEFAULT_UPFOR_TIMEZONE = "Africa/Accra";
 const MAX_UPFOR_CAPACITY = 50;
 const DEFAULT_UPFOR_CAPACITY = 5;
 
@@ -240,8 +260,47 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
   if (!access.ok) return { ok: false, message: access.message };
 
   const nowMs = Date.now();
-  const endsMs = Date.parse(parsed.data.endsAt);
-  const durationError = validateHangoutDuration(nowMs, endsMs);
+
+  /**
+   * The intended start, and the duration measured FROM IT.
+   *
+   * The bug this avoids: `endsAt` arrives as an absolute instant the client
+   * computed from *now*. Scheduling at 18:00 with a 2-hour duration would
+   * otherwise store 18:00-16:00 -- an end before the start -- because the
+   * client measured the window from 14:00. So the duration is taken as a
+   * length and re-applied to the real start.
+   */
+  const requestedStartMs = parsed.data.when === "later"
+    ? Date.parse(parsed.data.startsAt ?? "")
+    : nowMs;
+
+  if (parsed.data.when === "later") {
+    if (!Number.isFinite(requestedStartMs)) {
+      return { ok: false, message: "Choose a time later today." };
+    }
+    const zone = parsed.data.timezone ?? DEFAULT_UPFOR_TIMEZONE;
+    const verdict = validateLaterToday(new Date(requestedStartMs), new Date(nowMs), zone);
+    if (!verdict.ok) {
+      // Human-readable, and never the database's or the RPC's own error text.
+      return {
+        ok: false,
+        message:
+          verdict.reason === "not_in_future"
+            ? "That time has already passed."
+            : verdict.reason === "not_today"
+              ? "Choose a time later today."
+              : verdict.reason === "invalid_timezone"
+                ? "That time isn't available in your timezone."
+                : "Check the UpFor details and try again."
+      };
+    }
+  }
+
+  // Duration as a LENGTH, then applied to the intended start.
+  const clientEndsMs = Date.parse(parsed.data.endsAt);
+  const durationMs = clientEndsMs - nowMs;
+  const endsMs = requestedStartMs + durationMs;
+  const durationError = validateHangoutDuration(requestedStartMs, endsMs);
   if (durationError) return { ok: false, message: durationError };
 
   const rateLimit = await consumeRateLimit({ action: "hangouts.start", userId });
@@ -261,15 +320,16 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
    * version of it, which is the difference between selling a feature and
    * selling a quota.
    *
-   * The concurrency ceiling below is NOT monetization: it is the same
-   * anti-abuse limit for everybody with Access, so one account cannot flood
-   * the nearby feed with sessions. Being flat, it cannot be bought past. */
-  if ((await activeHangoutCount(admin, userId)) >= MAX_ACTIVE_UPFORS) {
-    return {
-      ok: false,
-      message: `You can have up to ${MAX_ACTIVE_UPFORS} UpFors running at once. End one to start another.`
-    };
-  }
+   * The concurrency ceiling is NOT monetization: it is the same anti-abuse
+   * limit for everybody with Access, so one account cannot flood the nearby
+   * feed with sessions. Being flat, it cannot be bought past.
+   *
+   * THE CEILING IS NO LONGER CHECKED HERE. It used to be
+   * `if (await activeHangoutCount(...) >= MAX) return` followed by a separate
+   * insert -- two statements, two snapshots. Driven from 2 by two concurrent
+   * requests that reaches 4, measured. The count and the insert now happen in
+   * one statement inside `create_upfor_session`, so the rejection below comes
+   * back from the database rather than being decided in advance here. */
 
   const requestedCapacity = parsed.data.maxParticipants ?? DEFAULT_UPFOR_CAPACITY;
   if (requestedCapacity > MAX_UPFOR_CAPACITY) {
@@ -313,30 +373,53 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
     };
   })();
 
-  const { data: session, error } = await admin
-    .from("hangout_sessions")
-    .insert({
-      owner_id: userId,
-      activity_type: parsed.data.activityType as HangoutActivityType,
-      message: parsed.data.message?.trim() || null,
-      audience_type: parsed.data.audienceType as HangoutAudienceType,
-      broad_area_text: parsed.data.broadAreaText?.trim() || null,
-      area_tier: derivedArea.tier,
-      area_derived_at: derivedArea.derivedAt,
-      // A session can only be nearby-discoverable if we actually know where
-      // its creator is. Falling back to 'muddies' rather than publishing a
-      // session nobody can be matched against — and rather than silently
-      // widening one we cannot place.
-      discovery_scope: derivedArea.tier === null ? "muddies" : parsed.data.discoveryScope,
-      ends_at: parsed.data.endsAt,
-      max_participants: requestedCapacity,
-      allow_pings: parsed.data.allowPings ?? true,
-      allow_friend_invites: parsed.data.allowFriendInvites ?? false,
-      status: "active"
-    })
-    .select("id")
-    .single();
-  if (error || !session) return { ok: false, message: "Couldn't start your UpFor." };
+  /**
+   * The ONLY creation path. `create_upfor_session` counts and inserts in one
+   * statement behind a per-owner advisory lock, so two concurrent requests
+   * cannot both pass the ceiling.
+   *
+   * Note what is NOT passed: an owner. The function reads `auth.uid()` itself,
+   * so no caller can create an UpFor for somebody else or spend their
+   * allowance. `status` is not passed either -- the function always writes
+   * 'active', so a caller cannot forge a lifecycle state.
+   */
+  const { data: created, error } = await admin.rpc("create_upfor_session", {
+    p_activity_type: parsed.data.activityType as HangoutActivityType,
+    p_message: parsed.data.message ?? null,
+    p_audience_type: parsed.data.audienceType as HangoutAudienceType,
+    p_broad_area_text: parsed.data.broadAreaText ?? null,
+    // A session can only be nearby-discoverable if we actually know where its
+    // creator is. Falling back to 'muddies' rather than publishing a session
+    // nobody can be matched against — and rather than silently widening one we
+    // cannot place.
+    p_discovery_scope: derivedArea.tier === null ? "muddies" : parsed.data.discoveryScope,
+    p_starts_at: new Date(requestedStartMs).toISOString(),
+    p_ends_at: new Date(endsMs).toISOString(),
+    p_timezone: parsed.data.timezone ?? DEFAULT_UPFOR_TIMEZONE,
+    p_max_participants: requestedCapacity,
+    p_allow_pings: parsed.data.allowPings ?? true,
+    p_allow_friend_invites: parsed.data.allowFriendInvites ?? false,
+    p_area_tier: derivedArea.tier,
+    p_area_derived_at: derivedArea.derivedAt,
+    p_limit: MAX_ACTIVE_UPFORS
+  });
+
+  const session = Array.isArray(created) ? created[0] : created;
+
+  if (error || !session) {
+    /* The ceiling rejection arrives as a database error, so it is translated
+       here into the calm operational sentence. Access is NOT the issue -- the
+       person already has it -- so there is no upgrade path to offer, and
+       naming the states keeps it truthful when a paused or full UpFor is what
+       is holding the slot. */
+    if (error?.message?.includes("upfor_limit_reached")) {
+      return {
+        ok: false,
+        message: `You already have ${MAX_ACTIVE_UPFORS} current or scheduled UpFors. When one ends, you can start another.`
+      };
+    }
+    return { ok: false, message: "Couldn't start your UpFor." };
+  }
 
   // Audience targets for narrowed audiences (owned circles / eligible muddies).
   if (parsed.data.audienceType === "selected_circles" && parsed.data.circleIds?.length) {
@@ -363,6 +446,25 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
         }))
       );
     }
+  }
+
+  /**
+   * A SCHEDULED UPFOR MUST NOT ANNOUNCE ITSELF EARLY.
+   *
+   * This fan-out says "<name> is open to hang out" -- present tense. Sending it
+   * at 14:00 for a session that starts at 18:00 tells the audience the owner is
+   * available right now, which is both false and a publication the owner did
+   * not ask for four hours early.
+   *
+   * So it only runs when the UpFor is actually starting. A scheduled one is
+   * announced by `upfor.announce_started`, which polls for sessions that have
+   * reached their start and not yet been announced -- the same shape as
+   * safe_arrival.unconfirmed_alert, using the job system that already exists
+   * rather than a new scheduler chasing exact-second delivery.
+   */
+  const startsNow = requestedStartMs <= nowMs;
+  if (!startsNow) {
+    return { ok: true, message: "Your UpFor is scheduled.", hangoutId: session.id };
   }
 
   // Notify the destined audience so they can show interest (request to join),
@@ -393,6 +495,12 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
   // through getVisibleHangoutsAction, which enforces each hangout's own audience
   // (all-Muddies, Close Friends, circles, selected). No status mirroring is
   // needed, so a narrower audience is never widened.
+
+  // Announced now, so the deferred job never repeats it.
+  await admin
+    .from("hangout_sessions")
+    .update({ audience_notified_at: new Date().toISOString() })
+    .eq("id", session.id);
 
   return { ok: true, message: "You're open to hang out.", hangoutId: session.id };
 }
@@ -734,6 +842,10 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
           .select(HANGOUT_DISCOVERY_COLUMNS)
           .in("owner_id", friendIds)
           .eq("status", "active")
+          // A scheduled UpFor is stored as `active` with a future starts_at, so
+          // discovery must also require that it has actually begun -- otherwise
+          // an 18:00 session is published to the audience from 14:00.
+          .lte("starts_at", nowIso)
           .gt("ends_at", nowIso)
           .order("ends_at", { ascending: true })
           .limit(50)
@@ -747,6 +859,10 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
       .select(HANGOUT_DISCOVERY_COLUMNS)
       .eq("discovery_scope", "nearby")
       .eq("status", "active")
+      // A scheduled UpFor is stored as `active` with a future starts_at, so
+      // discovery must also require that it has actually begun -- otherwise
+      // an 18:00 session is published to the audience from 14:00.
+      .lte("starts_at", nowIso)
       .gt("ends_at", nowIso)
       .neq("owner_id", userId)
       .order("ends_at", { ascending: true })

@@ -64,6 +64,10 @@ export async function listOpenToPlans(userId: string): Promise<OpenToPlan[]> {
     .select("id, owner_id, activity_type, message, broad_area_text, ends_at, audience_type, status")
     .in("owner_id", friendIds)
     .eq("status", "active")
+    // A scheduled UpFor is stored as `active` with a future starts_at, so
+    // discovery must also require that it has actually begun -- otherwise
+    // an 18:00 session is published to the audience from 14:00.
+    .lte("starts_at", new Date().toISOString())
     .gt("ends_at", new Date().toISOString())
     .order("ends_at", { ascending: true })
     .limit(50);
