@@ -7,7 +7,7 @@ import { pricingPlans } from "@/components/premium/plans";
 import { PricingViewTracker } from "@/components/premium/pricing-view-tracker";
 import { TrialOffer } from "@/components/premium/trial-offer";
 
-export function PricingPageContent() {
+export function PricingPageContent({ showTrialOffer = false }: { showTrialOffer?: boolean }) {
   return (
     <PublicPageShell>
       <PricingViewTracker />
@@ -18,12 +18,12 @@ export function PricingPageContent() {
             Start free. Upgrade when the extra access is useful.
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-[#4E0401]/65 dark:text-[#FFF8F1]/65">
-            Free, Buddy Plus, and Buddy Pro read from Mad Buddy's current billing and entitlement authority so this page does not invent a second set of plan promises.
+            Free, Buddy Plus, and Buddy Pro read from Mad Buddy&apos;s current billing and entitlement authority so this page does not invent a second set of plan promises.
           </p>
         </section>
 
         <section className="mt-12" aria-label="Pricing plans">
-          <TrialOffer />
+          {showTrialOffer ? <TrialOffer /> : null}
           <div className="grid overflow-hidden rounded-[1.5rem] border border-[#4E0401]/10 bg-white/35 shadow-[0_24px_70px_rgba(78,4,1,0.06)] divide-y divide-[#4E0401]/10 lg:grid-cols-3 lg:divide-x lg:divide-y-0 dark:border-white/10 dark:bg-white/[0.025] dark:divide-white/10">
             {pricingPlans.map((plan) => (
               <PricingCard key={plan.id} plan={plan} />

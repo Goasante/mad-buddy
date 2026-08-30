@@ -104,12 +104,12 @@ export function AboutPage() {
             Safety, privacy, legal terms, support, and account recovery should not feel like detached utility pages. They are part of the same promise as the Landing itself.
           </p>
           <nav className="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-4" aria-label="About related pages">
-            {[
+            {([
               { href: "/safety", label: "Safety" },
               { href: "/privacy", label: "Privacy" },
               { href: "/support", label: "Support" },
               { href: "/faq", label: "FAQ" }
-            ].map((item) => (
+            ] as const).map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

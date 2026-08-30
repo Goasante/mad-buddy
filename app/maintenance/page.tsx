@@ -32,7 +32,7 @@ export default async function MaintenancePage() {
           Check again
         </Link>
       ) : (
-        <Link href="/dashboard" className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full bg-[#4E0401] px-5 text-sm font-semibold text-white dark:bg-[#E88C2B] dark:text-[#2A120A]">
+        <Link prefetch={false} href="/dashboard" className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full bg-[#4E0401] px-5 text-sm font-semibold text-white dark:bg-[#E88C2B] dark:text-[#2A120A]">
           Open Mad Buddy
         </Link>
       )}

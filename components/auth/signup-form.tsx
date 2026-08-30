@@ -126,9 +126,9 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
           />
           <span>
             I agree to the{" "}
-            <Link href="/terms" className="font-semibold text-foreground underline underline-offset-2 hover:text-accent">Terms</Link>{" "}
+            <Link href="/terms" className="focus-ring -mx-1 inline-flex min-h-11 items-center rounded-lg px-1 font-semibold text-foreground underline underline-offset-2 hover:text-accent">Terms</Link>{" "}
             and acknowledge the{" "}
-            <Link href="/privacy" className="font-semibold text-foreground underline underline-offset-2 hover:text-accent">Privacy Policy</Link>.
+            <Link href="/privacy" className="focus-ring -mx-1 inline-flex min-h-11 items-center rounded-lg px-1 font-semibold text-foreground underline underline-offset-2 hover:text-accent">Privacy Policy</Link>.
           </span>
         </label>
         {errors.acceptedPolicy?.message ? (
@@ -174,7 +174,7 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
 
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-foreground hover:text-accent">Log in</Link>
+        <Link href="/login" className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-foreground hover:text-accent">Log in</Link>
       </p>
     </form>
   );

@@ -26,7 +26,7 @@ describe("authenticated visitors on guest-only routes", () => {
   });
 
   it("keeps marketing and legal pages readable while signed in", () => {
-    for (const path of ["/pricing", "/about", "/faq", "/privacy", "/terms"]) {
+    for (const path of ["/pricing", "/about", "/faq", "/support", "/safety", "/privacy", "/terms"]) {
       expect(authenticatedRedirect(path)).toBeNull();
     }
   });
@@ -50,6 +50,8 @@ describe("route protection (deny-by-default, audit I-08)", () => {
       "/pricing",
       "/about",
       "/faq",
+      "/support",
+      "/safety",
       "/privacy",
       "/terms",
       "/login",

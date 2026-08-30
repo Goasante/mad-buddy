@@ -39,7 +39,7 @@ export default function SafetyPage() {
             <UserRoundCheck className="h-6 w-6 text-[#A45A18]" aria-hidden="true" />
             <h2 className="mt-4 text-xl font-semibold text-[#4E0401] dark:text-[#FFF8F1]">Muddy proximity</h2>
             <p className="mt-3 text-sm leading-7 text-[#4E0401]/62 dark:text-[#FFF8F1]/62">
-              Muddies are people who have mutually approved the connection. When visibility is enabled, approved Muddies may receive privacy-preserving proximity information according to each person's settings.
+              Muddies are people who have mutually approved the connection. When visibility is enabled, approved Muddies may receive privacy-preserving proximity information according to each person&apos;s settings.
             </p>
           </div>
           <div>

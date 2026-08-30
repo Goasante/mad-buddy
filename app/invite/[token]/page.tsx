@@ -26,7 +26,7 @@ export default async function InviteLandingPage({
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#A45A18]">Invitation</p>
           {!preview ? (
             <>
-              <h1 className="mt-3 text-4xl font-semibold tracking-[-0.04em] text-[#4E0401] sm:text-5xl dark:text-[#FFF8F1]">This invite isn't available.</h1>
+              <h1 className="mt-3 text-4xl font-semibold tracking-[-0.04em] text-[#4E0401] sm:text-5xl dark:text-[#FFF8F1]">This invite isn&apos;t available.</h1>
               <p className="mt-5 max-w-xl text-sm leading-7 text-[#4E0401]/62 dark:text-[#FFF8F1]/62">
                 The link may have expired or been revoked. Ask the person who invited you for a fresh link.
               </p>

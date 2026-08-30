@@ -2,11 +2,33 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { BrandSymbol } from "@/components/brand/brand-symbol";
 import { PublicMobileMenu } from "@/components/front-door/public-mobile-menu";
+import { brandSymbol } from "@/lib/brand/assets";
 
 const navItemClass =
   "focus-ring inline-flex min-h-11 items-center rounded-full px-3 py-2 text-sm font-semibold text-[#4E0401]/70 transition-colors hover:bg-[#E88C2B]/10 hover:text-[#4E0401] dark:text-[#FFF8F1]/70 dark:hover:bg-white/[0.06] dark:hover:text-[#FFF8F1]";
 
-export function PublicHeader() {
+function PublicBrandSymbol() {
+  return (
+    <picture className="block h-8 w-8">
+      <source media="(prefers-color-scheme: dark)" srcSet={brandSymbol.dark.src} />
+      <img
+        src={brandSymbol.light.src}
+        alt=""
+        width="32"
+        height="32"
+        loading="lazy"
+        aria-hidden="true"
+        className="h-8 w-8 object-contain"
+      />
+    </picture>
+  );
+}
+
+export function PublicHeader({
+  mobileMenu
+}: {
+  mobileMenu?: ReactNode;
+} = {}) {
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-[#4E0401]/10 bg-[#FEFBF3]/90 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl dark:border-white/10 dark:bg-[#140B09]/90">
       <nav
@@ -14,7 +36,7 @@ export function PublicHeader() {
         aria-label="Main navigation"
       >
         <Link href="/" className="focus-ring inline-flex min-h-11 items-center gap-2.5 rounded-xl" aria-label="Mad Buddy home">
-          <BrandSymbol className="h-8 w-8" priority />
+          <PublicBrandSymbol />
           <span className="text-[15px] font-bold tracking-[-0.02em] text-[#4E0401] dark:text-[#FFF8F1]">Mad Buddy</span>
         </Link>
 
@@ -41,7 +63,7 @@ export function PublicHeader() {
           </Link>
         </div>
 
-        <PublicMobileMenu />
+        {mobileMenu ?? <PublicMobileMenu />}
       </nav>
     </header>
   );

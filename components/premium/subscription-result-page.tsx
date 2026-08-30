@@ -37,11 +37,11 @@ export function SubscriptionResultPage({ type, verified = false, message }: Subs
         </p>
 
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-          <Link href="/dashboard" className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full bg-[#4E0401] px-5 text-sm font-semibold text-white dark:bg-[#E88C2B] dark:text-[#2A120A]">
+          <Link prefetch={false} href="/dashboard" className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full bg-[#4E0401] px-5 text-sm font-semibold text-white dark:bg-[#E88C2B] dark:text-[#2A120A]">
             Return to Mad Buddy
           </Link>
           {!isSuccess ? (
-            <Link href="/upgrade" className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full border border-[#4E0401]/15 px-5 text-sm font-semibold text-[#4E0401] dark:border-white/15 dark:text-[#FFF8F1]">
+            <Link prefetch={false} href="/upgrade" className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full border border-[#4E0401]/15 px-5 text-sm font-semibold text-[#4E0401] dark:border-white/15 dark:text-[#FFF8F1]">
               Retry upgrade
             </Link>
           ) : null}

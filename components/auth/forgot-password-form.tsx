@@ -49,7 +49,7 @@ export function ForgotPasswordForm() {
   }, []);
 
   return (
-    <form className="space-y-4" method="post" onSubmit={handleSubmit(onSubmit)}>
+    <form className="space-y-4" method="post" onSubmit={handleSubmit(onSubmit)} noValidate>
       <FormField htmlFor="email" label="Email address" error={errors.email?.message}>
         <Input id="email" type="email" autoComplete="email" placeholder="you@example.com" {...register("email")} />
       </FormField>
@@ -79,7 +79,7 @@ export function ForgotPasswordForm() {
       </Button>
       <p className="text-center text-sm text-muted-foreground">
         Remembered it?{" "}
-        <Link href="/login" className="font-semibold text-foreground hover:text-accent">Back to login</Link>
+        <Link href="/login" className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-foreground hover:text-accent">Back to login</Link>
       </p>
     </form>
   );

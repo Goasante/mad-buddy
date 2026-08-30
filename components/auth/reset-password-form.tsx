@@ -70,7 +70,7 @@ export function ResetPasswordForm() {
       </Button>
       <p className="text-center text-sm text-muted-foreground">
         Already updated?{" "}
-        <Link href="/login" className="font-semibold text-foreground hover:text-accent">Back to login</Link>
+        <Link href="/login" className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-foreground hover:text-accent">Back to login</Link>
       </p>
     </form>
   );
