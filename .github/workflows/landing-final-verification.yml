@@ -10,9 +10,8 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 45
     env:
-      BASE_SHA: 26c397437171dfe58a5de748f8f1a623d44ccb48
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
       CI: "1"
     steps:
@@ -25,33 +24,14 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Prepare identical base and landing worktrees
-        run: |
-          git worktree add /tmp/mb-base "$BASE_SHA"
-          mkdir -p verification/screenshots
-          printf 'BASE_SHA=%s\nLANDING_SHA=%s\n' "$BASE_SHA" "$GITHUB_SHA" | tee verification/shas.txt
-
-      - name: Install base dependencies
-        working-directory: /tmp/mb-base
+      - name: Install dependencies
         run: npm ci
-
-      - name: Install landing dependencies
-        run: npm ci
-
-      - name: Run exact BASE full suite
-        shell: bash
-        run: |
-          set +e
-          cd /tmp/mb-base
-          npx vitest run 2>&1 | tee "$GITHUB_WORKSPACE/verification/base-vitest.log"
-          status=${PIPESTATUS[0]}
-          echo "$status" > "$GITHUB_WORKSPACE/verification/base-vitest.status"
-          exit 0
 
       - name: Run exact LANDING full suite
         shell: bash
         run: |
           set +e
+          mkdir -p verification/screenshots
           npx vitest run 2>&1 | tee verification/landing-vitest.log
           status=${PIPESTATUS[0]}
           echo "$status" > verification/landing-vitest.status
@@ -62,10 +42,6 @@ jobs:
           npm run lint
           npm run typecheck
           npm run build
-
-      - name: Build BASE for synthetic comparison
-        working-directory: /tmp/mb-base
-        run: npm run build
 
       - name: Install Chromium for visual proof
         run: npx playwright install --with-deps chromium
@@ -78,23 +54,59 @@ jobs:
           import { writeFile } from "node:fs/promises";
 
           const browser = await chromium.launch({ headless: true });
-          const viewports = [
-            { name: "360x800", width: 360, height: 800 },
-            { name: "390x844", width: 390, height: 844 },
-            { name: "430x932", width: 430, height: 932 },
-            { name: "1440x1000", width: 1440, height: 1000 }
+          const cases = [
+            { name: "360x800-light", width: 360, height: 800, colorScheme: "light" },
+            { name: "390x844-light", width: 390, height: 844, colorScheme: "light" },
+            { name: "430x932-light", width: 430, height: 932, colorScheme: "light" },
+            { name: "1440x1000-light", width: 1440, height: 1000, colorScheme: "light" },
+            { name: "390x844-dark", width: 390, height: 844, colorScheme: "dark" },
+            { name: "1440x1000-dark", width: 1440, height: 1000, colorScheme: "dark" }
           ];
           const results = [];
 
-          for (const viewport of viewports) {
-            const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height }, colorScheme: "light" });
+          for (const item of cases) {
+            const page = await browser.newPage({
+              viewport: { width: item.width, height: item.height },
+              colorScheme: item.colorScheme
+            });
             const pageErrors = [];
+            const failedImageRequests = [];
+            const imageResponses = [];
+
             page.on("pageerror", (error) => pageErrors.push(String(error)));
+            page.on("requestfailed", (request) => {
+              if (request.resourceType() === "image") {
+                failedImageRequests.push({ url: request.url(), error: request.failure()?.errorText ?? "request failed" });
+              }
+            });
+            page.on("response", (response) => {
+              if (response.request().resourceType() === "image") {
+                imageResponses.push({ url: response.url(), status: response.status() });
+              }
+            });
+
             await page.goto("http://127.0.0.1:3000/", { waitUntil: "networkidle" });
+
+            const focusedSkip = await page.evaluate(() => {
+              const skip = document.querySelector('a[href="#main-content"]');
+              if (!(skip instanceof HTMLElement)) return null;
+              skip.focus();
+              const rect = skip.getBoundingClientRect();
+              const style = getComputedStyle(skip);
+              const result = {
+                focused: document.activeElement === skip,
+                visible: rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none",
+                width: Math.round(rect.width),
+                height: Math.round(rect.height)
+              };
+              skip.blur();
+              return result;
+            });
 
             const audit = await page.evaluate(() => {
               const doc = document.documentElement;
               const visible = (el) => {
+                if (el.classList.contains("sr-only") && !el.matches(":focus")) return false;
                 const r = el.getBoundingClientRect();
                 const style = getComputedStyle(el);
                 return r.width > 0 && r.height > 0 && style.visibility !== "hidden" && style.display !== "none";
@@ -103,9 +115,13 @@ jobs:
               const smallTargets = interactive
                 .map((el) => {
                   const r = el.getBoundingClientRect();
-                  return { text: (el.getAttribute("aria-label") || el.textContent || el.tagName).trim().replace(/\s+/g, " ").slice(0, 80), width: Math.round(r.width), height: Math.round(r.height) };
+                  return {
+                    text: (el.getAttribute("aria-label") || el.textContent || el.tagName).trim().replace(/\s+/g, " ").slice(0, 80),
+                    width: Math.round(r.width),
+                    height: Math.round(r.height)
+                  };
                 })
-                .filter((item) => item.width < 44 || item.height < 44);
+                .filter((target) => target.width < 44 || target.height < 44);
               const clipped = [...document.querySelectorAll("h1,h2,h3,p,li,a,button,span")]
                 .filter(visible)
                 .filter((el) => {
@@ -114,14 +130,20 @@ jobs:
                   return clips && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1);
                 })
                 .map((el) => (el.textContent || el.tagName).trim().replace(/\s+/g, " ").slice(0, 100));
-              const brokenImages = [...document.images].filter((img) => !img.complete || img.naturalWidth === 0).map((img) => img.currentSrc || img.src);
+              const brokenDomImages = [...document.images]
+                .filter((img) => Boolean(img.currentSrc) && img.complete && img.naturalWidth === 0)
+                .map((img) => img.currentSrc);
               const sections = [...document.querySelectorAll("main section")].map((section) => {
                 const r = section.getBoundingClientRect();
-                return { id: section.id || "(no id)", height: Math.round(r.height), viewportRatio: Number((r.height / innerHeight).toFixed(2)) };
+                return {
+                  id: section.id || "(no id)",
+                  height: Math.round(r.height),
+                  viewportRatio: Number((r.height / innerHeight).toFixed(2))
+                };
               });
               return {
                 horizontalOverflowPx: Math.max(0, doc.scrollWidth - doc.clientWidth),
-                brokenImages,
+                brokenDomImages,
                 smallTargets,
                 clipped,
                 sections
@@ -129,7 +151,7 @@ jobs:
             });
 
             let menu = null;
-            if (viewport.width < 768) {
+            if (item.colorScheme === "light" && item.width < 768) {
               const trigger = page.getByRole("button", { name: "Open menu" });
               await trigger.click();
               const opened = await page.getByRole("dialog", { name: "Main navigation" }).isVisible();
@@ -139,20 +161,52 @@ jobs:
               menu = { opened, escapeClosed: closed, focusRestored };
             }
 
-            await page.screenshot({ path: `verification/screenshots/${viewport.name}-light.png`, fullPage: true });
-            results.push({ viewport, audit, menu, pageErrors });
-            await page.close();
-          }
-
-          for (const viewport of [{ name: "390x844", width: 390, height: 844 }, { name: "1440x1000", width: 1440, height: 1000 }]) {
-            const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height }, colorScheme: "dark" });
-            await page.goto("http://127.0.0.1:3000/", { waitUntil: "networkidle" });
-            await page.screenshot({ path: `verification/screenshots/${viewport.name}-dark.png`, fullPage: true });
+            const badImageResponses = imageResponses.filter((response) => response.status >= 400);
+            await page.screenshot({ path: `verification/screenshots/${item.name}.png`, fullPage: true });
+            results.push({
+              viewport: item,
+              audit,
+              focusedSkip,
+              menu,
+              pageErrors,
+              failedImageRequests,
+              badImageResponses,
+              requestedImages: imageResponses
+            });
             await page.close();
           }
 
           await writeFile("verification/headless-audit.json", JSON.stringify(results, null, 2));
+          console.log(JSON.stringify(results, null, 2));
           await browser.close();
+          EOF
+
+          cat > verification/enforce-headless.mjs <<'EOF'
+          import { readFile } from "node:fs/promises";
+
+          const results = JSON.parse(await readFile("verification/headless-audit.json", "utf8"));
+          const failures = [];
+          for (const result of results) {
+            const name = result.viewport.name;
+            if (result.audit.horizontalOverflowPx !== 0) failures.push(`${name}: horizontal overflow ${result.audit.horizontalOverflowPx}px`);
+            if (result.audit.brokenDomImages.length) failures.push(`${name}: broken DOM images ${JSON.stringify(result.audit.brokenDomImages)}`);
+            if (result.failedImageRequests.length) failures.push(`${name}: failed image requests ${JSON.stringify(result.failedImageRequests)}`);
+            if (result.badImageResponses.length) failures.push(`${name}: bad image responses ${JSON.stringify(result.badImageResponses)}`);
+            if (result.audit.smallTargets.length) failures.push(`${name}: <44px visible targets ${JSON.stringify(result.audit.smallTargets)}`);
+            if (result.audit.clipped.length) failures.push(`${name}: clipped copy ${JSON.stringify(result.audit.clipped)}`);
+            if (result.pageErrors.length) failures.push(`${name}: page errors ${JSON.stringify(result.pageErrors)}`);
+            if (!result.focusedSkip?.focused || !result.focusedSkip?.visible || result.focusedSkip.height < 44) {
+              failures.push(`${name}: focused skip link is not a usable >=44px control ${JSON.stringify(result.focusedSkip)}`);
+            }
+            if (result.menu && (!result.menu.opened || !result.menu.escapeClosed || !result.menu.focusRestored)) {
+              failures.push(`${name}: mobile menu contract failed ${JSON.stringify(result.menu)}`);
+            }
+          }
+          if (failures.length) {
+            console.error(failures.join("\n"));
+            process.exit(1);
+          }
+          console.log("HEADLESS_VISUAL_AUDIT=PASS");
           EOF
 
           cat > verification/lighthouse-summary.mjs <<'EOF'
@@ -160,60 +214,42 @@ jobs:
 
           const median = (values) => {
             const sorted = values.filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
-            if (!sorted.length) return null;
-            return sorted[Math.floor(sorted.length / 2)];
+            return sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
           };
 
-          const labels = ["base", "landing"];
-          const summary = {};
-          for (const label of labels) {
-            const runs = [];
-            for (let i = 1; i <= 3; i += 1) {
-              const report = JSON.parse(await readFile(`verification/${label}-lh-${i}.json`, "utf8"));
-              const requests = report.audits?.["network-requests"]?.details?.items ?? [];
-              const transfer = (type) => requests.filter((item) => !type || item.resourceType === type).reduce((sum, item) => sum + (item.transferSize || 0), 0);
-              runs.push({
-                lcp: report.audits?.["largest-contentful-paint"]?.numericValue,
-                cls: report.audits?.["cumulative-layout-shift"]?.numericValue,
-                fcp: report.audits?.["first-contentful-paint"]?.numericValue,
-                tbt: report.audits?.["total-blocking-time"]?.numericValue,
-                speedIndex: report.audits?.["speed-index"]?.numericValue,
-                performance: (report.categories?.performance?.score ?? 0) * 100,
-                accessibility: (report.categories?.accessibility?.score ?? 0) * 100,
-                bestPractices: (report.categories?.["best-practices"]?.score ?? 0) * 100,
-                seo: (report.categories?.seo?.score ?? 0) * 100,
-                totalTransfer: transfer(),
-                jsTransfer: transfer("Script"),
-                imageTransfer: transfer("Image"),
-                requestCount: requests.length,
-                images: requests.filter((item) => item.resourceType === "Image").map((item) => ({ url: item.url, transferSize: item.transferSize || 0 }))
-              });
-            }
-            summary[label] = {
-              runs,
-              median: Object.fromEntries(Object.keys(runs[0]).filter((key) => key !== "images").map((key) => [key, median(runs.map((run) => run[key]))])),
-              imageRequests: runs[1].images
-            };
+          const runs = [];
+          for (let i = 1; i <= 3; i += 1) {
+            const report = JSON.parse(await readFile(`verification/landing-lh-${i}.json`, "utf8"));
+            const requests = report.audits?.["network-requests"]?.details?.items ?? [];
+            const transfer = (type) => requests.filter((item) => !type || item.resourceType === type).reduce((sum, item) => sum + (item.transferSize || 0), 0);
+            runs.push({
+              lcp: report.audits?.["largest-contentful-paint"]?.numericValue,
+              cls: report.audits?.["cumulative-layout-shift"]?.numericValue,
+              fcp: report.audits?.["first-contentful-paint"]?.numericValue,
+              tbt: report.audits?.["total-blocking-time"]?.numericValue,
+              speedIndex: report.audits?.["speed-index"]?.numericValue,
+              performance: (report.categories?.performance?.score ?? 0) * 100,
+              accessibility: (report.categories?.accessibility?.score ?? 0) * 100,
+              bestPractices: (report.categories?.["best-practices"]?.score ?? 0) * 100,
+              seo: (report.categories?.seo?.score ?? 0) * 100,
+              totalTransfer: transfer(),
+              jsTransfer: transfer("Script"),
+              imageTransfer: transfer("Image"),
+              requestCount: requests.length,
+              images: requests.filter((item) => item.resourceType === "Image").map((item) => ({ url: item.url, transferSize: item.transferSize || 0 }))
+            });
           }
-          await writeFile("verification/lighthouse-summary.json", JSON.stringify(summary, null, 2));
-          console.log(JSON.stringify(summary, null, 2));
-          EOF
 
-      - name: Start BASE and collect 3-run Lighthouse
-        shell: bash
-        run: |
-          set -e
-          cd /tmp/mb-base
-          ./node_modules/.bin/next start -H 127.0.0.1 -p 3000 > "$GITHUB_WORKSPACE/verification/base-server.log" 2>&1 &
-          pid=$!
-          echo "$pid" > "$GITHUB_WORKSPACE/verification/base-server.pid"
-          for i in {1..60}; do curl -fsS http://127.0.0.1:3000/ >/dev/null && break; sleep 1; done
-          curl -fsS http://127.0.0.1:3000/ > "$GITHUB_WORKSPACE/verification/base-ssr.html"
-          cd "$GITHUB_WORKSPACE"
-          for i in 1 2 3; do
-            npx -y lighthouse@12 http://127.0.0.1:3000/ --quiet --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" --output=json --output-path="verification/base-lh-$i.json"
-          done
-          kill "$pid" || true
+          const medianResult = Object.fromEntries(
+            Object.keys(runs[0])
+              .filter((key) => key !== "images")
+              .map((key) => [key, median(runs.map((run) => run[key]))])
+          );
+          const summary = { runs, median: medianResult, imageRequests: runs[1].images };
+          await writeFile("verification/lighthouse-summary.json", JSON.stringify(summary, null, 2));
+          console.log(`LIGHTHOUSE_MEDIAN=${JSON.stringify(medianResult)}`);
+          console.log(`LIGHTHOUSE_IMAGE_REQUESTS=${JSON.stringify(runs[1].images)}`);
+          EOF
 
       - name: Start LANDING and collect headless proof plus 3-run Lighthouse
         shell: bash
@@ -222,13 +258,14 @@ jobs:
           ./node_modules/.bin/next start -H 127.0.0.1 -p 3000 > verification/landing-server.log 2>&1 &
           pid=$!
           echo "$pid" > verification/landing-server.pid
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
           for i in {1..60}; do curl -fsS http://127.0.0.1:3000/ >/dev/null && break; sleep 1; done
           curl -fsS http://127.0.0.1:3000/ > verification/landing-ssr.html
-          node verification/landing-headless.mjs
+          node verification/landing-headless.mjs | tee verification/headless-audit.log
+          node verification/enforce-headless.mjs | tee verification/headless-enforcement.log
           for i in 1 2 3; do
             npx -y lighthouse@12 http://127.0.0.1:3000/ --quiet --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" --output=json --output-path="verification/landing-lh-$i.json"
           done
-          kill "$pid" || true
           node verification/lighthouse-summary.mjs | tee verification/lighthouse-summary.log
 
       - name: Prove server-rendered landing content exists before hydration
@@ -237,7 +274,20 @@ jobs:
           grep -q "When your Muddies are close" verification/landing-ssr.html
           grep -q "Muddies + Linkr" verification/landing-ssr.html
           grep -q "Privacy" verification/landing-ssr.html
-          printf 'landing body text in raw HTML = PASS\ndesktop navigation text in raw HTML = PASS\n' | tee verification/ssr-proof.txt
+          printf 'SERVER_BODY=YES\nSERVER_DESKTOP_NAV=YES\n' | tee verification/ssr-proof.txt
+
+      - name: Print closeout evidence
+        if: always()
+        shell: bash
+        run: |
+          echo "=== VITEST SUMMARY ==="
+          grep -E "Test Files|Tests" verification/landing-vitest.log | tail -n 4 || true
+          echo "=== HEADLESS ==="
+          cat verification/headless-enforcement.log 2>/dev/null || true
+          echo "=== LIGHTHOUSE ==="
+          cat verification/lighthouse-summary.log 2>/dev/null || true
+          echo "=== SSR ==="
+          cat verification/ssr-proof.txt 2>/dev/null || true
 
       - name: Upload verification evidence
         if: always()
@@ -251,8 +301,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          base_status=$(cat verification/base-vitest.status 2>/dev/null || echo 99)
           landing_status=$(cat verification/landing-vitest.status 2>/dev/null || echo 99)
-          echo "BASE vitest exit=$base_status"
           echo "LANDING vitest exit=$landing_status"
           test "$landing_status" -eq 0
