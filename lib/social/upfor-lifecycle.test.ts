@@ -141,3 +141,46 @@ describe("legacy and malformed rows degrade safely", () => {
     expect(isComingUpUpFor(legacy, NOW)).toBe(false);
   });
 });
+
+describe("slot accounting and Coming Up are different questions", () => {
+  const NOW_MS = NOW;
+  const future = (status: string) => row(status, "2026-07-17T18:00:00Z", "2026-07-17T20:00:00Z");
+
+  it("counts paused and full toward the ceiling but keeps them OUT of Coming Up", () => {
+    /*
+     * THE DELIBERATE DISAGREEMENT.
+     *
+     * A paused or full UpFor is a live intent the owner still holds, so it
+     * spends a slot -- otherwise pausing would be a way to hold unlimited
+     * sessions. But neither is something the viewer is waiting for: paused is
+     * not accepting anyone, and full has no room. Home lists what is coming
+     * up, not what is merely occupying a slot.
+     *
+     * These two predicates must therefore be allowed to differ, which is why
+     * Home must never be built on consumesUpForSlot().
+     */
+    for (const status of ["paused", "full"] as const) {
+      expect(consumesUpForSlot(future(status), NOW_MS), `${status} spends a slot`).toBe(true);
+      expect(isComingUpUpFor(future(status), NOW_MS), `${status} is not Coming Up`).toBe(false);
+    }
+  });
+
+  it("agrees on a future active UpFor: it both spends a slot and is coming up", () => {
+    expect(consumesUpForSlot(future("active"), NOW_MS)).toBe(true);
+    expect(isComingUpUpFor(future("active"), NOW_MS)).toBe(true);
+  });
+
+  it("agrees that terminal rows do neither", () => {
+    for (const status of ["expired", "cancelled", "converted_to_plan"] as const) {
+      expect(consumesUpForSlot(future(status), NOW_MS), status).toBe(false);
+      expect(isComingUpUpFor(future(status), NOW_MS), status).toBe(false);
+    }
+  });
+
+  it("disagrees on a RUNNING UpFor: it spends a slot but is not coming up", () => {
+    // Already happening, so it is not something to look forward to.
+    const running = row("active", "2026-07-17T13:00:00Z", "2026-07-17T16:00:00Z");
+    expect(consumesUpForSlot(running, NOW_MS)).toBe(true);
+    expect(isComingUpUpFor(running, NOW_MS)).toBe(false);
+  });
+});

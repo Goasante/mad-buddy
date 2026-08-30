@@ -451,7 +451,7 @@ export async function convertHangoutToPlan(
 
   const { data: session } = await admin
     .from("hangout_sessions")
-    .select("activity_type, message")
+    .select("activity_type, message, starts_at, ends_at, timezone, status")
     .eq("id", hangoutId)
     .maybeSingle();
   if (!session) return { ok: false, code: "not_found", message: "UpFor not found." };
@@ -467,9 +467,21 @@ export async function convertHangoutToPlan(
     p_title: planTitle,
     p_description: session.message,
     p_plan_type: "quick",
-    p_start_at: null,
-    p_end_at: null,
-    p_timezone: "UTC",
+    /* A SCHEDULED UpFor keeps the start it was created for.
+
+       Converting an 18:30 UpFor at 16:00 must produce a Plan that starts at
+       18:30, not at the moment somebody pressed the button. The value comes
+       from the session row this function already read server-side -- never
+       from the caller -- so a client cannot post a start of its choosing
+       through the conversion path.
+
+       An UpFor that has ALREADY STARTED keeps the previous behaviour and
+       passes null: its start is in the past, and a Plan dated in the past
+       would be worse than one with no date at all. Existing semantics for a
+       running UpFor are deliberately unchanged. */
+    p_start_at: Date.parse(session.starts_at) > Date.now() ? session.starts_at : null,
+    p_end_at: Date.parse(session.starts_at) > Date.now() ? session.ends_at : null,
+    p_timezone: session.timezone || "UTC",
     p_rsvp_deadline: null,
     p_place_type: "decide_in_chat",
     p_custom_place_text: null,

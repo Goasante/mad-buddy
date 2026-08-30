@@ -96,9 +96,22 @@ export function isDiscoverableUpFor(row: UpForTiming, nowMs: number): boolean {
   return upForPhase(row, nowMs) === "live" && row.status === "active";
 }
 
-/** Whether this UpFor belongs in Home's "Coming Up" -- scheduled, not yet started. */
+/**
+ * Whether this UpFor belongs in Home's "Coming Up".
+ *
+ * DELIBERATELY NOT `consumesUpForSlot`. Slot accounting and presentation are
+ * different questions, and they disagree on purpose:
+ *
+ *   paused   spends a slot (it is a live intent the owner still holds, and if
+ *            pausing freed a slot somebody could hold unlimited sessions) but
+ *            is NOT coming up -- it is not accepting anyone
+ *   full     spends a slot but is NOT coming up -- there is no room in it
+ *
+ * So this requires `active` specifically, not merely "not terminal". Home lists
+ * what a person is actually waiting for, not what is occupying a slot.
+ */
 export function isComingUpUpFor(row: UpForTiming, nowMs: number): boolean {
-  return upForPhase(row, nowMs) === "scheduled" && row.status !== "draft";
+  return row.status === "active" && upForPhase(row, nowMs) === "scheduled";
 }
 
 /**
