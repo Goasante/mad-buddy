@@ -1,0 +1,124 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import {
+  AVATAR_SIZE_BY_GLOW_SIZE,
+  PROXIMITY_GLOW_SIZES,
+  type ProximityGlowSize
+} from "@/lib/proximity/glow-config";
+
+const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
+
+/**
+ * C1 — the Glow geometry authority.
+ *
+ * The product rule is that on every Glow composition the avatar centre and
+ * every concentric layer's centre are the SAME point. Runtime measurement
+ * across the real production wrappers proves the current tree satisfies that.
+ * These tests exist so it cannot silently stop being true.
+ *
+ * They assert the STRUCTURAL reasons centring holds, because those are what a
+ * future change would break. A screenshot diff would notice later and explain
+ * less.
+ */
+describe("glow geometry: one square frame owns every layer", () => {
+  const css = read("app/globals.css");
+  const glow = css.slice(css.indexOf(".proximity-glow {"), css.indexOf(".proximity-glow-reserve-bloom"));
+
+  it("centres the container's own contents", () => {
+    // Layers are absolutely positioned WITHOUT inset/left/top, so they are
+    // placed by the container's own centring. Lose this and every layer falls
+    // back to its static position -- top-left -- at once.
+    expect(glow).toContain("display: grid");
+    expect(glow).toContain("place-items: center");
+    expect(glow).toContain("position: relative");
+  });
+
+  it("keeps the container square, so 'centred' means the same on both axes", () => {
+    // The component sets width and height from the SAME number
+    // (geometry.avatar). A non-square container would still centre each layer,
+    // but the avatar and the layers would centre on different points once any
+    // layer was sized from the other axis.
+    const component = read("components/glow/proximity-glow.tsx");
+    expect(component).toContain("width: `${geometry.avatar}px`");
+    expect(component).toContain("height: `${geometry.avatar}px`");
+  });
+
+  it("never clips the layers it deliberately overflows", () => {
+    // The layers are larger than the container by design. overflow:hidden here
+    // would crop every state back to a disc and read as a broken Glow.
+    expect(glow).toContain("overflow: visible");
+  });
+});
+
+describe("glow geometry: avatar and layers agree on one size", () => {
+  // The two size systems are independent by construction: PROXIMITY_GLOW_SIZES
+  // drives the layers in px, AVATAR_SIZE_BY_GLOW_SIZE drives the avatar via a
+  // UserAvatar token. If they ever disagree the subject and the rings centre
+  // on different boxes -- the exact failure this tranche investigated.
+  const AVATAR_TOKEN_PX: Record<string, number> = {
+    sm: 40, // h-10
+    md: 56, // h-14
+    lg: 76, // h-[4.75rem]
+    xl: 96 // h-24
+  };
+
+  it.each(Object.keys(PROXIMITY_GLOW_SIZES) as ProximityGlowSize[])(
+    "size %s resolves the avatar and the layer box to the same px",
+    (size) => {
+      const layerPx = PROXIMITY_GLOW_SIZES[size].avatarPx;
+      const avatarPx = AVATAR_TOKEN_PX[AVATAR_SIZE_BY_GLOW_SIZE[size]];
+      expect(avatarPx, `glow size ${size}`).toBe(layerPx);
+    }
+  );
+
+  it("pins the UserAvatar tokens this mapping depends on", () => {
+    // The table above is a copy of values that live in another file, so it is
+    // checked against the source rather than trusted.
+    const avatar = read("components/ui/user-avatar.tsx");
+    expect(avatar).toContain('sm: "h-10 w-10');
+    expect(avatar).toContain('md: "h-14 w-14');
+    expect(avatar).toContain('lg: "h-[4.75rem] w-[4.75rem]');
+    expect(avatar).toContain('xl: "h-24 w-24');
+  });
+});
+
+describe("glow geometry: content cannot move the centre", () => {
+  it("keeps names, badges and buttons outside the Glow element", () => {
+    // ProximityGlowAvatar renders exactly one child into the Glow: the avatar.
+    // Names, proximity copy, Pro badges and buttons are the CALLER's siblings,
+    // so no amount of text can widen the box the layers centre on.
+    const component = read("components/glow/proximity-glow-avatar.tsx");
+    const glowBlock = component.slice(component.indexOf("<ProximityGlow"));
+    expect(glowBlock).toContain("<UserAvatar");
+
+    // No sibling element inside the Glow other than the avatar, and no text
+    // node at all. `name={name}` is fine -- that is a prop the avatar uses for
+    // its alt text, not laid-out content.
+    for (const leak of ["<button", "<p", "<span", "ProximityBadge", "ConfidenceBadge"]) {
+      expect(glowBlock, `content must not render inside the Glow: ${leak}`).not.toContain(leak);
+    }
+    expect(glowBlock.match(/<[A-Za-z]/g)?.length, "exactly one element inside the Glow").toBe(2);
+  });
+
+  it("sizes the avatar from the glow size, not from its surroundings", () => {
+    const component = read("components/glow/proximity-glow-avatar.tsx");
+    expect(component).toContain("size={AVATAR_SIZE_BY_GLOW_SIZE[size]}");
+  });
+});
+
+describe("glow geometry: no per-surface nudges", () => {
+  const css = read("app/globals.css");
+
+  it("corrects no production wrapper with a translate or offset", () => {
+    // If one surface needed a nudge the architecture would be wrong, so the
+    // absence of nudges IS the invariant. Scoped to the glow wrapper rules.
+    for (const selector of [".muddies-rail-glow", ".muddies-card-avatar"]) {
+      const start = css.indexOf(`${selector} {`);
+      expect(start, `${selector} should exist`).toBeGreaterThan(-1);
+      const block = css.slice(start, css.indexOf("}", start));
+      expect(block, selector).not.toMatch(/transform:\s*translate/);
+      expect(block, selector).not.toMatch(/margin-(left|top):\s*-?\d/);
+    }
+  });
+});
