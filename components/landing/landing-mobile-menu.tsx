@@ -76,7 +76,7 @@ export function LandingMobileMenu() {
       <button
         ref={triggerRef}
         type="button"
-        className="focus-ring inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#4E0401]/10 bg-white/45 text-[#4E0401] transition-colors hover:bg-white/75 dark:border-white/10 dark:bg-white/[0.04] dark:text-[#FFF8F1] dark:hover:bg-white/[0.08]"
+        className="focus-ring inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#4E0401]/10 bg-white/40 text-[#4E0401] transition-colors hover:bg-white/75 dark:border-white/10 dark:bg-white/[0.04] dark:text-[#FFF8F1] dark:hover:bg-white/[0.08]"
         aria-expanded={open}
         aria-controls={menuId}
         aria-label={open ? "Close menu" : "Open menu"}
@@ -86,7 +86,10 @@ export function LandingMobileMenu() {
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-40 bg-[#24120E]/28 pt-[calc(env(safe-area-inset-top,0px)+4.25rem)] backdrop-blur-[2px]" onMouseDown={() => close(false)}>
+        <div
+          className="fixed inset-0 z-40 bg-[#24120E]/30 pt-[calc(env(safe-area-inset-top,0px)+4.25rem)] backdrop-blur-[2px]"
+          onMouseDown={() => close()}
+        >
           <div
             id={menuId}
             ref={panelRef}
@@ -122,7 +125,7 @@ export function LandingMobileMenu() {
             <div className="mt-4 grid grid-cols-2 gap-2 border-t border-[#4E0401]/10 pt-4 dark:border-white/10">
               <Link
                 href="/login"
-                className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full border border-[#4E0401]/15 bg-white/65 px-4 text-sm font-semibold text-[#4E0401] dark:border-white/15 dark:bg-white/[0.05] dark:text-[#FFF8F1]"
+                className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full border border-[#4E0401]/15 bg-white/60 px-4 text-sm font-semibold text-[#4E0401] dark:border-white/15 dark:bg-white/[0.05] dark:text-[#FFF8F1]"
                 onClick={() => close(false)}
               >
                 Log in
