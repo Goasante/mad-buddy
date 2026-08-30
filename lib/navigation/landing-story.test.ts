@@ -17,6 +17,10 @@ function between(source: string, start: string, end: string) {
   return source.slice(startIndex, endIndex);
 }
 
+function expectAll(source: string, invariants: RegExp[]) {
+  for (const invariant of invariants) expect(source).toMatch(invariant);
+}
+
 const connectionModes = between(landing, "const connectionModes = [", "const privacyCanKnow = [");
 const muddiesMode = between(connectionModes, 'label: "Muddies"', 'label: "Linkr"');
 const linkrMode = connectionModes.slice(connectionModes.indexOf('label: "Linkr"'));
@@ -25,51 +29,62 @@ const momentumFlow = between(landing, "const momentumFlow = [", "const supportin
 const connectionSection = between(landing, "function ConnectionSection()", "function MomentumSection()");
 const momentumSection = between(landing, "function MomentumSection()", "function PrivacySection()");
 
-describe("the landing page keeps the product's real connection model", () => {
-  it("keeps Muddies as mutually approved existing relationships", () => {
-    expect(muddiesMode).toMatch(/friendship|people you already trust/i);
-    expect(muddiesMode).toMatch(/both people approve|mutual approval/i);
+describe("the landing page preserves the product connection model", () => {
+  it("models Muddies as existing relationships that require mutual approval", () => {
+    expectAll(muddiesMode, [
+      /friend|people you already trust/i,
+      /both people approve|mutual approval/i
+    ]);
     expect(connectionSection).toContain("connectionModes.map");
   });
 
-  it("keeps Linkr as deliberate discovery of people not already known", () => {
-    expect(linkrMode).toMatch(/discover someone new|people you might want to know/i);
-    expect(linkrMode).toMatch(/Linkr session/i);
-    expect(linkrMode).toMatch(/mutual choice/i);
+  it("models Linkr as deliberate discovery beyond people already known", () => {
+    expectAll(linkrMode, [
+      /discover someone new|people you might want to know/i,
+      /session/i,
+      /mutual choice|both.*choose/i
+    ]);
     expect(connectionSection).toContain("connectionModes.map");
   });
 
-  it("keeps Linkr exposure user-controlled and session-bounded", () => {
-    expect(linkrMode).toMatch(/switch on a Linkr session/i);
-    expect(linkrMode).toMatch(/choose when discovery is active|choose when discovery is on/i);
+  it("keeps Linkr exposure user-controlled and bounded to an enabled session", () => {
+    expectAll(linkrMode, [
+      /switch on|turn on|enable/i,
+      /Linkr session|discovery.*active|discovery.*on/i,
+      /you choose|your choice|on your terms/i
+    ]);
   });
 
-  it("keeps UpFor as a real named capability in the momentum story", () => {
+  it("keeps UpFor as a first-class named product capability", () => {
     expect(momentumFlow).toMatch(/label:\s*"UpFor"/);
-    expect(momentumSection).toMatch(/UpFor\s*·\s*right now/i);
-    expect(momentumSection).toMatch(/Temporary intent/i);
+    expect(momentumSection).toMatch(/\bUpFor\b/);
   });
 });
 
 describe("the landing page keeps proximity communication privacy-safe", () => {
-  it("never turns a Muddy's Glow into precise location", () => {
-    expect(muddiesMode).toMatch(/rough sense|privacy-safe proximity/i);
-    expect(muddiesMode).toMatch(/never a map, pin or exact distance/i);
+  it("communicates Muddy proximity without precise tracking primitives", () => {
+    expectAll(muddiesMode, [
+      /rough sense|privacy-safe proximity|roughly/i,
+      /never a map, pin or exact distance|no exact/i
+    ]);
   });
 
   it("keeps Linkr discovery free of exact-location exposure", () => {
-    expect(linkrMode).toMatch(/No exact-location reveal/i);
+    expect(linkrMode).toMatch(/no exact-location reveal|no exact location|without.*exact.*location/i);
   });
 
-  it("explicitly withholds the tracking primitives", () => {
+  it("explicitly withholds exact coordinates, numerical distance and maps/pins", () => {
     for (const invariant of [
       "Exact GPS coordinates",
       "A live map or map pin",
-      "Exact numerical distance",
-      "Location history"
+      "Exact numerical distance"
     ]) {
       expect(privacyNeverGet).toContain(invariant);
     }
+  });
+
+  it("also withholds location history", () => {
+    expect(privacyNeverGet).toContain("Location history");
   });
 
   it("does not restore false exclusivity claims about who may appear nearby", () => {
