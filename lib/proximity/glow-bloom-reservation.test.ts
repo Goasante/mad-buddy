@@ -4,6 +4,7 @@ import {
   PROXIMITY_GLOW_LEVELS,
   PROXIMITY_GLOW_CONFIG,
   PROXIMITY_GLOW_SIZES,
+  PROXIMITY_GLOW_REFERENCE_AVATAR_PX,
   resolveGlowGeometry,
   type ProximityGlowLevel,
   type ProximityGlowSize
@@ -143,45 +144,44 @@ describe("the Near strip reserves enough room for the bloom", () => {
   });
 });
 
-describe("the Near strip tightens the gap without reordering the states", () => {
-  it("measures the nearest avatar-edge to primary-ring gap at the real Home size", () => {
+describe("the tightened gap is canonical, and keeps the states ordered", () => {
+  /*
+   * The tightening used to be a `.near-strip` stylesheet override, so these
+   * tests re-applied the formula by hand to model what CSS would do. It now
+   * lives in `resolveGlowGeometry`, which returns the tightened ring directly
+   * -- so the values below are read, not recomputed. Applying the formula a
+   * second time would measure a Glow the product never draws.
+   *
+   * The invariant is unchanged: the ring sits closer to the avatar than the
+   * raw prototype offset put it, never inside the core, and the six states
+   * stay strictly ordered so proximity still reads.
+   */
+  it("leaves a tighter avatar-edge to ring gap than the raw offset", () => {
     const g = resolveGlowGeometry("right-here", NEAR_STRIP_SIZE);
     const border = PROXIMITY_GLOW_CONFIG["right-here"].layers.ringWidth;
-    const before = (g.ring - border * 2 - g.avatar) / 2;
-    const tightenedWidth = (g.ring + g.core) / 2;
-    const after = (tightenedWidth - border * 2 - g.avatar) / 2;
+    const gap = (g.ring - border * 2 - g.avatar) / 2;
 
-    expect(before).toBeCloseTo(11.46, 2);
-    expect(after).toBeCloseTo(6.62, 2);
-    expect(after).toBeLessThan(before);
+    // The raw, untightened offset for the same state and size.
+    const scale = PROXIMITY_GLOW_SIZES[NEAR_STRIP_SIZE].avatarPx / PROXIMITY_GLOW_REFERENCE_AVATAR_PX;
+    const rawRing = PROXIMITY_GLOW_CONFIG["right-here"].ring * scale;
+    const rawGap = (rawRing - border * 2 - g.avatar) / 2;
+
+    expect(gap).toBeLessThan(rawGap);
+    expect(gap).toBeGreaterThan(0);
   });
 
-  it("pulls the ring in toward the avatar", () => {
+  it("never pulls the ring inside the core, which would invert the layers", () => {
     for (const level of LEVELS) {
       const g = resolveGlowGeometry(level, NEAR_STRIP_SIZE);
-      const tightened = (g.ring + g.core) / 2;
-      expect(tightened, `${level}`).toBeLessThan(g.ring);
-      // ...but never inside the core, which would invert the layer order.
-      expect(tightened).toBeGreaterThan(g.core);
+      expect(g.ring, `${level}`).toBeGreaterThan(g.core);
     }
   });
 
   it("keeps the six states ordered after tightening", () => {
-    const gaps = LEVELS.map((level) => {
-      const g = resolveGlowGeometry(level, NEAR_STRIP_SIZE);
-      return (g.ring + g.core) / 2;
-    });
-    for (let i = 1; i < gaps.length; i += 1) {
-      expect(gaps[i - 1], `${LEVELS[i - 1]} vs ${LEVELS[i]}`).toBeGreaterThan(gaps[i]!);
+    const rings = LEVELS.map((level) => resolveGlowGeometry(level, NEAR_STRIP_SIZE).ring);
+    for (let i = 1; i < rings.length; i += 1) {
+      expect(rings[i - 1], `${LEVELS[i - 1]} vs ${LEVELS[i]}`).toBeGreaterThan(rings[i]!);
     }
-  });
-
-  it("roughly halves the dead band between the core and the ring", () => {
-    const g = resolveGlowGeometry("right-here", NEAR_STRIP_SIZE);
-    const before = (g.ring - g.core) / 2;
-    const after = ((g.ring + g.core) / 2 - g.core) / 2;
-    expect(after).toBeLessThan(before);
-    expect(after / before).toBeCloseTo(0.5, 1);
   });
 });
 

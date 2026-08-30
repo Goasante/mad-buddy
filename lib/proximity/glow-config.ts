@@ -365,10 +365,32 @@ export function resolveGlowGeometry(
   // are what the browser actually lays out, so sizing the box against the
   // unrounded ones can leave it a fraction of a pixel short of the layer it is
   // supposed to contain.
-  const ring = round(config.ring * scale);
-  const outer = round(config.outer * scale);
   const core = round(PROTOTYPE_CORE_PX * scale);
   const field = round(PROTOTYPE_FIELD_PX * scale);
+
+  /**
+   * THE GLOW STARTS AT THE AVATAR, not a ring's distance away.
+   *
+   * The raw prototype offsets leave a visible gap: the core draws a bright
+   * edge just off the photo, the ring sits well outside it, and between them
+   * the soft halo has already fallen off far enough to read as a transparent
+   * void -- photo, thin bright circle, empty band, then a detached ring.
+   *
+   * Each ring is drawn at the midpoint of its own distance past the layer
+   * inside it. The spread that separates the six states is COMPRESSED, not
+   * removed: every state keeps half of its own offset, so the ordering that
+   * carries proximity survives intact.
+   *
+   * This lives here, in the canonical geometry, because it is a property of
+   * the Glow rather than of any one screen. It was previously a `.near-strip`
+   * stylesheet override, which meant Home rendered a materially different ring
+   * (99.38px vs 112.53px at lg/right-here) for the SAME proximity state every
+   * other surface drew canonically. One state must look like one state
+   * everywhere; a surface that needs more room changes its own slot, never
+   * these numbers.
+   */
+  const ring = round((config.ring * scale + core) / 2);
+  const outer = round((config.outer * scale + config.ring * scale) / 2);
 
   // How far ring2 actually travels, which depends on which animation it runs.
   const ring2Peak =

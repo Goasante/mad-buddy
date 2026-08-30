@@ -273,14 +273,17 @@ describe("size variants preserve the hierarchy", () => {
   it("scales proportionally against the size it actually renders at", () => {
     // hero is the reference scale for the prototype ratios; every smaller size
     // is a strict scale-down of the same geometry, not a re-tuned table.
-    for (const size of SIZES) {
+    // The ring is the TIGHTENED midpoint (see resolveGlowGeometry), not the
+    // raw prototype offset, so the invariant is proportionality rather than a
+    // literal ratio: every size must be the same shape scaled, and the ring
+    // must still clear the avatar it surrounds.
+    const ratios = SIZES.map((size) => {
       const { avatarPx } = PROXIMITY_GLOW_SIZES[size];
       const geometry = resolveGlowGeometry("right-here", size);
-      const expectedRing = (PROXIMITY_GLOW_CONFIG["right-here"].ring * avatarPx) / 104;
-      expect(geometry.ring).toBeCloseTo(expectedRing, 1);
-      // The ring always clears the avatar it surrounds.
-      expect(geometry.ring).toBeGreaterThan(avatarPx);
-    }
+      expect(geometry.ring, size).toBeGreaterThan(avatarPx);
+      return geometry.ring / avatarPx;
+    });
+    for (const ratio of ratios) expect(ratio).toBeCloseTo(ratios[0]!, 1);
   });
 
   it("reserves room for the animation peak, not just the static layers", () => {
@@ -312,14 +315,17 @@ describe("size variants preserve the hierarchy", () => {
   });
 
   it("only grows the box where a layer actually needs it", () => {
-    // A blanket oversize would push neighbouring avatars apart for nothing.
-    // Only Right Here's expanding wave reaches past the static field.
-    expect(resolveGlowGeometry("right-here", "hero").box).toBeGreaterThan(
-      resolveGlowGeometry("right-here", "hero").field
-    );
-    for (const level of ["close-by", "in-your-area", "around-town", "across-town"] as const) {
+    // A blanket oversize would push neighbouring avatars apart for nothing, so
+    // the box is only ever as large as the widest layer a state actually
+    // draws. Since the ring tightening became canonical, the outermost EDGE
+    // layer no longer reaches past the static radial field at any state, so
+    // the field bounds the box throughout -- and the box must never be smaller
+    // than a layer, which is what would clip the aura.
+    for (const level of PROXIMITY_GLOW_LEVELS) {
       const geometry = resolveGlowGeometry(level, "hero");
       expect(geometry.box, level).toBe(geometry.field);
+      expect(geometry.box, `${level} must contain ring2`).toBeGreaterThanOrEqual(geometry.outer);
+      expect(geometry.box, `${level} must contain the ring`).toBeGreaterThanOrEqual(geometry.ring);
     }
   });
 

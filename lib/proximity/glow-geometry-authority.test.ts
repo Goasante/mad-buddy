@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   AVATAR_SIZE_BY_GLOW_SIZE,
   PROXIMITY_GLOW_SIZES,
+  PROXIMITY_GLOW_LEVELS,
+  resolveGlowGeometry,
   type ProximityGlowSize
 } from "@/lib/proximity/glow-config";
 
@@ -119,6 +121,46 @@ describe("glow geometry: no per-surface nudges", () => {
       const block = css.slice(start, css.indexOf("}", start));
       expect(block, selector).not.toMatch(/transform:\s*translate/);
       expect(block, selector).not.toMatch(/margin-(left|top):\s*-?\d/);
+    }
+  });
+});
+
+describe("glow atomicity: one state looks the same on every surface", () => {
+  const css = read("app/globals.css");
+
+  it("lets no surface restyle the Glow's internal layers", () => {
+    /*
+     * THE DEFECT THIS EXISTS FOR. `.near-strip` (Home's nearby row) used to
+     * redefine the ring, ring2 and core for the same proximity state every
+     * other surface drew canonically -- measured at lg/right-here, Home drew a
+     * 99.38px ring against 112.53px elsewhere. Same person, same state, same
+     * size, two different Glows depending on the route.
+     *
+     * A surface may position the finished unit and reserve room around it. It
+     * may not reach inside. Any `.some-surface .proximity-glow__layer` rule is
+     * that reach, so the count must stay zero.
+     */
+    const surfaceScoped = css.match(/^\.[a-z-]+ +\.proximity-glow[^,{]*/gm) ?? [];
+    expect(surfaceScoped, `surface-scoped Glow internals: ${surfaceScoped.join(", ")}`).toHaveLength(0);
+  });
+
+  it("keeps the ring tightening in the geometry, not in a stylesheet", () => {
+    // If this moves back into CSS it can be scoped to one surface again, which
+    // is exactly how the divergence happened.
+    const config = read("lib/proximity/glow-config.ts");
+    expect(config).toContain("const ring = round((config.ring * scale + core) / 2);");
+    expect(css).not.toContain(".near-strip .proximity-glow__ring");
+  });
+
+  it("keeps every state ordered and inside its reserved box after tightening", () => {
+    // Compression must not flatten proximity: closer must still draw wider.
+    const rings = PROXIMITY_GLOW_LEVELS.map((l) => resolveGlowGeometry(l, "hero"));
+    for (let i = 1; i < rings.length; i += 1) {
+      expect(rings[i - 1]!.ring).toBeGreaterThan(rings[i]!.ring);
+    }
+    for (const g of rings) {
+      expect(g.ring).toBeGreaterThan(g.core);
+      expect(g.box).toBeGreaterThanOrEqual(g.outer);
     }
   });
 });
