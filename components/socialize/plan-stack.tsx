@@ -333,6 +333,10 @@ function UpForAgendaCard({ upfor, nowMs }: { upfor: ComingUpUpForItem; nowMs: nu
             {upfor.title}
           </Link>
           {countdown ? <div className="linkr-plan-meta">{countdown}</div> : null}
+          {/* Fills the slot the way the Plan and Event cards do. Without a
+             trailing block the shorter card left the card beneath it showing
+             through the stack -- "Hosted by Ama" bleeding over an UpFor. */}
+          <p className="linkr-plan-host">Open to your Muddies</p>
         </div>
       </div>
     </article>

@@ -28,7 +28,13 @@ describe("approved compact UpFor activity card", () => {
   });
 
   it("keeps expiry and response authority while exposing View", () => {
-    expect(card).toContain("upForTimeLeft(upfor.endsAt, nowMs)");
+    /* The time line now comes from the phase-aware helper rather than
+       upForTimeLeft: a scheduled UpFor counts down to its START, a running
+       one to its end, and a terminal one shows nothing. The invariant is
+       unchanged -- the card derives expiry from canonical timestamps and
+       persists no countdown -- so that is what is asserted. */
+    expect(card).toContain("upForCountdownLabel(upfor, nowMs)");
+    expect(card).toContain("timeLabel");
     expect(card).toContain("isOwner ? null : expired ? (");
     expect(card).toContain("I&apos;m in");
     expect(card).toMatch(/>\s*View\s*</);
