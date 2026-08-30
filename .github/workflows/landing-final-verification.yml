@@ -182,7 +182,7 @@ jobs:
           EOF
 
           cat > verification/enforce-headless.mjs <<'EOF'
-          import { readFile } from "node:fs/promises";
+          import { readFile, writeFile } from "node:fs/promises";
 
           const results = JSON.parse(await readFile("verification/headless-audit.json", "utf8"));
           const failures = [];
@@ -202,11 +202,8 @@ jobs:
               failures.push(`${name}: mobile menu contract failed ${JSON.stringify(result.menu)}`);
             }
           }
-          if (failures.length) {
-            console.error(failures.join("\n"));
-            process.exit(1);
-          }
-          console.log("HEADLESS_VISUAL_AUDIT=PASS");
+          await writeFile("verification/headless-failures.txt", failures.join("\n"));
+          console.log(failures.length ? failures.join("\n") : "HEADLESS_VISUAL_AUDIT=PASS");
           EOF
 
           cat > verification/lighthouse-summary.mjs <<'EOF'
@@ -276,18 +273,23 @@ jobs:
           grep -q "Privacy" verification/landing-ssr.html
           printf 'SERVER_BODY=YES\nSERVER_DESKTOP_NAV=YES\n' | tee verification/ssr-proof.txt
 
-      - name: Print closeout evidence
+      - name: Publish closeout evidence
         if: always()
         shell: bash
         run: |
-          echo "=== VITEST SUMMARY ==="
-          grep -E "Test Files|Tests" verification/landing-vitest.log | tail -n 4 || true
-          echo "=== HEADLESS ==="
-          cat verification/headless-enforcement.log 2>/dev/null || true
-          echo "=== LIGHTHOUSE ==="
-          cat verification/lighthouse-summary.log 2>/dev/null || true
-          echo "=== SSR ==="
-          cat verification/ssr-proof.txt 2>/dev/null || true
+          {
+            echo '## Landing closeout evidence'
+            echo '```text'
+            echo '=== VITEST SUMMARY ==='
+            grep -E "Test Files|Tests" verification/landing-vitest.log | tail -n 4 || true
+            echo '=== HEADLESS ==='
+            if [ -s verification/headless-failures.txt ]; then cat verification/headless-failures.txt; else echo 'HEADLESS_VISUAL_AUDIT=PASS'; fi
+            echo '=== LIGHTHOUSE ==='
+            cat verification/lighthouse-summary.log 2>/dev/null || true
+            echo '=== SSR ==='
+            cat verification/ssr-proof.txt 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload verification evidence
         if: always()
@@ -297,10 +299,12 @@ jobs:
           path: verification/
           if-no-files-found: warn
 
-      - name: Enforce landing full-suite result
+      - name: Enforce final closeout
         if: always()
         shell: bash
         run: |
           landing_status=$(cat verification/landing-vitest.status 2>/dev/null || echo 99)
           echo "LANDING vitest exit=$landing_status"
           test "$landing_status" -eq 0
+          test -f verification/headless-failures.txt
+          test ! -s verification/headless-failures.txt
