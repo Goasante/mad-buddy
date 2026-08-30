@@ -79,23 +79,29 @@ describe("acknowledging the first Muddy", () => {
   });
 });
 
-describe("Glow is the hero, not a map pin", () => {
+describe("the person is the hero, and no proximity is invented", () => {
   const card = stripComments(readFileSync("components/activation/first-muddy-card.tsx", "utf8"));
 
-  it("leads with the person in the app's real Glow treatment", () => {
-    /* Matches the element boundary, not a prefix.
+  it("renders the real person, with no fabricated proximity state", () => {
+    /*
+     * This block used to REQUIRE a Glow here -- `proximityLevel=` and
+     * `glowStrength=` -- and called it "a real signal". It never was: the
+     * card's `muddy` prop is {id, displayName, avatarUrl}, so the level was
+     * hardcoded to "near" for somebody whose data says nothing about where
+     * they are. A Glow is a claim about proximity, and an activation card is
+     * not entitled to make one.
      *
-     * `toContain("<GlowAvatar")` also matched `<GlowAvatarX`, so swapping in a
-     * different component passed. The trailing boundary is what makes this
-     * assert the real component rather than anything starting with its name. */
-    expect(card).toMatch(/<GlowAvatar[\s/>]/);
-    // And it must be the Glow treatment doing the work, with a real signal.
-    expect(card).toContain("proximityLevel=");
-    expect(card).toContain("glowStrength=");
+     * What survives is the real intent: lead with the person's actual face.
+     */
+    expect(card).toMatch(/<UserAvatar[\s/>]/);
+    expect(card).toContain("src={muddy.avatarUrl}");
+    expect(card).not.toMatch(/proximityLevel=/);
+    expect(card).not.toMatch(/glowStrength=/);
   });
 
-  it("reuses the canonical Glow component rather than a second implementation", () => {
-    expect(card).toContain('from "@/components/glow/glow-avatar"');
+  it("does not instantiate the Glow system for a card with no proximity", () => {
+    expect(card).not.toContain('from "@/components/glow/glow-avatar"');
+    expect(card).not.toContain("<GlowAvatar");
   });
 
   it("uses no map, pin, radar or distance metaphor", () => {
@@ -104,9 +110,10 @@ describe("Glow is the hero, not a map pin", () => {
     }
   });
 
-  it("passes reduced motion through to the Glow treatment", () => {
-    expect(card).toContain("useReducedMotion");
-    expect(card).toContain("reducedMotion={reducedMotion}");
+  it("needs no motion preference, because nothing here animates", () => {
+    // The Glow was the only animated thing on this card. With it gone the
+    // hook would be dead code, so its absence is the correct state.
+    expect(card).not.toContain("reducedMotion={reducedMotion}");
   });
 
   it("never fabricates an avatar", () => {

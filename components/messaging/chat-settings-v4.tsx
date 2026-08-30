@@ -1,6 +1,7 @@
 "use client";
 
 import { BellOff, Bookmark, ChevronRight, Clock3, Image, Pin, Search, ShieldCheck, Star, UsersRound } from "lucide-react";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { useState, useTransition } from "react";
 
 import { muteConversationAction } from "@/app/(app)/messaging-actions";
@@ -8,7 +9,6 @@ import {
   updateConversationChatSettingsAction,
   updateConversationUserPreferencesAction
 } from "@/app/(app)/messaging-ultimate-actions";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { ChatCollectionsV4 } from "@/components/messaging/chat-collections-v4";
 import { Modal } from "@/components/ui/modal";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
@@ -104,7 +104,7 @@ export function ChatSettingsV4({
       >
         <div className="space-y-4 pb-[max(.5rem,env(safe-area-inset-bottom))]">
           <div className="flex items-center gap-3 rounded-[22px] border border-border/60 bg-card/70 p-3">
-            <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" membershipTier={publicMembershipTier(conversation.otherPlan)} />
+            <UserAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" decorative membershipTier={publicMembershipTier(conversation.otherPlan)} className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" />
             <div className="min-w-0 flex-1">
               <strong className="block truncate text-[15px]">{conversation.title}</strong>
               <span className="text-xs text-muted-foreground">{isGroup ? "Group conversation" : conversation.otherUsername ? `@${conversation.otherUsername}` : "Conversation"}</span>

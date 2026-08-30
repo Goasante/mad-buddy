@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Loader2, Pencil, Send, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EventArtwork } from "@/components/events/event-artwork";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { SafeMessageText } from "@/components/messages/safe-message-text";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import {
@@ -256,11 +256,13 @@ export function EventRoomDetail({
                   key={member.userId}
                   className={cn("rounded-full ring-2 ring-black/20", index > 0 && "-ml-2.5")}
                 >
-                  <GlowAvatar
+                  <UserAvatar
                     name={member.displayName}
                     src={member.avatarUrl}
                     size="sm"
+                    decorative
                     membershipTier={publicMembershipTier(member.plan)}
+                    className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]"
                   />
                 </div>
               ))}
@@ -327,10 +329,12 @@ export function EventRoomDetail({
             ) : (
               messages.map((message) => (
                 <div key={message.id} className="flex items-start gap-2.5">
-                  <GlowAvatar
+                  <UserAvatar
                     name={message.senderName}
                     src={message.senderAvatarUrl}
                     size="sm"
+                    decorative
+                    className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]"
                   />
                   <div className="min-w-0 flex-1">
                     <p className="flex items-baseline gap-2">
@@ -400,11 +404,12 @@ export function EventRoomDetail({
           ) : (
             members.map((member) => (
               <div key={member.userId} className="flex items-center gap-3 rounded-xl px-1 py-2">
-                <GlowAvatar
+                <UserAvatar
                   name={member.displayName}
                   src={member.avatarUrl}
                   size="sm"
-                  membershipTier={publicMembershipTier(member.plan)}
+                  decorative
+                  className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]"
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">

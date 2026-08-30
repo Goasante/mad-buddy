@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -10,6 +11,8 @@ import {
 } from "@/lib/proximity/glow-config";
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
+/** Line splitter that tolerates either line ending, so a CRLF checkout reads the same. */
+const SPLIT_LINES = /\r?\n/;
 
 /**
  * C1 — the Glow geometry authority.
@@ -161,6 +164,73 @@ describe("glow atomicity: one state looks the same on every surface", () => {
     for (const g of rings) {
       expect(g.ring).toBeGreaterThan(g.core);
       expect(g.box).toBeGreaterThanOrEqual(g.outer);
+    }
+  });
+});
+
+describe("one proximity identity system", () => {
+  const PRODUCTION_GLOB = ["components", "app"];
+
+  /** Every production .tsx, excluding admin-gated VNext labs and dev harnesses. */
+  function productionFiles(): string[] {
+    return execSync(`git ls-files ${PRODUCTION_GLOB.join(" ")}`, { encoding: "utf8" })
+      .split("\n")
+      .filter((f) => f.endsWith(".tsx"))
+      .filter((f) => !/vnext|profile-lab|chats-lab|\/dev\//.test(f));
+  }
+
+  it("renders Muddy proximity through exactly one component", () => {
+    // ProximityGlowAvatar is the sole Muddy proximity primitive. The legacy
+    // GlowAvatar path (GlowRing / .proximity-halo) survives only for Socialize,
+    // which carries its own three-level discovery tier -- a different signal
+    // with its own filtering and ranking, not the six-state nearby band.
+    const legacy = productionFiles().filter((f) =>
+      readFileSync(join(process.cwd(), f), "utf8").includes("<GlowAvatar")
+    );
+    const allowed = [
+      "components/socialize/socialize-person-card.tsx",
+      "components/socialize/swipe-deck.tsx",
+      "components/onboarding/visibility-preview-card.tsx",
+      // Unrouted legacy Messages pages: no route imports them. Listed so the
+      // guard stays honest rather than silently passing over dead files.
+      "components/messages/messages-page.tsx",
+      "components/messages/messages-page-v2.tsx",
+      "components/messages/messages-page-v3.tsx"
+    ];
+    const unexpected = legacy.filter((f) => !allowed.includes(f));
+    expect(unexpected, `new legacy Glow callers: ${unexpected.join(", ")}`).toHaveLength(0);
+  });
+
+  it("never fabricates a proximity level for a card that has no proximity data", () => {
+    // Home's first-muddy card used to hardcode proximityLevel="near" for a
+    // person whose props are {id, displayName, avatarUrl}. A Glow is a claim
+    // about where somebody is; it may only come from real authorized data.
+    const card = read("components/activation/first-muddy-card.tsx");
+    // Matched as a JSX prop, so the explanatory comment above the change does
+    // not itself trip the guard.
+    expect(card).not.toMatch(/proximityLevel=/);
+    expect(card).toContain("<UserAvatar");
+  });
+
+  it("keeps the inbox free of a Glow it has no proximity for", () => {
+    // Conversation membership is not a proximity fact.
+    const row = read("components/messaging/conversation-row-v4.tsx");
+    expect(row).not.toContain("GlowAvatar");
+    expect(row).toContain("<UserAvatar");
+  });
+
+  it("has no purple in the proximity Glow path", () => {
+    // Brand rule: proximity is the warm orange/maroon system.
+    const css = read("app/globals.css");
+    const railBlock = css.slice(css.indexOf(".muddies-rail-tone-close"), css.indexOf("/* --- Filter chips"));
+    // Declarations only: the comment recording which purples were removed is
+    // documentation, not a colour anything can render.
+    const declarations = railBlock
+      .split(SPLIT_LINES)
+      .filter((line) => !line.trim().startsWith("*") && !line.trim().startsWith("/*"))
+      .join(" ");
+    for (const purple of ["#a78bfa", "#8b7bd8", "#8b5cf6", "167 139 250"]) {
+      expect(declarations, `purple declared in the rail tone block: ${purple}`).not.toContain(purple);
     }
   });
 });

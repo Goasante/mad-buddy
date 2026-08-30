@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { ArrowRight, Check, ChevronRight, Loader2, LogOut, MapPin, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EventCoverField, type EventCoverValue } from "@/components/events/event-cover-field";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { EventArtwork } from "@/components/events/event-artwork";
 import { EventShare } from "@/components/events/event-share";
 import { AudienceChip, LiveBadge, SectionLabel, audienceHint, formatAttendance } from "@/components/events/event-badges";
@@ -109,11 +109,13 @@ function YourPeopleHere({ glowList }: { glowList: EventGlowMuddyList | null }) {
                     membershipTier IS passed: a premium ring is an identity
                     signal that belongs to the person on every surface, and it
                     is independent of proximity by construction. */}
-                <GlowAvatar
+                <UserAvatar
                   name={muddy.displayName}
                   src={muddy.avatarUrl}
                   size="sm"
+                  decorative
                   membershipTier={publicMembershipTier(muddy.plan)}
+                  className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]"
                 />
               </div>
             ))}

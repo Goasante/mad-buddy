@@ -3,7 +3,7 @@
 import { BellOff, Mail, Star, Archive, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { GlowAvatar } from "@/components/glow/glow-avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
@@ -165,7 +165,17 @@ export function ConversationRowV4({
         style={{ transform: `translate3d(${offset}px,0,0)` }}
       >
         <div className="relative shrink-0">
-          <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" membershipTier={publicMembershipTier(conversation.otherPlan)} />
+          {/* An inbox row carries no proximity, so it renders a plain avatar
+              rather than instantiating a dormant Glow system. Conversation
+              membership is not a proximity fact. */}
+          <UserAvatar
+            name={conversation.title}
+            src={conversation.avatarUrl}
+            size="sm"
+            decorative
+            membershipTier={publicMembershipTier(conversation.otherPlan)}
+            className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]"
+          />
           {conversation.unreadCount > 0 ? <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[#FEFBF3] bg-[#E88C2B] dark:border-background" /> : null}
         </div>
         <div className="min-w-0 flex-1">

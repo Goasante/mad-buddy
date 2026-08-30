@@ -1,12 +1,12 @@
 "use client";
 
 import { CalendarCheck2, HelpCircle, MessageCircle, Plus, Search, Send } from "lucide-react";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import * as Popover from "@radix-ui/react-popover";
 import { useMemo, useState, useTransition } from "react";
 import { createMeetupRequestAction, dismissMeetupRequestAction, respondToMeetupRequestAction, type MeetingPingListItem } from "@/app/(app)/premium-actions";
 import { getMessageableFriendsAction } from "@/app/(app)/messaging-actions";
 import type { MessageableFriend } from "@/lib/messaging/mobile";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
@@ -311,7 +311,7 @@ export function MeetingPingsPage({ initialPings }: { initialPings: MeetingPingLi
                       isSelected ? "bg-primary/10" : "hover:bg-secondary/60"
                     )}
                   >
-                    <GlowAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" />
+                    <UserAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{friend.displayName}</span>
                       {isDuplicateName ? (

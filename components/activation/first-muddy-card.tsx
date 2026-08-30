@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import type { Route } from "next";
 import { Lock, ShieldCheck, UserRound } from "lucide-react";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Button } from "@/components/ui/button";
-import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 
 /**
@@ -52,7 +51,6 @@ export function FirstMuddyCard({
   sayHiPending?: boolean;
   className?: string;
 }) {
-  const reducedMotion = useReducedMotion();
 
   return (
     <section
@@ -63,17 +61,18 @@ export function FirstMuddyCard({
       )}
     >
       <div className="flex items-start gap-4">
-        {/* The real avatar, in the real Glow ring. GlowAvatar owns the fallback
-            when somebody has no photo, so nothing is fabricated here. */}
-        <GlowAvatar
+        {/* The real avatar, with NO Glow.
+            This card used to hardcode a "near" proximity state, which drew a
+            proximity state for somebody whose data carries none -- the `muddy`
+            prop is {id, displayName, avatarUrl}. A Glow is a claim about where
+            a person is; inventing one to decorate an activation card is the
+            one thing the proximity system must never do. */}
+        <UserAvatar
           name={muddy.displayName}
           src={muddy.avatarUrl}
-          proximityLevel="near"
-          glowStrength={0.55}
-          confidence="low"
           size="lg"
-          reducedMotion={reducedMotion}
-          className="shrink-0"
+          decorative
+          className="shrink-0 border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]"
         />
 
         <div className="min-w-0 flex-1">

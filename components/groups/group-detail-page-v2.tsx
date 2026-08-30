@@ -12,7 +12,6 @@ import {
   removeGroupMemberAction,
   transferGroupOwnershipAction
 } from "@/app/(app)/group-actions";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { MessageMediaViewer } from "@/components/messaging/message-media-viewer";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
@@ -149,7 +148,7 @@ export function GroupDetailPageV2({
 
       <section className="mt-4 overflow-hidden rounded-[28px] border border-border/60 bg-card/60 shadow-[0_20px_55px_rgba(78,4,1,.06)]">
         <div className="flex flex-col items-center px-5 pb-5 pt-7 text-center">
-          <GlowAvatar name={group.name} src={group.imageUrl} size="lg" />
+          <UserAvatar name={group.name} src={group.imageUrl} size="lg" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" />
           <h1 className="mt-4 font-serif text-2xl font-semibold tracking-tight text-[#4E0401] dark:text-orange-50">{group.name}</h1>
           <p className="mt-1 text-xs font-medium text-muted-foreground">{group.memberCount} members · {group.visibility === "public" ? "Public" : "Private"} · {group.joinMode === "link" ? "Open to join" : "Invite only"}</p>
           {group.description ? <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">{group.description}</p> : null}

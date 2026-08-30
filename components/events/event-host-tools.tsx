@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import {
   ChevronRight,
   Loader2,
@@ -13,7 +14,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EventArtwork } from "@/components/events/event-artwork";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { listEventGuestsAction } from "@/app/(app)/event-actions";
 import { cn } from "@/lib/utils";
 
@@ -303,7 +303,7 @@ export function EventGuestList({ eventId }: { eventId: string }) {
         <div className="space-y-1">
           {guests.map((guest) => (
             <div key={guest.userId} className="flex items-center gap-3 rounded-xl px-1 py-2">
-              <GlowAvatar name={guest.displayName} src={guest.avatarUrl} size="sm" />
+              <UserAvatar name={guest.displayName} src={guest.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{guest.displayName}</p>
                 <p className="text-xs text-muted-foreground">

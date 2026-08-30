@@ -97,18 +97,25 @@ describe("each empty state answers the question its tab asked", () => {
 
 describe("Events keep proximity out of attendance", () => {
   it("shows presence only where someone has explicitly checked in", () => {
-    /* GlowAvatar is correct in "Muddies here" -- that list is opt-in checked-in
-     * presence, not an inference from an RSVP. It must not spread to the RSVP
-     * controls or the Event cards, where nobody consented to being located. */
-    const glowUse = detail.slice(detail.indexOf('id="event-people-here"'));
-    expect(glowUse.slice(0, 1400)).toContain("<GlowAvatar");
+    /* "Muddies here" is opt-in checked-in presence, not an inference from an
+     * RSVP. It renders a PLAIN avatar: the roster never carried a proximity
+     * level (this test already asserted that), so it used to instantiate the
+     * Glow system to draw nothing. Event attendance is not a proximity fact,
+     * so the avatar is now UserAvatar and the Glow cannot appear here at all.
+     *
+     * The invariant is unchanged and now stricter: no proximity anywhere in
+     * Events -- not in the roster, not in the RSVP controls, not on the cards. */
+    const roster = detail.slice(detail.indexOf('id="event-people-here"'));
+    expect(roster.slice(0, 1400)).toContain("<UserAvatar");
+    expect(roster.slice(0, 1400)).not.toContain("proximityLevel");
 
     const rsvpBlock = detail.slice(detail.indexOf('id="event-rsvp"'), detail.indexOf('id="event-presence"'));
     expect(rsvpBlock).not.toContain("GlowAvatar");
+    expect(rsvpBlock).not.toContain("ProximityGlowAvatar");
 
-    /* And the roster passes NO proximityLevel, so GlowAvatar renders a plain
-     * avatar. Presence at an Event means "checked in", never a distance. */
-    expect(glowUse.slice(0, 1400)).not.toContain("proximityLevel");
+    // And the whole surface stays free of the proximity system.
+    expect(detail).not.toContain("GlowAvatar");
+    expect(detail).not.toContain("ProximityGlowAvatar");
   });
 
   it("never treats an RSVP as evidence of being somewhere", () => {

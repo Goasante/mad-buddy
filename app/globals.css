@@ -5355,30 +5355,21 @@ select {
   --muddies-tone: #f59f4b;
 }
 
-.muddies-rail-tone-near {
-  --muddies-tone: #a78bfa;
-}
-
-.muddies-rail-tone-far {
-  --muddies-tone: #8b7bd8;
-}
-
+/* The two cooler bands deliberately carry NO tone of their own and fall back
+   to muted-foreground. They used to carry violet accents, which are against
+   the brand: proximity is the warm orange/maroon system, and a
+   second palette keyed to distance is the kind of divergence this tranche
+   removed. The close band keeps its warm accent; further away simply recedes,
+   which is the correct reading anyway. */
+.muddies-rail-tone-near,
+.muddies-rail-tone-far,
 .muddies-rail-tone-hidden {
   --muddies-tone: hsl(var(--muted-foreground));
 }
 
-/* Recolours the halo for the two cooler bands, so the rail reads as a distance
-   gradient. Unlayered, so it wins over the layered proximity-halo-* defaults
-   without touching their blur, spread or timing. */
-.muddies-rail-tone-near .proximity-halo-nearby {
-  --halo-color: 167 139 250;
-  --halo-ring: linear-gradient(135deg, #c4b5fd 0%, #8b5cf6 100%);
-}
-
-.muddies-rail-tone-far .proximity-halo-around {
-  --halo-color: 139 123 216;
-  --halo-ring: linear-gradient(135deg, rgb(167 139 250 / 0.72) 0%, rgb(124 58 237 / 0.6) 100%);
-}
+/* The `.muddies-rail-tone-* .proximity-halo-*` recolour rules that used to sit
+   here are REMOVED: they were dead (the rail renders ProximityGlowAvatar,
+   which paints no `.proximity-halo` for them to reach) and they were purple. */
 
 /* --- Filter chips ---------------------------------------------------------- */
 

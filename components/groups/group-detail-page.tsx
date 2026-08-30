@@ -18,7 +18,6 @@ import {
   setGroupVisibilityAction,
   transferGroupOwnershipAction
 } from "@/app/(app)/group-actions";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
@@ -28,7 +27,6 @@ import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { startsNewDay, startsNewRun } from "@/lib/messaging/conversation-presence";
-import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useTransientFeedback } from "@/hooks/use-transient-feedback";
 import type { GroupDetailView, GroupInviteCandidate, GroupMemberView } from "@/lib/groups/types";
 import {
@@ -65,7 +63,6 @@ export function GroupDetailPage({
   voiceRecorderConfig?: VoiceRecorderConfig;
 }) {
   const router = useRouter();
-  const reducedMotion = useReducedMotion();
   const [tab, setTab] = useState<GroupTab>("chat");
   const [messages, setMessages] = useState(initialMessages);
   // Which message's photo is open full-screen. The id (not the object) so a
@@ -1135,7 +1132,7 @@ export function GroupDetailPage({
           <div className="max-h-80 space-y-2 overflow-y-auto">
             {candidates.map((candidate) => (
               <div key={candidate.userId} className="flex items-center gap-3 rounded-xl border border-border/70 p-3">
-                <GlowAvatar name={candidate.displayName} src={candidate.avatarUrl} size="sm" reducedMotion={reducedMotion} />
+                <UserAvatar name={candidate.displayName} src={candidate.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{candidate.displayName}</p>
                   <p className="truncate text-xs text-muted-foreground">@{candidate.username}</p>

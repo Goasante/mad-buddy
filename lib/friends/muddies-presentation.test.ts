@@ -99,8 +99,24 @@ describe("distance wording matches the glow it sits under", () => {
   });
 
   it("defines every tone it can return", () => {
+    // Matched as a selector rather than as `.class {`: the three toned-down
+    // bands now share one rule. They deliberately carry no colour of their
+    // own -- they used to be violet, which is off-brand for proximity -- so
+    // they resolve to muted-foreground together.
     for (const level of ["close", "near", "far", "hidden"] as const) {
-      expect(css).toContain(`.${railToneClass(level)} {`);
+      expect(css, level).toMatch(new RegExp(`\\.${railToneClass(level)}[\\s,{]`));
+    }
+  });
+
+  it("gives the proximity rail no purple tone", () => {
+    // Brand rule: proximity is the warm orange/maroon system.
+    const block = css.slice(css.indexOf(".muddies-rail-tone-close"), css.indexOf("/* --- Filter chips"));
+    const declarations = block
+      .split(/\r?\n/)
+      .filter((line) => !line.trim().startsWith("*") && !line.trim().startsWith("/*"))
+      .join(" ");
+    for (const purple of ["#a78bfa", "#8b7bd8", "#8b5cf6"]) {
+      expect(declarations, purple).not.toContain(purple);
     }
   });
 });
