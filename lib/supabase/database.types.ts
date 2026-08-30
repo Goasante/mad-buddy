@@ -1642,7 +1642,7 @@ export type Database = {
           status: HangoutStatus;
           converted_plan_id: string | null;
           timezone: string;
-          audience_notified_at: string | null;
+          audience_announce_claimed_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1664,7 +1664,7 @@ export type Database = {
           status?: HangoutStatus;
           converted_plan_id?: string | null;
           timezone?: string;
-          audience_notified_at?: string | null;
+          audience_announce_claimed_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };

@@ -186,7 +186,7 @@ export const handleUpForAnnounceStarted: JobHandler = async (admin) => {
     .from("hangout_sessions")
     .select("id, owner_id, message, audience_type")
     .eq("status", "active")
-    .is("audience_notified_at", null)
+    .is("audience_announce_claimed_at", null)
     .lte("starts_at", nowIso)
     .gt("ends_at", nowIso)
     .limit(200);

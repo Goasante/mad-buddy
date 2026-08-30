@@ -192,16 +192,16 @@ grant execute on function public.create_upfor_session(
 -- NULL on an already-running session would make the job announce every UpFor
 -- created before this migration.
 alter table public.hangout_sessions
-  add column if not exists audience_notified_at timestamptz;
+  add column if not exists audience_announce_claimed_at timestamptz;
 
-comment on column public.hangout_sessions.audience_notified_at is
-  'When the audience fan-out was sent. NULL = not yet sent. Set once, so a retry cannot double-notify.';
+comment on column public.hangout_sessions.audience_announce_claimed_at is
+  'When the audience fan-out was CLAIMED and attempted. NULL = unclaimed, still eligible. Named for the claim, not for delivery: it is not evidence that every recipient received the notification.';
 
 -- Backfill: everything that already exists has, by definition, already had its
 -- notification sent at creation time under the old behaviour.
 update public.hangout_sessions
-  set audience_notified_at = created_at
-  where audience_notified_at is null;
+  set audience_announce_claimed_at = created_at
+  where audience_announce_claimed_at is null;
 
 -- Supports both the allowance count and the "Coming Up" read, which are the
 -- two hot per-owner lookups this change introduces.
@@ -211,16 +211,16 @@ create index if not exists hangout_sessions_owner_window_idx
 -- The notification job's due-work lookup: started, not yet announced.
 create index if not exists hangout_sessions_pending_announce_idx
   on public.hangout_sessions (starts_at)
-  where audience_notified_at is null and status = 'active';
+  where audience_announce_claimed_at is null and status = 'active';
 
 -- 5. Claiming the audience fan-out, exactly once.
 --
 -- Two actors can want to announce the same session: the creation path (for an
 -- UpFor starting now) and the polling worker (for one that was scheduled, and
--- again on any retry). If both read `audience_notified_at IS NULL` and both
+-- again on any retry). If both read `audience_announce_claimed_at IS NULL` and both
 -- then write, the audience is notified twice.
 --
--- So the claim is the UPDATE itself. `where audience_notified_at is null` is
+-- So the claim is the UPDATE itself. `where audience_announce_claimed_at is null` is
 -- evaluated against the row the statement locks, and only one concurrent
 -- writer can satisfy it -- the loser's predicate is re-checked after the first
 -- commits and no longer matches, so it updates nothing and returns no row.
@@ -244,9 +244,9 @@ declare
   v_claimed uuid;
 begin
   update public.hangout_sessions
-     set audience_notified_at = now()
+     set audience_announce_claimed_at = now()
    where id = p_session_id
-     and audience_notified_at is null
+     and audience_announce_claimed_at is null
      and status = 'active'
      and ends_at > now()
      and (not p_require_started or starts_at <= now())

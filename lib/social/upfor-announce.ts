@@ -10,8 +10,8 @@ type Admin = SupabaseClient<Database>;
  *
  * TWO ACTORS WANT TO DO THIS. Creation announces an UpFor that starts now; the
  * polling worker announces one that was scheduled, and tries again on every
- * retry. Both would otherwise read `audience_notified_at IS NULL`, both would
- * pass, and the audience would hear twice.
+ * retry. Both would otherwise read `audience_announce_claimed_at IS NULL`,
+ * both would pass, and the audience would hear twice.
  *
  * So neither reads first. `claim_upfor_announcement` does the check and the
  * write as one UPDATE, and returns whether THIS caller was the one that
@@ -24,8 +24,8 @@ type Admin = SupabaseClient<Database>;
  * itself is not the product -- the UpFor is still discoverable, and the person
  * still appears in "Muddies open to plans".
  *
- * That is the honest meaning of `audience_notified_at`: "this fan-out has been
- * claimed and attempted", not "every recipient definitely received it".
+ * The column is named for what it records: the announcement was CLAIMED for
+ * fan-out and attempted -- not that every recipient definitely received it.
  * Per-recipient delivery has its own retry inside deliverNotification.
  */
 export async function announceUpForToAudience(
