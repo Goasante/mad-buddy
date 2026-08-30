@@ -405,8 +405,16 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
     // nobody can be matched against — and rather than silently widening one we
     // cannot place.
     p_discovery_scope: derivedArea.tier === null ? "muddies" : parsed.data.discoveryScope,
-    p_starts_at: new Date(requestedStartMs).toISOString(),
-    p_ends_at: new Date(endsMs).toISOString(),
+    /* "Now" sends NULL and lets the database decide, because a clock read
+       here is already stale by the time the row is written -- production
+       stored a start 157ms BEFORE its own created_at. "Later today" still
+       sends the exact chosen instant: the person picked that time, so it is
+       not the database's to reinterpret. */
+    p_starts_at: parsed.data.when === "later" ? new Date(requestedStartMs).toISOString() : null,
+    p_ends_at: parsed.data.when === "later" ? new Date(endsMs).toISOString() : null,
+    // Length, not an end instant, so an immediate UpFor cannot carry a stale
+    // clock reading into its window.
+    p_duration: parsed.data.when === "later" ? null : `${Math.max(1, Math.round(durationMs / 60000))} minutes`,
     p_timezone: parsed.data.timezone ?? DEFAULT_UPFOR_TIMEZONE,
     p_max_participants: requestedCapacity,
     p_allow_pings: parsed.data.allowPings ?? true,
@@ -1474,6 +1482,76 @@ export type OwnerHangoutRequestsState = {
   hangoutId: string | null;
   requests: OwnerHangoutRequest[];
 };
+
+/**
+ * Requests for EVERY UpFor the owner holds, keyed by the session they belong to.
+ *
+ * `getOwnerHangoutRequestsAction` below answers for one session -- the newest --
+ * which was right while a person could only have one. With three, it silently
+ * hides the requests on the other two, and worse, an accept/decline rendered
+ * without its session is a request whose target the screen has to guess.
+ *
+ * ONE ROUND TRIP, NOT ONE PER UPFOR. Sessions are read once and their requests
+ * fetched with a single `in(...)`, so three UpFors cost the same two queries as
+ * one. A per-session poll would be four times the traffic to answer the same
+ * question.
+ *
+ * Ownership is still resolved from `owner_id = the authed user`, never from the
+ * client, so this can only ever return the caller's own requests.
+ */
+export type OwnerRequestsByUpFor = Record<string, OwnerHangoutRequest[]>;
+
+export async function getOwnerRequestsByUpForAction(): Promise<OwnerRequestsByUpFor> {
+  const env = getSupabaseServerEnv();
+  if (!env.url || !env.serviceRoleKey) return {};
+
+  const userId = await getAuthedUserId();
+  if (!userId) return {};
+
+  const admin = createSupabaseAdminClient();
+  const { data: sessions } = await admin
+    .from("hangout_sessions")
+    .select("id")
+    .eq("owner_id", userId)
+    .in("status", ["active", "paused", "full"])
+    .gt("ends_at", new Date().toISOString())
+    .limit(10);
+
+  const sessionIds = (sessions ?? []).map((row) => row.id);
+  if (sessionIds.length === 0) return {};
+
+  const { data: rows } = await admin
+    .from("hangout_requests")
+    .select("id, hangout_session_id, requester_id, status, message, created_at")
+    .in("hangout_session_id", sessionIds)
+    .order("created_at", { ascending: true });
+
+  const requesterIds = [...new Set((rows ?? []).map((row) => row.requester_id))];
+  const nameById = new Map<string, string>();
+  if (requesterIds.length > 0) {
+    const { data: profiles } = await admin
+      .from("profiles")
+      .select("user_id, full_name")
+      .in("user_id", requesterIds);
+    for (const profile of profiles ?? []) {
+      nameById.set(profile.user_id, profile.full_name?.trim() || "A Muddy");
+    }
+  }
+
+  // Every owned session gets a key, including the ones with no requests, so the
+  // UI can render "no requests yet" without a second existence check.
+  const byUpFor: OwnerRequestsByUpFor = {};
+  for (const id of sessionIds) byUpFor[id] = [];
+  for (const row of rows ?? []) {
+    byUpFor[row.hangout_session_id]?.push({
+      id: row.id,
+      requesterName: nameById.get(row.requester_id) ?? "A Muddy",
+      status: row.status,
+      message: row.message
+    });
+  }
+  return byUpFor;
+}
 
 export async function getOwnerHangoutRequestsAction(): Promise<OwnerHangoutRequestsState> {
   const empty: OwnerHangoutRequestsState = { hangoutId: null, requests: [] };

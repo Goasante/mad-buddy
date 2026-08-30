@@ -166,6 +166,40 @@ export async function activeHangoutCount(admin: Admin, ownerId: string): Promise
 }
 
 /**
+ * EVERY UpFor the owner currently holds: live now AND scheduled for later.
+ *
+ * `currentActiveHangout` below returns one row, which was correct while a
+ * person could only have one. C2 raised that to three, so a loader that stops
+ * at `.limit(1)` makes the owner screen structurally unable to show what the
+ * database already permits -- and that is what let "create" behave like
+ * "replace".
+ *
+ * Ordered by start so the owner reads them as a timeline: what is happening
+ * now, then what is coming. `starts_at` is selected because the screen has to
+ * tell scheduled from live, and only the timestamps carry that -- there is no
+ * `scheduled` status and deliberately never will be.
+ *
+ * Terminal rows are excluded by the status filter, so a cancelled or converted
+ * UpFor leaves this list the moment its lifecycle says so.
+ */
+export async function ownedUpForSessions(admin: Admin, ownerId: string) {
+  await sweepExpiredHangouts(admin, ownerId);
+  const nowIso = new Date().toISOString();
+  const { data } = await admin
+    .from("hangout_sessions")
+    .select("id, activity_type, audience_type, message, starts_at, ends_at, status, discovery_scope")
+    .eq("owner_id", ownerId)
+    .in("status", [...LIVE_HANGOUT_STATUSES])
+    .gt("ends_at", nowIso)
+    .order("starts_at", { ascending: true })
+    // The canonical ceiling is three; a few more than that is only defensive
+    // in case the limit is ever raised, and keeps one bad row from hiding the
+    // rest.
+    .limit(10);
+  return data ?? [];
+}
+
+/**
  * The user's current canonical active Hangout (or null). Sweeps expired rows
  * first, then returns the single most recent live, not-yet-elapsed session — so
  * a page load/reopen always resolves the authoritative state.

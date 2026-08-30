@@ -189,6 +189,17 @@ export function HangoutModePage({
   const scrolled = useHasScrolled();
 
   const [activeHangout, setActiveHangout] = useState(initialActiveHangout);
+  /* EXPLICIT INTENT, NOT INFERRED FROM EXISTENCE.
+
+     The defect this replaces: `editing` was `activeHangout !== null`, so
+     having ANY UpFor made the next creation an edit -- and an edit ends the
+     previous session. Creating B therefore cancelled A, and C cancelled B.
+     Production data showed exactly that chain of cancellations.
+
+     Now the form is told what it is for. null means create; an id means edit
+     that specific UpFor and no other. Nothing about how many sessions exist
+     can change which one an action targets. */
+  const [editingUpForId, setEditingUpForId] = useState<string | null>(null);
   const [requests, setRequests] = useState(initialRequests);
   const [feed, setFeed] = useState(initialFeed);
   /**
@@ -402,6 +413,43 @@ export function HangoutModePage({
    * preselection, not a submission — audience and duration are still the
    * user's to confirm before anything becomes visible to anyone.
    */
+  /**
+   * Open the form to CREATE another UpFor.
+   *
+   * Always create, whatever already exists. Reaching for "Create" or a Quick
+   * Idea while one UpFor is running now means the person wants a second one --
+   * the canonical ceiling of three is what decides whether they may, and it
+   * decides that on the server.
+   */
+  function openCreate(preset?: HangoutActivityType) {
+    setEditingUpForId(null);
+    setActivity(preset ?? null);
+    setAudience("all_muddies");
+    setMessage("");
+    setBroadArea("");
+    setDiscoveryScope("muddies");
+    setDuration("1h");
+    setWhen("now");
+    setStartAtIso("");
+    setSetupError("");
+    setSetupOpen(true);
+  }
+
+  /** Open the form to EDIT one specific UpFor, named by id. */
+  function openEdit(target: ActiveHangout) {
+    setEditingUpForId(target.id);
+    setActivity(target.activityType);
+    setAudience(target.audienceType);
+    setMessage(target.message ?? "");
+    setBroadArea("");
+    setDiscoveryScope("muddies");
+    setDuration("1h");
+    setWhen("now");
+    setStartAtIso("");
+    setSetupError("");
+    setSetupOpen(true);
+  }
+
   function openSetup(preset?: HangoutActivityType) {
     if (isActive && activeHangout) {
       setActivity(preset ?? activeHangout.activityType);
@@ -526,8 +574,15 @@ export function HangoutModePage({
      * within a second and is what every other part of this screen measures
      * against. */
     const endsAt = new Date(nowMs + chosen.ms).toISOString();
-    const editing = isActive && activeHangout !== null;
-    const previousId = activeHangout?.id;
+    /* THE FIX. `editing` is now the explicit intent the caller set, not
+       "does this person happen to have an UpFor". A create leaves every
+       existing session untouched; an edit touches exactly the one it names.
+
+       Editing still replaces the row, because no canonical update action
+       exists and inventing a whole lifecycle for it is out of scope here --
+       but it can now only ever replace the UpFor the owner actually chose. */
+    const editing = editingUpForId !== null;
+    const previousId = editingUpForId;
 
     startTransition(async () => {
       // No dedicated update action exists, so an edit ends the current session
@@ -562,6 +617,9 @@ export function HangoutModePage({
           endsAt
         });
         if (!editing) setRequests([]);
+        /* Clear the target on every exit. A stale id would make the NEXT
+           create behave as an edit and cancel a sibling -- the exact bug. */
+        setEditingUpForId(null);
         setSetupOpen(false);
         showToast(
           `Visible to ${audienceLabel[audience]} until ${formatTime(endsAt)}.`,
@@ -953,7 +1011,7 @@ UpFors are temporary and disappear when they end. Jump in while you can!
         compact
         footer={
           <>
-            <Button type="button" variant="outline" onClick={() => setSetupOpen(false)} disabled={isPending}>
+            <Button type="button" variant="outline" onClick={() => { setEditingUpForId(null); setSetupOpen(false); }} disabled={isPending}>
               Cancel
             </Button>
             <Button type="button" onClick={submitSetup} disabled={isPending || (attempted && !activity)}>
