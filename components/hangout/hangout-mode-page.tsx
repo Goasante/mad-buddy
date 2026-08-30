@@ -908,7 +908,7 @@ UpFors are temporary and disappear when they end. Jump in while you can!
             href="/plans"
             actionAriaLabel="See all plans"
           />
-          <PlanStack plans={initialPlans} onJoin={joinPlan} pending={isPending} />
+          <PlanStack plans={initialPlans} onJoin={joinPlan} pending={isPending} nowMs={nowMs} />
         </section>
       ) : null}
 

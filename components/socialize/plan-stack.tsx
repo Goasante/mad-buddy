@@ -61,7 +61,10 @@ export function PlanStack({
   plans,
   onJoin,
   pending = false,
-  nowMs = Date.now()
+  /* No Date.now() default: a clock read during render is impure, and the
+     React Compiler rejects it. Every caller already ticks its own clock, so
+     the value is passed in; 0 renders no countdown rather than a wrong one. */
+  nowMs = 0
 }: {
   plans: readonly ComingUpRenderItem[];
   /** Clock for countdown labels; supplied by the surface that already ticks. */
