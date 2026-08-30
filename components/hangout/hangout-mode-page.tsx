@@ -55,6 +55,8 @@ import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import { useHasScrolled } from "@/hooks/use-has-scrolled";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useCountdownResume } from "@/hooks/use-countdown-clock";
+import { OwnedUpForsSection } from "@/components/hangout/owned-upfors-section";
+import type { OwnedUpFor } from "@/lib/social/owned-upfors";
 import { resolveViewerTimeZone, upForTimeSlots } from "@/lib/social/upfor-schedule-options";
 import { cn } from "@/lib/utils";
 import { countActiveRequests } from "@/lib/social/hangout-requests";
@@ -163,6 +165,7 @@ type Toast = { title?: string; message: string; error: boolean } | null;
 
 export function HangoutModePage({
   initialActiveHangout = null,
+  initialOwnedUpFors = [],
   initialRequests = [],
   initialFeed = [],
   avatarUrl = null,
@@ -172,6 +175,8 @@ export function HangoutModePage({
   initialPlans = []
 }: {
   initialActiveHangout?: ActiveHangout | null;
+  /** Every UpFor the owner holds -- the owner-facing authority. */
+  initialOwnedUpFors?: OwnedUpFor[];
   initialRequests?: HangoutRequestSummary[];
   initialFeed?: VisibleHangout[];
   avatarUrl?: string | null;
@@ -200,6 +205,21 @@ export function HangoutModePage({
      that specific UpFor and no other. Nothing about how many sessions exist
      can change which one an action targets. */
   const [editingUpForId, setEditingUpForId] = useState<string | null>(null);
+  const [ownedUpFors, setOwnedUpFors] = useState(initialOwnedUpFors);
+  /* Which owned UpFor the management surface is showing. ONE selection is
+     legitimate UI state; one session standing in for the whole collection is
+     the defect this repair removed. */
+  const [managingId, setManagingId] = useState<string | null>(null);
+  const [requestsByUpFor, setRequestsByUpFor] = useState<Record<string, HangoutRequestSummary[]>>({});
+  /* Pending count per UpFor, from the session-scoped projection. Derived, so
+     a row cannot disagree with the list the sheet will show. */
+  const pendingRequestCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const [upForId, rows] of Object.entries(requestsByUpFor)) {
+      counts[upForId] = rows.filter((row) => row.status === "pending").length;
+    }
+    return counts;
+  }, [requestsByUpFor]);
   const [requests, setRequests] = useState(initialRequests);
   const [feed, setFeed] = useState(initialFeed);
   /**
@@ -773,6 +793,19 @@ UpFors are temporary and disappear when they end. Jump in while you can!
           </p>
         </div>
       </section>
+
+      {/* --------------------------- YOUR UPFORS --------------------------
+          Every UpFor the owner holds, live and scheduled. The projection in
+          lib/social/owned-upfors.ts decides order and wording; this only hands
+          it the collection and the page's single clock. */}
+      <OwnedUpForsSection
+        ownedUpFors={ownedUpFors}
+        nowMs={nowMs}
+        pendingRequestCounts={pendingRequestCounts}
+        busy={isPending}
+        onCreate={() => openCreate()}
+        onManage={(id) => setManagingId(id)}
+      />
 
       {/* --------------------------- YOUR OWN UPFOR ---------------------- */}
       {isActive && activeHangout ? (
