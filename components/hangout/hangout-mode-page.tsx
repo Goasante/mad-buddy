@@ -36,6 +36,7 @@ import {
   convertHangoutToPlanAction,
   endHangoutAction,
   getOwnerHangoutRequestsAction,
+  getOwnerRequestsByUpForAction,
   leaveHangoutAction,
   getVisibleHangoutsAction,
   requestHangoutAction,
@@ -56,7 +57,7 @@ import { useHasScrolled } from "@/hooks/use-has-scrolled";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useCountdownResume } from "@/hooks/use-countdown-clock";
 import { OwnedUpForsSection } from "@/components/hangout/owned-upfors-section";
-import type { OwnedUpFor } from "@/lib/social/owned-upfors";
+import { ownedUpForTimeLabel, type OwnedUpFor } from "@/lib/social/owned-upfors";
 import { resolveViewerTimeZone, upForTimeSlots } from "@/lib/social/upfor-schedule-options";
 import { cn } from "@/lib/utils";
 import { countActiveRequests } from "@/lib/social/hangout-requests";
@@ -205,7 +206,11 @@ export function HangoutModePage({
      that specific UpFor and no other. Nothing about how many sessions exist
      can change which one an action targets. */
   const [editingUpForId, setEditingUpForId] = useState<string | null>(null);
-  const [ownedUpFors, setOwnedUpFors] = useState(initialOwnedUpFors);
+  /* The collection is a SERVER prop. refreshOwnedUpFors re-resolves it via
+     router.refresh() rather than assembling a new array here, so there is no
+     setter: a local shadow copy would be a second owner authority, which is
+     the shape of the defect this repair removed. */
+  const ownedUpFors = initialOwnedUpFors;
   /* Which owned UpFor the management surface is showing. ONE selection is
      legitimate UI state; one session standing in for the whole collection is
      the defect this repair removed. */
@@ -220,6 +225,20 @@ export function HangoutModePage({
     }
     return counts;
   }, [requestsByUpFor]);
+
+  /* The one session the management sheet is about, resolved BY ID from the
+     canonical collection -- never ownedUpFors[0] or the newest row. If it
+     disappears (ended, converted, expired) this becomes null and the sheet
+     closes rather than lingering over a dead session. */
+  const managedUpFor = useMemo(
+    () => ownedUpFors.find((row) => row.id === managingId) ?? null,
+    [ownedUpFors, managingId]
+  );
+  const managedRequests = managingId ? (requestsByUpFor[managingId] ?? []) : [];
+  const managedAcceptedCount = managedRequests.filter((r) => r.status === "accepted").length;
+  const managedLabel = managedUpFor
+    ? HANGOUT_ACTIVITY_LABELS[managedUpFor.activityType as HangoutActivityType] ?? "Anything"
+    : "";
   const [requests, setRequests] = useState(initialRequests);
   const [feed, setFeed] = useState(initialFeed);
   /**
@@ -293,6 +312,8 @@ export function HangoutModePage({
 
   const [toast, setToast] = useState<Toast>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  /* Placed after the clock it reads. */
+  const managedTimeLabel = managedUpFor ? ownedUpForTimeLabel(managedUpFor, nowMs) : "";
   /* Recomputed as the clock ticks, so a form left open past a slot stops
      offering it -- rather than letting the server reject it on submit. */
   const timeSlots = useMemo(
@@ -657,19 +678,60 @@ export function HangoutModePage({
     });
   }
 
-  function turnOff() {
-    if (!activeHangout) return;
+  /**
+   * ONE post-mutation synchronisation path.
+   *
+   * Every owner mutation ends here rather than patching its own corner of the
+   * state: create, edit, end, accept, decline and conversion all change which
+   * UpFors exist or who is waiting on them, and four slightly different local
+   * updates would drift from the server the first time one of them was wrong.
+   *
+   * Only ever called after a mutation SUCCEEDS. Refreshing after a failure
+   * would replace the canonical state the user is still looking at with the
+   * same state, plus a network round trip.
+   */
+  const refreshOwnedUpFors = useCallback(async () => {
+    try {
+      const byUpFor = await withTimeout(getOwnerRequestsByUpForAction(), {
+        operation: "refresh owner UpFor requests"
+      });
+      setRequestsByUpFor(byUpFor);
+      // The owner collection itself is a server prop, so the canonical list is
+      // re-resolved by the route rather than reassembled here.
+      router.refresh();
+    } catch {
+      // A failed refetch leaves the last known canonical state in place.
+    }
+  }, [router]);
+
+  /**
+   * End one specific UpFor.
+   *
+   * Takes the id rather than reading a single "current" session: with three
+   * possible sessions, an End that inferred its own target is exactly the
+   * class of bug this repair removed.
+   */
+  function endUpForById(hangoutId: string) {
     startTransition(async () => {
-      const result = await endHangoutAction(activeHangout.id);
-      if (result.ok) {
+      const result = await endHangoutAction(hangoutId);
+      if (!result.ok) {
+        showToast(result.message, true);
+        return;
+      }
+      if (activeHangout?.id === hangoutId) {
         setActiveHangout(null);
         setRequests([]);
-        showToast("You're no longer visible to your Muddies.", false, "UpFor ended");
-        router.refresh();
-      } else {
-        showToast(result.message, true);
       }
+      // The managed session no longer exists, so its sheet must not linger.
+      if (managingId === hangoutId) setManagingId(null);
+      showToast("You're no longer visible to your Muddies.", false, "UpFor ended");
+      await refreshOwnedUpFors();
     });
+  }
+
+  function turnOff() {
+    if (!activeHangout) return;
+    endUpForById(activeHangout.id);
   }
 
   function respond(requestId: string, response: "accepted" | "declined") {
@@ -1034,6 +1096,138 @@ UpFors are temporary and disappear when they end. Jump in while you can!
 
       {/* The filter sheet. Rendered from the registry, so a future filter is a
           new entry there rather than an edit here. */}
+
+      {/* ------------------- MANAGE ONE UPFOR ---------------------------
+          Keyed by managingId, never by "the current session". Everything the
+          legacy hero used to hold for a single UpFor lives here for the one
+          the owner actually chose: edit, its own requests, and ending it. */}
+      <Modal
+        open={managedUpFor !== null}
+        onOpenChange={(open) => !open && setManagingId(null)}
+        title={managedUpFor ? `${managedLabel} UpFor` : "UpFor"}
+        description={managedUpFor ? managedTimeLabel : undefined}
+        variant="sheet"
+        compact
+      >
+        {managedUpFor ? (
+          <div className="flex flex-col gap-4">
+            {managedUpFor.message ? (
+              <p className="text-[14px] text-muted-foreground">
+                &ldquo;{managedUpFor.message}&rdquo;
+              </p>
+            ) : null}
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={isPending}
+              onClick={() => {
+                const target = managedUpFor;
+                setManagingId(null);
+                openEdit({
+                  id: target.id,
+                  activityType: target.activityType as HangoutActivityType,
+                  audienceType: target.audienceType as HangoutAudienceType,
+                  message: target.message,
+                  endsAt: target.endsAt
+                });
+              }}
+              aria-label={`Edit ${managedLabel} UpFor`}
+            >
+              Edit
+            </Button>
+
+            {/* Requests for THIS UpFor only. The list is read from
+                requestsByUpFor[managingId], so a request on another session can
+                never appear here and Accept can never touch it. */}
+            <div>
+              <p className="mb-2 text-[14px] font-semibold">
+                Requests to join ({managedRequests.filter((r) => r.status === "pending").length})
+              </p>
+              {managedRequests.length === 0 ? (
+                <p className="text-[12px] text-muted-foreground">
+                  No requests yet. We&apos;ll let you know.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {managedRequests.map((request) => (
+                    <li key={request.id} className="upfor-request">
+                      <span className="min-w-0 flex-1 truncate text-[14px] font-medium">
+                        {request.requesterName}
+                        {request.message ? (
+                          <span className="ml-1 text-[12px] font-normal text-muted-foreground">
+                            : {request.message}
+                          </span>
+                        ) : null}
+                      </span>
+                      {request.status === "pending" ? (
+                        <span className="flex gap-1.5">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => respond(request.id, "accepted")}
+                            disabled={isPending}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => respond(request.id, "declined")}
+                            disabled={isPending}
+                          >
+                            Decline
+                          </Button>
+                        </span>
+                      ) : (
+                        <span className="text-[12px] font-medium capitalize text-muted-foreground">
+                          {request.status}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* Plan conversion, carried over from the legacy hero rather than
+                lost with it, and now aimed at the selected session. */}
+            {managedAcceptedCount > 0 ? (
+              <Button
+                type="button"
+                variant="primary"
+                className="w-full"
+                disabled={isPending}
+                onClick={() => {
+                  const targetId = managedUpFor.id;
+                  setManagingId(null);
+                  void convertToPlanById(targetId);
+                }}
+              >
+                Create a group plan with {managedAcceptedCount}{" "}
+                {managedAcceptedCount === 1 ? "person" : "people"}
+              </Button>
+            ) : null}
+
+            {/* Ending is separated from the rest: it is the one action here
+                that cannot be undone. */}
+            <div className="border-t border-border/60 pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-primary/40 text-primary"
+                disabled={isPending}
+                onClick={() => endUpForById(managedUpFor.id)}
+                aria-label={`End ${managedLabel} UpFor`}
+              >
+                End UpFor
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
 
       <Modal
         open={setupOpen}
