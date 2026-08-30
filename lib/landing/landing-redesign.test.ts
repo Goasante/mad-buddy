@@ -13,7 +13,10 @@ const navigation = stripComments(rawNavigation);
 const mobileMenu = source("components/landing/landing-mobile-menu.tsx");
 const homePage = source("app/page.tsx");
 
-const imageTags = [rawLanding, rawNavigation].flatMap((rawSource) => rawSource.match(/<Image\b[\s\S]*?\/>/g) ?? []);
+const imageTags = [rawLanding, rawNavigation].flatMap((rawSource) => [
+  ...(rawSource.match(/<Image\b[\s\S]*?\/>/g) ?? []),
+  ...(rawSource.match(/<img\b[\s\S]*?>/g) ?? [])
+]);
 const eagerImageTags = imageTags.filter(
   (tag) => /\bpriority(?:\s|=|\/|>)/.test(tag) || /\bloading\s*=\s*["']eager["']/.test(tag)
 );
