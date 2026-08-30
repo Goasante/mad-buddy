@@ -903,7 +903,7 @@ UpFors are temporary and disappear when they end. Jump in while you can!
         <section aria-labelledby="upfor-plans-heading" className="upfor-section">
           <PageSectionHeader
             id="upfor-plans-heading"
-            title="Upcoming Plans"
+            title="Coming Up"
             href="/plans"
             actionAriaLabel="See all plans"
           />
