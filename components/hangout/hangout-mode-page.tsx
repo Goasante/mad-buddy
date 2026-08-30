@@ -746,7 +746,7 @@ export function HangoutModePage({
             data-tour-id={TOUR_TARGET_IDS.HANGOUT_TOGGLE}
             onClick={() => openCreate()}
             disabled={isPending}
-            aria-label={isActive ? "Edit your UpFor" : "Create an UpFor"}
+            aria-label="Create an UpFor"
             className="upfor-create-button"
           >
             <Plus className="h-6 w-6" aria-hidden="true" />
@@ -1062,9 +1062,9 @@ UpFors are temporary and disappear when they end. Jump in while you can!
               {isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                  {isActive ? "Saving…" : "Turning on…"}
+                  {editingUpForId ? "Saving…" : "Turning on…"}
                 </>
-              ) : isActive ? (
+              ) : editingUpForId ? (
                 "Save changes"
               ) : (
                 "Start UpFor"
