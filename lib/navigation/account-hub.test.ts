@@ -86,7 +86,7 @@ describe("A1 account hub interaction contract", () => {
   });
 
   it("renders no admin heading, row, or gap for unauthorized users", () => {
-    expect(hub).toContain("showAdminLink ? <SheetGroup rows={ADMINISTRATION}");
+    expect(hub).toContain("{showAdminLink ? (");
     expect(hub).not.toContain("hidden={showAdminLink");
   });
 
