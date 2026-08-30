@@ -1,16 +1,11 @@
-"use client";
-
 import Link from "next/link";
-import { ArrowUp, Check, Printer } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { BrandSymbol } from "@/components/brand/brand-symbol";
-import { Button } from "@/components/ui/button";
+import { Check } from "lucide-react";
+import { Fragment } from "react";
 import {
   PRIVACY_POLICY_EFFECTIVE_DATE,
   PRIVACY_POLICY_LAST_UPDATED,
   privacyPolicyMarkdown
 } from "@/content/privacy-policy";
-import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
 type PolicyBlock =
   | { type: "paragraph"; text: string }
@@ -24,11 +19,11 @@ type PolicySection = {
 };
 
 const summaryItems = [
-  "No exact locations",
-  "No maps",
-  "No location history",
-  "Only approved friends receive glow signals"
-];
+  "No exact-location reveal to other users",
+  "No live map position or exact numerical distance",
+  "Muddy proximity is for mutually approved friends",
+  "Linkr discovery only runs when you deliberately enable it"
+] as const;
 
 function slugify(value: string) {
   return value.toLowerCase().replace(/^\d+\.\s*/, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -73,6 +68,7 @@ function parsePolicy(markdown: string) {
     if (list.length) flush();
     paragraph.push(line);
   }
+
   flush();
   if (current.blocks.length) sections.push(current);
   return sections;
@@ -83,7 +79,9 @@ function InlineText({ text }: { text: string }) {
     <>
       {text.split(/(\*\*.*?\*\*)/g).map((part, index) =>
         part.startsWith("**") && part.endsWith("**") ? (
-          <strong key={index}>{part.slice(2, -2)}</strong>
+          <strong key={index} className="font-semibold text-[#4E0401] dark:text-[#FFF8F1]">
+            {part.slice(2, -2)}
+          </strong>
         ) : (
           <Fragment key={index}>{part}</Fragment>
         )
@@ -93,121 +91,87 @@ function InlineText({ text }: { text: string }) {
 }
 
 export function PrivacyPolicyPage() {
-  const sections = useMemo(() => parsePolicy(privacyPolicyMarkdown), []);
-  const [activeSection, setActiveSection] = useState("introduction");
-  const reducedMotion = useReducedMotion();
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (visible?.target.id) setActiveSection(visible.target.id);
-      },
-      { rootMargin: "-18% 0px -62% 0px", threshold: [0, 0.2, 0.6] }
-    );
-    sections.forEach((section) => {
-      const element = document.getElementById(section.id);
-      if (element) observer.observe(element);
-    });
-    return () => observer.disconnect();
-  }, [sections]);
-
-  const backToTop = () => {
-    window.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
-  };
+  const sections = parsePolicy(privacyPolicyMarkdown);
 
   return (
-    <main id="top" className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-40 border-b border-border bg-background/90 px-4 py-3 backdrop-blur-xl print:hidden">
-        <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4" aria-label="Privacy policy navigation">
-          <Link href="/" className="flex items-center gap-2 font-semibold">
-            <BrandSymbol className="h-9 w-9" priority />
-            Mad Buddy
-          </Link>
-          <div className="flex items-center gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => window.print()} aria-label="Print privacy policy" title="Print privacy policy">
-              <Printer className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Print</span>
-            </Button>
-            <Button type="button" size="sm" variant="ghost" asChild>
-              <Link href="/">Home</Link>
-            </Button>
+    <div className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
+      <section className="max-w-3xl" aria-labelledby="privacy-title">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#A45A18]">Legal · Privacy</p>
+        <h1 id="privacy-title" className="mt-3 text-4xl font-semibold tracking-[-0.04em] text-[#4E0401] sm:text-5xl dark:text-[#FFF8F1]">
+          Privacy Policy
+        </h1>
+        <p className="mt-5 max-w-2xl text-base leading-8 text-[#4E0401]/65 dark:text-[#FFF8F1]/65">
+          How Mad Buddy handles account information, location signals, Muddy proximity, deliberately enabled Linkr discovery, and your choices.
+        </p>
+        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[#4E0401]/50 dark:text-[#FFF8F1]/50">
+          <p>Effective date: {PRIVACY_POLICY_EFFECTIVE_DATE}</p>
+          <p>Last updated: {PRIVACY_POLICY_LAST_UPDATED}</p>
+        </div>
+      </section>
+
+      <section className="mt-10 grid gap-x-8 gap-y-4 border-y border-[#4E0401]/10 py-7 sm:grid-cols-2 dark:border-white/10" aria-label="Privacy summary">
+        {summaryItems.map((item) => (
+          <div key={item} className="flex items-start gap-3 text-sm font-medium leading-6 text-[#4E0401]/75 dark:text-[#FFF8F1]/75">
+            <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#E88C2B]/14 text-[#A45A18]">
+              <Check className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
+            {item}
           </div>
-        </nav>
-      </header>
+        ))}
+      </section>
 
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
-        <section className="max-w-3xl" aria-labelledby="privacy-title">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-accent">Legal</p>
-          <h1 id="privacy-title" className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">Privacy Policy</h1>
-          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-            <p>Effective date: {PRIVACY_POLICY_EFFECTIVE_DATE}</p>
-            <p>Last updated: {PRIVACY_POLICY_LAST_UPDATED}</p>
-          </div>
-        </section>
+      <div className="mt-12 grid gap-12 lg:grid-cols-[15rem_minmax(0,1fr)]">
+        <aside>
+          <nav className="lg:sticky lg:top-[calc(env(safe-area-inset-top,0px)+6rem)]" aria-label="Privacy policy table of contents">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#4E0401]/45 dark:text-[#FFF8F1]/45">On this page</p>
+            <ul className="mt-3 grid gap-1">
+              {sections.map((section) => (
+                <li key={section.id}>
+                  <a
+                    href={`#${section.id}`}
+                    className="focus-ring inline-flex min-h-11 w-full items-center rounded-lg px-2 text-sm font-medium text-[#4E0401]/58 hover:bg-[#E88C2B]/10 hover:text-[#4E0401] dark:text-[#FFF8F1]/58 dark:hover:bg-white/[0.05] dark:hover:text-[#FFF8F1]"
+                  >
+                    {section.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </aside>
 
-        <section className="mt-8 grid gap-3 rounded-[1.35rem] border border-emerald-300/20 bg-emerald-300/10 p-5 sm:grid-cols-2" aria-label="Privacy summary">
-          {summaryItems.map((item) => (
-            <div key={item} className="flex items-center gap-3 text-sm font-medium">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-emerald-300/15 text-emerald-700 dark:text-emerald-100">
-                <Check className="h-4 w-4" aria-hidden="true" />
-              </span>
-              {item}
-            </div>
-          ))}
-        </section>
-
-        <div className="mt-10 grid gap-10 lg:grid-cols-[16rem_minmax(0,1fr)]">
-          <aside className="print:hidden">
-            <nav className="sticky top-24 rounded-[1rem] border border-border bg-card/65 p-3" aria-label="Privacy policy table of contents">
-              <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">On this page</p>
-              {/* dvh, not vh (Mission 5). A sticky list capped at 100vh is
-                  capped against the LARGE viewport, so on a phone with the URL
-                  bar showing its last entries sit below the fold and cannot be
-                  scrolled to inside their own container. */}
-              <ul className="max-h-[calc(100dvh-9rem)] space-y-0.5 overflow-y-auto">
-                {sections.map((section) => (
-                  <li key={section.id}>
-                    <a
-                      href={`#${section.id}`}
-                      aria-current={activeSection === section.id ? "location" : undefined}
-                      className={`block rounded-lg px-2 py-2 text-sm transition-colors motion-reduce:transition-none ${activeSection === section.id ? "bg-secondary font-semibold text-foreground" : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground"}`}
-                    >
-                      {section.title}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          </aside>
-
-          <article className="min-w-0 space-y-12">
-            {sections.map((section) => (
-              <section key={section.id} id={section.id} className="scroll-mt-24" aria-labelledby={`${section.id}-title`}>
-                <h2 id={`${section.id}-title`} className="text-2xl font-semibold tracking-tight sm:text-3xl">{section.title}</h2>
-                <div className="mt-5 space-y-4 text-[0.98rem] leading-7 text-muted-foreground">
-                  {section.blocks.map((block, index) => {
-                    if (block.type === "subheading") return <h3 key={index} className="pt-3 text-lg font-semibold text-foreground">{block.text}</h3>;
-                    if (block.type === "list") return (
+        <article className="min-w-0 space-y-12">
+          {sections.map((section) => (
+            <section key={section.id} id={section.id} className="scroll-mt-28 border-t border-[#4E0401]/10 pt-8 first:border-t-0 first:pt-0 dark:border-white/10" aria-labelledby={`${section.id}-title`}>
+              <h2 id={`${section.id}-title`} className="text-2xl font-semibold tracking-[-0.025em] text-[#4E0401] dark:text-[#FFF8F1]">
+                {section.title}
+              </h2>
+              <div className="mt-5 space-y-4 text-[0.96rem] leading-7 text-[#4E0401]/64 dark:text-[#FFF8F1]/64">
+                {section.blocks.map((block, index) => {
+                  if (block.type === "subheading") {
+                    return <h3 key={index} className="pt-3 text-lg font-semibold text-[#4E0401] dark:text-[#FFF8F1]">{block.text}</h3>;
+                  }
+                  if (block.type === "list") {
+                    return (
                       <ul key={index} className="space-y-2 pl-5">
-                        {block.items.map((item) => <li key={item} className="list-disc pl-1"><InlineText text={item} /></li>)}
+                        {block.items.map((item) => (
+                          <li key={item} className="list-disc pl-1"><InlineText text={item} /></li>
+                        ))}
                       </ul>
                     );
-                    return <p key={index}><InlineText text={block.text} /></p>;
-                  })}
-                </div>
-              </section>
-            ))}
-          </article>
-        </div>
-
-        <div className="mt-12 flex justify-end print:hidden">
-          <Button type="button" variant="outline" onClick={backToTop}>
-            <ArrowUp className="h-4 w-4" aria-hidden="true" />
-            Back to top
-          </Button>
-        </div>
+                  }
+                  return <p key={index}><InlineText text={block.text} /></p>;
+                })}
+              </div>
+            </section>
+          ))}
+        </article>
       </div>
-    </main>
+
+      <div className="mt-14 border-t border-[#4E0401]/10 pt-7 text-sm dark:border-white/10">
+        <Link href="/support" className="focus-ring inline-flex min-h-11 items-center rounded-lg font-semibold text-[#4E0401] hover:text-[#E88C2B] dark:text-[#FFF8F1]">
+          Questions about your data? Go to Support
+        </Link>
+      </div>
+    </div>
   );
 }
