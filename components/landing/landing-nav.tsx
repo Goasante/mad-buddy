@@ -50,10 +50,14 @@ export function LandingNav() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-[#4E0401]/10 bg-[#FEFBF3]/90 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl dark:border-white/10 dark:bg-[#140B09]/90">
       <style>{`
-        footer nav[aria-label="Footer navigation"] a {
+        footer nav[aria-label="Footer navigation"] a,
+        a[href="#main-content"]:focus {
           display: inline-flex;
           min-height: 44px;
           align-items: center;
+        }
+
+        footer nav[aria-label="Footer navigation"] a {
           padding-block: 0.625rem;
         }
       `}</style>
