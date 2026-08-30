@@ -54,6 +54,7 @@ import { rsvpAction } from "@/app/(app)/plans-actions";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import { useHasScrolled } from "@/hooks/use-has-scrolled";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { useCountdownResume } from "@/hooks/use-countdown-clock";
 import { resolveViewerTimeZone, upForTimeSlots } from "@/lib/social/upfor-schedule-options";
 import { cn } from "@/lib/utils";
 import { countActiveRequests } from "@/lib/social/hangout-requests";
@@ -302,10 +303,10 @@ export function HangoutModePage({
   // flips the orb back to inactive without a manual refresh.
   const isActive = activeHangout !== null && Date.parse(activeHangout.endsAt) > nowMs;
 
-  useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 30_000);
-    return () => clearInterval(timer);
-  }, []);
+  /* The clock now also re-reads on visibilitychange/pageshow, so a phone that
+     spent forty minutes in a pocket shows the correct countdown on the first
+     frame back rather than up to 30s later. See useCountdownClock. */
+  useCountdownResume(setNowMs);
 
   useEffect(() => {
     if (!requestedHangoutId) return;
