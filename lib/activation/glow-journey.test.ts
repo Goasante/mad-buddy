@@ -50,8 +50,15 @@ describe("one Glow language everywhere", () => {
   });
 
   it("leads with Glow rather than a map pin", () => {
+    // The point is that this state does NOT reach for map/location iconography
+    // — Glow is a presence idea, not a pin on a map. It used to be spelled
+    // `Sparkles`; the icon audit replaced that with RadioTower (presence being
+    // broadcast) because sparkles read as "AI magic" rather than proximity.
+    // The invariant is the absence of the pin, so that is what is asserted,
+    // plus a real icon being chosen at all.
     expect(copy).not.toContain("MapPin");
-    expect(copy).toContain("Sparkles");
+    expect(copy).not.toContain("Sparkles");
+    expect(copy).toContain("RadioTower");
   });
 
   it("keeps the trust guarantees", () => {

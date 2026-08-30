@@ -160,10 +160,21 @@ describe("GlareHover survives for its own consumers", () => {
 
 describe("reduced motion", () => {
   it("renders no canvas at all, not a slower one", () => {
-    // A slowed animation is still animation. The gradient is a finished
-    // background on its own.
-    expect(card).toContain("const showPrism = PRISM_CARD_IDS.has(card.id) && !reducedMotion;");
+    // A slowed animation is still animation, so the canvas is gated on motion.
+    expect(card).toContain("const prismAnimated = showPrism && !reducedMotion;");
+    expect(card).toContain("{prismAnimated ? (");
     expect(card).toContain("useReducedMotion()");
+  });
+
+  it("keeps the card's earned identity when it drops the animation", () => {
+    // The canvas goes; the card's identity does NOT. This previously read
+    // `showPrism = PRISM_CARD_IDS.has(card.id) && !reducedMotion`, which
+    // demoted an advanced Journey card to the ordinary gradient for anyone
+    // who prefers reduced motion -- removing earned status as though it were
+    // decoration. Identity is now motion-blind and a still ground stands in
+    // for the canvas.
+    expect(card).not.toContain("const showPrism = PRISM_CARD_IDS.has(card.id) && !reducedMotion;");
+    expect(card).toContain("showPrism && !prismAnimated");
   });
 });
 

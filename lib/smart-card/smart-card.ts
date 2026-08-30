@@ -100,6 +100,44 @@ export function smartCardProgress(completed: number, total: number, label: strin
 }
 
 /**
+ * How far along the Journey a viewer is, as a visual stage.
+ *
+ * Three stages rather than a continuous ramp: the card has to read as a
+ * deliberate state someone can recognise ("I'm well into this"), not as a
+ * gradient that shifts imperceptibly with every completed step.
+ *
+ * Derived from the percent that already exists on the card — there is no
+ * second stored value. `smartCardProgress` computes that percent from
+ * completed/total at the domain layer, so the stage cannot drift from the
+ * meter the viewer is reading right above it.
+ */
+export type JourneyStage = "early" | "progressing" | "advanced";
+
+/** Inclusive lower bounds. Below the first, the stage is `early`. */
+export const JOURNEY_STAGE_THRESHOLDS = { progressing: 40, advanced: 70 } as const;
+
+export function journeyStageForPercent(percent: number): JourneyStage {
+  // Guards a NaN percent into the quietest state rather than the loudest:
+  // a broken input must never award the advanced treatment.
+  if (!Number.isFinite(percent)) return "early";
+  if (percent >= JOURNEY_STAGE_THRESHOLDS.advanced) return "advanced";
+  if (percent >= JOURNEY_STAGE_THRESHOLDS.progressing) return "progressing";
+  return "early";
+}
+
+/**
+ * Whether a card gets the staged Journey treatment at all.
+ *
+ * Only the `journey` card progresses. `journey_complete` is a separate,
+ * already-earned reward state with its own copy and artwork, and it is NOT
+ * folded into the advanced stage — completing the Journey is a different
+ * fact from being 70% through it.
+ */
+export function isStagedJourneyCard(id: SmartCardId): boolean {
+  return id === "journey";
+}
+
+/**
  * Pick the single card Home renders.
  *
  * Providers are sorted by the canonical priority rather than trusting call

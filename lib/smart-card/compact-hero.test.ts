@@ -112,9 +112,11 @@ describe("the card can still grow", () => {
   });
 
   it("varies only spacing and type scale between the two modes", () => {
-    // One shell whatever the card: same radius, same gradient.
+    // One shell whatever the card: same radius, same default ground. The
+    // Journey stages add their own gradients, so this pins the card's default
+    // background rather than counting every 118deg gradient in the file.
     expect(component.match(/rounded-\[1\.75rem\]/g)?.length).toBe(1);
-    expect(component.match(/linear-gradient\(118deg/g)?.length).toBe(1);
+    expect(component.match(/bg-\[linear-gradient\(118deg,#9d1268/g)?.length).toBe(1);
     // And the compact mode really is tighter than the prominent one.
     expect(component).toContain('prominent ? "px-5 pb-5 pt-5" : "px-5 pb-4 pt-4"');
   });

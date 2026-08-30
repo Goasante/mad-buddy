@@ -405,9 +405,14 @@ describe("smart card architecture", () => {
 
   it("keeps the card frame fixed across states", () => {
     const component = read("components/journey/smart-card.tsx");
-    // One Link, one radius, one gradient — the shell cannot vary per card.
+    // One Link, one radius — the shell cannot vary per card.
     expect(component.match(/rounded-\[1\.75rem\]/g)?.length).toBe(1);
-    expect(component.match(/linear-gradient\(118deg/g)?.length).toBe(1);
+    // Exactly one BACKGROUND gradient on the card element itself. The Journey
+    // stages add a `bg-[linear-gradient(...)]` of their own and the advanced
+    // tint reuses the same 118deg angle, so counting every occurrence of the
+    // angle no longer measures the frame. What must stay singular is the
+    // card's own default ground.
+    expect(component.match(/bg-\[linear-gradient\(118deg,#9d1268/g)?.length).toBe(1);
   });
 
   it("validates the acknowledged card id against the canonical list", () => {

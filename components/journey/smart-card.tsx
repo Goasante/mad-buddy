@@ -9,7 +9,12 @@ import { acknowledgeSmartCardAction } from "@/app/(app)/smart-card-actions";
 import { GlareHover } from "@/components/ui/glare-hover";
 import { PrismBackground } from "@/components/ui/prism-background";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
-import type { SmartCard, SmartCardIllustration } from "@/lib/smart-card/smart-card";
+import {
+  isStagedJourneyCard,
+  journeyStageForPercent,
+  type SmartCard,
+  type SmartCardIllustration
+} from "@/lib/smart-card/smart-card";
 
 /**
  * Home's canonical Smart Card.
@@ -72,10 +77,15 @@ const PROMINENT_CARD_IDS = new Set<SmartCard["id"]>(["safe_arrival", "journey"])
  * fallback -- the card most people see most often -- and it carries nothing
  * time-critical, so an animated background competes with no information.
  *
- * Scoping by id rather than by "not prominent" means the safety states are
- * excluded by construction: safe_arrival and journey can never reach this
- * branch, so the existing rule that safety outranks decoration holds without
+ * Scoping by id rather than by "not prominent" keeps safe_arrival excluded by
+ * construction, so the rule that safety outranks decoration holds without
  * needing to be re-stated here.
+ *
+ * `journey` is NOT listed here and must not be added. It reaches the prism by
+ * a different authority -- an EARNED progression stage (see `journeyStage`) --
+ * because the two are different ideas: this set is "this card always looks
+ * like that", the stage is "this viewer has got this far". Adding journey here
+ * would give a 0% card the advanced treatment on day one.
  */
 const PRISM_CARD_IDS = new Set<SmartCard["id"]>(["suggestions"]);
 
@@ -104,10 +114,23 @@ export function SmartCardHero({
   const percent = card.progress?.percent ?? 0;
   const prominent = PROMINENT_CARD_IDS.has(card.id);
   const reducedMotion = useReducedMotion();
-  // Reduced motion renders NO canvas at all rather than a slowed one: the
-  // card's own gradient is a finished background on its own, so the honest
-  // reduced result is stillness, not a cheaper animation.
-  const showPrism = PRISM_CARD_IDS.has(card.id) && !reducedMotion;
+
+  /**
+   * Three independent questions, deliberately not collapsed into one boolean:
+   *
+   *   1. what stage has been EARNED    -> journeyStage
+   *   2. what IDENTITY does it render  -> prism (stage-driven, motion-blind)
+   *   3. may it MOVE                   -> animated (motion-driven only)
+   *
+   * Keeping (2) and (3) apart is the fix for a real defect: identity used to
+   * be gated on `!reducedMotion`, so a viewer who prefers reduced motion was
+   * silently demoted to the ordinary card instead of getting a still version
+   * of the card they had earned. Reduced motion may remove movement. It may
+   * not remove status.
+   */
+  const journeyStage = isStagedJourneyCard(card.id) ? journeyStageForPercent(percent) : null;
+  const showPrism = PRISM_CARD_IDS.has(card.id) || journeyStage === "advanced";
+  const prismAnimated = showPrism && !reducedMotion;
 
   // The bar fills from 0 on mount via a real state transition — a plain CSS
   // transition would race its own initial value and never animate.
@@ -148,7 +171,14 @@ export function SmartCardHero({
             "border border-border/70 bg-card/70"
           : showPrism
             ? "bg-[#12060f]"
-            : "bg-[linear-gradient(118deg,#9d1268_0%,#b81a5c_32%,#cc2f44_60%,#d9482c_100%)]"
+            : journeyStage === "progressing"
+              ? // PROGRESSING: the same gradient, travelled further along.
+                // Not a different palette -- the identical four stops at a
+                // steeper angle with the warm end pulled in earlier, so the
+                // card reads as the early card advanced rather than as a
+                // second design. The prism is still withheld until 70%.
+                "bg-[linear-gradient(126deg,#8d0f6b_0%,#b81a5c_26%,#cc2f44_52%,#e2542a_100%)]"
+              : "bg-[linear-gradient(118deg,#9d1268_0%,#b81a5c_32%,#cc2f44_60%,#d9482c_100%)]"
       } ${
         deferred
           ? "shadow-none"
@@ -167,7 +197,7 @@ export function SmartCardHero({
       {/* Exactly one animated background, never two. The prism replaces the
           sheen on its card rather than layering over it -- two live visual
           systems on one card is twice the cost for a muddier result. */}
-      {showPrism ? (
+      {prismAnimated ? (
         <PrismBackground
           // Tuned as a BACKGROUND, not an overlay: full opacity and no blend
           // mode, because there is no longer a gradient underneath for it to
@@ -180,8 +210,13 @@ export function SmartCardHero({
           glow={0.9}
           bloom={0.8}
           colorFrequency={0.35}
-          // Hue-rotated toward the Mad Buddy magenta so the card keeps its
-          // identity instead of turning into a generic rainbow.
+          // Hue rotation alone CANNOT brand this shader, so it is no longer
+          // asked to. Measured across a full 2*PI sweep the palette only ever
+          // travels cyan -> green -> olive -> cyan: `hueRotation` is applied
+          // after `tanh4` has already compressed the dynamic range, so every
+          // value lands in the same narrow, desaturated band and none of them
+          // reaches magenta. The brand colour comes from the tint layer below
+          // instead; this value is kept only for the cool base it produces.
           hueShift={-0.5}
           scale={3.2}
           // Pushed right so the bright core sits in the empty half of the
@@ -192,12 +227,40 @@ export function SmartCardHero({
           className="z-0"
         />
       ) : null}
-      {/* Readability scrim over the animation only.
+      {/* Brand tint over the moving prism.
+          The shader cannot be hue-rotated into the Mad Buddy palette (see
+          above), and an advanced Journey card that reads cyan is a different
+          design system from the early and progressing cards it is supposed to
+          be the endpoint of. A multiply pass pulls the whole animation into
+          the card's magenta while leaving its movement and structure intact:
+          the light still sweeps, it simply sweeps in the brand's colour.
+          Scoped to the Journey stage so the `suggestions` card, whose look was
+          signed off as it is, is untouched. */}
+      {prismAnimated && journeyStage === "advanced" ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 mix-blend-color bg-[linear-gradient(118deg,#d4177a_0%,#d62268_38%,#e03a4e_68%,#ec5330_100%)]"
+        />
+      ) : null}
+      {/* Still prism identity for reduced motion.
+          The card has EARNED the prism look, so reduced motion freezes it
+          rather than removing it: a fixed multi-stop wash in the same hues
+          the canvas moves through, painted on the same near-black ground at
+          the same z-0. A viewer who prefers reduced motion sees the advanced
+          card they earned, simply holding still. */}
+      {showPrism && !prismAnimated ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(120%_95%_at_82%_18%,rgba(233,64,142,0.62)_0%,rgba(196,36,120,0.42)_34%,rgba(120,20,88,0.24)_62%,rgba(18,6,15,0)_100%)]"
+        />
+      ) : null}
+      {/* Readability scrim over the prism ground — animated OR still.
           The gradient it replaced had a known, fixed luminance behind the
-          copy; a moving prism does not, so its bright passes would otherwise
-          wash out the title as they swept under it. Weighted to the left,
-          where the text column sits, and fading out to the right so the
-          artwork keeps the full colour. */}
+          copy; a prism does not, so its bright passes would otherwise wash
+          out the title as they swept under it. Weighted to the left, where
+          the text column sits, and fading out to the right so the artwork
+          keeps the full colour. Applied to the still variant too, so the
+          reduced-motion card clears the same contrast floor. */}
       {showPrism ? (
         <span
           aria-hidden="true"
@@ -232,9 +295,23 @@ export function SmartCardHero({
         // Hidden entirely on the prism card: the animation IS the visual
         // interest there, and a cut-out illustration on top of it makes two
         // focal points competing in the same corner.
-        className={`pointer-events-none absolute -right-12 top-[66%] z-[1] -translate-y-1/2 opacity-90 ${
-          showPrism ? "hidden" : ""
-        } ${prominent ? "h-[10.5rem] w-[10.5rem]" : "h-[9rem] w-[9rem]"}`}
+        // The Journey target is pulled back in from the shared -right-12
+        // bleed. Measured at 168px with that offset, only 68.5% of the
+        // artwork stayed inside the card and the crop fell exactly across the
+        // arrow -- removing the one element that carries "aim at a
+        // destination", which is the whole point of the early state. A
+        // smaller, less-bled target keeps the arrow and the rings intact.
+        // Other illustrations keep the original framing: they are abstract
+        // enough that a bleed costs them nothing.
+        className={`pointer-events-none absolute top-[66%] z-[1] -translate-y-1/2 opacity-90 ${
+          journeyStage ? "-right-5" : "-right-12"
+        } ${showPrism ? "hidden" : ""} ${
+          journeyStage
+            ? "h-[8.25rem] w-[8.25rem]"
+            : prominent
+              ? "h-[10.5rem] w-[10.5rem]"
+              : "h-[9rem] w-[9rem]"
+        }`}
         aria-hidden="true"
       >
         <span className="journey-target-glow absolute inset-[12%] rounded-full bg-white/25 blur-2xl" />
