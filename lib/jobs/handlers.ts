@@ -164,6 +164,76 @@ export const handlePlanLifecycleSideEffect: JobHandler = async (admin, payload) 
  * filtered on read, so the alert fires at most once per session even if two
  * workers overlap.
  */
+/**
+ * Announces scheduled UpFors that have reached their start time.
+ *
+ * A "Later today" UpFor is deliberately silent when created: telling the
+ * audience at 14:00 that somebody is open to hang out, for a session starting
+ * at 18:00, is both untrue and a publication four hours early. This is what
+ * announces it at the right moment instead.
+ *
+ * Polls, like safe_arrival.unconfirmed_alert, rather than scheduling a timer
+ * per session. A few minutes late is fine for "someone is free"; four hours
+ * early was the defect.
+ *
+ * The claim is atomic (see announceUpForToAudience), so a retry, an
+ * overlapping tick, or a race with the creation path cannot notify the same
+ * audience twice.
+ */
+export const handleUpForAnnounceStarted: JobHandler = async (admin) => {
+  const nowIso = new Date().toISOString();
+  const { data: sessions, error } = await admin
+    .from("hangout_sessions")
+    .select("id, owner_id, message, audience_type")
+    .eq("status", "active")
+    .is("audience_notified_at", null)
+    .lte("starts_at", nowIso)
+    .gt("ends_at", nowIso)
+    .limit(200);
+
+  if (error) throw new JobError("DATABASE_TIMEOUT", error.message);
+
+  let announced = 0;
+  for (const session of sessions ?? []) {
+    const { announceUpForToAudience } = await import("@/lib/social/upfor-announce");
+    const { resolveHangoutAudience } = await import("@/lib/social/upfor-audience");
+
+    const result = await announceUpForToAudience(admin, {
+      sessionId: session.id,
+      ownerId: session.owner_id,
+      requireStarted: true,
+      resolveRecipients: () =>
+        resolveHangoutAudience(admin, session.owner_id, {
+          audienceType: session.audience_type,
+          circleIds: [],
+          muddyIds: []
+        }),
+      senderName: async () => {
+        const { data } = await admin
+          .from("profiles")
+          .select("full_name")
+          .eq("user_id", session.owner_id)
+          .maybeSingle();
+        return data?.full_name?.trim() || "A Muddy";
+      },
+      note: session.message,
+      deliver: (recipientId, title, message) =>
+        deliverNotification(admin, {
+          userId: recipientId,
+          senderId: session.owner_id,
+          category: "plans",
+          type: `hangout:${session.id}`,
+          title,
+          message
+        })
+    });
+
+    if (result.claimed) announced += 1;
+  }
+
+  return announced;
+};
+
 export const handleSafeArrivalUnconfirmedAlert: JobHandler = async (admin) => {
   const nowMs = Date.now();
   const { data: sessions, error } = await admin
@@ -1072,6 +1142,7 @@ export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
   "plans.lifecycle_side_effect": handlePlanLifecycleSideEffect,
   "events.update_fanout": handleEventUpdateFanout,
   "safe_arrival.unconfirmed_alert": handleSafeArrivalUnconfirmedAlert,
+  "upfor.announce_started": handleUpForAnnounceStarted,
   "media.cleanup_orphan_chat": handleCleanupOrphanChatMedia,
   "media.delete_queued": handleMediaDeleteQueued,
   "billing.apply_scheduled_downgrade": handleApplyScheduledDowngrade,

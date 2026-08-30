@@ -29,6 +29,8 @@ import {
   isHangoutJoinable,
   validateHangoutDuration
 } from "@/lib/social/plans";
+import { announceUpForToAudience } from "@/lib/social/upfor-announce";
+import { resolveHangoutAudience } from "@/lib/social/upfor-audience";
 import { validateLaterToday } from "@/lib/time/timezone";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { checkAccess } from "@/lib/access/guard";
@@ -467,40 +469,38 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
     return { ok: true, message: "Your UpFor is scheduled.", hangoutId: session.id };
   }
 
-  // Notify the destined audience so they can show interest (request to join),
-  // which the host then accepts. Bounded fan-out; blocked users excluded.
-  const recipients = await resolveHangoutAudience(admin, userId, {
-    audienceType: parsed.data.audienceType,
-    circleIds: parsed.data.circleIds,
-    muddyIds: parsed.data.muddyIds
+  /* Claimed exactly once, then sent. Creation and the polling worker share
+     this one helper, so the two can never both fan out for the same session.
+     `requireStarted: false` because this branch only runs for an UpFor that
+     is starting now -- spelled out rather than relying on a millisecond of
+     clock agreement between this server and the database. */
+  await announceUpForToAudience(admin, {
+    sessionId: session.id,
+    ownerId: userId,
+    requireStarted: false,
+    resolveRecipients: () =>
+      resolveHangoutAudience(admin, userId, {
+        audienceType: parsed.data.audienceType,
+        circleIds: parsed.data.circleIds,
+        muddyIds: parsed.data.muddyIds
+      }),
+    senderName: () => displayName(admin, userId),
+    note: parsed.data.message,
+    deliver: (recipientId, title, message) =>
+      deliverNotification(admin, {
+        userId: recipientId,
+        senderId: userId,
+        category: "plans",
+        type: `hangout:${session.id}`,
+        title,
+        message
+      })
   });
-  if (recipients.length > 0) {
-    const name = await displayName(admin, userId);
-    const note = parsed.data.message?.trim();
-    await Promise.all(
-      recipients.map((recipientId) =>
-        deliverNotification(admin, {
-          userId: recipientId,
-          senderId: userId,
-          category: "plans",
-          type: `hangout:${session.id}`,
-          title: "A Muddy is open to hang out",
-          message: note ? `${name} is open to hang out: “${note}”` : `${name} is open to hang out. Tap to show interest.`
-        })
-      )
-    );
-  }
 
   // Note: the host appears in every eligible viewer's "Muddies open to plans"
   // through getVisibleHangoutsAction, which enforces each hangout's own audience
   // (all-Muddies, Close Friends, circles, selected). No status mirroring is
   // needed, so a narrower audience is never widened.
-
-  // Announced now, so the deferred job never repeats it.
-  await admin
-    .from("hangout_sessions")
-    .update({ audience_notified_at: new Date().toISOString() })
-    .eq("id", session.id);
 
   return { ok: true, message: "You're open to hang out.", hangoutId: session.id };
 }
@@ -510,57 +510,6 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
  * its audience. Only approved muddies of the host are eligible; blocked users
  * and the host are excluded, and the fan-out is capped.
  */
-async function resolveHangoutAudience(
-  admin: Admin,
-  ownerId: string,
-  input: { audienceType: HangoutAudienceType; circleIds?: string[]; muddyIds?: string[] }
-): Promise<string[]> {
-  const { data: friendships } = await admin
-    .from("friendships")
-    .select("user_one_id, user_two_id")
-    .or(`user_one_id.eq.${ownerId},user_two_id.eq.${ownerId}`)
-    .is("ended_at", null);
-  const friendIds = new Set(
-    (friendships ?? []).map((row) => (row.user_one_id === ownerId ? row.user_two_id : row.user_one_id))
-  );
-  if (friendIds.size === 0) return [];
-
-  const { data: blocks } = await admin
-    .from("blocked_users")
-    .select("blocker_id, blocked_id")
-    .or(`blocker_id.eq.${ownerId},blocked_id.eq.${ownerId}`);
-  const blocked = new Set((blocks ?? []).flatMap((row) => [row.blocker_id, row.blocked_id]));
-
-  let candidates: string[] = [];
-  switch (input.audienceType) {
-    case "all_muddies":
-      candidates = [...friendIds];
-      break;
-    case "close_friends": {
-      const { data } = await admin.from("close_friend_relationships").select("friend_id").eq("owner_id", ownerId);
-      candidates = (data ?? []).map((row) => row.friend_id);
-      break;
-    }
-    case "selected_circles": {
-      const circleIds = input.circleIds ?? [];
-      if (circleIds.length === 0) break;
-      // Only circles the host actually owns.
-      const { data: owned } = await admin.from("friend_circles").select("id").eq("user_id", ownerId).in("id", circleIds);
-      const ownedIds = (owned ?? []).map((row) => row.id);
-      if (ownedIds.length === 0) break;
-      const { data: members } = await admin.from("circle_members").select("friend_id").in("circle_id", ownedIds);
-      candidates = (members ?? []).map((row) => row.friend_id);
-      break;
-    }
-    case "selected_muddies":
-      candidates = input.muddyIds ?? [];
-      break;
-  }
-
-  return [...new Set(candidates)]
-    .filter((id) => id !== ownerId && friendIds.has(id) && !blocked.has(id))
-    .slice(0, 200);
-}
 
 export async function endHangoutAction(hangoutId: string): Promise<HangoutActionState> {
   const missing = missingEnvState();

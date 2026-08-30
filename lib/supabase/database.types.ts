@@ -5148,6 +5148,10 @@ export type Database = {
         Args: { p_actor: string; p_target: string; p_event_id?: string | null };
         Returns: Array<{ matched: boolean; connection_id: string | null; created: boolean }>;
       };
+      claim_upfor_announcement: {
+        Args: { p_session_id: string; p_require_started?: boolean };
+        Returns: boolean;
+      };
       create_upfor_session: {
         Args: {
           p_activity_type: string;

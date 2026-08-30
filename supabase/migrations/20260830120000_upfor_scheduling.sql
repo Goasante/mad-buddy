@@ -212,3 +212,49 @@ create index if not exists hangout_sessions_owner_window_idx
 create index if not exists hangout_sessions_pending_announce_idx
   on public.hangout_sessions (starts_at)
   where audience_notified_at is null and status = 'active';
+
+-- 5. Claiming the audience fan-out, exactly once.
+--
+-- Two actors can want to announce the same session: the creation path (for an
+-- UpFor starting now) and the polling worker (for one that was scheduled, and
+-- again on any retry). If both read `audience_notified_at IS NULL` and both
+-- then write, the audience is notified twice.
+--
+-- So the claim is the UPDATE itself. `where audience_notified_at is null` is
+-- evaluated against the row the statement locks, and only one concurrent
+-- writer can satisfy it -- the loser's predicate is re-checked after the first
+-- commits and no longer matches, so it updates nothing and returns no row.
+-- The caller fans out only if it got the row back.
+--
+-- Deliberately claim-before-send. Claiming after a successful send would mean a
+-- crash mid-fan-out leaves the row unclaimed and the next tick re-notifies
+-- everyone who already heard. Losing one announcement is a better failure than
+-- announcing repeatedly, and `also_requires_started` keeps a scheduled session
+-- from being claimed before it begins.
+create or replace function public.claim_upfor_announcement(
+  p_session_id uuid,
+  p_require_started boolean default true
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_claimed uuid;
+begin
+  update public.hangout_sessions
+     set audience_notified_at = now()
+   where id = p_session_id
+     and audience_notified_at is null
+     and status = 'active'
+     and ends_at > now()
+     and (not p_require_started or starts_at <= now())
+  returning id into v_claimed;
+
+  return v_claimed is not null;
+end;
+$$;
+
+revoke all on function public.claim_upfor_announcement(uuid, boolean) from public;
+grant execute on function public.claim_upfor_announcement(uuid, boolean) to service_role;
