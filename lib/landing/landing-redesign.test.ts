@@ -59,10 +59,16 @@ describe("landing visual and image contract", () => {
     expect(landing).not.toContain("BrandMark");
   });
 
-  it("gives the hero responsive image sizing instead of a generic viewport width", () => {
+  it("gives the hero responsive sizing and requests only the active nav mark theme", () => {
     expect(landing).toContain('(max-width: 639px) 92vw');
     expect(landing).toContain('(max-width: 1023px) 74vw');
-    expect(navigation).toContain('sizes="32px"');
+    expect(navigation).toContain("getImageProps");
+    expect(navigation).toContain("<picture");
+    expect(navigation).toContain('media="(prefers-color-scheme: dark)"');
+    expect(navigation).toContain("width: 32");
+    expect(navigation).toContain("height: 32");
+    expect(navigation).not.toContain("dark:hidden");
+    expect(navigation).not.toContain("dark:block");
   });
 });
 
@@ -98,11 +104,14 @@ describe("landing product story", () => {
 });
 
 describe("landing accessibility and discovery", () => {
-  it("keeps a skip link, semantic main, and full-size primary touch targets", () => {
+  it("keeps the skip link and >=44px visible interactive targets", () => {
     expect(landing).toContain('href="#main-content"');
     expect(landing).toContain('<main id="main-content">');
     expect(landing).toContain("min-h-12");
     expect(mobileMenu).toContain("min-h-11");
+    expect(navigation).toContain("inline-flex min-h-11 items-center");
+    expect(navigation).toContain('footer nav[aria-label="Footer navigation"] a');
+    expect(navigation).toContain("min-height: 44px");
   });
 
   it("describes the real product in route metadata and structured data", () => {
