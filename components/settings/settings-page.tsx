@@ -7,7 +7,6 @@ import {
   BookOpen,
   CalendarClock,
   ChevronRight,
-  CreditCard,
   Database,
   Gauge,
   Ghost,
@@ -44,8 +43,6 @@ import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { PageHeader } from "@/components/app-shell/page-header";
 
-// Deferred: most visits to Settings never open this — no reason to ship its
-// JS on every Settings page load.
 const DeleteAccountModal = dynamic(() =>
   import("@/components/settings/delete-account-modal").then((mod) => mod.DeleteAccountModal)
 );
@@ -83,13 +80,11 @@ export function SettingsPageContent({
     setVisibilityStatus(nextStatus);
     startTransition(async () => {
       const result = await updateVisibilityStatusAction(nextStatus);
-
       if (!result.ok) {
         setVisibilityStatus(previousStatus);
         showToast("Couldn’t update this setting. Try again.", true);
         return;
       }
-
       window.dispatchEvent(
         new CustomEvent("mad-buddy:location-sync-status", {
           detail: { enabled: nextStatus !== "ghost" }
@@ -104,13 +99,11 @@ export function SettingsPageContent({
     setNearbyAlerts(checked);
     startTransition(async () => {
       const result = await updateNotificationPreferenceAction({ nearbyAlerts: checked });
-
       if (!result.ok) {
         setNearbyAlerts(previousValue);
         showToast("Couldn’t update this setting. Try again.", true);
         return;
       }
-
       showToast("Settings updated");
     });
   }
@@ -119,237 +112,88 @@ export function SettingsPageContent({
     <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_OVERVIEW} className="mr-auto max-w-[980px] space-y-6 md:pt-6">
       <PageHeader title="Settings" />
 
-      {/* The divider goes with the desktop title: on mobile the shared
-          header draws its own once content scrolls under it. */}
       <header className="pt-1 md:border-b md:border-border/70 md:pb-4 md:pt-0">
         <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Settings</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Manage your account and app preferences.
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">Manage your account and app preferences.</p>
       </header>
 
       <div className="space-y-6">
         <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_ACCOUNT}>
-        <SettingsSection title="Account">
-          <SettingsLinkRow
-            icon={UserRound}
-            title="Profile"
-            description="Manage how approved friends see you."
-            href="/profile"
-          />
-          <SettingsLinkRow
-            icon={ShieldCheck}
-            title="Account Privacy"
-            description="Control who can see you and message you."
-            href="/settings/privacy"
-          />
-          <SettingsLinkRow
-            icon={ShieldCheck}
-            title="Mad Buddy Access"
-            description="Linkr and UpFor. See your access and what stays free."
-            href="/settings/access"
-          />
-          <SettingsLinkRow
-            icon={Laptop}
-            title="Sessions"
-            description="See where you're logged in."
-            href="/settings/sessions"
-          />
-          <SettingsLinkRow
-            icon={Trophy}
-            title="Badges & Achievements"
-            description="Celebrate your vibe and consistency."
-            href="/badges"
-          />
-          <SettingsLinkRow
-            icon={Gauge}
-            title="Buddy Score"
-            description="Your trust score that grows with good vibes."
-            href="/buddy-score"
-          />
-        </SettingsSection>
+          <SettingsSection title="Account">
+            <SettingsLinkRow icon={UserRound} title="Profile" description="Manage how approved friends see you." href="/profile" />
+            <SettingsLinkRow icon={ShieldCheck} title="Account Privacy" description="Control who can see you and message you." href="/settings/privacy" />
+            <SettingsLinkRow icon={ShieldCheck} title="Mad Buddy Access" description="Linkr and UpFor. See your access and what stays free." href="/settings/access" />
+            <SettingsLinkRow icon={Laptop} title="Sessions" description="See where you're logged in." href="/settings/sessions" />
+            <SettingsLinkRow icon={Trophy} title="Badges & Achievements" description="Celebrate your vibe and consistency." href="/badges" />
+            <SettingsLinkRow icon={Gauge} title="Buddy Score" description="Your trust score that grows with good vibes." href="/buddy-score" />
+          </SettingsSection>
         </div>
 
         <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_PRIVACY}>
-        <SettingsSection title="Privacy & safety">
-          <SettingsLinkRow
-            /* Same concept, same glyph as the Glow settings page itself and
-               the public pages: Glow is proximity presence being broadcast, so
-               a signal mark rather than a sparkle. */
-            icon={RadioTower}
-            title="Glow & Visibility"
-            description="Control who can see you and for how long."
-            href="/settings/glow-visibility"
-          />
-          <SettingsLinkRow
-            icon={PartyPopper}
-            title="UpFor"
-            description="Let people know you're down to hang out right now."
-            href="/hangout-mode"
-          />
-          <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_LOCATION_GLOW}>
-            <LocationForGlowSetting onFeedback={showToast} />
-          </div>
-          <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_GHOST_MODE}>
+          <SettingsSection title="Privacy & safety">
+            <SettingsLinkRow icon={RadioTower} title="Glow & Visibility" description="Control who can see you and for how long." href="/settings/glow-visibility" />
+            <SettingsLinkRow icon={PartyPopper} title="UpFor" description="Let people know you're down to hang out right now." href="/hangout-mode" />
+            <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_LOCATION_GLOW}>
+              <LocationForGlowSetting onFeedback={showToast} />
+            </div>
+            <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_GHOST_MODE}>
+              <PrivacyToggle
+                icon={Ghost}
+                title="Ghost Mode"
+                description="Pause your visibility until you turn it back on."
+                checked={visibilityStatus === "ghost"}
+                onCheckedChange={(checked) => saveVisibility(checked ? "ghost" : "visible")}
+              />
+            </div>
             <PrivacyToggle
-              icon={Ghost}
-              title="Ghost Mode"
-              description="Pause your visibility until you turn it back on."
-              checked={visibilityStatus === "ghost"}
-              onCheckedChange={(checked) => saveVisibility(checked ? "ghost" : "visible")}
+              icon={MapPinOff}
+              title="Only while app is open"
+              description="Update your nearby status only while Mad Buddy is open."
+              checked={visibilityStatus === "app_open_only"}
+              onCheckedChange={(checked) => saveVisibility(checked ? "app_open_only" : "visible")}
             />
-          </div>
-          <PrivacyToggle
-            icon={MapPinOff}
-            title="Only while app is open"
-            description="Update your nearby status only while Mad Buddy is open."
-            checked={visibilityStatus === "app_open_only"}
-            onCheckedChange={(checked) => saveVisibility(checked ? "app_open_only" : "visible")}
-          />
-          <SettingsLinkRow
-            icon={Shield}
-            title="Privacy Zones"
-            description="Pause visibility automatically in selected places."
-            href="/upgrade"
-          />
-          <SettingsLinkRow
-            icon={Blocks}
-            title="Blocked users"
-            description="Review or unblock people."
-            href="/friends"
-          />
-          <SettingsLinkRow
-            icon={ShieldCheck}
-            title="Privacy setup"
-            description="Who can see your glow, and who can reach you."
-            href="/settings/privacy-setup"
-          />
-          <SettingsLinkRow
-            icon={ShieldCheck}
-            title="Safe Arrival"
-            description="Ask trusted Muddies to check you got there."
-            href="/safe-arrival"
-          />
-          <SettingsLinkRow
-            icon={ShieldCheck}
-            title="Safety Center"
-            description="Tools and tips to keep you safe."
-            href="/safety-center"
-          />
-        </SettingsSection>
+            <SettingsLinkRow icon={Shield} title="Privacy Zones" description="Pause visibility automatically in selected places." href="/upgrade" />
+            <SettingsLinkRow icon={Blocks} title="Blocked users" description="Review or unblock people." href="/friends" />
+            <SettingsLinkRow icon={ShieldCheck} title="Privacy setup" description="Who can see your glow, and who can reach you." href="/settings/privacy-setup" />
+            <SettingsLinkRow icon={ShieldCheck} title="Safe Arrival" description="Ask trusted Muddies to check you got there." href="/safe-arrival" />
+            <SettingsLinkRow icon={ShieldCheck} title="Safety Center" description="Tools and tips to keep you safe." href="/safety-center" />
+          </SettingsSection>
         </div>
 
         <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_NOTIFICATIONS}>
-        <SettingsSection title="Notifications">
-          <PrivacyToggle
-            icon={Bell}
-            title="Nearby alerts"
-            description="Get notified when approved friends are nearby."
-            checked={nearbyAlerts}
-            onCheckedChange={saveNearbyAlerts}
-          />
-          <SettingsLinkRow
-            icon={Bell}
-            title="Focus & balance"
-            description="Focus Mode, notification limits, recaps and streaks."
-            href="/settings/engagement"
-          />
-          <SettingsLinkRow
-            icon={Bell}
-            title="Notification preferences"
-            description="Categories, quiet hours, and how you're reached."
-            href="/settings/notifications"
-          />
-          <SettingsLinkRow
-            icon={MessageSquare}
-            title="Messaging privacy"
-            description="Who can message you, Group adds, read receipts, previews."
-            href="/settings/communication"
-          />
-          <SettingsLinkRow
-            icon={CalendarClock}
-            title="Reminders"
-            description="Plan reminders and notification preferences."
-            href="/reminders"
-          />
-        </SettingsSection>
+          <SettingsSection title="Notifications">
+            <PrivacyToggle
+              icon={Bell}
+              title="Nearby alerts"
+              description="Get notified when approved friends are nearby."
+              checked={nearbyAlerts}
+              onCheckedChange={saveNearbyAlerts}
+            />
+            <SettingsLinkRow icon={Bell} title="Focus & balance" description="Focus Mode, notification limits, recaps and streaks." href="/settings/engagement" />
+            <SettingsLinkRow icon={Bell} title="Notification preferences" description="Categories, quiet hours, and how you're reached." href="/settings/notifications" />
+            <SettingsLinkRow icon={MessageSquare} title="Messaging privacy" description="Who can message you, Group adds, read receipts, previews." href="/settings/communication" />
+            <SettingsLinkRow icon={CalendarClock} title="Reminders" description="Plan reminders and notification preferences." href="/reminders" />
+          </SettingsSection>
         </div>
 
         <SettingsSection title="Preferences">
-          <SettingsLinkRow
-            icon={Palette}
-            title="Appearance"
-            description="Theme and accent color."
-            href="/settings/appearance"
-          />
-          <SettingsLinkRow
-            icon={Globe}
-            title="Language & Region"
-            description="Language, time zone, and formats."
-            href="/settings/language"
-          />
-        </SettingsSection>
-
-        <SettingsSection title="Membership">
-          <SettingsLinkRow
-            icon={CreditCard}
-            title="Membership"
-            description="View your access, usage, renewal, and membership options."
-            href="/billing"
-          />
+          <SettingsLinkRow icon={Palette} title="Appearance" description="Theme and accent color." href="/settings/appearance" />
+          <SettingsLinkRow icon={Globe} title="Language & Region" description="Language, time zone, and formats." href="/settings/language" />
         </SettingsSection>
 
         <SettingsSection title="Data">
           <DataExportButton />
-          <SettingsLinkRow
-            icon={Database}
-            title="Data & Storage"
-            description="Manage storage, exports, and cookies."
-            href="/settings/data-storage"
-          />
+          <SettingsLinkRow icon={Database} title="Data & Storage" description="Manage storage, exports, and cookies." href="/settings/data-storage" />
         </SettingsSection>
 
         <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_SUPPORT}>
-        <SettingsSection title="Support & feedback">
-          <SettingsLinkRow
-            icon={HelpCircle}
-            title="Help & Support"
-            description="Browse help topics or contact us."
-            href="/help"
-          />
-          <SettingsLinkRow
-            /* Guides are documentation -- something to read. A book says
-               that; a sparkle implied the guides were themselves some kind of
-               magic feature. */
-            icon={BookOpen}
-            title="Feature guides"
-            description="Learn or replay any Mad Buddy feature."
-            href="/settings/walkthrough"
-          />
-          <SettingsLinkRow
-            icon={MessageSquare}
-            title="Send feedback"
-            description="Rate Mad Buddy or suggest an idea."
-            href="/settings/feedback"
-          />
-          <SettingsLinkRow
-            icon={UserPlus}
-            title="Invite Buddies"
-            description="Invite friends and track your invites."
-            href="/invite"
-          />
-          {/* Moved here from Profile (MB-GOD-013). Settings already indexed every
-              other destination Profile's Support block linked to; /about was the
-              one exception, so it is added HERE FIRST — removing the Profile
-              block before this row existed would have left version and legal
-              information unreachable from inside the app. */}
-          <SettingsLinkRow
-            icon={Info}
-            title="About Mad Buddy"
-            description="Version, credits, and legal."
-            href="/about"
-          />
-        </SettingsSection>
+          <SettingsSection title="Support & feedback">
+            <SettingsLinkRow icon={HelpCircle} title="Help & Support" description="Browse help topics or contact us." href="/help" />
+            <SettingsLinkRow icon={BookOpen} title="Feature guides" description="Learn or replay any Mad Buddy feature." href="/settings/walkthrough" />
+            <SettingsLinkRow icon={MessageSquare} title="Send feedback" description="Rate Mad Buddy or suggest an idea." href="/settings/feedback" />
+            <SettingsLinkRow icon={UserPlus} title="Invite Friends" description="Invite friends and track your invites." href="/invite" />
+            <SettingsLinkRow icon={Info} title="About Mad Buddy" description="Version, credits, and legal." href="/about" />
+          </SettingsSection>
         </div>
 
         <section>
@@ -374,9 +218,7 @@ export function SettingsPageContent({
           role="status"
           className={cn(
             "fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full border px-4 py-2 text-sm font-medium shadow-lg md:bottom-6",
-            toast.error
-              ? "border-red-300/30 bg-red-950 text-red-50"
-              : "border-border bg-foreground text-background"
+            toast.error ? "border-red-300/30 bg-red-950 text-red-50" : "border-border bg-foreground text-background"
           )}
         >
           {toast.message}
@@ -390,14 +232,10 @@ type SettingsLinkRowProps = {
   icon: LucideIcon;
   title: string;
   description: string;
-  /* An explicit allow-list rather than `Route`: it catches a typo or a link to
-     a route that no longer exists at compile time, which is worth more here
-     than the convenience of accepting any string. Extend it deliberately. */
   href:
     | "/about"
     | "/profile"
     | "/upgrade"
-    | "/billing"
     | "/friends"
     | "/settings/access"
     | "/settings/privacy"
