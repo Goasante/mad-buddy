@@ -1,276 +1,135 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect } from "react";
 import {
   ArrowRight,
-  Bell,
   CalendarCheck2,
+  CalendarDays,
   Check,
   Coffee,
   Eye,
   EyeOff,
   Ghost,
   Hand,
-  MessageCircle,
-  Music2,
-  Palette,
+  MessagesSquare,
   Radio,
   RadioTower,
-  ShieldAlert,
   ShieldCheck,
-  Users,
+  UsersRound,
   X
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { BrandSymbol } from "@/components/brand/brand-symbol";
-import { LandingNav, useLandingActiveSection } from "@/components/landing/landing-nav";
-import { cn } from "@/lib/utils";
+import { LandingNav } from "@/components/landing/landing-nav";
 
-const trustPoints = ["Mutual approval required", "No maps or exact locations", "You control when you're visible"];
+const trustPoints = [
+  "Rough proximity, never a map",
+  "Visibility stays on your terms",
+  "Muddies require mutual approval"
+];
 
-const howItWorksSteps = [
+const flowSteps = [
   {
-    title: "Glow",
-    description: "See Muddies around you through broad proximity signals.",
-    /* Glow is proximity presence being broadcast, so the signal glyph is the
-       literal concept -- and it is the same one the Glow settings page now
-       uses, so the marketing page and the product agree about what Glow is. */
+    title: "Notice",
+    product: "Glow",
+    description: "A Muddy becomes more present as they get closer, without exposing an exact distance.",
     icon: RadioTower
   },
   {
-    title: "Wave",
-    description: "Show that you're open to connecting.",
+    title: "Signal",
+    product: "Wave or Ping",
+    description: "Show you are open to a hello, or ask whether meeting up sounds good.",
     icon: Hand
   },
   {
-    title: "Ping",
-    description: "Start a conversation and see if the feeling is mutual.",
-    icon: MessageCircle
-  },
-  {
-    title: "Plan",
-    description: "Create a plan and invite your Muddies.",
+    title: "Make it real",
+    product: "Plan",
+    description: "Turn the moment into an actual commitment instead of another chat that goes nowhere.",
     icon: CalendarCheck2
-  },
-  {
-    title: "Meet",
-    description: "Turn nearby connections into real moments.",
-    icon: Users
   }
 ];
 
-/*
- * UpFor, named as itself rather than folded into "Plan".
- *
- * It is one of the five bottom-nav destinations and half of the future paid
- * tier, and the public story did not mention it at all. Its own subtitle in the
- * product is "See what people are up for", which is the phrasing used here so
- * the landing page and the screen agree.
- */
-const upForPitch = {
-  title: "UpFor",
-  description: "Say what you are open to \u2014 coffee, a walk, a match \u2014 and see what your Muddies are up for.",
-  icon: Coffee
-};
-
-/*
- * Three, not four.
- *
- * "Everyday plans -- coffee, food, walks, or spontaneous meetups" said the same
- * thing as "Easy catch-ups -- turn a quick break into a hello", and on a 390px
- * phone the four cards stacked one-up to 732px, over a third of the section.
- * The two that remain are distinct occasions; UpFor is a real capability rather
- * than a mood, so it earns the third slot.
- */
-const useCases = [
+const connectionModes = [
   {
-    title: "Easy catch-ups",
-    description: "Turn a quick break into a hello.",
-    icon: Coffee
-  },
-  {
-    title: "Same event",
-    description: "Notice a Muddy at the same venue.",
-    icon: Music2
-  },
-  {
-    /* Was "Privacy-first / Everything is designed around your privacy." -- a
-       fourth restatement of a section that already has its own screen. UpFor,
-       a primary nav destination the public story never mentioned, uses the
-       slot instead. */
-    title: upForPitch.title,
-    description: upForPitch.description,
-    icon: upForPitch.icon
-  }
-];
-
-/*
- * THE TWO WAYS PEOPLE MEET (MB-GOD-059).
- *
- * This list replaces `momentSteps`, which was Glow -> Wave -> Plan -> Meet: a
- * near-copy of `howItWorksSteps` two sections above it, costing 2.62 screens to
- * restate what the reader had already been told.
- *
- * It also corrects a factual claim. The landing page said, in four places, that
- * only approved Muddies can see you nearby. Linkr makes that untrue: it shows
- * you to people you have not met, for as long as a session is switched on. The
- * About page was corrected for exactly this ("Two ways people find each other")
- * and the landing page was left behind, so a visitor met the honest version of
- * the product only after signing up.
- *
- * The bounded phrasing is deliberate and matches About word for word: Linkr
- * exposure exists "only while you have a session switched on", and at the same
- * rough proximity level as everything else. No coordinates, no distance, no map
- * -- the locked product principle is unchanged and is stated in both branches.
- */
-const discoveryModes = [
-  {
-    title: "With your Muddies",
-    tagline: "Mutual, always on your terms",
+    label: "Muddies",
+    title: "People you already trust.",
     description:
-      "People you have both approved see a rough sense of how close you are \u2014 close, near or far. Never a map, a pin or a distance.",
-    // Mutual proximity, described in bands. Same concept, same glyph.
-    icon: RadioTower,
-    points: ["Both of you approve first", "Close, Near or Far only", "Ghost Mode hides you instantly"]
+      "A Muddy is a friendship both people approve. Once connected, Glow can give you a rough sense that they are around — never a map, pin or exact distance.",
+    icon: UsersRound,
+    points: ["Mutual approval first", "Privacy-safe proximity", "Ghost Mode whenever you want out"]
   },
   {
-    title: "With Linkr",
-    tagline: "Only while a session is on",
+    label: "Linkr",
+    title: "People you might want to know.",
     description:
-      "Be discoverable to people you have not met yet \u2014 at the same rough level, and only for as long as you keep a session switched on.",
+      "Switch on a Linkr session when you want to discover someone new. You choose when discovery is active, and a real connection still requires mutual choice.",
     icon: Radio,
-    points: ["You choose when it is on", "Same Close, Near or Far detail", "Switch it off at any point"]
+    points: ["You choose when discovery is on", "No exact-location reveal", "Connection happens only by mutual choice"]
   }
 ];
 
-
-
-const muddiesMaySee = [
-  "Close, Near, or Far",
-  "Your chosen profile name and image",
-  "Whether you have chosen to be visible"
+const privacyCanKnow = [
+  "That someone you trust is roughly nearby",
+  "Whether they have chosen to be visible",
+  "Whether they are open to doing something"
 ];
 
-const muddiesNeverSee = [
-  "Exact coordinates",
-  "Map pins",
-  "Street addresses",
+const privacyNeverGet = [
+  "Exact GPS coordinates",
+  "A live map or map pin",
+  "Street names or addresses",
+  "Exact numerical distance",
   "Direction of travel",
-  "Exact distance",
   "Location history"
 ];
 
-const safetyControls = [
-  {
-    title: "Ghost Mode",
-    description: "Pause your visibility whenever you need privacy.",
-    icon: Ghost
-  },
-  {
-    title: "Block and report",
-    description: "Block or report anyone who makes you uncomfortable.",
-    icon: ShieldAlert
-  }
+const momentumFlow = [
+  { label: "Glow", icon: RadioTower },
+  { label: "Wave", icon: Hand },
+  { label: "UpFor", icon: Coffee },
+  { label: "Plan", icon: CalendarCheck2 }
 ];
 
-const featureItems = [
-  /* "Privacy-safe proximity -- see Close, Near, or Far, never an exact
-     distance" is now stated by BOTH discovery cards above and by the whole
-     privacy section. Dropped here rather than said a fourth time. */
+const supportingFeatures = [
   {
-    title: "Mutual approval",
-    /* Was "Only Muddies you both approve can appear nearby", which Linkr makes
-       untrue. The guarantee that survives is that approval governs the Muddies
-       relationship -- not that nobody else can ever see you. */
-    description: "Muddies see each other only after you both approve.",
-    icon: ShieldCheck
-  },
-  {
-    title: "Linkr",
-    description: "Meet people you don't know yet \u2014 only while your session is on.",
-    icon: Radio
-  },
-  {
-    title: "UpFor",
-    description: "Share what you're open to and see what your Muddies are up for.",
-    icon: Coffee
-  },
-  /* "Visibility controls -- choose when your glow is visible" is the same
-     promise as the Linkr card's "You choose when it is on" and Ghost Mode in
-     the privacy section. */
-  {
-    title: "Nearby alerts",
-    description: "Get optional alerts when selected Muddies are nearby.",
-    icon: Bell
+    title: "Events",
+    detail: "Shared experiences people can discover or attend together.",
+    icon: CalendarDays
   },
   {
     title: "Circles",
-    description: "Organise Muddies into groups that make sense to you.",
-    icon: Users
+    detail: "Organise the Muddies who belong together.",
+    icon: UsersRound
   },
   {
-    title: "Glow styles",
-    description: "Personalise your profile without sharing additional location detail.",
-    /* This one is about APPEARANCE, not the signal -- choosing how your Glow
-       looks. Palette says that; reusing the signal glyph here would blur the
-       two ideas the page is carefully keeping apart. */
-    icon: Palette
+    title: "Messaging",
+    detail: "Keep the conversation attached to the people and plans that matter.",
+    icon: MessagesSquare
+  },
+  {
+    title: "Safe Arrival",
+    detail: "A safety-focused arrival experience without turning friends into trackers.",
+    icon: ShieldCheck
   }
 ];
 
 export function LandingPage() {
-  const [activeSection, setActiveSection] = useLandingActiveSection();
-
-  // Full-viewport scroll snapping lives on <html> (the real scroll
-  // container) so the nav's window-scroll tracking keeps working. Scoped by
-  // class so no other page inherits it; removed on unmount.
-  useEffect(() => {
-    document.documentElement.classList.add("landing-snap");
-    return () => document.documentElement.classList.remove("landing-snap");
-  }, []);
-
-  // One restrained entry animation per section (opacity + small rise), not
-  // per card. CSS keeps elements fully visible under prefers-reduced-motion,
-  // so this observer only ever enhances.
-  useEffect(() => {
-    const elements = Array.from(document.querySelectorAll<HTMLElement>(".landing-reveal"));
-    if (elements.length === 0) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("is-visible");
-            observer.unobserve(entry.target);
-          }
-        }
-      },
-      { threshold: 0.15 }
-    );
-    for (const element of elements) observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
   return (
-    <>
+    <div className="min-h-screen bg-[#FEFBF3] text-[#311712] selection:bg-[#E88C2B]/25 selection:text-[#4E0401] dark:bg-[#100807] dark:text-[#FFF8F1]">
       <a
         href="#main-content"
-        className="focus-ring sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:shadow-lg"
+        className="focus-ring sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-[#FEFBF3] focus:px-4 focus:py-2 focus:text-[#4E0401] focus:shadow-lg dark:focus:bg-[#1B0E0B] dark:focus:text-[#FFF8F1]"
       >
         Skip to content
       </a>
-      <LandingNav activeSection={activeSection} onSectionChange={setActiveSection} />
-      <main id="main-content" className="min-h-screen bg-background text-foreground">
+      <LandingNav />
+      <main id="main-content">
         <Hero />
-        <HowItWorksSection />
-        <RealLifeMomentsSection />
+        <FeelingSection />
+        <ConnectionSection />
+        <MomentumSection />
         <PrivacySection />
-        <FeatureSection />
         <FinalCta />
-        <Footer />
       </main>
-    </>
+      <Footer />
+    </div>
   );
 }
 
@@ -278,215 +137,246 @@ function Hero() {
   return (
     <section
       id="hero"
-      className="landing-section relative flex min-h-[100svh] items-center overflow-clip px-4 pb-10 pt-[calc(var(--header-height)+1.5rem)] sm:px-6 lg:px-10"
+      className="relative isolate overflow-hidden px-4 pb-16 pt-[calc(env(safe-area-inset-top,0px)+6.75rem)] sm:px-6 sm:pb-20 sm:pt-[calc(env(safe-area-inset-top,0px)+7.5rem)] lg:min-h-[760px] lg:px-10 lg:pb-24"
     >
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(249,115,22,0.16),transparent_42%),radial-gradient(circle_at_80%_30%,rgba(251,146,60,0.12),transparent_40%),radial-gradient(circle_at_50%_90%,rgba(234,88,12,0.14),transparent_45%)]"
         aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[680px] bg-[radial-gradient(circle_at_18%_14%,rgba(232,140,43,0.20),transparent_38%),radial-gradient(circle_at_82%_24%,rgba(78,4,1,0.10),transparent_34%)] dark:bg-[radial-gradient(circle_at_18%_14%,rgba(232,140,43,0.16),transparent_38%),radial-gradient(circle_at_82%_24%,rgba(232,140,43,0.08),transparent_34%)]"
       />
-      <div className="landing-reveal relative mx-auto grid w-full max-w-7xl items-center gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-14">
+      <div aria-hidden="true" className="pointer-events-none absolute -left-20 top-28 -z-10 h-64 w-64 rounded-full border border-[#E88C2B]/10" />
+      <div aria-hidden="true" className="pointer-events-none absolute -right-24 top-40 -z-10 h-80 w-80 rounded-full border border-[#4E0401]/10 dark:border-white/[0.05]" />
+
+      <div className="mx-auto grid w-full max-w-7xl items-center gap-12 lg:grid-cols-[0.86fr_1.14fr] lg:gap-16">
         <div className="max-w-2xl">
-          <h1 className="text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.25rem]">
-            When your Muddies are close,{" "}
-            <span className="text-primary">they glow.</span>
-          </h1>
-          <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
-            A <strong className="font-semibold text-foreground">Muddy</strong>{" "}is a friend you
-            both approve. See who&rsquo;s nearby, connect, and make plans, without sharing exact
-            locations.
+          <p className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E88C2B]/25 bg-[#E88C2B]/[0.08] px-3.5 text-xs font-bold uppercase tracking-[0.14em] text-[#8E4B12] dark:text-[#F0AE68]">
+            <ShieldCheck className="h-4 w-4" aria-hidden="true" /> Privacy-first proximity
           </p>
+          <h1 className="mt-5 max-w-2xl text-[2.7rem] font-semibold leading-[1.01] tracking-[-0.045em] text-[#4E0401] sm:text-6xl sm:leading-[0.98] lg:text-[4.4rem] dark:text-[#FFF8F1]">
+            When your Muddies are close, <span className="text-[#E88C2B]">they glow.</span>
+          </h1>
+          <p className="mt-6 max-w-xl text-base leading-7 text-[#4E0401]/70 sm:text-lg sm:leading-8 dark:text-[#FFF8F1]/70">
+            Know when the right people are around. Turn a quick wave into coffee, a plan, or something spontaneous — without broadcasting exactly where you are.
+          </p>
+
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <Button asChild size="lg">
-              <Link href="/login" aria-label="Get started: create a Mad Buddy account">
-                Get started
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="lg">
-              <a href="#how-it-works" aria-label="See how Mad Buddy works">
-                See how it works
-              </a>
-            </Button>
+            <Link
+              href="/login"
+              className="focus-ring inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#4E0401] px-6 text-sm font-bold text-white shadow-[0_14px_35px_rgba(78,4,1,0.18)] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(78,4,1,0.24)] active:translate-y-0 dark:bg-[#E88C2B] dark:text-[#2B120A]"
+            >
+              Get started <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+            <a
+              href="#how-it-works"
+              className="focus-ring inline-flex min-h-12 items-center justify-center rounded-full border border-[#4E0401]/15 bg-white/50 px-6 text-sm font-bold text-[#4E0401] transition-colors hover:bg-white/80 dark:border-white/15 dark:bg-white/[0.04] dark:text-[#FFF8F1] dark:hover:bg-white/[0.08]"
+            >
+              See how it works
+            </a>
           </div>
-          {/* Trust points stay inside the hero as a compact inline line, not
-              a separate strip. */}
-          <ul className="mt-6 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-1.5">
-            {trustPoints.map((item) => (
-              <li key={item} className="inline-flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                <span>{item}</span>
+
+          <ul className="mt-7 grid gap-2.5 text-sm text-[#4E0401]/60 sm:grid-cols-3 sm:gap-3 dark:text-[#FFF8F1]/60">
+            {trustPoints.map((point) => (
+              <li key={point} className="flex items-start gap-2">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                <span>{point}</span>
               </li>
             ))}
           </ul>
         </div>
-        <div className="relative flex w-full items-center justify-center">
-          {/* Ambient glow behind the mockup: a wide soft haze plus a tighter
-              warm core centred on the middle phone, echoing the hero's own
-              radial atmosphere so the devices sit in the same pool of light
-              rather than on a separate backdrop. */}
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-[-4%] rounded-full bg-orange-500/6 blur-[100px] lg:inset-[-8%] lg:bg-orange-500/9 lg:blur-[150px]"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-[14%] rounded-full bg-orange-400/10 blur-[60px] lg:inset-[12%] lg:bg-orange-400/15 lg:blur-[95px]"
-          />
-          {/* A soft, irregular (not circular) orange haze, deliberately
-              blob-shaped rather than a perfect ring so it reads as ambient
-              light, not a radar/tracking signal. */}
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-1/2 h-[70%] w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-[62%_38%_55%_45%/45%_60%_40%_55%] bg-orange-500/10 blur-[65px] lg:blur-[95px]"
-          />
-          {/* A soft grounding shadow so the phones read as standing in the
-              scene instead of floating with nothing beneath them. */}
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute bottom-0 left-1/2 h-10 w-[55%] -translate-x-1/2 rounded-[100%] bg-black/25 blur-xl lg:bottom-[2%] lg:h-16 lg:w-[60%] lg:bg-black/40 lg:blur-2xl"
-          />
-          {/* This asset has its background removed (true alpha, not a CSS
-              mask). The phones and glow lines are the only opaque pixels,
-              so nothing here can read as a rectangle. A slight contrast/
-              saturation lift keeps the devices reading as sharp as the
-              surrounding text without touching the source file. */}
+
+        <div className="relative mx-auto w-full max-w-[680px] lg:max-w-none">
+          <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 h-[78%] w-[76%] -translate-x-1/2 -translate-y-1/2 rounded-[48%] bg-[#E88C2B]/15 blur-3xl motion-safe:animate-pulse dark:bg-[#E88C2B]/10" />
+          <div aria-hidden="true" className="pointer-events-none absolute bottom-[4%] left-1/2 h-12 w-[58%] -translate-x-1/2 rounded-[100%] bg-[#4E0401]/15 blur-2xl dark:bg-black/40" />
           <Image
             src="/brand/mad-buddy-hero-mockup-v2.png"
-            alt="Mad Buddy showing nearby Muddies, plans, and privacy controls"
+            alt="Mad Buddy product screens showing privacy-safe proximity and social planning"
             width={617}
             height={405}
             priority
-            sizes="(max-width: 1024px) 75vw, 42vw"
-            className="relative z-10 h-auto w-full max-w-[560px] object-contain [filter:contrast(1.06)_saturate(1.08)]"
+            quality={82}
+            sizes="(max-width: 639px) 92vw, (max-width: 1023px) 74vw, 46vw"
+            className="relative z-10 h-auto w-full object-contain [filter:contrast(1.035)_saturate(1.04)]"
           />
+
+          <div className="absolute -left-1 top-[10%] z-20 hidden max-w-[180px] rounded-2xl border border-[#4E0401]/10 bg-[#FEFBF3]/95 p-3 shadow-[0_18px_50px_rgba(78,4,1,0.12)] backdrop-blur sm:block lg:-left-4 dark:border-white/10 dark:bg-[#1A0D0A]/95">
+            <div className="flex items-center gap-2">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-[#E88C2B]/15 text-[#A45A18]"><RadioTower className="h-4 w-4" aria-hidden="true" /></span>
+              <div><p className="text-xs font-bold text-[#4E0401] dark:text-[#FFF8F1]">Ama is around</p><p className="mt-0.5 text-[10px] text-[#4E0401]/50 dark:text-[#FFF8F1]/50">Enough to say hello. Not enough to track.</p></div>
+            </div>
+          </div>
+
+          <div className="absolute -bottom-3 right-0 z-20 hidden max-w-[190px] rounded-2xl border border-[#4E0401]/10 bg-[#4E0401] p-3.5 text-white shadow-[0_20px_55px_rgba(78,4,1,0.25)] sm:block lg:right-3 dark:bg-[#F7E9DE] dark:text-[#3B1711]">
+            <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#F2B16F] dark:text-[#A45A18]">UpFor now</p>
+            <p className="mt-1 text-sm font-bold">Coffee after class?</p>
+            <p className="mt-1 text-[11px] text-white/70 dark:text-[#3B1711]/60">A quick intention can become a real plan.</p>
+          </div>
         </div>
       </div>
     </section>
   );
 }
 
-function HowItWorksSection() {
+function FeelingSection() {
   return (
-    <section
-      id="how-it-works"
-      className="landing-section relative flex min-h-[calc(100svh-var(--header-height))] items-center overflow-clip px-4 py-10 sm:px-6 lg:px-10"
-    >
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_50%_0%,rgba(249,115,22,0.1),transparent_65%)]"
-        aria-hidden="true"
-      />
-      <div className="landing-reveal relative mx-auto w-full max-w-7xl">
-        <SectionHeading
-          eyebrow="How it works"
-          title="Simple. Social. Human."
-          description="Mad Buddy helps approved Muddies go from nearby to meeting in real life."
-          align="center"
-        />
-        <ol className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {howItWorksSteps.map((step, index) => (
-            <li key={step.title} className="rounded-2xl border border-border/80 bg-card/60 p-5">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                <step.icon className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <p className="mt-3 text-sm font-semibold">
-                {index + 1}. {step.title}
-              </p>
-              <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{step.description}</p>
-            </li>
-          ))}
-        </ol>
-      </div>
-    </section>
-  );
-}
+    <section id="how-it-works" className="scroll-mt-24 border-y border-[#4E0401]/10 bg-[#4E0401]/[0.025] px-4 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-28 dark:border-white/[0.06] dark:bg-white/[0.018]">
+      <div className="mx-auto grid w-full max-w-7xl items-center gap-12 lg:grid-cols-[1.04fr_0.96fr] lg:gap-16">
+        <div>
+          <SectionHeading
+            eyebrow="The feeling"
+            title="Not a map. A sense that someone is around."
+            description="Mad Buddy turns proximity into a softer social signal. People feel more present as they get closer, while the geography stays private."
+          />
 
-function RealLifeMomentsSection() {
-  return (
-    <section
-      id="real-life-moments"
-      className="landing-section relative flex min-h-[calc(100svh-var(--header-height))] items-center overflow-clip bg-secondary/20 px-4 py-16 sm:px-6 sm:py-20 lg:px-10"
-    >
-      <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_42%,hsl(var(--primary)/0.08),transparent_30%),radial-gradient(circle_at_82%_58%,hsl(var(--primary)/0.05),transparent_28%)]"
-        aria-hidden="true"
-      />
-      <div className="landing-reveal moment-story relative mx-auto w-full max-w-7xl">
-        <SectionHeading
-          eyebrow="Real-life moments"
-          title="Made for moments that happen offline."
-          description="See who's around. Say hello. Make plans. Meet in real life."
-          align="center"
-        />
-        <div className="mx-auto mt-12 grid max-w-6xl items-start gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:gap-10">
-          <div className="rounded-[1.75rem] border border-border/70 bg-card/45 p-5 shadow-[0_24px_70px_hsl(var(--shadow)/0.1)] sm:p-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Two ways people find each other</p>
-            <ul className="mt-6 grid gap-4" aria-label="The two ways people find each other on Mad Buddy">
-              {discoveryModes.map((mode) => (
-                <li
-                  key={mode.title}
-                  className="moment-step rounded-2xl border border-border/70 bg-background/60 p-4 sm:p-5"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-primary/35 bg-primary/10 text-primary">
-                      <mode.icon className="h-5 w-5" aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0">
-                      <h3 className="text-base font-semibold">{mode.title}</h3>
-                      <p className="text-xs font-medium text-primary">{mode.tagline}</p>
-                    </div>
+          <ol className="mt-9 grid gap-3">
+            {flowSteps.map((step, index) => (
+              <li key={step.product} className="group flex gap-4 rounded-2xl border border-[#4E0401]/10 bg-[#FEFBF3]/70 p-4 transition-[transform,border-color,background-color] hover:-translate-y-0.5 hover:border-[#E88C2B]/35 hover:bg-white/75 dark:border-white/[0.08] dark:bg-white/[0.025] dark:hover:bg-white/[0.045]">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#E88C2B]/15 text-[#A45A18]">
+                  <step.icon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#4E0401]/50 dark:text-[#FFF8F1]/50">0{index + 1} · {step.title}</span>
+                    <span className="text-sm font-bold text-[#E88C2B]">{step.product}</span>
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-muted-foreground">{mode.description}</p>
-                  <ul className="mt-3 grid gap-1.5">
-                    {mode.points.map((point) => (
-                      <li key={point} className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                        {point}
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
+                  <p className="mt-1.5 text-sm leading-6 text-[#4E0401]/60 dark:text-[#FFF8F1]/60">{step.description}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
 
-            {/* The duplicated "Privacy built in" card that sat here is gone: the
-                same four points are rendered again 40 lines below in this very
-                section, and a third time in the dedicated privacy section. */}
+        <div className="relative mx-auto w-full max-w-[520px] rounded-[2rem] border border-[#4E0401]/10 bg-[#FEFBF3] p-5 shadow-[0_28px_80px_rgba(78,4,1,0.10)] sm:p-7 dark:border-white/10 dark:bg-[#180C09]">
+          <div className="mb-7 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#A45A18]">Around you</p>
+              <h3 className="mt-1 text-xl font-bold tracking-[-0.02em] text-[#4E0401] dark:text-[#FFF8F1]">Your friends become more present.</h3>
+            </div>
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#E88C2B]/15 text-[#A45A18]"><RadioTower className="h-5 w-5" aria-hidden="true" /></span>
           </div>
 
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Made for everyday connection</p>
-            {/* Two-up from the narrowest width: at 390px these were stacking
-                one-up and the four of them cost 732px. */}
-            <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-1 xl:grid-cols-2">
-              {useCases.map((item) => (
-                <article
-                  key={item.title}
-                  className="moment-benefit group relative overflow-hidden rounded-2xl border border-border/70 bg-card/60 p-4 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-[0_18px_45px_hsl(var(--primary)/0.1)] sm:min-h-[156px] sm:p-5"
-                >
-                  <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full border border-primary/10 transition-transform duration-500 group-hover:scale-125" aria-hidden="true" />
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary transition-colors duration-300 group-hover:bg-primary group-hover:text-primary-foreground">
-                    <item.icon className="h-5 w-5" aria-hidden="true" />
-                  </span>
-                  <h3 className="mt-4 text-base font-semibold">{item.title}</h3>
-                  <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{item.description}</p>
-                </article>
-              ))}
+          <div className="relative min-h-[300px] overflow-hidden rounded-[1.5rem] border border-[#4E0401]/10 bg-[radial-gradient(circle_at_50%_45%,rgba(232,140,43,0.13),transparent_23%),radial-gradient(circle_at_50%_45%,transparent_0,transparent_29%,rgba(232,140,43,0.10)_30%,transparent_31%),radial-gradient(circle_at_50%_45%,transparent_0,transparent_47%,rgba(232,140,43,0.07)_48%,transparent_49%)] dark:border-white/[0.07] dark:bg-[radial-gradient(circle_at_50%_45%,rgba(232,140,43,0.12),transparent_23%),radial-gradient(circle_at_50%_45%,transparent_0,transparent_29%,rgba(232,140,43,0.10)_30%,transparent_31%),radial-gradient(circle_at_50%_45%,transparent_0,transparent_47%,rgba(232,140,43,0.07)_48%,transparent_49%)]">
+            <MuddyAvatar initials="AM" name="Ama" className="left-[42%] top-[33%]" intensity="strong" />
+            <MuddyAvatar initials="KB" name="Kojo" className="left-[13%] top-[17%]" intensity="medium" />
+            <MuddyAvatar initials="NA" name="Nana" className="bottom-[14%] right-[13%]" intensity="soft" />
+            <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-[#4E0401]/10 bg-[#FEFBF3]/95 p-3.5 backdrop-blur dark:border-white/10 dark:bg-[#1C0E0B]/95">
+              <p className="text-sm font-bold text-[#4E0401] dark:text-[#FFF8F1]">You know enough to act.</p>
+              <p className="mt-1 text-xs leading-5 text-[#4E0401]/60 dark:text-[#FFF8F1]/60">No coordinates. No route. No “147 metres away.” Just a privacy-safe cue that a real-world moment might be possible.</p>
             </div>
           </div>
         </div>
+      </div>
+    </section>
+  );
+}
 
-        {/* The "Approved friends only / No exact location / No maps / No location
-            history" strip that sat here is gone. It was the THIRD rendering of
-            those four points on this page -- twice inside this section, once in
-            the privacy section that follows it -- and its first item was part of
-            the claim Linkr makes untrue. The two discovery cards above now carry
-            the privacy guarantee where the reader actually needs it: attached to
-            the model it applies to. */}
+function ConnectionSection() {
+  return (
+    <section id="connect" className="scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-28">
+      <div className="mx-auto w-full max-w-7xl">
+        <SectionHeading
+          eyebrow="Two ways to connect"
+          title="Your people. And the people you choose to discover."
+          description="Mad Buddy separates trusted friendship from deliberate discovery, so the social context is always clear."
+          align="center"
+        />
 
-        {/* The section's own "Ready to meet naturally?" call to action is gone.
-            `get-started` is one screen further on and says the same thing with
-            the same two buttons; two CTAs a screen apart read as a page that
-            has run out of things to say rather than as urgency. */}
+        <div className="mx-auto mt-10 grid max-w-5xl gap-4 lg:grid-cols-2">
+          {connectionModes.map((mode, index) => (
+            <article key={mode.label} className={`relative overflow-hidden rounded-[1.75rem] border p-6 sm:p-7 ${index === 0 ? "border-[#E88C2B]/25 bg-[#E88C2B]/[0.055]" : "border-[#4E0401]/15 bg-white/50 dark:border-white/10 dark:bg-white/[0.03]"}`}>
+              <div aria-hidden="true" className={`pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full border ${index === 0 ? "border-[#E88C2B]/15" : "border-[#4E0401]/10 dark:border-white/[0.05]"}`} />
+              <div className="relative flex items-start gap-4">
+                <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${index === 0 ? "bg-[#E88C2B] text-[#2A120A]" : "bg-[#4E0401] text-white dark:bg-[#F4E4D8] dark:text-[#3A1610]"}`}>
+                  <mode.icon className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#A45A18]">{mode.label}</p>
+                  <h3 className="mt-1.5 text-2xl font-bold tracking-[-0.025em] text-[#4E0401] dark:text-[#FFF8F1]">{mode.title}</h3>
+                </div>
+              </div>
+              <p className="relative mt-5 text-sm leading-6 text-[#4E0401]/70 dark:text-[#FFF8F1]/60">{mode.description}</p>
+              <ul className="relative mt-5 grid gap-2.5">
+                {mode.points.map((point) => (
+                  <li key={point} className="flex items-center gap-2.5 text-sm font-semibold text-[#4E0401]/75 dark:text-[#FFF8F1]/70">
+                    <Check className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {point}
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+
+        <p className="mx-auto mt-6 max-w-2xl text-center text-sm leading-6 text-[#4E0401]/50 dark:text-[#FFF8F1]/50">
+          Different social contexts. The same privacy standard: Mad Buddy gives people enough context to decide whether to connect, not enough detail to follow one another around.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function MomentumSection() {
+  return (
+    <section className="border-y border-[#4E0401]/10 bg-[#4E0401]/[0.025] px-4 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-28 dark:border-white/[0.06] dark:bg-white/[0.018]">
+      <div className="mx-auto w-full max-w-7xl">
+        <div className="grid items-end gap-6 lg:grid-cols-[0.82fr_1.18fr]">
+          <SectionHeading
+            eyebrow="From maybe to actually meeting"
+            title="Proximity is only useful if something happens next."
+            description="UpFor captures the moment. Plans make it real. Everything around them helps the right people coordinate without turning Mad Buddy into another endless feed."
+          />
+          <div className="flex flex-wrap gap-2 lg:justify-end" aria-label="Typical connection flow">
+            {momentumFlow.map(({ label, icon: Icon }) => (
+              <span key={label} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[#4E0401]/10 bg-[#FEFBF3]/80 px-3.5 text-xs font-bold text-[#4E0401]/70 dark:border-white/10 dark:bg-white/[0.03] dark:text-[#FFF8F1]/70">
+                <Icon className="h-4 w-4 text-[#E88C2B]" aria-hidden="true" /> {label}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-10 grid gap-4 lg:grid-cols-2">
+          <article className="rounded-[1.75rem] border border-[#E88C2B]/25 bg-[#FEFBF3] p-5 shadow-[0_20px_60px_rgba(78,4,1,0.07)] sm:p-7 dark:bg-[#180C09]">
+            <div className="flex items-center justify-between gap-4">
+              <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#A45A18]">UpFor · right now</p><h3 className="mt-1 text-xl font-bold text-[#4E0401] dark:text-[#FFF8F1]">What are you open to?</h3></div>
+              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#E88C2B]/15 text-[#A45A18]"><Coffee className="h-5 w-5" aria-hidden="true" /></span>
+            </div>
+            <div className="mt-6 flex flex-wrap gap-2">
+              {[
+                ["Coffee", "45 min"],
+                ["Gym", "Tonight"],
+                ["Food", "Now"],
+                ["Walk", "1 hour"]
+              ].map(([activity, time], index) => (
+                <span key={activity} className={`rounded-2xl border px-4 py-3 ${index === 0 ? "border-[#E88C2B] bg-[#E88C2B]/10" : "border-[#4E0401]/10 bg-white/50 dark:border-white/10 dark:bg-white/[0.03]"}`}>
+                  <span className="block text-sm font-bold text-[#4E0401] dark:text-[#FFF8F1]">{activity}</span>
+                  <span className="mt-0.5 block text-[11px] text-[#4E0401]/50 dark:text-[#FFF8F1]/50">{time}</span>
+                </span>
+              ))}
+            </div>
+            <p className="mt-5 text-sm leading-6 text-[#4E0401]/60 dark:text-[#FFF8F1]/60">Temporary intent, with an audience and an expiry. It says “I could do something” without pretending it is already a commitment.</p>
+          </article>
+
+          <article className="rounded-[1.75rem] bg-[#4E0401] p-5 text-white shadow-[0_24px_70px_rgba(78,4,1,0.18)] sm:p-7 dark:bg-[#F2E3D7] dark:text-[#3A1610]">
+            <div className="flex items-center justify-between gap-4">
+              <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#F2B16F] dark:text-[#A45A18]">Plan · committed</p><h3 className="mt-1 text-xl font-bold">Coffee after class</h3></div>
+              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-[#F2B16F] dark:bg-[#4E0401]/10 dark:text-[#8E4B12]"><CalendarCheck2 className="h-5 w-5" aria-hidden="true" /></span>
+            </div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <PlanDetail label="When" value="Today · 5:30 PM" />
+              <PlanDetail label="Who" value="4 Muddies going" />
+              <PlanDetail label="Chat" value="Ready with the plan" />
+              <PlanDetail label="Next" value="Meet, then mark it done" />
+            </div>
+            <p className="mt-5 text-sm leading-6 text-white/70 dark:text-[#3A1610]/60">A Plan becomes the shared commitment — with the people, context, and conversation needed to actually show up.</p>
+          </article>
+        </div>
+
+        <div className="mt-5 grid gap-px overflow-hidden rounded-[1.5rem] border border-[#4E0401]/10 bg-[#4E0401]/10 sm:grid-cols-2 lg:grid-cols-4 dark:border-white/[0.08] dark:bg-white/[0.08]">
+          {supportingFeatures.map((feature) => (
+            <div key={feature.title} className="bg-[#FEFBF3] p-4 dark:bg-[#140B09] sm:p-5">
+              <feature.icon className="h-5 w-5 text-[#E88C2B]" aria-hidden="true" />
+              <h3 className="mt-3 text-sm font-bold text-[#4E0401] dark:text-[#FFF8F1]">{feature.title}</h3>
+              <p className="mt-1.5 text-xs leading-5 text-[#4E0401]/60 dark:text-[#FFF8F1]/50">{feature.detail}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -494,98 +384,46 @@ function RealLifeMomentsSection() {
 
 function PrivacySection() {
   return (
-    <section
-      id="privacy"
-      className="landing-section relative flex min-h-[calc(100svh-var(--header-height))] items-center overflow-clip px-4 py-10 sm:px-6 lg:px-10"
-    >
-      <div className="landing-reveal mx-auto w-full max-w-7xl">
-        <SectionHeading
-          eyebrow="Privacy and safety"
-          title="Nearby, without giving away where."
-          description="You choose who can see you're nearby, and no exact location is ever shared."
-          align="center"
-        />
-        <div className="mx-auto mt-8 grid max-w-5xl gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border border-border/80 bg-card/60 p-5">
-            <div className="flex items-center gap-3">
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-emerald-400/12 text-emerald-700 dark:text-emerald-100">
-                <Eye className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <h3 className="text-base font-semibold">What Muddies may see</h3>
-            </div>
-            <ul className="mt-4 space-y-2">
-              {muddiesMaySee.map((item) => (
-                <li key={item} className="flex gap-2.5 text-sm leading-6 text-muted-foreground">
-                  <Check className="mt-1 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="rounded-2xl border border-border/80 bg-card/60 p-5">
-            <div className="flex items-center gap-3">
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-red-400/10 text-red-700 dark:text-red-200">
-                <EyeOff className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <h3 className="text-base font-semibold">What Muddies never see</h3>
-            </div>
-            <ul className="mt-4 grid gap-x-4 gap-y-2 sm:grid-cols-2">
-              {muddiesNeverSee.map((item) => (
-                <li key={item} className="flex gap-2.5 text-sm leading-6 text-muted-foreground">
-                  <X className="mt-1 h-4 w-4 shrink-0 text-red-600 dark:text-red-300" aria-hidden="true" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+    <section id="privacy" className="scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-28">
+      <div className="mx-auto w-full max-w-7xl">
+        <div className="mx-auto max-w-4xl text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#A45A18]">Privacy is the product</p>
+          <h2 className="mt-3 text-4xl font-semibold leading-[1.05] tracking-[-0.035em] text-[#4E0401] sm:text-5xl dark:text-[#FFF8F1]">Know enough to meet. Never enough to track.</h2>
+          <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-[#4E0401]/60 dark:text-[#FFF8F1]/60">Mad Buddy deliberately withholds the pieces that turn social awareness into surveillance.</p>
         </div>
-        <div className="mx-auto mt-4 grid max-w-5xl gap-4 sm:grid-cols-2">
-          {safetyControls.map((item) => (
-            <div key={item.title} className="flex items-start gap-3 rounded-2xl border border-border/80 bg-card/60 p-5">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                <item.icon className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <div>
-                <h3 className="text-base font-semibold">{item.title}</h3>
-                <p className="mt-1 text-sm leading-6 text-muted-foreground">{item.description}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          Read the full{" "}
-          <Link href="/privacy" className="font-medium text-primary underline-offset-4 hover:underline">
-            privacy policy
-          </Link>{" "}
-          for details on data handling.
-        </p>
-      </div>
-    </section>
-  );
-}
 
-function FeatureSection() {
-  return (
-    <section
-      id="features"
-      className="landing-section relative flex min-h-[calc(100svh-var(--header-height))] items-center overflow-clip bg-secondary/20 px-4 py-10 sm:px-6 lg:px-10"
-    >
-      <div className="landing-reveal mx-auto w-full max-w-7xl">
-        <SectionHeading
-          eyebrow="Features"
-          title="Built for connection, not tracking."
-          align="center"
-        />
-        <div className="mx-auto mt-10 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {featureItems.map((feature) => (
-            <article key={feature.title} className="rounded-2xl border border-border/80 bg-card p-5">
-              <span className="grid h-10 w-10 place-items-center rounded-full bg-primary/10 text-primary">
-                <feature.icon className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <h3 className="mt-3 text-base font-semibold">{feature.title}</h3>
-              <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{feature.description}</p>
-            </article>
-          ))}
+        <div className="mx-auto mt-10 grid max-w-5xl gap-4 lg:grid-cols-2">
+          <article className="rounded-[1.75rem] border border-emerald-700/10 bg-emerald-700/[0.035] p-5 sm:p-7 dark:border-emerald-400/15 dark:bg-emerald-400/[0.035]">
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"><Eye className="h-5 w-5" aria-hidden="true" /></span>
+              <div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-emerald-700 dark:text-emerald-400">You can know</p><h3 className="mt-0.5 text-xl font-bold text-[#4E0401] dark:text-[#FFF8F1]">Enough context to decide.</h3></div>
+            </div>
+            <ul className="mt-6 grid gap-3">
+              {privacyCanKnow.map((item) => (
+                <li key={item} className="flex gap-3 text-sm leading-6 text-[#4E0401]/70 dark:text-[#FFF8F1]/60"><Check className="mt-1 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /><span>{item}</span></li>
+              ))}
+            </ul>
+          </article>
+
+          <article className="rounded-[1.75rem] border border-[#4E0401]/10 bg-[#4E0401]/[0.025] p-5 sm:p-7 dark:border-white/[0.08] dark:bg-white/[0.02]">
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#4E0401]/10 text-[#4E0401] dark:bg-white/[0.07] dark:text-[#FFF8F1]"><EyeOff className="h-5 w-5" aria-hidden="true" /></span>
+              <div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#4E0401]/50 dark:text-[#FFF8F1]/50">You never get</p><h3 className="mt-0.5 text-xl font-bold text-[#4E0401] dark:text-[#FFF8F1]">The pieces needed to follow someone.</h3></div>
+            </div>
+            <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+              {privacyNeverGet.map((item) => (
+                <li key={item} className="flex gap-3 text-sm leading-6 text-[#4E0401]/70 dark:text-[#FFF8F1]/60"><X className="mt-1 h-4 w-4 shrink-0 text-[#B24637] dark:text-[#F28B7C]" aria-hidden="true" /><span>{item}</span></li>
+              ))}
+            </ul>
+          </article>
+        </div>
+
+        <div className="mx-auto mt-4 flex max-w-5xl flex-col gap-4 rounded-[1.5rem] border border-[#E88C2B]/25 bg-[#E88C2B]/[0.06] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#E88C2B]/15 text-[#A45A18]"><Ghost className="h-5 w-5" aria-hidden="true" /></span>
+            <div><h3 className="text-sm font-bold text-[#4E0401] dark:text-[#FFF8F1]">Need to disappear? Ghost Mode.</h3><p className="mt-1 text-sm leading-6 text-[#4E0401]/60 dark:text-[#FFF8F1]/60">Pause proximity visibility when you want privacy. Control should be immediate and understandable.</p></div>
+          </div>
+          <Link href="/privacy" className="focus-ring inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-[#E88C2B]/30 bg-[#FEFBF3]/75 px-5 text-sm font-bold text-[#8E4B12] hover:bg-white dark:bg-white/[0.04] dark:text-[#F0AE68] dark:hover:bg-white/[0.07]">Read how privacy works</Link>
         </div>
       </div>
     </section>
@@ -594,37 +432,17 @@ function FeatureSection() {
 
 function FinalCta() {
   return (
-    <section
-      id="get-started"
-      className="landing-section relative flex min-h-[calc(100svh-var(--header-height))] items-center overflow-clip px-4 py-10 sm:px-6 lg:px-10"
-    >
-      <div className="landing-reveal mx-auto w-full max-w-7xl">
-        <div className="mx-auto overflow-hidden rounded-2xl bg-primary px-6 py-12 sm:px-10 sm:py-16">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-semibold tracking-tight text-primary-foreground sm:text-4xl">
-              Your Muddies are closer than you think.
-            </h2>
-            <p className="mt-4 text-base leading-7 text-primary-foreground/85">
-              Create an account, approve a friend, and choose when to glow.
-            </p>
-            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-              <Button asChild size="lg" className="bg-background text-primary hover:bg-background/90">
-                <Link href="/login" aria-label="Get started: create a Mad Buddy account">
-                  Get started
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                size="lg"
-                className="border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
-              >
-                <Link href="/login" aria-label="Log in to Mad Buddy">
-                  Log in
-                </Link>
-              </Button>
-            </div>
+    <section id="get-started" className="px-4 pb-20 pt-4 sm:px-6 sm:pb-24 lg:px-10 lg:pb-28">
+      <div className="relative mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-[#4E0401] px-5 py-12 text-white shadow-[0_28px_80px_rgba(78,4,1,0.18)] sm:px-10 sm:py-16 lg:px-14 dark:bg-[#E8D6C9] dark:text-[#3A1610]">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full border border-white/10 dark:border-[#4E0401]/10" />
+        <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 left-[14%] h-64 w-64 rounded-full bg-[#E88C2B]/20 blur-3xl" />
+        <div className="relative mx-auto max-w-3xl text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#F2B16F] dark:text-[#955115]">Real life is the point</p>
+          <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.03em] sm:text-5xl">The next hangout could already be around you.</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-white/70 dark:text-[#3A1610]/60">Add the people you trust. Choose when to be visible. See what becomes possible when digital friendship has a way back into the real world.</p>
+          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+            <Link href="/login" className="focus-ring inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#E88C2B] px-6 text-sm font-bold text-[#2B120A] shadow-sm transition-transform hover:-translate-y-0.5 active:translate-y-0">Get started <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+            <Link href="/about" className="focus-ring inline-flex min-h-12 items-center justify-center rounded-full border border-white/20 bg-white/[0.05] px-6 text-sm font-bold text-white hover:bg-white/[0.09] dark:border-[#4E0401]/10 dark:bg-white/30 dark:text-[#3A1610] dark:hover:bg-white/50">Learn about Mad Buddy</Link>
           </div>
         </div>
       </div>
@@ -634,114 +452,54 @@ function FinalCta() {
 
 function Footer() {
   return (
-    <footer className="landing-section flex min-h-[calc(100svh-var(--header-height))] items-center px-4 py-10 sm:px-6 lg:px-10">
-      <div className="mx-auto w-full max-w-7xl border-t border-border/70 pt-10">
-        <div className="grid gap-10 lg:grid-cols-[1.7fr_0.8fr_0.8fr_0.8fr] lg:gap-12">
-          <div className="max-w-sm">
-            <Link href="#hero" className="inline-flex items-center gap-3" aria-label="Mad Buddy home" title="Mad Buddy home">
-              <BrandSymbol className="h-9 w-9" />
-              <span className="text-base font-semibold text-foreground">Mad Buddy</span>
-            </Link>
-            <p className="mt-4 text-sm leading-6 text-muted-foreground">
-              When your friends are close, they glow.
-            </p>
-          </div>
-
-          <nav aria-label="Explore">
-            <h2 className="text-sm font-semibold text-foreground">Explore</h2>
-            <ul className="mt-4 flex flex-col gap-3 text-sm text-muted-foreground">
-              <li>
-                <a href="#how-it-works" className="transition-colors hover:text-foreground">
-                  How it works
-                </a>
-              </li>
-              <li>
-                <Link href="/privacy" className="transition-colors hover:text-foreground">
-                  Privacy
-                </Link>
-              </li>
-              <li>
-                <Link href="/about" className="transition-colors hover:text-foreground">
-                  About
-                </Link>
-              </li>
-              <li>
-                <a href="#features" className="transition-colors hover:text-foreground">
-                  Features
-                </a>
-              </li>
-              <li>
-                <Link href="/pricing" className="transition-colors hover:text-foreground">
-                  Pricing
-                </Link>
-              </li>
-              <li>
-                <Link href="/faq" className="transition-colors hover:text-foreground">
-                  FAQ
-                </Link>
-              </li>
-            </ul>
-          </nav>
-
-          <nav aria-label="Account">
-            <h2 className="text-sm font-semibold text-foreground">Account</h2>
-            <ul className="mt-4 flex flex-col gap-3 text-sm text-muted-foreground">
-              <li>
-                <Link href="/login" className="transition-colors hover:text-foreground">
-                  Get started
-                </Link>
-              </li>
-              <li>
-                <Link href="/login" className="transition-colors hover:text-foreground">
-                  Log in
-                </Link>
-              </li>
-            </ul>
-          </nav>
-
-          <nav aria-label="Legal">
-            <h2 className="text-sm font-semibold text-foreground">Legal</h2>
-            <ul className="mt-4 flex flex-col gap-3 text-sm text-muted-foreground">
-              <li>
-                <Link href="/privacy" className="transition-colors hover:text-foreground">
-                  Privacy policy
-                </Link>
-              </li>
-              <li>
-                <Link href="/terms" className="transition-colors hover:text-foreground">
-                  Terms of use
-                </Link>
-              </li>
-            </ul>
-          </nav>
+    <footer className="border-t border-[#4E0401]/10 px-4 py-10 sm:px-6 lg:px-10 dark:border-white/[0.07]">
+      <div className="mx-auto grid w-full max-w-7xl gap-8 sm:grid-cols-[1.35fr_1fr] sm:items-end">
+        <div>
+          <Link href="#hero" className="focus-ring inline-flex min-h-11 items-center rounded-lg text-base font-bold tracking-[-0.02em] text-[#4E0401] dark:text-[#FFF8F1]">Mad Buddy<span className="text-[#E88C2B]">.</span></Link>
+          <p className="mt-2 max-w-sm text-sm leading-6 text-[#4E0401]/50 dark:text-[#FFF8F1]/50">When your friends are close, they glow.</p>
         </div>
-
-        <div className="mt-10 flex flex-col gap-3 border-t border-border/70 pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <p>&copy; {new Date().getFullYear()} Mad Buddy. All rights reserved.</p>
-        </div>
+        <nav className="flex flex-wrap gap-x-5 gap-y-3 text-sm font-semibold text-[#4E0401]/60 sm:justify-end dark:text-[#FFF8F1]/50" aria-label="Footer navigation">
+          <Link href="/about" className="focus-ring rounded-md hover:text-[#4E0401] dark:hover:text-[#FFF8F1]">About</Link>
+          <Link href="/faq" className="focus-ring rounded-md hover:text-[#4E0401] dark:hover:text-[#FFF8F1]">FAQ</Link>
+          <Link href="/pricing" className="focus-ring rounded-md hover:text-[#4E0401] dark:hover:text-[#FFF8F1]">Pricing</Link>
+          <Link href="/privacy" className="focus-ring rounded-md hover:text-[#4E0401] dark:hover:text-[#FFF8F1]">Privacy</Link>
+          <Link href="/terms" className="focus-ring rounded-md hover:text-[#4E0401] dark:hover:text-[#FFF8F1]">Terms</Link>
+          <Link href="/login" className="focus-ring rounded-md text-[#A45A18] hover:text-[#7E3C08] dark:text-[#F0AE68]">Log in</Link>
+        </nav>
+      </div>
+      <div className="mx-auto mt-8 flex w-full max-w-7xl flex-col gap-2 border-t border-[#4E0401]/10 pt-5 text-xs text-[#4E0401]/40 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.06] dark:text-[#FFF8F1]/40">
+        <p>&copy; {new Date().getFullYear()} Mad Buddy. All rights reserved.</p>
+        <p>Privacy-safe proximity for real-world connection.</p>
       </div>
     </footer>
   );
 }
 
-function SectionHeading({
-  eyebrow,
-  title,
-  description,
-  align = "left"
-}: {
-  eyebrow: string;
-  title: string;
-  description?: string;
-  align?: "left" | "center";
-}) {
+function SectionHeading({ eyebrow, title, description, align = "left" }: { eyebrow: string; title: string; description: string; align?: "left" | "center" }) {
   return (
-    <div className={cn("max-w-3xl", align === "center" && "mx-auto text-center")}>
-      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">{eyebrow}</p>
-      <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h2>
-      {description ? (
-        <p className="mt-4 text-base leading-7 text-muted-foreground">{description}</p>
-      ) : null}
+    <div className={align === "center" ? "mx-auto max-w-3xl text-center" : "max-w-3xl"}>
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#A45A18]">{eyebrow}</p>
+      <h2 className="mt-3 text-3xl font-semibold leading-[1.08] tracking-[-0.03em] text-[#4E0401] sm:text-4xl lg:text-[2.8rem] dark:text-[#FFF8F1]">{title}</h2>
+      <p className="mt-4 max-w-2xl text-base leading-7 text-[#4E0401]/60 dark:text-[#FFF8F1]/60">{description}</p>
+    </div>
+  );
+}
+
+function MuddyAvatar({ initials, name, className, intensity }: { initials: string; name: string; className: string; intensity: "strong" | "medium" | "soft" }) {
+  const glow = intensity === "strong" ? "shadow-[0_0_0_9px_rgba(232,140,43,0.14),0_0_32px_rgba(232,140,43,0.34)]" : intensity === "medium" ? "shadow-[0_0_0_7px_rgba(232,140,43,0.10),0_0_24px_rgba(232,140,43,0.22)]" : "shadow-[0_0_0_5px_rgba(232,140,43,0.07),0_0_18px_rgba(232,140,43,0.14)]";
+  return (
+    <div className={`absolute ${className} -translate-x-1/2 -translate-y-1/2 text-center`}>
+      <span className={`grid h-14 w-14 place-items-center rounded-full border-2 border-[#FEFBF3] bg-[#4E0401] text-sm font-bold text-white ${glow} dark:border-[#180C09] dark:bg-[#E8D6C9] dark:text-[#3A1610]`}>{initials}</span>
+      <span className="mt-2 inline-block rounded-full bg-[#FEFBF3]/90 px-2 py-1 text-[10px] font-bold text-[#4E0401] shadow-sm dark:bg-[#180C09]/90 dark:text-[#FFF8F1]">{name}</span>
+    </div>
+  );
+}
+
+function PlanDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-3.5 dark:border-[#4E0401]/10 dark:bg-white/40">
+      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/50 dark:text-[#3A1610]/50">{label}</p>
+      <p className="mt-1 text-sm font-bold">{value}</p>
     </div>
   );
 }

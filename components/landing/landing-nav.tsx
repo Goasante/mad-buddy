@@ -1,275 +1,105 @@
-"use client";
-
+import { getImageProps } from "next/image";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { BrandMark } from "@/components/brand/brand-mark";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { LandingMobileMenu } from "@/components/landing/landing-mobile-menu";
+import { brandSymbol } from "@/lib/brand/assets";
 
-// Must stay in document order. The scroll tracker picks the last id whose
-// section top has passed the header.
-const sectionIds = ["how-it-works", "real-life-moments", "privacy", "features"] as const;
+const navItemClass =
+  "focus-ring inline-flex min-h-11 items-center rounded-full px-3 py-2 text-sm font-semibold text-[#4E0401]/70 transition-colors hover:bg-[#E88C2B]/10 hover:text-[#4E0401] dark:text-[#FFF8F1]/70 dark:hover:bg-white/[0.06] dark:hover:text-[#FFF8F1]";
 
-type LandingNavProps = {
-  activeSection: string | null;
-  onSectionChange: (section: string | null) => void;
-};
-
-export function LandingNav({ activeSection, onSectionChange }: LandingNavProps) {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const mobilePanelRef = useRef<HTMLDivElement>(null);
-  const menuId = useId();
-
-  const closeMobile = useCallback(() => {
-    setMobileOpen(false);
-    menuButtonRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    document.body.style.overflow = mobileOpen ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [mobileOpen]);
-
-  useEffect(() => {
-    if (!mobileOpen) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeMobile();
-        return;
-      }
-
-      if (event.key !== "Tab" || !mobilePanelRef.current) return;
-
-      const focusable = mobilePanelRef.current.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    const firstLink = mobilePanelRef.current?.querySelector<HTMLElement>("a, button");
-    firstLink?.focus();
-
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [mobileOpen, closeMobile]);
+function LandingBrandMark() {
+  const light = getImageProps({
+    src: brandSymbol.light.src,
+    alt: "",
+    width: 32,
+    height: 32
+  }).props;
+  const dark = getImageProps({
+    src: brandSymbol.dark.src,
+    alt: "",
+    width: 32,
+    height: 32
+  }).props;
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-border/60 bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur-md">
+    <picture className="block h-8 w-8">
+      <source media="(prefers-color-scheme: dark)" srcSet={dark.srcSet} />
+      <img
+        {...light}
+        alt=""
+        aria-hidden="true"
+        className="h-8 w-8 object-contain"
+      />
+    </picture>
+  );
+}
+
+/**
+ * Server-rendered landing navigation.
+ *
+ * Only the hamburger menu hydrates. The desktop links, brand lockup and CTA
+ * are static HTML so the public page does not ship scroll listeners or active
+ * section state just to highlight navigation while somebody reads.
+ *
+ * The brand mark uses one <picture> rather than two CSS-swapped images. The
+ * browser therefore requests only the artwork for the active colour scheme;
+ * the hidden theme no longer leaves an unrequested lazy image in the DOM for
+ * headless audits to misclassify as broken, and a 32px mark no longer exposes
+ * a giant fallback optimiser URL from an unused element.
+ */
+export function LandingNav() {
+  return (
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-[#4E0401]/10 bg-[#FEFBF3]/90 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl dark:border-white/10 dark:bg-[#140B09]/90">
+      <style>{`
+        footer nav[aria-label="Footer navigation"] a,
+        a[href="#main-content"]:focus {
+          display: inline-flex;
+          min-height: 44px;
+          align-items: center;
+        }
+
+        footer nav[aria-label="Footer navigation"] a {
+          min-width: 44px;
+          padding-block: 0.625rem;
+          padding-inline: 0.5rem;
+          justify-content: center;
+        }
+      `}</style>
       <nav
-        className="mx-auto flex h-[4.25rem] max-w-6xl items-center justify-between gap-3 px-4 sm:h-[4.5rem] sm:px-6"
+        className="mx-auto flex h-[4.25rem] w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-10"
         aria-label="Main navigation"
       >
-        <Link
-          href="/"
-          className="focus-ring flex items-center gap-3 rounded-lg font-semibold"
-          aria-label="Mad Buddy home"
-          title="Mad Buddy home"
-          onClick={() => onSectionChange(null)}
-        >
-          {/* The horizontal lockup, which carries the wordmark itself. It used
-              to sit beside a "Mad Buddy" <span>, printing the name twice; the
-              span is gone and the artwork supplies the name. Larger than the
-              old h-9 so it reads as the brand rather than a favicon. */}
-          <BrandMark className="h-11" priority />
+        <Link href="/" className="focus-ring inline-flex min-h-11 items-center gap-2.5 rounded-xl" aria-label="Mad Buddy home">
+          <span className="relative grid h-8 w-8 shrink-0 place-items-center">
+            <LandingBrandMark />
+          </span>
+          <span className="text-[15px] font-bold tracking-[-0.02em] text-[#4E0401] dark:text-[#FFF8F1]">Mad Buddy</span>
         </Link>
 
-        <div className="hidden items-center gap-1 text-sm font-medium text-muted-foreground md:flex">
-          <NavAnchor
-            href="#how-it-works"
-            isActive={activeSection === "how-it-works"}
-            onClick={() => onSectionChange("how-it-works")}
-          >
-            How it works
-          </NavAnchor>
-          <Link className={navLinkClass(false)} href="/about" onClick={() => onSectionChange(null)}>
-            About
-          </Link>
-          <Link className={navLinkClass(false)} href="/privacy" onClick={() => onSectionChange(null)}>
-            Privacy
-          </Link>
-          <Link className={navLinkClass(false)} href="/pricing" onClick={() => onSectionChange(null)}>
-            Pricing
-          </Link>
+        <div className="hidden items-center gap-0.5 md:flex">
+          <a className={navItemClass} href="#how-it-works">How it works</a>
+          <a className={navItemClass} href="#connect">Muddies + Linkr</a>
+          <a className={navItemClass} href="#privacy">Privacy</a>
+          <Link className={navItemClass} href="/about">About</Link>
+          <Link className={navItemClass} href="/pricing">Pricing</Link>
         </div>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button asChild size="sm" variant="ghost">
-            <Link href="/login">Log in</Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link href="/login">Get started</Link>
-          </Button>
+          <Link
+            href="/login"
+            className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full px-4 text-sm font-semibold text-[#4E0401]/70 transition-colors hover:bg-[#E88C2B]/10 hover:text-[#4E0401] dark:text-[#FFF8F1]/75 dark:hover:bg-white/[0.06] dark:hover:text-[#FFF8F1]"
+          >
+            Log in
+          </Link>
+          <Link
+            href="/login"
+            className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full bg-[#4E0401] px-5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(78,4,1,0.16)] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(78,4,1,0.22)] active:translate-y-0 dark:bg-[#E88C2B] dark:text-[#2A120A]"
+          >
+            Get started
+          </Link>
         </div>
 
-        <button
-          ref={menuButtonRef}
-          type="button"
-          className="focus-ring safe-motion inline-flex h-11 w-11 items-center justify-center rounded-full border border-transparent text-foreground hover:bg-secondary md:hidden"
-          aria-expanded={mobileOpen}
-          aria-controls={menuId}
-          aria-label={mobileOpen ? "Close menu" : "Open menu"}
-          onClick={() => setMobileOpen((open) => !open)}
-        >
-          {mobileOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
-        </button>
+        <LandingMobileMenu />
       </nav>
-
-      {mobileOpen ? (
-        <div
-          id={menuId}
-          ref={mobilePanelRef}
-          className="border-t border-border/70 bg-background px-4 py-4 md:hidden"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Mobile navigation"
-        >
-          <div className="flex flex-col gap-1">
-            <MobileNavLink href="#how-it-works" onNavigate={closeMobile}>
-              How it works
-            </MobileNavLink>
-            <MobileNavLink href="/about" onNavigate={closeMobile}>
-              About
-            </MobileNavLink>
-            <MobileNavLink href="/privacy" onNavigate={closeMobile}>
-              Privacy
-            </MobileNavLink>
-            <MobileNavLink href="/faq" onNavigate={closeMobile}>
-              FAQ
-            </MobileNavLink>
-            <MobileNavLink href="/pricing" onNavigate={closeMobile}>
-              Pricing
-            </MobileNavLink>
-            <MobileNavLink href="/login" onNavigate={closeMobile}>
-              Log in
-            </MobileNavLink>
-          </div>
-          <Button asChild className="mt-4 w-full" size="lg">
-            <Link href="/login" onClick={closeMobile}>
-              Get started
-            </Link>
-          </Button>
-        </div>
-      ) : null}
     </header>
   );
 }
-
-export function useLandingActiveSection() {
-  const [activeSection, setActiveSection] = useState<string | null>(null);
-
-  useEffect(() => {
-    const syncSectionFromHash = () => {
-      const section = window.location.hash.slice(1);
-      setActiveSection(sectionIds.includes(section as (typeof sectionIds)[number]) ? section : null);
-    };
-
-    const syncSectionFromScroll = () => {
-      const headerBottom = window.innerWidth >= 640 ? 72 : 68;
-      let currentSection: string | null = null;
-
-      for (const sectionId of sectionIds) {
-        const section = document.getElementById(sectionId);
-        if (section && section.getBoundingClientRect().top <= headerBottom) {
-          currentSection = sectionId;
-        }
-      }
-
-      setActiveSection(currentSection);
-    };
-
-    let animationFrame = 0;
-    const scheduleScrollSync = () => {
-      window.cancelAnimationFrame(animationFrame);
-      animationFrame = window.requestAnimationFrame(syncSectionFromScroll);
-    };
-
-    syncSectionFromHash();
-    window.addEventListener("hashchange", syncSectionFromHash);
-    window.addEventListener("scroll", scheduleScrollSync, { passive: true });
-    window.addEventListener("resize", scheduleScrollSync);
-    scheduleScrollSync();
-
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-      window.removeEventListener("hashchange", syncSectionFromHash);
-      window.removeEventListener("scroll", scheduleScrollSync);
-      window.removeEventListener("resize", scheduleScrollSync);
-    };
-  }, []);
-
-  return [activeSection, setActiveSection] as const;
-}
-
-function NavAnchor({
-  href,
-  isActive,
-  onClick,
-  children
-}: {
-  href: string;
-  isActive: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <a
-      className={navLinkClass(isActive)}
-      href={href}
-      aria-current={isActive ? "location" : undefined}
-      onClick={onClick}
-    >
-      {children}
-    </a>
-  );
-}
-
-function MobileNavLink({
-  href,
-  onNavigate,
-  children
-}: {
-  href: `#${string}` | "/about" | "/privacy" | "/pricing" | "/faq" | "/login" | "/signup";
-  onNavigate: () => void;
-  children: ReactNode;
-}) {
-  if (href.startsWith("/")) {
-    return (
-      <Link href={href} className={mobileLinkClass} onClick={onNavigate}>
-        {children}
-      </Link>
-    );
-  }
-
-  return (
-    <a href={href} className={mobileLinkClass} onClick={onNavigate}>
-      {children}
-    </a>
-  );
-}
-
-function navLinkClass(isActive: boolean) {
-  return cn(
-    "focus-ring rounded-full px-3 py-2 transition-[color,background-color] duration-200 motion-reduce:transition-none",
-    isActive
-      ? "bg-secondary text-foreground shadow-[inset_0_0_0_1px_hsl(var(--border))]"
-      : "hover:bg-secondary/70 hover:text-foreground"
-  );
-}
-
-const mobileLinkClass =
-  "focus-ring rounded-lg px-3 py-3 text-base font-medium text-foreground hover:bg-secondary";

@@ -1,9 +1,17 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { PROXIMITY_BAND_LABELS } from "@/lib/proximity/bands";
+import { PROXIMITY_GLOW_CONFIG } from "@/lib/proximity/glow-config";
 
 const ROOT = join(__dirname, "..", "..");
 const read = (path: string) => readFileSync(join(ROOT, path), "utf8");
+
+function expectMuddiesGridUsesCanonicalBandLabel(source: string) {
+  expect(source).toMatch(
+    /const\s+proximityText\s*=\s*band\s*\?\s*proximityBandLabel\(band\)\s*:\s*null;/
+  );
+}
 
 describe("canonical proximity parity", () => {
   it("keeps all three in-range buckets on web and mobile Home", () => {
@@ -54,18 +62,44 @@ describe("canonical proximity parity", () => {
     expect(pulseRoute).toContain('nearby.filter((friend) => friend.proximity_level !== "hidden")');
   });
 
-  it("uses only the canonical bucket vocabulary on public proximity surfaces", () => {
-    const publicCopy = [
-      read("components/landing/landing-page.tsx"),
-      read("components/legal/about-page.tsx"),
-      read("content/privacy-policy.ts")
-    ].join("\n");
-    const backend = read("lib/proximity/backend.ts");
+  it("keeps the six user-facing Glow labels on the canonical presentation authority", () => {
+    const expected = [
+      "Right Here",
+      "Just Around",
+      "Close By",
+      "In Your Area",
+      "Around Town",
+      "Across Town"
+    ];
 
-    expect(publicCopy).toContain("Close, Near, or Far");
-    expect(publicCopy).not.toMatch(/Very close|Around you/);
-    expect(backend).toContain('return "Close and glowing clearly"');
-    expect(backend).not.toContain('return "Very close and glowing clearly"');
+    expect(Object.values(PROXIMITY_BAND_LABELS).filter((label) => label !== "Too far")).toEqual(expected);
+    expect(Object.values(PROXIMITY_GLOW_CONFIG).map((config) => config.label)).toEqual(expected);
+  });
+
+  it("makes proximity-state surfaces resolve labels from the canonical band authority", () => {
+    const home = read("components/dashboard/dashboard-page.tsx");
+    const friends = read("components/friends/friends-page.tsx");
+    const muddiesGrid = read("components/friends/muddies-grid.tsx");
+
+    expect(home).toContain("proximityBandLabel(");
+    expect(friends).toContain("proximityBandLabel(");
+    expectMuddiesGridUsesCanonicalBandLabel(muddiesGrid);
+  });
+
+  it("rejects an obsolete label when it is injected into a real proximity-label slot", () => {
+    const muddiesGrid = read("components/friends/muddies-grid.tsx");
+    const mutated = muddiesGrid.replace(
+      /const\s+proximityText\s*=\s*band\s*\?\s*proximityBandLabel\(band\)\s*:\s*null;/,
+      'const proximityText = band ? "Around You" : null;'
+    );
+
+    expect(mutated).not.toBe(muddiesGrid);
+    expect(() => expectMuddiesGridUsesCanonicalBandLabel(mutated)).toThrow();
+  });
+
+  it("does not police ordinary prose that happens to share words with old labels", () => {
+    const landing = read("components/landing/landing-page.tsx");
+    expect(landing).toContain("Around you");
   });
 
   it("migrates only the canonical proximity enum and preserves other preferences", () => {
