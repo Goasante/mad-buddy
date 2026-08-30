@@ -149,7 +149,9 @@ export function HomeSettingsSheet({
             <SheetGroup rows={CONTROLS} label="Controls" className="mt-4" />
             <SheetGroup rows={CONNECT} label="Connect" className="mt-4" />
             <SheetGroup rows={SUPPORT} label="Support" className="mt-4" />
-            {showAdminLink ? <SheetGroup rows={ADMINISTRATION} label="Admin" className="mt-4" /> : null}
+            {showAdminLink ? (
+              <SheetGroup rows={ADMINISTRATION} label="Admin" className="mt-4" />
+            ) : null}
           </div>
 
           <div className="shrink-0 border-t border-border/60 bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-5 sm:pb-4">
