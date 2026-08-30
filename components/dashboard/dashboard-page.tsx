@@ -1156,7 +1156,7 @@ export function DashboardPageContent({
           <section aria-labelledby="home-plans-heading" data-tour-id={TOUR_TARGET_IDS.HOME_UPCOMING_PLAN}>
             <PageSectionHeader
               id="home-plans-heading"
-              title="My Plans"
+              title="Coming Up"
               href="/plans"
               actionAriaLabel="See all plans"
             />

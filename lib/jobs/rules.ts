@@ -21,6 +21,7 @@ export type JobStatus =
 export type JobType =
   // The six that batches 5-13 left un-run.
   | "safe_arrival.unconfirmed_alert"
+  | "upfor.announce_started"
   | "media.strip_exif"
   | "media.cleanup_orphan_chat"
   | "media.delete_queued"
@@ -180,6 +181,12 @@ export type ScheduleSpec = {
  */
 export const SCHEDULE: readonly ScheduleSpec[] = [
   { jobType: "safe_arrival.unconfirmed_alert", everyMinutes: 5, priority: 1 },
+  /* A scheduled UpFor announces itself when it starts, not when it was
+     created. Five minutes matches the safe-arrival cadence: the alternative
+     is a per-row timer for exact-second delivery, which is a lot of
+     machinery for a "someone is free" notification. Being a few minutes late
+     is fine; being four hours EARLY was the defect. */
+  { jobType: "upfor.announce_started", everyMinutes: 5, priority: 3 },
   { jobType: "media.cleanup_orphan_chat", everyMinutes: 60, priority: 4 },
   { jobType: "media.delete_queued", everyMinutes: 60, priority: 4 },
   { jobType: "billing.apply_scheduled_downgrade", everyMinutes: 60, priority: 3 },

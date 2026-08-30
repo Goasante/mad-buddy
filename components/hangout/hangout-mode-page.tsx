@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Route } from "next";
 import { cameFromInsideApp, resolveBack } from "@/lib/navigation/entry-origin";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -54,6 +54,8 @@ import { rsvpAction } from "@/app/(app)/plans-actions";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import { useHasScrolled } from "@/hooks/use-has-scrolled";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { useCountdownResume } from "@/hooks/use-countdown-clock";
+import { resolveViewerTimeZone, upForTimeSlots } from "@/lib/social/upfor-schedule-options";
 import { cn } from "@/lib/utils";
 import { countActiveRequests } from "@/lib/social/hangout-requests";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
@@ -238,6 +240,12 @@ export function HangoutModePage({
   const [activity, setActivity] = useState<HangoutActivityType | null>(null);
   const [audience, setAudience] = useState<HangoutAudienceType>("all_muddies");
   const [duration, setDuration] = useState<Duration>("1h");
+  /* Scheduling is one extra choice on the existing form, not a sub-product:
+     "Now" behaves exactly as it always has, and "Later today" reveals a time
+     list for the rest of today only. There is deliberately no date input. */
+  const [when, setWhen] = useState<"now" | "later">("now");
+  const [startAtIso, setStartAtIso] = useState<string>("");
+  const viewerTimeZone = useMemo(() => resolveViewerTimeZone(), []);
   const [message, setMessage] = useState("");
   const [broadArea, setBroadArea] = useState("");
   /**
@@ -254,6 +262,12 @@ export function HangoutModePage({
 
   const [toast, setToast] = useState<Toast>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  /* Recomputed as the clock ticks, so a form left open past a slot stops
+     offering it -- rather than letting the server reject it on submit. */
+  const timeSlots = useMemo(
+    () => upForTimeSlots(new Date(nowMs), viewerTimeZone),
+    [nowMs, viewerTimeZone]
+  );
 
   /**
    * Filter state, held here rather than in the sheet.
@@ -289,10 +303,10 @@ export function HangoutModePage({
   // flips the orb back to inactive without a manual refresh.
   const isActive = activeHangout !== null && Date.parse(activeHangout.endsAt) > nowMs;
 
-  useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 30_000);
-    return () => clearInterval(timer);
-  }, []);
+  /* The clock now also re-reads on visibilitychange/pageshow, so a phone that
+     spent forty minutes in a pocket shows the correct countdown on the first
+     frame back rather than up to 30s later. See useCountdownClock. */
+  useCountdownResume(setNowMs);
 
   useEffect(() => {
     if (!requestedHangoutId) return;
@@ -499,6 +513,10 @@ export function HangoutModePage({
     setAttempted(true);
     setSetupError("");
     if (!activity) return;
+    if (when === "later" && !startAtIso) {
+      setSetupError("Choose a time later today.");
+      return;
+    }
 
     const chosen = durationOptions.find((option) => option.id === duration) ?? durationOptions[1];
     /* `nowMs` rather than Date.now(): this runs in an event handler, but the
@@ -529,7 +547,10 @@ export function HangoutModePage({
         message: message.trim() || undefined,
         broadAreaText: broadArea.trim() || undefined,
         discoveryScope,
-        endsAt
+        endsAt,
+        when,
+        startsAt: when === "later" ? startAtIso : undefined,
+        timezone: viewerTimeZone
       });
 
       if (result.ok && result.hangoutId) {
@@ -883,11 +904,11 @@ UpFors are temporary and disappear when they end. Jump in while you can!
         <section aria-labelledby="upfor-plans-heading" className="upfor-section">
           <PageSectionHeader
             id="upfor-plans-heading"
-            title="Upcoming Plans"
+            title="Coming Up"
             href="/plans"
             actionAriaLabel="See all plans"
           />
-          <PlanStack plans={initialPlans} onJoin={joinPlan} pending={isPending} />
+          <PlanStack plans={initialPlans} onJoin={joinPlan} pending={isPending} nowMs={nowMs} />
         </section>
       ) : null}
 
@@ -1092,6 +1113,71 @@ UpFors are temporary and disappear when they end. Jump in while you can!
               Your Muddies can see this too, plus people nearby.
             </p>
           )}
+
+          <fieldset>
+            <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              When?
+            </legend>
+            <div className="flex gap-1.5">
+              {(["now", "later"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => {
+                    setWhen(option);
+                    /* Preselect the first still-valid slot, so choosing
+                       "Later today" is one tap rather than two. */
+                    if (option === "later" && !startAtIso) setStartAtIso(timeSlots[0]?.iso ?? "");
+                    if (option === "now") setStartAtIso("");
+                    setSetupError("");
+                  }}
+                  aria-pressed={when === option}
+                  className={cn(
+                    "focus-ring safe-motion min-h-11 flex-1 rounded-full border px-2 py-1.5 text-sm font-medium",
+                    when === option
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:bg-secondary"
+                  )}
+                >
+                  {option === "now" ? "Now" : "Later today"}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          {when === "later" ? (
+            <div>
+              <label
+                htmlFor="upfor-start-time"
+                className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                Time
+              </label>
+              {timeSlots.length === 0 ? (
+                /* Late enough that nothing is left today. Said plainly rather
+                   than offering a time the server would refuse. */
+                <p className="text-sm text-muted-foreground">
+                  There is no time left today. Choose Now instead.
+                </p>
+              ) : (
+                <select
+                  id="upfor-start-time"
+                  value={startAtIso}
+                  onChange={(event) => {
+                    setStartAtIso(event.target.value);
+                    setSetupError("");
+                  }}
+                  className="focus-ring min-h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm"
+                >
+                  {timeSlots.map((slot) => (
+                    <option key={slot.iso} value={slot.iso}>
+                      {slot.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          ) : null}
 
           <fieldset>
             <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

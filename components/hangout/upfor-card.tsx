@@ -11,7 +11,8 @@ import {
   upForMomentum,
   upForSocialProof
 } from "@/lib/social/upfor-feed";
-import { upForPlaceLabel, upForTimeLeft, upForTitle } from "@/lib/social/upfor";
+import { upForPlaceLabel, upForTitle } from "@/lib/social/upfor";
+import { upForCountdownLabel } from "@/lib/social/upfor-countdown";
 import type { SocializeAreaTier } from "@/lib/social/socialize";
 import type { HangoutActivityType } from "@/lib/supabase/database.types";
 
@@ -62,7 +63,10 @@ export const UpForCard = memo(function UpForCard({
 }) {
   const isOwner = upfor.ownerId === viewerId;
   const proximity = upForPlaceLabel(upfor);
-  const timeLeft = upForTimeLeft(upfor.endsAt, nowMs);
+  /* One time line, chosen by phase: "Starts in 47m" before it begins,
+     "42m left" while it runs, nothing once it is over. The card never shows
+     a status word, a date and a countdown stacked together. */
+  const timeLabel = upForCountdownLabel(upfor, nowMs);
   const proof = upForSocialProof({ participants: upfor.participants });
   const momentum = upForMomentum({
     joinerCount: upfor.participants.length,
@@ -126,8 +130,8 @@ export const UpForCard = memo(function UpForCard({
       </div>
 
       <div className="upfor-card__rail">
-        <p className={cn("upfor-card__timer", !timeLeft && "is-ended")}>
-          <Clock3 aria-hidden /> {timeLeft ?? "Ended"}
+        <p className={cn("upfor-card__timer", !timeLabel && "is-ended")}>
+          <Clock3 aria-hidden /> {timeLabel ?? "Ended"}
         </p>
 
         {isOwner ? null : expired ? (
