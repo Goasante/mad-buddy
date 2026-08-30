@@ -39,10 +39,7 @@ export function LoginForm({ initialError = null, nextDestination = POST_LOGIN_RO
     formState: { errors }
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: ""
-    }
+    defaultValues: { email: "", password: "" }
   });
 
   function onSubmit(values: LoginFormValues) {
@@ -63,9 +60,7 @@ export function LoginForm({ initialError = null, nextDestination = POST_LOGIN_RO
             : { ...result, message: "Email address or password is incorrect." }
         );
 
-        if (result.ok && result.redirectTo) {
-          window.location.assign(result.redirectTo);
-        }
+        if (result.ok && result.redirectTo) window.location.assign(result.redirectTo);
       } catch (error) {
         setActionState({
           ok: false,
@@ -89,27 +84,12 @@ export function LoginForm({ initialError = null, nextDestination = POST_LOGIN_RO
     }
   }
 
-  /* method="post" on the form below is a SAFETY FALLBACK, not the submit path.
-   *
-   * Submission normally runs through the onSubmit handler and never reaches the
-   * browser's native form submission. But when the page's JavaScript has not run
-   * -- a failed or blocked chunk, a slow network that drops the bundle, an
-   * extension, or JS disabled outright -- the browser submits the form itself.
-   * A <form> with no method defaults to GET, which appends every field to the
-   * URL. Verified in a real browser: /login and /signup both produced
-   * `?email=...&password=...` in the address bar, and a URL like that is written
-   * to browser history, server access logs and any intermediate proxy.
-   *
-   * POST keeps the fields in the request body. Login still fails closed without
-   * JavaScript (there is no non-JS endpoint), so this changes nothing about what
-   * succeeds -- only about what leaks when it fails. */
   return (
     <form className="space-y-4" method="post" onSubmit={handleSubmit(onSubmit)}>
-      {/* OAuth first: the fastest, most-used path leads. */}
       <Button
         type="button"
         variant="outline"
-        className="w-full border-white/12 bg-white/[0.045] text-white hover:border-white/20 hover:bg-white/[0.09] hover:text-white"
+        className="w-full border-[#4E0401]/12 bg-white/45 text-[#4E0401] hover:bg-white/80 dark:border-white/12 dark:bg-white/[0.035] dark:text-[#FFF8F1] dark:hover:bg-white/[0.07]"
         onClick={signInWithGoogle}
         disabled={isPending || isGooglePending}
       >
@@ -127,46 +107,36 @@ export function LoginForm({ initialError = null, nextDestination = POST_LOGIN_RO
       </Button>
 
       <div className="flex items-center gap-3" aria-hidden="true">
-        <span className="h-px flex-1 bg-white/10" />
-        <span className="text-xs font-medium uppercase tracking-[0.18em] text-white/35">or log in with email</span>
-        <span className="h-px flex-1 bg-white/10" />
+        <span className="h-px flex-1 bg-[#4E0401]/10 dark:bg-white/10" />
+        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[#4E0401]/40 dark:text-[#FFF8F1]/40">
+          or use email
+        </span>
+        <span className="h-px flex-1 bg-[#4E0401]/10 dark:bg-white/10" />
       </div>
 
       <FormField htmlFor="email" label="Email address" error={errors.email?.message}>
         <div className="relative">
-          <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" aria-hidden="true" />
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            className="border-white/10 bg-white/[0.055] pl-10 text-white placeholder:text-white/30 hover:bg-white/[0.075] focus-visible:border-white/25 focus-visible:bg-white/[0.08] focus-visible:ring-white/10"
-            {...register("email")}
-          />
+          <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input id="email" type="email" autoComplete="email" placeholder="you@example.com" className="pl-10" {...register("email")} />
         </div>
       </FormField>
+
       <FormField
         htmlFor="password"
         label="Password"
         hint={
-          <Link href="/forgot-password" className="hover:text-foreground">
+          <Link href="/forgot-password" className="font-semibold text-foreground hover:text-accent">
             Forgot password?
           </Link>
         }
         error={errors.password?.message}
       >
         <div className="relative">
-          <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" aria-hidden="true" />
-          <Input
-            id="password"
-            type={showPassword ? "text" : "password"}
-            autoComplete="current-password"
-            className="border-white/10 bg-white/[0.055] px-10 text-white hover:bg-white/[0.075] focus-visible:border-white/25 focus-visible:bg-white/[0.08] focus-visible:ring-white/10"
-            {...register("password")}
-          />
+          <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input id="password" type={showPassword ? "text" : "password"} autoComplete="current-password" className="px-10" {...register("password")} />
           <button
             type="button"
-            className="focus-ring absolute right-0.5 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-md text-white/40 transition-colors hover:bg-white/[0.08] hover:text-white"
+            className="focus-ring absolute right-0.5 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
             onClick={() => setShowPassword((current) => !current)}
             aria-label={showPassword ? "Hide password" : "Show password"}
             title={showPassword ? "Hide password" : "Show password"}
@@ -175,29 +145,18 @@ export function LoginForm({ initialError = null, nextDestination = POST_LOGIN_RO
           </button>
         </div>
       </FormField>
+
       {actionState && !actionState.ok ? (
-        <div className="flex gap-2 rounded-lg border border-amber-300/20 bg-amber-300/10 p-3 text-sm leading-6 text-amber-50">
+        <div className="flex gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm leading-6 text-amber-900 dark:text-amber-100">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           {actionState.message}
         </div>
       ) : null}
-      <Button
-        type="submit"
-        className="w-full border-primary shadow-[0_12px_30px_hsl(var(--primary)/0.3)] hover:shadow-[0_16px_36px_hsl(var(--primary)/0.4)]"
-        disabled={isPending || isGooglePending}
-      >
-        {isPending ? (
-          <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-        ) : null}
-        Log in
-      </Button>
 
-      <p className="text-center text-sm text-white/55">
-        New to Mad Buddy?{" "}
-        <Link href="/signup" className="font-semibold text-white hover:text-white/75">
-          Create account
-        </Link>
-      </p>
+      <Button type="submit" className="w-full" disabled={isPending || isGooglePending}>
+        {isPending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
+        {isPending ? "Logging in..." : "Log in"}
+      </Button>
     </form>
   );
 }
