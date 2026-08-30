@@ -473,7 +473,17 @@ export const HANGOUT_ACTIVITY_LABELS: Record<string, string> = {
   walk: "Walk",
   gaming: "Gaming",
   chill: "Chill",
-  anything: "Open to anything"
+  anything: "Open to anything",
+  /* The six activities the 20260822120000 migration added. Without them the
+     lookup fell through to "Anything", so a Coffee UpFor displayed as "Open to
+     anything" -- wrong, and it made two different sessions look identical in a
+     list. Surfaced by the owner's multi-session view; the gap predates it. */
+  coffee: "Coffee",
+  football: "Football",
+  drinks: "Drinks",
+  movie: "Movie",
+  drive: "Drive",
+  party: "Party"
 };
 
 // ---------------------------------------------------------------------------
