@@ -622,6 +622,28 @@ export function HangoutModePage({
     }
   }, [router]);
 
+  /* Load the per-session requests once on mount.
+     Without this the map starts empty and is only ever filled by a mutation,
+     so a plain page load showed "Requests to join (0)" on every sheet even
+     when requests existed -- caught by driving the real screen, not by any
+     test. Owner-scoped and read-only, so it is safe to run on arrival. */
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const byUpFor = await withTimeout(getOwnerRequestsByUpForAction(), {
+          operation: "load owner UpFor requests"
+        });
+        if (!cancelled) setRequestsByUpFor(byUpFor);
+      } catch {
+        // Leaves the empty map; the sheet simply shows no requests yet.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   /**
    * End one specific UpFor.
    *
