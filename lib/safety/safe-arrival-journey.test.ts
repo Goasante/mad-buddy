@@ -637,9 +637,12 @@ describe("no location anywhere in the feature surface", () => {
   it("logs no destination text, note or location in analytics", () => {
     const actions = read("app/(app)/safe-arrival-actions.ts");
     // Anchored on the CALL, not the import of the same name, and every call is
-    // checked rather than just the first.
+    // checked rather than just the first. The threshold only has to make the
+    // loop below non-vacuous: the feature records one event, safe_arrival_started,
+    // and asserting two would be asserting an analytics event that deliberately
+    // does not exist. What matters is that EVERY call is inspected.
     const calls = [...actions.matchAll(/recordProductEvent\(admin, \{[\s\S]*?\}\);/g)].map((match) => match[0]);
-    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls.length).toBeGreaterThanOrEqual(1);
     for (const call of calls) {
       expect(call).toContain("resourceId: sessionId");
       expect(call).not.toContain("destinationLabel");
