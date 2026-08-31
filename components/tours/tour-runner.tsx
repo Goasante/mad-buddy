@@ -278,7 +278,21 @@ export function TourRunner({
         role="dialog"
         aria-modal="false"
         aria-labelledby="tour-invite-title"
-        className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[95] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-border bg-card p-4 shadow-xl focus:outline-none md:bottom-5"
+        /* POINTER-EVENTS-NONE ON THE CARD, AUTO ON ITS CONTROLS.
+         *
+         * This prompt is unsolicited -- nobody asked for it -- and it is
+         * declared aria-modal="false", so it must not intercept the page
+         * underneath. It did: fixed above the bottom nav and nearly full width,
+         * its padding and artwork sat over whatever the page put there. At
+         * 390px that was Safe Arrival's "Count me in", and elementFromPoint at
+         * the CTA's centre returned this card's image rather than the button --
+         * a person tapping Accept on a safety journey hit the tour instead.
+         *
+         * The card still looks identical and its own buttons still work; only
+         * its dead space stops swallowing taps. Fixed here rather than by
+         * offsetting Safe Arrival, because no safety control's geometry should
+         * depend on whether a tour happens to be showing. */
+        className="pointer-events-none fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[95] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-border bg-card p-4 shadow-xl focus:outline-none md:bottom-5"
       >
         {/* The brand mark, not a generic sparkle: the first thing a user sees of
             the walkthrough should read as Mad Buddy. */}
@@ -290,7 +304,7 @@ export function TourRunner({
           {description ||
             "Take a quick tour of how to find nearby Muddies, connect, make plans, and stay in control of your privacy."}
         </p>
-        <div className="mt-3 flex justify-end gap-2">
+        <div className="pointer-events-auto mt-3 flex justify-end gap-2">
           {/* "Not now" before the tour has begun; "Skip tour" only applies once
               the user is actually inside it. */}
           <Button type="button" size="sm" variant="ghost" onClick={skip}>
