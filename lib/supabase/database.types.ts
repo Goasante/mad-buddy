@@ -5159,8 +5159,8 @@ export type Database = {
           p_audience_type: string;
           p_broad_area_text: string | null;
           p_discovery_scope: string;
-          p_starts_at: string;
-          p_ends_at: string;
+          p_starts_at: string | null;
+          p_ends_at: string | null;
           p_timezone: string;
           p_max_participants: number;
           p_allow_pings: boolean;
@@ -5168,6 +5168,7 @@ export type Database = {
           p_area_tier: string | null;
           p_area_derived_at: string | null;
           p_limit: number;
+          p_duration?: string | null;
         };
         Returns: Database["public"]["Tables"]["hangout_sessions"]["Row"];
       };

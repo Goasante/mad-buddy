@@ -124,3 +124,67 @@ export function isOwnerVisibleUpFor(row: UpForTiming, nowMs: number): boolean {
   const phase = upForPhase(row, nowMs);
   return phase === "scheduled" || phase === "live";
 }
+
+// ---------------------------------------------------------------------------
+// Replacement-edit eligibility (C2 Defect 1 closeout)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether an UpFor may go through the REPLACEMENT edit path.
+ *
+ * WHY THIS EXISTS. Editing is currently implemented as end-then-create: the
+ * chosen session is cancelled and a fresh one is inserted. Runtime proof on the
+ * real screen showed what that costs when the session is already in flight --
+ * a pending request was left stranded on the cancelled row, invisible to both
+ * people, and the new row's clock restarted, so "Live now, 44m left" silently
+ * became a brand new hour.
+ *
+ * Someone else's request is not ours to discard because the owner changed a
+ * note. Until a true in-place update action exists, replacement is allowed only
+ * where nothing can be lost: an UpFor that has not started and that nobody has
+ * responded to.
+ *
+ * NOT the full fix. A real update action -- which fields may change after
+ * people respond, what re-notifies, whether an audience change revokes
+ * visibility -- is a deliberate design problem, deferred to its own tranche.
+ * This only refuses to destroy state in the meantime.
+ */
+export type UpForEditVerdict =
+  | { ok: true }
+  | { ok: false; reason: "already_live" | "has_responses" | "not_editable" };
+
+export function replacementEditVerdict(
+  session: { status: string; startsAt: string | null },
+  responseCount: number,
+  nowMs: number
+): UpForEditVerdict {
+  // An ended UpFor has nothing to edit; say so before anything more specific.
+  if (session.status !== "active" && session.status !== "paused") {
+    return { ok: false, reason: "not_editable" };
+  }
+
+  // Responses first: it is the more important thing to protect, and it is the
+  // reason a live session usually cannot be touched anyway.
+  if (responseCount > 0) return { ok: false, reason: "has_responses" };
+
+  const startMs = session.startsAt ? Date.parse(session.startsAt) : Number.NaN;
+  // An unparseable or absent start is treated as already begun: the safe
+  // direction is to refuse, never to destroy on a guess.
+  if (!Number.isFinite(startMs) || startMs <= nowMs) {
+    return { ok: false, reason: "already_live" };
+  }
+
+  return { ok: true };
+}
+
+/** Canonical owner-facing copy, so the action and the UI cannot diverge. */
+export function upForEditBlockedMessage(reason: "already_live" | "has_responses" | "not_editable"): string {
+  switch (reason) {
+    case "has_responses":
+      return "Someone has already responded, so this UpFor can't be changed. End it and start another if you need to.";
+    case "already_live":
+      return "This UpFor is already live. End it and start another if you want to change it.";
+    default:
+      return "This UpFor is already over.";
+  }
+}

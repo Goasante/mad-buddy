@@ -8,34 +8,19 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import {
   AlertTriangle,
   ArrowLeft,
-  BookOpen,
   CheckCircle2,
-  ChevronRight,
   Clock,
-  Coffee,
-  Dumbbell,
-  Footprints,
-  Gamepad2,
-  Car,
-  Clapperboard,
-  Hand,
   Loader2,
   Lock,
-  Moon,
-  PartyPopper,
   Plus,
   ShieldCheck,
-  Shuffle,
-  Trophy,
-  Users,
-  UtensilsCrossed,
-  Wine,
   X
 } from "lucide-react";
 import {
   convertHangoutToPlanAction,
+  canEditUpForAction,
   endHangoutAction,
-  getOwnerHangoutRequestsAction,
+  getOwnerRequestsByUpForAction,
   leaveHangoutAction,
   getVisibleHangoutsAction,
   requestHangoutAction,
@@ -45,7 +30,6 @@ import {
 } from "@/app/(app)/hangout-actions";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { UserAvatar } from "@/components/ui/user-avatar";
 import { UpForFeed } from "@/components/hangout/upfor-feed";
 import { UpForDetailSheet } from "@/components/hangout/upfor-detail-sheet";
 import { PlanStack } from "@/components/socialize/plan-stack";
@@ -55,6 +39,9 @@ import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import { useHasScrolled } from "@/hooks/use-has-scrolled";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useCountdownResume } from "@/hooks/use-countdown-clock";
+import { useFeedRefresh } from "@/hooks/use-feed-refresh";
+import { OwnedUpForsSection } from "@/components/hangout/owned-upfors-section";
+import { ownedUpForTimeLabel, type OwnedUpFor } from "@/lib/social/owned-upfors";
 import { resolveViewerTimeZone, upForTimeSlots } from "@/lib/social/upfor-schedule-options";
 import { cn } from "@/lib/utils";
 import { countActiveRequests } from "@/lib/social/hangout-requests";
@@ -102,31 +89,6 @@ const durationOptions: Array<{ id: Duration; label: string; ms: number }> = [
   { id: "3h", label: "3 hours", ms: 3 * 60 * 60 * 1000 }
 ];
 
-const ACTIVITY_ICONS: Record<HangoutActivityType, typeof Hand> = {
-  // The original eight.
-  /* "Anything" is an OPEN CHOICE -- the person has not picked an activity and
-     is up for whatever fits. Shuffle says that literally; Sparkles said the
-     option was somehow special, which it is not: it sits alongside food, gym
-     and study as one ordinary choice among them. */
-  anything: Shuffle,
-  food: UtensilsCrossed,
-  study: BookOpen,
-  sports: Trophy,
-  gym: Dumbbell,
-  walk: Footprints,
-  gaming: Gamepad2,
-  chill: Moon,
-  /* Added with the 20260822120000 migration. `chill` moves to a moon so
-   * `coffee` can take the cup it always should have had -- the label was
-   * already "Chill 🌙" everywhere else, so this aligns the icon with the word
-   * rather than changing what the category means. */
-  coffee: Coffee,
-  football: Trophy,
-  drinks: Wine,
-  movie: Clapperboard,
-  drive: Car,
-  party: PartyPopper
-};
 
 const audienceLabel: Record<HangoutAudienceType, string> = {
   all_muddies: "all your Muddies",
@@ -141,42 +103,23 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-/** Human "1h 20m remaining" from an end time (empty once elapsed). */
-function remainingLabel(endsAt: string, nowMs: number): string {
-  const totalMinutes = Math.max(0, Math.round((Date.parse(endsAt) - nowMs) / 60000));
-  if (totalMinutes === 0) return "ending now";
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours > 0) return `${hours}h ${minutes}m remaining`;
-  return `${minutes}m remaining`;
-}
 
-/** Short audience label for the "Visible to …" pill. */
-function visibleToLabel(audience: HangoutAudienceType, muddyCount: number): string {
-  if (audience === "all_muddies") return `${muddyCount} ${muddyCount === 1 ? "Muddy" : "Muddies"}`;
-  if (audience === "close_friends") return "Close Friends";
-  if (audience === "selected_circles") return "selected circles";
-  return "selected Muddies";
-}
 
 type Toast = { title?: string; message: string; error: boolean } | null;
 
 export function HangoutModePage({
   initialActiveHangout = null,
+  initialOwnedUpFors = [],
   initialRequests = [],
   initialFeed = [],
-  avatarUrl = null,
-  displayName = "",
-  muddyCount = 0,
   viewerId = null,
   initialPlans = []
 }: {
   initialActiveHangout?: ActiveHangout | null;
+  /** Every UpFor the owner holds -- the owner-facing authority. */
+  initialOwnedUpFors?: OwnedUpFor[];
   initialRequests?: HangoutRequestSummary[];
   initialFeed?: VisibleHangout[];
-  avatarUrl?: string | null;
-  displayName?: string;
-  muddyCount?: number;
   /** The signed-in user, so the sheet can recognise their own UpFor. */
   viewerId?: string | null;
   /** Upcoming plans, from the same projection Home and Linkr read. */
@@ -189,6 +132,50 @@ export function HangoutModePage({
   const scrolled = useHasScrolled();
 
   const [activeHangout, setActiveHangout] = useState(initialActiveHangout);
+  /* EXPLICIT INTENT, NOT INFERRED FROM EXISTENCE.
+
+     The defect this replaces: `editing` was `activeHangout !== null`, so
+     having ANY UpFor made the next creation an edit -- and an edit ends the
+     previous session. Creating B therefore cancelled A, and C cancelled B.
+     Production data showed exactly that chain of cancellations.
+
+     Now the form is told what it is for. null means create; an id means edit
+     that specific UpFor and no other. Nothing about how many sessions exist
+     can change which one an action targets. */
+  const [editingUpForId, setEditingUpForId] = useState<string | null>(null);
+  /* The collection is a SERVER prop. refreshOwnedUpFors re-resolves it via
+     router.refresh() rather than assembling a new array here, so there is no
+     setter: a local shadow copy would be a second owner authority, which is
+     the shape of the defect this repair removed. */
+  const ownedUpFors = initialOwnedUpFors;
+  /* Which owned UpFor the management surface is showing. ONE selection is
+     legitimate UI state; one session standing in for the whole collection is
+     the defect this repair removed. */
+  const [managingId, setManagingId] = useState<string | null>(null);
+  const [requestsByUpFor, setRequestsByUpFor] = useState<Record<string, HangoutRequestSummary[]>>({});
+  /* Pending count per UpFor, from the session-scoped projection. Derived, so
+     a row cannot disagree with the list the sheet will show. */
+  const pendingRequestCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const [upForId, rows] of Object.entries(requestsByUpFor)) {
+      counts[upForId] = rows.filter((row) => row.status === "pending").length;
+    }
+    return counts;
+  }, [requestsByUpFor]);
+
+  /* The one session the management sheet is about, resolved BY ID from the
+     canonical collection -- never ownedUpFors[0] or the newest row. If it
+     disappears (ended, converted, expired) this becomes null and the sheet
+     closes rather than lingering over a dead session. */
+  const managedUpFor = useMemo(
+    () => ownedUpFors.find((row) => row.id === managingId) ?? null,
+    [ownedUpFors, managingId]
+  );
+  const managedRequests = managingId ? (requestsByUpFor[managingId] ?? []) : [];
+  const managedAcceptedCount = managedRequests.filter((r) => r.status === "accepted").length;
+  const managedLabel = managedUpFor
+    ? HANGOUT_ACTIVITY_LABELS[managedUpFor.activityType as HangoutActivityType] ?? "Anything"
+    : "";
   const [requests, setRequests] = useState(initialRequests);
   const [feed, setFeed] = useState(initialFeed);
   /**
@@ -214,17 +201,34 @@ export function HangoutModePage({
    * called from event handlers, never passed as a dependency.
    */
   async function refreshFeed() {
+    /* Ordering guard. Several triggers can start a read close together -- a
+       tab return fires visibilitychange, pageshow and focus within
+       milliseconds -- and the network does not promise they come back in the
+       order they left. Applying a slower earlier response after a faster
+       later one would put the viewer back on staler data than they already
+       had, which is the bug this whole change exists to fix. Only the newest
+       request is allowed to write. */
+    const seq = ++feedRequestSeq.current;
     setFeedRefreshing(true);
     try {
       const next = await getVisibleHangoutsAction();
+      if (seq !== feedRequestSeq.current) return;
       setFeed(next);
       setFeedError(null);
     } catch {
+      if (seq !== feedRequestSeq.current) return;
       setFeedError("Couldn't load UpFors. Try again.");
     } finally {
-      setFeedRefreshing(false);
+      // The newest request owns the spinner; an overtaken one leaves it alone.
+      if (seq === feedRequestSeq.current) setFeedRefreshing(false);
     }
   }
+
+  /* Keep the feed current while the viewer is looking at it, and the moment
+     they come back. Eligibility was never the defect -- the feed simply was
+     not re-read after mount. All three modes (For You, Muddies, Around) are
+     filters over this one state, so this is the single seam for every one. */
+  useFeedRefresh(refreshFeed);
 
   /* ANSWER "MAYBE" REMOVED (owner decision).
    *
@@ -262,6 +266,8 @@ export function HangoutModePage({
 
   const [toast, setToast] = useState<Toast>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  /* Placed after the clock it reads. */
+  const managedTimeLabel = managedUpFor ? ownedUpForTimeLabel(managedUpFor, nowMs) : "";
   /* Recomputed as the clock ticks, so a form left open past a slot stops
      offering it -- rather than letting the server reject it on submit. */
   const timeSlots = useMemo(
@@ -288,6 +294,9 @@ export function HangoutModePage({
   const [isPending, startTransition] = useTransition();
 
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* Monotonic id for feed reads, so only the newest response may write. */
+  const feedRequestSeq = useRef(0);
+  /* Single-flight guard for the owner's request map. */
   const requestRefreshRef = useRef<Promise<void> | null>(null);
 
   /* The feed is no longer narrowed here. UpForFeed owns discovery now: the
@@ -301,7 +310,6 @@ export function HangoutModePage({
 
   // Derive activation straight from the source of truth so an expired session
   // flips the orb back to inactive without a manual refresh.
-  const isActive = activeHangout !== null && Date.parse(activeHangout.endsAt) > nowMs;
 
   /* The clock now also re-reads on visibilitychange/pageshow, so a phone that
      spent forty minutes in a pocket shows the correct countdown on the first
@@ -322,22 +330,33 @@ export function HangoutModePage({
   // Canonical refetch of the owner's join requests — the database is the source
   // of truth, never client-side arithmetic. Adopts the server list only for the
   // current active Hangout, so requests from an unrelated session never leak in.
-  const activeHangoutId = activeHangout?.id ?? null;
-  const refreshRequests = useCallback(async () => {
+
+  // Live count updates for the owner: refetch on an interval while the Hangout
+  // is active and whenever the tab regains focus. Reuses the project's server-
+  // action data pattern rather than introducing a new realtime framework. The
+  // interval and listener are cleaned up on unmount or when the Hangout ends.
+  /* ONE loader for the per-session request map. Used on mount, by the 15s
+     poll, and by every post-mutation refresh, so there is a single way the
+     counts and lists become current. */
+  const loadOwnerRequests = useCallback(async () => {
+    /* SINGLE-FLIGHT, the repository's foreground-storm convention.
+     *
+     * This runs on a 15s interval AND on window focus, and a phone returning
+     * to the app can fire focus while a tick is already in the air. The guard
+     * it inherits belonged to the legacy refreshRequests, which this replaced;
+     * dropping it would have left the owner path storming on resume -- the
+     * exact failure lib/performance/freeze-recovery.test.ts exists to catch.
+     * A caller that arrives mid-read joins the read already running. */
     if (requestRefreshRef.current) return requestRefreshRef.current;
 
     const refresh = (async () => {
       try {
-        const state = await withTimeout(getOwnerHangoutRequestsAction(), {
-          operation: "refresh hangout requests"
+        const byUpFor = await withTimeout(getOwnerRequestsByUpForAction(), {
+          operation: "load owner UpFor requests"
         });
-        if (state.hangoutId && state.hangoutId === activeHangoutId) {
-          setRequests(state.requests);
-        } else if (!state.hangoutId) {
-          setRequests([]);
-        }
+        setRequestsByUpFor(byUpFor);
       } catch {
-        // A failed refetch simply leaves the last known canonical state in place.
+        // Leaves the last known map in place.
       } finally {
         requestRefreshRef.current = null;
       }
@@ -345,28 +364,26 @@ export function HangoutModePage({
 
     requestRefreshRef.current = refresh;
     return refresh;
-  }, [activeHangoutId]);
+  }, []);
 
-  // Live count updates for the owner: refetch on an interval while the Hangout
-  // is active and whenever the tab regains focus. Reuses the project's server-
-  // action data pattern rather than introducing a new realtime framework. The
-  // interval and listener are cleaned up on unmount or when the Hangout ends.
+  /* Keep the per-session request counts fresh while the owner is looking.
+
+     Repointed from refreshRequests to the shared seam: the old one maintained
+     `requests`, which only the removed owner hero read, so this interval was
+     polling every 15 seconds to update state nothing rendered. It now feeds
+     the map the rows and the management sheet actually read. */
   useEffect(() => {
-    if (!isActive) return;
-    // Initial refetch is scheduled (not called synchronously in the effect body)
-    // so it never triggers a cascading render on mount.
-    const initial = setTimeout(() => void refreshRequests(), 0);
+    if (ownedUpFors.length === 0) return;
     const interval = setInterval(() => {
-      if (!document.hidden) void refreshRequests();
+      if (!document.hidden) void loadOwnerRequests();
     }, 15_000);
-    const onFocus = () => void refreshRequests();
+    const onFocus = () => void loadOwnerRequests();
     window.addEventListener("focus", onFocus);
     return () => {
-      clearTimeout(initial);
       clearInterval(interval);
       window.removeEventListener("focus", onFocus);
     };
-  }, [isActive, refreshRequests]);
+  }, [ownedUpFors.length, loadOwnerRequests]);
 
   useEffect(() => {
     return () => {
@@ -402,26 +419,71 @@ export function HangoutModePage({
    * preselection, not a submission — audience and duration are still the
    * user's to confirm before anything becomes visible to anyone.
    */
-  function openSetup(preset?: HangoutActivityType) {
-    if (isActive && activeHangout) {
-      setActivity(preset ?? activeHangout.activityType);
-      setAudience(activeHangout.audienceType);
-      setMessage(activeHangout.message ?? "");
-      setBroadArea("");
-      setDiscoveryScope("muddies");
-      setDuration("1h");
-    } else {
-      setActivity(preset ?? null);
-      setAudience("all_muddies");
-      setMessage("");
-      setBroadArea("");
-      setDiscoveryScope("muddies");
-      setDuration("1h");
-    }
-    setAttempted(false);
+  /**
+   * Open the form to CREATE another UpFor.
+   *
+   * Always create, whatever already exists. Reaching for "Create" or a Quick
+   * Idea while one UpFor is running now means the person wants a second one --
+   * the canonical ceiling of three is what decides whether they may, and it
+   * decides that on the server.
+   */
+  function openCreate(preset?: HangoutActivityType) {
+    setEditingUpForId(null);
+    setActivity(preset ?? null);
+    setAudience("all_muddies");
+    setMessage("");
+    setBroadArea("");
+    setDiscoveryScope("muddies");
+    setDuration("1h");
+    setWhen("now");
+    setStartAtIso("");
     setSetupError("");
     setSetupOpen(true);
   }
+
+  /** Open the form to EDIT one specific UpFor, named by id. */
+  /**
+   * Open the edit sheet -- but only for an UpFor that can survive the edit.
+   *
+   * Editing replaces the row (end, then create), so a live session or one
+   * somebody has already responded to would lose that state silently. The
+   * server decides; this only refuses to open the door. The same check runs
+   * inside the mutation, so a stale client cannot get past it either.
+   */
+  async function openEdit(target: ActiveHangout & { startsAt?: string | null }) {
+    const allowed = await canEditUpForAction(target.id);
+    if (!allowed.ok) {
+      showToast(allowed.message, true);
+      return;
+    }
+    setEditingUpForId(target.id);
+    setActivity(target.activityType);
+    setAudience(target.audienceType);
+    setMessage(target.message ?? "");
+    setBroadArea("");
+    setDiscoveryScope("muddies");
+    setDuration("1h");
+    /* Keep the original schedule. Defaulting to "now" moved a scheduled UpFor
+       to the moment it was edited -- the owner changed a note and the start
+       time silently jumped. Only a not-yet-started UpFor is editable, so a
+       start always exists here. */
+    const startsMs = target.startsAt ? Date.parse(target.startsAt) : Number.NaN;
+    // `nowMs`, not Date.now(): the component already keeps a ticking clock, and
+    // reading the real one here is an impure render-reachable call.
+    if (Number.isFinite(startsMs) && startsMs > nowMs) {
+      setWhen("later");
+      setStartAtIso(new Date(startsMs).toISOString());
+    } else {
+      setWhen("now");
+      setStartAtIso("");
+    }
+    setSetupError("");
+    setSetupOpen(true);
+  }
+
+  /* openSetup is gone: it prefilled the form from whichever session existed,
+     which is precisely how creating B came to mean editing A. Creation now
+     goes through openCreate and editing through openEdit(id). */
 
   /**
    * Join an UpFor.
@@ -445,7 +507,6 @@ export function HangoutModePage({
     }
   }
 
-  const acceptedCount = requests.filter((request) => request.status === "accepted").length;
 
   /**
    * Withdraw: cancel a pending request, or leave after being accepted.
@@ -526,14 +587,21 @@ export function HangoutModePage({
      * within a second and is what every other part of this screen measures
      * against. */
     const endsAt = new Date(nowMs + chosen.ms).toISOString();
-    const editing = isActive && activeHangout !== null;
-    const previousId = activeHangout?.id;
+    /* THE FIX. `editing` is now the explicit intent the caller set, not
+       "does this person happen to have an UpFor". A create leaves every
+       existing session untouched; an edit touches exactly the one it names.
+
+       Editing still replaces the row, because no canonical update action
+       exists and inventing a whole lifecycle for it is out of scope here --
+       but it can now only ever replace the UpFor the owner actually chose. */
+    const editing = editingUpForId !== null;
+    const previousId = editingUpForId;
 
     startTransition(async () => {
       // No dedicated update action exists, so an edit ends the current session
       // and starts a fresh one with the new details.
       if (editing && previousId) {
-        const ended = await endHangoutAction(previousId);
+        const ended = await endHangoutAction(previousId, true);
         if (!ended.ok) {
           setSetupError(ended.message);
           showToast(ended.message, true);
@@ -562,6 +630,9 @@ export function HangoutModePage({
           endsAt
         });
         if (!editing) setRequests([]);
+        /* Clear the target on every exit. A stale id would make the NEXT
+           create behave as an edit and cancel a sibling -- the exact bug. */
+        setEditingUpForId(null);
         setSetupOpen(false);
         showToast(
           `Visible to ${audienceLabel[audience]} until ${formatTime(endsAt)}.`,
@@ -579,28 +650,78 @@ export function HangoutModePage({
     });
   }
 
-  function turnOff() {
-    if (!activeHangout) return;
+  /**
+   * ONE post-mutation synchronisation path.
+   *
+   * Every owner mutation ends here rather than patching its own corner of the
+   * state: create, edit, end, accept, decline and conversion all change which
+   * UpFors exist or who is waiting on them, and four slightly different local
+   * updates would drift from the server the first time one of them was wrong.
+   *
+   * Only ever called after a mutation SUCCEEDS. Refreshing after a failure
+   * would replace the canonical state the user is still looking at with the
+   * same state, plus a network round trip.
+   */
+  const refreshOwnedUpFors = useCallback(async () => {
+    await loadOwnerRequests();
+    // The owner collection itself is a server prop, so the canonical list is
+    // re-resolved by the route rather than reassembled here.
+    router.refresh();
+  }, [router, loadOwnerRequests]);
+
+  /* Load the per-session requests on arrival. Without this the map started
+     empty and was only filled by a mutation, so a plain page load showed
+     "Requests to join (0)" on every sheet even when requests existed. */
+  useEffect(() => {
+    // Scheduled rather than called in the effect body, so the first paint
+    // is never followed by a synchronous cascading render.
+    const t = setTimeout(() => void loadOwnerRequests(), 0);
+    return () => clearTimeout(t);
+  }, [loadOwnerRequests]);
+
+  /**
+   * End one specific UpFor.
+   *
+   * Takes the id rather than reading a single "current" session: with three
+   * possible sessions, an End that inferred its own target is exactly the
+   * class of bug this repair removed.
+   */
+  function endUpForById(hangoutId: string) {
     startTransition(async () => {
-      const result = await endHangoutAction(activeHangout.id);
-      if (result.ok) {
+      const result = await endHangoutAction(hangoutId);
+      if (!result.ok) {
+        showToast(result.message, true);
+        return;
+      }
+      if (activeHangout?.id === hangoutId) {
         setActiveHangout(null);
         setRequests([]);
-        showToast("You're no longer visible to your Muddies.", false, "UpFor ended");
-        router.refresh();
-      } else {
-        showToast(result.message, true);
       }
+      // The managed session no longer exists, so its sheet must not linger.
+      if (managingId === hangoutId) setManagingId(null);
+      showToast("You're no longer visible to your Muddies.", false, "UpFor ended");
+      await refreshOwnedUpFors();
     });
+  }
+
+  function turnOff() {
+    if (!activeHangout) return;
+    endUpForById(activeHangout.id);
   }
 
   function respond(requestId: string, response: "accepted" | "declined") {
     startTransition(async () => {
       const result = await respondHangoutRequestAction(requestId, response);
       showToast(result.message, !result.ok);
-      // Re-derive the list from the database rather than trusting a local edit,
-      // so the count stays canonical after accept/decline.
-      if (result.ok) await refreshRequests();
+      /* Re-derive from the database rather than trusting a local edit, so the
+         count stays canonical after accept/decline.
+
+         Through the SHARED seam, not the legacy single-session refresher:
+         refreshRequests writes `requests`, which only the removed owner hero
+         read. The management sheet reads requestsByUpFor, so accepting left
+         the open sheet showing the request still pending even though the row
+         had already changed in the database. */
+      if (result.ok) await refreshOwnedUpFors();
     });
   }
 
@@ -657,15 +778,8 @@ export function HangoutModePage({
     else router.push(decision.href as Route);
   }, [fromInsideApp, router]);
 
-  function convertToPlan() {
-    if (!activeHangout) return;
-    void convertToPlanById(activeHangout.id);
-  }
 
-  const activityType = activeHangout?.activityType ?? "anything";
-  const OrbIcon = isActive ? ACTIVITY_ICONS[activityType] ?? Hand : Hand;
 
-  const remaining = isActive && activeHangout ? remainingLabel(activeHangout.endsAt, nowMs) : "";
 
   return (
     <div className="upfor-page">
@@ -693,9 +807,9 @@ export function HangoutModePage({
           <button
             type="button"
             data-tour-id={TOUR_TARGET_IDS.HANGOUT_TOGGLE}
-            onClick={() => openSetup()}
+            onClick={() => openCreate()}
             disabled={isPending}
-            aria-label={isActive ? "Edit your UpFor" : "Create an UpFor"}
+            aria-label="Create an UpFor"
             className="upfor-create-button"
           >
             <Plus className="h-6 w-6" aria-hidden="true" />
@@ -716,99 +830,18 @@ UpFors are temporary and disappear when they end. Jump in while you can!
         </div>
       </section>
 
-      {/* --------------------------- YOUR OWN UPFOR ---------------------- */}
-      {isActive && activeHangout ? (
-        <section data-tour-id={TOUR_TARGET_IDS.HANGOUT_ACTIVE} className="upfor-mine">
-          <div className="upfor-mine-head">
-            <span className="upfor-mine-avatar">
-              <UserAvatar src={avatarUrl} name={displayName || "You"} size="lg" decorative />
-              <span className="upfor-mine-glyph" aria-hidden="true">
-                <OrbIcon className="h-3.5 w-3.5" />
-              </span>
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="upfor-mine-label">You&rsquo;re up for</p>
-              <p className="upfor-mine-activity">
-                {HANGOUT_ACTIVITY_LABELS[activeHangout.activityType] ?? "Anything"}
-              </p>
-              {activeHangout.message ? (
-                <p className="upfor-mine-message">&ldquo;{activeHangout.message}&rdquo;</p>
-              ) : null}
-            </div>
-            <span className="upfor-mine-timer" suppressHydrationWarning>
-              <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-              {remaining}
-            </span>
-          </div>
-
-          <button type="button" onClick={() => openSetup()} className="upfor-mine-audience">
-            <Users className="h-4 w-4" aria-hidden="true" />
-            Visible to {visibleToLabel(activeHangout.audienceType, muddyCount)}
-            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-
-          <div className="upfor-mine-actions">
-            <Button type="button" variant="outline" className="flex-1" onClick={() => openSetup()} disabled={isPending}>
-              Update
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1 border-primary/40 text-primary"
-              onClick={turnOff}
-              disabled={isPending}
-            >
-              End UpFor
-            </Button>
-          </div>
-
-          {/* Requests to join. Unchanged behaviour — accept, maybe, decline,
-              and the existing route into a group plan. */}
-          <div className="upfor-requests">
-            <p className="upfor-requests-title">Requests to join ({countActiveRequests(requests)})</p>
-            {requests.length === 0 ? (
-              <p className="upfor-requests-empty">No requests yet. We&apos;ll let you know.</p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {requests.map((request) => (
-                  <li
-                    key={request.id}
-                    id={`hangout-${request.id}`}
-                    className={cn(
-                      "upfor-request",
-                      requestedHangoutId === request.id && "ring-2 ring-primary/35"
-                    )}
-                  >
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                      {request.requesterName}
-                      {request.message ? (
-                        <span className="ml-1 text-xs font-normal text-muted-foreground">: {request.message}</span>
-                      ) : null}
-                    </span>
-                    {request.status === "pending" ? (
-                      <span className="flex gap-1.5">
-                        <Button type="button" size="sm" onClick={() => respond(request.id, "accepted")} disabled={isPending}>
-                          Accept
-                        </Button>
-                        <Button type="button" size="sm" variant="ghost" onClick={() => respond(request.id, "declined")} disabled={isPending}>
-                          Decline
-                        </Button>
-                      </span>
-                    ) : (
-                      <span className="text-xs font-medium capitalize text-muted-foreground">{request.status}</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {acceptedCount > 0 ? (
-              <Button type="button" variant="primary" className="mt-3 w-full" onClick={convertToPlan} disabled={isPending}>
-                Create a group plan with {acceptedCount} {acceptedCount === 1 ? "person" : "people"}
-              </Button>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
+      {/* --------------------------- YOUR UPFORS --------------------------
+          Every UpFor the owner holds, live and scheduled. The projection in
+          lib/social/owned-upfors.ts decides order and wording; this only hands
+          it the collection and the page's single clock. */}
+      <OwnedUpForsSection
+        ownedUpFors={ownedUpFors}
+        nowMs={nowMs}
+        pendingRequestCounts={pendingRequestCounts}
+        busy={isPending}
+        onCreate={() => openCreate()}
+        onManage={(id) => setManagingId(id)}
+      />
 
       {/* ------------------------- THE UPFOR FEED -------------------------
           The approved "Live Social Pulse" feed. Four real discovery modes over
@@ -855,7 +888,7 @@ UpFors are temporary and disappear when they end. Jump in while you can!
           onWithdraw={leaveUpFor}
           onCreatePlan={convertToPlanById}
           onOpen={(id) => setDetailId(id)}
-          onStart={() => openSetup()}
+          onStart={() => openCreate()}
         />
       </section>
 
@@ -876,7 +909,7 @@ UpFors are temporary and disappear when they end. Jump in while you can!
             <li key={idea.id}>
               <button
                 type="button"
-                onClick={() => openSetup(idea.id)}
+                onClick={() => openCreate(idea.id)}
                 disabled={isPending}
                 className="upfor-idea"
                 aria-label={`Start an UpFor for ${idea.label}`}
@@ -944,25 +977,158 @@ UpFors are temporary and disappear when they end. Jump in while you can!
       {/* The filter sheet. Rendered from the registry, so a future filter is a
           new entry there rather than an edit here. */}
 
+      {/* ------------------- MANAGE ONE UPFOR ---------------------------
+          Keyed by managingId, never by "the current session". Everything the
+          legacy hero used to hold for a single UpFor lives here for the one
+          the owner actually chose: edit, its own requests, and ending it. */}
+      <Modal
+        open={managedUpFor !== null}
+        onOpenChange={(open) => !open && setManagingId(null)}
+        title={managedUpFor ? `${managedLabel} UpFor` : "UpFor"}
+        description={managedUpFor ? managedTimeLabel : undefined}
+        variant="sheet"
+        compact
+      >
+        {managedUpFor ? (
+          <div className="flex flex-col gap-4">
+            {managedUpFor.message ? (
+              <p className="text-[14px] text-muted-foreground">
+                &ldquo;{managedUpFor.message}&rdquo;
+              </p>
+            ) : null}
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={isPending}
+              onClick={() => {
+                const target = managedUpFor;
+                setManagingId(null);
+                void openEdit({
+                  id: target.id,
+                  activityType: target.activityType as HangoutActivityType,
+                  audienceType: target.audienceType as HangoutAudienceType,
+                  message: target.message,
+                  endsAt: target.endsAt,
+                  startsAt: target.startsAt
+                });
+              }}
+              aria-label={`Edit ${managedLabel} UpFor`}
+            >
+              Edit
+            </Button>
+
+            {/* Requests for THIS UpFor only. The list is read from
+                requestsByUpFor[managingId], so a request on another session can
+                never appear here and Accept can never touch it. */}
+            <div>
+              <p className="mb-2 text-[14px] font-semibold">
+                Requests to join ({managedRequests.filter((r) => r.status === "pending").length})
+              </p>
+              {managedRequests.length === 0 ? (
+                <p className="text-[12px] text-muted-foreground">
+                  No requests yet. We&apos;ll let you know.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {managedRequests.map((request) => (
+                    <li key={request.id} className="upfor-request">
+                      <span className="min-w-0 flex-1 truncate text-[14px] font-medium">
+                        {request.requesterName}
+                        {request.message ? (
+                          <span className="ml-1 text-[12px] font-normal text-muted-foreground">
+                            : {request.message}
+                          </span>
+                        ) : null}
+                      </span>
+                      {request.status === "pending" ? (
+                        <span className="flex gap-1.5">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => respond(request.id, "accepted")}
+                            disabled={isPending}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => respond(request.id, "declined")}
+                            disabled={isPending}
+                          >
+                            Decline
+                          </Button>
+                        </span>
+                      ) : (
+                        <span className="text-[12px] font-medium capitalize text-muted-foreground">
+                          {request.status}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* Plan conversion, carried over from the legacy hero rather than
+                lost with it, and now aimed at the selected session. */}
+            {managedAcceptedCount > 0 ? (
+              <Button
+                type="button"
+                variant="primary"
+                className="w-full"
+                disabled={isPending}
+                onClick={() => {
+                  const targetId = managedUpFor.id;
+                  setManagingId(null);
+                  void convertToPlanById(targetId);
+                }}
+              >
+                Create a group plan with {managedAcceptedCount}{" "}
+                {managedAcceptedCount === 1 ? "person" : "people"}
+              </Button>
+            ) : null}
+
+            {/* Ending is separated from the rest: it is the one action here
+                that cannot be undone. */}
+            <div className="border-t border-border/60 pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-primary/40 text-primary"
+                disabled={isPending}
+                onClick={() => endUpForById(managedUpFor.id)}
+                aria-label={`End ${managedLabel} UpFor`}
+              >
+                End UpFor
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
       <Modal
         open={setupOpen}
         onOpenChange={setSetupOpen}
-        title={isActive ? "Update your UpFor" : "What are you up for?"}
+        title={editingUpForId ? "Update your UpFor" : "What are you up for?"}
         description="Let your Muddies know what you're open to."
         variant="sheet"
         compact
         footer={
           <>
-            <Button type="button" variant="outline" onClick={() => setSetupOpen(false)} disabled={isPending}>
+            <Button type="button" variant="outline" onClick={() => { setEditingUpForId(null); setSetupOpen(false); }} disabled={isPending}>
               Cancel
             </Button>
             <Button type="button" onClick={submitSetup} disabled={isPending || (attempted && !activity)}>
               {isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                  {isActive ? "Saving…" : "Turning on…"}
+                  {editingUpForId ? "Saving…" : "Turning on…"}
                 </>
-              ) : isActive ? (
+              ) : editingUpForId ? (
                 "Save changes"
               ) : (
                 "Start UpFor"

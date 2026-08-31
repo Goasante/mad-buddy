@@ -8,7 +8,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
-import { currentActiveHangout } from "@/lib/social/planning";
+import { currentActiveHangout, ownedUpForSessions } from "@/lib/social/planning";
+import type { OwnedUpFor } from "@/lib/social/owned-upfors";
 import { AccessLocked } from "@/components/access/access-locked";
 import { checkAccess } from "@/lib/access/guard";
 
@@ -19,10 +20,8 @@ export default async function HangoutModeRoute() {
 
   const env = getSupabaseServerEnv();
   let activeHangout: ActiveHangout | null = null;
+  let ownedUpFors: OwnedUpFor[] = [];
   let requests: HangoutRequestSummary[] = [];
-  let avatarUrl: string | null = null;
-  let displayName = "";
-  let muddyCount = 0;
   const feedPromise: Promise<VisibleHangout[]> = user
     ? getVisibleHangoutsAction()
     : Promise.resolve([]);
@@ -49,23 +48,28 @@ export default async function HangoutModeRoute() {
   if (user && env.url && env.serviceRoleKey) {
     const admin = createSupabaseAdminClient();
 
-    const [{ data: profile }, muddies] = await Promise.all([
-      admin.from("profiles").select("full_name, avatar_url").eq("user_id", user.id).maybeSingle(),
-      admin
-        .from("friendships")
-        .select("user_one_id", { count: "exact", head: true })
-        .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
-        .is("ended_at", null)
-        .then((result) => result.count ?? 0)
-    ]);
-    avatarUrl = profile?.avatar_url ?? null;
-    displayName = profile?.full_name?.trim() ?? "";
-    muddyCount = muddies;
-
+    /* The profile and Muddy-count reads that used to live here fed only the
+       legacy owner hero -- its avatar, name and "visible to N Muddies" line.
+       With the hero gone they were two database round trips per page load
+       whose results nothing read. */
     // Canonical, server-authoritative resolve: sweeps expired sessions and
     // returns the single genuinely-active one (or null). A reopen never shows a
     // stale ACTIVE, and expired rows stop counting toward the active limit.
     const session = await currentActiveHangout(admin, user.id);
+
+    /* Every UpFor the owner holds -- live and scheduled alike. This is the
+       owner-facing authority; the single resolve above still feeds the legacy
+       hero until it is removed. */
+    ownedUpFors = (await ownedUpForSessions(admin, user.id)).map((row) => ({
+      id: row.id,
+      activityType: row.activity_type,
+      audienceType: row.audience_type,
+      message: row.message,
+      status: row.status,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      discoveryScope: row.discovery_scope
+    }));
 
     if (session) {
       activeHangout = {
@@ -116,11 +120,9 @@ export default async function HangoutModeRoute() {
   return (
     <HangoutModePage
       initialActiveHangout={activeHangout}
+      initialOwnedUpFors={ownedUpFors}
       initialRequests={requests}
       initialFeed={feed}
-      avatarUrl={avatarUrl}
-      displayName={displayName}
-      muddyCount={muddyCount}
       viewerId={user?.id ?? null}
       initialPlans={plansData.plans}
     />

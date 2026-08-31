@@ -69,9 +69,11 @@ describe("counts and titles state only what is true", () => {
 
   it("offers only real activity types as quick ideas", () => {
     // Each tile preselects an activity in the existing setup sheet rather
-    // than routing anywhere new.
+    // than routing anywhere new. It opens the CREATE path specifically: the
+    // old openSetup prefilled from whichever session happened to exist, which
+    // is how a quick idea could end up editing -- and cancelling -- a sibling.
     expect(UPFOR_QUICK_IDEAS.length).toBeGreaterThan(0);
-    expect(page).toContain("openSetup(idea.id)");
+    expect(page).toContain("openCreate(idea.id)");
   });
 });
 
