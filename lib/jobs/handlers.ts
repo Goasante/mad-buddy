@@ -10,6 +10,11 @@ import {
 } from "@/lib/safety/safe-arrival";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { JobType } from "@/lib/jobs/rules";
+import { processDueSafeArrivals } from "@/lib/safety/safe-arrival-authority";
+import {
+  deliverSafeArrivalNotificationIntent,
+  type SafeArrivalNotificationIntent
+} from "@/lib/safety/safe-arrival-notification";
 import {
   INCOMPLETE_CHAT_ORPHAN_AGE_MS,
   READY_CHAT_ORPHAN_AGE_MS
@@ -326,6 +331,18 @@ export const handleSafeArrivalUnconfirmedAlert: JobHandler = async (admin) => {
   }
 
   return sent;
+};
+
+/** S1 database-owned sweep: eligibility, mutation, audit and intents are atomic. */
+export const handleSafeArrivalDueSweep: JobHandler = async (admin) => processDueSafeArrivals(admin, 200);
+
+/** One durable semantic recipient/event intent. The notification row dedupes retries. */
+export const handleSafeArrivalLifecycleNotification: JobHandler = async (admin, payload) => {
+  try {
+    return await deliverSafeArrivalNotificationIntent(admin, payload as SafeArrivalNotificationIntent);
+  } catch (error) {
+    throw new JobError("DATABASE_TIMEOUT", error instanceof Error ? error.message : "notification delivery failed");
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -1141,7 +1158,8 @@ export const handleEventUpdateFanout: JobHandler = async (admin, payload) => {
 export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
   "plans.lifecycle_side_effect": handlePlanLifecycleSideEffect,
   "events.update_fanout": handleEventUpdateFanout,
-  "safe_arrival.unconfirmed_alert": handleSafeArrivalUnconfirmedAlert,
+  "safe_arrival.unconfirmed_alert": handleSafeArrivalDueSweep,
+  "safe_arrival.lifecycle_notification": handleSafeArrivalLifecycleNotification,
   "upfor.announce_started": handleUpForAnnounceStarted,
   "media.cleanup_orphan_chat": handleCleanupOrphanChatMedia,
   "media.delete_queued": handleMediaDeleteQueued,

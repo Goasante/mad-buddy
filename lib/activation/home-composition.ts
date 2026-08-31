@@ -278,6 +278,20 @@ function suppressSetupWhileSomeoneWaits(
 }
 
 export function composeHome(input: HomeCompositionInputs): HomeComposition {
+  if (input.hasSafetyCard) {
+    // A live safety responsibility is the one thing Home must not bury under
+    // discovery or setup. Real plans still render outside this composition.
+    return {
+      showNearby: false,
+      showTrending: false,
+      showPlansEmpty: false,
+      showSuggestions: false,
+      showJourneyCard: false,
+      showMoments: false,
+      showProfileReminder: false,
+      nextBestAction: null
+    };
+  }
   const maturity = deriveHomeMaturity({
     milestones: input.milestones,
     twoSidedConversationCount: input.twoSidedConversationCount,

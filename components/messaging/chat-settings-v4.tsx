@@ -106,7 +106,7 @@ export function ChatSettingsV4({
           <div className="flex items-center gap-3 rounded-[22px] border border-border/60 bg-card/70 p-3">
             <UserAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" decorative membershipTier={publicMembershipTier(conversation.otherPlan)} className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" />
             <div className="min-w-0 flex-1">
-              <strong className="block truncate text-[15px]">{conversation.title}</strong>
+              <strong className="block truncate text-sm font-semibold">{conversation.title}</strong>
               <span className="text-xs text-muted-foreground">{isGroup ? "Group conversation" : conversation.otherUsername ? `@${conversation.otherUsername}` : "Conversation"}</span>
             </div>
           </div>
@@ -117,14 +117,14 @@ export function ChatSettingsV4({
               <div className="border-t border-border/50 px-3 py-3 animate-in slide-in-from-top-1 fade-in">
                 <div className="flex flex-wrap gap-2">
                   {[{h:1,l:"1 hour"},{h:8,l:"8 hours"},{h:24,l:"Today"},{h:168,l:"1 week"},{h:87600,l:"Indefinitely"},{h:0,l:"Unmute"}].map((item) => (
-                    <button key={item.l} type="button" disabled={isPending} onClick={() => run(() => muteConversationAction(conversation.id, item.h))} className="focus-ring min-h-10 rounded-full border border-border/70 px-3 text-xs font-semibold transition hover:border-[#E88C2B]/45 hover:bg-[#E88C2B]/8 active:scale-95">{item.l}</button>
+                    <button key={item.l} type="button" disabled={isPending} onClick={() => run(() => muteConversationAction(conversation.id, item.h))} className="focus-ring min-h-10 rounded-full border border-border/70 px-3 text-xs font-semibold transition hover:border-primary/45 hover:bg-primary/8 active:scale-95">{item.l}</button>
                   ))}
                 </div>
                 {prefs ? (
                   <div className="mt-3 space-y-2 border-t border-border/40 pt-3">
                     <ToggleRow label="Still notify me for @mentions" checked={prefs.notifyMentionsWhenMuted} disabled={isPending} onChange={(checked) => run(() => updateConversationUserPreferencesAction({ conversationId: conversation.id, notifyMentionsWhenMuted: checked }))} />
                     <ToggleRow label="Still notify me for direct replies" checked={prefs.notifyRepliesWhenMuted} disabled={isPending} onChange={(checked) => run(() => updateConversationUserPreferencesAction({ conversationId: conversation.id, notifyRepliesWhenMuted: checked }))} />
-                    <p className="pt-1 text-[11px] font-semibold text-muted-foreground">Notification preview</p>
+                    <p className="pt-1 text-xs font-medium text-muted-foreground">Notification preview</p>
                     <Segmented value={prefs.notificationPreview} options={[{id:"always",label:"Always"},{id:"when_unlocked",label:"Unlocked"},{id:"never",label:"Never"}]} onChange={(value) => run(() => updateConversationUserPreferencesAction({ conversationId: conversation.id, notificationPreview: value }))} />
                   </div>
                 ) : null}
@@ -143,8 +143,8 @@ export function ChatSettingsV4({
                   {THEMES.map((theme) => {
                     const active = (prefs?.themeKey ?? "default") === theme.id;
                     return (
-                      <button key={theme.id} type="button" disabled={isPending} onClick={() => setTheme(theme.id)} className="focus-ring group flex flex-col items-center gap-1.5 rounded-xl p-1.5 text-[10px] font-semibold">
-                        <span className={cn("block h-10 w-10 rounded-full border-2 shadow-sm transition-transform group-active:scale-90", active ? "border-[#E88C2B] scale-110" : "border-white dark:border-white/10")} style={{ background: theme.preview }} />
+                      <button key={theme.id} type="button" disabled={isPending} onClick={() => setTheme(theme.id)} className="focus-ring group flex flex-col items-center gap-1.5 rounded-xl p-1.5 text-xs font-medium">
+                        <span className={cn("block h-10 w-10 rounded-full border-2 shadow-sm transition-transform group-active:scale-90", active ? "border-primary scale-110" : "border-white dark:border-white/10")} style={{ background: theme.preview }} />
                         {theme.label}
                       </button>
                     );
@@ -181,7 +181,7 @@ export function ChatSettingsV4({
             </section>
           ) : null}
 
-          <div className="rounded-[20px] border border-[#E88C2B]/16 bg-[#E88C2B]/7 p-3 text-[11px] leading-relaxed text-muted-foreground">
+          <div className="rounded-[20px] border border-primary/16 bg-primary/7 p-3 text-xs leading-relaxed text-muted-foreground">
             Chats are protected by Mad Buddy's server authorization and transport encryption. End-to-end encryption is not shown here because it requires a separate cryptographic key architecture, not a cosmetic switch.
           </div>
         </div>
@@ -201,7 +201,7 @@ export function ChatSettingsV4({
 function SettingRow({ icon: Icon, title, subtitle, onClick, active }: { icon: typeof Search; title: string; subtitle: string; onClick: () => void; active?: boolean }) {
   return (
     <button type="button" onClick={onClick} className="focus-ring flex min-h-[67px] w-full items-center gap-3 border-b border-border/45 px-3 py-2.5 text-left last:border-b-0 hover:bg-black/[0.025] active:bg-black/[0.045] dark:hover:bg-white/[0.035]">
-      <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full", active ? "bg-[#E88C2B] text-white" : "bg-[#E88C2B]/10 text-[#E88C2B]")}><Icon className="h-4 w-4" /></span>
+      <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full", active ? "bg-primary text-white" : "bg-primary/10 text-primary")}><Icon className="h-4 w-4" /></span>
       <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{title}</strong><span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{subtitle}</span></span>
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
     </button>
@@ -212,7 +212,7 @@ function ToggleRow({ label, checked, disabled, onChange }: { label: string; chec
   return (
     <label className="flex min-h-10 cursor-pointer items-center justify-between gap-4 text-xs font-medium">
       <span>{label}</span>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 accent-[#E88C2B]" />
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 accent-primary" />
     </label>
   );
 }
@@ -220,7 +220,7 @@ function ToggleRow({ label, checked, disabled, onChange }: { label: string; chec
 function Segmented<T extends string>({ value, options, onChange }: { value: T; options: readonly { id: T; label: string }[]; onChange: (value: T) => void }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      {options.map((option) => <button key={option.id} type="button" onClick={() => onChange(option.id)} className={cn("focus-ring min-h-9 rounded-full border px-3 text-[11px] font-semibold transition active:scale-95", value === option.id ? "border-[#E88C2B] bg-[#E88C2B] text-white" : "border-border/70 bg-card")}>{option.label}</button>)}
+      {options.map((option) => <button key={option.id} type="button" onClick={() => onChange(option.id)} className={cn("focus-ring min-h-9 rounded-full border px-3 text-xs font-medium transition active:scale-95", value === option.id ? "border-primary bg-primary text-white" : "border-border/70 bg-card")}>{option.label}</button>)}
     </div>
   );
 }

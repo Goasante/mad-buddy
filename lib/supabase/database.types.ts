@@ -377,6 +377,7 @@ export type Database = {
           message: string;
           is_read: boolean;
           created_at: string;
+          dedupe_key: string | null;
         };
         Insert: {
           id?: string;
@@ -386,6 +387,7 @@ export type Database = {
           message: string;
           is_read?: boolean;
           created_at?: string;
+          dedupe_key?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>;
         Relationships: [];
@@ -2042,6 +2044,8 @@ export type Database = {
           confirmed_at: string | null;
           cancelled_at: string | null;
           unconfirmed_notified_at: string | null;
+          unconfirmed_at: string | null;
+          expired_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -2059,6 +2063,8 @@ export type Database = {
           confirmed_at?: string | null;
           cancelled_at?: string | null;
           unconfirmed_notified_at?: string | null;
+          unconfirmed_at?: string | null;
+          expired_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -5335,7 +5341,17 @@ export type Database = {
           p_contact_ids: string[];
           p_max_active: number;
         };
-        Returns: string;
+        Returns: Array<{ session_id: string; replayed: boolean; canonical_status: string }>;
+      };
+      transition_safe_arrival: {
+        Args: { p_session_id: string; p_actor_id: string; p_action: string; p_extra_minutes?: number | null };
+        Returns: Array<{ session_id: string; canonical_status: string; changed: boolean; expected_arrival_at: string }>;
+      };
+      process_due_safe_arrivals: { Args: { p_limit?: number }; Returns: number };
+      admin_safe_arrival_health: { Args: Record<PropertyKey, never>; Returns: Json };
+      can_view_safe_arrival_session: {
+        Args: { p_session_id: string; p_require_accepted?: boolean };
+        Returns: boolean;
       };
       process_experiment_schedules: {
         Args: Record<PropertyKey, never>;
@@ -5693,7 +5709,9 @@ export type SafeArrivalEventType =
   | "extended"
   | "confirmed"
   | "cancelled"
-  | "unconfirmed_alert";
+  | "unconfirmed_alert"
+  | "expired"
+  | "transition_conflict";
 
 export type CheckInContextType = "event" | "plan" | "place" | "circle";
 export type CheckInMethod = "manual" | "qr" | "code" | "host_assisted";

@@ -18,7 +18,7 @@ const attachments = stripComments(read("lib/messaging/attachments.ts"));
 const actions = stripComments(read("app/(app)/messaging-actions.ts"));
 const projection = stripComments(read("lib/messaging/mobile.ts"));
 const picker = stripComments(read("components/messaging/attachment-picker.tsx"));
-const composer = stripComments(read("components/messaging/message-composer.tsx"));
+const composer = stripComments(read("components/messaging/message-composer-v3.tsx"));
 const attachmentImage = stripComments(read("components/messaging/message-attachment-image.tsx"));
 const messagesPage = stripComments(read("components/messages/messages-page.tsx"));
 const viewer = stripComments(read("components/messaging/message-media-viewer.tsx"));
@@ -218,12 +218,21 @@ describe("upload lifecycle", () => {
 
   it("no longer blocks a second send on the first one's round trip", () => {
     // The regression this guards: re-adding isPending would restore the freeze.
-    expect(composer).not.toContain("|| uploadBusy || isPending) return;");
+    // Scoped to the TEXT send. V3's startHold() legitimately refuses to begin a
+    // RECORDING while an upload is in flight; that is not the freeze this guards.
+    const textSend = composer.slice(composer.indexOf("const handleSubmit"), composer.indexOf("function startHold"));
+    expect(textSend).not.toContain("|| uploadBusy || isPending) return;");
   });
 
   it("keeps idempotency on the send", () => {
     expect(composer).toContain("clientMessageIdRef.current ?? crypto.randomUUID()");
-    expect(composer).toContain("clientMessageIdRef.current = clientMessageId");
+    // V3 hands the SAME clientMessageId to the action for the whole in-flight
+    // send, and the retry path re-sends with that id (messages-page-v4), so a
+    // retry cannot create a second message. The ref is cleared for the NEXT
+    // compose rather than held across it.
+    const send = composer.slice(composer.indexOf("function sendText()"));
+    expect(send).toContain("sendMessageAction({");
+    expect(send.slice(0, 1200)).toContain("clientMessageId");
   });
 
   it("treats a photo with no caption as a complete message", () => {

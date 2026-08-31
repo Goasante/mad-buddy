@@ -203,19 +203,39 @@ describe("premium ring presentation", () => {
 // ---------------------------------------------------------------------------
 
 describe("premium ring wiring", () => {
-  const wired: Array<[string, string]> = [
+  const profileSurfaces: Array<[string, string]> = [
     ["own profile", "components/profile/profile-page.tsx"],
     ["public profile", "components/friends/muddy-profile-page.tsx"],
-    ["muddies list and requests", "components/friends/friends-page.tsx"]
+    ["Profile VNext", "components/profile/profile-vnext-page.tsx"],
+    ["Profile VNext edit", "components/profile/profile-edit-vnext.tsx"]
   ];
 
-  for (const [surface, path] of wired) {
-    it(`derives the tier from a server-resolved plan on ${surface}`, () => {
+  for (const [surface, path] of profileSurfaces) {
+    it(`keeps premium avatar-ring geometry off ${surface}`, () => {
       const source = read(path);
-      expect(source).toContain("publicMembershipTier(");
-      expect(source).toContain("membershipTier={");
+      expect(source).not.toContain("publicMembershipTier(");
+      expect(source).not.toContain("membershipTier=");
     });
   }
+
+  it("keeps the public Profile Glow canonical without a competing membership ring", () => {
+    const source = read("components/friends/muddy-profile-page.tsx");
+    expect(source).toContain("<ProximityGlowAvatar");
+    expect(source).toContain("band={muddy.proximityBand ?? null}");
+    expect(source).not.toContain("membershipTier=");
+  });
+
+  it("does not load a premium tier solely for the Profile VNext edit avatar", () => {
+    const source = read("app/(app)/profile-lab/edit/page.tsx");
+    expect(source).not.toContain("loadEffectivePlan");
+    expect(source).not.toContain("plan={");
+  });
+
+  it("preserves premium rings on authorised non-Profile identity surfaces", () => {
+    const source = read("components/friends/friends-page.tsx");
+    expect(source).toContain("publicMembershipTier(");
+    expect(source).toContain("membershipTier={");
+  });
 
   it("passes the tier through GlowAvatar without mixing it into proximity", () => {
     const glowAvatar = read("components/glow/glow-avatar.tsx");

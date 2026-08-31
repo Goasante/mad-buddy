@@ -61,7 +61,6 @@ export async function updateReportStatusAction(input: unknown): Promise<SafetyAc
       return { ok: false, message: "The report status could not be updated." };
     }
 
-    revalidatePath("/safety");
     revalidatePath("/admin");
     revalidatePath("/admin/reports");
     return { ok: true, message: "Report status updated." };
@@ -136,7 +135,7 @@ export async function blockReportedUserAction(input: unknown): Promise<SafetyAct
       });
     }
 
-    revalidatePath("/safety");
+    revalidatePath("/admin/reports");
     return { ok: true, message: "Reported user blocked for this moderator and report moved to review." };
   } catch {
     return {

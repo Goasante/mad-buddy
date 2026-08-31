@@ -4,10 +4,6 @@ import { BellOff, Mail, Star, Archive, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
-import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
-import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import type { ConversationView } from "@/lib/messaging/mobile";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
@@ -126,13 +122,13 @@ export function ConversationRowV4({
   return (
     <div className="relative overflow-hidden rounded-[20px]">
       <div aria-hidden="true" className="absolute inset-0 flex items-stretch justify-between overflow-hidden rounded-[20px]">
-        <div className="flex min-w-[148px] items-center gap-3 bg-[#E88C2B]/12 pl-4 text-[#4E0401] dark:text-orange-100">
-          <span className={cn("grid h-9 w-9 place-items-center rounded-full bg-white/80 transition-transform", offset >= ACTION_THRESHOLD && "scale-110")}><Mail className="h-4 w-4" /></span>
-          <span className={cn("grid h-9 w-9 place-items-center rounded-full bg-[#E88C2B] text-white transition-transform", offset >= SECONDARY_THRESHOLD && "scale-110")}><Star className="h-4 w-4" /></span>
+        <div className="flex min-w-[148px] items-center gap-3 bg-primary/12 pl-4 text-foreground">
+          <span className={cn("grid h-9 w-9 place-items-center rounded-full bg-card/90 transition-transform", offset >= ACTION_THRESHOLD && "scale-110")}><Mail className="h-4 w-4" /></span>
+          <span className={cn("grid h-9 w-9 place-items-center rounded-full bg-primary text-white transition-transform", offset >= SECONDARY_THRESHOLD && "scale-110")}><Star className="h-4 w-4" /></span>
         </div>
-        <div className="flex min-w-[148px] items-center justify-end gap-3 bg-[#4E0401]/8 pr-4 text-[#4E0401] dark:text-orange-100">
-          <span className={cn("grid h-9 w-9 place-items-center rounded-full bg-white/80 transition-transform", offset <= -ACTION_THRESHOLD && "scale-110")}><BellOff className="h-4 w-4" /></span>
-          <span className={cn("grid h-9 w-9 place-items-center rounded-full bg-[#4E0401] text-[#FEFBF3] transition-transform", offset <= -SECONDARY_THRESHOLD && "scale-110")}><Archive className="h-4 w-4" /></span>
+        <div className="flex min-w-[148px] items-center justify-end gap-3 bg-[#4E0401]/8 pr-4 text-foreground">
+          <span className={cn("grid h-9 w-9 place-items-center rounded-full bg-card/90 transition-transform", offset <= -ACTION_THRESHOLD && "scale-110")}><BellOff className="h-4 w-4" /></span>
+          <span className={cn("grid h-9 w-9 place-items-center rounded-full bg-foreground text-background transition-transform", offset <= -SECONDARY_THRESHOLD && "scale-110")}><Archive className="h-4 w-4" /></span>
         </div>
       </div>
 
@@ -159,7 +155,7 @@ export function ConversationRowV4({
           setActionsOpen(true);
         }}
         className={cn(
-          "relative z-10 flex min-h-[76px] touch-pan-y select-none items-center gap-3 rounded-[20px] bg-[#FEFBF3] px-3 py-2.5 text-left shadow-[0_0_0_1px_rgba(78,4,1,0.025)] dark:bg-background",
+          "relative z-10 flex min-h-[76px] touch-pan-y select-none items-center gap-3 rounded-[20px] bg-background px-3 py-2.5 text-left shadow-[0_0_0_1px_hsl(var(--border)/0.45)]",
           !dragging && "transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)]"
         )}
         style={{ transform: `translate3d(${offset}px,0,0)` }}
@@ -173,18 +169,13 @@ export function ConversationRowV4({
             src={conversation.avatarUrl}
             size="sm"
             decorative
-            membershipTier={publicMembershipTier(conversation.otherPlan)}
             className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]"
           />
-          {conversation.unreadCount > 0 ? <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[#FEFBF3] bg-[#E88C2B] dark:border-background" /> : null}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5">
-            <strong className={cn("truncate text-[0.95rem]", conversation.unreadCount > 0 ? "font-bold" : "font-semibold")}>{conversation.title}</strong>
-            <PremiumPlanBadge plan={conversation.otherPlan} compact />
-            <TrustedMemberMark trustedSince={conversation.otherTrustedSince} compact />
-            <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact />
-            {conversation.pinned ? <Star className="h-3 w-3 shrink-0 fill-[#E88C2B] text-[#E88C2B]" /> : null}
+            <strong className={cn("truncate text-sm", conversation.unreadCount > 0 ? "font-semibold" : "font-medium")}>{conversation.title}</strong>
+            {conversation.pinned ? <Star className="h-3 w-3 shrink-0 fill-[#E88C2B] text-primary" /> : null}
           </div>
           {/* WHAT KIND OF CHAT THIS IS.
               Without this line an Event Room, a Plan Chat and a Group are
@@ -194,26 +185,26 @@ export function ConversationRowV4({
               A Room is temporary and belongs to one Event, so the inbox has to
               say which; it is deliberately NOT presented as a Group. */}
           {conversation.contextBadge ? (
-            <p className="mt-0.5 truncate text-[0.7rem] text-muted-foreground">
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
               {conversation.roomEventName
                 ? `${conversation.roomEventName} · ${conversation.contextBadge}`
                 : conversation.contextBadge}
             </p>
           ) : null}
-          <p className={cn("mt-1 truncate text-[0.82rem]", conversation.unreadCount > 0 ? "font-medium text-foreground/80" : "text-muted-foreground")}>{conversation.lastMessagePreview ?? "No messages yet"}</p>
+          <p className={cn("mt-1 truncate text-sm", conversation.unreadCount > 0 ? "font-medium text-foreground/80" : "text-muted-foreground")}>{conversation.lastMessagePreview ?? "No messages yet"}</p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5 pl-1">
-          <span className={cn("text-[10px]", conversation.unreadCount > 0 ? "font-semibold text-[#E88C2B]" : "text-muted-foreground")}>{conversation.lastMessageAt ? formatRelativeTime(conversation.lastMessageAt) : ""}</span>
-          {conversation.unreadCount > 0 ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#E88C2B] px-1.5 text-[10px] font-bold text-white transition-transform animate-in zoom-in-75">{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span> : conversation.muted ? <BellOff className="h-3.5 w-3.5 text-muted-foreground" /> : null}
+          <span className={cn("text-xs", conversation.unreadCount > 0 ? "font-semibold text-primary" : "text-muted-foreground")}>{conversation.lastMessageAt ? formatRelativeTime(conversation.lastMessageAt) : ""}</span>
+          {conversation.unreadCount > 0 ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground transition-transform animate-in zoom-in-75">{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span> : conversation.muted ? <BellOff className="h-3.5 w-3.5 text-muted-foreground" /> : null}
         </div>
       </div>
 
       {actionsOpen ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-end gap-1.5 rounded-[20px] bg-[#FEFBF3]/96 px-2 shadow-lg backdrop-blur-md animate-in fade-in zoom-in-95 dark:bg-background/96" role="toolbar" aria-label={`Actions for ${conversation.title}`}>
+        <div className="absolute inset-0 z-20 flex items-center justify-end gap-1.5 rounded-[20px] bg-background/95 px-2 shadow-lg backdrop-blur-md animate-in fade-in zoom-in-95" role="toolbar" aria-label={`Actions for ${conversation.title}`}>
           <button type="button" onClick={() => { onMarkUnread(); setActionsOpen(false); }} className="grid h-11 min-w-11 place-items-center rounded-full bg-secondary px-3 text-xs font-semibold"><Mail className="h-4 w-4" /></button>
           <button type="button" onClick={() => { onFavorite(); setActionsOpen(false); }} className="grid h-11 min-w-11 place-items-center rounded-full bg-secondary px-3 text-xs font-semibold"><Star className="h-4 w-4" /></button>
           <button type="button" onClick={() => { onMute(); setActionsOpen(false); }} className="grid h-11 min-w-11 place-items-center rounded-full bg-secondary px-3 text-xs font-semibold"><BellOff className="h-4 w-4" /></button>
-          <button type="button" onClick={() => { onArchive(); setActionsOpen(false); }} className="grid h-11 min-w-11 place-items-center rounded-full bg-[#4E0401] px-3 text-xs font-semibold text-[#FEFBF3]"><Archive className="h-4 w-4" /></button>
+          <button type="button" onClick={() => { onArchive(); setActionsOpen(false); }} className="grid h-11 min-w-11 place-items-center rounded-full bg-foreground px-3 text-xs font-semibold text-background"><Archive className="h-4 w-4" /></button>
           <button type="button" onClick={() => setActionsOpen(false)} className="grid h-11 w-11 place-items-center rounded-full text-muted-foreground" aria-label="Close actions"><X className="h-4 w-4" /></button>
         </div>
       ) : null}

@@ -26,7 +26,6 @@ import { ProfilePhotoCarousel } from "@/components/profile/profile-photo-carouse
 import { ProfilePhotoViewer } from "@/components/profile/profile-photo-viewer";
 import { profileViewerSequence } from "@/lib/profile/photo-labels";
 import type { ProfilePhoto } from "@/lib/profile/profile-photos";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { GLOW_COLORS } from "@/lib/glow/custom-colors";
 import type { PublicTrustSummary } from "@/lib/discovery/trust";
 import type { VisibleProfileFields } from "@/lib/profile/service";
@@ -205,7 +204,6 @@ export function MuddyProfilePage({
                 <ProximityGlowAvatar
                   name={muddy.displayName}
                   src={muddy.avatarUrl}
-                  membershipTier={publicMembershipTier(muddy.plan)}
                   band={muddy.proximityBand ?? null}
                   glowColorId={glowColorId}
                   size="hero"

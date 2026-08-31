@@ -18,7 +18,7 @@ import { stripComments } from "@/lib/content/strip-comments";
  * replace it.
  */
 
-const composerSource = readFileSync("components/messaging/message-composer.tsx", "utf8");
+const composerSource = readFileSync("components/messaging/message-composer-v3.tsx", "utf8");
 const composer = stripComments(composerSource);
 
 /** The JSX of one control, from its opening tag to the end of that element. */
@@ -88,7 +88,7 @@ describe("the recording survives being listened to", () => {
     // voice.cancel() is what drops the blob. It may only be reached from the
     // success path or from an explicit discard -- never from playback.
     const send = composer.slice(composer.indexOf("const sendVoice"));
-    const okBranch = send.slice(send.indexOf("clientMessageIdRef.current = null;"));
+    const okBranch = send.slice(send.indexOf('onOptimisticSettled?.(clientMessageId, "sent")'));
     expect(okBranch).toContain("voice.cancel()");
   });
 
@@ -96,7 +96,7 @@ describe("the recording survives being listened to", () => {
     // The catch block reports and stops. If it cancelled, a network blip would
     // cost the person the thing they just said.
     const send = composer.slice(composer.indexOf("const sendVoice"));
-    const katch = send.slice(send.indexOf("} catch (error) {"), send.indexOf("} finally {"));
+    const katch = send.slice(send.indexOf("} catch (error) {"), send.indexOf("} catch (error) {") + 700);
     expect(katch).not.toContain("voice.cancel");
     expect(katch).not.toContain("voiceUpload.reset");
   });
@@ -106,12 +106,15 @@ describe("a playback failure is not reported as a send failure", () => {
   it("keeps the two messages distinct", () => {
     // Different product states must not share wording, or the person is told
     // their message failed when only the speaker did.
-    expect(composer).toContain("That recording could not be played back on this device.");
+    expect(composer).toContain("That recording could not be played back.");
     expect(composer).toContain("Couldn't send that voice message. Try again.");
   });
 
   it("reports the playback message from the audio element, not the send path", () => {
-    const onError = composer.slice(composer.indexOf("onError={() => {"));
-    expect(onError.slice(0, 300)).toContain("could not be played back");
+    // V3 surfaces a failed decode from the audio element's own play() rejection
+    // rather than an onError prop. Same boundary: the message originates at the
+    // element, never in the send path.
+    const play = composer.slice(composer.indexOf("if (audio.paused) {"));
+    expect(play.slice(0, 420)).toContain("could not be played back");
   });
 });

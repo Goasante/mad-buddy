@@ -126,12 +126,12 @@ export function ChatCollectionsV4({
     <Modal open={open} onOpenChange={onOpenChange} title="Chat collections" variant="sheet">
       <div className="space-y-4 pb-[max(.5rem,env(safe-area-inset-bottom))]">
         <div className="grid grid-cols-2 gap-1 rounded-2xl bg-secondary/55 p-1" role="tablist" aria-label="Chat collections">
-          <button type="button" role="tab" aria-selected={tab === "saved"} onClick={() => setTab("saved")} className={cn("focus-ring min-h-10 rounded-xl text-xs font-bold transition", tab === "saved" ? "bg-card text-[#4E0401] shadow-sm dark:text-orange-100" : "text-muted-foreground")}><Bookmark className="mr-1.5 inline h-3.5 w-3.5" />Saved · {data.saved.length}</button>
-          <button type="button" role="tab" aria-selected={tab === "pinned"} onClick={() => setTab("pinned")} className={cn("focus-ring min-h-10 rounded-xl text-xs font-bold transition", tab === "pinned" ? "bg-card text-[#4E0401] shadow-sm dark:text-orange-100" : "text-muted-foreground")}><Pin className="mr-1.5 inline h-3.5 w-3.5" />Pinned · {data.pinned.length}</button>
+          <button type="button" role="tab" aria-selected={tab === "saved"} onClick={() => setTab("saved")} className={cn("focus-ring min-h-10 rounded-xl text-xs font-bold transition", tab === "saved" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground")}><Bookmark className="mr-1.5 inline h-3.5 w-3.5" />Saved · {data.saved.length}</button>
+          <button type="button" role="tab" aria-selected={tab === "pinned"} onClick={() => setTab("pinned")} className={cn("focus-ring min-h-10 rounded-xl text-xs font-bold transition", tab === "pinned" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground")}><Pin className="mr-1.5 inline h-3.5 w-3.5" />Pinned · {data.pinned.length}</button>
         </div>
 
         {loading ? (
-          <div className="grid min-h-40 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-[#E88C2B] motion-reduce:animate-none" /></div>
+          <div className="grid min-h-40 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-primary motion-reduce:animate-none" /></div>
         ) : tab === "saved" ? (
           <>
             <section className="rounded-[22px] border border-border/60 bg-card/60 p-3">
@@ -144,7 +144,7 @@ export function ChatCollectionsV4({
                 <FilterChip active={folderFilter === "unfiled"} onClick={() => setFolderFilter("unfiled")}>Unfiled</FilterChip>
                 {data.folders.map((folder) => (
                   <div key={folder.id} className="inline-flex shrink-0 items-center rounded-full border border-border/65 bg-background">
-                    <button type="button" onClick={() => setFolderFilter(folder.id)} className={cn("focus-ring min-h-9 rounded-l-full px-3 text-[11px] font-semibold", folderFilter === folder.id && "bg-[#E88C2B] text-white")}>{folder.name}</button>
+                    <button type="button" onClick={() => setFolderFilter(folder.id)} className={cn("focus-ring min-h-9 rounded-l-full px-3 text-xs font-medium", folderFilter === folder.id && "bg-primary text-primary-foreground")}>{folder.name}</button>
                     <button type="button" onClick={() => deleteFolder(folder.id)} disabled={isPending} className="focus-ring grid h-9 w-9 place-items-center rounded-r-full text-muted-foreground hover:text-destructive" aria-label={`Delete ${folder.name} folder`}><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
@@ -158,10 +158,10 @@ export function ChatCollectionsV4({
                 {visibleSaved.map((item) => (
                   <li key={item.messageId} className="rounded-[20px] border border-border/60 bg-card/60 p-3">
                     <button type="button" onClick={() => jump(item.messageId)} className="focus-ring block w-full text-left">
-                      <div className="flex items-start gap-2"><Bookmark className="mt-0.5 h-4 w-4 shrink-0 text-[#E88C2B]" /><div className="min-w-0 flex-1"><strong className="block truncate text-xs">{item.senderName}</strong><p className="mt-1 line-clamp-2 text-sm leading-relaxed">{item.preview}</p><span className="mt-1 block text-[10px] text-muted-foreground">{when(item.createdAt)}</span></div></div>
+                      <div className="flex items-start gap-2"><Bookmark className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><div className="min-w-0 flex-1"><strong className="block truncate text-xs">{item.senderName}</strong><p className="mt-1 line-clamp-2 text-sm leading-relaxed">{item.preview}</p><span className="mt-1 block text-xs text-muted-foreground">{when(item.createdAt)}</span></div></div>
                     </button>
                     <div className="mt-2 border-t border-border/45 pt-2">
-                      <label className="flex items-center justify-between gap-3 text-[11px] font-semibold text-muted-foreground">
+                      <label className="flex items-center justify-between gap-3 text-xs font-medium text-muted-foreground">
                         Folder
                         <select value={item.folderId ?? ""} disabled={isPending} onChange={(event) => move(item.messageId, event.target.value || null)} className="focus-ring min-h-9 max-w-[65%] rounded-xl border border-border/70 bg-background px-2 text-xs text-foreground">
                           <option value="">Unfiled</option>
@@ -180,10 +180,10 @@ export function ChatCollectionsV4({
           <ul className="space-y-2">
             {data.pinned.map((item, index) => (
               <li key={item.messageId}>
-                <button type="button" onClick={() => jump(item.messageId)} className="focus-ring flex w-full items-start gap-3 rounded-[20px] border border-border/60 bg-card/60 p-3 text-left transition hover:border-[#E88C2B]/30 active:scale-[.99]">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#E88C2B]/10 text-[11px] font-bold text-[#E88C2B]">{index + 1}</span>
-                  <span className="min-w-0 flex-1"><strong className="block truncate text-xs">{item.senderName}</strong><span className="mt-1 block line-clamp-2 text-sm leading-relaxed">{item.preview}</span><span className="mt-1 block text-[10px] text-muted-foreground">Pinned {item.pinnedAt ? when(item.pinnedAt) : ""}</span></span>
-                  <Pin className="h-4 w-4 shrink-0 fill-[#E88C2B] text-[#E88C2B]" />
+                <button type="button" onClick={() => jump(item.messageId)} className="focus-ring flex w-full items-start gap-3 rounded-[20px] border border-border/60 bg-card/60 p-3 text-left transition hover:border-primary/30 active:scale-[.99]">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{index + 1}</span>
+                  <span className="min-w-0 flex-1"><strong className="block truncate text-xs">{item.senderName}</strong><span className="mt-1 block line-clamp-2 text-sm leading-relaxed">{item.preview}</span><span className="mt-1 block text-xs text-muted-foreground">Pinned {item.pinnedAt ? when(item.pinnedAt) : ""}</span></span>
+                  <Pin className="h-4 w-4 shrink-0 fill-[#E88C2B] text-primary" />
                 </button>
               </li>
             ))}
@@ -195,9 +195,9 @@ export function ChatCollectionsV4({
 }
 
 function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  return <button type="button" onClick={onClick} className={cn("focus-ring min-h-9 shrink-0 rounded-full border px-3 text-[11px] font-semibold transition", active ? "border-[#E88C2B] bg-[#E88C2B] text-white" : "border-border/70 bg-background")}>{children}</button>;
+  return <button type="button" onClick={onClick} className={cn("focus-ring min-h-9 shrink-0 rounded-full border px-3 text-xs font-medium transition", active ? "border-primary bg-primary text-primary-foreground" : "border-border/70 bg-background")}>{children}</button>;
 }
 
 function EmptyCollection({ icon: Icon, title, description }: { icon: typeof Bookmark; title: string; description: string }) {
-  return <div className="grid min-h-44 place-items-center rounded-[22px] border border-dashed border-border/70 bg-card/35 px-6 text-center"><div><span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-[#E88C2B]/10 text-[#E88C2B]"><Icon className="h-5 w-5" /></span><strong className="mt-3 block text-sm">{title}</strong><p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">{description}</p></div></div>;
+  return <div className="grid min-h-44 place-items-center rounded-[22px] border border-dashed border-border/70 bg-card/35 px-6 text-center"><div><span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-primary/10 text-primary"><Icon className="h-5 w-5" /></span><strong className="mt-3 block text-sm">{title}</strong><p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">{description}</p></div></div>;
 }

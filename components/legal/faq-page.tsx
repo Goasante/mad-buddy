@@ -1,99 +1,94 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { BrandSymbol } from "@/components/brand/brand-symbol";
-import { Button } from "@/components/ui/button";
+import { PublicPageShell } from "@/components/front-door/public-shell";
 
 const faqItems = [
   {
     question: "What is a Muddy?",
     answer:
-      "A Muddy is a friend you have mutually approved on Mad Buddy. You both need to accept before either of you can appear nearby."
+      "A Muddy is a friend you have both approved on Mad Buddy. Muddy proximity is mutual and follows each person's visibility settings."
   },
   {
-    question: "Can friends see my exact location?",
+    question: "Can other people see my exact location?",
     answer:
-      "No. Friends see privacy-safe proximity levels and your profile, not coordinates, maps, street addresses, direction of travel, or exact distance."
+      "No. Mad Buddy does not show another user your exact GPS coordinates, street address, live map position, exact numerical distance, or location history through the ordinary proximity experience."
   },
   {
-    question: "Do both people have to approve?",
-    answer: "Yes. Mad Buddy requires mutual approval before anyone appears in a nearby list."
-  },
-  {
-    question: "What's the difference between a Wave and a Plan?",
+    question: "How is Linkr different from Muddy proximity?",
     answer:
-      "A Wave is a quick signal that you're open to connect, when it's mutual, a chat opens. A Plan is a real event you create and invite Muddies to, with simple RSVPs."
+      "Muddy proximity is for approved friends. Linkr is discovery you deliberately switch on when you want to meet someone new. While Linkr is enabled, eligible people who are not yet Muddies may receive a privacy-safe approximate proximity signal as part of discovery."
+  },
+  {
+    question: "Do both people have to approve before becoming Muddies?",
+    answer:
+      "Yes. A friendship becomes a Muddy connection only after mutual approval. Linkr discovery does not make someone a Muddy automatically."
   },
   {
     question: "Can I stop appearing nearby?",
     answer:
-      "Yes. Pause your visibility from the dashboard or turn on Ghost Mode in settings whenever you want more privacy."
+      "Yes. You can change your visibility controls, use Ghost Mode, and stop a Linkr session when you no longer want discovery active."
   },
   {
-    question: "What does Ghost Mode do?",
+    question: "Does Mad Buddy show a live map?",
     answer:
-      "Ghost Mode pauses your visibility. Approved friends will not see your glow while it is on. You can turn it off again at any time."
+      "No. The proximity experience is designed around broad signals rather than a live map, map pin, direction of travel, or exact distance."
   },
   {
-    question: "Does Mad Buddy show a map?",
-    answer: "No. Mad Buddy uses glowing profile cards and proximity levels, there is no map view."
-  },
-  {
-    question: "Can I delete my data?",
+    question: "What is Safe Arrival?",
     answer:
-      "Yes. You can delete your account from settings, which removes your profile and associated data. Production deletion behaviour should be verified against your live deployment."
+      "Safe Arrival is a safety-focused check-in experience that helps chosen people know whether you arrived, without turning them into live location trackers."
+  },
+  {
+    question: "Can I block or report someone?",
+    answer:
+      "Yes. Mad Buddy includes blocking and reporting controls. Blocking is intended to remove the connection and interaction paths between the people involved."
+  },
+  {
+    question: "Can I delete my account data?",
+    answer:
+      "Mad Buddy provides account deletion from Settings. The Privacy Policy explains the current deletion and limited-retention rules in more detail."
   },
   {
     question: "Is Mad Buddy free?",
     answer:
-      "Yes. Mad Buddy has a free plan with nearby glow, up to 25 approved friends, and Ghost Mode. Paid plans add more friends and extras, see Pricing for details."
+      "Mad Buddy has a Free plan as well as Buddy Plus and Buddy Pro. Features, limits, current prices, and any eligible trial are shown on Pricing so the public explanation stays aligned with the product's billing authority."
   }
-];
+] as const;
 
 export function FaqPage() {
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border/70 px-4 py-4 sm:px-6">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <Link href="/" className="focus-ring flex items-center gap-3 font-semibold" aria-label="Mad Buddy home">
-            <BrandSymbol className="h-9 w-9" priority />
-            Mad Buddy
-          </Link>
-          <Button type="button" variant="outline" size="sm" asChild>
-            <Link href="/">Back home</Link>
-          </Button>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">FAQ</p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Common questions</h1>
-        <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground">
-          Everything you need to know about how Mad Buddy keeps proximity private, mutual, and on
-          your terms.
+    <PublicPageShell>
+      <div className="mx-auto w-full max-w-3xl px-4 py-14 sm:px-6 sm:py-20">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#A45A18]">FAQ</p>
+        <h1 className="mt-3 text-4xl font-semibold tracking-[-0.04em] text-[#4E0401] sm:text-5xl dark:text-[#FFF8F1]">
+          Common questions, plainly answered.
+        </h1>
+        <p className="mt-5 max-w-2xl text-base leading-8 text-[#4E0401]/65 dark:text-[#FFF8F1]/65">
+          The short version of how proximity, discovery, safety, access, and account control work before you decide to join.
         </p>
 
-        <dl className="mt-10 space-y-3">
+        <dl className="mt-12 divide-y divide-[#4E0401]/10 border-y border-[#4E0401]/10 dark:divide-white/10 dark:border-white/10">
           {faqItems.map((item) => (
-            <div key={item.question} className="rounded-xl border border-border/70 bg-card/50 px-5 py-4">
-              <dt className="text-base font-semibold">{item.question}</dt>
-              <dd className="mt-2 text-sm leading-6 text-muted-foreground">{item.answer}</dd>
+            <div key={item.question} className="py-6 first:pt-0 last:pb-0">
+              <dt className="text-base font-semibold text-[#4E0401] dark:text-[#FFF8F1]">{item.question}</dt>
+              <dd className="mt-2 text-sm leading-7 text-[#4E0401]/62 dark:text-[#FFF8F1]/62">{item.answer}</dd>
             </div>
           ))}
         </dl>
 
-        <div className="mt-12 rounded-2xl border border-border/70 bg-card/50 p-6 text-center">
-          <p className="text-lg font-semibold">Still have questions?</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Create a free account and see how it works, or reach out from your settings once you&apos;re in.
+        <section className="mt-14 border-t border-[#4E0401]/10 pt-8 dark:border-white/10">
+          <h2 className="text-xl font-semibold tracking-[-0.02em] text-[#4E0401] dark:text-[#FFF8F1]">Need help with your own account?</h2>
+          <p className="mt-2 max-w-xl text-sm leading-7 text-[#4E0401]/62 dark:text-[#FFF8F1]/62">
+            FAQ explains the product. Support is for account access, verification, billing, privacy requests, and problems that need a real next step.
           </p>
-          <Button type="button" className="mt-5" asChild>
-            <Link href="/signup">
-              Get started
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
-          </Button>
-        </div>
+          <Link
+            href="/support"
+            className="focus-ring mt-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-[#4E0401] px-5 text-sm font-semibold text-white dark:bg-[#E88C2B] dark:text-[#2A120A]"
+          >
+            Go to Support <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        </section>
       </div>
-    </main>
+    </PublicPageShell>
   );
 }

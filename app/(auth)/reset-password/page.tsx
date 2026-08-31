@@ -10,7 +10,7 @@ export default function ResetPasswordPage() {
       footer={
         <>
           Need a new link?{" "}
-          <Link href="/forgot-password" className="font-semibold text-foreground hover:text-accent">
+          <Link href="/forgot-password" className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-foreground hover:text-accent">
             Request reset
           </Link>
         </>

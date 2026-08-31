@@ -21,6 +21,7 @@ export type JobStatus =
 export type JobType =
   // The six that batches 5-13 left un-run.
   | "safe_arrival.unconfirmed_alert"
+  | "safe_arrival.lifecycle_notification"
   | "upfor.announce_started"
   | "media.strip_exif"
   | "media.cleanup_orphan_chat"
