@@ -70,6 +70,15 @@
     "vitest": "^3.2.7"
   },
   "overrides": {
-    "postcss": "$postcss"
+    "postcss": "$postcss",
+    "gaxios": {
+      "uuid": "11.1.1"
+    },
+    "google-gax": {
+      "uuid": "11.1.1"
+    },
+    "teeny-request": {
+      "uuid": "11.1.1"
+    }
   }
 }
