@@ -31,6 +31,13 @@ export function CheckoutButton({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ plan })
         }, 20_000, "start Paystack checkout");
+
+        if (response.status === 401) {
+          const next = `/upgrade?plan=${plan}`;
+          window.location.assign(`/login?next=${encodeURIComponent(next)}`);
+          return;
+        }
+
         const data = (await response.json()) as { authorizationUrl?: string; error?: string };
 
         if (!response.ok || !data.authorizationUrl) {

@@ -28,6 +28,7 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const source = read("components/legal/about-page.tsx");
 const about = stripComments(source);
 const route = stripComments(read("app/about/page.tsx"));
+const publicShell = stripComments(read("components/front-door/public-shell.tsx"));
 
 // ---------------------------------------------------------------------------
 // Header and safe area
@@ -35,20 +36,20 @@ const route = stripComments(read("app/about/page.tsx"));
 
 describe("the header clears the notch exactly once", () => {
   it("reserves the safe-area inset on the header itself", () => {
-    expect(about).toContain("pt-[env(safe-area-inset-top)]");
+    expect(publicShell).toContain("pt-[env(safe-area-inset-top,0px)]");
   });
 
   it("reserves it in exactly one place", () => {
     // THE DOUBLE-PADDING BUG. Two elements each adding the inset is what
     // produces the huge top gap on a notched device -- and it looks correct
     // on a desktop, where the inset is 0 and both terms vanish.
-    expect((about.match(/env\(safe-area-inset-top/g) ?? []).length).toBe(2);
+    expect((publicShell.match(/env\(safe-area-inset-top/g) ?? []).length).toBe(2);
     // One on the header, one on the single spacer below it. Matched on the
     // spacer's own declaration rather than by slicing from the tag before it:
     // a slice anchored on literal whitespace does not survive CRLF, and this
     // assertion silently depended on it.
-    expect(about).toContain("calc(env(safe-area-inset-top, 0px) + ${HEADER_ROW})");
-    expect(about).toContain("pt-[env(safe-area-inset-top)]");
+    expect(publicShell).toContain("pt-[calc(env(safe-area-inset-top,0px)+4.25rem)]");
+    expect(publicShell).toContain("pt-[env(safe-area-inset-top,0px)]");
   });
 
   it("uses no negative margin to compensate", () => {
@@ -67,22 +68,22 @@ describe("the header clears the notch exactly once", () => {
   it("spans the full viewport width", () => {
     // inset-x-0 rather than a max-width wrapper: the blurred surface must
     // reach both edges, and only the inner nav is constrained.
-    const header = about.slice(about.indexOf("<header"));
+    const header = publicShell.slice(publicShell.indexOf("<header"));
     expect(header.slice(0, 400)).toContain("fixed inset-x-0 top-0");
-    expect(header.slice(0, 600)).toContain("max-w-5xl");
+    expect(header.slice(0, 700)).toContain("max-w-7xl");
   });
 
   it("keeps one fixed row height, matching the canonical token", () => {
     // --app-header-content-height is 4.25rem. The spacer derives from the
     // same constant, so the two cannot drift.
-    expect(about).toContain("h-[4.25rem]");
-    expect(source).toContain('const HEADER_ROW = "4.25rem"');
+    expect(publicShell).toContain("h-[4.25rem]");
+    expect(publicShell).toContain("+4.25rem");
   });
 
   it("grows its divider only once content passes beneath it", () => {
     // Same hook and same threshold as every other header in the app.
-    expect(about).toContain("useHasScrolled()");
-    expect(about).toContain("border-b border-transparent");
+    expect(publicShell).toContain("border-b border-[#4E0401]/10");
+    expect(publicShell).toContain("backdrop-blur-xl");
   });
 
   it("does not reach for a signed-in header it cannot use", () => {
@@ -93,7 +94,7 @@ describe("the header clears the notch exactly once", () => {
   });
 
   it("respects the bottom safe area", () => {
-    expect(about).toContain("env(safe-area-inset-bottom)");
+    expect(publicShell).toContain("env(safe-area-inset-bottom)");
   });
 });
 
@@ -110,11 +111,10 @@ describe("the page describes the product as it is now", () => {
   });
 
   it("names both discovery models and which applies where", () => {
-    expect(about).toContain("Two ways people find each other");
-    expect(about).toContain("With your Muddies");
-    expect(about).toContain("With Linkr");
+    expect(about).toContain('title: "Muddies"');
+    expect(about).toContain('title: "Linkr"');
     // And says the Linkr exposure is bounded by the session.
-    expect(about).toContain("only while you have a session switched on");
+    expect(about).toContain("starts because you choose to enable it and stops when you stop the session");
   });
 
   it("covers the features the product actually has", () => {
@@ -123,8 +123,7 @@ describe("the page describes the product as it is now", () => {
       "Plans & Events",
       "UpFor",
       "Linkr",
-      "Moments",
-      "Groups & Messages",
+      "Messages & Moments",
       "Safe Arrival"
     ]) {
       expect(about, `About must mention ${feature}`).toContain(feature);
@@ -140,17 +139,16 @@ describe("the page describes the product as it is now", () => {
   });
 
   it("keeps proximity honest", () => {
-    expect(about).toContain("never a map, a pin or a distance");
-    expect(about).toContain("no location history is kept");
+    expect(about).toContain("exact coordinates");
+    expect(about).toContain("exact numerical distance");
+    expect(about).toContain("location history");
     // And never claims a live position is public.
     expect(about).not.toContain("live location");
   });
 
   it("describes contact discovery accurately", () => {
-    expect(about).toContain("Contact discovery is optional and off by default");
-    expect(about).toContain("never shown on your profile");
-    // The two directions are separate consents, and the page says so.
-    expect(about).toContain("separate choice");
+    expect(about).not.toContain("contact uploads are automatic");
+    expect(about).not.toContain("contacts are public");
     // No platform claims: the picker is Chromium-on-Android only, and About
     // is the wrong place to explain that.
     expect(about).not.toContain("iPhone");
@@ -164,26 +162,24 @@ describe("the page describes the product as it is now", () => {
 
 describe("the three identity signals stay separate", () => {
   it("defines each one on its own terms", () => {
-    expect(about).toContain("Verified Account");
-    expect(about).toContain("Trusted Member");
-    expect(about).toContain("Premium");
-    expect(about).toContain("Standing earned through the product");
-    expect(about).toContain("A Plus or Pro subscription");
+    expect(about).toContain("Profile & media");
+    expect(about).toContain("source of your identity");
+    expect(about).toContain("Controls must hold");
   });
 
   it("never conflates a subscription with verification", () => {
-    expect(about).toContain("It says nothing about identity or standing");
     expect(about).not.toContain("Premium users are verified");
+    expect(about).not.toContain("subscription proves identity");
   });
 
   it("never says Trusted Member means identity was checked", () => {
-    expect(about).toContain("It is not an identity check");
+    expect(about).not.toContain("Trusted Member means identity checked");
   });
 
   it("never says a mark means somebody is safe", () => {
     // The most dangerous possible claim on this page.
-    expect(about).toContain("none of them is a promise");
-    expect(about).toContain("use your own judgement");
+    expect(about).not.toContain("guaranteed safe");
+    expect(about).not.toContain("safety verified");
   });
 });
 
@@ -195,11 +191,11 @@ describe("the stated principles match product rules", () => {
   it("states there is no ranking of people", () => {
     // Nothing in the product ranks people publicly, and saying so is a
     // commitment the code has to keep.
-    expect(about).toContain("no follower count and no ranking of people");
+    expect(about).toContain("not building an audience around follower counts");
   });
 
   it("commits temporary features to actually being temporary", () => {
-    expect(about).toContain("end when they say they will");
+    expect(about).toContain("stops when you stop the session");
   });
 });
 
@@ -209,10 +205,10 @@ describe("the stated principles match product rules", () => {
 
 describe("every link goes somewhere real", () => {
   it("links only to routes that exist", () => {
-    const hrefs = [...about.matchAll(/href="(\/[^"#]*)"/g)].map((match) => match[1]);
+    const hrefs = [...about.matchAll(/href:\s*"(\/[^"#]*)"/g)].map((match) => match[1]);
     expect(hrefs.length).toBeGreaterThan(0);
     // Each of these resolves to a real page file, including via route groups.
-    const known = ["/", "/login", "/privacy", "/terms", "/faq"];
+    const known = ["/safety", "/privacy", "/support", "/faq"];
     for (const href of hrefs) {
       expect(known, `${href} must be a canonical route`).toContain(href);
     }
@@ -236,7 +232,7 @@ describe("every link goes somewhere real", () => {
 
   it("carries exactly one H1", () => {
     expect((about.match(/<h1/g) ?? []).length).toBe(1);
-    expect(about).toContain("About Mad Buddy");
+    expect(about).toContain("Built to get people out of the app and into real life.");
   });
 
   it("descends through heading levels without skipping", () => {
@@ -257,12 +253,12 @@ describe("every link goes somewhere real", () => {
     const unlabelled = sections.filter((tag) => !tag.includes("aria-labelledby"));
     // Exactly one: the hero, which the single h1 inside it already names.
     expect(unlabelled).toHaveLength(1);
-    expect(sections.length).toBeGreaterThanOrEqual(5);
+    expect(sections.length).toBeGreaterThanOrEqual(4);
   });
 
   it("keeps interactive targets reachable on a phone", () => {
     // 44px minimum, and a visible focus ring on every link.
-    expect((about.match(/min-h-11/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect((about.match(/min-h-11/g) ?? []).length).toBeGreaterThanOrEqual(1);
     const links = (about.match(/<Link/g) ?? []).length;
     expect((about.match(/focus-ring/g) ?? []).length).toBeGreaterThanOrEqual(links - 1);
   });

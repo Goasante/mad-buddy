@@ -50,6 +50,8 @@ export type CreateNotificationInput = {
     | `support_user_reply:${string}`;
   title: string;
   message: string;
+  /** Stable semantic identity for crash-safe worker retries. */
+  dedupeKey?: string;
 };
 
 export async function createNotification(
@@ -61,7 +63,8 @@ export async function createNotification(
     type: input.type,
     title: input.title,
     message: input.message,
-    is_read: false
+    is_read: false,
+    dedupe_key: input.dedupeKey ?? null
   });
 }
 
@@ -166,12 +169,21 @@ export async function deliverNotification(
   }
 
   if (shouldPersistInApp) {
-    await createNotification(supabase, {
+    const persisted = await createNotification(supabase, {
       userId: input.userId,
       type: input.type,
       title: input.title,
-      message: input.message
+      message: input.message,
+      dedupeKey: input.dedupeKey
     });
+    if (persisted.error) {
+      // A retry after persistence is success, not another push. The semantic
+      // key is per recipient/event, so it never suppresses somebody else.
+      if (input.dedupeKey && persisted.error.code === "23505") {
+        return { inApp: true, push: false, reason: "duplicate" };
+      }
+      throw persisted.error;
+    }
   }
 
   if (decision.push) {

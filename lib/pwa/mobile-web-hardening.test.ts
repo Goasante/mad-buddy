@@ -21,7 +21,7 @@ describe("mobile web layout hardening", () => {
 
   it("uses dynamic mobile viewport units for authentication and onboarding", () => {
     for (const path of [
-      "components/auth/auth-layout.tsx",
+      "components/front-door/auth-shell.tsx",
       "components/onboarding/onboarding-flow.tsx",
       "app/(admin-auth)/admin/login/page.tsx"
     ]) {

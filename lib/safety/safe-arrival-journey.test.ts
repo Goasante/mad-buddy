@@ -295,31 +295,33 @@ describe("watcher notification set", () => {
   });
 
   it("is the single copy source for traveller actions AND the overdue job", () => {
-    expect(stripComments(read("app/(app)/safe-arrival-actions.ts"))).toContain("safeArrivalNotification");
-    expect(stripComments(read("lib/jobs/handlers.ts"))).toContain('safeArrivalNotification("overdue"');
+    const delivery = stripComments(read("lib/safety/safe-arrival-notification.ts"));
+    expect(delivery).toContain("safeArrivalNotification");
+    expect(stripComments(read("lib/jobs/handlers.ts"))).toContain("deliverSafeArrivalNotificationIntent");
   });
 });
 
 describe("notification delivery is server-side and deep-linkable", () => {
   const actions = stripComments(read("app/(app)/safe-arrival-actions.ts"));
+  const migration = stripComments(read("supabase/migrations/20260830223000_safe_arrival_s1_authority.sql"));
+  const delivery = stripComments(read("lib/safety/safe-arrival-notification.ts"));
 
   it("fans out to every watcher who has not declined", () => {
-    expect(actions).toContain('.neq("acknowledgement_status", "declined")');
-    expect(actions).toContain("deliverNotification");
+    expect(migration).toContain("c.acknowledgement_status<>'declined'");
+    expect(migration).toContain("enqueue_safe_arrival_notifications");
   });
 
   it("stamps the session id so a tap opens the exact journey", () => {
-    expect(actions).toContain("type: `safe_arrival:${sessionId}`");
+    expect(delivery).toContain("type: `safe_arrival:${intent.sessionId}`");
     // The resolver turns that into the per-journey URL rather than the root.
     const destination = read("lib/notifications/destination.ts");
     expect(destination).toContain('withQuery("/safe-arrival", "session", entityId)');
   });
 
-  it("creates in-app rows in the request path, so correctness never rides on Realtime", () => {
-    const notify = actions.slice(actions.indexOf("async function notifyWatchers"));
-    const body = notify.slice(0, notify.indexOf("\n}"));
-    expect(body).toContain("await Promise.all");
-    expect(body).not.toContain("after(");
+  it("persists durable per-recipient intents in the lifecycle transaction", () => {
+    expect(migration).toContain("insert into public.jobs");
+    expect(migration).toContain("v_recipient");
+    expect(migration).toContain("idempotency_key");
   });
 
   it("does not build a second notification system", () => {
@@ -330,20 +332,16 @@ describe("notification delivery is server-side and deep-linkable", () => {
   });
 
   it("notifies arrival exactly once, guarded on a real status transition", () => {
-    const confirm = actions.slice(actions.indexOf("export async function confirmSafeArrivalAction"));
-    const body = confirm.slice(0, confirm.indexOf("\n// ---"));
-    // The guarded update returns no rows on a duplicate confirm, and the
-    // notification sits after that early return.
-    expect(body).toContain('.in("status", ["active", "grace_period", "extended", "unconfirmed"])');
-    expect(body.indexOf("if (!updated?.length)")).toBeLessThan(body.indexOf("notifyWatchers"));
+    expect(actions).toContain('action: "arrive"');
+    expect(migration).toContain("where id=p_session_id for update");
+    expect(migration).toContain("if v.status='completed' then return query");
+    expect(migration).toContain("perform public.enqueue_safe_arrival_notifications(v.id,v_event");
   });
 
-  it("rate limits repeated extension notifications without dropping the new time", () => {
-    const extend = actions.slice(actions.indexOf("export async function extendSafeArrivalAction"));
-    const body = extend.slice(0, extend.indexOf("\n// ---"));
-    // The write is unconditional; only the notify is behind the cooldown.
-    expect(body.indexOf("expected_arrival_at: nextArrivalIso")).toBeLessThan(body.indexOf("withinCooldown"));
-    expect(body).toContain("if (!withinCooldown)");
+  it("serializes repeated extensions and keys each persisted new time", () => {
+    expect(actions).toContain('action: "extend"');
+    expect(migration).toContain("greatest(v.expected_arrival_at,now())+make_interval");
+    expect(migration).toContain("case when v_event='extended' then v_next::text");
   });
 });
 
@@ -639,9 +637,12 @@ describe("no location anywhere in the feature surface", () => {
   it("logs no destination text, note or location in analytics", () => {
     const actions = read("app/(app)/safe-arrival-actions.ts");
     // Anchored on the CALL, not the import of the same name, and every call is
-    // checked rather than just the first.
+    // checked rather than just the first. The threshold only has to make the
+    // loop below non-vacuous: the feature records one event, safe_arrival_started,
+    // and asserting two would be asserting an analytics event that deliberately
+    // does not exist. What matters is that EVERY call is inspected.
     const calls = [...actions.matchAll(/recordProductEvent\(admin, \{[\s\S]*?\}\);/g)].map((match) => match[0]);
-    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls.length).toBeGreaterThanOrEqual(1);
     for (const call of calls) {
       expect(call).toContain("resourceId: sessionId");
       expect(call).not.toContain("destinationLabel");

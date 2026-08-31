@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { recordProductEvent } from "@/lib/analytics/track";
 import { deliverNotification } from "@/lib/notifications/server";
-import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import {
@@ -14,12 +13,8 @@ import {
 } from "@/lib/safety/safe-arrival-service";
 import type { SafeArrivalJourney } from "@/lib/safety/safe-arrival-service";
 import {
-  canTransitionSafeArrival,
-  canTravellerAct,
-  extendedArrivalMs,
   isTerminalSafeArrivalStatus,
   safeArrivalLimitsFor,
-  safeArrivalNotification,
   validateContactCount,
   validateDestinationLabel,
   validateExpectedArrival,
@@ -31,6 +26,7 @@ import type { SafeArrivalStatus } from "@/lib/supabase/database.types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { transitionSafeArrival } from "@/lib/safety/safe-arrival-authority";
 
 /**
  * Deliberately NOT exported: a `"use server"` module must never export a type.
@@ -74,61 +70,6 @@ async function getAuthedUserId() {
 async function travellerName(admin: Admin, userId: string) {
   const { data } = await admin.from("profiles").select("full_name").eq("user_id", userId).maybeSingle();
   return data?.full_name?.trim() || "A Muddy";
-}
-
-/**
- * Times in notifications are rendered in the product's default recipient
- * timezone, not the server's. On Vercel the runtime is UTC, so
- * `toLocaleTimeString()` with no zone would quietly state the wrong arrival
- * time for anyone outside it.
- */
-function arrivalTimeLabel(iso: string): string {
-  const ms = Date.parse(iso);
-  if (!Number.isFinite(ms)) return "";
-  return new Date(ms).toLocaleTimeString("en-GB", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZone: DEFAULT_RECIPIENT_TIMEZONE
-  });
-}
-
-/**
- * Fans a lifecycle notification out to every watcher who has not declined.
- *
- * In-app rows are written IN the response path on purpose: a Safe Arrival alert
- * is the promise the feature makes, so it must not depend on post-response work
- * surviving. (Push transport is separately deferred inside
- * `deliverNotification`.) Realtime is never involved — a watcher who reloads
- * still finds the notification and the journey.
- */
-async function notifyWatchers(
-  admin: Admin,
-  sessionId: string,
-  notification: { title: string; message: string }
-) {
-  const { data: contacts } = await admin
-    .from("safe_arrival_contacts")
-    .select("contact_user_id")
-    .eq("session_id", sessionId)
-    .neq("acknowledgement_status", "declined");
-
-  await Promise.all(
-    (contacts ?? []).map((contact) =>
-      // Safety notifications are critical: they intentionally bypass category
-      // preferences, quiet hours, Exam Mode and the daily budget.
-      deliverNotification(admin, {
-        userId: contact.contact_user_id,
-        priority: "critical",
-        // `safe_arrival:<sessionId>` is what the notification destination
-        // resolver turns into /safe-arrival?session=<id>, so a tap opens THIS
-        // journey rather than the feature root.
-        type: `safe_arrival:${sessionId}`,
-        title: notification.title,
-        message: notification.message
-      })
-    )
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -195,7 +136,7 @@ export async function createSafeArrivalAction(input: unknown): Promise<SafeArriv
   // One transaction creates the journey, its watcher rows and the audit event.
   // A duplicate submit within two minutes replays the same journey id instead of
   // starting a second one, so a double tap or a retried request is harmless.
-  const { data: sessionId, error } = await admin.rpc("start_safe_arrival", {
+  const { data: started, error } = await admin.rpc("start_safe_arrival", {
     p_traveller_id: userId,
     p_destination_label: parsed.data.destinationLabel.trim(),
     p_expected_arrival_at: new Date(expectedMs).toISOString(),
@@ -205,6 +146,8 @@ export async function createSafeArrivalAction(input: unknown): Promise<SafeArriv
     p_max_active: limits.maxActiveSessions
   });
 
+  const startResult = started?.[0];
+  const sessionId = startResult?.session_id;
   if (error || !sessionId) {
     if (error?.message?.includes("safe_arrival_active_limit")) {
       return {
@@ -218,28 +161,19 @@ export async function createSafeArrivalAction(input: unknown): Promise<SafeArriv
     return { ok: false, message: "Couldn't start Safe Arrival. Try again." };
   }
 
-  {
+  if (!startResult.replayed) {
     const { grantAchievement } = await import("@/lib/engagement/achievements");
     await grantAchievement(admin, userId, "trusted_contact");
+
+    // Privacy-safe analytics is a first-start side effect, never replayed.
+    await recordProductEvent(admin, {
+      eventName: "safe_arrival_started",
+      actorId: userId,
+      resourceType: "safe_arrival_session",
+      resourceId: sessionId,
+      featureKey: "safe_arrival"
+    });
   }
-
-  const name = await travellerName(admin, userId);
-  const notification = safeArrivalNotification("started", {
-    travellerName: name,
-    destinationLabel: parsed.data.destinationLabel.trim(),
-    timeLabel: arrivalTimeLabel(new Date(expectedMs).toISOString())
-  });
-  await notifyWatchers(admin, sessionId, notification);
-
-  // Privacy-safe analytics: the journey id and the watcher count, never the
-  // destination text, the note, or anything derived from location.
-  await recordProductEvent(admin, {
-    eventName: "safe_arrival_started",
-    actorId: userId,
-    resourceType: "safe_arrival_session",
-    resourceId: sessionId,
-    featureKey: "safe_arrival"
-  });
 
   const journey = await loadSafeArrivalJourneyById(admin, userId, sessionId);
   return {
@@ -337,70 +271,20 @@ export async function confirmSafeArrivalAction(sessionId: string): Promise<SafeA
   if (!userId) return { ok: false, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
-  const { data: session } = await admin
-    .from("safe_arrival_sessions")
-    .select("id, traveller_id, status")
-    .eq("id", sessionId)
-    .maybeSingle();
-  if (!session) return { ok: false, message: "Journey not found." };
-  if (session.traveller_id !== userId) {
-    return { ok: false, message: "Only the traveller can confirm arrival." };
-  }
-  if (!canTravellerAct(session.status)) return { ok: false, message: "This journey is already closed." };
-  if (!canTransitionSafeArrival(session.status, "completed")) {
-    return { ok: false, message: "This journey can't be confirmed." };
+  try {
+    const result = await transitionSafeArrival(admin, { sessionId, actorId: userId, action: "arrive" });
+    const journey = await loadSafeArrivalJourneyById(admin, userId, sessionId);
+    if (result.status !== "completed") return { ok: false, message: "This journey is already closed.", sessionId, journey };
+    return { ok: true, message: "You're marked as arrived.", sessionId, journey };
+  } catch {
+    return { ok: false, message: "Couldn't confirm arrival. Try again." };
   }
 
-  // Guarded update: a duplicate confirm from another device updates no row and
-  // therefore sends no second round of notifications.
-  const { data: updated } = await admin
-    .from("safe_arrival_sessions")
-    .update({ status: "completed", confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq("id", sessionId)
-    .eq("traveller_id", userId)
-    .in("status", ["active", "grace_period", "extended", "unconfirmed"])
-    .select("id");
-
-  if (!updated?.length) {
-    return {
-      ok: true,
-      message: "You're marked as arrived.",
-      sessionId,
-      journey: await loadSafeArrivalJourneyById(admin, userId, sessionId)
-    };
-  }
-
-  await recordSafeArrivalEvent(admin, { sessionId, eventType: "confirmed", createdBy: userId });
-  {
-    const { grantSafeTravellerAchievements } = await import("@/lib/engagement/achievements");
-    await grantSafeTravellerAchievements(admin, userId);
-  }
-
-  const name = await travellerName(admin, userId);
-  await notifyWatchers(admin, sessionId, safeArrivalNotification("arrived", { travellerName: name }));
-
-  await recordProductEvent(admin, {
-    eventName: "safe_arrival_completed",
-    actorId: userId,
-    resourceType: "safe_arrival_session",
-    resourceId: sessionId,
-    featureKey: "safe_arrival"
-  });
-
-  return {
-    ok: true,
-    message: "You're marked as arrived.",
-    sessionId,
-    journey: await loadSafeArrivalJourneyById(admin, userId, sessionId)
-  };
 }
 
 // ---------------------------------------------------------------------------
 // Extend
 // ---------------------------------------------------------------------------
-
-/** Repeated small extensions must not spam watchers with a push each time. */
-const EXTENSION_NOTIFICATION_COOLDOWN_MS = 5 * 60 * 1000;
 
 export async function extendSafeArrivalAction(
   sessionId: string,
@@ -417,69 +301,15 @@ export async function extendSafeArrivalAction(
   if (!userId) return { ok: false, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
-  const { data: session } = await admin
-    .from("safe_arrival_sessions")
-    .select("id, traveller_id, status, expected_arrival_at")
-    .eq("id", sessionId)
-    .maybeSingle();
-  if (!session) return { ok: false, message: "Journey not found." };
-  if (session.traveller_id !== userId) return { ok: false, message: "Only the traveller can extend." };
-  if (!canTravellerAct(session.status)) return { ok: false, message: "This journey is already closed." };
-
-  const nextArrivalMs = extendedArrivalMs(Date.parse(session.expected_arrival_at), extraMinutes, Date.now());
-  const nextArrivalIso = new Date(nextArrivalMs).toISOString();
-
-  const { error } = await admin
-    .from("safe_arrival_sessions")
-    .update({
-      expected_arrival_at: nextArrivalIso,
-      status: "extended",
-      // Clear the alert latch so a LATER overdue can still alert. Without this,
-      // extending a journey that had already alerted would silence it forever.
-      unconfirmed_notified_at: null,
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", sessionId)
-    .eq("traveller_id", userId);
-  if (error) return { ok: false, message: "Couldn't extend the journey." };
-
-  // Read the previous extension BEFORE writing this one, so the cooldown
-  // compares against the last notified extension rather than itself.
-  const { data: priorExtensions } = await admin
-    .from("safe_arrival_events")
-    .select("created_at")
-    .eq("session_id", sessionId)
-    .eq("event_type", "extended")
-    .order("created_at", { ascending: false })
-    .limit(1);
-  const lastExtendedMs = priorExtensions?.[0]?.created_at ? Date.parse(priorExtensions[0].created_at) : null;
-
-  await recordSafeArrivalEvent(admin, {
-    sessionId,
-    eventType: "extended",
-    createdBy: userId,
-    metadata: { extraMinutes }
-  });
-
-  // The new time is always persisted and always visible on the watcher's
-  // screen; only the notification is rate limited.
-  const withinCooldown =
-    lastExtendedMs !== null && Date.now() - lastExtendedMs < EXTENSION_NOTIFICATION_COOLDOWN_MS;
-  if (!withinCooldown) {
-    const name = await travellerName(admin, userId);
-    await notifyWatchers(
-      admin,
-      sessionId,
-      safeArrivalNotification("extended", { travellerName: name, timeLabel: arrivalTimeLabel(nextArrivalIso) })
-    );
+  try {
+    const result = await transitionSafeArrival(admin, { sessionId, actorId: userId, action: "extend", extraMinutes });
+    const journey = await loadSafeArrivalJourneyById(admin, userId, sessionId);
+    if (!result.changed) return { ok: false, message: "This journey is already closed.", sessionId, journey };
+    return { ok: true, message: `Extended by ${extraMinutes} minutes.`, sessionId, journey };
+  } catch {
+    return { ok: false, message: "Couldn't extend the journey." };
   }
 
-  return {
-    ok: true,
-    message: `Extended by ${extraMinutes} minutes.`,
-    sessionId,
-    journey: await loadSafeArrivalJourneyById(admin, userId, sessionId)
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -495,35 +325,15 @@ export async function cancelSafeArrivalAction(sessionId: string): Promise<SafeAr
   if (!userId) return { ok: false, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
-  const { data: session } = await admin
-    .from("safe_arrival_sessions")
-    .select("id, traveller_id, status")
-    .eq("id", sessionId)
-    .maybeSingle();
-  if (!session) return { ok: false, message: "Journey not found." };
-  if (session.traveller_id !== userId) return { ok: false, message: "Only the traveller can cancel." };
-  if (!canTransitionSafeArrival(session.status, "cancelled")) {
-    return { ok: false, message: "This journey is already closed." };
+  try {
+    const result = await transitionSafeArrival(admin, { sessionId, actorId: userId, action: "cancel" });
+    const journey = await loadSafeArrivalJourneyById(admin, userId, sessionId);
+    if (result.status !== "cancelled") return { ok: false, message: "This journey is already closed.", sessionId, journey };
+    return { ok: true, message: "Safe Arrival ended.", sessionId, journey };
+  } catch {
+    return { ok: false, message: "Couldn't end Safe Arrival." };
   }
 
-  // Guarded so a duplicate cancel updates no row and sends no second round.
-  const { data: cancelled } = await admin
-    .from("safe_arrival_sessions")
-    .update({ status: "cancelled", cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq("id", sessionId)
-    .eq("traveller_id", userId)
-    .in("status", ["draft", "pending_acknowledgement", "active", "grace_period", "extended", "unconfirmed"])
-    .select("id");
-
-  await recordSafeArrivalEvent(admin, { sessionId, eventType: "cancelled", createdBy: userId });
-
-  // Watchers must know they can stand down.
-  if (cancelled?.length) {
-    const name = await travellerName(admin, userId);
-    await notifyWatchers(admin, sessionId, safeArrivalNotification("cancelled", { travellerName: name }));
-  }
-
-  return { ok: true, message: "Safe Arrival ended.", sessionId, journey: null };
 }
 
 // ---------------------------------------------------------------------------

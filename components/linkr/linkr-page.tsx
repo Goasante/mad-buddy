@@ -766,7 +766,7 @@ function LinkrPageContent({
               type="button"
               className="linkr-link"
               onClick={() =>
-                router.push(`/safety?report=${encodeURIComponent(current.userId)}` as Route)
+                router.push(`/safety-center?report=${encodeURIComponent(current.userId)}` as Route)
               }
             >
               <Flag aria-hidden /> Report
