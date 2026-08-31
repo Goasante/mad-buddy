@@ -200,7 +200,7 @@ export function SafeArrivalSetup({
                   id={`${formId}-destination`}
                   value={destination}
                   onChange={(event) => setDestination(event.target.value)}
-                  placeholder="Home, or a place name"
+                  placeholder="Home, Campus, East Legon, or Ama's place"
                   className="pl-9 pr-9"
                   autoComplete="off"
                   enterKeyHint="next"
@@ -217,7 +217,7 @@ export function SafeArrivalSetup({
                 ) : null}
               </div>
               <p className="mt-1.5 text-xs text-muted-foreground">
-                A label only. Your live location is never shared.
+                Use a general, useful label. An exact address and live location are never required.
               </p>
             </div>
 
