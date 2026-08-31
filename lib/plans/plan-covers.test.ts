@@ -232,8 +232,13 @@ describe("plan cover data flow", () => {
   });
 
   it("offers a picker rather than inferring the category", () => {
+    /* The picker is still a picker; only the visible slice shrank. All fifteen
+     * chips wrapped across several rows and became the tallest thing in the
+     * composer, so six show and the rest sit behind "More" -- reduced on
+     * screen, never removed from the model or inferred from the title. */
     const page = read("components/plans/plans-page.tsx");
-    expect(page).toContain("PLAN_CATEGORIES.map");
+    expect(page).toContain("shownCategories.map");
+    expect(page).toContain("if (showAllCategories) return PLAN_CATEGORIES;");
     expect(page).toContain("setCategory(active ? null : option)");
   });
 });

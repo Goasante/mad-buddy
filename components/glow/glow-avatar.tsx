@@ -5,6 +5,23 @@ import { proximityLabels } from "@/lib/proximity";
 import { GlowRing } from "@/components/glow/glow-ring";
 import { UserAvatar } from "@/components/ui/user-avatar";
 
+/**
+ * RETIRED FOR MUDDY PROXIMITY. Use <ProximityGlowAvatar> instead.
+ *
+ * Muddy proximity now renders through components/glow/proximity-glow.tsx,
+ * driven by the six-state band in lib/proximity/glow-config.ts. This component
+ * survives for two remaining callers, neither of which is Muddy proximity:
+ *
+ *  - Surfaces reusing it purely as a plain avatar (no proximityLevel passed),
+ *    where it is just UserAvatar with consistent borders.
+ *  - Socialize discovery, which carries its own three-level `proximityTier`
+ *    with its own filtering and ranking (lib/social/discovery-filters.ts).
+ *    That is a different signal from the nearby-friends band, and converting
+ *    it means changing Socialize's discovery logic rather than its styling.
+ *
+ * Do not add new proximity callers here. A second glow keyed to a different
+ * scale is exactly what the V2 port removed.
+ */
 export type GlowAvatarProps = {
   src?: string | null;
   name: string;

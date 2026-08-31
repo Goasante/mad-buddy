@@ -139,6 +139,33 @@ async function loadPlans(): Promise<{
     }
   }
 
+  /* The Plan conversation, gated on real membership -- see the matching block
+   * in lib/plans/service.ts for why this reads conversation_members rather than
+   * re-deriving the RSVP rule. The CTA must never offer a door the server
+   * would close. */
+  const planIdsForChat = (planRows ?? []).map((plan) => plan.id);
+  const myConversationByPlan = new Map<string, string>();
+  if (planIdsForChat.length > 0) {
+    const { data: planConversations } = await admin
+      .from("conversations")
+      .select("id, context_id")
+      .eq("context_type", "plan")
+      .in("context_id", planIdsForChat);
+    const conversationIds = (planConversations ?? []).map((row) => row.id);
+    if (conversationIds.length > 0) {
+      const { data: myMemberships } = await admin
+        .from("conversation_members")
+        .select("conversation_id")
+        .eq("user_id", user.id)
+        .eq("status", "joined")
+        .in("conversation_id", conversationIds);
+      const joined = new Set((myMemberships ?? []).map((row) => row.conversation_id));
+      for (const row of planConversations ?? []) {
+        if (row.context_id && joined.has(row.id)) myConversationByPlan.set(row.context_id, row.id);
+      }
+    }
+  }
+
   const plans: PlanSummary[] = (planRows ?? []).map((plan) => {
     const myRow = myRowByPlan.get(plan.id);
     const isHost = plan.creator_id === user.id || myRow?.role === "host" || myRow?.role === "co_host";
@@ -161,7 +188,8 @@ async function loadPlans(): Promise<{
       isHost,
       myRsvp,
       attendees: participantsByPlan.get(plan.id) ?? [],
-      polls: pollsByPlan.get(plan.id) ?? []
+      polls: pollsByPlan.get(plan.id) ?? [],
+      myConversationId: myConversationByPlan.get(plan.id) ?? null
     };
   });
 

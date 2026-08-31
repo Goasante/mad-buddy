@@ -256,17 +256,20 @@ describe("failure handling", () => {
 // ---------------------------------------------------------------------------
 
 describe("Safe Arrival duplicate alert protection", () => {
+  const alert = handlers.slice(
+    handlers.indexOf("export const handleSafeArrivalUnconfirmedAlert"),
+    handlers.indexOf("// Media deletion")
+  );
+
   it("claims the alert with a compare-and-swap before sending", () => {
     // Independent of the job claim: even if two workers somehow ran the same
     // job, only one wins this update and the other sends nothing.
-    const alert = handlers.slice(0, handlers.indexOf("// Media deletion"));
     expect(alert).toContain('.is("unconfirmed_notified_at", null)');
     expect(alert).toContain("if (!claimed?.length) continue;");
   });
 
   it("claims BEFORE notifying, never after", () => {
     // Notify-then-claim would double-send whenever the claim lost the race.
-    const alert = handlers.slice(0, handlers.indexOf("// Media deletion"));
     // Compared against the CALL, not the import at the top of the file.
     expect(alert.indexOf('.is("unconfirmed_notified_at", null)')).toBeLessThan(
       alert.indexOf("deliverNotification(admin, {")
@@ -274,7 +277,6 @@ describe("Safe Arrival duplicate alert protection", () => {
   });
 
   it("records the alert as an audited event", () => {
-    const alert = handlers.slice(0, handlers.indexOf("// Media deletion"));
     expect(alert).toContain('.from("safe_arrival_events").insert({');
     expect(alert).toContain('event_type: "unconfirmed_alert"');
   });

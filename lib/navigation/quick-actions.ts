@@ -89,6 +89,11 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
  *   /safe-arrival  An active journey is a safety surface. Anything floating
  *                  over the share and check-in controls is unacceptable when
  *                  the whole point is reaching them quickly.
+ *   /settings      Rows of toggles down the right edge -- exactly where the
+ *                  pill sits. Reserving space at the FOOT of the page cannot
+ *                  fix a control the user meets mid-scroll, and a shortcut to
+ *                  five other features earns nothing on the screen where
+ *                  somebody is deliberately configuring one thing.
  *
  * Mad Cam and the image editor need no entry: they render full-screen at
  * z-120 while the launcher sits at z-40, so they already cover it.
@@ -97,7 +102,7 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
  * shell already knows it is immersive -- the message composer owns the
  * lower-right corner there.
  */
-const EXCLUDED_SURFACES: readonly string[] = ["/scan", "/safe-arrival"];
+const EXCLUDED_SURFACES: readonly string[] = ["/scan", "/safe-arrival", "/settings"];
 
 /**
  * Detail routes that keep their own corner.
@@ -113,7 +118,10 @@ const EXCLUDED_PREFIXES: readonly string[] = [
   "/groups/",
   "/events/",
   "/scan/",
-  "/safe-arrival/"
+  "/safe-arrival/",
+  // Every settings sub-page is the same focused configuration surface as its
+  // parent -- /settings/glow-visibility is exactly where this matters most.
+  "/settings/"
 ];
 
 /**

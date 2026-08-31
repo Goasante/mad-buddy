@@ -10,7 +10,7 @@ import {
   isOnline,
   matchesMuddiesFilter,
   presenceLabel,
-  proximityRailLabels,
+  railDistanceLabel,
   railToneClass,
   type MuddyProximity
 } from "@/lib/friends/muddies-presentation";
@@ -67,12 +67,31 @@ describe("the closest rail orders by distance", () => {
 });
 
 describe("distance wording matches the glow it sits under", () => {
-  it("uses the vocabulary the halo classes already encode", () => {
-    // getGlowClass returns proximity-halo-very-close / -nearby / -around, so
-    // the rail says what the ring means instead of inventing a second scale.
-    expect(proximityRailLabels.close).toBe("Very close");
-    expect(proximityRailLabels.near).toBe("Nearby");
-    expect(proximityRailLabels.far).toBe("Around you");
+  it("uses the six approved Glow state names when a band is present", () => {
+    // The rail says exactly what the Glow means -- both read the same band
+    // table -- rather than inventing a second scale beside it.
+    expect(railDistanceLabel({ ...at("close"), proximityBand: "right_here" })).toBe("Right Here");
+    expect(railDistanceLabel({ ...at("close"), proximityBand: "around_you" })).toBe("Just Around");
+    expect(railDistanceLabel({ ...at("near"), proximityBand: "close_by" })).toBe("Close By");
+    expect(railDistanceLabel({ ...at("near"), proximityBand: "nearby" })).toBe("In Your Area");
+    expect(railDistanceLabel({ ...at("far"), proximityBand: "around_town" })).toBe("Around Town");
+    expect(railDistanceLabel({ ...at("far"), proximityBand: "further_away" })).toBe("Across Town");
+  });
+
+  it("falls back to the widest state a bare level can honestly claim", () => {
+    // Without a band there is no evidence for a tight state, so the fallback
+    // widens rather than guessing -- it can never overstate closeness.
+    expect(railDistanceLabel(at("close"))).toBe("Just Around");
+    expect(railDistanceLabel(at("near"))).toBe("In Your Area");
+    expect(railDistanceLabel(at("far"))).toBe("Across Town");
+  });
+
+  it("never renders a distance", () => {
+    for (const band of ["right_here", "around_you", "close_by", "nearby", "around_town", "further_away"] as const) {
+      const label = railDistanceLabel({ ...at("close"), proximityBand: band });
+      expect(label).not.toMatch(/\d/);
+      expect(label).not.toMatch(/\b(m|km|metres|meters|miles|min)\b/i);
+    }
   });
 
   it("gives each band its own tone class", () => {
@@ -145,15 +164,17 @@ describe("every filter answers from data the page already holds", () => {
 // ---------------------------------------------------------------------------
 
 describe("the rail reuses the product's glow rather than a new treatment", () => {
-  it("renders the canonical GlowAvatar", () => {
-    expect(rail).toContain("<GlowAvatar");
-    expect(rail).toContain("proximityLevel={level}");
+  it("renders the canonical ProximityGlowAvatar", () => {
+    expect(rail).toContain("<ProximityGlowAvatar");
+    expect(rail).toContain("band={proximity?.proximityBand ?? null}");
   });
 
-  it("raises intensity instead of redefining the halo", () => {
-    // intensity is a presentation-only multiplier on the existing aura, so the
-    // distance ordering close > near > far still holds at any strength.
-    expect(rail).toContain("intensity={1.35}");
+  it("needs no intensity boost, because the Glow already reads at a glance", () => {
+    // The old halo needed intensity={1.35} on this rail to stop reading as a
+    // hairline. The ported Glow carries its own luminosity, so the boost is
+    // gone -- and must not come back, since a surface that amplifies one scale
+    // makes this rail disagree with Home about what a state looks like.
+    expect(rail).not.toContain("intensity=");
   });
 
   it("passes reduced motion through, so the aura can stop breathing", () => {
@@ -183,25 +204,22 @@ describe("the aura is never clipped into a rectangle", () => {
     expect(Number(padding?.[1])).toBeGreaterThanOrEqual(1.5);
   });
 
-  it("tightens blur and spread rather than paying for the default bloom", () => {
-    // The default very-close halo reaches roughly 48px past the avatar, which
-    // would need so much padding that neighbouring auras would overlap.
-    expect(css).toContain(".muddies-rail-glow .proximity-halo-very-close");
-    const scoped = css.slice(css.indexOf(".muddies-rail-glow .proximity-halo-very-close"));
-    const blur = /--halo-blur:\s*(\d+)px/.exec(scoped);
-    expect(Number(blur?.[1])).toBeLessThan(26);
+  it("lets the Glow contain its own bloom instead of scoping overrides here", () => {
+    // The old rail retuned --halo-blur/--halo-spread per state because the halo
+    // painted outside its own box. ProximityGlow sizes its element to its
+    // widest layer, so those overrides are gone -- and a new one would be a
+    // second state authority, which is the thing this redesign removed.
+    expect(css).not.toContain(".muddies-rail-glow .proximity-halo");
+    expect(css).not.toContain(".muddies-rail-glow .proximity-glow-");
   });
 
-  it("tightens geometry only, so the raised intensity survives", () => {
-    // Opacity comes from GlowRing's inline `intensity`; inline custom
-    // properties beat stylesheet rules, so a CSS opacity override here would
-    // be silently ignored anyway.
-    const scoped = css.slice(
-      css.indexOf(".muddies-rail-glow .proximity-halo-very-close"),
-      css.indexOf(".muddies-rail-name")
-    );
-    expect(scoped).not.toContain("--halo-active-opacity");
-    expect(rail).toContain("intensity={1.35}");
+  it("reserves the bloom's room in the component, not per surface", () => {
+    const glow = read("components/glow/proximity-glow.tsx");
+    // width/height come from the resolved geometry's `box`, which is sized to
+    // the furthest any layer reaches AT ITS ANIMATION PEAK -- not the static
+    // field, which Right Here's expanding wave overshoots.
+    expect(glow).toContain("width: `${geometry.box}px`");
+    expect(glow).toContain("height: `${geometry.box}px`");
   });
 
   it("reserves that room on the inline edges too, not just top and bottom", () => {
@@ -305,10 +323,10 @@ describe("a rail card announces itself once", () => {
     expect(subtree).toMatch(/muddies-rail-distance[^>]*aria-hidden="true"/);
   });
 
-  it("uses one vocabulary, the rail's own", () => {
-    // proximityLabels says "Close"; the rail says "Very close". Mixing them in
-    // one announcement implied two different states.
-    expect(subtree).toContain("proximityRailLabels[level].toLowerCase()");
+  it("uses one vocabulary, the canonical band names", () => {
+    // The announcement and the visible label must come from the same resolver,
+    // or a screen reader hears a different state than the eye sees.
+    expect(subtree).toContain("railDistanceLabel(proximity).toLowerCase()");
   });
 });
 

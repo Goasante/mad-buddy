@@ -61,10 +61,21 @@ describe("camera permission, privacy and lifecycle", () => {
 });
 
 describe("camera shell UX", () => {
-  it("has safe-area-aware full-screen chrome and no dead effects control", () => {
+  it("has safe-area-aware full-screen chrome", () => {
     expect(camera).toContain("env(safe-area-inset-top,0px)");
     expect(camera).toContain("env(safe-area-inset-bottom,0px)");
-    expect(camera).not.toContain('aria-label="Effects"');
+  });
+
+  it("has no DEAD effects control -- the button must open a real tray", () => {
+    // This assertion used to require the Effects button to be ABSENT, because
+    // at the time it existed and did nothing. Slice 2 wires it to the shipped
+    // effects engine, so the rule is now what it always meant: if the control
+    // is present, it must be connected to something.
+    const hasButton = camera.includes('aria-label="Effects"');
+    if (!hasButton) return;
+    expect(camera).toContain('toggleTray("effects")');
+    expect(camera).toContain('openTray === "effects"');
+    expect(camera).toContain("MAD_EFFECTS");
   });
 
   it.each([
@@ -83,7 +94,7 @@ describe("camera shell UX", () => {
     expect(camera).toContain("state.canFlip ? (");
   });
 
-  it("implements shared photo/video review and local completion without effects", () => {
+  it("implements shared photo/video review and local completion", () => {
     expect(camera).toContain('state.media?.kind === "video" ? "video" : "photo"');
     expect(camera).toContain("Retake");
     expect(camera).toContain("Photo ready for editing");
@@ -91,7 +102,6 @@ describe("camera shell UX", () => {
     expect(camera).toContain("Tap for photo");
     expect(camera).toContain("hold for video");
     expect(camera).toContain("MAX_CAMERA_VIDEO_SECONDS");
-    expect(camera).not.toContain('aria-label="Effects"');
   });
 
   it("uses pointer hold semantics, a hard duration cap and one finalized mobile-safe container", () => {

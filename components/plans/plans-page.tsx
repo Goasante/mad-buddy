@@ -1,17 +1,18 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import type { Route } from "next";
 import {
-  CalendarDays,
   ChevronRight,
   Clock,
   Lock,
   MapPin,
+  MessageCircle,
   Plus,
   Vote,
   X
 } from "lucide-react";
-import { useId, useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useRef, useState, useTransition } from "react";
 import {
   cancelPlanAction,
   createPlanAction,
@@ -23,11 +24,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AppMultiSelect, AppSelect } from "@/components/ui/app-dropdown";
 import { FormField } from "@/components/auth/form-field";
-import { GlowAvatar } from "@/components/glow/glow-avatar";
-import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { isArchivedUnscheduledPlan, planPhase } from "@/lib/social/plans";
@@ -74,6 +74,12 @@ export type PlanSummary = {
   myRsvp: string;
   attendees: Array<{ name: string; avatarUrl: string | null; rsvp: string; isMe: boolean; plan: SubscriptionPlan }>;
   polls: PlanPollSummary[];
+  /**
+   * The Plan conversation, present ONLY when the viewer is a joined member.
+   * Null for an invitee who has not responded yet, which is why the Plan Chat
+   * button can simply test this instead of re-deriving the RSVP rule.
+   */
+  myConversationId?: string | null;
 };
 
 type PlanBucket = "upcoming" | "invites" | "hosting" | "unscheduled" | "past";
@@ -87,6 +93,9 @@ const bucketTabs: Array<{ id: PlanBucket; label: string }> = [
 ];
 
 const TERMINAL = new Set(["cancelled", "completed", "expired"]);
+
+/** Categories shown before "More". Enough to be useful, few enough to scan. */
+const QUICK_CATEGORY_COUNT = 6;
 
 /**
  * Which tab a plan belongs to.
@@ -161,6 +170,10 @@ export function PlansPageContent({
   const openAppMenu = useAppMenu();
   const unreadNotificationCount = useUnreadNotifications();
   const [createOpen, setCreateOpen] = useState(() => searchParams.get("create") === "1");
+  /* Who the Plan is with, when the user arrived from a relationship surface.
+     Read once from the URL so a refresh keeps the context. */
+  const contextMuddyId = searchParams.get("with");
+  const createRequestKeyRef = useRef<string | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(() => requestedPlan?.id ?? null);
 
   /**
@@ -204,13 +217,42 @@ export function PlansPageContent({
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? null;
 
   function changeRsvp(planId: string, rsvp: "going" | "maybe" | "not_going") {
-    // Optimistic; refresh from server on completion for authoritative counts.
+    /* A REFUSED RSVP MUST NOT LOOK LIKE AN ACCEPTED ONE.
+     *
+     * The optimistic update was never rolled back, so a server refusal -- a
+     * cancelled Plan, a passed deadline, an ended friendship, a full guest list
+     * -- left "Going" selected underneath an error message saying it had not
+     * worked. router.refresh() eventually corrected it, but in the meantime the
+     * UI contradicted both the server and its own feedback.
+     *
+     * The previous answer is captured first and restored on failure, so the
+     * control keeps showing what the server actually believes. The optimistic
+     * paint stays for the successful path, which is nearly all of them. */
+    const previousRsvp = plans.find((plan) => plan.id === planId)?.myRsvp;
     setPlans((current) =>
       current.map((plan) => (plan.id === planId ? { ...plan, myRsvp: rsvp } : plan))
     );
     startTransition(async () => {
-      const result = await rsvpAction(planId, rsvp);
+      let result: Awaited<ReturnType<typeof rsvpAction>>;
+      try {
+        result = await rsvpAction(planId, rsvp);
+      } catch {
+        if (previousRsvp !== undefined) {
+          setPlans((current) =>
+            current.map((plan) => (plan.id === planId ? { ...plan, myRsvp: previousRsvp } : plan))
+          );
+        }
+        setFeedback("Couldn't save your RSVP. Try again.");
+        return;
+      }
+      if (!result.ok && previousRsvp !== undefined) {
+        setPlans((current) =>
+          current.map((plan) => (plan.id === planId ? { ...plan, myRsvp: previousRsvp } : plan))
+        );
+      }
       setFeedback(result.message);
+      // Authoritative counts, roster statuses, and -- because reconciliation
+      // runs inside the RSVP transaction -- the Plan Chat button appearing.
       router.refresh();
     });
   }
@@ -279,6 +321,8 @@ export function PlansPageContent({
   }) {
     startTransition(async () => {
       const result = await createPlanAction({
+        requestKey:
+          createRequestKeyRef.current ?? (createRequestKeyRef.current = crypto.randomUUID()),
         title: input.title,
         description: input.description || undefined,
         planType: input.startAt ? "scheduled" : "quick",
@@ -292,8 +336,17 @@ export function PlansPageContent({
       });
       setFeedback(result.message);
       if (result.ok) {
+        createRequestKeyRef.current = null;
         setCreateOpen(false);
         setActiveBucket("hosting");
+        /* LAND ON THE PLAN, NOT ON A LIST CONTAINING IT.
+         *
+         * Creating dropped the user onto the "Created by you" tab and left
+         * them to spot their own new Plan among the others -- so the moment
+         * after the most deliberate action in the product was a search task.
+         * Opening it directly is also what makes the invite state visible: it
+         * is where "invited" appears beside the person they chose. */
+        if (result.planId) setSelectedPlanId(result.planId);
         router.refresh();
       }
     });
@@ -337,9 +390,20 @@ export function PlansPageContent({
         </div>
       ) : null}
 
+      {/* THE CLIPPED TAB WAS SCROLLING, NOT BREAKING.
+       *
+       * "No date y..." in the screenshot is the last tab meeting the viewport
+       * edge -- the strip already scrolls (overflow-x-auto + w-max + shrink-0 +
+       * whitespace-nowrap), so nothing is truncated or unreachable. What was
+       * missing is the SIGNAL: `no-scrollbar` hides the bar, so a cleanly cut
+       * label looked like a layout bug rather than an invitation to swipe.
+       *
+       * A fade on the trailing edge says "there is more this way" without
+       * shrinking type or abbreviating labels. It is masked out from `sm` up,
+       * where every tab fits and there is nothing to hint at. */}
       <nav
         data-tour-id={TOUR_TARGET_IDS.PLANS_TABS}
-        className="no-scrollbar -mx-4 mt-4 overflow-x-auto border-b border-border/70 px-4 sm:mx-0 sm:px-0"
+        className="no-scrollbar plans-tab-strip -mx-4 mt-4 overflow-x-auto border-b border-border/70 px-4 sm:mx-0 sm:px-0"
         aria-label="Plans tabs"
       >
         <div className="flex w-max gap-1 pr-4 sm:pr-0">
@@ -382,11 +446,19 @@ export function PlansPageContent({
                 <PlanCard key={plan.id} plan={plan} onView={() => setSelectedPlanId(plan.id)} />
               ))}
             </ul>
-            <div className="mt-5 rounded-2xl border border-border/60 bg-card/40 py-6 text-center">
-              <CalendarDays className="mx-auto h-6 w-6 text-primary" aria-hidden="true" />
-              <p className="mt-2 text-sm font-semibold">{listEndCopy[activeBucket].title}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">{listEndCopy[activeBucket].description}</p>
-            </div>
+            {/* AN END MARKER, NOT A SECOND EMPTY STATE.
+             *
+             * This was a bordered card with a primary-coloured icon and two
+             * lines of copy, sitting directly under a real plan -- heavier than
+             * the genuine empty state and reading as "there is nothing here"
+             * on a tab that plainly had something in it.
+             *
+             * Reaching the end of a short list is not an event that needs a
+             * card. One quiet line closes the list; the empty state below still
+             * does the real work when a tab has zero plans. */}
+            <p className="mt-4 pb-1 text-center text-xs text-muted-foreground">
+              {listEndCopy[activeBucket].title}
+            </p>
           </>
         ) : (
           <div className="py-12 text-center">
@@ -398,9 +470,13 @@ export function PlansPageContent({
 
       <CreatePlanModal
         open={createOpen}
+        contextMuddyId={contextMuddyId}
         invitees={invitees}
         pending={isPending}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(next) => {
+          if (!next) createRequestKeyRef.current = null;
+          setCreateOpen(next);
+        }}
         onCreate={createPlan}
       />
       <PlanDetailsModal
@@ -413,6 +489,13 @@ export function PlansPageContent({
         onVote={(pollId, optionId) => vote(pollId, optionId)}
         onCancel={() => selectedPlan && cancelPlan(selectedPlan.id)}
         onAddPoll={(question, pollType, options) => selectedPlan && addPoll(selectedPlan.id, question, pollType, options)}
+        // The canonical Plan conversation on the Messages surface -- the same
+        // route a Plan Chat opened from anywhere else lands on. Deliberately
+        // NOT a DM with the organiser: a Plan has one conversation, and this is
+        // it.
+        onOpenChat={(conversationId) =>
+          router.push(`/messages?conversation=${encodeURIComponent(conversationId)}` as Route)
+        }
       />
     </div>
   );
@@ -437,15 +520,16 @@ const bucketSectionLabel: Record<PlanBucket, string> = {
   past: "Past plans"
 };
 
-const listEndCopy: Record<PlanBucket, { title: string; description: string }> = {
-  upcoming: { title: "No more upcoming plans", description: "Create a plan to meet up with your Muddies." },
-  invites: { title: "That's every invitation", description: "New plan invitations will appear here." },
-  hosting: { title: "That's all you've created", description: "Start another plan whenever you're ready." },
-  unscheduled: {
-    title: "That's everything without a time",
-    description: "Add a date and a plan moves back to Upcoming."
-  },
-  past: { title: "You've reached the start", description: "Older plans stay here for reference." }
+/* One quiet line each. The second line these used to carry ("Create a plan to
+ * meet up with your Muddies.") was prompting the user to act at the bottom of a
+ * list that already showed them acting -- that job belongs to the empty state
+ * and to the Create button, not to the end of a populated list. */
+const listEndCopy: Record<PlanBucket, { title: string }> = {
+  upcoming: { title: "No more upcoming plans" },
+  invites: { title: "That's every invitation" },
+  hosting: { title: "That's all you've created" },
+  unscheduled: { title: "That's everything without a time" },
+  past: { title: "You've reached the start" }
 };
 
 // The title-keyword icon rules that used to live here are gone. They guessed
@@ -586,8 +670,10 @@ function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           </span>
           <span className="w-full truncate text-right text-[11px] leading-tight text-muted-foreground">
+            {/* Organiser name only. The same rule as the Plan roster: the
+                person who invited you is a Muddy, and their billing tier is
+                not a fact about the Plan you are deciding whether to join. */}
             {plan.isHost ? "By you" : plan.organiserName}
-            <PremiumPlanBadge plan={plan.organiserPlan} compact className="ml-1.5 align-middle" />
           </span>
         </span>
       </button>
@@ -614,12 +700,21 @@ function CreatePlanModal({
   open,
   invitees,
   pending,
+  contextMuddyId,
   onOpenChange,
   onCreate
 }: {
   open: boolean;
   invitees: PlanInvitee[];
   pending: boolean;
+  /**
+   * The Muddy this Plan started from, if the user arrived from a relationship.
+   *
+   * CONTEXT SHOULD FOLLOW THE USER. Tapping "Make a Plan" on Kofi and then
+   * being asked to search for Kofi again is the product forgetting what you
+   * just did. An id only -- person context, never a location payload.
+   */
+  contextMuddyId?: string | null;
   onOpenChange: (open: boolean) => void;
   onCreate: (input: {
     title: string;
@@ -638,8 +733,35 @@ function CreatePlanModal({
   // Optional. Null means "no category", which resolves to the branded
   // fallback cover — never a guess.
   const [category, setCategory] = useState<PlanCategory | null>(null);
-  const [selected, setSelected] = useState<string[]>([]);
+  /* Seeded from the relationship the user came from. Filtered against real
+     invitees so a stale or unauthorised id simply selects nobody. */
+  const contextSelection = useMemo(
+    () =>
+      contextMuddyId && invitees.some((invitee) => invitee.id === contextMuddyId)
+        ? [contextMuddyId]
+        : [],
+    [contextMuddyId, invitees]
+  );
+  const [selected, setSelected] = useState<string[]>(contextSelection);
+  /* The person named at the top, resolved from real invitees only -- an id the
+     viewer is not actually Muddies with resolves to nothing. */
+  const contextInvitee = useMemo(
+    () => invitees.find((invitee) => invitee.id === contextMuddyId) ?? null,
+    [invitees, contextMuddyId]
+  );
   const [nameTouched, setNameTouched] = useState(false);
+  /* CATEGORIES ACCELERATE, THEY DO NOT ENUMERATE.
+   *
+   * All fifteen wrapped across several rows and became the tallest thing in
+   * the composer -- a taxonomy to browse rather than a shortcut. The common
+   * few are shown; the rest stay one tap away, and a category chosen from
+   * "More" keeps its chip visible so the selection is never hidden. */
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const shownCategories = useMemo(() => {
+    if (showAllCategories) return PLAN_CATEGORIES;
+    const quick = PLAN_CATEGORIES.slice(0, QUICK_CATEGORY_COUNT);
+    return category && !quick.includes(category) ? [...quick, category] : quick;
+  }, [showAllCategories, category]);
   const formId = useId();
 
   function reset() {
@@ -649,7 +771,7 @@ function CreatePlanModal({
     setPlaceText("");
     setDescription("");
     setCategory(null);
-    setSelected([]);
+    setSelected(contextSelection);
     setNameTouched(false);
   }
 
@@ -712,12 +834,37 @@ function CreatePlanModal({
               });
             }}
           >
-            Create plan
+            {/* Says the send is under way rather than sitting inert while the
+                canonical lifecycle runs. Never a fake completion: the label
+                returns to "Create plan" unless the server actually succeeded. */}
+            {pending ? "Creating…" : "Create plan"}
           </Button>
         </>
       }
     >
       <div className="space-y-5 pb-1 pr-1">
+        {/* WHO THIS STARTED WITH, stated before anything is asked.
+            Somebody who tapped "Make a Plan" on Kofi should see Kofi here
+            rather than wonder whether the app kept track. They stay editable
+            below -- this confirms the context, it does not lock it. */}
+        {contextInvitee ? (
+          <p className="flex items-center gap-2.5 text-sm">
+            {/* UserAvatar, not GlowAvatar. Glow is the proximity treatment and
+                needs proximity props even to be switched off -- passing
+                "hidden"/0 here meant a Plan surface reasoning about nearness
+                it has no business knowing. This is Plan context, so it uses
+                the plain identity avatar the picker below uses. */}
+            <UserAvatar
+              name={contextInvitee.name}
+              src={contextInvitee.avatarUrl ?? null}
+              size="xs"
+            />
+            <span className="text-muted-foreground">
+              Planning with <span className="font-semibold text-foreground">{contextInvitee.name}</span>
+            </span>
+          </p>
+        ) : null}
+
         <FormField
           htmlFor={`${formId}-title`}
           label="What are we doing?"
@@ -728,7 +875,9 @@ function CreatePlanModal({
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             onBlur={() => setNameTouched(true)}
-            placeholder="Lunch later"
+            // An idea, not an idea plus a time. "Lunch later" hinted that the
+            // when belonged in this box, which the When field asks separately.
+            placeholder="Grab food"
             className={fieldClassName}
           />
         </FormField>
@@ -741,7 +890,7 @@ function CreatePlanModal({
             What kind of plan? <span className="font-normal text-muted-foreground">(optional)</span>
           </p>
           <div className="flex flex-wrap gap-2">
-            {PLAN_CATEGORIES.map((option) => {
+            {shownCategories.map((option) => {
               const active = category === option;
               return (
                 <button
@@ -763,6 +912,15 @@ function CreatePlanModal({
                 </button>
               );
             })}
+            {!showAllCategories && PLAN_CATEGORIES.length > shownCategories.length ? (
+              <button
+                type="button"
+                onClick={() => setShowAllCategories(true)}
+                className="focus-ring safe-motion rounded-full border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary/50"
+              >
+                More
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -816,10 +974,20 @@ function CreatePlanModal({
             id={`${formId}-place`}
             value={placeText}
             onChange={(event) => setPlaceText(event.target.value)}
-            placeholder="Café or nearby area"
+            // "Nearby area" quietly echoed proximity, a different idea
+            // entirely: this is a place the user types, not one the app knows.
+            placeholder="Café, cinema, campus…"
             className={fieldClassName}
           />
-          <p className="mt-1.5 text-xs text-muted-foreground">Keep it general — no exact addresses.</p>
+          {/* THE OLD HELPER SAID "Keep it general — no exact addresses."
+              That was the wrong invariant. The rule Mad Buddy protects is that
+              GLOW never exposes where a friend is; it was never that Muddies
+              may not deliberately tell each other where to meet. Deciding on a
+              café and being told not to name it makes the product useless for
+              the thing it exists to arrange.
+
+              No replacement text: the footer already says only invited Muddies
+              see this plan, and saying it twice is not reassurance. */}
         </FormField>
 
         <InviteMuddiesField invitees={invitees} selected={selected} onToggle={toggle} fieldClassName={fieldClassName} />
@@ -881,13 +1049,16 @@ function InviteMuddiesField({
           label: invitee.name,
           description: usernameSuffixFor(invitee) ?? undefined,
           keywords: invitee.username ? [invitee.username] : undefined,
-          icon: (
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-secondary text-[11px] font-semibold text-foreground">
-              {invitee.name.trim().charAt(0).toUpperCase() || "?"}
-            </span>
-          )
+          /* The same face as Home and the context line above. UserAvatar owns
+             the no-photo fallback, so nothing here invents one. */
+          icon: <UserAvatar src={invitee.avatarUrl ?? null} name={invitee.name} size="xs" />
         }))}
-        placeholder={invitees.length === 0 ? "Add Muddies first" : "Select Muddies"}
+        /* SAYS WHAT IT DOES NEXT, not who is already coming.
+           The trigger used to echo the current selection while the chips below
+           repeated it -- the control telling you about Kofi twice, when its
+           actual remaining job is adding somebody else. */
+        placeholder={invitees.length === 0 ? "Add Muddies first" : "Add Muddy"}
+        alwaysShowPlaceholder
         searchable
         searchPlaceholder="Search Muddies"
         emptyText="No Muddies found"
@@ -906,11 +1077,13 @@ function InviteMuddiesField({
               key={invitee.id}
               className="inline-flex items-center gap-1 rounded-full bg-secondary py-0.5 pl-1 pr-2 text-xs font-medium text-foreground"
             >
-              <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-primary/15 text-[9px] font-semibold text-primary">
-                {invitee.name.trim().charAt(0).toUpperCase() || "?"}
-              </span>
+              <UserAvatar src={invitee.avatarUrl ?? null} name={invitee.name} size="xs" />
               {invitee.name}
-              <PremiumPlanBadge plan={invitee.plan} compact />
+              {/* NO SUBSCRIPTION TIER AMONG PEOPLE YOU ARE MEETING.
+                  A participant in a private Plan is a Muddy first; ranking the
+                  guest list by who pays has nothing to do with arranging to see
+                  them. The badge stays everywhere it is genuinely about
+                  entitlement -- this is a coordination space. */}
               <button
                 type="button"
                 onClick={() => onToggle(invitee.id)}
@@ -934,7 +1107,8 @@ function PlanDetailsModal({
   onRsvpChange,
   onVote,
   onCancel,
-  onAddPoll
+  onAddPoll,
+  onOpenChat
 }: {
   plan: PlanSummary | null;
   pending: boolean;
@@ -943,6 +1117,7 @@ function PlanDetailsModal({
   onVote: (pollId: string, optionId: string) => void;
   onCancel: () => void;
   onAddPoll: (question: string, pollType: string, options: string[]) => void;
+  onOpenChat: (conversationId: string) => void;
 }) {
   return (
     <Modal
@@ -967,14 +1142,29 @@ function PlanDetailsModal({
 
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Who&apos;s going ({plan.attendees.filter((a) => a.rsvp === "going").length})
+              {/* THE HEADING MUST DESCRIBE WHAT IS UNDER IT.
+                  "Who's going (1)" sat above a list containing one person who
+                  was going and one who had only been invited -- a count that
+                  was accurate about confirmations and a title that was wrong
+                  about the list. Naming the section for the people, and
+                  putting the confirmed count in words beside it, lets both be
+                  true at once without splitting the list. */}
+              People ({plan.attendees.filter((a) => a.rsvp === "going").length} going)
             </p>
             <ul className="space-y-2">
               {plan.attendees.map((attendee) => (
                 <li key={attendee.name} className="flex items-center gap-3 rounded-lg border border-border/70 bg-background/60 px-3 py-2">
-                  <GlowAvatar name={attendee.name} src={attendee.avatarUrl} size="sm" />
+                  {/* UserAvatar, not GlowAvatar: a Plan roster is a guest list,
+                      and Glow is the proximity treatment. Who is coming to a
+                      Plan has nothing to do with who is near you right now. */}
+                  <UserAvatar name={attendee.name} src={attendee.avatarUrl} size="sm" />
                   <span className="text-sm font-medium">{attendee.name}</span>
-                  <PremiumPlanBadge plan={attendee.plan} compact />
+                  {/* NO SUBSCRIPTION TIER AMONG PEOPLE YOU ARE MEETING.
+                      The composer already dropped this badge for the same
+                      reason: inside a private Plan a person is a Muddy, not a
+                      billing tier, and rating your guest list by who pays has
+                      nothing to do with arranging to meet them. RSVP stays --
+                      that is the one status a guest list genuinely carries. */}
                   <RsvpBadge rsvp={attendee.rsvp} className="ml-auto" />
                 </li>
               ))}
@@ -983,7 +1173,14 @@ function PlanDetailsModal({
 
           {!plan.isHost && !TERMINAL.has(plan.status) ? (
             <div data-tour-id={TOUR_TARGET_IDS.PLANS_RSVP}>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your RSVP</p>
+              {/* "You're invited" before you have answered, "Your RSVP" after.
+                  The old label described the form field rather than the moment:
+                  someone opening a fresh invitation was met with an admin word
+                  for a thing a friend just asked them. Once answered, the
+                  heading goes back to naming what the controls now change. */}
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {plan.myRsvp === "invited" || plan.myRsvp === "viewed" ? "You're invited" : "Your RSVP"}
+              </p>
               <div className="flex flex-wrap gap-2">
                 <Button type="button" size="sm" variant={plan.myRsvp === "going" ? "primary" : "outline"} onClick={() => onRsvpChange("going")} disabled={pending}>
                   Going
@@ -996,6 +1193,29 @@ function PlanDetailsModal({
                 </Button>
               </div>
             </div>
+          ) : null}
+
+          {/* THE PLACE THE PLAN ACTUALLY HAPPENS.
+           *
+           * Plan detail had no route into the Plan conversation at all, so the
+           * surface where people sort out when and where was reachable only by
+           * hunting through Messages. It sits directly under the RSVP controls
+           * because that is the order of events: answer, then coordinate.
+           *
+           * Shown only when myConversationId is set, which the server fills in
+           * only for a joined member. An invitee who has not responded sees
+           * nothing here rather than a button that would refuse them -- and
+           * nothing locked or upsold either, since this is not a paid feature. */}
+          {plan.myConversationId ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-center"
+              onClick={() => onOpenChat(plan.myConversationId as string)}
+            >
+              <MessageCircle className="mr-2 h-4 w-4" aria-hidden="true" />
+              Open Plan Chat
+            </Button>
           ) : null}
 
           {plan.polls.map((poll) => (

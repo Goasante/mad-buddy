@@ -13,6 +13,7 @@ import {
   Trash2,
   Type,
   Undo2,
+  WandSparkles,
   X
 } from "lucide-react";
 import {
@@ -31,6 +32,7 @@ import {
   DEFAULT_IMAGE_ADJUSTMENTS,
   STRAIGHTEN_RANGE,
   clampNormalizedCrop,
+  createImageEditDocument,
   createImageEditSession,
   cropForPreset,
   imageEditReducer,
@@ -50,6 +52,10 @@ import {
   renderEditedImage,
   type DecodedImageSource
 } from "@/lib/camera/image-renderer";
+import { detectEffectCapabilities, canRenderEffect, type EffectCapabilities } from "@/lib/camera/effect-capabilities";
+import { resetDocumentEffects, setDocumentEffect, setDocumentEffectIntensity, type EffectInstance } from "@/lib/camera/effect-document";
+import { effectInstanceFor, getMadEffect, MAD_EFFECTS } from "@/lib/camera/effect-registry";
+import { EffectThumbnailCache, generateEffectThumbnails } from "@/lib/camera/effect-thumbnails";
 import { generateLookThumbnails, LookThumbnailCache } from "@/lib/camera/look-thumbnails";
 import {
   MAD_LOOKS,
@@ -63,7 +69,7 @@ import {
 import type { LocalCameraImage } from "@/lib/camera/types";
 import { cn } from "@/lib/utils";
 
-type EditorTool = "looks" | "crop" | "adjust" | "text" | "draw";
+type EditorTool = "looks" | "effects" | "crop" | "adjust" | "text" | "draw";
 type CropDrag = {
   pointerId: number;
   mode: "move" | "nw" | "ne" | "sw" | "se";
@@ -96,14 +102,25 @@ const COLORS = ["#FFFFFF", "#111827", "#FF7A12", "#38BDF8", "#34D399", "#F472B6"
 
 export default function ImageEditor({
   source,
+  initialEffect,
   onCancel,
   onDone
 }: {
   source: LocalCameraImage;
+  initialEffect?: EffectInstance | null;
   onCancel: () => void;
   onDone: (media: LocalCameraImage) => void;
 }) {
-  const [session, dispatch] = useReducer(imageEditReducer, source, createImageEditSession);
+  const [session, dispatch] = useReducer(
+    imageEditReducer,
+    { source, initialEffect },
+    ({ source: initialSource, initialEffect: seededEffect }) => {
+      const initialDocument = seededEffect
+        ? setDocumentEffect(createImageEditDocument(), seededEffect)
+        : createImageEditDocument();
+      return createImageEditSession(initialSource, initialDocument);
+    }
+  );
   const [tool, setTool] = useState<EditorTool>("looks");
   const [previewSize, setPreviewSize] = useState({ width: source.width, height: source.height });
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
@@ -114,6 +131,12 @@ export default function ImageEditor({
     sourceKey: source.objectUrl,
     urls: {}
   });
+  const [effectThumbnails, setEffectThumbnails] = useState<{ sourceKey: string; urls: Record<string, string> }>({
+    sourceKey: source.objectUrl,
+    urls: {}
+  });
+  const [effectCapabilities, setEffectCapabilities] = useState<EffectCapabilities | null>(null);
+  const [effectFrame, setEffectFrame] = useState(0);
   const [decodedReady, setDecodedReady] = useState(false);
   const [compareOriginal, setCompareOriginal] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -124,6 +147,7 @@ export default function ImageEditor({
   const decodedRef = useRef<DecodedImageSource | null>(null);
   const workCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const thumbnailCacheRef = useRef<LookThumbnailCache | null>(null);
+  const effectThumbnailCacheRef = useRef<EffectThumbnailCache | null>(null);
   const transientBeforeRef = useRef<ImageEditDocument | null>(null);
   const cropDragRef = useRef<CropDrag | null>(null);
   const textDragRef = useRef<TextDrag | null>(null);
@@ -132,6 +156,11 @@ export default function ImageEditor({
 
   useEffect(() => {
     closeRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setEffectCapabilities(detectEffectCapabilities()));
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
@@ -183,6 +212,14 @@ export default function ImageEditor({
   }, [source.objectUrl]);
 
   useEffect(() => {
+    if (!effectThumbnailCacheRef.current) effectThumbnailCacheRef.current = new EffectThumbnailCache();
+    return () => {
+      effectThumbnailCacheRef.current?.clear();
+      effectThumbnailCacheRef.current = null;
+    };
+  }, [source.objectUrl]);
+
+  useEffect(() => {
     const decoded = decodedRef.current;
     const cache = thumbnailCacheRef.current;
     if (tool !== "looks" || !decodedReady || !decoded || !cache) return;
@@ -209,6 +246,40 @@ export default function ImageEditor({
 
   useEffect(() => {
     const decoded = decodedRef.current;
+    const cache = effectThumbnailCacheRef.current;
+    if (tool !== "effects" || !decodedReady || !decoded || !cache) return;
+    let cancelled = false;
+    void generateEffectThumbnails({
+      decoded,
+      sourceKey: source.objectUrl,
+      cache,
+      isCancelled: () => cancelled,
+      onThumbnail: (effectId, url) => {
+        if (!cancelled) {
+          setEffectThumbnails((current) => current.sourceKey === source.objectUrl
+            ? { ...current, urls: { ...current.urls, [effectId]: url } }
+            : { sourceKey: source.objectUrl, urls: { [effectId]: url } });
+        }
+      }
+    }).catch(() => {
+      // Thumbnail failure never blocks the canonical full-size effect preview.
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [decodedReady, source.objectUrl, tool]);
+
+  const activeEffectInstance = session.present.effects[0] ?? null;
+  const activeEffect = activeEffectInstance ? getMadEffect(activeEffectInstance.effectId) : null;
+
+  useEffect(() => {
+    if (tool !== "effects" || !activeEffect?.animated || effectCapabilities?.reducedMotion) return;
+    const timer = window.setInterval(() => setEffectFrame(Date.now()), 120);
+    return () => window.clearInterval(timer);
+  }, [activeEffect?.animated, effectCapabilities?.reducedMotion, tool]);
+
+  useEffect(() => {
+    const decoded = decodedRef.current;
     const canvas = canvasRef.current;
     if (!decoded || !canvas) return;
     let cancelled = false;
@@ -223,7 +294,9 @@ export default function ImageEditor({
         if (!workCanvasRef.current) workCanvasRef.current = globalThis.document.createElement("canvas");
         const dimensions = renderEditedImage(decoded, previewDocument, canvas, {
           includeOverlays: tool !== "text" && tool !== "draw",
-          workCanvas: workCanvasRef.current
+          workCanvas: workCanvasRef.current,
+          timeMs: effectFrame,
+          reducedMotion: effectCapabilities?.reducedMotion ?? true
         });
         setPreviewSize(dimensions);
         dispatch({ type: "lifecycle", lifecycle: "ready" });
@@ -235,7 +308,7 @@ export default function ImageEditor({
       cancelled = true;
       cancelAnimationFrame(frame);
     };
-  }, [compareOriginal, session.present, tool, session.source]);
+  }, [compareOriginal, effectCapabilities?.reducedMotion, effectFrame, session.present, tool, session.source]);
 
   const replace = useCallback((document: ImageEditDocument, recordHistory = true) => {
     dispatch({ type: "replace", document, recordHistory });
@@ -404,6 +477,10 @@ export default function ImageEditor({
   );
   const activeLook = getMadLook(session.present.look.id);
   const activeLookThumbnails = lookThumbnails.sourceKey === source.objectUrl ? lookThumbnails.urls : {};
+  const activeEffectThumbnails = effectThumbnails.sourceKey === source.objectUrl ? effectThumbnails.urls : {};
+  const availableEffects = effectCapabilities
+    ? MAD_EFFECTS.filter((effect) => canRenderEffect(effect, effectCapabilities))
+    : MAD_EFFECTS;
   const aspect = `${previewSize.width} / ${previewSize.height}`;
   const frameDimensions = useMemo(() => {
     if (!stageBounds.width || !stageBounds.height) return null;
@@ -464,10 +541,10 @@ export default function ImageEditor({
           ref={frameRef}
           className="mad-cam-editor-frame"
           style={{ "--mad-cam-editor-aspect": aspect, width: frameDimensions ? `${frameDimensions.width}px` : "100%", height: frameDimensions ? `${frameDimensions.height}px` : "auto" } as CSSProperties}
-          onPointerDown={tool === "looks" ? () => setCompareOriginal(true) : undefined}
-          onPointerUp={tool === "looks" ? () => setCompareOriginal(false) : undefined}
-          onPointerCancel={tool === "looks" ? () => setCompareOriginal(false) : undefined}
-          onPointerLeave={tool === "looks" ? () => setCompareOriginal(false) : undefined}
+          onPointerDown={tool === "looks" || tool === "effects" ? () => setCompareOriginal(true) : undefined}
+          onPointerUp={tool === "looks" || tool === "effects" ? () => setCompareOriginal(false) : undefined}
+          onPointerCancel={tool === "looks" || tool === "effects" ? () => setCompareOriginal(false) : undefined}
+          onPointerLeave={tool === "looks" || tool === "effects" ? () => setCompareOriginal(false) : undefined}
         >
           <canvas ref={canvasRef} className="h-full w-full" aria-label="Edited photo preview" />
           {tool === "crop" ? (
@@ -575,6 +652,79 @@ export default function ImageEditor({
             </div>
           </div>
         ) : null}
+        {tool === "effects" ? (
+          <div className="space-y-3">
+            <div className="mad-cam-effect-rail" role="group" aria-label="Mad Effects">
+              <button
+                type="button"
+                className={cn("mad-cam-effect-option", !activeEffect && "is-selected")}
+                aria-label="No effect"
+                aria-pressed={!activeEffect}
+                onClick={() => replace(resetDocumentEffects(session.present))}
+              >
+                <span className="mad-cam-effect-thumbnail is-original">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- local image object URL */}
+                  <img src={source.objectUrl} alt="" aria-hidden="true" />
+                </span>
+                <span>None</span>
+              </button>
+              {availableEffects.map((effect) => (
+                <button
+                  key={effect.id}
+                  type="button"
+                  className={cn("mad-cam-effect-option", activeEffect?.id === effect.id && "is-selected")}
+                  aria-label={`${effect.name} effect`}
+                  aria-pressed={activeEffect?.id === effect.id}
+                  onClick={() => {
+                    const instance = effectInstanceFor(effect.id);
+                    if (instance) replace(setDocumentEffect(session.present, instance));
+                  }}
+                >
+                  <span className="mad-cam-effect-thumbnail" style={{ "--mad-effect-accent": effect.presentation.accent } as CSSProperties}>
+                    {activeEffectThumbnails[effect.id] ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- local low-resolution object URL
+                      <img src={activeEffectThumbnails[effect.id]} alt="" aria-hidden="true" />
+                    ) : <span className="mad-cam-effect-placeholder" aria-hidden="true" />}
+                  </span>
+                  <span>{effect.name}</span>
+                </button>
+              ))}
+            </div>
+            <div className="mad-cam-look-controls">
+              <label className="mad-cam-editor-range min-w-0 flex-1">
+                <span>{activeEffect ? `${activeEffect.name} intensity: ${activeEffectInstance?.intensity ?? 0}%` : "Choose an effect"}</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={activeEffectInstance?.intensity ?? 0}
+                  disabled={!activeEffectInstance}
+                  onFocus={beginTransient}
+                  onPointerDown={beginTransient}
+                  onChange={(event) => replace(setDocumentEffectIntensity(session.present, Number(event.target.value)), false)}
+                  onBlur={commitTransient}
+                  onPointerUp={commitTransient}
+                  aria-label={`${activeEffect?.name ?? "Effect"} intensity`}
+                  aria-valuetext={`${activeEffectInstance?.intensity ?? 0} percent`}
+                />
+              </label>
+              <button type="button" className="mad-cam-reset-control" disabled={!activeEffectInstance} onClick={() => replace(resetDocumentEffects(session.present))}>Reset effect</button>
+              <button
+                type="button"
+                className="mad-cam-compare-control"
+                onPointerDown={() => setCompareOriginal(true)}
+                onPointerUp={() => setCompareOriginal(false)}
+                onPointerCancel={() => setCompareOriginal(false)}
+                onPointerLeave={() => setCompareOriginal(false)}
+                onKeyDown={(event) => { if (event.key === " " || event.key === "Enter") setCompareOriginal(true); }}
+                onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") setCompareOriginal(false); }}
+                aria-label="Hold to compare without effects"
+              >
+                Hold to compare
+              </button>
+            </div>
+          </div>
+        ) : null}
         {tool === "crop" ? (
           <div className="space-y-3">
             <div className="mad-cam-editor-scroll-row">
@@ -610,6 +760,7 @@ export default function ImageEditor({
       <nav className="mad-cam-editor-tools" aria-label="Photo editing tools">
         {([
           ["looks", Sparkles, "Looks"],
+          ["effects", WandSparkles, "Effects"],
           ["crop", Crop, "Crop"],
           ["adjust", SlidersHorizontal, "Adjust"],
           ["text", Type, "Text"],

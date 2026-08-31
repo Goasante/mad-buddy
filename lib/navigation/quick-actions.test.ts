@@ -37,7 +37,6 @@ describe("the launcher appears throughout the app", () => {
       "/messages",
       "/notifications",
       "/profile",
-      "/settings",
       "/badges",
       "/buddy-score"
     ]) {
@@ -50,6 +49,15 @@ describe("the launcher appears throughout the app", () => {
     // /safe-arrival is a safety surface; nothing floats over check-in controls.
     expect(showsQuickActions("/scan")).toBe(false);
     expect(showsQuickActions("/safe-arrival")).toBe(false);
+  });
+
+  it("stays off focused configuration surfaces", () => {
+    /* Settings is rows of toggles down the right edge -- where the pill sits.
+     * Reserving space at the FOOT of a page cannot fix a control somebody
+     * meets mid-scroll, which is why this is a visibility rule rather than
+     * more padding. Sub-pages are the same surface. */
+    expect(showsQuickActions("/settings")).toBe(false);
+    expect(showsQuickActions("/settings/glow-visibility")).toBe(false);
   });
 
   it("leaves detail routes their own corner", () => {
@@ -306,7 +314,12 @@ describe("positioning clears the navigation and the safe area", () => {
     const trigger = css.slice(css.indexOf(".quick-actions-trigger {"));
     const triggerBlock = trigger.slice(0, trigger.indexOf("}"));
     expect(triggerBlock).toContain("width: 2.75rem");
-    expect(triggerBlock).toContain("height: 3.75rem");
+    /* The height moved into --quick-actions-size so the app shell can reserve
+     * exactly this much space beneath a scrolling page. The touch target is
+     * unchanged -- asserted here on the token's VALUE, so tokenising it cannot
+     * quietly shrink the control. */
+    expect(triggerBlock).toContain("height: var(--quick-actions-size)");
+    expect(css).toContain("--quick-actions-size: 3.75rem");
   });
 
   it("keeps 44px touch targets on every action", () => {

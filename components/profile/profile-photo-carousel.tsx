@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, ImagePlus, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, ImagePlus, Loader2, Trash2, X } from "lucide-react";
 import { useCallback, useState, useTransition } from "react";
 
 import {
@@ -37,18 +37,22 @@ import { cn } from "@/lib/utils";
 export function ProfilePhotoCarousel({
   photos,
   isOwner,
-  onChanged
+  onChanged,
+  presentation = "carousel"
 }: {
   /** Already filtered by the server for this viewer. */
   photos: readonly ProfilePhoto[];
   isOwner: boolean;
   /** Called after any mutation, so the page can refetch. */
   onChanged?: () => void;
+  /** Compact three-up presentation used by the owner's reference-aligned page. */
+  presentation?: "carousel" | "showcase";
 }) {
   const [index, setIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const count = photos.length;
   // Clamped during render: deleting the last photo would otherwise leave the
@@ -126,6 +130,53 @@ export function ProfilePhotoCarousel({
   if (count === 0 && !isOwner) return null;
 
   const current = photos[active];
+
+  if (presentation === "showcase" && count > 0) {
+    const viewedPhoto = viewerIndex === null ? null : photos[viewerIndex];
+    return (
+      <section aria-labelledby="profile-showcase-heading">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="profile-showcase-heading" className="text-sm font-semibold">My Showcase</h2>
+          <p className="text-xs tabular-nums text-muted-foreground">{count} of {MAX_PROFILE_PHOTOS}</p>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2.5">
+          {photos.map((photo, photoIndex) => (
+            <button
+              key={photo.id}
+              type="button"
+              onClick={() => setViewerIndex(photoIndex)}
+              className="focus-ring safe-motion group relative aspect-[4/5] overflow-hidden rounded-2xl border border-border/60 bg-secondary/40 shadow-sm"
+              aria-label={`Open showcase photo ${photoIndex + 1} of ${count}`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- signed profile media URL */}
+              <img src={photo.url} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none" />
+              {photoIndex === count - 1 && count > 1 ? (
+                <span className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-black/45 text-white backdrop-blur-sm" aria-hidden="true">
+                  <ChevronRight className="h-4 w-4" />
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+
+        {viewedPhoto ? (
+          <div className="fixed inset-0 z-[80] grid place-items-center bg-black/90 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]" role="dialog" aria-modal="true" aria-label={`Showcase photo ${viewerIndex! + 1} of ${count}`}>
+            <button type="button" onClick={() => setViewerIndex(null)} className="focus-ring absolute right-4 top-[max(1rem,env(safe-area-inset-top))] grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white" aria-label="Close photo viewer">
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element -- signed profile media URL */}
+            <img src={viewedPhoto.url} alt={`Showcase photo ${viewerIndex! + 1}`} className="max-h-[82svh] max-w-full rounded-2xl object-contain" />
+            {count > 1 ? (
+              <div className="absolute inset-x-4 top-1/2 flex -translate-y-1/2 justify-between">
+                <button type="button" onClick={() => setViewerIndex((viewerIndex! - 1 + count) % count)} className="focus-ring grid h-11 w-11 place-items-center rounded-full bg-black/55 text-white" aria-label="Previous showcase photo"><ChevronLeft className="h-5 w-5" /></button>
+                <button type="button" onClick={() => setViewerIndex((viewerIndex! + 1) % count)} className="focus-ring grid h-11 w-11 place-items-center rounded-full bg-black/55 text-white" aria-label="Next showcase photo"><ChevronRight className="h-5 w-5" /></button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <section aria-labelledby="profile-photos-heading" className="profile-photos">

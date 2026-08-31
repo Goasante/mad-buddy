@@ -79,7 +79,26 @@ const PROMINENT_CARD_IDS = new Set<SmartCard["id"]>(["safe_arrival", "journey"])
  */
 const PRISM_CARD_IDS = new Set<SmartCard["id"]>(["suggestions"]);
 
-export function SmartCardHero({ card }: { card: SmartCard }) {
+export function SmartCardHero({
+  card,
+  /**
+   * Something more urgent already owns the screen.
+   *
+   * On a brand-new account the activation hero is the one thing that matters,
+   * and this card's saturated full-bleed gradient was the most vivid object on
+   * Home -- so the eye landed on it first and the actual next step read as
+   * secondary. Deferring keeps the card and everything it says, and only
+   * lowers its visual volume so the hierarchy matches the priority.
+   *
+   * SAFETY STATES ARE NEVER DEFERRED. The caller decides, and it does not pass
+   * this when a prominent (Safe Arrival / active Journey) card is showing --
+   * those outrank activation by design.
+   */
+  deferred = false
+}: {
+  card: SmartCard;
+  deferred?: boolean;
+}) {
   const [animatedPercent, setAnimatedPercent] = useState(0);
   const [pending, startTransition] = useTransition();
   const percent = card.progress?.percent ?? 0;
@@ -122,10 +141,19 @@ export function SmartCardHero({ card }: { card: SmartCard }) {
         // sit on top of it. A near-black ground stays behind, so the card is
         // still a solid, readable object before WebGL paints -- and remains
         // one if WebGL never paints at all.
-        showPrism
-          ? "bg-[#12060f]"
-          : "bg-[linear-gradient(118deg,#9d1268_0%,#b81a5c_32%,#cc2f44_60%,#d9482c_100%)]"
-      } shadow-[0_10px_30px_hsl(var(--shadow)/0.18)] transition-transform duration-200 ease-out active:scale-[0.99] motion-reduce:active:scale-100 ${
+        deferred
+          ? // Yielding to the activation hero: the app's own card surface with
+            // a warm accent edge instead of a full-bleed gradient. Same card,
+            // same copy, same destination -- a quieter voice.
+            "border border-border/70 bg-card/70"
+          : showPrism
+            ? "bg-[#12060f]"
+            : "bg-[linear-gradient(118deg,#9d1268_0%,#b81a5c_32%,#cc2f44_60%,#d9482c_100%)]"
+      } ${
+        deferred
+          ? "shadow-none"
+          : "shadow-[0_10px_30px_hsl(var(--shadow)/0.18)]"
+      } transition-transform duration-200 ease-out active:scale-[0.99] motion-reduce:active:scale-100 ${
         prominent ? "px-5 pb-5 pt-5" : "px-5 pb-4 pt-4"
       }`}
     >
@@ -227,7 +255,7 @@ export function SmartCardHero({ card }: { card: SmartCard }) {
             of the same thing: the title stays bold and dominant, and the gap
             below it closes. */}
         <p
-          className={`font-bold leading-[1.15] text-white ${
+          className={`font-bold leading-[1.15] ${deferred ? "text-foreground" : "text-white"} ${
             prominent ? "text-[1.375rem]" : "text-[1.25rem]"
           }`}
         >
@@ -236,7 +264,7 @@ export function SmartCardHero({ card }: { card: SmartCard }) {
         {/* Solid white, not white/90 — at this size the alpha variant measured
             4.23:1 against the gradient, just under the 4.5:1 AA floor. */}
         <p
-          className={`text-[0.8125rem] font-normal leading-[1.45] text-white ${
+          className={`text-[0.8125rem] font-normal leading-[1.45] ${deferred ? "text-muted-foreground" : "text-white"} ${
             prominent ? "mt-2" : "mt-1.5"
           }`}
         >
@@ -254,12 +282,12 @@ export function SmartCardHero({ card }: { card: SmartCard }) {
                 them cost a whole line of height to say it twice as slowly.
                 The progress meter itself is never dropped. */}
             <div className="flex flex-wrap items-baseline gap-x-2">
-              <p className="text-[0.9375rem] font-semibold tabular-nums text-white">
+              <p className={`text-[0.9375rem] font-semibold tabular-nums ${deferred ? "text-foreground" : "text-white"}`}>
                 {card.progress.percent}% Complete
               </p>
               {/* Supporting text, so it recedes. Still clears AA at this size
                   against the gradient's dark left end. */}
-              <p className={`text-xs font-normal text-white/85 ${prominent ? "w-full mt-0.5" : ""}`}>
+              <p className={`text-xs font-normal ${deferred ? "text-muted-foreground" : "text-white/85"} ${prominent ? "w-full mt-0.5" : ""}`}>
                 {card.progress.label}
               </p>
             </div>
@@ -281,7 +309,7 @@ export function SmartCardHero({ card }: { card: SmartCard }) {
             the 4.5:1 AA floor. Amber survives as the progress fill, where it is
             decorative and carries no text. */}
         <span
-          className={`inline-flex items-center gap-2 text-[0.9375rem] font-bold text-white ${
+          className={`inline-flex items-center gap-2 text-[0.9375rem] font-bold ${deferred ? "text-primary" : "text-white"} ${
             card.progress ? (prominent ? "mt-4" : "mt-3") : "mt-1"
           }`}
         >

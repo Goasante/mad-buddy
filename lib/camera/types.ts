@@ -78,4 +78,16 @@ export type CameraSessionState = {
   recordingSeconds: number;
   media: LocalCameraMedia | null;
   error: CameraFailureReason | null;
+  /**
+   * Which capture mode the shutter is in (Slice 2).
+   *
+   * The two modes are a UI affordance over ONE recorder, never two recording
+   * implementations: photo mode keeps the original tap-photo / hold-video
+   * gesture, and video mode makes the same recording explicit as tap-to-start
+   * / tap-to-stop. Both call startVideoRecording.
+   */
+  captureMode: CameraCaptureMode;
 };
+
+/** Photo: tap captures, hold records. Video: tap starts and stops recording. */
+export type CameraCaptureMode = "photo" | "video";

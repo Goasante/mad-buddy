@@ -1,4 +1,5 @@
 import type { LocalCameraImage } from "@/lib/camera/types";
+import type { EffectInstance } from "@/lib/camera/effect-document";
 
 export const IMAGE_EDIT_HISTORY_LIMIT = 40;
 export const STRAIGHTEN_RANGE = { min: -15, max: 15 } as const;
@@ -61,6 +62,7 @@ export type ImageEditDocument = {
   geometry: ImageGeometry;
   look: ImageLookState;
   adjustments: ImageAdjustments;
+  effects: EffectInstance[];
   textOverlays: ImageTextOverlay[];
   drawingStrokes: ImageDrawingStroke[];
 };
@@ -102,18 +104,20 @@ export function createImageEditDocument(): ImageEditDocument {
     },
     look: { id: "original", intensity: 0, parameters: {} },
     adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
+    effects: [],
     textOverlays: [],
     drawingStrokes: []
   };
 }
 
-export function createImageEditSession(source: LocalCameraImage): ImageEditSession {
+export function createImageEditSession(source: LocalCameraImage, present?: ImageEditDocument): ImageEditSession {
   const initial = createImageEditDocument();
+  const seeded = present && !equalDocuments(initial, present) ? present : initial;
   return {
     source,
     initial,
-    present: initial,
-    past: [],
+    present: seeded,
+    past: seeded === initial ? [] : [initial],
     future: [],
     lifecycle: "loading",
     error: null

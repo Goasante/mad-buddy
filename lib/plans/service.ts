@@ -5,23 +5,21 @@ import { guardAction } from "@/lib/admin/enforcement";
 import { upgradePromptFor } from "@/lib/billing/entitlements";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
-import { deliverNotification } from "@/lib/notifications/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { PLAN_CATEGORIES } from "@/lib/plans/plan-covers";
+import {
+  canonicalPlanErrorIdentifier,
+  mapCanonicalPlanError,
+  toCanonicalPlanLimit,
+  type PlanServiceCode
+} from "@/lib/plans/canonical-contract";
 import type { PlanCategory } from "@/lib/supabase/database.types";
 import {
   isRsvpChoice,
   planTierLimitsFor,
-  resolveRsvp,
   validatePlanTiming,
   validatePlanTitle
 } from "@/lib/social/plans";
-import {
-  activePlanCount,
-  eligibleInvitees,
-  resolvePlanAccess,
-  resolvePlanCapacity
-} from "@/lib/social/planning";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import type { PlanType, SubscriptionPlan } from "@/lib/supabase/database.types";
@@ -36,7 +34,16 @@ import type { PlanType, SubscriptionPlan } from "@/lib/supabase/database.types";
  * service-role path, so they live here.
  */
 
-export type ServiceResult = { ok: boolean; message: string; planId?: string };
+export type ServiceResult = {
+  ok: boolean;
+  message: string;
+  code?: PlanServiceCode;
+  planId?: string;
+  conversationId?: string;
+  created?: boolean;
+  rsvpStatus?: string;
+  addedCount?: number;
+};
 
 export type PlanListItem = {
   id: string;
@@ -56,13 +63,28 @@ export type PlanListItem = {
   myRsvp: string;
   goingCount: number;
   attendeeCount: number;
+  /**
+   * The Plan conversation, but ONLY when this viewer is a joined member of it.
+   * Null means "no chat for you yet" -- an invitee who has not responded, or a
+   * Plan whose conversation does not exist. The UI keys the Plan Chat CTA off
+   * this, so it can never offer a door the server would close.
+   */
+  myConversationId: string | null;
 };
 
-export type PlanInviteeItem = { id: string; name: string; username: string; plan: SubscriptionPlan };
+export type PlanInviteeItem = {
+  id: string;
+  name: string;
+  username: string;
+  /** Safe profile avatar, or null for the canonical fallback. */
+  avatarUrl: string | null;
+  plan: SubscriptionPlan;
+};
 
 const uuidSchema = z.string().uuid();
 
 const createPlanSchema = z.object({
+  requestKey: uuidSchema,
   title: z.string(),
   description: z.string().max(500).optional(),
   planType: z.enum(["quick", "scheduled", "poll"]),
@@ -81,17 +103,17 @@ const createPlanSchema = z.object({
   participantIds: z.array(uuidSchema).max(500).optional()
 });
 
+const addParticipantsSchema = z.object({
+  planId: uuidSchema,
+  participantIds: z.array(uuidSchema).min(1).max(500)
+});
+
 function serviceRoleEnvMessage(): string | null {
   const env = getSupabaseServerEnv();
   if (!env.url || !env.serviceRoleKey) {
     return "This action needs the server database configuration.";
   }
   return null;
-}
-
-async function senderName(admin: ReturnType<typeof createSupabaseAdminClient>, userId: string) {
-  const { data } = await admin.from("profiles").select("full_name").eq("user_id", userId).maybeSingle();
-  return data?.full_name?.trim() || "A Muddy";
 }
 
 /**
@@ -125,13 +147,21 @@ export async function listPlansForUser(
     friendship.user_one_id === userId ? friendship.user_two_id : friendship.user_one_id
   );
   const inviteeProfiles = friendIds.length
-    ? (await admin.from("profiles").select("user_id, full_name, username").in("user_id", friendIds)).data ?? []
+    ? (await admin.from("profiles").select("user_id, full_name, username, avatar_url").in("user_id", friendIds)).data ?? []
     : [];
   const inviteePlans = await loadEffectivePlansForUsers(admin, friendIds);
   const invitees: PlanInviteeItem[] = inviteeProfiles.map((profile) => ({
         id: profile.user_id,
         name: profile.full_name?.trim() || "A Muddy",
         username: profile.username,
+        /* THE SAME PERSON EITHER SIDE OF A TAP.
+         *
+         * This query never selected avatar_url, so a Muddy shown with their
+         * real photo on Home arrived in the Plan composer as a bare initial --
+         * the app appearing to forget who they were between two screens. One
+         * more column on a query that already runs: no extra round trip and
+         * no per-participant fetch. */
+        avatarUrl: profile.avatar_url,
         plan: inviteePlans.get(profile.user_id) ?? "free"
       }));
 
@@ -160,6 +190,43 @@ export async function listPlansForUser(
       .in("id", planIds),
     admin.from("plan_participants").select("plan_id, user_id, role, rsvp_status").in("plan_id", planIds)
   ]);
+
+  /* THE PLAN CHAT LINK, AND WHO IS ALLOWED TO SEE IT.
+   *
+   * Plan detail had no way into the Plan conversation at all -- the one place
+   * the people meeting up would actually coordinate was unreachable from the
+   * Plan itself.
+   *
+   * Membership is the gate, not RSVP. The canonical rule admits `going` and
+   * `maybe` (plus friendship/block checks) via reconcile_plan_conversation_
+   * members, and re-deriving that here would be a second, drifting copy of it.
+   * Reading conversation_members instead means the button appears exactly when
+   * the server would let the user in -- so an invitee never taps a CTA that is
+   * about to refuse them, and a rule change in the migration needs no matching
+   * change here. */
+  const { data: planConversations } = await admin
+    .from("conversations")
+    .select("id, context_id")
+    .eq("context_type", "plan")
+    .in("context_id", planIds);
+
+  const conversationIds = (planConversations ?? []).map((row) => row.id);
+  const joinedConversationIds = new Set<string>();
+  if (conversationIds.length > 0) {
+    const { data: myMemberships } = await admin
+      .from("conversation_members")
+      .select("conversation_id")
+      .eq("user_id", userId)
+      .eq("status", "joined")
+      .in("conversation_id", conversationIds);
+    for (const row of myMemberships ?? []) joinedConversationIds.add(row.conversation_id);
+  }
+  const myConversationByPlan = new Map<string, string>();
+  for (const row of planConversations ?? []) {
+    if (row.context_id && joinedConversationIds.has(row.id)) {
+      myConversationByPlan.set(row.context_id, row.id);
+    }
+  }
 
   const organiserIds = [...new Set((planRows ?? []).map((plan) => plan.creator_id))];
   const organiserPlans = await loadEffectivePlansForUsers(admin, organiserIds);
@@ -204,7 +271,9 @@ export async function listPlansForUser(
       isHost,
       myRsvp: isHost ? "going" : myRow?.rsvp_status ?? "invited",
       goingCount: counts.going,
-      attendeeCount: counts.total
+      attendeeCount: counts.total,
+      // Present only when this viewer is genuinely a joined member.
+      myConversationId: myConversationByPlan.get(plan.id) ?? null
     };
   });
 
@@ -242,80 +311,50 @@ export async function createPlan(userId: string, input: unknown): Promise<Servic
   const access = await getCurrentSubscriptionAccess(userId);
   const limits = planTierLimitsFor(access.plan);
 
-  if ((await activePlanCount(admin, userId)) >= limits.maxActivePlans) {
-    return {
-      ok: false,
-      message:
-        upgradePromptFor("max_active_plans", access.plan) ?? "You've reached your active plan limit."
-    };
+  const { data, error } = await admin.rpc("create_plan_lifecycle", {
+    p_actor_id: userId,
+    p_request_key: parsed.data.requestKey,
+    p_title: parsed.data.title.trim(),
+    p_description: parsed.data.description?.trim() || null,
+    p_plan_type: parsed.data.planType,
+    p_start_at: parsed.data.startAt ?? null,
+    p_end_at: parsed.data.endAt ?? null,
+    p_timezone: parsed.data.timezone || "UTC",
+    p_rsvp_deadline: parsed.data.rsvpDeadline ?? null,
+    p_place_type: parsed.data.placeType ?? "custom",
+    p_custom_place_text: parsed.data.customPlaceText?.trim() || null,
+    p_reminder_minutes: parsed.data.reminderMinutes ?? null,
+    p_category: parsed.data.category ?? null,
+    p_invitee_ids: [...new Set(parsed.data.participantIds ?? [])],
+    p_initial_going_ids: [],
+    p_source_hangout_id: null,
+    p_effective_max_active_plans: toCanonicalPlanLimit(limits.maxActivePlans),
+    p_effective_max_participants: toCanonicalPlanLimit(limits.maxPlanParticipants)
+  });
+
+  if (error || !data?.[0]) {
+    const identifier = canonicalPlanErrorIdentifier(error);
+    const mapped = mapCanonicalPlanError(error, "Couldn't create the plan. Try again.");
+    if (mapped.code === "limit_reached") {
+      return {
+        ...mapped,
+        message:
+          identifier === "PLAN_ACTIVE_LIMIT_REACHED"
+            ? upgradePromptFor("max_active_plans", access.plan) ?? "You've reached your active plan limit."
+            : `Plans can have up to ${limits.maxPlanParticipants} people.`
+      };
+    }
+    return mapped;
   }
 
-  const invitees = await eligibleInvitees(admin, userId, parsed.data.participantIds ?? []);
-  // +1 for the host themselves.
-  if (invitees.length + 1 > limits.maxPlanParticipants) {
-    return {
-      ok: false,
-      message: `Plans can have up to ${limits.maxPlanParticipants} people on your plan.`
-    };
-  }
-
-  const isPoll = parsed.data.planType === "poll";
-  const { data: plan, error } = await admin
-    .from("plans")
-    .insert({
-      creator_id: userId,
-      title: parsed.data.title.trim(),
-      description: parsed.data.description?.trim() || null,
-      plan_type: parsed.data.planType as PlanType,
-      status: isPoll ? "polling" : "inviting",
-      start_at: parsed.data.startAt ?? null,
-      end_at: parsed.data.endAt ?? null,
-      timezone: parsed.data.timezone || "UTC",
-      rsvp_deadline: parsed.data.rsvpDeadline ?? null,
-      max_participants: limits.maxPlanParticipants === Infinity ? 500 : limits.maxPlanParticipants,
-      place_type: parsed.data.placeType ?? "custom",
-      custom_place_text: parsed.data.customPlaceText?.trim() || null,
-      reminder_minutes: parsed.data.reminderMinutes ?? null,
-      category: parsed.data.category ?? null
-    })
-    .select("id")
-    .single();
-
-  if (error || !plan) return { ok: false, message: "Couldn't create the plan. Try again." };
-
-  const { recordMilestone } = await import("@/lib/onboarding/service");
-  await recordMilestone(admin, userId, "first_plan_created");
-
-  // Host row (auto-going) plus one invited row per eligible Muddy.
-  const rows = [
-    { plan_id: plan.id, user_id: userId, role: "host" as const, rsvp_status: "going" as const },
-    ...invitees.map((inviteeId) => ({
-      plan_id: plan.id,
-      user_id: inviteeId,
-      role: "participant" as const,
-      rsvp_status: "invited" as const,
-      invited_by: userId
-    }))
-  ];
-  await admin.from("plan_participants").insert(rows);
-
-  if (invitees.length > 0) {
-    const name = await senderName(admin, userId);
-    await Promise.all(
-      invitees.map((inviteeId) =>
-        deliverNotification(admin, {
-          userId: inviteeId,
-          senderId: userId,
-          category: "plans",
-          type: `plan:${plan.id}`,
-          title: "New plan invite",
-          message: `${name} invited you to "${parsed.data.title.trim()}".`
-        })
-      )
-    );
-  }
-
-  return { ok: true, message: "Plan created.", planId: plan.id };
+  const result = data[0];
+  return {
+    ok: true,
+    message: "Plan created.",
+    planId: result.plan_id,
+    conversationId: result.conversation_id,
+    created: result.created
+  };
 }
 
 export async function rsvp(userId: string, planId: string, status: string): Promise<ServiceResult> {
@@ -325,61 +364,129 @@ export async function rsvp(userId: string, planId: string, status: string): Prom
   if (!isRsvpChoice(status)) return { ok: false, message: "Choose Going, Maybe, or Can't make it." };
 
   const admin = createSupabaseAdminClient();
-  const access = await resolvePlanAccess(admin, userId, planId);
-  if (!access.exists) return { ok: false, message: "Plan not found." };
-  if (!access.participant && !access.isCreator) {
-    return { ok: false, message: "You're not on this plan." };
-  }
-
-  const { data: plan } = await admin
-    .from("plans")
-    .select("status, rsvp_deadline")
-    .eq("id", planId)
-    .maybeSingle();
-  if (!plan) return { ok: false, message: "Plan not found." };
-
-  const capacity = await resolvePlanCapacity(admin, planId);
-  const decision = resolveRsvp({
-    currentStatus: access.participant?.rsvp_status ?? "invited",
-    desired: status,
-    planStatus: plan.status,
-    rsvpDeadlineMs: plan.rsvp_deadline ? Date.parse(plan.rsvp_deadline) : null,
-    nowMs: Date.now(),
-    // Exclude the responder's own seat from the taken count.
-    goingCount:
-      access.participant?.rsvp_status === "going" ? Math.max(0, capacity.goingCount - 1) : capacity.goingCount,
-    maxParticipants: capacity.maxParticipants
+  const { data, error } = await admin.rpc("set_plan_participant_rsvp", {
+    p_actor_id: userId,
+    p_plan_id: planId,
+    p_status: status
   });
+  if (error || !data?.[0]) return mapCanonicalPlanError(error, "Couldn't save your RSVP.");
 
-  if (!decision.allowed) {
-    const message =
-      decision.reason === "removed"
-        ? "You're no longer on this plan."
-        : decision.reason === "plan_closed"
-          ? "This plan is closed."
-          : "The RSVP deadline has passed.";
-    return { ok: false, message };
-  }
-
-  const finalStatus = decision.waitlisted ? "waitlisted" : decision.status;
-  const { error } = await admin
-    .from("plan_participants")
-    .update({
-      rsvp_status: finalStatus,
-      responded_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    })
-    .eq("plan_id", planId)
-    .eq("user_id", userId);
-
-  if (error) return { ok: false, message: "Couldn't save your RSVP." };
-
-  const message = decision.waitlisted
+  const result = data[0];
+  const message = result.rsvp_status === "waitlisted"
     ? "This plan is full, you're on the waitlist."
     : status === "going"
       ? "You're going."
       : status === "maybe"
         ? "You marked this as Maybe."
         : "You marked this as Can't make it.";
-  return { ok: true, message };
+  return {
+    ok: true,
+    message,
+    conversationId: result.conversation_id,
+    rsvpStatus: result.rsvp_status
+  };
+}
+
+export async function addPlanParticipants(
+  userId: string,
+  planId: string,
+  participantIds: string[]
+): Promise<ServiceResult> {
+  const envMessage = serviceRoleEnvMessage();
+  if (envMessage) return { ok: false, code: "server_unavailable", message: envMessage };
+
+  const parsed = addParticipantsSchema.safeParse({ planId, participantIds });
+  if (!parsed.success) return { ok: false, code: "validation", message: "Choose at least one Muddy." };
+
+  const rateLimit = await consumeRateLimit({ action: "plans.invite", userId });
+  if (!rateLimit.allowed) {
+    return { ok: false, code: "rate_limited", message: rateLimitMessage(rateLimit.resetAt) };
+  }
+
+  const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId, surface: "plans" });
+  if (!guard.allowed) return { ok: false, code: "not_authorized", message: guard.message };
+
+  const access = await getCurrentSubscriptionAccess(userId);
+  const limits = planTierLimitsFor(access.plan);
+  const { data, error } = await admin.rpc("add_plan_participants", {
+    p_actor_id: userId,
+    p_plan_id: parsed.data.planId,
+    p_participant_ids: [...new Set(parsed.data.participantIds)],
+    p_effective_max_participants: toCanonicalPlanLimit(limits.maxPlanParticipants)
+  });
+  if (error || !data?.[0]) return mapCanonicalPlanError(error, "Couldn't add those people.");
+
+  return {
+    ok: true,
+    message:
+      data[0].added_count > 0
+        ? `Invited ${data[0].added_count} to the plan.`
+        : "Those Muddies are already on the plan.",
+    conversationId: data[0].conversation_id,
+    addedCount: data[0].added_count
+  };
+}
+
+export async function convertHangoutToPlan(
+  userId: string,
+  hangoutId: string,
+  title?: string
+): Promise<ServiceResult> {
+  const envMessage = serviceRoleEnvMessage();
+  if (envMessage) return { ok: false, code: "server_unavailable", message: envMessage };
+  if (!uuidSchema.safeParse(hangoutId).success) {
+    return { ok: false, code: "not_found", message: "UpFor not found." };
+  }
+
+  const rateLimit = await consumeRateLimit({ action: "plans.create", userId });
+  if (!rateLimit.allowed) {
+    return { ok: false, code: "rate_limited", message: rateLimitMessage(rateLimit.resetAt) };
+  }
+
+  const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId, surface: "plans" });
+  if (!guard.allowed) return { ok: false, code: "not_authorized", message: guard.message };
+
+  const { data: session } = await admin
+    .from("hangout_sessions")
+    .select("activity_type, message")
+    .eq("id", hangoutId)
+    .maybeSingle();
+  if (!session) return { ok: false, code: "not_found", message: "UpFor not found." };
+
+  const access = await getCurrentSubscriptionAccess(userId);
+  const limits = planTierLimitsFor(access.plan);
+  const planTitle = (title?.trim() || `${session.activity_type} hangout`).slice(0, 80);
+  const { data, error } = await admin.rpc("create_plan_lifecycle", {
+    p_actor_id: userId,
+    // A source UpFor can become exactly one Plan, so its UUID is the stable
+    // retry key across tabs, devices and lost responses.
+    p_request_key: hangoutId,
+    p_title: planTitle,
+    p_description: session.message,
+    p_plan_type: "quick",
+    p_start_at: null,
+    p_end_at: null,
+    p_timezone: "UTC",
+    p_rsvp_deadline: null,
+    p_place_type: "decide_in_chat",
+    p_custom_place_text: null,
+    p_reminder_minutes: null,
+    p_category: null,
+    p_invitee_ids: [],
+    p_initial_going_ids: [],
+    p_source_hangout_id: hangoutId,
+    p_effective_max_active_plans: toCanonicalPlanLimit(limits.maxActivePlans),
+    p_effective_max_participants: toCanonicalPlanLimit(limits.maxPlanParticipants)
+  });
+  if (error || !data?.[0]) return mapCanonicalPlanError(error, "Couldn't create the plan.");
+
+  return {
+    ok: true,
+    message: "Plan created from your hangout.",
+    planId: data[0].plan_id,
+    conversationId: data[0].conversation_id,
+    created: data[0].created
+  };
 }

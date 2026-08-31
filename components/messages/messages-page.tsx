@@ -1241,11 +1241,25 @@ export function MessagesPageContent({
                         size="lg"
                         membershipTier={publicMembershipTier(selected.otherPlan)}
                       />
-                      <p className="mt-4 text-[0.9375rem] font-semibold">{selected.title}</p>
+                      {/* NAMES THE RELATIONSHIP, NOT JUST THE PERSON.
+                          The header already says who this is, so repeating the
+                          name alone was the screen saying the same thing
+                          twice. "You and X are Muddies" is the one fact the
+                          header does not carry, and it is why the empty screen
+                          is worth anything: it confirms the connection landed.
+
+                          It still never speaks for the user -- no prefilled
+                          text, no suggested wording, no confetti. "When you're
+                          ready" leaves the first message theirs to write. */}
+                      <p className="mt-4 max-w-[22rem] text-[0.9375rem] font-semibold leading-snug">
+                        {context.shared && context.subtitle
+                          ? selected.title
+                          : `You and ${selected.title} are Muddies.`}
+                      </p>
                       <p className="mt-1 max-w-[22rem] text-sm leading-relaxed text-muted-foreground">
                         {context.shared && context.subtitle
                           ? `${context.subtitle}. Say hello.`
-                          : "Say hello and start the conversation."}
+                          : "Say hi when you're ready."}
                       </p>
                     </div>
                   ) : (
@@ -1553,7 +1567,14 @@ function ConversationIdentity({
       <span className="flex min-w-0 flex-1 flex-col justify-center">
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[0.9375rem] font-semibold leading-tight">{conversation.title}</span>
-          <PremiumPlanBadge plan={conversation.otherPlan} compact />
+          {/* NO SUBSCRIPTION TIER IN A PRIVATE CONVERSATION.
+              A Crown beside somebody's name told you what they pay, which has
+              nothing to do with talking to them and quietly sorts your friends
+              into paid and free at the top of a private chat. The badge stays
+              everywhere it is genuinely about entitlement -- Profile, billing,
+              the inbox list -- and leaves the one screen that is only ever
+              two people talking. Trusted Member below is different: it is a
+              safety signal about the person, not a purchase. */}
           {/* THE DM identity surface.
               A direct chat has one other person, established once at the top,
               so the mark belongs here and nowhere else in the thread. Putting

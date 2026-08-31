@@ -188,12 +188,12 @@ describe("labels stay coarse", () => {
   it("reads in order, tightest to widest", () => {
     // Ids alone are not enough: swapping two labels would leave every
     // boundary test passing while the card told people the wrong thing.
-    expect(proximityBandLabel("right_here")).toBe("Right here");
-    expect(proximityBandLabel("around_you")).toBe("Around you");
-    expect(proximityBandLabel("close_by")).toBe("Close by");
-    expect(proximityBandLabel("nearby")).toBe("Nearby");
-    expect(proximityBandLabel("around_town")).toBe("Around town");
-    expect(proximityBandLabel("further_away")).toBe("Further away");
+    expect(proximityBandLabel("right_here")).toBe("Right Here");
+    expect(proximityBandLabel("around_you")).toBe("Just Around");
+    expect(proximityBandLabel("close_by")).toBe("Close By");
+    expect(proximityBandLabel("nearby")).toBe("In Your Area");
+    expect(proximityBandLabel("around_town")).toBe("Around Town");
+    expect(proximityBandLabel("further_away")).toBe("Across Town");
   });
 
   it("has copy for every band that can be rendered", () => {

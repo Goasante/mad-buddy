@@ -41,6 +41,7 @@ import { PullToRefresh } from "@/components/ui/pull-to-refresh";
 import { cn } from "@/lib/utils";
 import { MadBuddyOrb, ORB_HOME_HREF } from "@/components/app-shell/mad-buddy-orb";
 import { QuickActionsLauncher } from "@/components/app-shell/quick-actions-launcher";
+import { showsQuickActions } from "@/lib/navigation/quick-actions";
 import { ImmersiveModeProvider, useImmersiveMode } from "@/components/app-shell/immersive-mode";
 import { bindCachesToSession } from "@/lib/cache/session-binding";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
@@ -307,6 +308,13 @@ function AppShellInner({
   }, [cameraOpen, pathname]);
   const immersiveHeader = hasImmersiveHeader(pathname);
   const showsWallpaper = hasWallpaper(pathname);
+  /* Reserve space for the launcher only where the launcher actually is.
+   *
+   * The SAME predicate the launcher renders itself from, so the space and the
+   * pill can never disagree: Safe Arrival and open conversations exclude it
+   * deliberately, and reserving its footprint there would leave a dead strip
+   * under a page that has no pill above it. */
+  const reservesQuickActions = !immersive && showsQuickActions(pathname);
   // Canonical unread count, shared with the mobile header via the same hook —
   // one fetch/poll/broadcast implementation, so the sidebar badge and the
   // header Bell badge can never disagree.
@@ -417,7 +425,39 @@ function AppShellInner({
           <main
           id="app-main-content"
           className={cn(
-            "relative flex-1 px-4 pb-5 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:overflow-y-auto md:pt-0",
+            /* The bottom inset belongs HERE, on the element that scrolls.
+             *
+             * The outer shell already reserves the bar's footprint, but <main>
+             * is flex-1 and owns the scroll on mobile -- so that reservation
+             * sits outside the scrolling box and the final card still slides
+             * under the fixed bar. `pb-5` alone was 1.25rem against a 5rem bar
+             * plus the device inset.
+             *
+             * Computed from the same canonical variables the bar itself uses,
+             * never a per-device magic number: --mobile-nav-height is the bar's
+             * own height and the safe-area inset is what it pads itself by.
+             * Desktop has no bottom bar, so md: returns to ordinary spacing.
+             *
+             * THE FLOATING LAUNCHER IS RESERVED FOR HERE TOO.
+             *
+             * The bar's height was cleared but the Quick Actions pill above it
+             * was not, so the last 3.25rem of every scrolling page ended
+             * underneath a fixed control -- a primary CTA could come to rest
+             * beneath it and be unreadable, or swallow the tap outright. This
+             * is the one place a page's bottom inset is decided, so the fix
+             * belongs here rather than as a margin on whichever screen the
+             * collision was noticed. --quick-actions-reserve carries the
+             * pill's own geometry, and collapses to ordinary spacing on
+             * desktop where the pill sits clear of the content column. */
+            "relative flex-1 px-4 sm:px-6 lg:px-8 lg:pb-6 md:min-h-0 md:overflow-y-auto md:pt-0",
+            immersive
+              ? // The bar has stepped aside, so reserving its height would
+                // leave a dead strip under an open conversation. The launcher
+                // is hidden while immersive, so its reserve goes too.
+                "pb-5"
+              : reservesQuickActions
+                ? "pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)+var(--quick-actions-reserve))] md:pb-5"
+                : "pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)+1.25rem)] md:pb-5",
             // Both mobile headers are FIXED (out of normal flow), so <main>
             // reserves the matching footprint here — the one place either
             // offset is computed, so no page needs its own top-padding guess

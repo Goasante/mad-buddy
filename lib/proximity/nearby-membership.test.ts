@@ -15,7 +15,14 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const NOW = Date.UTC(2026, 0, 15);
 const DAY = 86_400_000;
 
-const VIEWER = { latitude: 0, longitude: 0, confidence: "high" as const };
+/* A CURRENT viewer fix. The engine now requires one before it will compute any
+ * distance, because an old position corrupts a band from either end. */
+const VIEWER = {
+  latitude: 0,
+  longitude: 0,
+  confidence: "high" as const,
+  last_updated: new Date(NOW - 60_000).toISOString()
+};
 
 /** ~1km away → "close" at high confidence. */
 const CLOSE = { latitude: 0.009, longitude: 0 };

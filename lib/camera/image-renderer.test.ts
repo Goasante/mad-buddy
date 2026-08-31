@@ -23,14 +23,15 @@ afterEach(() => {
 });
 
 describe("canonical image renderer", () => {
-  it("publishes the required render order with an explicit future filter insertion point", () => {
+  it("publishes the required render order with scene and tracked effect stages", () => {
     expect(IMAGE_RENDER_ORDER).toEqual([
       "orientation_mirror",
       "crop",
       "straighten_rotation",
       "base_look",
       "manual_adjustments",
-      "future_effects",
+      "scene_effects",
+      "tracked_face_effects",
       "overlays"
     ]);
   });

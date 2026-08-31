@@ -52,6 +52,23 @@ export function Modal({
           )}
         />
         <Dialog.Content
+          /* THE RING WAS FOCUS, NOT DECORATION.
+           *
+           * Radix focuses the first focusable element on open, which is the
+           * close button -- so every sheet opened with a bright focus ring
+           * around its exit, reading as the loudest thing on screen. The
+           * indicator is correct and stays; what was wrong is that leaving is
+           * the first thing offered.
+           *
+           * Focus moves to the panel instead: the dialog is still announced,
+           * Escape still closes, Tab still reaches the close button first, and
+           * a keyboard user still gets a visible ring the moment they move.
+           * Focus is not suppressed anywhere -- only redirected off the exit. */
+          tabIndex={-1}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            (event.currentTarget as HTMLElement | null)?.focus({ preventScroll: true });
+          }}
           className={cn(
             "flex flex-col overflow-hidden border border-border/80 bg-card/95 outline-none supports-[backdrop-filter]:bg-card/90",
             compact ? "p-3" : "p-4",

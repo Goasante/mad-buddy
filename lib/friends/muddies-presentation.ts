@@ -1,4 +1,6 @@
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
+import type { ProximityBand } from "@/lib/proximity/bands";
+import { PROXIMITY_BAND_LABELS } from "@/lib/proximity/bands";
 
 /**
  * Presentation rules for the Muddies page.
@@ -10,6 +12,14 @@ import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 
 export type MuddyProximity = {
   proximityLevel: ProximityLevel;
+  /**
+   * The six-state presentation band from the API.
+   *
+   * Optional so surfaces still mid-migration keep compiling; where it is
+   * absent the rail falls back to the coarse level, which is less informative
+   * but never wrong.
+   */
+  proximityBand?: ProximityBand;
   glowStrength: number;
   confidence: ConfidenceLevel;
   /** Privacy-safe presence string from the API. Never a timestamp. */
@@ -23,12 +33,26 @@ export type MuddyProximity = {
  * (`proximity-halo-very-close`, `-nearby`, `-around`), so the rail says what
  * the ring already means rather than inventing a second scale.
  */
-export const proximityRailLabels: Record<ProximityLevel, string> = {
-  close: "Very close",
-  near: "Nearby",
-  far: "Around you",
-  hidden: "Hidden"
-};
+/**
+ * Distance wording on the closest rail.
+ *
+ * Now the six approved Proximity Glow state names, read from the canonical
+ * band table rather than re-typed here -- a second copy of the copy is how the
+ * rail and the Glow start disagreeing about what a state is called.
+ */
+export function railDistanceLabel(proximity: MuddyProximity | undefined): string {
+  const band = proximity?.proximityBand;
+  if (band && band !== "outside_range") return PROXIMITY_BAND_LABELS[band];
+
+  // No band: fall back to the coarse level. Deliberately maps to the WIDEST
+  // state each level can represent, so the fallback can never overstate how
+  // close somebody is.
+  const level = proximity?.proximityLevel ?? "hidden";
+  if (level === "close") return PROXIMITY_BAND_LABELS.around_you;
+  if (level === "near") return PROXIMITY_BAND_LABELS.nearby;
+  if (level === "far") return PROXIMITY_BAND_LABELS.further_away;
+  return "Hidden";
+}
 
 /**
  * Rail hue per distance band.

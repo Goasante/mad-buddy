@@ -4,7 +4,6 @@ import { z } from "zod";
 import { upgradePromptFor } from "@/lib/billing/entitlements";
 import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { deliverNotification } from "@/lib/notifications/server";
-import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import {
   canTransitionPlan,
   maxVotesPerUser,
@@ -13,11 +12,8 @@ import {
   validatePollOptions,
   type PollTally
 } from "@/lib/social/plans";
-import {
-  eligibleInvitees,
-  resolvePlanAccess
-} from "@/lib/social/planning";
-import { createPlan, rsvp } from "@/lib/plans/service";
+import { addPlanParticipants, createPlan, rsvp } from "@/lib/plans/service";
+import { resolvePlanAccess } from "@/lib/social/planning";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -47,11 +43,6 @@ async function getAuthedUserId() {
     error
   } = await supabase.auth.getUser();
   return error || !user ? null : user.id;
-}
-
-async function senderName(admin: ReturnType<typeof createSupabaseAdminClient>, userId: string) {
-  const { data } = await admin.from("profiles").select("full_name").eq("user_id", userId).maybeSingle();
-  return data?.full_name?.trim() || "A Muddy";
 }
 
 // ---------------------------------------------------------------------------
@@ -132,8 +123,6 @@ export async function cancelPlanAction(planId: string): Promise<PlanActionState>
 }
 
 export async function leavePlanAction(planId: string): Promise<PlanActionState> {
-  const missing = missingEnvState();
-  if (missing) return missing;
   if (!uuidSchema.safeParse(planId).success) return { ok: false, message: "Plan not found." };
 
   const userId = await getAuthedUserId();
@@ -142,69 +131,24 @@ export async function leavePlanAction(planId: string): Promise<PlanActionState> 
   const admin = createSupabaseAdminClient();
   const { data: plan } = await admin.from("plans").select("creator_id").eq("id", planId).maybeSingle();
   if (!plan) return { ok: false, message: "Plan not found." };
-  // A lone host must cancel rather than leave (spec §16).
   if (plan.creator_id === userId) {
     return { ok: false, message: "You're the host, cancel the plan instead." };
   }
 
-  const { error } = await admin
-    .from("plan_participants")
-    .update({ rsvp_status: "not_going", responded_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq("plan_id", planId)
-    .eq("user_id", userId);
-  if (error) return { ok: false, message: "Couldn't leave the plan." };
-  return { ok: true, message: "You've left this plan." };
+  const result = await rsvp(userId, planId, "not_going");
+  return result.ok ? { ...result, message: "You've left this plan." } : result;
 }
 
 export async function addPlanParticipantsAction(
   planId: string,
   participantIds: string[]
 ): Promise<PlanActionState> {
-  const missing = missingEnvState();
-  if (missing) return missing;
   if (!uuidSchema.safeParse(planId).success) return { ok: false, message: "Plan not found." };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
-  const admin = createSupabaseAdminClient();
-  const access = await resolvePlanAccess(admin, userId, planId);
-  if (!access.exists) return { ok: false, message: "Plan not found." };
-  if (!access.canEdit) return { ok: false, message: "Only the host can invite people." };
-
-  const rateLimit = await consumeRateLimit({ action: "plans.invite", userId });
-  if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
-
-  const invitees = await eligibleInvitees(admin, userId, participantIds);
-  if (invitees.length === 0) return { ok: false, message: "Add approved Muddies only." };
-
-  const { error } = await admin.from("plan_participants").upsert(
-    invitees.map((inviteeId) => ({
-      plan_id: planId,
-      user_id: inviteeId,
-      role: "participant" as const,
-      rsvp_status: "invited" as const,
-      invited_by: userId
-    })),
-    { onConflict: "plan_id,user_id", ignoreDuplicates: true }
-  );
-  if (error) return { ok: false, message: "Couldn't add those people." };
-
-  const name = await senderName(admin, userId);
-  const { data: plan } = await admin.from("plans").select("title").eq("id", planId).maybeSingle();
-  await Promise.all(
-    invitees.map((inviteeId) =>
-      deliverNotification(admin, {
-        userId: inviteeId,
-        senderId: userId,
-        category: "plans",
-        type: `plan:${planId}`,
-        title: "New plan invite",
-        message: `${name} invited you to "${plan?.title ?? "a plan"}".`
-      })
-    )
-  );
-  return { ok: true, message: `Invited ${invitees.length} to the plan.` };
+  return addPlanParticipants(userId, planId, participantIds);
 }
 
 // ---------------------------------------------------------------------------

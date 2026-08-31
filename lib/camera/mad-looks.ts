@@ -189,6 +189,7 @@ export function documentForOriginalComparison(document: ImageEditDocument): Imag
   return {
     ...resetDocumentLook(document),
     adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
+    effects: [],
     textOverlays: [],
     drawingStrokes: []
   };

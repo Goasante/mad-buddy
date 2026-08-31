@@ -19,7 +19,7 @@ describe("Mad Cam C3/C4 image editor boundary", () => {
   });
 
   it("offers only implemented first-release tools", () => {
-    for (const label of ["Looks", "Crop", "Adjust", "Text", "Draw", "Undo", "Redo", "Reset to original"]) {
+    for (const label of ["Looks", "Effects", "Crop", "Adjust", "Text", "Draw", "Undo", "Redo", "Reset to original"]) {
       expect(editor).toContain(label);
     }
     for (const future of ["Music", "Sticker", "AR effect", "Video editor"]) {

@@ -46,14 +46,23 @@ export const PROXIMITY_BAND_MAX_METERS = {
   further_away: 15_000
 } as const;
 
-/** User-facing copy. Stable ids above, wording here. */
+/**
+ * User-facing copy. Stable ids above, wording here.
+ *
+ * These are the approved Proximity Glow V2 names. They are Title Case because
+ * they read as named states rather than as descriptions -- a person is IN
+ * "Close By", they are not "close by" in the adjectival sense. The same six
+ * strings appear in lib/proximity/glow-config.ts, which is the presentation
+ * authority; a mismatch between the two is a bug, and
+ * lib/proximity/glow-config.test.ts asserts they agree.
+ */
 export const PROXIMITY_BAND_LABELS: Record<ProximityBand, string> = {
-  right_here: "Right here",
-  around_you: "Around you",
-  close_by: "Close by",
-  nearby: "Nearby",
-  around_town: "Around town",
-  further_away: "Further away",
+  right_here: "Right Here",
+  around_you: "Just Around",
+  close_by: "Close By",
+  nearby: "In Your Area",
+  around_town: "Around Town",
+  further_away: "Across Town",
   // Never rendered: someone outside range is excluded from the response
   // before any label is chosen. Present so the type is total.
   outside_range: "Too far"

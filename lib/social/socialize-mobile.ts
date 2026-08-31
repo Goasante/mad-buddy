@@ -272,7 +272,9 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
 
     const { data: viewerLocation } = await admin
       .from("user_locations")
-      .select("latitude, longitude, confidence")
+      // last_updated: the proximity engine holds the viewer to the same
+      // freshness rule as everybody else, so it must be selected here.
+      .select("latitude, longitude, confidence, last_updated")
       .eq("user_id", userId)
       .maybeSingle();
     if (!viewerLocation) return [];
@@ -355,7 +357,12 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
     if (eligibleIds.length === 0) return [];
 
     const safe = buildSafeNearbyFriends({
-      viewer: viewerLocation as { latitude: number; longitude: number; confidence: ConfidenceLevel },
+      viewer: viewerLocation as {
+        latitude: number;
+        longitude: number;
+        confidence: ConfidenceLevel;
+        last_updated: string;
+      },
       friendIds: eligibleIds,
       blockedIds,
       premiumUserIds: new Set(),

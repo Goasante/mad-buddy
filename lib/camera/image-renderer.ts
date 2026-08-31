@@ -1,6 +1,7 @@
 import type { LocalCameraImage } from "@/lib/camera/types";
 import type { ImageEditDocument } from "@/lib/camera/image-edit-session";
 import { getMadLook, interpolateLook, type MadLookTone } from "@/lib/camera/mad-looks";
+import { renderImageEffects, type EffectRenderOptions } from "@/lib/camera/effect-renderer";
 
 export const IMAGE_RENDER_ORDER = [
   "orientation_mirror",
@@ -8,7 +9,8 @@ export const IMAGE_RENDER_ORDER = [
   "straighten_rotation",
   "base_look",
   "manual_adjustments",
-  "future_effects",
+  "scene_effects",
+  "tracked_face_effects",
   "overlays"
 ] as const;
 
@@ -118,7 +120,7 @@ export function renderEditedImage(
   decoded: DecodedImageSource,
   document: ImageEditDocument,
   canvas: HTMLCanvasElement,
-  options: { maxEdge?: number; includeOverlays?: boolean; workCanvas?: HTMLCanvasElement } = {}
+  options: { maxEdge?: number; includeOverlays?: boolean; workCanvas?: HTMLCanvasElement } & EffectRenderOptions = {}
 ) {
   const dimensions = editedOutputDimensions(
     decoded.width,
@@ -173,6 +175,7 @@ export function renderEditedImage(
   context.drawImage(workCanvas, 0, 0, dimensions.width, dimensions.height);
   context.restore();
   applyWarmthOverlay(context, document.adjustments.warmth, dimensions.width, dimensions.height);
+  renderImageEffects(context, document.effects, dimensions.width, dimensions.height, options);
 
   if (options.includeOverlays !== false) drawImageOverlays(context, document, dimensions.width, dimensions.height);
   return dimensions;

@@ -338,6 +338,14 @@ export function AppCombobox<T extends string = string>({
 export type AppMultiSelectProps<T extends string = string> = Omit<AppSelectProps<T>, "value" | "onChange"> & {
   value: T[];
   onChange: (value: T[]) => void;
+  /**
+   * Keep the trigger reading as an action instead of a summary.
+   *
+   * For surfaces that already show their selection as chips beneath: without
+   * this the trigger repeats those same names, so the control describes what
+   * is already on screen rather than what it does next.
+   */
+  alwaysShowPlaceholder?: boolean;
 };
 
 export function AppMultiSelect<T extends string = string>({
@@ -346,6 +354,7 @@ export function AppMultiSelect<T extends string = string>({
   value,
   options,
   placeholder = "Choose options",
+  alwaysShowPlaceholder = false,
   searchable = false,
   searchPlaceholder = "Search options...",
   emptyText = "No options found",
@@ -376,7 +385,13 @@ export function AppMultiSelect<T extends string = string>({
   }, [options, query]);
   const enabledIndexes = filtered.map((option, index) => option.disabled ? -1 : index).filter((index) => index >= 0);
   const ids = fieldIds(id, helperText, error);
-  const display = selected.length === 0
+  /* Opt-in: keep the trigger as an ACTION rather than a summary.
+   *
+   * Surfaces that already render their selection as chips beneath end up
+   * saying the same names twice -- once in the trigger, once below -- when the
+   * control's remaining job is adding somebody else. Off by default, so every
+   * existing multi-select keeps summarising as before. */
+  const display = alwaysShowPlaceholder || selected.length === 0
     ? placeholder
     : selected.length <= 2
       ? selected.map((option) => option.label).join(", ")

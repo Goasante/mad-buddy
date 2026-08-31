@@ -1,4 +1,5 @@
 import type {
+  CameraCaptureMode,
   CameraFacingMode,
   CameraFailureReason,
   CameraSessionState,
@@ -13,7 +14,8 @@ export const initialCameraState: CameraSessionState = {
   torchEnabled: false,
   recordingSeconds: 0,
   media: null,
-  error: null
+  error: null,
+  captureMode: "photo"
 };
 
 export type CameraAction =
@@ -32,6 +34,7 @@ export type CameraAction =
   | { type: "retake" }
   | { type: "complete" }
   | { type: "torch"; enabled: boolean }
+  | { type: "capture_mode"; mode: CameraCaptureMode }
   | { type: "fail"; reason: CameraFailureReason }
   | { type: "close" };
 
@@ -74,6 +77,18 @@ export function cameraReducer(state: CameraSessionState, action: CameraAction): 
       return { ...state, status: "completed" };
     case "torch":
       return { ...state, torchEnabled: action.enabled };
+    case "capture_mode": {
+      // Refused mid-recording. Switching modes while the recorder is running
+      // would leave the shutter showing "photo" over an active clip, and the
+      // stop control would disappear from under the user's thumb.
+      const busy =
+        state.status === "preparing_video" ||
+        state.status === "recording_video" ||
+        state.status === "stopping_video" ||
+        state.status === "processing_video";
+      if (busy || state.captureMode === action.mode) return state;
+      return { ...state, captureMode: action.mode };
+    }
     case "fail":
       return { ...state, status: "failed", error: action.reason, torchEnabled: false, recordingSeconds: 0 };
     case "close":

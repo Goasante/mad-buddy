@@ -7,6 +7,7 @@ import {
   Images,
   Loader2,
   RotateCcw,
+  Sparkles,
   Square,
   SwitchCamera,
   X,
@@ -20,6 +21,7 @@ import {
   useEffect,
   useReducer,
   useRef,
+  useState,
   type ButtonHTMLAttributes,
   type ForwardedRef,
   type ReactNode
@@ -29,9 +31,18 @@ import {
   detectCameraCapabilities,
   trackSupportsTorch
 } from "@/lib/camera/capabilities";
+import { canRenderEffect, detectEffectCapabilities, type EffectCapabilities } from "@/lib/camera/effect-capabilities";
+import type { EffectInstance } from "@/lib/camera/effect-document";
+import { effectInstanceFor, MAD_EFFECTS } from "@/lib/camera/effect-registry";
+import { renderImageEffects } from "@/lib/camera/effect-renderer";
 import { captureVideoFrame, localMediaFromLibrary } from "@/lib/camera/local-media";
 import { cameraReducer, initialCameraState } from "@/lib/camera/state";
-import type { CameraFacingMode, CameraFailureReason, LocalCameraMedia } from "@/lib/camera/types";
+import type {
+  CameraCaptureMode,
+  CameraFacingMode,
+  CameraFailureReason,
+  LocalCameraMedia
+} from "@/lib/camera/types";
 import {
   cameraVideoError,
   localVideoFromChunks,
@@ -42,6 +53,21 @@ import { cn } from "@/lib/utils";
 
 const CAMERA_HISTORY_KEY = "mbCamera";
 const REVIEW_HISTORY_KEY = "mbCameraReview";
+
+/**
+ * How long a press must last in photo mode before it becomes a recording.
+ *
+ * Unchanged from the original gesture. Long enough that a normal tap is
+ * unambiguously a photo, short enough that the transition feels immediate.
+ */
+const HOLD_TO_RECORD_MS = 420;
+
+/**
+ * The trays. Exactly one may be open, so the live preview is never buried
+ * under stacked panels and the shutter stays reachable.
+ */
+const CAMERA_TRAYS = ["effects", "looks", "more"] as const;
+type CameraTrayId = (typeof CAMERA_TRAYS)[number];
 
 const ImageEditor = dynamic(() => import("@/components/camera/image-editor"), {
   ssr: false,
@@ -137,9 +163,14 @@ type ActiveCameraRecording = {
 
 export function CameraComposer({ onClose }: { onClose: () => void }) {
   const [state, dispatch] = useReducer(cameraReducer, initialCameraState);
+  const [activeLiveEffect, setActiveLiveEffect] = useState<EffectInstance | null>(null);
+  const [effectCapabilities, setEffectCapabilities] = useState<EffectCapabilities | null>(null);
+  const [capturedEffect, setCapturedEffect] = useState<EffectInstance | null>(null);
+  const live = !state.media && state.status !== "completed";
   const rootRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const effectCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const reviewVideoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const videoRecordingRef = useRef<ActiveCameraRecording | null>(null);
@@ -154,6 +185,18 @@ export function CameraComposer({ onClose }: { onClose: () => void }) {
   const facingModeRef = useRef<CameraFacingMode>("environment");
   const mountedRef = useRef(true);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * The capture mode, mirrored into a ref.
+   *
+   * startVideoRecording awaits the microphone prompt, and by the time it
+   * resumes the closed-over `state` is stale. The ref is what that async path
+   * reads so it cannot act on a mode the user has since left.
+   */
+  const captureModeRef = useRef<CameraCaptureMode>("photo");
+  /** Which tray is open, if any. Exactly one at a time (Slice 2). */
+  const [openTray, setOpenTray] = useState<CameraTrayId | null>(null);
+  /** Guards overlapping camera-flip requests (see flipCamera). */
+  const flipInFlightRef = useRef(false);
   const holdActiveRef = useRef(false);
   const pointerGestureRef = useRef(false);
 
@@ -400,7 +443,12 @@ export function CameraComposer({ onClose }: { onClose: () => void }) {
       audioStream.getTracks().forEach((track) => track.stop());
       return;
     }
-    if (!holdActiveRef.current) {
+    // In PHOTO mode the recording only exists for as long as the finger is
+    // down, so a hold released during the microphone prompt must abandon it.
+    // In VIDEO mode the tap already committed to recording and there is no
+    // hold to release, so this gate does not apply -- same recorder, one
+    // guard that understands both entry points.
+    if (captureModeRef.current === "photo" && !holdActiveRef.current) {
       audioStream.getTracks().forEach((track) => track.stop());
       dispatch({ type: "video_cancel" });
       return;
@@ -524,14 +572,71 @@ export function CameraComposer({ onClose }: { onClose: () => void }) {
     };
   }, [clearMedia, onClose, restartCamera, startCamera, stopStream]);
 
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setEffectCapabilities(detectEffectCapabilities()));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  // Keep the ref the async recorder reads in step with rendered state.
+  useEffect(() => {
+    captureModeRef.current = state.captureMode;
+  }, [state.captureMode]);
+
+  /** One tray at a time: opening a tray closes whichever was open. */
+  const toggleTray = useCallback((tray: CameraTrayId) => {
+    setOpenTray((current) => (current === tray ? null : tray));
+  }, []);
+
+  const selectCaptureMode = useCallback((mode: CameraCaptureMode) => {
+    // Trays close on a mode change so the new shutter affordance is visible
+    // rather than hidden behind an effects panel.
+    setOpenTray(null);
+    dispatch({ type: "capture_mode", mode });
+  }, []);
+
+  useEffect(() => {
+    const canvas = effectCanvasRef.current;
+    if (!canvas || !live) return;
+    let frame = 0;
+    let lastDraw = 0;
+    const activeDefinition = activeLiveEffect ? MAD_EFFECTS.find((effect) => effect.id === activeLiveEffect.effectId) : null;
+    const animated = Boolean(activeDefinition?.animated && !effectCapabilities?.reducedMotion);
+    const draw = (time: number) => {
+      if (!canvas.isConnected) return;
+      if (time - lastDraw >= 80 || !animated) {
+        const ratio = Math.min(2, window.devicePixelRatio || 1);
+        const width = Math.max(1, Math.round(canvas.clientWidth * ratio));
+        const height = Math.max(1, Math.round(canvas.clientHeight * ratio));
+        if (canvas.width !== width) canvas.width = width;
+        if (canvas.height !== height) canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (context) {
+          context.clearRect(0, 0, width, height);
+          if (activeLiveEffect) {
+            renderImageEffects(context, [activeLiveEffect], width, height, {
+              timeMs: time,
+              reducedMotion: effectCapabilities?.reducedMotion ?? true
+            });
+          }
+        }
+        lastDraw = time;
+      }
+      if (animated) frame = requestAnimationFrame(draw);
+    };
+    frame = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(frame);
+  }, [activeLiveEffect, effectCapabilities?.reducedMotion, live]);
+
   async function takePhoto() {
     const video = videoRef.current;
     if (!video || state.status !== "ready") return;
     dispatch({ type: "capture" });
     try {
       const media = await captureVideoFrame(video, state.facingMode);
+      setCapturedEffect(activeLiveEffect);
       stopStream();
       enterReview(media);
+      if (activeLiveEffect) dispatch({ type: "edit_image" });
     } catch {
       dispatch({ type: "fail", reason: "capture_failed" });
     }
@@ -541,6 +646,7 @@ export function CameraComposer({ onClose }: { onClose: () => void }) {
     if (!file) return;
     try {
       const media = await localMediaFromLibrary(file);
+      setCapturedEffect(null);
       stopStream();
       enterReview(media);
     } catch {
@@ -550,8 +656,18 @@ export function CameraComposer({ onClose }: { onClose: () => void }) {
 
   async function flipCamera() {
     if (!state.canFlip || state.status !== "ready") return;
+    // Synchronous guard, not just the status check above: `state` only
+    // updates on re-render, so two taps in the same frame would both pass
+    // and start overlapping getUserMedia requests -- which is how a flip
+    // ends up leaving an orphaned track running.
+    if (flipInFlightRef.current) return;
+    flipInFlightRef.current = true;
     const nextMode = state.facingMode === "environment" ? "user" : "environment";
-    await startCamera(nextMode, true);
+    try {
+      await startCamera(nextMode, true);
+    } finally {
+      flipInFlightRef.current = false;
+    }
   }
 
   async function toggleTorch() {
@@ -567,7 +683,24 @@ export function CameraComposer({ onClose }: { onClose: () => void }) {
   }
 
   function handleShutterPointerDown(event: React.PointerEvent<HTMLButtonElement>) {
-    if (event.button !== 0 || state.status !== "ready") return;
+    if (event.button !== 0) return;
+
+    // VIDEO MODE: tap starts, tap stops. No hold, no hidden gesture.
+    if (state.captureMode === "video") {
+      if (state.status === "recording_video") {
+        pointerGestureRef.current = true;
+        stopVideoRecording();
+        return;
+      }
+      if (state.status !== "ready") return;
+      pointerGestureRef.current = true;
+      void startVideoRecording();
+      return;
+    }
+
+    // PHOTO MODE: the original gesture, preserved. Tap captures a photo, a
+    // hold past the threshold rolls into the same video recorder.
+    if (state.status !== "ready") return;
     event.currentTarget.setPointerCapture?.(event.pointerId);
     pointerGestureRef.current = true;
     holdActiveRef.current = true;
@@ -575,11 +708,17 @@ export function CameraComposer({ onClose }: { onClose: () => void }) {
     holdTimerRef.current = setTimeout(() => {
       holdTimerRef.current = null;
       void startVideoRecording();
-    }, 420);
+    }, HOLD_TO_RECORD_MS);
   }
 
   function handleShutterPointerUp(event: React.PointerEvent<HTMLButtonElement>) {
     if (!pointerGestureRef.current) return;
+    // Video mode owns its own start/stop on pointer-down; releasing the
+    // finger must not stop a recording the user deliberately started.
+    if (state.captureMode === "video") {
+      event.preventDefault();
+      return;
+    }
     event.preventDefault();
     holdActiveRef.current = false;
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
@@ -634,7 +773,6 @@ export function CameraComposer({ onClose }: { onClose: () => void }) {
   }
 
   const errorCopy = state.error ? ERROR_COPY[state.error] : null;
-  const live = !state.media && state.status !== "completed";
   const busy = [
     "requesting_permission",
     "starting",
@@ -650,8 +788,12 @@ export function CameraComposer({ onClose }: { onClose: () => void }) {
     return (
       <ImageEditor
         source={state.media}
+        initialEffect={capturedEffect}
         onCancel={() => dispatch({ type: "review", media: state.media! })}
-        onDone={enterReview}
+        onDone={(media) => {
+          setCapturedEffect(null);
+          enterReview(media);
+        }}
       />
     );
   }
@@ -704,6 +846,14 @@ export function CameraComposer({ onClose }: { onClose: () => void }) {
           )}
         />
 
+        {live ? (
+          <canvas
+            ref={effectCanvasRef}
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            aria-hidden="true"
+          />
+        ) : null}
+
         {state.media?.kind === "image" ? (
           // eslint-disable-next-line @next/next/no-img-element -- local object URL, never uploaded in C1/C2
           <img src={state.media.objectUrl} alt="Photo preview" className="absolute inset-0 h-full w-full object-contain" />
@@ -741,8 +891,12 @@ export function CameraComposer({ onClose }: { onClose: () => void }) {
 
         {recordingVideo ? (
           <div className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center" role="status" aria-live="polite">
+            {/* "Recording" is stated as TEXT, not carried by the red dot
+                alone: colour is not information for someone who cannot see
+                it, and a dot beside a timer is ambiguous on its own. */}
             <div className="camera-recording-status">
               <span className="camera-recording-dot" aria-hidden="true" />
+              <span className="camera-recording-label">Recording</span>
               {formatRecordingTime(state.recordingSeconds)} / 0:15
             </div>
           </div>
@@ -809,6 +963,37 @@ export function CameraComposer({ onClose }: { onClose: () => void }) {
           </div>
         ) : (
           <div className="mx-auto w-full max-w-lg">
+            {/* EFFECTS TRAY. Progressive disclosure: the rail is no longer
+                permanently on screen competing with the preview -- it opens
+                from the tool rail and closes when another tray opens. */}
+            {state.status === "ready" && openTray === "effects" ? (
+              <div className="camera-effect-rail" role="group" aria-label="Camera effects">
+                <button
+                  type="button"
+                  className={cn("camera-effect-choice", !activeLiveEffect && "is-active")}
+                  aria-pressed={!activeLiveEffect}
+                  onClick={() => setActiveLiveEffect(null)}
+                >
+                  <span className="camera-effect-swatch is-none" aria-hidden="true" />
+                  None
+                </button>
+                {(effectCapabilities
+                  ? MAD_EFFECTS.filter((effect) => canRenderEffect(effect, effectCapabilities))
+                  : MAD_EFFECTS
+                ).map((effect) => (
+                  <button
+                    key={effect.id}
+                    type="button"
+                    className={cn("camera-effect-choice", activeLiveEffect?.effectId === effect.id && "is-active")}
+                    aria-pressed={activeLiveEffect?.effectId === effect.id}
+                    onClick={() => setActiveLiveEffect(effectInstanceFor(effect.id))}
+                  >
+                    <span className="camera-effect-swatch" style={{ "--camera-effect-accent": effect.presentation.accent } as React.CSSProperties} aria-hidden="true" />
+                    {effect.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="grid grid-cols-3 items-center">
             <button
               type="button"
@@ -819,10 +1004,21 @@ export function CameraComposer({ onClose }: { onClose: () => void }) {
               <Images className="h-6 w-6" aria-hidden="true" />
               Library
             </button>
+
             <button
               type="button"
-              aria-label="Take photo or hold to record video"
-              title="Tap for photo, hold for video"
+              aria-label={
+                state.captureMode === "video"
+                  ? recordingVideo
+                    ? "Stop recording"
+                    : "Start recording video"
+                  : "Take photo or hold to record video"
+              }
+              title={
+                state.captureMode === "video"
+                  ? "Tap to start and stop recording"
+                  : "Tap for photo, hold for video"
+              }
               disabled={state.status !== "ready" && state.status !== "preparing_video" && !recordingVideo}
               onPointerDown={handleShutterPointerDown}
               onPointerUp={handleShutterPointerUp}
@@ -838,11 +1034,63 @@ export function CameraComposer({ onClose }: { onClose: () => void }) {
                 {recordingVideo ? <Square className="h-5 w-5 fill-current" /> : null}
               </span>
             </button>
-            <span aria-hidden="true" />
+            {/* TOOL RAIL entry. One control opens the effects tray rather
+                than the tray occupying the screen permanently. */}
+            {state.status === "ready" ? (
+              <button
+                type="button"
+                aria-label="Effects"
+                aria-expanded={openTray === "effects"}
+                aria-pressed={openTray === "effects"}
+                className={cn(
+                  "camera-tool-button",
+                  openTray === "effects" && "is-active"
+                )}
+                onClick={() => toggleTray("effects")}
+              >
+                <Sparkles className="h-5 w-5" aria-hidden="true" />
+                <span className="sr-only">Effects</span>
+              </button>
+            ) : null}
             </div>
             <p className="mt-2 text-center text-xs font-medium text-white/55">
-              {recordingVideo ? "Release to finish" : "Tap for photo or hold for video"}
+              {recordingVideo
+                ? state.captureMode === "video"
+                  ? "Tap to finish"
+                  : "Release to finish"
+                : state.captureMode === "video"
+                  ? "Tap to start recording"
+                  : "Tap for photo or hold for video"}
             </p>
+
+            {/* MODE STRIP. Two affordances over ONE recorder: photo keeps the
+                original tap/hold gesture, video makes the same recording
+                explicit. Hidden while recording, because switching mid-clip
+                is refused by the reducer anyway and a dead control is worse
+                than no control. */}
+            {state.status === "ready" || state.status === "capturing_photo" ? (
+              <div
+                className="camera-mode-strip"
+                role="radiogroup"
+                aria-label="Capture mode"
+              >
+                {(["photo", "video"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="radio"
+                    aria-checked={state.captureMode === mode}
+                    className={cn(
+                      "camera-mode-choice",
+                      state.captureMode === mode && "is-active"
+                    )}
+                    onClick={() => selectCaptureMode(mode)}
+                  >
+                    {mode === "photo" ? "Photo" : "Video"}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
       </footer>

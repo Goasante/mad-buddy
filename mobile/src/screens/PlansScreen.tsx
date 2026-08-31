@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -234,6 +234,7 @@ function CreatePlanModal({
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const requestKeyRef = useRef<string | null>(null);
 
   function reset() {
     setTitle("");
@@ -243,6 +244,7 @@ function CreatePlanModal({
     setNotes("");
     setSelected(new Set());
     setError("");
+    requestKeyRef.current = null;
   }
 
   async function create() {
@@ -254,6 +256,7 @@ function CreatePlanModal({
     const scheduled = date.trim().length > 0;
     const startAt = scheduled ? new Date(`${date}T${time || "00:00"}`).toISOString() : undefined;
     const result = await api.post<{ ok: boolean; message: string }>("/api/plans", {
+      requestKey: requestKeyRef.current ?? (requestKeyRef.current = crypto.randomUUID()),
       title: title.trim(),
       description: notes.trim() || undefined,
       planType: scheduled ? "scheduled" : "quick",
