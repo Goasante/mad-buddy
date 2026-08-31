@@ -22,7 +22,6 @@ import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { ProfilePhotoCarousel } from "@/components/profile/profile-photo-carousel";
 import { Card } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { deriveBirthProfile } from "@/lib/profile/birth-date";
 import type { ProfileIdentitySummary } from "@/lib/profile/identity";
 import type { ProfilePhoto } from "@/lib/profile/profile-photos";
@@ -130,7 +129,6 @@ export function ProfileVNextPage({
                 src={avatarSrc}
                 name={displayName}
                 size="profile"
-                membershipTier={publicMembershipTier(plan)}
                 className="h-32 w-32 border-[4px] border-[#FEFBF3] bg-background sm:h-36 sm:w-36 [&>span>span]:h-32 [&>span>span]:w-32 sm:[&>span>span]:h-36 sm:[&>span>span]:w-36"
               />
             </div>

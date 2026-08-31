@@ -24,10 +24,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { validateImageSelection } from "@/lib/media/validation";
 import type { ProfilePhoto } from "@/lib/profile/profile-photos";
-import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 
 type BirthVisibility = "only_me" | "approved_muddies";
 
@@ -43,7 +41,6 @@ type ProfileEditVNextProps = {
   initialAgeVisibility: BirthVisibility;
   initialZodiacVisibility: BirthVisibility;
   photos: ProfilePhoto[];
-  plan: SubscriptionPlan;
 };
 
 export function ProfileEditVNext({
@@ -57,8 +54,7 @@ export function ProfileEditVNext({
   initialBirthdayVisibility,
   initialAgeVisibility,
   initialZodiacVisibility,
-  photos,
-  plan
+  photos
 }: ProfileEditVNextProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -218,7 +214,6 @@ export function ProfileEditVNext({
                 src={avatarSrc}
                 name={displayName || "Your profile"}
                 size="profile"
-                membershipTier={publicMembershipTier(plan)}
                 className="h-32 w-32 border-[4px] border-[#FEFBF3] bg-background [&>span>span]:h-32 [&>span>span]:w-32"
               />
             </div>

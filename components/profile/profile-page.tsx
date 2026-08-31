@@ -19,7 +19,6 @@ import { profileViewerSequence } from "@/lib/profile/photo-labels";
 import { TrustedMemberApplyCard } from "@/components/trust/trusted-member-apply-card";
 import type { ProfilePhoto } from "@/lib/profile/profile-photos";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { validateImageSelection } from "@/lib/media/validation";
 import { cn } from "@/lib/utils";
 import type { SubscriptionPlan, VisibilityStatus } from "@/lib/supabase/database.types";
@@ -652,10 +651,6 @@ export function ProfilePageContent({
                     src={avatarSrc}
                     name={savedProfile.displayName}
                     size="profile"
-                    // initialPlan is the server-resolved effective plan
-                    // (loadEffectivePlan), so the ring already reflects paid,
-                    // trial, earned or granted access without saying which.
-                    membershipTier={publicMembershipTier(initialPlan)}
                     className="h-[7.25rem] w-[7.25rem] border-[3px] border-background shadow-[0_12px_30px_hsl(var(--shadow)/0.24)] [&>span>span]:h-[7.25rem] [&>span>span]:w-[7.25rem] sm:h-32 sm:w-32 sm:[&>span>span]:h-32 sm:[&>span>span]:w-32"
                     onImageError={() => {
                       if (selectedAvatarFile) {

@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 
 import { ProfileEditVNext } from "@/components/profile/profile-edit-vnext";
 import { ProfileInterestsVNextSection } from "@/components/profile/profile-interests-vnext-section";
-import { loadEffectivePlan } from "@/lib/billing/service";
 import { loadDateOfBirthState } from "@/lib/profile/date-of-birth-service";
 import { loadVisibleProfilePhotosFor } from "@/lib/profile/photo-service";
 import { loadFieldPrivacy } from "@/lib/profile/service";
@@ -35,8 +34,7 @@ export default async function ProfileLabEditPage() {
     .maybeSingle();
 
   const admin = createSupabaseAdminClient();
-  const [plan, birthDetails, fieldPrivacy, photos, interestRows] = await Promise.all([
-    loadEffectivePlan(admin, user.id),
+  const [birthDetails, fieldPrivacy, photos, interestRows] = await Promise.all([
     loadDateOfBirthState(user.id),
     loadFieldPrivacy(admin, user.id),
     loadVisibleProfilePhotosFor(admin, user.id, { isOwner: true, isApprovedMuddy: false }),
@@ -58,7 +56,6 @@ export default async function ProfileLabEditPage() {
         initialAgeVisibility={fieldPrivacy?.age === "approved_muddies" ? "approved_muddies" : "only_me"}
         initialZodiacVisibility={fieldPrivacy?.zodiac === "approved_muddies" ? "approved_muddies" : "only_me"}
         photos={photos}
-        plan={plan}
       />
       <ProfileInterestsVNextSection interests={interests} />
     </>
