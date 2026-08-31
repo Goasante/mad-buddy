@@ -1189,7 +1189,7 @@ export function DashboardPageContent({
             reinforces rather than competes. Only the generic returning-user
             rail stands down, because "Suggestions for you" alongside a single
             clear next step is the screen offering two answers at once. */}
-        {isFirstTimeUser ? (
+        {isFirstTimeUser && !hasSafeArrival ? (
           /* UpFor is filtered out until Glow has happened -- it describes
              letting Muddies know you are free, which needs somebody able to
              see you. Invite and Find Muddies remain: they grow the circle,

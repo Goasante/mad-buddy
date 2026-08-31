@@ -97,11 +97,19 @@ export async function resolveSafeArrivalAccess(
 
   const { data: contact } = await admin
     .from("safe_arrival_contacts")
-    .select("id")
+    .select("id, acknowledgement_status")
     .eq("session_id", sessionId)
     .eq("contact_user_id", userId)
     .maybeSingle();
-  const isContact = Boolean(contact);
+  // A historical contact row is not continuing authority. Block and ended
+  // friendship revoke the focused route/server projection immediately; Safe
+  // Arrival mute is deliberately absent because it affects future requests.
+  const isContact = Boolean(
+    contact &&
+      contact.acknowledgement_status !== "declined" &&
+      (await areApprovedMuddies(admin, session.traveller_id, userId)) &&
+      !(await isBlockedEitherDirection(admin, session.traveller_id, userId))
+  );
   return { exists: true, isTraveller: false, isContact, canView: isContact };
 }
 
@@ -327,7 +335,15 @@ export async function loadSafeArrivalJourneys(
       .in("id", invitedIds)
       .in("status", LIVE_SAFE_ARRIVAL_STATUSES)
       .order("expected_arrival_at", { ascending: true });
-    invitedRows = (data ?? []) as JourneyRow[];
+    const candidates = (data ?? []) as JourneyRow[];
+    const current = await Promise.all(
+      candidates.map(async (row) =>
+        (await areApprovedMuddies(admin, row.traveller_id, userId)) &&
+        !(await isBlockedEitherDirection(admin, row.traveller_id, userId)) &&
+        myStateBySession.get(row.id) !== "declined"
+      )
+    );
+    invitedRows = candidates.filter((_, index) => current[index]);
   }
 
   const allRows = [...((ownRows ?? []) as JourneyRow[]), ...invitedRows];

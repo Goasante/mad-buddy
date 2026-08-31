@@ -57,7 +57,7 @@ function makeAdmin(input: { acks: Acks; friendships: [string, string][]; blocks?
 
   return {
     from(table: string) {
-      const state: { eqUser?: string } = {};
+      const state: { eqUser?: string; orFilter?: string } = {};
       const builder = {
         select: () => builder,
         order: () => builder,
@@ -68,7 +68,10 @@ function makeAdmin(input: { acks: Acks; friendships: [string, string][]; blocks?
           if (column === "contact_user_id") state.eqUser = value;
           return builder;
         },
-        or: () => builder,
+        or: (filter: string) => {
+          state.orFilter = filter;
+          return builder;
+        },
         // Active-friend reads filter on ended_at; these fixtures are all
         // active friendships, so the filter is a no-op here.
         is: () => builder,
@@ -76,8 +79,9 @@ function makeAdmin(input: { acks: Acks; friendships: [string, string][]; blocks?
           if (table === "safe_arrival_sessions") return resolve({ data: [sessionRow] });
           if (table === "profiles") return resolve({ data: profiles });
           if (table === "friendships") {
+            const ids = new Set(state.orFilter?.match(/[0-9a-f]{8}-[0-9a-f-]{27,}/g) ?? []);
             return resolve({
-              data: input.friendships.map(([one, two]) => ({
+              data: input.friendships.filter(([one, two]) => !state.orFilter || (ids.size === 1 ? ids.has(one) || ids.has(two) : ids.has(one) && ids.has(two))).map(([one, two]) => ({
                 user_one_id: one,
                 user_two_id: two,
                 ended_at: null
@@ -85,8 +89,9 @@ function makeAdmin(input: { acks: Acks; friendships: [string, string][]; blocks?
             });
           }
           if (table === "blocked_users") {
+            const ids = new Set(state.orFilter?.match(/[0-9a-f]{8}-[0-9a-f-]{27,}/g) ?? []);
             return resolve({
-              data: (input.blocks ?? []).map(([blocker, blocked]) => ({ blocker_id: blocker, blocked_id: blocked }))
+              data: (input.blocks ?? []).filter(([blocker, blocked]) => !state.orFilter || (ids.size === 1 ? ids.has(blocker) || ids.has(blocked) : ids.has(blocker) && ids.has(blocked))).map(([blocker, blocked]) => ({ blocker_id: blocker, blocked_id: blocked }))
             });
           }
           if (table === "safe_arrival_contacts") {

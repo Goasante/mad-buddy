@@ -34,6 +34,8 @@ import {
 } from "@/components/safety/journey-parts";
 import { SafeArrivalSetup, type SafeArrivalSetupInput } from "@/components/safety/safe-arrival-setup";
 import { PageHeader } from "@/components/app-shell/page-header";
+import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
+import { conversationHref } from "@/lib/messaging/open-conversation";
 
 /**
  * Safe Arrival, both experiences.
@@ -507,6 +509,8 @@ function WatcherJourneyView({
   isPending: boolean;
   onRespond: (response: "watching" | "declined") => void;
 }) {
+  const router = useRouter();
+  const [messagePending, startMessageTransition] = useTransition();
   const reducedMotion = useReducedMotion();
   const tone = journeyTone(journey, nowMs);
   const realtime = useJourneyRealtime({
@@ -643,6 +647,27 @@ function WatcherJourneyView({
               Not this time
             </Button>
           </div>
+        </div>
+      ) : null}
+
+      {journey.status === "unconfirmed" && journey.myAcknowledgement === "accepted" ? (
+        <div className="rounded-[1.25rem] border border-amber-400/30 bg-amber-400/10 p-4" role="status">
+          <p className="text-sm font-semibold">{firstName} hasn&apos;t confirmed arrival</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            This does not mean there is an emergency. A message is the most useful next step.
+          </p>
+          <Button
+            type="button"
+            size="lg"
+            className="mt-3 min-h-11 w-full"
+            disabled={messagePending}
+            onClick={() => startMessageTransition(async () => {
+              const result = await openDirectConversationAction(journey.travellerId);
+              if (result.ok && result.conversationId) router.push(conversationHref(result.conversationId));
+            })}
+          >
+            Message {firstName}
+          </Button>
         </div>
       ) : null}
 
