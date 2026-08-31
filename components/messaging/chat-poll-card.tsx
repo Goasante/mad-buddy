@@ -42,11 +42,11 @@ export function ChatPollCard({
   }
 
   return (
-    <section className={cn("min-w-[250px] max-w-[340px] rounded-[18px] p-1", mine ? "text-[#FEFBF3]" : "text-foreground")} aria-label={`Poll: ${poll.question}`}>
+    <section className={cn("min-w-[250px] max-w-[340px] rounded-[18px] p-1", mine ? "text-primary-foreground" : "text-foreground")} aria-label={`Poll: ${poll.question}`}>
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <p className="text-[15px] font-bold leading-snug">{poll.question}</p>
-          <p className={cn("mt-1 text-[10px] font-medium", mine ? "text-white/55" : "text-muted-foreground")}>
+          <p className="text-sm font-semibold leading-snug">{poll.question}</p>
+          <p className={cn("mt-1 text-xs font-normal", mine ? "text-white/55" : "text-muted-foreground")}>
             {poll.allowMultiple ? "Select one or more" : "Select one"} · {poll.totalVoters} {poll.totalVoters === 1 ? "vote" : "voters"}
           </p>
         </div>
@@ -71,15 +71,15 @@ export function ChatPollCard({
             >
               <span
                 aria-hidden="true"
-                className={cn("absolute inset-y-0 left-0 transition-[width] duration-500 ease-[cubic-bezier(.2,.8,.2,1)]", mine ? "bg-[#E88C2B]/25" : "bg-[#E88C2B]/14")}
+                className={cn("absolute inset-y-0 left-0 transition-[width] duration-500 ease-[cubic-bezier(.2,.8,.2,1)]", mine ? "bg-primary/25" : "bg-primary/15")}
                 style={{ width: `${percent}%` }}
               />
               <span className="relative flex items-center gap-2">
-                <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full border transition", active ? "border-[#E88C2B] bg-[#E88C2B] text-white scale-105" : mine ? "border-white/30" : "border-black/15 dark:border-white/20")}>
+                <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full border transition", active ? "border-primary bg-primary text-primary-foreground scale-105" : mine ? "border-white/30" : "border-black/15 dark:border-white/20")}>
                   {active ? <Check className="h-3 w-3" /> : null}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">{option.label}</span>
-                <span className={cn("text-[10px] font-semibold", mine ? "text-white/60" : "text-muted-foreground")}>{Math.max(0, adjustedVotes)}</span>
+                <span className={cn("text-xs font-medium", mine ? "text-white/60" : "text-muted-foreground")}>{Math.max(0, adjustedVotes)}</span>
               </span>
             </button>
           );

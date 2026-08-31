@@ -10,6 +10,7 @@ import {
   ChevronUp,
   Loader2,
   MessageCircle,
+  MoreHorizontal,
   PenSquare,
   Pin,
   Plus,
@@ -56,6 +57,7 @@ import { MessageComposerV4Shell } from "@/components/messaging/message-composer-
 import { planChatClosedNotice } from "@/lib/messaging/plan-chat-closure";
 import { MessageMediaViewer } from "@/components/messaging/message-media-viewer";
 import { Button } from "@/components/ui/button";
+import { AppMenu } from "@/components/ui/app-dropdown";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
@@ -88,6 +90,8 @@ const FILTERS = [
 ] as const;
 
 type FilterId = (typeof FILTERS)[number]["id"];
+const PRIMARY_FILTERS = FILTERS.filter((filter) => filter.id !== "favorites" && filter.id !== "archived");
+const SECONDARY_FILTERS = FILTERS.filter((filter) => filter.id === "favorites" || filter.id === "archived");
 type ReplyContext = { replyToMessageId: string; senderName: string; text: string };
 type ViewerRole = "owner" | "admin" | "moderator" | "member" | null;
 type InboxPreference = {
@@ -124,17 +128,18 @@ function messagePreview(message: ChatMessageView) {
 }
 
 function themeStyle(themeKey: string | null | undefined): CSSProperties {
+  const base: CSSProperties = { backgroundColor: "hsl(var(--background))" };
   switch (themeKey) {
     case "apricot":
-      return { background: "radial-gradient(circle at 20% 0%, rgba(232,140,43,.13), transparent 38%), #fffaf3" };
+      return { ...base, backgroundImage: "radial-gradient(circle at 20% 0%, hsl(var(--primary) / .14), transparent 38%)" };
     case "maroon":
-      return { background: "radial-gradient(circle at 85% 10%, rgba(232,140,43,.08), transparent 28%), linear-gradient(180deg,#2d0806,#160c0b)" };
+      return { ...base, backgroundImage: "radial-gradient(circle at 85% 10%, hsl(var(--primary) / .10), transparent 30%), radial-gradient(circle at 15% 100%, rgba(78,4,1,.16), transparent 42%)" };
     case "sunset":
-      return { background: "radial-gradient(circle at 25% 0%, rgba(245,168,90,.2), transparent 36%), radial-gradient(circle at 85% 80%, rgba(217,102,85,.12), transparent 35%), #fff9f4" };
+      return { ...base, backgroundImage: "radial-gradient(circle at 25% 0%, hsl(var(--primary) / .16), transparent 36%), radial-gradient(circle at 85% 80%, rgba(217,102,85,.12), transparent 35%)" };
     case "forest":
-      return { background: "radial-gradient(circle at 20% 0%, rgba(92,130,102,.16), transparent 38%), #f8faf6" };
+      return { ...base, backgroundImage: "radial-gradient(circle at 20% 0%, rgba(92,130,102,.14), transparent 38%)" };
     default:
-      return { background: "#FFFDFC" };
+      return base;
   }
 }
 
@@ -590,28 +595,37 @@ export function MessagesPageV4({
   const peopleHere = ultimate?.presence.filter((person) => person.isInChat).slice(0, 3) ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-[1240px] pb-3">
+    <div className="mx-auto w-full max-w-[1240px] bg-background pb-3 text-foreground">
       {feedback ? (
-        <div role="status" className="mb-2 rounded-2xl border border-[#E88C2B]/20 bg-[#E88C2B]/10 px-4 py-3 text-sm text-[#4E0401] dark:text-orange-100 animate-in fade-in slide-in-from-top-1">
+        <div role="status" className="mb-2 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-foreground animate-in fade-in slide-in-from-top-1">
           {feedback}
         </div>
       ) : null}
 
       <div className="grid min-h-[620px] overflow-hidden md:rounded-[28px] md:border md:border-border/60 md:bg-card/45 md:shadow-[0_24px_80px_rgba(78,4,1,0.08)] lg:grid-cols-[390px_minmax(0,1fr)]">
-        <aside className={cn("min-w-0 bg-[#FEFBF3] dark:bg-background lg:border-r lg:border-border/60", selectedId && "hidden lg:flex lg:flex-col")}>
-          <div className="sticky top-0 z-10 border-b border-black/[0.04] bg-[#FEFBF3]/95 px-3 pb-3 pt-[max(.55rem,env(safe-area-inset-top))] backdrop-blur-xl dark:border-white/[0.06] dark:bg-background/95 sm:px-4 md:px-5">
+        <aside className={cn("min-w-0 bg-background lg:border-r lg:border-border/60", selectedId && "hidden lg:flex lg:flex-col")}>
+          <div className="sticky top-0 z-10 border-b border-black/[0.04] bg-background/95 px-3 pb-3 pt-[max(.55rem,env(safe-area-inset-top))] backdrop-blur-xl dark:border-white/[0.06] dark:bg-background/95 sm:px-4 md:px-5">
             <div className="flex items-center justify-between gap-3">
-              <h1 className="font-serif text-[2.2rem] font-semibold leading-none tracking-[-0.04em] text-[#4E0401] dark:text-orange-50">Chats</h1>
-              <button type="button" onClick={() => setNewMessageOpen(true)} className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#E88C2B] text-white shadow-[0_8px_22px_rgba(232,140,43,0.28)] transition-transform active:scale-90" aria-label="New chat"><PenSquare className="h-4.5 w-4.5" /></button>
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground">Chats</h1>
+              <button type="button" onClick={() => setNewMessageOpen(true)} className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform active:scale-90" aria-label="New chat"><PenSquare className="h-4.5 w-4.5" /></button>
             </div>
             <div className="relative mt-3"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations" aria-label="Search conversations" className="h-11 rounded-2xl border-transparent bg-black/[0.035] pl-10 shadow-none dark:bg-white/[0.055]" /></div>
             <nav aria-label="Chat filters" className="no-scrollbar -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
-              {FILTERS.map((filter) => {
+              {PRIMARY_FILTERS.map((filter) => {
                 const active = activeFilter === filter.id;
-                return <button key={filter.id} type="button" onClick={() => setActiveFilter(filter.id)} aria-current={active ? "page" : undefined} className={cn("focus-ring relative inline-flex min-h-10 shrink-0 items-center gap-1.5 overflow-hidden rounded-full border px-3.5 text-sm font-medium transition-all duration-250 active:scale-95", active ? "border-[#E88C2B]/35 bg-[#E88C2B]/12 text-[#4E0401] shadow-sm dark:text-orange-100" : "border-black/[0.06] bg-white/60 text-muted-foreground hover:bg-white dark:border-white/[0.08] dark:bg-white/[0.03]")}>{filter.label}{filter.id === "unread" && unreadChats > 0 ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#E88C2B] px-1 text-[10px] font-bold text-white animate-in zoom-in-75">{unreadChats}</span> : null}</button>;
+                return <button key={filter.id} type="button" onClick={() => setActiveFilter(filter.id)} aria-current={active ? "page" : undefined} className={cn("focus-ring relative inline-flex min-h-10 shrink-0 items-center gap-1.5 overflow-hidden rounded-full border px-3.5 text-sm font-medium transition-all duration-250 active:scale-95", active ? "border-primary/35 bg-primary/10 text-foreground shadow-sm" : "border-border/60 bg-card/65 text-muted-foreground hover:bg-card")}>{filter.label}{filter.id === "unread" && unreadChats > 0 ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground animate-in zoom-in-75">{unreadChats}</span> : null}</button>;
               })}
+              <AppMenu
+                label="More chat filters"
+                items={SECONDARY_FILTERS.map((filter) => ({ id: filter.id, label: filter.label, onSelect: () => setActiveFilter(filter.id) }))}
+                trigger={
+                  <button type="button" aria-current={activeFilter === "favorites" || activeFilter === "archived" ? "page" : undefined} className={cn("focus-ring inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium", activeFilter === "favorites" || activeFilter === "archived" ? "border-primary/35 bg-primary/10 text-foreground" : "border-border/60 bg-card/65 text-muted-foreground")}>
+                    <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                    {activeFilter === "favorites" ? "Favorites" : activeFilter === "archived" ? "Archived" : "More"}
+                  </button>
+                }
+              />
             </nav>
-            <p className="mt-2 text-center text-[9px] font-medium text-muted-foreground/65 md:hidden">Swipe chats → unread/favorite · ← mute/archive · hold for actions</p>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 md:px-3">
@@ -625,17 +639,17 @@ export function MessagesPageV4({
 
         <main className={cn("min-w-0", "fixed inset-0 z-30 flex h-[100dvh] flex-col lg:static lg:z-auto lg:h-[min(790px,calc(100dvh-3rem))]", !selectedId && "hidden lg:flex")} style={themeStyle(ultimate?.preferences.themeKey)}>
           {!selected ? (
-            <div className="flex flex-1 flex-col items-center justify-center px-8 text-center"><div className="grid h-20 w-20 place-items-center rounded-[28px] bg-[#E88C2B]/10 text-[#E88C2B]"><MessageCircle className="h-8 w-8" /></div><h2 className="mt-5 text-xl font-semibold tracking-tight">Choose a chat</h2><p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">Message a Muddy, continue a Group, or pick up a Plan chat.</p></div>
+            <div className="flex flex-1 flex-col items-center justify-center px-8 text-center"><div className="grid h-20 w-20 place-items-center rounded-[28px] bg-primary/10 text-primary"><MessageCircle className="h-8 w-8" /></div><h2 className="mt-5 text-xl font-semibold tracking-tight">Choose a chat</h2><p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">Message a Muddy, continue a Group, or pick up a Plan chat.</p></div>
           ) : (
             <>
-              <header className="shrink-0 border-b border-black/[0.05] bg-[#FFFDFC]/92 pt-[max(.35rem,env(safe-area-inset-top))] backdrop-blur-xl dark:border-white/[0.06] dark:bg-background/92 lg:pt-0">
+              <header className="shrink-0 border-b border-black/[0.05] bg-background/95 pt-[max(.35rem,env(safe-area-inset-top))] backdrop-blur-xl dark:border-white/[0.06] lg:pt-0">
                 <div className="flex min-h-[64px] items-center gap-1.5 px-2.5 md:px-4">
                   <button type="button" onClick={closeConversation} aria-label="Back to Chats" className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full transition-transform active:scale-90 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] lg:hidden"><ArrowLeft className="h-5 w-5" /></button>
                   <button type="button" onClick={() => setSettingsOpen(true)} className="focus-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl p-1 text-left hover:bg-black/[0.035] dark:hover:bg-white/[0.05]">
                     <UserAvatar name={selected.title} src={selected.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[0.98rem] font-bold">{selected.title}</span>
-                      <span className={cn("mt-0.5 flex items-center gap-1.5 truncate text-[11px] font-medium transition-colors", typingNow || peopleHere.length > 0 ? "text-[#E88C2B]" : selectedContext.shared ? "text-[#E88C2B]" : "text-muted-foreground")}>
+                      <span className="block truncate text-base font-semibold">{selected.title}</span>
+                      <span className={cn("mt-0.5 flex items-center gap-1.5 truncate text-xs font-medium transition-colors", typingNow || peopleHere.length > 0 ? "text-primary" : selectedContext.shared ? "text-primary" : "text-muted-foreground")}>
                         {typingNow ? <span aria-hidden="true" className="inline-flex gap-0.5"><i className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:-.18s]" /><i className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:-.09s]" /><i className="h-1 w-1 animate-bounce rounded-full bg-current" /></span> : null}
                         <span className="truncate">{headerPresence}</span>
                       </span>
@@ -649,7 +663,7 @@ export function MessagesPageV4({
                 {threadSearchOpen ? (
                   <div className="flex items-center gap-1.5 px-3 pb-3 md:px-4 animate-in slide-in-from-top-1 fade-in">
                     <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input autoFocus value={threadQuery} onChange={(event) => setThreadQuery(event.target.value)} placeholder={`Search ${selected.title}`} className="h-10 rounded-2xl border-transparent bg-black/[0.04] pl-10 shadow-none dark:bg-white/[0.055]" /></div>
-                    <span className="min-w-[48px] text-center text-[10px] font-semibold text-muted-foreground">{threadQuery.trim() ? `${activeSearchIndex >= 0 ? activeSearchIndex + 1 : 0}/${matchingIds.length}` : ""}</span>
+                    <span className="min-w-[48px] text-center text-xs font-medium text-muted-foreground">{threadQuery.trim() ? `${activeSearchIndex >= 0 ? activeSearchIndex + 1 : 0}/${matchingIds.length}` : ""}</span>
                     <button type="button" disabled={matchingIds.length === 0} onClick={() => jumpSearch(-1)} className="focus-ring grid h-10 w-10 place-items-center rounded-full disabled:opacity-30" aria-label="Previous result"><ChevronUp className="h-4 w-4" /></button>
                     <button type="button" disabled={matchingIds.length === 0} onClick={() => jumpSearch(1)} className="focus-ring grid h-10 w-10 place-items-center rounded-full disabled:opacity-30" aria-label="Next result"><ChevronDown className="h-4 w-4" /></button>
                     <button type="button" onClick={() => { setThreadSearchOpen(false); setThreadQuery(""); }} className="focus-ring grid h-10 w-10 place-items-center rounded-full text-muted-foreground" aria-label="Close search"><X className="h-4 w-4" /></button>
@@ -658,10 +672,10 @@ export function MessagesPageV4({
               </header>
 
               {pinnedMessage ? (
-                <button type="button" onClick={() => scrollToMessage(pinnedMessage.id)} className="group flex shrink-0 items-center gap-2 border-b border-[#E88C2B]/12 bg-[#E88C2B]/7 px-3 py-2 text-left backdrop-blur-md animate-in slide-in-from-top-2 fade-in">
-                  <span className="grid h-8 w-8 place-items-center rounded-full bg-[#E88C2B]/14 text-[#E88C2B] transition-transform group-active:scale-90"><Pin className="h-3.5 w-3.5 fill-current" /></span>
-                  <span className="min-w-0 flex-1"><strong className="block text-[10px] uppercase tracking-[.12em] text-[#E88C2B]">Pinned</strong><span className="block truncate text-xs font-medium">{messagePreview(pinnedMessage)}</span></span>
-                  {ultimate && ultimate.pins.length > 1 ? <span className="text-[10px] font-semibold text-muted-foreground">+{ultimate.pins.length - 1}</span> : null}
+                <button type="button" onClick={() => scrollToMessage(pinnedMessage.id)} className="group flex shrink-0 items-center gap-2 border-b border-primary/15 bg-primary/10 px-3 py-2 text-left backdrop-blur-md animate-in slide-in-from-top-2 fade-in">
+                  <span className="grid h-8 w-8 place-items-center rounded-full bg-primary/15 text-primary transition-transform group-active:scale-90"><Pin className="h-3.5 w-3.5 fill-current" /></span>
+                  <span className="min-w-0 flex-1"><strong className="block text-xs font-semibold text-primary">Pinned</strong><span className="block truncate text-xs font-medium">{messagePreview(pinnedMessage)}</span></span>
+                  {ultimate && ultimate.pins.length > 1 ? <span className="text-xs font-medium text-muted-foreground">+{ultimate.pins.length - 1}</span> : null}
                 </button>
               ) : null}
 
@@ -675,7 +689,7 @@ export function MessagesPageV4({
                   if (near && unseenIncoming > 0) setUnseenIncoming(0);
                 }}
               >
-                {loadingMessages ? <div className="grid h-full place-items-center"><Loader2 className="h-5 w-5 animate-spin text-[#E88C2B]" /></div> : messages.length === 0 ? (
+                {loadingMessages ? <div className="grid h-full place-items-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div> : messages.length === 0 ? (
                   <div className="flex h-full flex-col items-center justify-center px-8 text-center animate-in fade-in zoom-in-95"><UserAvatar name={selected.title} src={selected.avatarUrl} size="lg" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><h2 className="mt-4 text-lg font-semibold">{selected.title}</h2><p className="mt-1 text-sm text-muted-foreground">Say hello and start the chat.</p>{isGroup ? <div className="mt-4 flex flex-wrap justify-center gap-2"><Button size="sm" onClick={() => setPollOpen(true)}><BarChart3 className="h-4 w-4" />Create poll</Button><Button size="sm" variant="outline" onClick={() => router.push("/plans" as Route)}>Make a Plan</Button></div> : null}</div>
                 ) : (
                   messages.map((message, index) => {
@@ -684,8 +698,8 @@ export function MessagesPageV4({
                     const newDay = startsNewDay(message.createdAt, previous?.createdAt);
                     return (
                       <Fragment key={message.id}>
-                        {newDay ? <div className="my-4 flex justify-center"><span className="rounded-full bg-black/[0.035] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground backdrop-blur-sm dark:bg-white/[0.05]">{dayLabel(message.createdAt)}</span></div> : null}
-                        {message.messageType === "system" ? <p data-message-id={message.id} className="mx-auto my-3 max-w-lg text-center text-[11px] font-medium leading-relaxed text-muted-foreground/80">{message.text}</p> : (
+                        {newDay ? <div className="my-4 flex justify-center"><span className="rounded-full bg-muted/70 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur-sm">{dayLabel(message.createdAt)}</span></div> : null}
+                        {message.messageType === "system" ? <p data-message-id={message.id} className="mx-auto my-3 max-w-lg text-center text-xs font-normal leading-relaxed text-muted-foreground">{message.text}</p> : (
                           <div data-message-id={message.id} className={cn("flex transition-[background-color] duration-500", message.isMine ? "justify-end" : "justify-start", startsRun ? "mt-3" : "mt-1")}>
                             <div className="max-w-[86%] sm:max-w-[78%]">
                               <MessageBubbleV4
@@ -720,13 +734,13 @@ export function MessagesPageV4({
 
                 {pendingMessages.map((message) => (
                   <div key={message.clientMessageId} className="mt-2 flex flex-col items-end animate-in fade-in slide-in-from-bottom-2">
-                    <div className={cn("max-w-[84%] rounded-[21px] rounded-br-[7px] bg-[#4E0401] px-3.5 py-2.5 text-[0.94rem] text-[#FEFBF3] transition-opacity", message.status === "pending" && "opacity-65")}>{message.kind === "voice" ? `Voice message${message.durationSeconds ? ` · ${Math.round(message.durationSeconds)}s` : ""}` : message.text}</div>
-                    <div className="mt-1 flex items-center gap-2 px-1 text-[10px] font-medium text-muted-foreground">{message.status === "failed" ? <><span className="text-destructive">Not sent</span><button type="button" onClick={() => retryOptimistic(message.clientMessageId)} className="underline">{message.kind === "voice" ? "Record again" : "Retry"}</button><button type="button" onClick={() => setOptimistic((current) => discardOptimistic(current, message.clientMessageId))} className="underline">Delete</button></> : <span>Sending…</span>}</div>
+                    <div className={cn("max-w-[84%] rounded-[21px] rounded-br-[7px] bg-primary px-3.5 py-2.5 text-sm leading-6 text-primary-foreground transition-opacity", message.status === "pending" && "opacity-65")}>{message.kind === "voice" ? `Voice message${message.durationSeconds ? ` · ${Math.round(message.durationSeconds)}s` : ""}` : message.text}</div>
+                    <div className="mt-1 flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">{message.status === "failed" ? <><span className="text-destructive">Not sent</span><button type="button" onClick={() => retryOptimistic(message.clientMessageId)} className="underline">{message.kind === "voice" ? "Record again" : "Retry"}</button><button type="button" onClick={() => setOptimistic((current) => discardOptimistic(current, message.clientMessageId))} className="underline">Delete</button></> : <span>Sending…</span>}</div>
                   </div>
                 ))}
               </div>
 
-              {unseenIncoming > 0 ? <button type="button" onClick={() => scrollToBottom()} className="absolute bottom-[calc(76px+env(safe-area-inset-bottom))] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-[#4E0401] px-3.5 py-2 text-xs font-bold text-[#FEFBF3] shadow-[0_12px_34px_rgba(78,4,1,.24)] animate-in zoom-in-85 slide-in-from-bottom-3"><ArrowDown className="h-4 w-4" />{unseenIncoming} new {unseenIncoming === 1 ? "message" : "messages"}</button> : null}
+              {unseenIncoming > 0 ? <button type="button" onClick={() => scrollToBottom()} className="absolute bottom-[calc(76px+env(safe-area-inset-bottom))] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-foreground px-3.5 py-2 text-xs font-semibold text-background shadow-[0_12px_34px_rgba(78,4,1,.24)] animate-in zoom-in-85 slide-in-from-bottom-3"><ArrowDown className="h-4 w-4" />{unseenIncoming} new {unseenIncoming === 1 ? "message" : "messages"}</button> : null}
 
               {/* A CLOSED PLAN CHAT KEEPS ITS HISTORY AND LOSES ITS COMPOSER.
                   Everything above this line still renders: the whole message
@@ -748,9 +762,9 @@ export function MessagesPageV4({
                     <div
                       data-plan-chat-closed="true"
                       role="status"
-                      className="border-t border-black/[0.06] bg-white/60 px-4 pb-[calc(16px+env(safe-area-inset-bottom))] pt-4 text-center dark:border-white/[0.08] dark:bg-white/[0.03]"
+                      className="border-t border-black/[0.06] bg-background/95 px-4 pb-[calc(16px+env(safe-area-inset-bottom))] pt-4 text-center dark:border-white/[0.08]"
                     >
-                      <p className="text-sm font-semibold text-[#4E0401] dark:text-orange-100">{notice.title}</p>
+                      <p className="text-sm font-semibold text-foreground">{notice.title}</p>
                       {notice.detail ? (
                         <p className="mt-1 text-xs text-muted-foreground">{notice.detail}</p>
                       ) : null}
@@ -849,7 +863,7 @@ function NewChatV4({ open, onOpenChange, onSelect, onOpenGroups }: { open: boole
     if (!friends) return [];
     return term ? friends.filter((friend) => `${friend.displayName} ${friend.username}`.toLowerCase().includes(term)) : friends;
   }, [friends, query]);
-  return <Modal open={open} onOpenChange={onOpenChange} title="New Chat" variant="sheet"><div className="space-y-3"><div className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Muddies or usernames" autoFocus className="h-11 rounded-2xl pl-10" /></div><button type="button" onClick={onOpenGroups} className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-[#E88C2B]/15 bg-[#E88C2B]/8 p-3 text-left active:scale-[.99]"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#4E0401] text-[#FEFBF3]"><UsersRound className="h-4 w-4" /></span><span className="min-w-0 flex-1"><strong className="block text-sm">Groups</strong><span className="text-xs text-muted-foreground">Open or create a group</span></span></button>{friends === null ? <div className="grid py-8 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-[#E88C2B]" /></div> : visible.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No Muddies match your search.</p> : <ul className="max-h-[55vh] space-y-1 overflow-y-auto">{visible.map((friend) => <li key={friend.friendId}><button type="button" onClick={() => onSelect(friend.friendId)} className="focus-ring flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition active:scale-[.99] hover:bg-secondary/70"><UserAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{friend.displayName}</strong><span className="block truncate text-xs text-muted-foreground">@{friend.username}</span></span></button></li>)}</ul>}</div></Modal>;
+  return <Modal open={open} onOpenChange={onOpenChange} title="New Chat" variant="sheet"><div className="space-y-3"><div className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Muddies or usernames" autoFocus className="h-11 rounded-2xl pl-10" /></div><button type="button" onClick={onOpenGroups} className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-primary/15 bg-primary/8 p-3 text-left active:scale-[.99]"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#4E0401] text-[#FEFBF3]"><UsersRound className="h-4 w-4" /></span><span className="min-w-0 flex-1"><strong className="block text-sm">Groups</strong><span className="text-xs text-muted-foreground">Open or create a group</span></span></button>{friends === null ? <div className="grid py-8 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div> : visible.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No Muddies match your search.</p> : <ul className="max-h-[55vh] space-y-1 overflow-y-auto">{visible.map((friend) => <li key={friend.friendId}><button type="button" onClick={() => onSelect(friend.friendId)} className="focus-ring flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition active:scale-[.99] hover:bg-secondary/70"><UserAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{friend.displayName}</strong><span className="block truncate text-xs text-muted-foreground">@{friend.username}</span></span></button></li>)}</ul>}</div></Modal>;
 }
 
 function EditMessageModal({ message, draft, setDraft, pending, onClose, onSave }: { message: ChatMessageView | null; draft: string; setDraft: (value: string) => void; pending: boolean; onClose: () => void; onSave: () => void }) {
@@ -867,7 +881,7 @@ function ForwardModal({ target, conversations, pending, onClose, onForward }: { 
     const term = query.trim().toLowerCase();
     return term ? conversations.filter((conversation) => conversation.title.toLowerCase().includes(term)) : conversations;
   }, [conversations, query]);
-  return <Modal open={Boolean(target)} onOpenChange={(open) => !open && onClose()} title="Forward to" variant="sheet"><div className="space-y-3"><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search chats" /><ul className="max-h-[55vh] space-y-1 overflow-y-auto">{visible.map((conversation) => <li key={conversation.id}><button type="button" disabled={pending} onClick={() => onForward(conversation.id)} className="focus-ring flex w-full items-center gap-3 rounded-2xl p-2.5 text-left hover:bg-secondary/70 active:scale-[.99]"><UserAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{conversation.title}</span><Send className="h-4 w-4 text-[#E88C2B]" /></button></li>)}</ul></div></Modal>;
+  return <Modal open={Boolean(target)} onOpenChange={(open) => !open && onClose()} title="Forward to" variant="sheet"><div className="space-y-3"><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search chats" /><ul className="max-h-[55vh] space-y-1 overflow-y-auto">{visible.map((conversation) => <li key={conversation.id}><button type="button" disabled={pending} onClick={() => onForward(conversation.id)} className="focus-ring flex w-full items-center gap-3 rounded-2xl p-2.5 text-left hover:bg-secondary/70 active:scale-[.99]"><UserAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{conversation.title}</span><Send className="h-4 w-4 text-primary" /></button></li>)}</ul></div></Modal>;
 }
 
 function CreatePollModal({ open, onOpenChange, conversationId, pending, onCreate }: { open: boolean; onOpenChange: (open: boolean) => void; conversationId: string; pending: boolean; onCreate: (payload: { question: string; options: string[]; allowMultiple: boolean; isAnonymous: boolean }) => void }) {
@@ -880,5 +894,5 @@ function CreatePollModal({ open, onOpenChange, conversationId, pending, onCreate
     if (!open) { setQuestion(""); setOptions(["", ""]); setAllowMultiple(false); setIsAnonymous(false); }
   }, [open]);
   const valid = question.trim() && options.filter((option) => option.trim()).length >= 2;
-  return <Modal open={open} onOpenChange={onOpenChange} title="Create poll" variant="sheet"><div className="space-y-4"><div><label className="mb-1.5 block text-xs font-semibold">Question</label><Input value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={240} placeholder="What should we do?" /></div><div className="space-y-2"><div className="flex items-center justify-between"><label className="text-xs font-semibold">Options</label>{options.length < 12 ? <button type="button" onClick={() => setOptions((current) => [...current, ""])} className="focus-ring inline-flex min-h-9 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[#E88C2B]"><Plus className="h-3.5 w-3.5" />Add option</button> : null}</div>{options.map((option, index) => <div key={index} className="flex gap-2"><Input value={option} onChange={(event) => setOptions((current) => current.map((value, itemIndex) => itemIndex === index ? event.target.value : value))} maxLength={120} placeholder={`Option ${index + 1}`} />{options.length > 2 ? <button type="button" onClick={() => setOptions((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="focus-ring grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted-foreground" aria-label={`Remove option ${index + 1}`}><X className="h-4 w-4" /></button> : null}</div>)}</div><label className="flex min-h-11 items-center justify-between gap-4 rounded-2xl border border-border/60 px-3 text-sm font-medium"><span>Allow multiple answers</span><input type="checkbox" checked={allowMultiple} onChange={(event) => setAllowMultiple(event.target.checked)} className="h-4 w-4 accent-[#E88C2B]" /></label><label className="flex min-h-11 items-center justify-between gap-4 rounded-2xl border border-border/60 px-3 text-sm font-medium"><span>Anonymous votes</span><input type="checkbox" checked={isAnonymous} onChange={(event) => setIsAnonymous(event.target.checked)} className="h-4 w-4 accent-[#E88C2B]" /></label><Button className="w-full" disabled={pending || !valid} onClick={() => onCreate({ question: question.trim(), options: options.map((option) => option.trim()).filter(Boolean), allowMultiple, isAnonymous })}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}Send poll</Button></div></Modal>;
+  return <Modal open={open} onOpenChange={onOpenChange} title="Create poll" variant="sheet"><div className="space-y-4"><div><label className="mb-1.5 block text-xs font-semibold">Question</label><Input value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={240} placeholder="What should we do?" /></div><div className="space-y-2"><div className="flex items-center justify-between"><label className="text-xs font-semibold">Options</label>{options.length < 12 ? <button type="button" onClick={() => setOptions((current) => [...current, ""])} className="focus-ring inline-flex min-h-9 items-center gap-1 rounded-full px-2 text-xs font-semibold text-primary"><Plus className="h-3.5 w-3.5" />Add option</button> : null}</div>{options.map((option, index) => <div key={index} className="flex gap-2"><Input value={option} onChange={(event) => setOptions((current) => current.map((value, itemIndex) => itemIndex === index ? event.target.value : value))} maxLength={120} placeholder={`Option ${index + 1}`} />{options.length > 2 ? <button type="button" onClick={() => setOptions((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="focus-ring grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted-foreground" aria-label={`Remove option ${index + 1}`}><X className="h-4 w-4" /></button> : null}</div>)}</div><label className="flex min-h-11 items-center justify-between gap-4 rounded-2xl border border-border/60 px-3 text-sm font-medium"><span>Allow multiple answers</span><input type="checkbox" checked={allowMultiple} onChange={(event) => setAllowMultiple(event.target.checked)} className="h-4 w-4 accent-[#E88C2B]" /></label><label className="flex min-h-11 items-center justify-between gap-4 rounded-2xl border border-border/60 px-3 text-sm font-medium"><span>Anonymous votes</span><input type="checkbox" checked={isAnonymous} onChange={(event) => setIsAnonymous(event.target.checked)} className="h-4 w-4 accent-[#E88C2B]" /></label><Button className="w-full" disabled={pending || !valid} onClick={() => onCreate({ question: question.trim(), options: options.map((option) => option.trim()).filter(Boolean), allowMultiple, isAnonymous })}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}Send poll</Button></div></Modal>;
 }

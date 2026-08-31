@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, FileText, Image as ImageIcon, ImagePlus, Loader2, Plus, RotateCcw, Video, X } from "lucide-react";
+import { CalendarDays, Camera, FileText, Image as ImageIcon, ImagePlus, Loader2, MapPin, Plus, RotateCcw, Video, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   createMessageAttachmentUploadIntentAction,
@@ -12,6 +12,7 @@ import {
   finalizeChatRichMediaUploadAction
 } from "@/app/(app)/messaging-rich-media-actions";
 import { AppMenu } from "@/components/ui/app-dropdown";
+import { StructuredShareV4, type StructuredShareMode } from "@/components/messaging/structured-share-v4";
 import { validateImageSelection } from "@/lib/media/validation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -101,11 +102,15 @@ export function AttachmentPicker({
   conversationId,
   onAttachmentChange,
   onLifecycleChange,
+  onFeedback,
+  onStructuredSent,
   disabled = false
 }: {
   conversationId: string;
   onAttachmentChange: (next: SelectedAttachment | null) => void;
   onLifecycleChange?: (state: AttachmentUploadLifecycle) => void;
+  onFeedback?: (message: string) => void;
+  onStructuredSent?: () => void | Promise<void>;
   disabled?: boolean;
 }) {
   const [state, setState] = useState<UploadState>({ status: "idle" });
@@ -114,6 +119,7 @@ export function AttachmentPicker({
   const uploadedRef = useRef(false);
   const richRetryRef = useRef<RichRetry>(null);
   const [retryAvailable, setRetryAvailable] = useState(false);
+  const [structuredShareMode, setStructuredShareMode] = useState<StructuredShareMode | null>(null);
   const libraryRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLInputElement | null>(null);
@@ -377,7 +383,28 @@ export function AttachmentPicker({
             icon: <FileText className="h-4.5 w-4.5" />,
             onSelect: () => documentRef.current?.click(),
             disabled: busy
-          }
+          },
+          ...(onFeedback && onStructuredSent
+            ? [
+                {
+                  id: "place",
+                  label: "Place",
+                  description: "Share a venue or general area — never live GPS",
+                  icon: <MapPin className="h-4.5 w-4.5" />,
+                  onSelect: () => setStructuredShareMode("place" as const),
+                  disabled: busy,
+                  separatorBefore: true
+                },
+                {
+                  id: "agenda",
+                  label: "Plan / Event",
+                  description: "Share something from your upcoming agenda",
+                  icon: <CalendarDays className="h-4.5 w-4.5" />,
+                  onSelect: () => setStructuredShareMode("agenda" as const),
+                  disabled: busy
+                }
+              ]
+            : [])
         ]}
         trigger={
           <button
@@ -397,6 +424,16 @@ export function AttachmentPicker({
           </button>
         }
       />
+      {structuredShareMode && onFeedback && onStructuredSent ? (
+        <StructuredShareV4
+          conversationId={conversationId}
+          open
+          mode={structuredShareMode}
+          onOpenChange={(next) => { if (!next) setStructuredShareMode(null); }}
+          onFeedback={onFeedback}
+          onSent={onStructuredSent}
+        />
+      ) : null}
       {state.status === "processing" ? <span className="sr-only" role="status">Verifying attachment</span> : null}
       {state.status === "failed" ? (
         <div className="flex items-center gap-1" role="alert">

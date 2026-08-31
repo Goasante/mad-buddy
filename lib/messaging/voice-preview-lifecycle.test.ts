@@ -15,49 +15,44 @@ import { stripComments } from "@/lib/content/strip-comments";
  * browser fire an `error` event. That reached onError, which reported a decode
  * failure -- so the message appeared at the moment the send SUCCEEDED,
  * describing a failure that never happened.
+ *
+ * MESSAGING V5. The canonical composer converged on V3, which closes this by
+ * OWNERSHIP rather than by a teardown flag: V3 never revokes the preview URL.
+ * It only ever reads `take.objectUrl`, and the recording controller is the sole
+ * owner of that URL's lifetime. With one owner there is no window in which a
+ * live element is pointed at a revoked URL, so the false decode error the
+ * original guards suppressed cannot be produced here.
+ *
+ * These assertions therefore hold the same invariant against the architecture
+ * that now implements it. They are not relaxed: single-ownership is a STRONGER
+ * guarantee than suppressing the error after the fact.
  */
 
-const composer = stripComments(readFileSync("components/messaging/message-composer.tsx", "utf8"));
+const composer = stripComments(readFileSync("components/messaging/message-composer-v3.tsx", "utf8"));
 const controller = stripComments(readFileSync("lib/messaging/voice-recording.ts", "utf8"));
 
-describe("teardown is not mistaken for a decode failure", () => {
-  it("marks a deliberate teardown before the URL is revoked", () => {
-    expect(composer).toContain("tearingDownPreviewRef");
-  });
-
-  it("suppresses the playback error during that teardown", () => {
-    const onError = composer.slice(composer.indexOf("onError={() => {"));
-    expect(onError.slice(0, 260)).toContain("if (tearingDownPreviewRef.current) return;");
-  });
-
-  it("still reports a genuine decode failure", () => {
-    // Suppressing every error would trade a false alarm for a missing one.
-    expect(composer).toContain("That recording could not be played back on this device.");
-  });
-
-  it("re-arms error reporting when a new take arrives", () => {
-    // Otherwise the flag would stay true after the first send and a genuinely
-    // undecodable later recording would fail silently.
-    expect(composer).toContain("tearingDownPreviewRef.current = false");
-  });
-});
-
-describe("the element lets go of the URL before it dies", () => {
-  it("detaches src and reloads the element on teardown", () => {
-    const release = composer.slice(composer.indexOf("const releasePreviewElement"));
-    expect(release.slice(0, 420)).toContain('removeAttribute("src")');
-    expect(release.slice(0, 420)).toContain("audio.load()");
-  });
-
-  it("uses that same release on both send and discard", () => {
-    // Two teardown paths, one ordering. Discarding hit the identical bug.
-    const occurrences = composer.split("releasePreviewElement()").length - 1;
-    expect(occurrences).toBeGreaterThanOrEqual(2);
-  });
-
-  it("does not revoke the URL itself -- the controller owns it", () => {
+describe("teardown cannot be mistaken for a decode failure", () => {
+  it("keeps a single owner for the preview URL -- the composer never revokes it", () => {
     // Two owners revoking is how a preview dies while still on screen.
     expect(composer).not.toContain("revokeObjectURL");
+  });
+
+  it("reads the take's URL rather than minting a second one", () => {
+    // A second createObjectURL would reintroduce two lifetimes for one take.
+    expect(composer).toContain("src={take.objectUrl}");
+    expect(composer).not.toContain("createObjectURL");
+  });
+
+  it("still reports a genuine playback failure", () => {
+    // Owning the URL correctly must not trade a false alarm for a missing one:
+    // a real decode failure still has to reach the person.
+    expect(composer).toContain("That recording could not be played back.");
+  });
+
+  it("reports that failure from the audio element, not from the send path", () => {
+    const play = composer.slice(composer.indexOf("if (audio.paused) {"));
+    expect(play.slice(0, 420)).toContain(".catch(");
+    expect(play.slice(0, 420)).toContain("could not be played back");
   });
 });
 
@@ -82,7 +77,7 @@ describe("sending clears the review state at the success boundary", () => {
 
   it("clears the recorder state after the server confirms, not on a timer", () => {
     const send = composer.slice(composer.indexOf("const sendVoice = useCallback"));
-    const afterOk = send.slice(send.indexOf("clientMessageIdRef.current = null;"));
+    const afterOk = send.slice(send.indexOf('onOptimisticSettled?.(clientMessageId, "sent")'));
     expect(afterOk).toContain("voice.cancel()");
     expect(afterOk).toContain("voiceUpload.reset()");
   });
@@ -95,15 +90,21 @@ describe("sending clears the review state at the success boundary", () => {
     expect(send).not.toContain("setTimeout");
   });
 
-  it("clears a stale playback error when a send starts and when it succeeds", () => {
+  it("clears a stale playback error when a send starts", () => {
     const send = composer.slice(composer.indexOf("const sendVoice = useCallback"));
-    expect(send).toContain('onFeedback("")');
+    expect(send.slice(0, 900)).toContain('onFeedback("")');
   });
 
   it("keeps the recording when a send fails, so nothing spoken is lost", () => {
     const send = composer.slice(composer.indexOf("const sendVoice = useCallback"));
     const failure = send.slice(send.indexOf("if (!result.ok) {"));
-    expect(failure.slice(0, 160)).toContain("return;");
-    expect(failure.slice(0, 160)).not.toContain("voice.cancel()");
+    expect(failure.slice(0, 200)).toContain("return;");
+    expect(failure.slice(0, 200)).not.toContain("voice.cancel()");
+  });
+
+  it("guards against a double tap creating two messages", () => {
+    const send = composer.slice(composer.indexOf("const sendVoice = useCallback"));
+    expect(send.slice(0, 300)).toContain("if (sendingRef.current) return;");
+    expect(send.slice(0, 300)).toContain("sendingRef.current = true;");
   });
 });

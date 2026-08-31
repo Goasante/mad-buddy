@@ -26,13 +26,6 @@ const common = z.object({
   conversationId: uuid,
   clientMessageId: z.string().min(1).max(64)
 });
-const contactSchema = common.extend({
-  kind: z.literal("contact"),
-  displayName: z.string().trim().min(1).max(120),
-  phone: z.string().trim().max(40).optional(),
-  email: z.string().trim().email().max(254).optional().or(z.literal("")),
-  organization: z.string().trim().max(120).optional()
-});
 const placeSchema = common.extend({
   kind: z.literal("place"),
   placeName: z.string().trim().min(1).max(160),
@@ -45,7 +38,7 @@ const agendaSchema = common.extend({
   refKind: z.enum(["plan", "event"]),
   refId: uuid
 });
-const sendSchema = z.discriminatedUnion("kind", [contactSchema, placeSchema, agendaSchema]);
+const sendSchema = z.discriminatedUnion("kind", [placeSchema, agendaSchema]);
 const payloadSchema = z.object({ conversationId: uuid, messageId: uuid });
 
 function configured() {
@@ -210,7 +203,7 @@ export async function sendStructuredChatMessageAction(input: unknown) {
     .maybeSingle();
   const lifetime = typeof settings?.message_lifetime_seconds === "number" ? settings.message_lifetime_seconds : null;
   const expiresAt = lifetime ? new Date(Date.now() + lifetime * 1000).toISOString() : null;
-  const messageType = parsed.data.kind === "contact" ? "contact" : parsed.data.kind === "place" ? "place" : "event";
+  const messageType = parsed.data.kind === "place" ? "place" : "event";
 
   const { data: message, error: messageError } = await db
     .from("messages")
@@ -228,16 +221,7 @@ export async function sendStructuredChatMessageAction(input: unknown) {
   if (messageError || !message) return fail("Could not send that share.");
 
   let payloadError: { message?: string } | null = null;
-  if (parsed.data.kind === "contact") {
-    const { error } = await db.from("message_contacts").insert({
-      message_id: message.id,
-      display_name: parsed.data.displayName,
-      phone: parsed.data.phone?.trim() || null,
-      email: parsed.data.email?.trim() || null,
-      organization: parsed.data.organization?.trim() || null
-    });
-    payloadError = error;
-  } else if (parsed.data.kind === "place") {
+  if (parsed.data.kind === "place") {
     const { error } = await db.from("message_places").insert({
       message_id: message.id,
       place_name: parsed.data.placeName,
@@ -266,13 +250,11 @@ export async function sendStructuredChatMessageAction(input: unknown) {
     admin.from("conversation_members").update({ hidden_at: null, updated_at: now }).eq("conversation_id", parsed.data.conversationId).eq("user_id", userId)
   ]);
 
-  const label = parsed.data.kind === "contact"
-    ? "Contact"
-    : parsed.data.kind === "place"
-      ? "Place"
-      : option?.kind === "plan"
-        ? "Plan"
-        : "Event";
+  const label = parsed.data.kind === "place"
+    ? "Place"
+    : option?.kind === "plan"
+      ? "Plan"
+      : "Event";
   await Promise.allSettled([
     notifyStructuredMembers(admin, parsed.data.conversationId, userId, label),
     recordDirectActivation(admin, userId, parsed.data.conversationId)

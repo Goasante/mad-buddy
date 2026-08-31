@@ -59,6 +59,7 @@ describe("private media and bundle boundaries", () => {
     expect(inspection).toContain('import("music-metadata")');
     for (const clientPath of [
       "components/messaging/message-composer.tsx",
+      "components/messaging/message-composer-v3.tsx",
       "components/messaging/voice-waveform-bar.tsx",
       "hooks/use-voice-upload.ts"
     ]) {

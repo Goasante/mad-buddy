@@ -11,7 +11,6 @@ import {
   MessageComposerV3,
   type OptimisticSendDraftV3
 } from "@/components/messaging/message-composer-v3";
-import { StructuredShareV4 } from "@/components/messaging/structured-share-v4";
 import type { MentionCandidate } from "@/lib/messaging/mentions";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 
@@ -151,16 +150,11 @@ export function MessageComposerV4Shell({
   return (
     <div ref={shellRef} onInputCapture={onInputCapture} className="relative">
       {!online ? (
-        <div className="absolute bottom-full left-1/2 z-20 mb-1 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border/70 bg-card/95 px-3 py-1 text-[10px] font-semibold text-muted-foreground shadow-sm backdrop-blur-md animate-in fade-in slide-in-from-bottom-1">
+        <div className="absolute bottom-full left-1/2 z-20 mb-1 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border/70 bg-card/95 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-md animate-in fade-in slide-in-from-bottom-1">
           <CloudOff className="h-3 w-3" />
           Offline · draft stays on this screen
         </div>
       ) : null}
-      <StructuredShareV4
-        conversationId={conversationId}
-        onFeedback={onFeedback}
-        onSent={handleSent}
-      />
       <MessageComposerV3
         conversationId={conversationId}
         isGroup={isGroup}

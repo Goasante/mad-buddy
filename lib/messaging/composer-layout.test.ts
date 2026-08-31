@@ -13,7 +13,7 @@ import { stripComments } from "@/lib/content/strip-comments";
  */
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
-const composer = stripComments(read("components/messaging/message-composer.tsx"));
+const composer = stripComments(read("components/messaging/message-composer-v3.tsx"));
 const css = read("app/globals.css");
 const groupPage = stripComments(read("components/groups/group-detail-page.tsx"));
 const dmPage = stripComments(read("components/messages/messages-page.tsx"));
@@ -90,8 +90,8 @@ describe("the field is genuinely multi-line", () => {
   });
 
   it("grows with the message but stops before eating the viewport", () => {
-    expect(composer).toContain("COMPOSER_MAX_FIELD_PX");
-    expect(composer).toContain("Math.min(field.scrollHeight, COMPOSER_MAX_FIELD_PX)");
+    expect(composer).toContain("MAX_FIELD_PX");
+    expect(composer).toContain("Math.min(field.scrollHeight, MAX_FIELD_PX)");
     expect(css).toContain("max-height: 148px");
   });
 });
@@ -105,7 +105,8 @@ describe("tool rail", () => {
     // One control, one position: mic while the composer is empty, send the
     // moment there is text or a photo.
     expect(composer).toContain("{canSendText || !voiceSupported ? (");
-    expect(composer).toContain('aria-label="Record voice message"');
+    // V3 labels the mic with its full gesture contract rather than two words.
+    expect(composer).toMatch(/aria-label="Tap to record[^"]*"/);
   });
 
   it("offers mentions only in group conversations", () => {

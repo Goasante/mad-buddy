@@ -6,7 +6,7 @@ const read = (path: string) => readFileSync(path, "utf8");
 const service = read("lib/messaging/voice-message-service.ts");
 const send = read("lib/messaging/mobile.ts");
 const bubble = read("components/messaging/voice-message-bubble.tsx");
-const composer = read("components/messaging/message-composer.tsx");
+const composer = read("components/messaging/message-composer-v3.tsx");
 const dm = read("components/messages/messages-page.tsx");
 const group = read("components/groups/group-detail-page.tsx");
 const playback = read("lib/media/voice-playback-service.ts");
@@ -55,7 +55,11 @@ describe("Phase 4F canonical voice messages", () => {
     // Voice is its own message with its own send path, rather than riding
     // along with the text send. A typed draft is never consumed by it.
     expect(composer).toContain("const sendVoice = useCallback(");
-    expect(composer).toContain("sendMessageAction({ conversationId, mediaId: prepared.mediaId, clientMessageId })");
+    // V3 formats the same call across lines; assert the send's shape, not its layout.
+    const voiceSend = composer.slice(composer.indexOf("const sendVoice = useCallback("));
+    expect(voiceSend).toContain("sendMessageAction({");
+    expect(voiceSend.slice(0, 1400)).toContain("mediaId: prepared.mediaId");
+    expect(voiceSend.slice(0, 1400)).toContain("clientMessageId");
     // One upload, one message, however many times send is tapped.
     expect(composer).toContain("if (sendingRef.current) return;");
     expect(composer).toContain("sendingRef.current = true;");

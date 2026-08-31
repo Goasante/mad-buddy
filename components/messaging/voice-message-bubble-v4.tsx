@@ -173,7 +173,7 @@ export function VoiceMessageBubbleV4({
         <button
           type="button"
           onClick={() => setSpeedIndex((index) => (index + 1) % SPEEDS.length)}
-          className="focus-ring min-w-8 rounded-full px-1.5 py-1 text-[10px] font-extrabold transition-transform active:scale-90"
+          className="focus-ring min-w-8 rounded-full px-1.5 py-1 text-xs font-semibold transition-transform active:scale-90"
           aria-label={`Playback speed ${speed} times. Tap to change.`}
         >
           {speed}×

@@ -403,13 +403,13 @@ describe("Phase 4B boundaries and canonical limits", () => {
 
   it("projects entitlements server-side and never uploads or sends audio", () => {
     const actions = stripComments(readFileSync(join(process.cwd(), "app/(app)/messaging-actions.ts"), "utf8"));
-    const composer = stripComments(readFileSync(join(process.cwd(), "components/messaging/message-composer.tsx"), "utf8"));
+    const composer = stripComments(readFileSync(join(process.cwd(), "components/messaging/message-composer-v3.tsx"), "utf8"));
     const recorder = stripComments(readFileSync(join(process.cwd(), "lib/messaging/voice-recording.ts"), "utf8"));
     const hook = stripComments(readFileSync(join(process.cwd(), "hooks/use-voice-recorder.ts"), "utf8"));
 
     expect(actions).toContain("resolveUserEntitlements");
     expect(actions).toContain("entitlements.max_voice_note_seconds");
-    expect(composer).toContain('aria-label="Record voice message"');
+    expect(composer).toMatch(/aria-label="Tap to record[^"]*"/);
     // The composer orchestrates the canonical recorder; it never uploads or
     // records on its own.
     expect(composer).toContain("useVoiceRecorder(");
@@ -425,7 +425,7 @@ describe("Phase 4B boundaries and canonical limits", () => {
   });
 
   it("keeps image composition and typed text intact", () => {
-    const composer = readFileSync(join(process.cwd(), "components/messaging/message-composer.tsx"), "utf8");
+    const composer = readFileSync(join(process.cwd(), "components/messaging/message-composer-v3.tsx"), "utf8");
     expect(composer).toContain("<AttachmentPicker");
     expect(composer).toContain('const [draft, setDraft] = useState("")');
     expect(composer).not.toContain("setDraft(\"\");\n    voice");
