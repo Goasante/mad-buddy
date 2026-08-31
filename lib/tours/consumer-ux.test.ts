@@ -163,10 +163,13 @@ describe("tour visual language", () => {
 describe("tour navigation and actions", () => {
   const runner = read("components/tours/tour-runner.tsx");
 
-  it("offers Not now before the tour starts and Skip tour inside it", () => {
-    expect(runner).toContain("Not now");
-    expect(runner).toContain("Take the tour");
+  it("offers Skip tour inside the walkthrough", () => {
+    /* The automatic floating invitation -- and with it "Not now" and "Take the
+       tour" -- was turned off on 2026-08-31 because it covered primary product
+       actions on short viewports. A tour a person actually starts still runs,
+       and it still offers a way out, which is what this protects. */
     expect(runner).toContain("Skip tour");
+    expect(runner).not.toContain("Take the tour");
   });
 
   it("ends with the explicit Finish action", () => {

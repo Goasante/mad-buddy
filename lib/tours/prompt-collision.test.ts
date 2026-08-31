@@ -2,55 +2,49 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const runner = readFileSync(join(process.cwd(), "components/tours/tour-runner.tsx"), "utf8");
-// The invitation branch only: from its `if` to the `</aside>` that closes it.
-const inviteStart = runner.indexOf('if (phase === "invitation")');
-const invitation = runner.slice(inviteStart, runner.indexOf("</aside>", inviteStart));
+const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
+const runner = read("components/tours/tour-runner.tsx");
 
 /**
- * A tour is optional education. It must never take a tap meant for a control
- * underneath it -- least of all a safety control.
+ * The automatic floating tour invitation is OFF (owner decision, 2026-08-31).
  *
- * WHAT HAPPENED. The invitation card is fixed above the bottom navigation and
- * nearly full width, so its padding and artwork covered whatever the page had
- * there. At 390px that was Safe Arrival's "Count me in": elementFromPoint at
- * the button's centre returned the tour's image, and Accept could not be
- * tapped until the tour was dismissed. Found by driving the real screen.
+ * WHY. Pinned above the bottom navigation, the unsolicited prompt reached into
+ * the page on shorter viewports and sat over primary actions -- measured
+ * covering Safe Arrival's "Count me in" at 360x800 and "Message …" at 390x844,
+ * with elementFromPoint returning the prompt rather than the CTA. Optional
+ * education must not intercept a safety control, and rather than keep tuning
+ * placement against every surface the prompt simply does not render.
  */
-describe("the tour invitation cannot swallow a tap meant for the page", () => {
-  it("declares itself non-modal", () => {
-    // A prompt nobody asked for does not get to trap interaction.
-    expect(invitation).toContain('aria-modal="false"');
+describe("the automatic tour invitation does not render", () => {
+  it("returns before drawing anything in the invitation phase", () => {
+    expect(runner).toContain('if (phase === "invitation") return null;');
   });
 
-  it("lets pointer events pass through the card itself", () => {
-    expect(invitation).toContain("pointer-events-none fixed");
+  it("draws no floating invitation card", () => {
+    // The card, its title and its actions are gone -- not merely hidden, which
+    // would still let it take a tap.
+    expect(runner).not.toContain("tour-invite-title");
+    expect(runner).not.toContain("Take the tour");
+  });
+});
+
+describe("the tour framework itself is intact", () => {
+  it("keeps the running phase, so an explicitly requested tour still works", () => {
+    expect(runner).toContain('phase === "running"');
+    expect(runner).toContain("autoStart");
   });
 
-  it("keeps its own actions clickable", () => {
-    // Passing through must not disarm the prompt's own buttons.
-    expect(invitation).toContain("pointer-events-auto");
-  });
-
-  it("does not reach for a higher stacking order instead", () => {
-    // Raising z-index would hide the collision rather than remove it.
-    expect(invitation).not.toContain("z-[99]");
-    expect(invitation).toContain("z-[95]");
-  });
-
-  it("stays clear of the bottom navigation and the safe area", () => {
-    expect(invitation).toContain("bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))]");
+  it("keeps step analytics", () => {
+    expect(runner).toContain("recordStep");
   });
 });
 
 describe("safety controls do not move because a tour exists", () => {
-  const safeArrival = readFileSync(
-    join(process.cwd(), "components/safety/safe-arrival-page.tsx"),
-    "utf8"
-  );
+  const safeArrival = read("components/safety/safe-arrival-page.tsx");
 
   it("has no tour-conditional spacing in Safe Arrival", () => {
-    // The fix belongs in the tour, not in every surface it might cover.
+    // The prompt was fixed in the tour, never by padding every surface it
+    // might cover; that must stay true if the invitation ever returns.
     for (const smell of ["tourOpen", "hasTour", "tour-offset", "isTourVisible"]) {
       expect(safeArrival, smell).not.toContain(smell);
     }

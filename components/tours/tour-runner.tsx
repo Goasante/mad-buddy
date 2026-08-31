@@ -270,60 +270,19 @@ export function TourRunner({
   if (phase === "closed" || steps.length === 0) return null;
   if (phase === "running" && !step) return null;
 
-  if (phase === "invitation") {
-    return (
-      <aside
-        ref={cardRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="false"
-        aria-labelledby="tour-invite-title"
-        /* POINTER-EVENTS-NONE ON THE CARD, AUTO ON ITS CONTROLS.
-         *
-         * This prompt is unsolicited -- nobody asked for it -- and it is
-         * declared aria-modal="false", so it must not intercept the page
-         * underneath. It did: fixed above the bottom nav and nearly full width,
-         * its padding and artwork sat over whatever the page put there. At
-         * 390px that was Safe Arrival's "Count me in", and elementFromPoint at
-         * the CTA's centre returned this card's image rather than the button --
-         * a person tapping Accept on a safety journey hit the tour instead.
-         *
-         * The card still looks identical and its own buttons still work; only
-         * its dead space stops swallowing taps. Fixed here rather than by
-         * offsetting Safe Arrival, because no safety control's geometry should
-         * depend on whether a tour happens to be showing. */
-        className="pointer-events-none fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[95] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-border bg-card p-4 shadow-xl focus:outline-none md:bottom-5"
-      >
-        {/* The brand mark, not a generic sparkle: the first thing a user sees of
-            the walkthrough should read as Mad Buddy. */}
-        <p id="tour-invite-title" className="flex items-center gap-2 text-sm font-semibold">
-          <BrandMark className="h-5 w-5 shrink-0" />
-          {title}
-        </p>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          {description ||
-            "Take a quick tour of how to find nearby Muddies, connect, make plans, and stay in control of your privacy."}
-        </p>
-        <div className="pointer-events-auto mt-3 flex justify-end gap-2">
-          {/* "Not now" before the tour has begun; "Skip tour" only applies once
-              the user is actually inside it. */}
-          <Button type="button" size="sm" variant="ghost" onClick={skip}>
-            Not now
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => {
-              record("started", steps[index]?.stepKey ?? null);
-              setPhase("running");
-            }}
-          >
-            Take the tour
-          </Button>
-        </div>
-      </aside>
-    );
-  }
+  /* THE AUTOMATIC FLOATING INVITATION IS OFF (owner decision, 2026-08-31).
+   *
+   * Optional education was interrupting primary product actions: pinned above
+   * the bottom navigation, the prompt reached into the page on shorter
+   * viewports and covered Safe Arrival's CTAs. Rather than keep tuning its
+   * placement against every surface, the unsolicited prompt no longer renders.
+   *
+   * Only the AUTOMATIC prompt is gone. The tour framework, step definitions,
+   * analytics and the `autoStart` path are all untouched, so a tour a person
+   * actually asks for still runs, and restoring this is one branch.
+   */
+  if (phase === "invitation") return null;
+
 
   const isLast = stepIndex === steps.length - 1;
   const stepEntitlements = (step?.entitlementKeys ?? [])
