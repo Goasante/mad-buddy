@@ -127,8 +127,17 @@ function messagePreview(message: ChatMessageView) {
   return message.text?.trim() || "Message";
 }
 
+/**
+ * Wallpaper only -- never a base colour.
+ *
+ * This used to set `backgroundColor: hsl(var(--background))` under every
+ * gradient. In dark mode that token is warmer than the shell's own #111112, so
+ * an open conversation painted a brown slab inside a near-black frame and the
+ * two read as different surfaces. The canvas now comes from one class on the
+ * elements themselves, and this contributes the theme's gradient alone.
+ */
 function themeStyle(themeKey: string | null | undefined): CSSProperties {
-  const base: CSSProperties = { backgroundColor: "hsl(var(--background))" };
+  const base: CSSProperties = {};
   switch (themeKey) {
     case "apricot":
       return { ...base, backgroundImage: "radial-gradient(circle at 20% 0%, hsl(var(--primary) / .14), transparent 38%)" };
@@ -595,7 +604,7 @@ export function MessagesPageV4({
   const peopleHere = ultimate?.presence.filter((person) => person.isInChat).slice(0, 3) ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-[1240px] bg-background pb-3 text-foreground">
+    <div className="mx-auto w-full max-w-[1240px] bg-background pb-3 text-foreground dark:bg-[#111112]">
       {feedback ? (
         <div role="status" className="mb-2 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-foreground animate-in fade-in slide-in-from-top-1">
           {feedback}
@@ -603,7 +612,7 @@ export function MessagesPageV4({
       ) : null}
 
       <div className="grid min-h-[620px] overflow-hidden md:rounded-[28px] md:border md:border-border/60 md:bg-card/45 md:shadow-[0_24px_80px_rgba(78,4,1,0.08)] lg:grid-cols-[390px_minmax(0,1fr)]">
-        <aside className={cn("min-w-0 bg-background lg:border-r lg:border-border/60", selectedId && "hidden lg:flex lg:flex-col")}>
+        <aside className={cn("min-w-0 bg-background dark:bg-[#111112] lg:border-r lg:border-border/60", selectedId && "hidden lg:flex lg:flex-col")}>
           <div className="sticky top-0 z-10 border-b border-black/[0.04] bg-background/95 px-3 pb-3 pt-[max(.55rem,env(safe-area-inset-top))] backdrop-blur-xl dark:border-white/[0.06] dark:bg-background/95 sm:px-4 md:px-5">
             <div className="flex items-center justify-between gap-3">
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">Chats</h1>
@@ -637,7 +646,7 @@ export function MessagesPageV4({
           </div>
         </aside>
 
-        <main className={cn("min-w-0", "fixed inset-0 z-30 flex h-[100dvh] flex-col lg:static lg:z-auto lg:h-[min(790px,calc(100dvh-3rem))]", !selectedId && "hidden lg:flex")} style={themeStyle(ultimate?.preferences.themeKey)}>
+        <main className={cn("min-w-0 bg-background dark:bg-[#111112]", "fixed inset-0 z-30 flex h-[100dvh] flex-col lg:static lg:z-auto lg:h-[min(790px,calc(100dvh-3rem))]", !selectedId && "hidden lg:flex")} style={themeStyle(ultimate?.preferences.themeKey)}>
           {!selected ? (
             <div className="flex flex-1 flex-col items-center justify-center px-8 text-center"><div className="grid h-20 w-20 place-items-center rounded-[28px] bg-primary/10 text-primary"><MessageCircle className="h-8 w-8" /></div><h2 className="mt-5 text-xl font-semibold tracking-tight">Choose a chat</h2><p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">Message a Muddy, continue a Group, or pick up a Plan chat.</p></div>
           ) : (

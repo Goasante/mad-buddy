@@ -259,6 +259,23 @@ function hasImmersiveHeader(pathname: string): boolean {
   return IMMERSIVE_HEADER_PAGES.some((href) => pathname === href || pathname.startsWith(`${href}/`));
 }
 
+/**
+ * Surfaces that paint their own canvas edge to edge on mobile.
+ *
+ * The shell's px-4 leaves a strip of shell colour down both sides of whatever
+ * the page paints. On most screens that reads as a page margin, which is what
+ * it is for. Messages paints a full chat surface, so the strip read instead as
+ * dark gutters framing a warmer central slab -- two competing backgrounds
+ * rather than one room. The page keeps its own internal padding; only the
+ * shell's horizontal inset steps aside, and only below md where the gutters
+ * exist.
+ */
+const FULL_BLEED_PAGES: readonly string[] = ["/messages"];
+
+function isFullBleed(pathname: string): boolean {
+  return FULL_BLEED_PAGES.some((href) => pathname === href || pathname.startsWith(`${href}/`));
+}
+
 export type AppShellProps = {
   children: ReactNode;
   showAdminLink?: boolean;
@@ -352,6 +369,7 @@ function AppShellInner({
   }, [cameraOpen, pathname]);
   const immersiveHeader = hasImmersiveHeader(pathname);
   const showsWallpaper = hasWallpaper(pathname);
+  const fullBleed = isFullBleed(pathname);
   /* Reserve space for the launcher only where the launcher actually is.
    *
    * The SAME predicate the launcher renders itself from, so the space and the
@@ -487,7 +505,11 @@ function AppShellInner({
              * collision was noticed. --quick-actions-reserve carries the
              * pill's own geometry, and collapses to ordinary spacing on
              * desktop where the pill sits clear of the content column. */
-            "relative min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)+1rem)] px-4 sm:px-6 lg:px-8 lg:pb-6 md:scroll-pb-6 md:pt-0",
+            "relative min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)+1rem)] lg:pb-6 md:scroll-pb-6 md:pt-0",
+            // Ordinary pages keep the shell's page margin; a full-bleed surface
+            // gets it back at md+, where there is a content column rather than
+            // a screen edge.
+            fullBleed ? "px-0 md:px-6 lg:px-8" : "px-4 sm:px-6 lg:px-8",
             immersive
               ? // The bar has stepped aside, so reserving its height would
                 // leave a dead strip under an open conversation. The launcher
@@ -495,7 +517,12 @@ function AppShellInner({
                 "pb-5"
               : reservesQuickActions
                 ? "pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)+var(--quick-actions-reserve))] md:pb-5"
-                : "pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)+1.25rem)] md:pb-5",
+                : /* The bar's own height and the device inset are what a page
+                     must clear; the extra 1.25rem on top of both was a third
+                     helping of space that showed up as a dead gap above the
+                     nav. A small breathing allowance stays so the last card
+                     does not sit flush against the bar. */
+                  "pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)+0.5rem)] md:pb-5",
             // Both mobile headers are FIXED (out of normal flow), so <main>
             // reserves the matching footprint here — the one place either
             // offset is computed, so no page needs its own top-padding guess
