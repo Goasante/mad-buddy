@@ -105,7 +105,7 @@ describe("mobile bottom navigation", () => {
   it("pads the safe area inside its own surface", () => {
     // Inside, so the bar's background reaches the screen edge rather than
     // leaving a strip of page visible below it.
-    expect(nav).toContain("pb-[env(safe-area-inset-bottom,0px)]");
+    expect(nav).toContain("pb-[min(env(safe-area-inset-bottom,0px),0.75rem)]");
   });
 
   it("keeps the raised Create button from clipping the top border", () => {

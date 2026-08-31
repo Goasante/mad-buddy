@@ -1328,7 +1328,7 @@ function MobileNav({
     // page showing beneath it.
     <nav
       className={cn(
-        "fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-background/95 pb-[env(safe-area-inset-bottom,0px)] backdrop-blur-xl dark:border-white/10 dark:bg-[#151517]/95 md:hidden",
+        "fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-background/95 pb-[min(env(safe-area-inset-bottom,0px),0.75rem)] backdrop-blur-xl dark:border-white/10 dark:bg-[#151517]/95 md:hidden",
         // Immersive: slide down and fade rather than disappearing, so opening
         // a conversation reads as the bar stepping aside. Hidden from
         // assistive tech and taken out of the tab order at the same time —
