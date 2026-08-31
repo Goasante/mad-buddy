@@ -301,7 +301,10 @@ describe("composer wiring", () => {
      * the mention state inside the async call would read it after the reset.
      * What matters is unchanged: what goes on the wire is ids. */
     expect(composer).toContain("mentionUserIdsForSend(reconcileMentions(text, mentions)");
-    expect(composer).toContain("mentionUserIds: mentionIds");
+    /* Carried on the message that owns the text. A multi-photo send puts the
+       caption on the first message only, so the mentions ride with it and the
+       rest go out with none rather than repeating them. */
+    expect(composer).toContain("mentionUserIds: send.text ? mentionIds : []");
   });
 
   it("supports keyboard navigation and Escape", () => {

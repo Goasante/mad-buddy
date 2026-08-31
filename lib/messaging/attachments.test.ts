@@ -201,11 +201,11 @@ describe("upload lifecycle", () => {
       composer.indexOf("if (!result.ok) {"),
       composer.indexOf('setDraft("")')
     );
-    expect(failure).not.toContain("setAttachment(null)");
+    expect(failure).not.toContain("setAttachments([])");
     const success = composer.slice(composer.indexOf('setDraft("")'));
-    expect(success.slice(0, 250)).toContain("setAttachment(null)");
+    expect(success.slice(0, 250)).toContain("setAttachments([])");
     // And only there: a failed send keeps the photo so retry is one tap.
-    expect(success.indexOf("setAttachment(null)")).toBeGreaterThan(-1);
+    expect(success.indexOf("setAttachments([])")).toBeGreaterThan(-1);
   });
 
   it("blocks a send with neither text nor photo", () => {
@@ -213,7 +213,8 @@ describe("upload lifecycle", () => {
      * locked the composer until the previous round trip finished. Concurrent
      * sends are safe because each carries its own idempotency key. An empty
      * send, and a send during an attachment upload, are still refused. */
-    expect(composer).toContain("if ((!text && !attachment) || uploadBusy) return;");
+    // Photos are a list now, so "nothing to send" is an empty one.
+    expect(composer).toContain("if ((!text && attachments.length === 0) || uploadBusy) return;");
   });
 
   it("no longer blocks a second send on the first one's round trip", () => {

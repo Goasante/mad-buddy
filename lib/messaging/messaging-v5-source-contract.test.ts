@@ -54,6 +54,17 @@ describe("Messaging V5 product source contracts", () => {
     expect(page).not.toContain("#fffaf3");
     expect(page).not.toContain("#fff9f4");
     expect(page).not.toContain("#f8faf6");
-    expect(page).toContain('backgroundColor: "hsl(var(--background))"');
+  });
+
+  it("paints the Messages canvas from classes, not from themeStyle", () => {
+    /* themeStyle used to set backgroundColor: hsl(var(--background)) beneath
+       every wallpaper. That token is warmer than the shell's own dark value, so
+       in dark mode an open conversation was a brown slab inside a near-black
+       frame. The wallpaper contributes its gradient and nothing else; the
+       canvas is one class, so the inbox and a conversation match the shell. */
+    const page = source("components/messages/messages-page-v4.tsx");
+    expect(page).toContain("const base: CSSProperties = {};");
+    expect(page).not.toContain('backgroundColor: "hsl(var(--background))"');
+    expect(page).toContain("dark:bg-[#111112]");
   });
 });

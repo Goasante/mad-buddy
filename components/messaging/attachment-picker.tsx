@@ -115,6 +115,15 @@ export function AttachmentPicker({
 }) {
   const [state, setState] = useState<UploadState>({ status: "idle" });
   const fileRef = useRef<File | null>(null);
+  /* Photos chosen in one go, waiting their turn.
+   *
+   * The upload path below is deliberately single-file -- one intent, one
+   * signed URL, one finalize -- and it is the pipeline the server verifies
+   * bytes through. Rather than parallelise it, a multi-photo selection queues
+   * here and is drained one at a time, so each photo takes the same proven
+   * route and a failure stops at the photo it belongs to instead of taking the
+   * batch down with it. */
+  const photoQueueRef = useRef<File[]>([]);
   const intentRef = useRef<UploadIntent | null>(null);
   const uploadedRef = useRef(false);
   const richRetryRef = useRef<RichRetry>(null);
@@ -183,6 +192,11 @@ export function AttachmentPicker({
         void discardMessageAttachmentAction(intent.mediaId);
         intentRef.current = null;
         uploadedRef.current = false;
+        /* Stop the batch here. Draining on would push more photos up behind a
+           visible failure, and the person could not tell which one broke. The
+           photos already READY stay in the composer; the rest are dropped and
+           can be picked again. */
+        photoQueueRef.current = [];
         transition({ status: "failed", message: "Couldn't upload that photo. Try again." });
         return;
       }
@@ -194,6 +208,7 @@ export function AttachmentPicker({
       mediaId: intent.mediaId
     });
     if (!result.ok || !result.mediaId) {
+      photoQueueRef.current = [];
       transition({ status: "failed", message: result.message });
       return;
     }
@@ -205,6 +220,26 @@ export function AttachmentPicker({
     setRetryAvailable(false);
     transition({ status: "ready" });
     onAttachmentChange({ mediaId: result.mediaId, previewUrl: result.previewUrl ?? null, kind: "image", fileName: file.name, sizeBytes: file.size });
+
+    // Selection order is preserved because the queue is drained from the front
+    // and only after the previous photo is READY.
+    const next = photoQueueRef.current.shift();
+    if (next) uploadImage(next);
+  }
+
+  /** Photos per selection. Enough for a set of holiday pictures, few enough
+   *  that a sequential upload still finishes in a reasonable time. */
+  const MAX_PHOTOS_PER_SELECTION = 10;
+
+  function uploadImages(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const chosen = Array.from(files).slice(0, MAX_PHOTOS_PER_SELECTION);
+    if (files.length > MAX_PHOTOS_PER_SELECTION) {
+      onFeedback?.(`Sending the first ${MAX_PHOTOS_PER_SELECTION} photos.`);
+    }
+    // The first goes straight into the existing single-file path; the rest wait.
+    photoQueueRef.current = chosen.slice(1);
+    uploadImage(chosen[0]);
   }
 
   function uploadImage(file: File | undefined) {
@@ -306,9 +341,11 @@ export function AttachmentPicker({
         ref={libraryRef}
         type="file"
         accept="image/jpeg,image/png,image/webp"
+        // Library only. The camera input below stays a single capture.
+        multiple
         className="hidden"
         onChange={(event) => {
-          uploadImage(event.target.files?.[0]);
+          uploadImages(event.target.files);
           event.target.value = "";
         }}
       />

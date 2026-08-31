@@ -95,7 +95,13 @@ export function MessageComposerV3({
   const [mentions, setMentions] = useState<StructuredMention[]>([]);
   const [trigger, setTrigger] = useState<MentionTrigger | null>(null);
   const [activeMention, setActiveMention] = useState(0);
-  const [attachment, setAttachment] = useState<SelectedAttachment | null>(null);
+  /* Photos accumulate; one message is sent per photo.
+   *
+   * The picker uploads a multi-selection one file at a time and reports each
+   * finished photo here, so this is a list rather than a slot. Videos and
+   * documents still arrive one at a time and simply make a list of one. */
+  const [attachments, setAttachments] = useState<SelectedAttachment[]>([]);
+  const attachment = attachments[0] ?? null;
   const [uploadState, setUploadState] = useState<AttachmentUploadLifecycle>("idle");
   const [isPending, startTransition] = useTransition();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -212,49 +218,74 @@ export function MessageComposerV3({
 
   function sendText() {
     const text = draft.trim();
-    if ((!text && !attachment) || uploadBusy) return;
-    const clientMessageId = clientMessageIdRef.current ?? crypto.randomUUID();
+    if ((!text && attachments.length === 0) || uploadBusy) return;
     const mentionIds = mentionUserIdsForSend(reconcileMentions(text, mentions), "");
-    const mediaId = attachment?.mediaId;
-    onOptimisticSend?.({ clientMessageId, text: text || null, kind: "text", durationSeconds: null });
+    /* One canonical message per photo, in the order they were chosen.
+     *
+     * The caption and the reply belong to the FIRST message only -- repeating
+     * them on every photo would post the same sentence several times and point
+     * several replies at one message. Each send carries its own
+     * clientMessageId, so the optimistic rows settle independently and a
+     * retried batch cannot duplicate one that already landed. */
+    const queued = attachments.length > 0 ? attachments : [null];
+    const sends = queued.map((item, index) => ({
+      mediaId: item?.mediaId,
+      text: index === 0 ? text : "",
+      replyToMessageId: index === 0 ? (replyToMessageId ?? undefined) : undefined,
+      clientMessageId:
+        index === 0 ? (clientMessageIdRef.current ?? crypto.randomUUID()) : crypto.randomUUID()
+    }));
+
+    for (const send of sends) {
+      onOptimisticSend?.({
+        clientMessageId: send.clientMessageId,
+        text: send.text || null,
+        kind: "text",
+        durationSeconds: null
+      });
+    }
     setDraft("");
     setMentions([]);
     setTrigger(null);
-    setAttachment(null);
+    setAttachments([]);
     setUploadState("idle");
     clientMessageIdRef.current = null;
-    const replyId = replyToMessageId ?? undefined;
     onCancelReply?.();
     onFeedback("");
 
     startTransition(async () => {
-      try {
-        const result = await withTimeout(
-          sendMessageAction({
-            conversationId,
-            text,
-            mediaId,
-            mentionUserIds: mentionIds,
-            replyToMessageId: replyId,
-            clientMessageId
-          }),
-          { operation: "send message" }
-        );
-        if (!result.ok) {
-          onOptimisticSettled?.(clientMessageId, "failed");
-          onFeedback(result.message);
-          return;
+      // Sequential: the server orders by arrival, and firing them together
+      // would let the second photo land before the first.
+      for (const send of sends) {
+        try {
+          const result = await withTimeout(
+            sendMessageAction({
+              conversationId,
+              text: send.text,
+              mediaId: send.mediaId,
+              mentionUserIds: send.text ? mentionIds : [],
+              replyToMessageId: send.replyToMessageId,
+              clientMessageId: send.clientMessageId
+            }),
+            { operation: "send message" }
+          );
+          if (!result.ok) {
+            onOptimisticSettled?.(send.clientMessageId, "failed");
+            onFeedback(result.message);
+            // A later photo failing must not undo the ones already sent.
+            continue;
+          }
+          onOptimisticSettled?.(send.clientMessageId, "sent");
+        } catch (error) {
+          onOptimisticSettled?.(send.clientMessageId, "failed");
+          onFeedback(
+            isRequestTimeoutError(error)
+              ? "Sending took too long. Your message was kept so you can try again."
+              : "The message could not be sent. Try again."
+          );
         }
-        onOptimisticSettled?.(clientMessageId, "sent");
-        await onSent();
-      } catch (error) {
-        onOptimisticSettled?.(clientMessageId, "failed");
-        onFeedback(
-          isRequestTimeoutError(error)
-            ? "Sending took too long. Your message was kept so you can try again."
-            : "The message could not be sent. Try again."
-        );
       }
+      await onSent();
     });
   }
 
@@ -709,14 +740,51 @@ export function MessageComposerV3({
       ) : null}
 
       {replyPreview ? <ReplyStrip preview={replyPreview} onCancel={onCancelReply} /> : null}
-      <AttachmentPreview
-        attachment={attachment}
-        onRemove={() => {
-          discardAttachment(attachment);
-          setAttachment(null);
-          setUploadState("idle");
-        }}
-      />
+      {attachments.length > 1 ? (
+        /* A tray once there is more than one: the single preview says what one
+           attachment is, and repeating it down the composer would push the
+           text field off a phone screen. Each thumbnail owns its own remove,
+           so discarding the third photo cannot take the others with it. */
+        <ul className="flex gap-2 overflow-x-auto px-3 pb-2">
+          {attachments.map((item, index) => (
+            <li key={item.mediaId} className="relative shrink-0">
+              {item.previewUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={item.previewUrl}
+                  alt=""
+                  className="h-16 w-16 rounded-[10px] object-cover"
+                  draggable={false}
+                />
+              ) : (
+                <span className="grid h-16 w-16 place-items-center rounded-[10px] bg-secondary text-[11px] text-muted-foreground">
+                  Photo
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  discardAttachment(item);
+                  setAttachments((current) => current.filter((entry) => entry.mediaId !== item.mediaId));
+                }}
+                className="focus-ring absolute -right-1 -top-1 grid h-6 w-6 place-items-center rounded-full bg-foreground/80 text-[11px] text-background"
+                aria-label={`Remove photo ${index + 1}`}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <AttachmentPreview
+          attachment={attachment}
+          onRemove={() => {
+            discardAttachment(attachment);
+            setAttachments([]);
+            setUploadState("idle");
+          }}
+        />
+      )}
       <form
         method="post"
         className="composer-row"
@@ -728,7 +796,11 @@ export function MessageComposerV3({
         <div className="composer-bubble">
           <AttachmentPicker
             conversationId={conversationId}
-            onAttachmentChange={setAttachment}
+            onAttachmentChange={(next) => {
+              // The picker reports one finished photo at a time; each is
+              // appended so a multi-selection accumulates in choice order.
+              setAttachments((current) => (next ? [...current, next] : []));
+            }}
             onLifecycleChange={setUploadState}
             onFeedback={onFeedback}
             onStructuredSent={onSent}
