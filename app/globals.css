@@ -4320,37 +4320,28 @@ select {
 .profile-photos-controls {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  /* The row that sets the intrinsic floor: three visibility chips plus reorder
-     and remove. It may wrap rather than force its parent wider -- on a 360px
-     phone the chips and the buttons simply take two lines. */
+  justify-content: flex-end;
+  gap: 0.5rem 0.375rem;
   flex-wrap: wrap;
   min-width: 0;
 }
 
 .profile-photos-visibility {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  flex: 0 0 100%;
   min-width: 0;
-  /* `flex: 1` alone still refuses to go below its content. A basis of 0 with a
-     sensible floor lets the three chips share whatever width exists. */
-  flex: 1 1 0;
   gap: 0.375rem;
 }
 
 .profile-photos-chip {
-  min-height: 2.25rem;
-  /* Shrinkable, with an ellipsis rather than an overflow: a narrow phone gets
-     smaller chips, never a wider page. */
-  flex: 1 1 0;
+  min-height: 2.75rem;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   border-radius: 999px;
   border: 1px solid hsl(var(--border) / 0.7);
-  padding-inline: 0.625rem;
+  padding: 0.375rem 0.5rem;
   font-size: 0.75rem;
+  line-height: 1.2;
   font-weight: 500;
   color: hsl(var(--muted-foreground));
   transition: background-color 300ms ease-out, border-color 300ms ease-out, color 300ms ease-out;
@@ -4378,8 +4369,8 @@ select {
 
 .profile-photos-move-button {
   display: grid;
-  height: 2.25rem;
-  width: 2.25rem;
+  height: 2.75rem;
+  width: 2.75rem;
   place-items: center;
   border-radius: 999px;
   border: 1px solid hsl(var(--border) / 0.7);
@@ -4398,8 +4389,8 @@ select {
 
 .profile-photos-remove {
   display: grid;
-  height: 2.25rem;
-  width: 2.25rem;
+  height: 2.75rem;
+  width: 2.75rem;
   flex-shrink: 0;
   place-items: center;
   border-radius: 999px;
