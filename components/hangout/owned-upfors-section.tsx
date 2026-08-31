@@ -9,6 +9,7 @@ import {
   type OwnedUpFor
 } from "@/lib/social/owned-upfors";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
+import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import type { HangoutActivityType } from "@/lib/supabase/database.types";
 
 /**
@@ -52,7 +53,14 @@ export function OwnedUpForsSection({
   if (views.length === 0) return null;
 
   return (
-    <section aria-labelledby="owned-upfors-heading" className="upfor-section">
+    <section
+      aria-labelledby="owned-upfors-heading"
+      /* The tour's anchor for "your UpFors". It used to sit on the legacy owner
+         hero; that hero is gone, and this list is what replaced it, so the tour
+         step points here rather than at nothing. */
+      data-tour-id={TOUR_TARGET_IDS.HANGOUT_ACTIVE}
+      className="upfor-section"
+    >
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2 id="owned-upfors-heading" className="text-[16px] font-semibold">
           Your UpFors

@@ -296,6 +296,8 @@ export function HangoutModePage({
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /* Monotonic id for feed reads, so only the newest response may write. */
   const feedRequestSeq = useRef(0);
+  /* Single-flight guard for the owner's request map. */
+  const requestRefreshRef = useRef<Promise<void> | null>(null);
 
   /* The feed is no longer narrowed here. UpForFeed owns discovery now: the
    * four modes are the only filter, and they are applied by the tested rules
@@ -337,14 +339,31 @@ export function HangoutModePage({
      poll, and by every post-mutation refresh, so there is a single way the
      counts and lists become current. */
   const loadOwnerRequests = useCallback(async () => {
-    try {
-      const byUpFor = await withTimeout(getOwnerRequestsByUpForAction(), {
-        operation: "load owner UpFor requests"
-      });
-      setRequestsByUpFor(byUpFor);
-    } catch {
-      // Leaves the last known map in place.
-    }
+    /* SINGLE-FLIGHT, the repository's foreground-storm convention.
+     *
+     * This runs on a 15s interval AND on window focus, and a phone returning
+     * to the app can fire focus while a tick is already in the air. The guard
+     * it inherits belonged to the legacy refreshRequests, which this replaced;
+     * dropping it would have left the owner path storming on resume -- the
+     * exact failure lib/performance/freeze-recovery.test.ts exists to catch.
+     * A caller that arrives mid-read joins the read already running. */
+    if (requestRefreshRef.current) return requestRefreshRef.current;
+
+    const refresh = (async () => {
+      try {
+        const byUpFor = await withTimeout(getOwnerRequestsByUpForAction(), {
+          operation: "load owner UpFor requests"
+        });
+        setRequestsByUpFor(byUpFor);
+      } catch {
+        // Leaves the last known map in place.
+      } finally {
+        requestRefreshRef.current = null;
+      }
+    })();
+
+    requestRefreshRef.current = refresh;
+    return refresh;
   }, []);
 
   /* Keep the per-session request counts fresh while the owner is looking.
