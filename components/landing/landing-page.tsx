@@ -18,6 +18,7 @@ import {
   X
 } from "lucide-react";
 import { LandingNav } from "@/components/landing/landing-nav";
+import { PublicFooter } from "@/components/front-door/public-shell";
 
 const trustPoints = [
   "Rough proximity, never a map",
@@ -128,7 +129,7 @@ export function LandingPage() {
         <PrivacySection />
         <FinalCta />
       </main>
-      <Footer />
+      <PublicFooter />
     </div>
   );
 }
@@ -160,7 +161,7 @@ function Hero() {
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Link
-              href="/login"
+              href="/signup"
               className="focus-ring inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#4E0401] px-6 text-sm font-bold text-white shadow-[0_14px_35px_rgba(78,4,1,0.18)] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(78,4,1,0.24)] active:translate-y-0 dark:bg-[#E88C2B] dark:text-[#2B120A]"
             >
               Get started <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -441,37 +442,12 @@ function FinalCta() {
           <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.03em] sm:text-5xl">The next hangout could already be around you.</h2>
           <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-white/70 dark:text-[#3A1610]/60">Add the people you trust. Choose when to be visible. See what becomes possible when digital friendship has a way back into the real world.</p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <Link href="/login" className="focus-ring inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#E88C2B] px-6 text-sm font-bold text-[#2B120A] shadow-sm transition-transform hover:-translate-y-0.5 active:translate-y-0">Get started <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+            <Link href="/signup" className="focus-ring inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#E88C2B] px-6 text-sm font-bold text-[#2B120A] shadow-sm transition-transform hover:-translate-y-0.5 active:translate-y-0">Get started <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
             <Link href="/about" className="focus-ring inline-flex min-h-12 items-center justify-center rounded-full border border-white/20 bg-white/[0.05] px-6 text-sm font-bold text-white hover:bg-white/[0.09] dark:border-[#4E0401]/10 dark:bg-white/30 dark:text-[#3A1610] dark:hover:bg-white/50">Learn about Mad Buddy</Link>
           </div>
         </div>
       </div>
     </section>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="border-t border-[#4E0401]/10 px-4 py-10 sm:px-6 lg:px-10 dark:border-white/[0.07]">
-      <div className="mx-auto grid w-full max-w-7xl gap-8 sm:grid-cols-[1.35fr_1fr] sm:items-end">
-        <div>
-          <Link href="#hero" className="focus-ring inline-flex min-h-11 items-center rounded-lg text-base font-bold tracking-[-0.02em] text-[#4E0401] dark:text-[#FFF8F1]">Mad Buddy<span className="text-[#E88C2B]">.</span></Link>
-          <p className="mt-2 max-w-sm text-sm leading-6 text-[#4E0401]/50 dark:text-[#FFF8F1]/50">When your friends are close, they glow.</p>
-        </div>
-        <nav className="flex flex-wrap gap-x-5 gap-y-3 text-sm font-semibold text-[#4E0401]/60 sm:justify-end dark:text-[#FFF8F1]/50" aria-label="Footer navigation">
-          <Link href="/about" className="focus-ring rounded-md hover:text-[#4E0401] dark:hover:text-[#FFF8F1]">About</Link>
-          <Link href="/faq" className="focus-ring rounded-md hover:text-[#4E0401] dark:hover:text-[#FFF8F1]">FAQ</Link>
-          <Link href="/pricing" className="focus-ring rounded-md hover:text-[#4E0401] dark:hover:text-[#FFF8F1]">Pricing</Link>
-          <Link href="/privacy" className="focus-ring rounded-md hover:text-[#4E0401] dark:hover:text-[#FFF8F1]">Privacy</Link>
-          <Link href="/terms" className="focus-ring rounded-md hover:text-[#4E0401] dark:hover:text-[#FFF8F1]">Terms</Link>
-          <Link href="/login" className="focus-ring rounded-md text-[#A45A18] hover:text-[#7E3C08] dark:text-[#F0AE68]">Log in</Link>
-        </nav>
-      </div>
-      <div className="mx-auto mt-8 flex w-full max-w-7xl flex-col gap-2 border-t border-[#4E0401]/10 pt-5 text-xs text-[#4E0401]/40 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.06] dark:text-[#FFF8F1]/40">
-        <p>&copy; {new Date().getFullYear()} Mad Buddy. All rights reserved.</p>
-        <p>Privacy-safe proximity for real-world connection.</p>
-      </div>
-    </footer>
   );
 }
 

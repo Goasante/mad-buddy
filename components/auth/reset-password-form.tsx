@@ -35,71 +35,42 @@ export function ResetPasswordForm() {
     formState: { errors }
   } = useForm<ResetPasswordFormValues>({
     resolver: zodResolver(resetPasswordSchema),
-    defaultValues: {
-      password: "",
-      confirmPassword: ""
-    }
+    defaultValues: { password: "", confirmPassword: "" }
   });
 
   function onSubmit(values: ResetPasswordFormValues) {
     startTransition(async () => {
       const result = await resetPasswordAction(values);
       setActionState(result);
-
-      if (result.ok && result.redirectTo) {
-        router.push(result.redirectTo as Route);
-      }
+      if (result.ok && result.redirectTo) router.push(result.redirectTo as Route);
     });
   }
 
-  /* method="post" is a safety fallback for when the page's JavaScript has not
-   * run: a form with no method defaults to GET and would put every field in the
-   * URL (browser history, access logs, proxies). Submission normally goes
-   * through onSubmit. Full note in login-form.tsx. */
   return (
     <form className="space-y-4" method="post" onSubmit={handleSubmit(onSubmit)}>
       <FormField htmlFor="password" label="New password" error={errors.password?.message}>
         <Input id="password" type="password" autoComplete="new-password" {...register("password")} />
       </FormField>
-      <FormField
-        htmlFor="confirmPassword"
-        label="Confirm password"
-        error={errors.confirmPassword?.message}
-      >
-        <Input
-          id="confirmPassword"
-          type="password"
-          autoComplete="new-password"
-          {...register("confirmPassword")}
-        />
+      <FormField htmlFor="confirmPassword" label="Confirm password" error={errors.confirmPassword?.message}>
+        <Input id="confirmPassword" type="password" autoComplete="new-password" {...register("confirmPassword")} />
       </FormField>
       {actionState ? (
-        <div
-          className={`flex items-center gap-2 rounded-md border p-3 text-sm ${
-            actionState.ok
-              ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-50"
-              : "border-amber-300/20 bg-amber-300/10 text-amber-50"
-          }`}
-        >
+        <div className={`flex items-start gap-2 rounded-xl border p-3 text-sm leading-6 ${actionState.ok ? "border-emerald-600/20 bg-emerald-600/10 text-emerald-900 dark:text-emerald-100" : "border-amber-500/20 bg-amber-500/10 text-amber-900 dark:text-amber-100"}`} role="status">
           {actionState.ok ? (
-            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           ) : (
-            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           )}
           {actionState.message}
         </div>
       ) : null}
       <Button type="submit" className="w-full" disabled={isPending}>
-        {isPending ? (
-          <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-        ) : null}
-        Update password
+        {isPending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
+        {isPending ? "Updating..." : "Update password"}
       </Button>
       <p className="text-center text-sm text-muted-foreground">
         Already updated?{" "}
-        <Link href="/login" className="font-semibold text-foreground hover:text-accent">
-          Back to login
-        </Link>
+        <Link href="/login" className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-foreground hover:text-accent">Back to login</Link>
       </p>
     </form>
   );

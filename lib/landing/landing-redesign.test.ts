@@ -8,12 +8,14 @@ const source = (path: string) => stripComments(read(path));
 
 const rawLanding = read("components/landing/landing-page.tsx");
 const rawNavigation = read("components/landing/landing-nav.tsx");
+const rawPublicShell = read("components/front-door/public-shell.tsx");
 const landing = stripComments(rawLanding);
 const navigation = stripComments(rawNavigation);
+const publicShell = stripComments(rawPublicShell);
 const mobileMenu = source("components/landing/landing-mobile-menu.tsx");
 const homePage = source("app/page.tsx");
 
-const imageTags = [rawLanding, rawNavigation].flatMap((rawSource) => [
+const imageTags = [rawLanding, rawNavigation, rawPublicShell].flatMap((rawSource) => [
   ...(rawSource.match(/<Image\b[\s\S]*?\/>/g) ?? []),
   ...(rawSource.match(/<img\b[\s\S]*?>/g) ?? [])
 ]);
@@ -32,6 +34,7 @@ describe("landing rendering architecture", () => {
   it("keeps the desktop navigation server-rendered and isolates the mobile menu", () => {
     expect(navigation).not.toContain('"use client"');
     expect(navigation).toContain("<LandingMobileMenu />");
+    expect(navigation).toContain("<PublicHeader mobileMenu={<LandingMobileMenu />} />");
     expect(mobileMenu).toContain('"use client"');
     expect(mobileMenu).toContain('event.key === "Escape"');
     expect(mobileMenu).toContain('event.key !== "Tab"');
@@ -65,13 +68,20 @@ describe("landing visual and image contract", () => {
   it("gives the hero responsive sizing and requests only the active nav mark theme", () => {
     expect(landing).toContain('(max-width: 639px) 92vw');
     expect(landing).toContain('(max-width: 1023px) 74vw');
-    expect(navigation).toContain("getImageProps");
-    expect(navigation).toContain("<picture");
-    expect(navigation).toContain('media="(prefers-color-scheme: dark)"');
-    expect(navigation).toContain("width: 32");
-    expect(navigation).toContain("height: 32");
-    expect(navigation).not.toContain("dark:hidden");
-    expect(navigation).not.toContain("dark:block");
+    expect(publicShell).toContain("<picture");
+    expect(publicShell).toContain('media="(prefers-color-scheme: dark)"');
+    expect(publicShell).toContain("srcSet={brandSymbol.dark.src}");
+    expect(publicShell).toContain("src={brandSymbol.light.src}");
+    expect(publicShell).toContain('width="32"');
+    expect(publicShell).toContain('height="32"');
+    expect(publicShell).not.toContain("dark:hidden");
+    expect(publicShell).not.toContain("dark:block");
+  });
+
+  it("routes both genuine acquisition CTAs to signup and uses the canonical footer", () => {
+    expect((rawLanding.match(/href="\/signup"/g) ?? [])).toHaveLength(2);
+    expect(landing).toContain("<PublicFooter />");
+    expect(landing).not.toContain("function Footer()");
   });
 });
 
@@ -112,11 +122,9 @@ describe("landing accessibility and discovery", () => {
     expect(landing).toContain('<main id="main-content">');
     expect(landing).toContain("min-h-12");
     expect(mobileMenu).toContain("min-h-11");
-    expect(navigation).toContain("inline-flex min-h-11 items-center");
-    expect(navigation).toContain('footer nav[aria-label="Footer navigation"] a');
-    expect(navigation).toContain("min-height: 44px");
-    expect(navigation).toContain("min-width: 44px");
-    expect(navigation).toContain("padding-inline: 0.5rem");
+    expect(publicShell).toContain("inline-flex min-h-11 items-center");
+    expect(publicShell).toContain('aria-label="Footer navigation"');
+    expect(publicShell).toContain("min-h-11 min-w-11");
   });
 
   it("describes the real product in route metadata and structured data", () => {

@@ -1,11 +1,9 @@
 import type { MetadataRoute } from "next";
 import { absoluteUrl } from "@/lib/seo";
 
-// Note: robots.txt is a crawl hint, not access control. Every route listed
-// here is also auth-gated by the deny-by-default guard in proxy.ts, this
-// list only keeps login-redirect noise out of search results.
-// No trailing slashes: Next.js serves these paths without them, and
-// robots.txt matching is a literal prefix match.
+// robots.txt is a crawl hint, not access control. Authenticated routes remain
+// protected by the application's route guards; this list keeps private and
+// transitional surfaces out of search results.
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
@@ -39,7 +37,6 @@ export default function robots(): MetadataRoute.Robots {
         "/reminders",
         "/reset-password",
         "/safe-arrival",
-        "/safety",
         "/safety-center",
         "/scan",
         "/settings",

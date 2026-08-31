@@ -10,7 +10,7 @@ export default function ForgotPasswordPage() {
       footer={
         <>
           New here?{" "}
-          <Link href="/signup" className="font-semibold text-foreground hover:text-accent">
+          <Link href="/signup" className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-foreground hover:text-accent">
             Create account
           </Link>
         </>

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { BrandMark } from "@/components/brand/brand-mark";
-import { legalContact } from "@/content/privacy-policy";
+import { PublicPageShell } from "@/components/front-door/public-shell";
 import { TERMS_EFFECTIVE_DATE, termsSections as sections } from "@/content/terms";
 
 export const metadata: Metadata = {
@@ -15,56 +14,51 @@ export const metadata: Metadata = {
   }
 };
 
-
 export default function TermsPage() {
   return (
-    <main className="min-h-screen bg-background px-4 py-16 text-foreground">
-      <div className="mx-auto max-w-2xl">
-        <div className="text-center">
-          <BrandMark className="mx-auto h-16 w-16" priority />
-          <h1 className="mt-4 text-3xl font-semibold">Terms and Conditions</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Effective date: {TERMS_EFFECTIVE_DATE}</p>
+    <PublicPageShell>
+      <div className="mx-auto w-full max-w-3xl px-4 py-14 sm:px-6 sm:py-20">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#A45A18]">Legal · Terms</p>
+        <h1 className="mt-3 text-4xl font-semibold tracking-[-0.04em] text-[#4E0401] sm:text-5xl dark:text-[#FFF8F1]">
+          Terms and Conditions
+        </h1>
+        <p className="mt-4 text-sm text-[#4E0401]/50 dark:text-[#FFF8F1]/50">Effective date: {TERMS_EFFECTIVE_DATE}</p>
+
+        <div className="mt-9 border-t border-[#4E0401]/10 pt-8 text-[0.96rem] leading-7 text-[#4E0401]/64 dark:border-white/10 dark:text-[#FFF8F1]/64">
+          <p>
+            Welcome to Mad Buddy. These Terms and Conditions (&ldquo;Terms&rdquo;) govern your access to and use of the Mad Buddy application, website, and related services (collectively, the &ldquo;Service&rdquo;).
+          </p>
+          <p className="mt-4">
+            By creating an account or using Mad Buddy, you confirm that you have read, understood, and agree to be bound by these Terms and our Privacy Policy. If you do not agree, please do not use the Service.
+          </p>
         </div>
 
-        <p className="mt-8 text-sm leading-7 text-muted-foreground">
-          Welcome to Mad Buddy. These Terms and Conditions (&ldquo;Terms&rdquo;) govern your access to and use of the
-          Mad Buddy application, website, and related services (collectively, the &ldquo;Service&rdquo;).
-        </p>
-        <p className="mt-3 text-sm leading-7 text-muted-foreground">
-          By creating an account or using Mad Buddy, you confirm that you have read, understood, and agree to be
-          bound by these Terms and our Privacy Policy. If you do not agree, please do not use the Service.
-        </p>
-
-        <div className="mt-8 space-y-8">
+        <article className="mt-12 space-y-12">
           {sections.map((section) => (
-            <section key={section.title}>
-              <h2 className="text-lg font-semibold">{section.title}</h2>
-              <div className="mt-2 space-y-3">
+            <section key={section.title} className="border-t border-[#4E0401]/10 pt-8 first:border-t-0 first:pt-0 dark:border-white/10">
+              <h2 className="text-2xl font-semibold tracking-[-0.025em] text-[#4E0401] dark:text-[#FFF8F1]">{section.title}</h2>
+              <div className="mt-4 space-y-4 text-[0.96rem] leading-7 text-[#4E0401]/64 dark:text-[#FFF8F1]/64">
                 {section.blocks.map((block, index) =>
                   block.type === "list" ? (
-                    <ul key={index} className="space-y-1.5 pl-5 text-sm leading-7 text-muted-foreground">
+                    <ul key={index} className="space-y-2 pl-5">
                       {block.items.map((item) => (
-                        <li key={item} className="list-disc pl-1">
-                          {item}
-                        </li>
+                        <li key={item} className="list-disc pl-1">{item}</li>
                       ))}
                     </ul>
                   ) : (
-                    <p key={index} className="text-sm leading-7 text-muted-foreground">
-                      {block.text}
-                    </p>
+                    <p key={index}>{block.text}</p>
                   )
                 )}
               </div>
             </section>
           ))}
-        </div>
+        </article>
 
-        <div className="mt-12 flex justify-center gap-4 border-t border-border/70 pt-6 text-sm">
-          <Link href="/" className="font-semibold hover:text-accent">Home</Link>
-          <Link href="/privacy" className="font-semibold hover:text-accent">Privacy Policy</Link>
+        <div className="mt-14 flex flex-wrap gap-4 border-t border-[#4E0401]/10 pt-7 text-sm dark:border-white/10">
+          <Link href="/privacy" className="focus-ring inline-flex min-h-11 items-center rounded-lg font-semibold text-[#4E0401] hover:text-[#E88C2B] dark:text-[#FFF8F1]">Privacy Policy</Link>
+          <Link href="/support" className="focus-ring inline-flex min-h-11 items-center rounded-lg font-semibold text-[#4E0401] hover:text-[#E88C2B] dark:text-[#FFF8F1]">Support</Link>
         </div>
       </div>
-    </main>
+    </PublicPageShell>
   );
 }
