@@ -1,5 +1,6 @@
 import { entitlementsFor } from "@/lib/billing/entitlements";
 import type {
+  HangoutActivityType,
   HangoutStatus,
   PlanStatus,
   PollSelectionMode,
@@ -464,6 +465,37 @@ export const RSVP_LABELS: Record<RsvpChoice, string> = {
   maybe: "Maybe",
   not_going: "Can't make it"
 };
+
+/**
+ * The canonical UpFor activities, in one place.
+ *
+ * THE DEFECT THIS CLOSES. The same fourteen values were written out separately
+ * in the database CHECK constraint, in HangoutActivityType, in the labels below
+ * and in startHangoutAction's validation. The last of those was never updated
+ * when 20260822120000 added six, so the server rejected an activity the
+ * database, the types and the labels all accepted -- and because an edit ends
+ * the old session before creating the new one, that rejection DESTROYED the
+ * UpFor and created nothing. Found by driving the real screen.
+ *
+ * Typed as HangoutActivityType[], so dropping a value that the generated type
+ * still carries is a compile error rather than a silent runtime rejection.
+ */
+export const HANGOUT_ACTIVITY_TYPES: readonly HangoutActivityType[] = [
+  "food",
+  "study",
+  "sports",
+  "gym",
+  "walk",
+  "gaming",
+  "chill",
+  "anything",
+  "coffee",
+  "football",
+  "drinks",
+  "movie",
+  "drive",
+  "party"
+] as const;
 
 export const HANGOUT_ACTIVITY_LABELS: Record<string, string> = {
   food: "Food",

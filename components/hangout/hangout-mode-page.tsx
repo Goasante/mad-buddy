@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import {
   convertHangoutToPlanAction,
+  canEditUpForAction,
   endHangoutAction,
   getOwnerRequestsByUpForAction,
   leaveHangoutAction,
@@ -402,7 +403,20 @@ export function HangoutModePage({
   }
 
   /** Open the form to EDIT one specific UpFor, named by id. */
-  function openEdit(target: ActiveHangout) {
+  /**
+   * Open the edit sheet -- but only for an UpFor that can survive the edit.
+   *
+   * Editing replaces the row (end, then create), so a live session or one
+   * somebody has already responded to would lose that state silently. The
+   * server decides; this only refuses to open the door. The same check runs
+   * inside the mutation, so a stale client cannot get past it either.
+   */
+  async function openEdit(target: ActiveHangout & { startsAt?: string | null }) {
+    const allowed = await canEditUpForAction(target.id);
+    if (!allowed.ok) {
+      showToast(allowed.message, true);
+      return;
+    }
     setEditingUpForId(target.id);
     setActivity(target.activityType);
     setAudience(target.audienceType);
@@ -410,8 +424,20 @@ export function HangoutModePage({
     setBroadArea("");
     setDiscoveryScope("muddies");
     setDuration("1h");
-    setWhen("now");
-    setStartAtIso("");
+    /* Keep the original schedule. Defaulting to "now" moved a scheduled UpFor
+       to the moment it was edited -- the owner changed a note and the start
+       time silently jumped. Only a not-yet-started UpFor is editable, so a
+       start always exists here. */
+    const startsMs = target.startsAt ? Date.parse(target.startsAt) : Number.NaN;
+    // `nowMs`, not Date.now(): the component already keeps a ticking clock, and
+    // reading the real one here is an impure render-reachable call.
+    if (Number.isFinite(startsMs) && startsMs > nowMs) {
+      setWhen("later");
+      setStartAtIso(new Date(startsMs).toISOString());
+    } else {
+      setWhen("now");
+      setStartAtIso("");
+    }
     setSetupError("");
     setSetupOpen(true);
   }
@@ -536,7 +562,7 @@ export function HangoutModePage({
       // No dedicated update action exists, so an edit ends the current session
       // and starts a fresh one with the new details.
       if (editing && previousId) {
-        const ended = await endHangoutAction(previousId);
+        const ended = await endHangoutAction(previousId, true);
         if (!ended.ok) {
           setSetupError(ended.message);
           showToast(ended.message, true);
@@ -940,12 +966,13 @@ UpFors are temporary and disappear when they end. Jump in while you can!
               onClick={() => {
                 const target = managedUpFor;
                 setManagingId(null);
-                openEdit({
+                void openEdit({
                   id: target.id,
                   activityType: target.activityType as HangoutActivityType,
                   audienceType: target.audienceType as HangoutAudienceType,
                   message: target.message,
-                  endsAt: target.endsAt
+                  endsAt: target.endsAt,
+                  startsAt: target.startsAt
                 });
               }}
               aria-label={`Edit ${managedLabel} UpFor`}

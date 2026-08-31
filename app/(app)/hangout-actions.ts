@@ -37,7 +37,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { checkAccess } from "@/lib/access/guard";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
+import { HANGOUT_ACTIVITY_LABELS, HANGOUT_ACTIVITY_TYPES } from "@/lib/social/plans";
+import { replacementEditVerdict, upForEditBlockedMessage } from "@/lib/social/upfor-lifecycle";
 import type { HangoutActivityType, HangoutAudienceType, HangoutRequestStatus, SubscriptionPlan } from "@/lib/supabase/database.types";
 
 export type HangoutActionState = {
@@ -193,7 +194,11 @@ async function canViewHangout(
 // ---------------------------------------------------------------------------
 
 const startHangoutSchema = z.object({
-  activityType: z.enum(["food", "study", "sports", "gym", "walk", "gaming", "chill", "anything"]),
+  /* Derived from the canonical list, never re-typed. This enum listed only the
+     original eight while the database, the generated type and the labels all
+     carried fourteen; an edit of one of the missing six ended the session and
+     then failed here, destroying it. */
+  activityType: z.enum(HANGOUT_ACTIVITY_TYPES as unknown as [string, ...string[]]),
   message: z.string().max(140).optional(),
   audienceType: z.enum(["all_muddies", "close_friends", "selected_circles", "selected_muddies"]),
   broadAreaText: z.string().max(80).optional(),
@@ -540,13 +545,90 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
  * and the host are excluded, and the fan-out is capped.
  */
 
-export async function endHangoutAction(hangoutId: string): Promise<HangoutActionState> {
+/**
+ * May this UpFor go through the replacement edit path?
+ *
+ * SERVER AUTHORITY, not a disabled button. The UI asks this before opening the
+ * edit sheet, but the same check runs inside the mutation below, because a
+ * stale client or a direct action call must not be able to reach the
+ * destructive path either.
+ */
+export async function canEditUpForAction(
+  hangoutId: string
+): Promise<{ ok: boolean; message: string }> {
+  const missing = missingEnvState();
+  if (missing) return { ok: false, message: missing.message };
+  if (!uuidSchema.safeParse(hangoutId).success) return { ok: false, message: "UpFor not found." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const verdict = await replacementEditVerdictFor(hangoutId, userId);
+  if (verdict === "not_found") return { ok: false, message: "UpFor not found." };
+  if (verdict === "not_owner") return { ok: false, message: "This isn't your UpFor." };
+  return verdict.ok
+    ? { ok: true, message: "" }
+    : { ok: false, message: upForEditBlockedMessage(verdict.reason) };
+}
+
+/**
+ * Shared eligibility read. Returns the domain verdict, or an ownership problem.
+ *
+ * Deliberately reads BEFORE anything is cancelled: the defect this closes was
+ * an edit that ended the session first and only then discovered it could not
+ * finish, leaving the owner with neither the old UpFor nor a new one.
+ */
+async function replacementEditVerdictFor(
+  hangoutId: string,
+  userId: string
+): Promise<ReturnType<typeof replacementEditVerdict> | "not_found" | "not_owner"> {
+  const admin = createSupabaseAdminClient();
+  const { data: session } = await admin
+    .from("hangout_sessions")
+    .select("status, owner_id, starts_at")
+    .eq("id", hangoutId)
+    .maybeSingle();
+  if (!session) return "not_found";
+  if (session.owner_id !== userId) return "not_owner";
+
+  // Anyone who has responded counts, whether they are waiting or already in.
+  const { count } = await admin
+    .from("hangout_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("hangout_session_id", hangoutId)
+    .in("status", ["pending", "accepted", "maybe"]);
+
+  return replacementEditVerdict(
+    { status: session.status, startsAt: session.starts_at },
+    count ?? 0,
+    Date.now()
+  );
+}
+
+export async function endHangoutAction(
+  hangoutId: string,
+  /**
+   * Set only by the replacement-edit path. Ending an UpFor deliberately is
+   * always allowed -- it is the owner choosing to stop, and the requests that
+   * end with it are visibly gone. Ending one as the first half of an edit is
+   * different: it silently destroys state the owner is trying to KEEP, so that
+   * caller must pass the eligibility check first.
+   */
+  forEdit = false
+): Promise<HangoutActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
   if (!uuidSchema.safeParse(hangoutId).success) return { ok: false, message: "UpFor not found." };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
+
+  if (forEdit) {
+    const verdict = await replacementEditVerdictFor(hangoutId, userId);
+    if (verdict === "not_found") return { ok: false, message: "UpFor not found." };
+    if (verdict === "not_owner") return { ok: false, message: "This isn't your UpFor." };
+    if (!verdict.ok) return { ok: false, message: upForEditBlockedMessage(verdict.reason) };
+  }
 
   const admin = createSupabaseAdminClient();
   const { data: session } = await admin
