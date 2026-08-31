@@ -55,3 +55,11 @@ qa-shots/
 
 # Local visual-verification output (see scripts/shoot-event-rooms.mjs).
 /screenshots/
+
+# Written by `next dev` (16.3.x+), not by us: it generates an agent-instruction
+# AGENTS.md at the repo root and a CLAUDE.md that just points at it, and re-adds
+# them if deleted. See node_modules/next/dist/server/lib/generate-agent-files.js.
+# Neither filename has ever been committed here, so anchoring to the root keeps
+# a real one elsewhere in the tree visible.
+/AGENTS.md
+/CLAUDE.md
