@@ -301,6 +301,7 @@ export function ActivationCard({
      copy stands everywhere else. */
   const primaryText = primaryLabel ?? copy.actionLabel;
   const Icon = ACTION_ICON[primaryActionFor(state)] ?? copy.icon;
+  const upcomingPlan = state === "upcoming_plan";
 
   return (
     <section
@@ -312,18 +313,41 @@ export function ActivationCard({
            Horizontal padding is unchanged -- narrowing it would crowd the text
            against the edge. Only the vertical is compressed, which is where
            the wasted height actually was. */
-        "relative overflow-hidden rounded-[1.25rem] border border-border/70 bg-card/60 px-5 py-4 sm:px-6 sm:py-5",
+        "relative isolate overflow-hidden rounded-[1.25rem] border px-5 py-4 sm:px-6 sm:py-5",
+        upcomingPlan
+          ? "border-white/15 bg-[#160b08] text-white shadow-[0_12px_36px_rgba(78,4,1,0.18)]"
+          : "border-border/70 bg-card/60",
         className
       )}
     >
+      {upcomingPlan ? (
+        <>
+          <Image
+            src="/home/open-your-plan-bg.webp"
+            alt=""
+            fill
+            priority
+            sizes="(max-width: 767px) calc(100vw - 2rem), 720px"
+            className="pointer-events-none absolute inset-0 z-0 object-cover object-[66%_center]"
+            aria-hidden="true"
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(90deg,rgba(18,8,6,0.94)_0%,rgba(18,8,6,0.84)_48%,rgba(18,8,6,0.50)_72%,rgba(18,8,6,0.30)_100%)]"
+          />
+        </>
+      ) : null}
+
       {/* Glow, at the lowest possible volume. The metaphor is present so
           proximity feels like one idea across the product, but it sits behind
           the words rather than competing with them. */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full opacity-60"
-        style={{ background: "var(--glow-gradient)" }}
-      />
+      {upcomingPlan ? null : (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full opacity-60"
+          style={{ background: "var(--glow-gradient)" }}
+        />
+      )}
 
       {/* The Glow mark belongs to the states that are ABOUT Glow.
           "Glow is on" carried a calendar icon -- borrowed from its Make-a-plan
@@ -331,7 +355,7 @@ export function ActivationCard({
           The mark says it in the product's own language, and no map or radar
           metaphor is introduced to do it. */}
       {state === "no_muddies" || state === "no_one_nearby" ? <GlowIntroMark /> : (
-        <span className="relative grid h-11 w-11 place-items-center rounded-full bg-primary/10 text-primary">
+        <span className={cn("relative z-[1] grid h-11 w-11 place-items-center rounded-full", upcomingPlan ? "bg-white/12 text-white" : "bg-primary/10 text-primary")}>
           <Icon className="h-5 w-5" aria-hidden="true" />
         </span>
       )}
@@ -343,10 +367,10 @@ export function ActivationCard({
       {/* Compression is all in the GAPS, never the type. Font sizes stay put
           so the card reads as compact rather than shrunken, and nothing gets
           harder to read. */}
-      <h2 id="activation-headline" className="relative mt-2.5 text-balance text-xl font-semibold tracking-tight">
+      <h2 id="activation-headline" className="relative z-[1] mt-2.5 text-balance text-xl font-semibold tracking-tight">
         {copy.headline}
       </h2>
-      <p className="relative mt-1 max-w-prose text-sm leading-relaxed text-muted-foreground">
+      <p className={cn("relative z-[1] mt-1 max-w-prose text-sm leading-relaxed", upcomingPlan ? "text-white/80" : "text-muted-foreground")}>
         {copy.body}
       </p>
 
@@ -360,7 +384,7 @@ export function ActivationCard({
           the nearby treatment would imply a closeness this data never claims.
           NearbyHero owns that moment, and it is not on screen when this is. */}
       {relationship ? (
-        <div className="relative mt-3 flex items-center gap-3">
+        <div className="relative z-[1] mt-3 flex items-center gap-3">
           <UserAvatar src={relationship.avatarUrl} name={relationship.displayName} size="sm" />
           <span className="min-w-0 truncate text-sm font-medium">{relationship.displayName}</span>
         </div>
@@ -372,7 +396,7 @@ export function ActivationCard({
           small step down when the link wraps -- the previous uniform gap-3
           spent a full row's height whenever it wrapped. The Button keeps
           size="lg", so the primary touch target is unchanged. */}
-      <div className="relative mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div className="relative z-[1] mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-2">
         {/* ACTS IN PLACE WHERE IT CAN, LINKS WHERE IT CANNOT.
             Activation used to send every state to /settings, so somebody who
             tapped "Turn on Glow" landed in a privacy screen and had to find
