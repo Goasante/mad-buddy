@@ -283,7 +283,7 @@ describe("a tombstoned message mentions nobody", () => {
 });
 
 describe("composer wiring", () => {
-  const composer = stripComments(readFileSync("components/messaging/message-composer.tsx", "utf8"));
+  const composer = stripComments(readFileSync("components/messaging/message-composer-v3.tsx", "utf8"));
   const circle = stripComments(readFileSync("components/groups/group-detail-page.tsx", "utf8"));
 
   it("no longer says mentions are coming soon", () => {

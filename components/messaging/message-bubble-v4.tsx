@@ -53,7 +53,7 @@ function haptic(pattern: number | number[]) {
 }
 
 function deliveryIcon(state: string) {
-  if (state === "seen") return <CheckCheck className="h-3.5 w-3.5 text-[#E88C2B]" aria-label="Seen" />;
+  if (state === "seen") return <CheckCheck className="h-3.5 w-3.5 text-primary" aria-label="Seen" />;
   if (state === "delivered") return <CheckCheck className="h-3.5 w-3.5" aria-label="Delivered" />;
   if (state === "sent") return <Check className="h-3.5 w-3.5" aria-label="Sent" />;
   return null;
@@ -198,7 +198,7 @@ export function MessageBubbleV4({
   const bubble = (
     <div className={cn("relative", message.isMine && "flex flex-col items-end", actionsOpen && "z-50") }>
       {showIdentity && !message.isMine && isGroup ? (
-        <div className="mb-1 flex max-w-full items-center gap-1.5 px-1 text-[11px] font-semibold text-muted-foreground">
+        <div className="mb-1 flex max-w-full items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
           <UserAvatar src={message.senderAvatarUrl} name={message.senderName} size="xs" decorative />
           <span className="truncate">{message.senderName}</span>
           <PremiumPlanBadge plan={message.senderPlan} compact />
@@ -209,7 +209,7 @@ export function MessageBubbleV4({
       ) : null}
 
       <div className="relative">
-        <div aria-hidden="true" className={cn("absolute inset-y-0 left-0 grid w-12 place-items-center text-[#E88C2B] transition-opacity", dragX > 14 ? "opacity-100" : "opacity-0")} style={{ transform: "translateX(-42px)" }}>
+        <div aria-hidden="true" className={cn("absolute inset-y-0 left-0 grid w-12 place-items-center text-primary transition-opacity", dragX > 14 ? "opacity-100" : "opacity-0")} style={{ transform: "translateX(-42px)" }}>
           <Reply className={cn("h-5 w-5 transition-transform", thresholdHit && "scale-125")} />
         </div>
         <div
@@ -231,14 +231,14 @@ export function MessageBubbleV4({
           style={{ transform: `translate3d(${dragX}px,0,0)` }}
         >
           <div className={cn(
-            "relative overflow-hidden rounded-[21px] px-3.5 py-2.5 text-[0.94rem] leading-[1.42] shadow-[0_1px_2px_rgba(78,4,1,0.07)] transition-[box-shadow,transform,background-color] duration-300",
-            message.isMine ? "rounded-br-[7px] bg-[#4E0401] text-[#FEFBF3]" : "rounded-bl-[7px] border border-black/[0.035] bg-white text-foreground dark:border-white/[0.055] dark:bg-white/[0.07]",
+            "relative overflow-hidden rounded-[21px] px-3.5 py-2.5 text-sm leading-6 shadow-[0_1px_2px_rgba(78,4,1,0.07)] transition-[box-shadow,transform,background-color] duration-300",
+            message.isMine ? "rounded-br-[7px] bg-primary text-primary-foreground" : "rounded-bl-[7px] border border-border/60 bg-card text-foreground",
             highlighted && "ring-2 ring-[#E88C2B]/70 shadow-[0_0_0_5px_rgba(232,140,43,.08)]",
             actionsOpen && "shadow-[0_16px_44px_rgba(78,4,1,.2)]"
           )}>
             {replyContext ? (
-              <button type="button" onClick={onReply} className={cn("mb-2 block w-full rounded-xl border-l-2 border-[#E88C2B] px-2.5 py-1.5 text-left text-xs", message.isMine ? "bg-white/10" : "bg-[#E88C2B]/8")}>
-                <strong className={message.isMine ? "text-orange-200" : "text-[#E88C2B]"}>{replyContext.senderName}</strong>
+              <button type="button" onClick={onReply} className={cn("mb-2 block w-full rounded-xl border-l-2 border-[#E88C2B] px-2.5 py-1.5 text-left text-xs", message.isMine ? "bg-white/10" : "bg-primary/10")}>
+                <strong className={message.isMine ? "text-primary-foreground/80" : "text-primary"}>{replyContext.senderName}</strong>
                 <span className="mt-0.5 block line-clamp-2 opacity-75">{replyContext.text}</span>
               </button>
             ) : null}
@@ -259,8 +259,8 @@ export function MessageBubbleV4({
               <ChatPollCard poll={poll} mine={message.isMine} onChanged={onPollChanged} />
             ) : null}
             {message.text ? <SafeMessageText text={message.deleted ? DELETED_MESSAGE_PLACEHOLDER : message.text} mentions={message.mentions} /> : null}
-            {message.editedAt && !message.deleted ? <span className={cn("ml-1 text-[10px]", message.isMine ? "text-white/55" : "text-muted-foreground")}>edited</span> : null}
-            <div className={cn("mt-1 flex items-center justify-end gap-1 text-[9px] font-medium", message.isMine ? "text-white/55" : "text-muted-foreground/75")}>
+            {message.editedAt && !message.deleted ? <span className={cn("ml-1 text-xs", message.isMine ? "text-white/55" : "text-muted-foreground")}>edited</span> : null}
+            <div className={cn("mt-1 flex items-center justify-end gap-1 text-xs font-normal", message.isMine ? "text-white/55" : "text-muted-foreground/75")}>
               {saved ? <Bookmark className="h-3 w-3 fill-current" aria-label="Saved" /> : null}
               {pinned ? <Pin className="h-3 w-3 fill-current" aria-label="Pinned" /> : null}
               <span>{new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(message.createdAt))}</span>
@@ -277,14 +277,14 @@ export function MessageBubbleV4({
               key={aggregate.reaction}
               type="button"
               onClick={() => showReactors(aggregate)}
-              className="focus-ring inline-flex min-h-7 items-center gap-1 rounded-full border border-black/[0.06] bg-white px-2 text-[11px] font-bold shadow-sm transition-transform hover:scale-105 active:scale-95 dark:border-white/[0.08] dark:bg-[#241f1c]"
+              className="focus-ring inline-flex min-h-7 items-center gap-1 rounded-full border border-border/60 bg-card px-2 text-xs font-semibold shadow-sm transition-transform hover:scale-105 active:scale-95 "
               aria-label={`${aggregate.count} ${aggregate.reaction} reactions`}
             >
               <span aria-hidden="true">{reactionEmoji(aggregate.reaction)}</span><span>{aggregate.count}</span>
             </button>
           ))}
         </div>
-      ) : myReaction ? <button type="button" onClick={() => react(message.myReaction as string)} className="focus-ring -mt-2 mx-2 grid h-7 min-w-7 place-items-center rounded-full border border-black/[0.06] bg-white px-1.5 text-sm shadow-sm transition-transform hover:scale-110 active:scale-95 dark:border-white/[0.08] dark:bg-[#241f1c]">{myReaction}</button> : null}
+      ) : myReaction ? <button type="button" onClick={() => react(message.myReaction as string)} className="focus-ring -mt-2 mx-2 grid h-7 min-w-7 place-items-center rounded-full border border-border/60 bg-card px-1.5 text-sm shadow-sm transition-transform hover:scale-110 active:scale-95 ">{myReaction}</button> : null}
     </div>
   );
 
@@ -293,7 +293,7 @@ export function MessageBubbleV4({
       {actionsOpen ? <button type="button" className="fixed inset-0 z-40 cursor-default bg-black/10 backdrop-blur-[1px] animate-in fade-in duration-150" aria-label="Close message actions" onClick={() => setActionsOpen(false)} /> : null}
       <div className={cn("relative", actionsOpen && "z-50")}>
         {actionsOpen ? (
-          <div className={cn("mb-2 flex w-fit max-w-[95vw] items-center gap-0.5 rounded-full border border-black/[0.06] bg-white p-1 shadow-[0_15px_50px_rgba(78,4,1,.18)] animate-in zoom-in-90 slide-in-from-bottom-2 duration-180 dark:border-white/[0.08] dark:bg-[#241f1c]", message.isMine && "ml-auto")}>
+          <div className={cn("mb-2 flex w-fit max-w-[95vw] items-center gap-0.5 rounded-full border border-border/60 bg-card p-1 shadow-[0_15px_50px_rgba(78,4,1,.18)] animate-in zoom-in-90 slide-in-from-bottom-2 duration-180 ", message.isMine && "ml-auto")}>
             {REACTIONS.map(([id, emoji], index) => (
               <button key={id} type="button" onClick={() => { react(id); setActionsOpen(false); }} className="focus-ring grid h-10 w-10 place-items-center rounded-full text-lg transition-transform hover:scale-125 active:scale-90" style={{ animationDelay: `${index * 18}ms` }} aria-label={`React ${emoji}`}>{emoji}</button>
             ))}
@@ -304,7 +304,7 @@ export function MessageBubbleV4({
         {bubble}
 
         {actionsOpen ? (
-          <div className={cn("mt-2 grid w-[min(330px,92vw)] grid-cols-4 gap-1 rounded-2xl border border-black/[0.06] bg-white p-1.5 shadow-[0_16px_52px_rgba(78,4,1,.18)] animate-in zoom-in-95 slide-in-from-top-1 dark:border-white/[0.08] dark:bg-[#241f1c]", message.isMine && "ml-auto")} role="menu" aria-label="Message actions">
+          <div className={cn("mt-2 grid w-[min(330px,92vw)] grid-cols-4 gap-1 rounded-2xl border border-border/60 bg-card p-1.5 shadow-[0_16px_52px_rgba(78,4,1,.18)] animate-in zoom-in-95 slide-in-from-top-1 ", message.isMine && "ml-auto")} role="menu" aria-label="Message actions">
             <Action icon={Reply} label="Reply" onClick={() => { onReply(); setActionsOpen(false); }} />
             <Action icon={Copy} label="Copy" onClick={() => { onCopy(); setActionsOpen(false); }} disabled={!message.text} />
             <Action icon={Bookmark} label={saved ? "Unsave" : "Save"} onClick={() => { onSave(); setActionsOpen(false); }} active={saved} />
@@ -322,12 +322,12 @@ export function MessageBubbleV4({
       <Modal open={Boolean(reactorAggregate)} onOpenChange={(next) => { if (!next) setReactorAggregate(null); }} title={reactorAggregate ? `${reactionEmoji(reactorAggregate.reaction)} Reactions` : "Reactions"} variant="sheet">
         {reactorAggregate ? (
           <div className="pb-[max(.5rem,env(safe-area-inset-bottom))]">
-            <div className="mb-3 flex items-center justify-between rounded-2xl bg-[#E88C2B]/8 px-3 py-2 text-xs"><span className="font-semibold">{reactionEmoji(reactorAggregate.reaction)} {reactorAggregate.count}</span><span className="text-muted-foreground">People who reacted</span></div>
+            <div className="mb-3 flex items-center justify-between rounded-2xl bg-primary/10 px-3 py-2 text-xs"><span className="font-semibold">{reactionEmoji(reactorAggregate.reaction)} {reactorAggregate.count}</span><span className="text-muted-foreground">People who reacted</span></div>
             <ul className="divide-y divide-border/45 overflow-hidden rounded-[20px] border border-border/60 bg-card/60">
               {reactorAggregate.reactors.map((person) => (
                 <li key={person.userId} className="flex min-h-[62px] items-center gap-3 px-3 py-2.5">
                   <UserAvatar src={person.avatarUrl} name={person.displayName} size="sm" />
-                  <div className="min-w-0 flex-1"><strong className="block truncate text-sm">{person.displayName}</strong>{person.username ? <span className="block truncate text-[11px] text-muted-foreground">@{person.username}</span> : null}</div>
+                  <div className="min-w-0 flex-1"><strong className="block truncate text-sm">{person.displayName}</strong>{person.username ? <span className="block truncate text-xs text-muted-foreground">@{person.username}</span> : null}</div>
                   <span className="text-lg" aria-hidden="true">{reactionEmoji(reactorAggregate.reaction)}</span>
                 </li>
               ))}
@@ -341,7 +341,7 @@ export function MessageBubbleV4({
 
 function Action({ icon: Icon, label, onClick, disabled, active, destructive }: { icon: typeof Reply; label: string; onClick: () => void; disabled?: boolean; active?: boolean; destructive?: boolean }) {
   return (
-    <button type="button" role="menuitem" disabled={disabled} onClick={onClick} className={cn("focus-ring flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition active:scale-95 disabled:opacity-35", active ? "bg-[#E88C2B]/12 text-[#E88C2B]" : destructive ? "text-destructive hover:bg-destructive/8" : "hover:bg-black/[0.035] dark:hover:bg-white/[0.055]")}>
+    <button type="button" role="menuitem" disabled={disabled} onClick={onClick} className={cn("focus-ring flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-xs font-medium transition active:scale-95 disabled:opacity-35", active ? "bg-primary/10 text-primary" : destructive ? "text-destructive hover:bg-destructive/8" : "hover:bg-black/[0.035] dark:hover:bg-white/[0.055]")}>
       <Icon className="h-4 w-4" />
       <span className="truncate">{label}</span>
     </button>

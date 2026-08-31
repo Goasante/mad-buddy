@@ -13,7 +13,7 @@ import type { ConversationView } from "@/lib/messaging/mobile";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const page = read("components/messages/messages-page.tsx");
-const composerSource = read("components/messaging/message-composer.tsx");
+const composerSource = read("components/messaging/message-composer-v3.tsx");
 const css = read("app/globals.css");
 const canvasCss = css.slice(
   css.indexOf("/* Conversation canvas"),

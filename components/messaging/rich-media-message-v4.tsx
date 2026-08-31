@@ -64,7 +64,7 @@ export function RichMediaMessageV4({
   if (media === undefined) {
     return (
       <div className="mb-2 grid min-h-28 min-w-[220px] place-items-center rounded-2xl bg-black/[0.035] dark:bg-white/[0.05]" role="status" aria-label={`Loading ${kind}`}>
-        <Loader2 className="h-5 w-5 animate-spin text-[#E88C2B] motion-reduce:animate-none" />
+        <Loader2 className="h-5 w-5 animate-spin text-primary motion-reduce:animate-none" />
       </div>
     );
   }
@@ -96,7 +96,7 @@ export function RichMediaMessageV4({
               if (Date.parse(media.expiresAt) <= Date.now() + 30_000) void refresh();
             }}
           />
-          <div className="flex items-center gap-2 bg-black/85 px-3 py-2 text-[10px] text-white/75">
+          <div className="flex items-center gap-2 bg-black/85 px-3 py-2 text-xs text-white/75">
             <PlaySquare className="h-3.5 w-3.5" />
             <span className="min-w-0 flex-1 truncate">{media.fileName}</span>
             {media.sizeBytes > 0 ? <span>{formatBytes(media.sizeBytes)}</span> : null}
@@ -111,19 +111,19 @@ export function RichMediaMessageV4({
     <div className="mb-2">
       <div className={`min-w-[230px] rounded-2xl border p-3 ${mine ? "border-white/15 bg-white/[0.08]" : "border-black/[0.06] bg-black/[0.025] dark:border-white/[0.08] dark:bg-white/[0.04]"}`}>
         <div className="flex items-center gap-3">
-          <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${mine ? "bg-white/10" : "bg-[#E88C2B]/10 text-[#E88C2B]"}`}>
+          <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${mine ? "bg-white/10" : "bg-primary/10 text-primary"}`}>
             <FileText className="h-5 w-5" />
           </span>
           <span className="min-w-0 flex-1">
             <strong className="block truncate text-xs">{media.fileName}</strong>
-            <span className="mt-0.5 block text-[10px] opacity-65">{fileTypeLabel(media.contentType)}{media.sizeBytes > 0 ? ` · ${formatBytes(media.sizeBytes)}` : ""}</span>
+            <span className="mt-0.5 block text-xs opacity-65">{fileTypeLabel(media.contentType)}{media.sizeBytes > 0 ? ` · ${formatBytes(media.sizeBytes)}` : ""}</span>
           </span>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <a href={media.url} target="_blank" rel="noopener noreferrer" className="focus-ring inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-current/15 px-2 text-[10px] font-bold transition active:scale-95">
+          <a href={media.url} target="_blank" rel="noopener noreferrer" className="focus-ring inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-current/15 px-2 text-xs font-semibold transition active:scale-95">
             <ExternalLink className="h-3.5 w-3.5" />Open
           </a>
-          <a href={media.url} download={media.fileName} className="focus-ring inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-current/15 px-2 text-[10px] font-bold transition active:scale-95">
+          <a href={media.url} download={media.fileName} className="focus-ring inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-current/15 px-2 text-xs font-semibold transition active:scale-95">
             <Download className="h-3.5 w-3.5" />Save
           </a>
         </div>

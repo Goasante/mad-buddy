@@ -62,7 +62,7 @@ export function MessageRetentionV4({
 
   if (state.keptAt) {
     return (
-      <div className={cn("mt-1.5 inline-flex min-h-7 items-center gap-1.5 rounded-full px-2.5 text-[10px] font-semibold", mine ? "bg-white/10 text-white/70" : "bg-[#E88C2B]/8 text-[#9a5b16]")}>
+      <div className={cn("mt-1.5 inline-flex min-h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium", mine ? "bg-white/10 text-white/70" : "bg-primary/10 text-primary")}>
         <BookmarkCheck className="h-3 w-3" />
         Kept in chat{state.keptByName ? ` · ${state.keptByName}` : ""}
       </div>
@@ -71,13 +71,13 @@ export function MessageRetentionV4({
 
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-      {label ? <span className={cn("inline-flex min-h-7 items-center gap-1 rounded-full px-2.5 text-[10px] font-semibold", mine ? "bg-white/10 text-white/70" : "bg-black/[0.035] text-muted-foreground dark:bg-white/[0.055]")}><Clock3 className="h-3 w-3" />{label}</span> : null}
+      {label ? <span className={cn("inline-flex min-h-7 items-center gap-1 rounded-full px-2.5 text-xs font-medium", mine ? "bg-white/10 text-white/70" : "bg-black/[0.035] text-muted-foreground dark:bg-white/[0.055]")}><Clock3 className="h-3 w-3" />{label}</span> : null}
       {state.canKeep ? <button type="button" disabled={isPending} onClick={() => startTransition(async () => {
         const result = await keepMessageInChatAction({ conversationId, messageId });
         if (!result.ok) return;
         const next = await getMessageRetentionAction({ conversationId, messageId });
         setState(next);
-      })} className={cn("focus-ring inline-flex min-h-7 items-center gap-1 rounded-full px-2.5 text-[10px] font-bold transition active:scale-95 disabled:opacity-50", mine ? "bg-white/12 text-[#FEFBF3]" : "bg-[#E88C2B]/10 text-[#E88C2B]")}><BookmarkCheck className="h-3 w-3" />{isPending ? "Keeping…" : "Keep in Chat"}</button> : null}
+      })} className={cn("focus-ring inline-flex min-h-7 items-center gap-1 rounded-full px-2.5 text-xs font-semibold transition active:scale-95 disabled:opacity-50", mine ? "bg-white/12 text-primary-foreground" : "bg-primary/10 text-primary")}><BookmarkCheck className="h-3 w-3" />{isPending ? "Keeping…" : "Keep in Chat"}</button> : null}
     </div>
   );
 }

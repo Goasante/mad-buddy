@@ -262,6 +262,9 @@ export function MessageComposerV3({
     async (take: Parameters<typeof voiceUpload.upload>[0]) => {
       if (sendingRef.current) return;
       sendingRef.current = true;
+      /* Playback and its moving progress belong to reviewing, not to sending. */
+      audioRef.current?.pause();
+      setPlaying(false);
       onFeedback("");
       const clientMessageId = crypto.randomUUID();
       onOptimisticSend?.({
@@ -507,7 +510,13 @@ export function MessageComposerV3({
   useEffect(() => () => clearPermissionPromptTimer(), [clearPermissionPromptTimer]);
 
   function startHold(event: React.PointerEvent<HTMLButtonElement>) {
-    if (attachment || uploadBusy || isPending) return;
+    /* A photo and a voice note are different messages. Refusing silently reads
+       as a broken mic, so say why the recording did not start. */
+    if (attachment) {
+      setMicHint("Remove the photo before recording a voice message.");
+      return;
+    }
+    if (uploadBusy || isPending) return;
     event.preventDefault();
     clearPermissionPromptTimer();
     setMicHint(null);
@@ -574,10 +583,15 @@ export function MessageComposerV3({
             : "Release to send · ← cancel · ↑ lock";
 
     return (
-      <div className={cn("border-t border-border/60 bg-[#FFFDFC]/96 backdrop-blur-xl dark:bg-background/96", className)}>
+      <div className={cn("border-t border-border/60 bg-background/95 backdrop-blur-xl", className)}>
         {replyPreview ? <ReplyStrip preview={replyPreview} onCancel={onCancelReply} /> : null}
         <div className="voice-bar" role="group" aria-label="Voice recording">
-          <button type="button" onClick={cancelRecording} className="voice-bar-button" aria-label="Delete recording">
+          {/* The state is otherwise carried by colour and a moving waveform.
+              Say it in words too, or the recorder is silent to a screen reader. */}
+          <span className="sr-only" role="status">
+            {awaitingPermission ? "Waiting for microphone access" : `Recording, ${formatDuration(elapsed)}`}
+          </span>
+          <button type="button" onClick={cancelRecording} className="voice-bar-button" aria-label="Cancel voice recording">
             <Trash2 className="h-5 w-5" aria-hidden="true" />
           </button>
           <span className="voice-bar-time">{formatDuration(elapsed)}</span>
@@ -585,7 +599,7 @@ export function MessageComposerV3({
           <span
             className={cn(
               "min-w-0 shrink truncate text-[10px] font-semibold sm:text-[11px]",
-              gesture === "cancel" ? "text-destructive" : locked || gesture === "lock" ? "text-[#E88C2B]" : "text-muted-foreground"
+              gesture === "cancel" ? "text-destructive" : locked || gesture === "lock" ? "text-primary" : "text-muted-foreground"
             )}
           >
             {locked && !awaitingPermission ? <Lock className="mr-1 inline h-3.5 w-3.5 align-[-2px]" /> : null}
@@ -602,7 +616,7 @@ export function MessageComposerV3({
             {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
           </button>
         </div>
-        {micHint ? <p className="px-4 pb-1 text-center text-[10px] font-medium text-[#E88C2B]">{micHint}</p> : null}
+        {micHint ? <p className="px-4 pb-1 text-center text-xs font-medium text-primary">{micHint}</p> : null}
       </div>
     );
   }
@@ -611,7 +625,7 @@ export function MessageComposerV3({
     const take = voice.state.recording;
     const duration = Math.max(0.1, take.durationSeconds);
     return (
-      <div className={cn("border-t border-border/60 bg-[#FFFDFC]/96 backdrop-blur-xl dark:bg-background/96", className)}>
+      <div className={cn("border-t border-border/60 bg-background/95 backdrop-blur-xl", className)}>
         {replyPreview ? <ReplyStrip preview={replyPreview} onCancel={onCancelReply} /> : null}
         <div className="voice-bar" role="group" aria-label="Voice message preview">
           <audio
@@ -635,7 +649,15 @@ export function MessageComposerV3({
             onClick={() => {
               const audio = audioRef.current;
               if (!audio) return;
-              if (audio.paused) void audio.play().then(() => setPlaying(true));
+              if (audio.paused) {
+                /* A failed decode must surface as a PLAYBACK message and must never
+                   be mistaken for a send failure -- the take stays in review either
+                   way, so the person can retry or discard it. */
+                void audio.play().then(() => setPlaying(true)).catch(() => {
+                  setPlaying(false);
+                  onFeedback("That recording could not be played back.");
+                });
+              }
               else {
                 audio.pause();
                 setPlaying(false);
@@ -656,7 +678,7 @@ export function MessageComposerV3({
   }
 
   return (
-    <div className={cn("relative border-t border-border/60 bg-[#FFFDFC]/96 backdrop-blur-xl dark:bg-background/96", className)}>
+    <div className={cn("relative border-t border-border/60 bg-background/95 backdrop-blur-xl", className)}>
       {mentionPickerOpen ? (
         <div className="absolute inset-x-2 bottom-full z-30 mb-1 max-h-56 overflow-y-auto rounded-2xl border border-border/70 bg-card p-1 shadow-xl" role="listbox" aria-label="Mention a member">
           {mentionSuggestions.length === 0 ? (
@@ -708,6 +730,8 @@ export function MessageComposerV3({
             conversationId={conversationId}
             onAttachmentChange={setAttachment}
             onLifecycleChange={setUploadState}
+            onFeedback={onFeedback}
+            onStructuredSent={onSent}
             disabled={isPending}
           />
           <textarea
@@ -762,7 +786,7 @@ export function MessageComposerV3({
         )}
       </form>
       {!canSendText && voiceSupported ? (
-        <p className="px-4 pb-1 text-center text-[10px] font-medium text-muted-foreground/75">
+        <p className="px-4 pb-1 text-center text-xs font-medium text-muted-foreground/75">
           {micHint ?? "Tap mic for hands-free · hold & release to send · ← cancel · ↑ lock"}
         </p>
       ) : null}
@@ -773,10 +797,10 @@ export function MessageComposerV3({
 
 function ReplyStrip({ preview, onCancel }: { preview: { senderName: string; text: string }; onCancel?: () => void }) {
   return (
-    <div className="flex items-center gap-2 border-t border-[#E88C2B]/15 bg-[#E88C2B]/8 px-3 py-2">
-      <span className="h-9 w-1 rounded-full bg-[#E88C2B]" aria-hidden="true" />
+    <div className="flex items-center gap-2 border-t border-primary/15 bg-primary/8 px-3 py-2">
+      <span className="h-9 w-1 rounded-full bg-primary" aria-hidden="true" />
       <span className="min-w-0 flex-1">
-        <span className="block text-[11px] font-bold text-[#E88C2B]">Replying to {preview.senderName}</span>
+        <span className="block text-xs font-semibold text-primary">Replying to {preview.senderName}</span>
         <span className="block truncate text-xs text-muted-foreground">{preview.text}</span>
       </span>
       <button type="button" onClick={onCancel} className="focus-ring grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-black/[0.04]" aria-label="Cancel reply">

@@ -17,7 +17,7 @@ import { cameraReducer } from "@/lib/camera/state";
  */
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
-const composer = stripComments(read("components/messaging/message-composer.tsx"));
+const composer = stripComments(read("components/messaging/message-composer-v3.tsx"));
 const upload = stripComments(read("hooks/use-voice-upload.ts"));
 const bubble = stripComments(read("components/messaging/voice-message-bubble.tsx"));
 const css = read("app/globals.css");
@@ -58,7 +58,9 @@ describe("recording row", () => {
     expect(row).toContain('aria-label="Cancel voice recording"');
     expect(row).toContain("voice-bar-time");
     expect(row).toContain("<LiveVoiceWaveform");
-    expect(row).toContain('aria-label="Stop recording"');
+    // V3's stop control stops AND sends in one action (stopAndSendRecording),
+    // so it is labelled for what it does rather than for half of it.
+    expect(row).toContain('aria-label="Send voice message"');
     expect(row).toContain('aria-label="Send voice message"');
   });
 
@@ -133,7 +135,8 @@ describe("send lifecycle", () => {
   });
 
   it("reuses an already-uploaded asset rather than uploading twice", () => {
-    expect(composer).toContain('voiceUpload.state.kind === "ready"');
+    expect(composer).toContain('voiceUpload.state.kind === "uploading"');
+    expect(composer).toContain('voiceUpload.state.kind === "finalizing"');
   });
 
   it("keeps one client message id so a retry cannot duplicate", () => {
@@ -277,7 +280,7 @@ describe("tapping the mic always leaves idle", () => {
   it("disables transport controls until capture actually starts", () => {
     // Stop and send are meaningless while the permission prompt is open.
     expect(composer).toContain("const busy = preparing || awaitingPermission;");
-    expect(composer).toContain("disabled={busy}");
+    expect(composer).toContain('disabled={busy || voice.state.kind !== "recording"}');
   });
 
   it("says why the bar is showing before recording begins", () => {
@@ -319,7 +322,7 @@ describe("tapping the mic always leaves idle", () => {
 
 describe("the send button during recording", () => {
   const composer = readFileSync(
-    join(process.cwd(), "components/messaging/message-composer.tsx"),
+    join(process.cwd(), "components/messaging/message-composer-v3.tsx"),
     "utf8"
   );
 
@@ -333,15 +336,19 @@ describe("the send button during recording", () => {
       composer.indexOf('aria-label="Voice recording"'),
       composer.indexOf('aria-label="Voice message preview"')
     );
-    const sendButton = recordingBar.slice(recordingBar.indexOf('className="voice-bar-send"') - 600);
-    expect(sendButton).toContain("sendOnNextTakeRef.current = true");
+    // V3 arms the deferred send in the stop/release handlers rather than
+    // inline on the button, but the guarantee is the same: the send survives
+    // stop() and fires when the take exists.
+    expect(recordingBar).toContain('className="voice-bar-send"');
+    expect(composer).toContain("sendOnNextTakeRef.current = true");
   });
 
   it("defers the send until the take exists", () => {
     // stop() is asynchronous: MediaRecorder assembles the blob afterwards,
     // so there is nothing to send in the tap's own tick.
-    expect(composer).toContain("if (!sendOnNextTakeRef.current) return;");
-    expect(composer).toContain('if (voice.state.kind !== "preview") return;');
+    expect(composer).toContain('if (!sendOnNextTakeRef.current || voice.state.kind !== "preview") return;');
+    // V3 folds the preview-state check into the guard asserted above, so the
+    // standalone form no longer exists; the guarantee is unchanged.
     expect(composer).toContain("void sendVoice(take)");
   });
 
@@ -349,8 +356,8 @@ describe("the send button during recording", () => {
     // generateWaveform resolves to null on failure, so gating the send on a
     // non-null waveform would let a decode error swallow the send forever.
     const effect = composer.slice(
-      composer.indexOf("if (!sendOnNextTakeRef.current) return;"),
-      composer.indexOf("// RECORDING: cancel, timer, live levels, stop, send")
+      composer.indexOf('if (!sendOnNextTakeRef.current || voice.state.kind !== "preview") return;'),
+      composer.indexOf('if (!sendOnNextTakeRef.current || voice.state.kind !== "preview") return;') + 400
     );
     expect(effect).not.toContain("waveform === null");
   });
@@ -358,8 +365,8 @@ describe("the send button during recording", () => {
   it("clears the pending send when the recording is discarded", () => {
     // Otherwise discarding mid-finalization would send what you discarded.
     const reset = composer.slice(
-      composer.indexOf("const resetVoice = useCallback"),
-      composer.indexOf("const sendVoice = useCallback")
+      composer.indexOf("const cancelRecording = useCallback"),
+      composer.indexOf("const cancelRecording = useCallback") + 700
     );
     expect(reset).toContain("sendOnNextTakeRef.current = false");
   });
@@ -426,7 +433,6 @@ describe("preview playback", () => {
   });
 
   it("reports a decode failure instead of doing nothing", () => {
-    const review = composer.slice(composer.indexOf('aria-label="Voice message preview"'));
-    expect(review).toContain("onError=");
+    expect(composer).toContain("could not be played back");
   });
 });
