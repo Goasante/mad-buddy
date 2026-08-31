@@ -1,0 +1,57 @@
+name: One-shot Home polish
+
+on:
+  push:
+    branches:
+      - automation/home-polish-direct
+    paths:
+      - .github/workflows/one-shot-home-polish.yml
+      - scripts/one-shot-home-polish.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[one-shot-applied]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply exact source patch
+        run: python scripts/one-shot-home-polish.py
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Targeted tests
+        run: npx vitest run lib/navigation/mobile-shell.test.ts lib/smart-card/prism-background.test.ts lib/activation/home-plan-background.test.ts
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Diff check
+        run: git diff --check
+
+      - name: Commit final tree and remove one-shot helper
+        shell: bash
+        run: |
+          git config user.name "Mad Buddy automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add components/app-shell/app-shell.tsx \
+                  components/journey/smart-card.tsx \
+                  components/activation/activation-card.tsx \
+                  lib/smart-card/prism-background.test.ts \
+                  lib/activation/home-plan-background.test.ts \
+                  public/home/open-your-plan-bg.webp
+          git rm .github/workflows/one-shot-home-polish.yml scripts/one-shot-home-polish.py
+          git commit -m "fix(home): polish nav and Home cards [one-shot-applied]"
+          git push origin HEAD:automation/home-polish-direct
