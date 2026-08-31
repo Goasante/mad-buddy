@@ -50,6 +50,11 @@ replace_exact(
     'expect(card).toContain("showPrism && !prismAnimated");',
     'expect(card).toContain("showPrism && !deferred && !prismAnimated");',
 )
+replace_exact(
+    "lib/smart-card/prism-background.test.ts",
+    'expect(guard).toContain("showPrism ?");',
+    'expect(guard).toContain("showPrism && !deferred ?");',
+)
 anchor = '''  it("renders only one prism instance", () => {
     expect(card.match(/<PrismBackground/g) ?? []).toHaveLength(1);
   });
