@@ -1524,7 +1524,6 @@ function NearbyHero({
                 band={heroFriend.proximityBand}
                 decorative
                 glowColorId={glowColorByFriendId[heroFriend.friendId] ?? null}
-                membershipTier={heroFriend.membershipTier}
                 /* The one size difference. Proximity, strength and confidence
                    are untouched, so the band this renders is the band the
                    server resolved -- only the stage is bigger. */
@@ -1578,7 +1577,6 @@ function NearbyHero({
                           band={friend.proximityBand}
                           decorative
                           glowColorId={glowColorByFriendId[friend.friendId] ?? null}
-                          membershipTier={friend.membershipTier}
                           size="sm"
                           reducedMotion={reducedMotion}
                           intensity={NEAR_GLOW_INTENSITY}
@@ -1640,7 +1638,6 @@ function NearbyHero({
                     // Identity, independent of the proximity prop above:
                     // ProximityGlow owns the distance aura, UserAvatar owns the
                     // membership band. Neither reads the other's inputs.
-                    membershipTier={friend.membershipTier}
                     size="md"
                     reducedMotion={reducedMotion}
                     // Presentation only: a calmer aura on Home. The band is

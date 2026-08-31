@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { VisibleMoment } from "@/lib/content/service";
 import { MomentImage } from "@/components/ui/moment-image";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn, formatRelativeTime } from "@/lib/utils";
@@ -395,7 +394,6 @@ export function MomentMediaViewer({
                 src={active.authorAvatarUrl}
                 name={active.authorName}
                 size="xs"
-                membershipTier={publicMembershipTier(active.authorPlan)}
                 decorative
               />
               <span className="truncate font-semibold text-white">{active.authorName}</span>

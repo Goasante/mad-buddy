@@ -49,7 +49,6 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
@@ -955,7 +954,7 @@ export function MessagesPageContent({
     <div data-tour-id={TOUR_TARGET_IDS.MESSAGES_INBOX} className="mx-auto w-full min-w-0 max-w-[1200px] md:pt-6">
       {/* Inbox only. On mobile an open conversation replaces the list, and
           that view keeps its own contextual header (participant avatar,
-          premium ring, name, plan badge, mute/info) — a Menu button has no
+          name, plan badge, mute/info) — a Menu button has no
           place inside a conversation, and the canonical header's controlled
           API cannot carry participant identity. Desktop shows both panes at
           once, so the shared header stays hidden there too. */}
@@ -1105,7 +1104,7 @@ export function MessagesPageContent({
                           className="focus-ring safe-motion flex w-full flex-col items-center gap-1.5 rounded-xl text-center"
                           aria-label={`Open ${conversation.title}`}
                         >
-                          <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="md" membershipTier={publicMembershipTier(conversation.otherPlan)} />
+                          <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="md" />
                           <span className="w-full truncate text-xs font-medium">{conversation.title}</span>
                         </button>
                         {pinEditMode ? (
@@ -1226,7 +1225,7 @@ export function MessagesPageContent({
                               : "border-transparent border-l-transparent hover:bg-secondary"
                         )}
                       >
-                        <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" membershipTier={publicMembershipTier(conversation.otherPlan)} />
+                        <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" />
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-1.5">
                             <span className="truncate text-sm font-semibold">{conversation.title}</span>
@@ -1396,7 +1395,6 @@ export function MessagesPageContent({
                         name={selected.title}
                         src={selected.avatarUrl}
                         size="lg"
-                        membershipTier={publicMembershipTier(selected.otherPlan)}
                       />
                       <p className="mt-4 text-[0.9375rem] font-semibold">{selected.title}</p>
                       <p className="mt-1 max-w-[22rem] text-sm leading-relaxed text-muted-foreground">
@@ -1817,7 +1815,6 @@ function ConversationIdentity({
         name={conversation.title}
         src={conversation.avatarUrl}
         size="sm"
-        membershipTier={publicMembershipTier(conversation.otherPlan)}
       />
       <span className="flex min-w-0 flex-1 flex-col justify-center">
         <span className="flex items-center gap-1.5">
@@ -1906,7 +1903,7 @@ function PinPickerModal({
                   onClick={() => onPin(conversation.id)}
                   className="focus-ring safe-motion flex w-full items-center gap-3 rounded-xl p-2.5 text-left hover:bg-secondary"
                 >
-                  <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" membershipTier={publicMembershipTier(conversation.otherPlan)} />
+                  <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" />
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold">{conversation.title}</span>
                   <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary">
                     <Star className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1981,7 +1978,7 @@ function NewMessageModal({
                   onClick={() => onSelect(friend.friendId)}
                   className="focus-ring safe-motion flex w-full items-center gap-3 rounded-xl p-2.5 text-left hover:bg-secondary"
                 >
-                  <GlowAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" membershipTier={publicMembershipTier(friend.plan)} />
+                  <GlowAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5">
                       <span className="block truncate text-sm font-semibold">{friend.displayName}</span>

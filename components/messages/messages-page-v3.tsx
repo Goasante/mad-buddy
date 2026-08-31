@@ -53,7 +53,6 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { MESSAGES_UPDATED_EVENT } from "@/hooks/use-unread-message-count";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { conversationContext, dayLabel, startsNewDay, startsNewRun } from "@/lib/messaging/conversation-presence";
 import { mergeConversations } from "@/lib/messaging/conversation-sync";
 import type { AttachmentView } from "@/lib/messaging/attachments";
@@ -568,7 +567,7 @@ export function MessagesPageV3({
                     <div className="group relative flex items-center rounded-[20px] transition hover:bg-white/70 dark:hover:bg-white/[0.035]">
                       <button type="button" onClick={() => openConversation(conversation.id)} className="focus-ring flex min-h-[76px] min-w-0 flex-1 items-center gap-3 rounded-[20px] px-3 py-2.5 text-left">
                         <div className="relative shrink-0">
-                          <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" membershipTier={publicMembershipTier(conversation.otherPlan)} />
+                          <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" />
                           {conversation.kind === "group" ? <span className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full border-2 border-[#FEFBF3] bg-[#4E0401] text-[#FEFBF3] dark:border-background"><UsersRound className="h-2.5 w-2.5" /></span> : null}
                         </div>
                         <span className="min-w-0 flex-1">
@@ -621,7 +620,7 @@ export function MessagesPageV3({
                 <div className="flex min-h-[64px] items-center gap-2 px-2.5 md:px-4">
                   <button type="button" onClick={closeConversation} aria-label="Back to Chats" className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full hover:bg-black/[0.04] dark:hover:bg-white/[0.06] lg:hidden"><ArrowLeft className="h-5 w-5" /></button>
                   <button type="button" onClick={() => setSettingsOpen(true)} className="focus-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl p-1 text-left hover:bg-black/[0.035] dark:hover:bg-white/[0.05]">
-                    <GlowAvatar name={selected.title} src={selected.avatarUrl} size="sm" membershipTier={publicMembershipTier(selected.otherPlan)} />
+                    <GlowAvatar name={selected.title} src={selected.avatarUrl} size="sm" />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5"><span className="truncate text-[0.98rem] font-bold">{selected.title}</span><PremiumPlanBadge plan={selected.otherPlan} compact /></span>
                       <span className={cn("mt-0.5 block truncate text-[11px] font-medium", selectedContext.shared ? "text-[#E88C2B]" : "text-muted-foreground")}>{selectedContext.subtitle ?? (selected.kind === "group" ? "Group chat" : selected.otherUsername ? `@${selected.otherUsername}` : "Chat")}</span>
@@ -659,7 +658,7 @@ export function MessagesPageV3({
                 {loadingMessages ? (
                   <div className="grid h-full place-items-center"><Loader2 className="h-5 w-5 animate-spin text-[#E88C2B]" /></div>
                 ) : messages.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center px-8 text-center"><GlowAvatar name={selected.title} src={selected.avatarUrl} size="lg" membershipTier={publicMembershipTier(selected.otherPlan)} /><h2 className="mt-4 text-lg font-semibold">{selected.title}</h2><p className="mt-1 text-sm text-muted-foreground">Say hello and start the chat.</p></div>
+                  <div className="flex h-full flex-col items-center justify-center px-8 text-center"><GlowAvatar name={selected.title} src={selected.avatarUrl} size="lg" /><h2 className="mt-4 text-lg font-semibold">{selected.title}</h2><p className="mt-1 text-sm text-muted-foreground">Say hello and start the chat.</p></div>
                 ) : (
                   messages.map((message, index) => {
                     const previous = messages[index - 1];
@@ -779,7 +778,7 @@ function NewChatModal({ open, onOpenChange, onSelect, onOpenGroups }: { open: bo
       <div className="space-y-3">
         <div className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Muddies or usernames" autoFocus className="h-11 rounded-2xl pl-10" /></div>
         <button type="button" onClick={onOpenGroups} className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-[#E88C2B]/15 bg-[#E88C2B]/8 p-3 text-left hover:bg-[#E88C2B]/12"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#4E0401] text-[#FEFBF3]"><UsersRound className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">Groups</span><span className="block text-xs text-muted-foreground">Open or create a group</span></span><ChevronRight className="h-4 w-4" /></button>
-        {friends === null ? <div className="grid py-8 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-[#E88C2B]" /></div> : visible.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No Muddies match your search.</p> : <ul className="max-h-80 space-y-1 overflow-y-auto">{visible.map((friend) => <li key={friend.friendId}><button type="button" onClick={() => onSelect(friend.friendId)} className="focus-ring flex w-full items-center gap-3 rounded-2xl p-2.5 text-left hover:bg-secondary/70"><GlowAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" membershipTier={publicMembershipTier(friend.plan)} /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{friend.displayName}</span><span className="block truncate text-xs text-muted-foreground">@{friend.username}</span></span></button></li>)}</ul>}
+        {friends === null ? <div className="grid py-8 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-[#E88C2B]" /></div> : visible.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No Muddies match your search.</p> : <ul className="max-h-80 space-y-1 overflow-y-auto">{visible.map((friend) => <li key={friend.friendId}><button type="button" onClick={() => onSelect(friend.friendId)} className="focus-ring flex w-full items-center gap-3 rounded-2xl p-2.5 text-left hover:bg-secondary/70"><GlowAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{friend.displayName}</span><span className="block truncate text-xs text-muted-foreground">@{friend.username}</span></span></button></li>)}</ul>}
       </div>
     </Modal>
   );
@@ -789,7 +788,7 @@ function ChatSettingsModal({ open, onOpenChange, conversation, onToggleFavorite,
   return (
     <Modal open={open} onOpenChange={onOpenChange} title={conversation.kind === "group" ? "Group Settings" : "Chat Settings"} compact>
       <div className="space-y-3">
-        <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card/70 p-3"><GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" membershipTier={publicMembershipTier(conversation.otherPlan)} /><div className="min-w-0 flex-1"><strong className="block truncate">{conversation.title}</strong><span className="text-xs text-muted-foreground">{conversation.kind === "group" ? "Group conversation" : conversation.otherUsername ? `@${conversation.otherUsername}` : "Conversation"}</span></div></div>
+        <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card/70 p-3"><GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" /><div className="min-w-0 flex-1"><strong className="block truncate">{conversation.title}</strong><span className="text-xs text-muted-foreground">{conversation.kind === "group" ? "Group conversation" : conversation.otherUsername ? `@${conversation.otherUsername}` : "Conversation"}</span></div></div>
         <button type="button" onClick={onToggleMute} className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-border/60 p-3 text-left hover:bg-secondary/50"><BellOff className="h-5 w-5 text-[#E88C2B]" /><span className="min-w-0 flex-1"><strong className="block">{conversation.muted ? "Unmute notifications" : "Mute notifications"}</strong><span className="text-xs text-muted-foreground">{conversation.muted ? "Receive chat notifications again" : "Silence this chat for 8 hours"}</span></span></button>
         <button type="button" onClick={onToggleFavorite} className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-border/60 p-3 text-left hover:bg-secondary/50"><Star className={cn("h-5 w-5 text-[#E88C2B]", conversation.pinned && "fill-[#E88C2B]")} /><span className="min-w-0 flex-1"><strong className="block">{conversation.pinned ? "Remove favorite" : "Favorite chat"}</strong><span className="text-xs text-muted-foreground">Keep important chats easy to reach</span></span></button>
         <button type="button" onClick={onSearch} className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-border/60 p-3 text-left hover:bg-secondary/50"><Search className="h-5 w-5 text-[#E88C2B]" /><span className="min-w-0 flex-1"><strong className="block">Search in chat</strong><span className="text-xs text-muted-foreground">Find messages in this conversation</span></span><ChevronRight className="h-4 w-4 text-muted-foreground" /></button>

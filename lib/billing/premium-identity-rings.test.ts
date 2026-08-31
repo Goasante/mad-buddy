@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { effectivePlan, type BillingState } from "@/lib/billing/entitlements";
 import {
-  membershipTierLabel,
   publicMembershipTier,
   type PublicMembershipTier
 } from "@/lib/billing/premium-identity";
@@ -149,52 +148,19 @@ describe("premium ring privacy", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Presentation — owned by the component, distinct from proximity Glow
+// Presentation — membership never changes avatar geometry
 // ---------------------------------------------------------------------------
 
 describe("premium ring presentation", () => {
   const avatar = read("components/ui/user-avatar.tsx");
   const css = read("app/globals.css");
 
-  it("gives free avatars no ring markup at all", () => {
-    expect(avatar).toContain('if (membershipTier === "free") return avatar;');
-  });
-
-  it("uses indigo for plus and gold for pro", () => {
-    expect(avatar).toContain("avatar-ring-plus");
-    expect(avatar).toContain("avatar-ring-pro");
-    expect(css).toMatch(/\.avatar-ring-plus\s*\{[^}]*#6366f1/);
-    expect(css).toMatch(/\.avatar-ring-pro\s*\{[^}]*#f59e0b/);
-  });
-
-  it("disables the pro shimmer under reduced motion", () => {
-    const block = css.slice(css.indexOf(".avatar-ring-pro-animated::after"));
-    expect(block).toContain("prefers-reduced-motion: reduce");
-    const reduced = block.slice(block.indexOf("prefers-reduced-motion: reduce"));
-    expect(reduced).toContain("animation: none");
-  });
-
-  it("does not let screens pass arbitrary ring colours", () => {
-    // The only membership input is a tier union; there is no colour prop.
-    expect(avatar).toContain("membershipTier?: PublicMembershipTier");
-    expect(avatar).not.toContain("ringColor");
-    expect(avatar).not.toContain("ringClassName");
-  });
-
-  it("keeps the premium ring independent of proximity Glow", () => {
-    // GlowRing owns proximity; UserAvatar owns membership. Neither reads the
-    // other's inputs, so a bright ring can never imply closeness.
-    expect(avatar).not.toContain("proximityLevel");
-    expect(avatar).not.toContain("glowStrength");
-    const glow = read("components/glow/glow-ring.tsx");
-    expect(glow).not.toContain("membershipTier");
-  });
-
-  it("states membership as text, not colour alone", () => {
-    expect(avatar).toContain("sr-only");
-    expect(membershipTierLabel("plus")).toBe("Buddy Plus member");
-    expect(membershipTierLabel("pro")).toBe("Buddy Pro member");
-    expect(membershipTierLabel("free")).toBeNull();
+  it("removes membership ring markup, colour and animation", () => {
+    expect(avatar).not.toContain("membershipTier");
+    expect(avatar).not.toContain("avatar-ring-");
+    expect(css).not.toContain(".avatar-ring-plus");
+    expect(css).not.toContain(".avatar-ring-pro");
+    expect(css).not.toContain("avatar-ring-pro-shimmer");
   });
 });
 
@@ -203,15 +169,33 @@ describe("premium ring presentation", () => {
 // ---------------------------------------------------------------------------
 
 describe("premium ring wiring", () => {
-  const profileSurfaces: Array<[string, string]> = [
+  const activeAvatarSurfaces: Array<[string, string]> = [
     ["own profile", "components/profile/profile-page.tsx"],
     ["public profile", "components/friends/muddy-profile-page.tsx"],
     ["Profile VNext", "components/profile/profile-vnext-page.tsx"],
-    ["Profile VNext edit", "components/profile/profile-edit-vnext.tsx"]
+    ["Profile VNext edit", "components/profile/profile-edit-vnext.tsx"],
+    ["Profile VNext public", "components/friends/muddy-profile-vnext.tsx"],
+    ["Muddies and requests", "components/friends/friends-page.tsx"],
+    ["Muddies grid", "components/friends/muddies-grid.tsx"],
+    ["Home proximity", "components/dashboard/dashboard-page.tsx"],
+    ["messages", "components/messages/messages-page.tsx"],
+    ["messages V2", "components/messages/messages-page-v2.tsx"],
+    ["messages V3", "components/messages/messages-page-v3.tsx"],
+    ["chat settings", "components/messaging/chat-settings-v4.tsx"],
+    ["groups", "components/groups/group-detail-page.tsx"],
+    ["events", "components/events/event-detail.tsx"],
+    ["event room", "components/events/event-room-detail.tsx"],
+    ["moments", "components/content/moment-parts.tsx"],
+    ["moment viewer", "components/content/moment-media-viewer.tsx"],
+    ["Air", "components/content/tuned-in-strip.tsx"],
+    ["contacts", "components/contacts/find-muddies-sheet.tsx"],
+    ["Socialize card", "components/socialize/socialize-person-card.tsx"],
+    ["Socialize deck", "components/socialize/swipe-deck.tsx"],
+    ["Profile lab people", "app/(app)/profile-lab/people/page.tsx"]
   ];
 
-  for (const [surface, path] of profileSurfaces) {
-    it(`keeps premium avatar-ring geometry off ${surface}`, () => {
+  for (const [surface, path] of activeAvatarSurfaces) {
+    it(`keeps membership-ring wiring off ${surface}`, () => {
       const source = read(path);
       expect(source).not.toContain("publicMembershipTier(");
       expect(source).not.toContain("membershipTier=");
@@ -231,19 +215,24 @@ describe("premium ring wiring", () => {
     expect(source).not.toContain("plan={");
   });
 
-  it("preserves premium rings on authorised non-Profile identity surfaces", () => {
-    const source = read("components/friends/friends-page.tsx");
-    expect(source).toContain("publicMembershipTier(");
-    expect(source).toContain("membershipTier={");
+  it("removes membership inputs from shared avatar components", () => {
+    for (const path of [
+      "components/ui/user-avatar.tsx",
+      "components/glow/glow-avatar.tsx",
+      "components/glow/proximity-glow-avatar.tsx"
+    ]) {
+      expect(read(path)).not.toContain("membershipTier");
+    }
   });
 
-  it("passes the tier through GlowAvatar without mixing it into proximity", () => {
-    const glowAvatar = read("components/glow/glow-avatar.tsx");
-    expect(glowAvatar).toContain("membershipTier");
-    // The tier reaches UserAvatar; it must never be fed to GlowRing, whose
-    // props are entirely about distance.
-    const glowRingCall = glowAvatar.slice(glowAvatar.indexOf("<GlowRing"), glowAvatar.indexOf("<UserAvatar"));
-    expect(glowRingCall).not.toContain("membershipTier");
+  it("preserves canonical proximity Glow inputs", () => {
+    const avatar = read("components/glow/proximity-glow-avatar.tsx");
+    expect(avatar).toContain("band?: ProximityBand | null");
+    expect(avatar).toContain("glowColorId?: string | null");
+    expect(avatar).toContain("size?: ProximityGlowSize");
+    expect(avatar).toContain("level={resolvedLevel}");
+    expect(avatar).toContain("glowColorId={glowColorId}");
+    expect(avatar).toContain("size={size}");
   });
 
   it("leaves a blocked viewer with no identity to project", () => {
@@ -263,27 +252,10 @@ describe("premium ring wiring", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Stage 3 — the remaining authorised identity surfaces
+// Billing projections remain compatible even though avatars no longer use them
 // ---------------------------------------------------------------------------
 
-describe("premium ring coverage across identity surfaces", () => {
-  const surfaces: Array<[string, string, string]> = [
-    ["messages inbox and conversation header", "components/messages/messages-page.tsx", "conversation.otherPlan"],
-    ["moments creator header", "components/content/moment-parts.tsx", "moment.authorPlan"],
-    ["air creator header", "components/content/tuned-in-strip.tsx", "moment.authorPlan"],
-    // The Event attendee roster moved into EventDetail in the Events 2.0
-    // visual rebuild. Same rule, new file.
-    ["events participants", "components/events/event-detail.tsx", "muddy.plan"]
-  ];
-
-  for (const [surface, path, planField] of surfaces) {
-    it(`derives ${surface} rings from the server-projected plan`, () => {
-      const source = read(path);
-      expect(source).toContain(`publicMembershipTier(${planField})`);
-      expect(source).toContain("membershipTier=");
-    });
-  }
-
+describe("membership projection compatibility", () => {
   it("resolves every projected plan through the canonical loaders", () => {
     // Each projection uses loadEffectivePlan(sForUsers), which applies the
     // paid → trial → earned precedence and expiry. None builds its own rule.
@@ -293,15 +265,6 @@ describe("premium ring coverage across identity surfaces", () => {
       "lib/events/service.ts"
     ]) {
       expect(read(path)).toMatch(/loadEffectivePlan(sForUsers)?\(/);
-    }
-  });
-
-  it("never derives a tier from a premium boolean on any wired surface", () => {
-    for (const [, path] of surfaces.map((s) => [s[0], s[1]] as const)) {
-      const source = read(path);
-      for (const banned of ["is_premium_theme_unlocked", "isPremiumThemeUnlocked", "isPremium"]) {
-        expect(source, `${path} must not infer tier from ${banned}`).not.toContain(banned);
-      }
     }
   });
 

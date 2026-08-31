@@ -6,7 +6,6 @@ import { Loader2, Pencil, Send, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EventArtwork } from "@/components/events/event-artwork";
 import { SafeMessageText } from "@/components/messages/safe-message-text";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import {
   getMessagesAction,
   markConversationReadAction,
@@ -261,7 +260,6 @@ export function EventRoomDetail({
                     src={member.avatarUrl}
                     size="sm"
                     decorative
-                    membershipTier={publicMembershipTier(member.plan)}
                     className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]"
                   />
                 </div>

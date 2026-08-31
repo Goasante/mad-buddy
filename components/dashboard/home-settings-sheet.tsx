@@ -148,13 +148,7 @@ export function HomeSettingsSheet({
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-1 pt-2 sm:px-5">
             {/* Identity header — read-only. No href, no onClick. */}
             <div className="flex items-center gap-3.5 px-1 pb-1">
-              <span
-                className={cn(
-                  "grid h-14 w-14 shrink-0 place-items-center rounded-full p-[2px]",
-                  identity?.tier === "pro" && "avatar-ring-pro",
-                  identity?.tier === "plus" && "bg-indigo-500"
-                )}
-              >
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full">
                 <UserAvatar
                   src={currentAvatarUrl}
                   name={initial}

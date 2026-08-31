@@ -6,7 +6,6 @@ import { useEffect, useState, useTransition } from "react";
 import { MomentImage } from "@/components/ui/moment-image";
 import { TuneInIcon } from "@/components/content/tune-in-icon";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import {
   MOMENT_REACTIONS,
@@ -492,12 +491,12 @@ export function MomentHeader({
           className="focus-ring safe-motion flex min-w-0 flex-1 items-center gap-2.5 rounded-full pr-2 text-left"
           aria-label={`Open ${moment.authorName}'s Moments`}
         >
-          <UserAvatar src={moment.authorAvatarUrl} name={moment.authorName} size="sm" decorative membershipTier={publicMembershipTier(moment.authorPlan)} />
+          <UserAvatar src={moment.authorAvatarUrl} name={moment.authorName} size="sm" decorative />
           {nameNode}
         </button>
       ) : (
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <UserAvatar src={moment.authorAvatarUrl} name={moment.authorName} size="sm" decorative membershipTier={publicMembershipTier(moment.authorPlan)} />
+          <UserAvatar src={moment.authorAvatarUrl} name={moment.authorName} size="sm" decorative />
           {nameNode}
         </div>
       )}

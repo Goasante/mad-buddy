@@ -49,7 +49,7 @@ export type GroupMemberView = {
   username: string;
   avatarUrl: string | null;
   role: ConversationRole;
-  /** Effective membership tier, for the canonical premium ring/badge. */
+  /** Effective membership tier, for the canonical membership badge. */
   plan: SubscriptionPlan | null;
   /**
    * Trusted Member approval, or null.

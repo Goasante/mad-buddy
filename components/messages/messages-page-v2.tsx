@@ -56,7 +56,6 @@ import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { MESSAGES_UPDATED_EVENT } from "@/hooks/use-unread-message-count";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import {
   conversationContext,
   dayLabel,
@@ -870,7 +869,6 @@ export function MessagesPageV2({
                                 name={conversation.title}
                                 src={conversation.avatarUrl}
                                 size="sm"
-                                membershipTier={publicMembershipTier(conversation.otherPlan)}
                               />
                               {conversation.kind === "group" ? (
                                 <span className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full border-2 border-[#FEFBF3] bg-[#4E0401] text-[#FEFBF3] dark:border-background">
@@ -1031,7 +1029,7 @@ export function MessagesPageV2({
                     <div className="grid h-full place-items-center"><Loader2 className="h-5 w-5 animate-spin text-[#E88C2B] motion-reduce:animate-none" aria-label="Loading messages" /></div>
                   ) : messages.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-                      <GlowAvatar name={selected.title} src={selected.avatarUrl} size="lg" membershipTier={publicMembershipTier(selected.otherPlan)} />
+                      <GlowAvatar name={selected.title} src={selected.avatarUrl} size="lg" />
                       <h2 className="mt-4 text-lg font-semibold">{selected.title}</h2>
                       <p className="mt-1 max-w-[22rem] text-sm leading-relaxed text-muted-foreground">{selectedContext.subtitle ? `${selectedContext.subtitle}. Say hello.` : "Say hello and start the conversation."}</p>
                     </div>
@@ -1187,7 +1185,7 @@ function ConversationIdentityV2({
 }) {
   const body = (
     <>
-      <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" membershipTier={publicMembershipTier(conversation.otherPlan)} />
+      <GlowAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" />
       <span className="flex min-w-0 flex-1 flex-col justify-center">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-[0.98rem] font-bold tracking-[-0.01em]">{conversation.title}</span>
@@ -1268,7 +1266,7 @@ function NewMessageModalV2({
             {visible.map((friend) => (
               <li key={friend.friendId}>
                 <button type="button" onClick={() => onSelect(friend.friendId)} className="focus-ring flex w-full items-center gap-3 rounded-2xl p-2.5 text-left hover:bg-secondary/70">
-                  <GlowAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" membershipTier={publicMembershipTier(friend.plan)} />
+                  <GlowAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" />
                   <span className="min-w-0 flex-1"><span className="flex items-center gap-1.5"><span className="truncate text-sm font-semibold">{friend.displayName}</span><PremiumPlanBadge plan={friend.plan} compact /></span><span className="block truncate text-xs text-muted-foreground">@{friend.username}</span></span>
                 </button>
               </li>

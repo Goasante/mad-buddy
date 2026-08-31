@@ -241,10 +241,10 @@ describe("nearby membership privacy", () => {
 // Presentation stays in the shared components
 // ---------------------------------------------------------------------------
 
-describe("nearby ring presentation", () => {
-  it("passes the tier through GlowAvatar rather than styling a ring on Home", () => {
+describe("nearby avatar presentation", () => {
+  it("does not pass the tier into GlowAvatar or style a ring on Home", () => {
     const home = read("components/dashboard/dashboard-page.tsx");
-    expect(home).toContain("membershipTier={friend.membershipTier}");
+    expect(home).not.toContain("membershipTier={friend.membershipTier}");
     // No bespoke ring CSS in the Home component.
     expect(home).not.toContain("avatar-ring-plus");
     expect(home).not.toContain("avatar-ring-pro");

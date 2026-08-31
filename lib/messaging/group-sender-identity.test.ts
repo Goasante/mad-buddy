@@ -176,7 +176,7 @@ describe("group message presentation", () => {
 
   it("reuses the canonical premium badge and avatar ring", () => {
     expect(groupPage).toContain("<PremiumPlanBadge");
-    expect(groupPage).toContain("membershipTier={publicMembershipTier(message.senderPlan)}");
+    expect(groupPage).not.toContain("membershipTier={publicMembershipTier(message.senderPlan)}");
   });
 
   it("opens the canonical profile route, not a group-specific modal", () => {

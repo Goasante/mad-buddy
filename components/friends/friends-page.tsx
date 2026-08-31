@@ -82,7 +82,6 @@ import { cn } from "@/lib/utils";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 
 type FriendTab = "all" | "circles" | "close" | "requests" | "blocked";
@@ -1546,7 +1545,6 @@ function MuddyRow({
           band={band}
           decorative
           size="sm"
-          membershipTier={publicMembershipTier(user.plan)}
         />
         <HiddenMarker level={level} />
       </button>
@@ -1691,7 +1689,6 @@ function ActiveNowStrip({
                   band={band}
                   decorative
                   size="md"
-                  membershipTier={publicMembershipTier(friend.plan)}
                 />
                 <span className="w-full truncate text-xs font-medium">{friend.displayName}</span>
                 {proximityText ? (

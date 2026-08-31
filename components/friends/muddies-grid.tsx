@@ -11,7 +11,6 @@ import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { type MuddyProximity } from "@/lib/friends/muddies-presentation";
 import { proximityBandLabel } from "@/lib/proximity/bands";
 import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
@@ -77,7 +76,6 @@ export function MuddiesGrid({
                   band={band}
                   decorative
                   size="lg"
-                  membershipTier={publicMembershipTier(person.plan)}
                 />
               </span>
 

@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import type { TuneInEntry, VisibleMoment } from "@/lib/content/service";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
@@ -281,7 +280,7 @@ export function TunedInViewer({
       </div>
 
       <div className="flex shrink-0 items-center gap-2.5 px-3 py-2.5">
-        <UserAvatar src={moment.authorAvatarUrl} name={moment.authorName} size="sm" decorative membershipTier={publicMembershipTier(moment.authorPlan)} />
+        <UserAvatar src={moment.authorAvatarUrl} name={moment.authorName} size="sm" decorative />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <p className="truncate text-sm font-semibold text-white">{moment.authorName}</p>

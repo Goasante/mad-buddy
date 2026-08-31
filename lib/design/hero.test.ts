@@ -192,6 +192,6 @@ describe("adoption", () => {
 
   it("reuses the canonical avatar and membership treatment in the viewer", () => {
     expect(viewer).toContain("<UserAvatar");
-    expect(viewer).toContain("publicMembershipTier(active.authorPlan)");
+    expect(viewer).not.toContain("publicMembershipTier(active.authorPlan)");
   });
 });

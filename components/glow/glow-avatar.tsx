@@ -1,5 +1,4 @@
 import { cn } from "@/lib/utils";
-import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 import { proximityLabels } from "@/lib/proximity";
 import { GlowRing } from "@/components/glow/glow-ring";
@@ -33,16 +32,6 @@ export type GlowAvatarProps = {
   className?: string;
   /** Optional custom-glow palette id (custom_glow_styles entitlement). */
   glowColorId?: string | null;
-  /**
-   * Effective membership tier, passed straight through to UserAvatar.
-   *
-   * The two signals stay independent by construction: proximity lives on the
-   * GlowRing wrapper (a wide aura whose intensity tracks distance), membership
-   * lives on the avatar itself (a thin, fixed band). Neither reads the other's
-   * inputs, so a Pro ring can never brighten with closeness and a Close glow
-   * can never imply membership.
-   */
-  membershipTier?: PublicMembershipTier;
   /** Presentation-only aura multiplier, passed through to GlowRing. */
   intensity?: number;
 };
@@ -57,7 +46,6 @@ export function GlowAvatar({
   reducedMotion = false,
   className,
   glowColorId = null,
-  membershipTier = "free",
   intensity = 1
 }: GlowAvatarProps) {
   // Many non-proximity surfaces reuse GlowAvatar for consistent avatar
@@ -82,7 +70,6 @@ export function GlowAvatar({
         name={name}
         decorative
         size={size}
-        membershipTier={membershipTier}
         className={cn(
           "relative z-[1] border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]"
         )}

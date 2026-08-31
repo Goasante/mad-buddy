@@ -305,48 +305,6 @@ html.dark .home-ambient-bg {
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent);
 }
 
-/* Buddy Pro's header-avatar ring: a slowly rotating gold conic gradient. */
-/* Premium membership rings.
- *
- * Owned entirely by UserAvatar — screens pass a tier, never a colour. The
- * ring is a thin band attached to identity, deliberately narrower and
- * calmer than the proximity Glow (see .proximity-halo), so the two read as
- * different signals when they appear on the same avatar: the ring says who
- * someone is, the halo says how near they are.
- *
- * The ring is painted on the wrapper's own background and the avatar sits
- * inside a padding box, so there is no negative-z pseudo-element that a
- * stacking context could clip, and no layout shift — the wrapper reserves
- * its own space. */
-.avatar-ring-plus {
-  background: linear-gradient(140deg, #818cf8, #6366f1 55%, #4f46e5);
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.25), 0 0 8px rgba(99, 102, 241, 0.28);
-}
-
-@keyframes avatar-ring-pro-shimmer {
-  to { transform: rotate(360deg); }
-}
-.avatar-ring-pro {
-  position: relative;
-  background: conic-gradient(from 0deg, #fcd34d, #f59e0b, #fbbf24, #fde68a, #fcd34d);
-  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.28), 0 0 10px rgba(245, 158, 11, 0.3);
-}
-/* The shimmer rotates the gradient itself rather than an extra layer, so
- * nothing paints outside the ring band. */
-.avatar-ring-pro-animated::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: conic-gradient(from 0deg, #fcd34d, #f59e0b, #fbbf24, #fde68a, #fcd34d);
-  animation: avatar-ring-pro-shimmer 6s linear infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .avatar-ring-pro-animated::after {
-    animation: none;
-  }
-}
-
 /* Arrival: a single expanding success ring, then settle. */
 .journey-mark-arrived::before {
   content: "";
@@ -5086,8 +5044,7 @@ select {
 
 /* Socialize People Nearby rows
    ------------------------------------------------------------------
-   A restrained fade for arriving rows. No continuous animation, and nothing
-   animates a premium ring. */
+   A restrained fade for arriving rows with no continuous animation. */
 @keyframes socialize-row-in {
   from {
     opacity: 0;

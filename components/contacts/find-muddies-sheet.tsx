@@ -11,7 +11,6 @@ import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { detectContactCapability, selectContacts } from "@/lib/contacts/contact-capability";
 import { DEMO_CONTACTS, demoContactsAvailable } from "@/lib/contacts/demo-contacts";
 import {
@@ -371,7 +370,6 @@ export function FindMuddiesSheet({
                     name={person.displayName}
                     size="sm"
                     decorative
-                    membershipTier={publicMembershipTier(person.plan as SubscriptionPlan)}
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-1.5">

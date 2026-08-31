@@ -1,5 +1,4 @@
 import { cn } from "@/lib/utils";
-import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
 import type { ProximityBand } from "@/lib/proximity/bands";
 import {
   AVATAR_SIZE_BY_GLOW_SIZE,
@@ -18,11 +17,8 @@ import { UserAvatar } from "@/components/ui/user-avatar";
  * gave them; the level, geometry and label are derived here so no page maps
  * bands to CSS classes itself.
  *
- * TWO INDEPENDENT SIGNALS, BY CONSTRUCTION. Proximity lives on the Glow
- * wrapper (a wide, layered aura whose energy tracks distance); membership lives
- * on the avatar itself (a thin, fixed identity band). Neither reads the other
- * input, so a Pro ring can never brighten with closeness and a Right Here glow
- * can never imply membership.
+ * Proximity is the only ring signal rendered here. Membership remains
+ * available as text elsewhere and never changes avatar geometry.
  */
 
 export type ProximityGlowAvatarProps = {
@@ -41,7 +37,6 @@ export type ProximityGlowAvatarProps = {
   size?: ProximityGlowSize;
   reducedMotion?: boolean;
   glowColorId?: string | null;
-  membershipTier?: PublicMembershipTier;
   intensity?: number;
   className?: string;
   /**
@@ -61,7 +56,6 @@ export function ProximityGlowAvatar({
   size = "md",
   reducedMotion = false,
   glowColorId = null,
-  membershipTier = "free",
   intensity = 1,
   className,
   decorative = false
@@ -91,7 +85,6 @@ export function ProximityGlowAvatar({
         name={name}
         decorative
         size={AVATAR_SIZE_BY_GLOW_SIZE[size]}
-        membershipTier={membershipTier}
         className={cn(
           "border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]"
         )}

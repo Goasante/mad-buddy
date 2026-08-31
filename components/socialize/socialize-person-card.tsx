@@ -9,7 +9,6 @@ import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { Button } from "@/components/ui/button";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { presenceLabel } from "@/lib/presence/freshness";
 import type { SocializePerson } from "@/lib/social/socialize-mobile";
 import { cn } from "@/lib/utils";
@@ -123,7 +122,6 @@ function PersonCard({ person, onWave, onMessage, pending = false, slots }: Socia
               src={null}
               size="xl"
               proximityLevel={person.proximityTier}
-              membershipTier={publicMembershipTier(person.plan)}
             />
           </span>
         )}

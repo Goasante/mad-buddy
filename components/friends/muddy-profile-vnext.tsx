@@ -34,7 +34,6 @@ import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import type { PublicTrustSummary } from "@/lib/discovery/trust";
 import { GLOW_COLORS } from "@/lib/glow/custom-colors";
 import { conversationHref } from "@/lib/messaging/open-conversation";
@@ -168,7 +167,6 @@ export function MuddyProfileVNext({
               src={muddy.avatarUrl}
               name={muddy.displayName}
               size="profile"
-              membershipTier={publicMembershipTier(muddy.plan)}
               className="h-32 w-32 border-[4px] border-[#FEFBF3] bg-background sm:h-36 sm:w-36 [&>span>span]:h-32 [&>span>span]:w-32 sm:[&>span>span]:h-36 sm:[&>span>span]:w-36"
             />
           </div>

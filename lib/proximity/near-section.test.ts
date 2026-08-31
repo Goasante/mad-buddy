@@ -124,25 +124,25 @@ describe("Near section avatar", () => {
     expect(userAvatar).toContain('md: "h-14 w-14');
   });
 
-  it("keeps the premium ring thin rather than scaling it with the avatar", () => {
-    const ringPadding = userAvatar.slice(userAvatar.indexOf("RING_PADDING"), userAvatar.indexOf("export function UserAvatar"));
-    expect(ringPadding).toContain('near: "p-[2.5px]"');
+  it("keeps membership rings off proximity avatars", () => {
+    expect(userAvatar).not.toContain("RING_PADDING");
+    expect(userAvatar).not.toContain("membershipTier");
   });
 
-  it("keeps the canonical layer order: glow outside, ring inside, avatar innermost", () => {
-    // ProximityGlow wraps UserAvatar, and UserAvatar owns the membership band.
+  it("keeps the canonical layer order: Glow outside, avatar inside", () => {
+    // ProximityGlow wraps UserAvatar without an intervening membership band.
     expect(glowAvatar).toContain("<ProximityGlow");
     expect(glowAvatar).toContain("<UserAvatar");
     expect(glowAvatar.indexOf("<ProximityGlow")).toBeLessThan(glowAvatar.indexOf("<UserAvatar"));
   });
 
-  it("passes the tier through rather than restyling the ring on Home", () => {
-    expect(nearSection).toContain("membershipTier={friend.membershipTier}");
+  it("does not pass or restyle a membership tier on Home", () => {
+    expect(nearSection).not.toContain("membershipTier={friend.membershipTier}");
     expect(nearSection).not.toContain("avatar-ring-plus");
     expect(nearSection).not.toContain("avatar-ring-pro");
   });
 
-  it("does not animate the premium ring in this section", () => {
+  it("contains no retired membership-ring animation", () => {
     expect(nearSection).not.toContain("avatar-ring-pro-animated");
   });
 });

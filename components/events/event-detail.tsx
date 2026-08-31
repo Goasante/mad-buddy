@@ -8,7 +8,6 @@ import { EventCoverField, type EventCoverValue } from "@/components/events/event
 import { EventArtwork } from "@/components/events/event-artwork";
 import { EventShare } from "@/components/events/event-share";
 import { AudienceChip, LiveBadge, SectionLabel, audienceHint, formatAttendance } from "@/components/events/event-badges";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { describeEvent } from "@/lib/events/presentation";
 import type { EventView } from "@/lib/events/mobile";
 import type { EventGlowMuddyList } from "@/lib/events/types";
@@ -102,19 +101,13 @@ function YourPeopleHere({ glowList }: { glowList: EventGlowMuddyList | null }) {
                 // surface colour so avatars separate on any background.
                 className={cn("rounded-full ring-2 ring-background", index > 0 && "-ml-2.5")}
               >
-                {/* NO proximityLevel passed, deliberately. Omitting it makes
-                    GlowAvatar render a plain full-colour avatar with no glow
-                    ring, so an Event roster cannot imply how far away anyone
-                    is. Presence here means "checked in", never "3 metres".
-                    membershipTier IS passed: a premium ring is an identity
-                    signal that belongs to the person on every surface, and it
-                    is independent of proximity by construction. */}
+                {/* This plain avatar carries no proximity signal. Presence here
+                    means "checked in", never "3 metres". */}
                 <UserAvatar
                   name={muddy.displayName}
                   src={muddy.avatarUrl}
                   size="sm"
                   decorative
-                  membershipTier={publicMembershipTier(muddy.plan)}
                   className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]"
                 />
               </div>

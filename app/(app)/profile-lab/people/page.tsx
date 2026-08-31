@@ -4,7 +4,6 @@ import { ChevronLeft, ChevronRight, UsersRound } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { listMuddies } from "@/lib/friends/service";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -64,7 +63,7 @@ export default async function ProfileLabPeopleIndexPage() {
               href={`/profile-lab/people/${muddy.username}` as Route}
               className="focus-ring safe-motion group flex min-h-[4.75rem] items-center gap-3 rounded-[1.25rem] border border-border/60 bg-card/75 px-4 py-3 shadow-sm hover:-translate-y-0.5 hover:bg-secondary/30 motion-reduce:hover:translate-y-0"
             >
-              <UserAvatar src={muddy.avatarUrl} name={muddy.displayName} size="md" membershipTier={publicMembershipTier(muddy.plan)} />
+              <UserAvatar src={muddy.avatarUrl} name={muddy.displayName} size="md" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold">{muddy.displayName}</span>
                 <span className="mt-0.5 block truncate text-xs text-muted-foreground">@{muddy.username}</span>

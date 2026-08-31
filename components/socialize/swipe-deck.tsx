@@ -11,7 +11,6 @@ import { haptic } from "@/lib/device/haptics";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { presenceLabel } from "@/lib/presence/freshness";
 import {
   DECK_PERSPECTIVE,
@@ -543,7 +542,6 @@ function PersonFace({ person, interactive }: { person: SocializePerson; interact
               src={null}
               size="xl"
               proximityLevel={person.proximityTier}
-              membershipTier={publicMembershipTier(person.plan)}
             />
           </span>
         )}

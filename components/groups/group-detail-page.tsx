@@ -25,7 +25,6 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
-import { publicMembershipTier } from "@/lib/billing/premium-identity";
 import { startsNewDay, startsNewRun } from "@/lib/messaging/conversation-presence";
 import { useTransientFeedback } from "@/hooks/use-transient-feedback";
 import type { GroupDetailView, GroupInviteCandidate, GroupMemberView } from "@/lib/groups/types";
@@ -663,7 +662,6 @@ export function GroupDetailPage({
                                 src={message.senderAvatarUrl}
                                 name={message.senderName}
                                 size="xs"
-                                membershipTier={publicMembershipTier(message.senderPlan)}
                                 decorative
                               />
                             </Link>
@@ -868,7 +866,6 @@ export function GroupDetailPage({
                       src={member.avatarUrl}
                       name={member.displayName}
                       size="sm"
-                      membershipTier={publicMembershipTier(member.plan)}
                       decorative
                     />
                     <div className="min-w-0 flex-1">
@@ -1073,7 +1070,6 @@ export function GroupDetailPage({
                   src={transferTarget.avatarUrl}
                   name={transferTarget.displayName}
                   size="sm"
-                  membershipTier={publicMembershipTier(transferTarget.plan)}
                   decorative
                 />
                 <div className="min-w-0">
@@ -1109,7 +1105,6 @@ export function GroupDetailPage({
                   src={member.avatarUrl}
                   name={member.displayName}
                   size="sm"
-                  membershipTier={publicMembershipTier(member.plan)}
                   decorative
                 />
                 <div className="min-w-0 flex-1">
