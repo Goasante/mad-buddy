@@ -7,7 +7,6 @@ import {
   BookOpen,
   CalendarClock,
   ChevronRight,
-  CreditCard,
   Database,
   Gauge,
   Ghost,
@@ -173,9 +172,6 @@ export function SettingsPageContent({
         <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_PRIVACY}>
         <SettingsSection title="Privacy & safety">
           <SettingsLinkRow
-            /* Same concept, same glyph as the Glow settings page itself and
-               the public pages: Glow is proximity presence being broadcast, so
-               a signal mark rather than a sparkle. */
             icon={RadioTower}
             title="Glow & Visibility"
             description="Control who can see you and for how long."
@@ -290,15 +286,6 @@ export function SettingsPageContent({
           />
         </SettingsSection>
 
-        <SettingsSection title="Membership">
-          <SettingsLinkRow
-            icon={CreditCard}
-            title="Membership"
-            description="View your access, usage, renewal, and membership options."
-            href="/billing"
-          />
-        </SettingsSection>
-
         <SettingsSection title="Data">
           <DataExportButton />
           <SettingsLinkRow
@@ -318,9 +305,6 @@ export function SettingsPageContent({
             href="/help"
           />
           <SettingsLinkRow
-            /* Guides are documentation -- something to read. A book says
-               that; a sparkle implied the guides were themselves some kind of
-               magic feature. */
             icon={BookOpen}
             title="Feature guides"
             description="Learn or replay any Mad Buddy feature."
@@ -334,7 +318,7 @@ export function SettingsPageContent({
           />
           <SettingsLinkRow
             icon={UserPlus}
-            title="Invite Buddies"
+            title="Invite Friends"
             description="Invite friends and track your invites."
             href="/invite"
           />
@@ -397,7 +381,6 @@ type SettingsLinkRowProps = {
     | "/about"
     | "/profile"
     | "/upgrade"
-    | "/billing"
     | "/friends"
     | "/settings/access"
     | "/settings/privacy"
