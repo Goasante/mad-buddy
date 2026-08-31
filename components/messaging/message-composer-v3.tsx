@@ -229,6 +229,9 @@ export function MessageComposerV3({
      * retried batch cannot duplicate one that already landed. */
     const queued = attachments.length > 0 ? attachments : [null];
     const sends = queued.map((item, index) => ({
+      // The attachment itself travels with its send, so a failure can put THAT
+      // photo back rather than guessing which one did not land.
+      attachment: item,
       mediaId: item?.mediaId,
       text: index === 0 ? text : "",
       replyToMessageId: index === 0 ? (replyToMessageId ?? undefined) : undefined,
@@ -247,6 +250,10 @@ export function MessageComposerV3({
     setDraft("");
     setMentions([]);
     setTrigger(null);
+    /* Cleared optimistically so the composer empties on Send, and restored
+       below with whatever did not make it. Clearing was the bug: the list went
+       before the loop ran, so a photo that failed on the third request had
+       nowhere to come back to and its uploaded media was stranded. */
     setAttachments([]);
     setUploadState("idle");
     clientMessageIdRef.current = null;
@@ -254,6 +261,11 @@ export function MessageComposerV3({
     onFeedback("");
 
     startTransition(async () => {
+      /* Photos whose message did not land. They keep their original order and
+         their existing mediaId, so pressing Send again re-sends exactly those
+         -- already-uploaded media, no second upload -- and never the ones that
+         already succeeded. */
+      const unsent: SelectedAttachment[] = [];
       // Sequential: the server orders by arrival, and firing them together
       // would let the second photo land before the first.
       for (const send of sends) {
@@ -273,11 +285,13 @@ export function MessageComposerV3({
             onOptimisticSettled?.(send.clientMessageId, "failed");
             onFeedback(result.message);
             // A later photo failing must not undo the ones already sent.
+            if (send.attachment) unsent.push(send.attachment);
             continue;
           }
           onOptimisticSettled?.(send.clientMessageId, "sent");
         } catch (error) {
           onOptimisticSettled?.(send.clientMessageId, "failed");
+          if (send.attachment) unsent.push(send.attachment);
           onFeedback(
             isRequestTimeoutError(error)
               ? "Sending took too long. Your message was kept so you can try again."
@@ -285,6 +299,10 @@ export function MessageComposerV3({
           );
         }
       }
+      /* Only the failures come back. Appending rather than replacing, because
+         a photo picked while the batch was in flight is also waiting here and
+         must not be thrown away. */
+      if (unsent.length > 0) setAttachments((current) => [...unsent, ...current]);
       await onSent();
     });
   }

@@ -208,6 +208,38 @@ describe("upload lifecycle", () => {
     expect(success.indexOf("setAttachments([])")).toBeGreaterThan(-1);
   });
 
+  it("puts a failed photo back and leaves the sent ones alone", () => {
+    /* The composer clears optimistically so it empties on Send. That was the
+       bug on its own: the list went before the sequential loop ran, so a photo
+       whose message failed on the third request had nowhere to return to and
+       its uploaded media was stranded. Each send now carries its attachment, so
+       only the ones that did not land come back -- in order, with the mediaId
+       they already uploaded, so pressing Send again re-sends exactly those and
+       never a photo that already succeeded. */
+    expect(composer).toContain("const unsent: SelectedAttachment[] = [];");
+    expect(composer).toContain("if (send.attachment) unsent.push(send.attachment);");
+    expect(composer).toContain("if (unsent.length > 0) setAttachments((current) => [...unsent, ...current]);");
+
+    // The attachment travels WITH its send, so the retained photo is the one
+    // that actually failed rather than whichever happens to be first.
+    expect(composer).toContain("attachment: item,");
+
+    // Both failure exits retain, not just the rejected-result one.
+    const loop = composer.slice(composer.indexOf("for (const send of sends) {"));
+    expect((loop.match(/unsent\.push\(send\.attachment\)/g) ?? []).length).toBe(2);
+
+    // A success must never be pushed back for a second send.
+    const success = loop.slice(loop.indexOf('onOptimisticSettled?.(send.clientMessageId, "sent")'));
+    expect(success.slice(0, 120)).not.toContain("unsent.push");
+  });
+
+  it("keeps the caption and the reply on the first message only", () => {
+    // Repeating them would post the same sentence several times and point
+    // several replies at one message.
+    expect(composer).toContain('text: index === 0 ? text : ""');
+    expect(composer).toContain("replyToMessageId: index === 0 ? (replyToMessageId ?? undefined) : undefined");
+  });
+
   it("blocks a send with neither text nor photo", () => {
     /* `isPending` is deliberately NOT part of this guard any more: it is what
      * locked the composer until the previous round trip finished. Concurrent
