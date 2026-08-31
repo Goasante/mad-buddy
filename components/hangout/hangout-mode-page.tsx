@@ -39,6 +39,7 @@ import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import { useHasScrolled } from "@/hooks/use-has-scrolled";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useCountdownResume } from "@/hooks/use-countdown-clock";
+import { useFeedRefresh } from "@/hooks/use-feed-refresh";
 import { OwnedUpForsSection } from "@/components/hangout/owned-upfors-section";
 import { ownedUpForTimeLabel, type OwnedUpFor } from "@/lib/social/owned-upfors";
 import { resolveViewerTimeZone, upForTimeSlots } from "@/lib/social/upfor-schedule-options";
@@ -200,17 +201,34 @@ export function HangoutModePage({
    * called from event handlers, never passed as a dependency.
    */
   async function refreshFeed() {
+    /* Ordering guard. Several triggers can start a read close together -- a
+       tab return fires visibilitychange, pageshow and focus within
+       milliseconds -- and the network does not promise they come back in the
+       order they left. Applying a slower earlier response after a faster
+       later one would put the viewer back on staler data than they already
+       had, which is the bug this whole change exists to fix. Only the newest
+       request is allowed to write. */
+    const seq = ++feedRequestSeq.current;
     setFeedRefreshing(true);
     try {
       const next = await getVisibleHangoutsAction();
+      if (seq !== feedRequestSeq.current) return;
       setFeed(next);
       setFeedError(null);
     } catch {
+      if (seq !== feedRequestSeq.current) return;
       setFeedError("Couldn't load UpFors. Try again.");
     } finally {
-      setFeedRefreshing(false);
+      // The newest request owns the spinner; an overtaken one leaves it alone.
+      if (seq === feedRequestSeq.current) setFeedRefreshing(false);
     }
   }
+
+  /* Keep the feed current while the viewer is looking at it, and the moment
+     they come back. Eligibility was never the defect -- the feed simply was
+     not re-read after mount. All three modes (For You, Muddies, Around) are
+     filters over this one state, so this is the single seam for every one. */
+  useFeedRefresh(refreshFeed);
 
   /* ANSWER "MAYBE" REMOVED (owner decision).
    *
@@ -276,6 +294,8 @@ export function HangoutModePage({
   const [isPending, startTransition] = useTransition();
 
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* Monotonic id for feed reads, so only the newest response may write. */
+  const feedRequestSeq = useRef(0);
 
   /* The feed is no longer narrowed here. UpForFeed owns discovery now: the
    * four modes are the only filter, and they are applied by the tested rules
