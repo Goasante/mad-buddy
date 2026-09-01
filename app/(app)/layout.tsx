@@ -18,7 +18,6 @@ import {
   resolveGlobalFeatureFlag,
   SOCIALIZE_FLAG
 } from "@/lib/features/feature-flags";
-import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { resolveWallpaperForRender } from "@/lib/wallpapers/service";
 import { defaultResolvedWallpaper, type ResolvedWallpaper } from "@/lib/wallpapers/catalog";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
@@ -69,7 +68,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   // the slowest one. This was blocking every page behind this layout, which
   // is why unrelated destinations (Profile, Settings, Billing, Help, Admin)
   // were all affected together.
-  const [adminContext, unreadResult, profileResult, shellFlagsResult, access, buddyScoreLevel] =
+  const [adminContext, unreadResult, profileResult, shellFlagsResult, buddyScoreLevel] =
     await Promise.all([
     getSafetyAdminContext(),
     user
@@ -102,7 +101,6 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
           .select("key, status, default_value")
           .in("key", [SOCIALIZE_FLAG, MOMENTS_FLAG, MAD_CAM_FLAG])
       : Promise.resolve({ data: null }),
-    user && env.url && env.serviceRoleKey ? getCurrentSubscriptionAccess(user.id) : Promise.resolve(null),
     // Buddy Score level for the shared menu sheet's identity header. Runs in
     // the same parallel batch, so it adds no serial latency, and it is the
     // read-only loader (never reconciles, never writes).
@@ -155,8 +153,8 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   // failed resolve falls back to the safe Mad Buddy Default, same as before,
   // just without blocking anything to get there.
   const wallpaperPromise: Promise<ResolvedWallpaper | null> =
-    user && access
-      ? withTimeout(resolveWallpaperForRender(createSupabaseAdminClient(), user.id, access.plan), {
+    user
+      ? withTimeout(resolveWallpaperForRender(createSupabaseAdminClient(), user.id, "free"), {
           operation: "resolveWallpaperForRender",
           timeoutMs: 3_000
         }).catch((error) => {
@@ -201,7 +199,6 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
       // Identity for the shared menu sheet, resolved once here rather than
       // per screen.
       currentDisplayName={profileResult.data?.full_name?.split(" ")[0] || ""}
-      subscriptionPlan={access?.plan ?? null}
       buddyScoreLevelLabel={buddyScoreLevel?.label ?? null}
       // Same three-item completion model the Home reminder uses.
       profileCompletionPercent={profileCompletionPercent(profileResult.data)}

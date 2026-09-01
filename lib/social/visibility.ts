@@ -29,7 +29,7 @@ export function tierLimitsFor(plan: SubscriptionPlan): TierLimits {
   return {
     maxPersonalCircles: entitlements.max_personal_circles,
     // Circle member cap tracks the group-member entitlement.
-    maxCircleMembers: plan === "free" ? 20 : plan === "buddy_plus" ? 100 : Infinity,
+    maxCircleMembers: entitlements.max_group_members,
     maxCloseFriends: entitlements.max_close_friends
   };
 }

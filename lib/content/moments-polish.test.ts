@@ -1,17 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { PLAN_ENTITLEMENTS } from "@/lib/billing/entitlements";
-import { planDisplayPrices } from "@/lib/billing/pricing";
-import {
-  capabilitiesAddedBy,
-  capabilityLabel,
-  cheapestPlanGranting,
-  HEADLINE_LIMITS,
-  formatEntitlementAmount,
-  spotlightUpgradeCopy
-} from "@/lib/billing/upgrade-copy";
-import { comparisonRows, pricingPlans } from "@/components/premium/plans";
 import { FEATURE_ICON_SOURCES } from "@/lib/icons/feature-icons";
 
 const ROOT = join(__dirname, "..", "..");
@@ -170,127 +159,24 @@ describe("pull-to-refresh is one reusable system", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Spotlight entitlement and upgrade copy
+// Air monetization convergence
 // ---------------------------------------------------------------------------
 
-/**
- * Phase 0: core Air publishing is free.
- *
- * A network effect only paying users can contribute to starves itself, so
- * publishing moved to Free. Advanced Air (scheduled sessions, analytics,
- * boost, creator tools) is not built and must NOT be advertised until it is
- * implemented and entitlement-backed.
- */
-describe("core Air publishing is free", () => {
-  it("grants publishing on every tier, starting with Free", () => {
-    expect(PLAN_ENTITLEMENTS.free.public_moments).toBe(true);
-    expect(PLAN_ENTITLEMENTS.buddy_plus.public_moments).toBe(true);
-    expect(PLAN_ENTITLEMENTS.buddy_pro.public_moments).toBe(true);
-    // Free is the cheapest plan granting it, which is the point.
-    expect(cheapestPlanGranting("public_moments")).toBe("free");
+describe("core Air publishing is plan-neutral", () => {
+  it("keeps server publication behind feature/safety controls but not billing", () => {
+    const actions = stripComments(read("app/(app)/moments-actions.ts"));
+    expect(actions).toContain("isOpenMomentsEnabled(admin)");
+    expect(actions).not.toContain("getCurrentSubscriptionAccess");
+    expect(actions).not.toContain("resolveUserEntitlements");
+    expect(actions).not.toContain("checkFeature");
   });
 
-  it("offers no upgrade copy, because there is nothing to upgrade to", () => {
-    // The helper already models this: plan is null when the capability is
-    // granted to everyone.
-    const copy = spotlightUpgradeCopy();
-    expect(copy.plan).toBeNull();
-  });
-
-  it("never advertises unbuilt advanced Air features", () => {
-    // Scheduled Air, analytics, boost and creator tools do not exist. Selling
-    // them would be selling nothing.
-    const plans = read("components/premium/plans.ts");
-    for (const unbuilt of ["Air Boost", "Scheduled Air", "Air analytics", "Audience insights"]) {
-      expect(plans, `must not advertise ${unbuilt}`).not.toContain(unbuilt);
-    }
-  });
-
-  it("lists only benefits the registry actually grants", () => {
-    const copy = spotlightUpgradeCopy();
-    // Nothing to sell means nothing listed.
-    if (copy.plan === null) {
-      expect(copy.benefits).toEqual([]);
-      return;
-    }
-    const granted = capabilitiesAddedBy("buddy_pro")
-      .map(capabilityLabel)
-      .filter((entry): entry is string => entry !== null);
-    for (const benefit of copy.benefits) {
-      expect(granted, `${benefit} is not a real Pro capability`).toContain(benefit);
-    }
-    expect(copy.benefits).toContain("Publish images to Air");
-  });
-
-  it("hardcodes no price in any Moments component", () => {
-    for (const file of [
-      "components/content/moment-composer.tsx",
-      "components/content/moments-page.tsx",
-      "components/content/moment-parts.tsx"
-    ]) {
-      expect(read(file), file).not.toMatch(/GHS\s?\d/);
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Pricing page truthfulness
-// ---------------------------------------------------------------------------
-
-describe("pricing page matches the entitlement registry", () => {
-  it("derives every advertised limit from the registry", () => {
-    // The original bug this guarded against: hand-written copy drifting from
-    // the real values. Still guarded — just over the limits that remain
-    // advertised, now that the resentment caps are gone.
-    for (const plan of pricingPlans) {
-      const key = plan.id === "free" ? "free" : plan.id === "plus" ? "buddy_plus" : "buddy_pro";
-      for (const { key: limitKey } of HEADLINE_LIMITS) {
-        const expected = formatEntitlementAmount(PLAN_ENTITLEMENTS[key][limitKey]);
-        expect(plan.limits.join(" "), `${plan.id}/${limitKey}`).toContain(expected);
-      }
-    }
-  });
-
-  it("never advertises a limit that is identical on every tier", () => {
-    // Selling "Unlimited Muddies" as a Plus benefit when Free has it too
-    // would be false advertising. HEADLINE_LIMITS must only carry real
-    // differences.
-    for (const { key } of HEADLINE_LIMITS) {
-      const values = (["free", "buddy_plus", "buddy_pro"] as const).map(
-        (plan) => PLAN_ENTITLEMENTS[plan][key]
-      );
-      expect(new Set(values).size, `${key} is the same on every tier`).toBeGreaterThan(1);
-    }
-  });
-
-  it("shows Air publishing as available on every tier", () => {
-    // Phase 0 moved core Air publishing to Free, so the comparison row must
-    // say so rather than continuing to sell it as a Pro benefit.
-    const spotlightRow = comparisonRows.find((row) => row.feature === "Publish to Air");
-    if (spotlightRow) {
-      expect(spotlightRow).toMatchObject({ free: true, plus: true, pro: true });
-    }
-    // And it is no longer listed as something Pro adds.
-    const pro = pricingPlans.find((plan) => plan.id === "pro");
-    expect(pro?.features.join(" ")).not.toContain("Publish images to Air");
-  });
-
-  it("quotes prices only from the single display-price source", () => {
-    expect(pricingPlans.map((plan) => plan.price)).toEqual([
-      planDisplayPrices.free,
-      planDisplayPrices.plus,
-      planDisplayPrices.pro
-    ]);
-    // No price literal is written anywhere else.
-    expect(read("components/premium/plans.ts")).not.toMatch(/"GHS\s?\d/);
-  });
-
-  it("keeps every comparison capability row consistent with the registry", () => {
-    for (const row of comparisonRows) {
-      if (typeof row.free !== "boolean") continue;
-      // A true cell must correspond to a real granted entitlement.
-      if (row.pro === true) expect(typeof row.plus).toBe("boolean");
-    }
+  it("contains no consumer upgrade presentation", () => {
+    const composer = read("components/content/moment-composer.tsx");
+    expect(composer).toContain("Go On Air");
+    expect(composer).not.toContain("Premium");
+    expect(composer).not.toContain("spotlightUpgradeCopy");
+    expect(composer).not.toContain('href="/upgrade"');
   });
 });
 
@@ -317,7 +203,6 @@ describe("Tune In has one purpose-built icon", () => {
     for (const file of [
       "components/content/moments-page.tsx",
       "components/content/moment-parts.tsx",
-      "components/content/moment-composer.tsx",
       "components/content/tuned-in-strip.tsx"
     ]) {
       expect(read(file), file).toContain("TuneInIcon");

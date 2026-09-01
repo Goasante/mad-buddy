@@ -7,7 +7,6 @@ import {
   BookOpen,
   CalendarClock,
   ChevronRight,
-  CreditCard,
   Database,
   Gauge,
   Ghost,
@@ -19,7 +18,6 @@ import {
   MessageSquare,
   Palette,
   PartyPopper,
-  Shield,
   ShieldCheck,
   RadioTower,
   Trash2,
@@ -207,12 +205,6 @@ export function SettingsPageContent({
             onCheckedChange={(checked) => saveVisibility(checked ? "app_open_only" : "visible")}
           />
           <SettingsLinkRow
-            icon={Shield}
-            title="Privacy Zones"
-            description="Pause visibility automatically in selected places."
-            href="/upgrade"
-          />
-          <SettingsLinkRow
             icon={Blocks}
             title="Blocked users"
             description="Review or unblock people."
@@ -290,14 +282,6 @@ export function SettingsPageContent({
           />
         </SettingsSection>
 
-        <SettingsSection title="Membership">
-          <SettingsLinkRow
-            icon={CreditCard}
-            title="Membership"
-            description="View your access, usage, renewal, and membership options."
-            href="/billing"
-          />
-        </SettingsSection>
 
         <SettingsSection title="Data">
           <DataExportButton />
@@ -396,8 +380,6 @@ type SettingsLinkRowProps = {
   href:
     | "/about"
     | "/profile"
-    | "/upgrade"
-    | "/billing"
     | "/friends"
     | "/settings/access"
     | "/settings/privacy"

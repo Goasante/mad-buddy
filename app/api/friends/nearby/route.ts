@@ -6,8 +6,7 @@ import {
   type SafeNearbyFriend
 } from "@/lib/proximity/backend";
 import { guardFeature } from "@/lib/admin/enforcement";
-import { loadEffectivePlansForUsers } from "@/lib/billing/service";
-import { publicMembershipTier, type PublicMembershipTier } from "@/lib/billing/premium-identity";
+import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
 import { createNearbyNotificationsIfAllowed } from "@/lib/notifications/server";
 import { resolveFeatureDeniedIds } from "@/lib/social/permissions";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
@@ -160,7 +159,7 @@ export async function GET(request: Request) {
     return withCors(NextResponse.json(nearbyFriendsResponseSchema.parse({ friends: [] })), request);
   }
 
-  const [locationsResult, profilesResult, blocksResult, subscriptionsResult, statusesResult] =
+  const [locationsResult, profilesResult, blocksResult, statusesResult] =
     await Promise.all([
       admin
         .from("user_locations")
@@ -174,10 +173,6 @@ export async function GET(request: Request) {
         .from("blocked_users")
         .select("blocker_id, blocked_id")
         .or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`),
-      admin
-        .from("subscriptions")
-        .select("user_id, plan, status")
-        .in("user_id", friendIds),
       // Muddy Status context (MVP: all_muddies visibility). Best-effort,
       // a missing table or error simply omits statuses rather than failing
       // the proximity feed.
@@ -189,7 +184,7 @@ export async function GET(request: Request) {
         .gt("expires_at", new Date().toISOString())
     ]);
 
-  if (locationsResult.error || profilesResult.error || blocksResult.error || subscriptionsResult.error) {
+  if (locationsResult.error || profilesResult.error || blocksResult.error) {
     logBackendEvent("warn", {
       requestId,
       route,
@@ -213,28 +208,9 @@ export async function GET(request: Request) {
   const profileByUserId = new Map(
     (profilesResult.data as ProfileRow[]).map((profile) => [profile.user_id, profile])
   );
-  const premiumUserIds = new Set(
-    subscriptionsResult.data
-      .filter((subscription) => subscription.status === "active" && subscription.plan !== "free")
-      .map((subscription) => subscription.user_id)
-  );
+  const premiumUserIds = new Set<string>();
 
-  // Effective public tier per friend, for the avatar identity ring.
-  //
-  // Resolved through the canonical loader, NOT from subscriptionsResult
-  // above: that raw query only sees paid subscription rows, so it would miss
-  // trial, earned and admin-granted access and would ignore expiry. It also
-  // cannot distinguish plus from pro. loadEffectivePlansForUsers applies the
-  // full paid -> trial -> earned precedence and expiry rules.
-  //
-  // Scoped to friendIds, which is already the authorised set — this cannot
-  // widen who appears in Nearby, only annotate whoever was going to appear.
-  const membershipTierByUserId = new Map<string, PublicMembershipTier>(
-    [...(await loadEffectivePlansForUsers(admin, friendIds))].map(([userId, plan]) => [
-      userId,
-      publicMembershipTier(plan)
-    ])
-  );
+  const membershipTierByUserId = new Map<string, PublicMembershipTier>();
 
   const statusByUserId = new Map(
     (statusesResult.data ?? []).map((status) => [status.user_id, status])

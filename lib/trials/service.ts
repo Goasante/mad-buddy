@@ -1,6 +1,5 @@
 import "server-only";
 
-import { deliverNotification } from "@/lib/notifications/server";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { legacyTierOf } from "@/lib/supabase/database.types";
@@ -128,28 +127,15 @@ export async function getTrialEligibility(
   };
 }
 
-export async function startUserTrial(admin: Admin, userId: string) {
-  const { data, error } = await admin.rpc("start_premium_trial", { p_user_id: userId });
-  if (error || !data) throw new Error(error?.message ?? "trial_start_failed");
-  await deliverPendingBestEffort(admin);
-  return data;
+export async function startUserTrial(_admin: Admin, _userId: string) {
+  throw new Error("premium_trial_retired");
 }
 
 export async function grantOwnerTrial(
-  admin: Admin,
-  input: { userId: string; ownerId: string; plan: PaidPlan; reason: string }
+  _admin: Admin,
+  _input: { userId: string; ownerId: string; plan: PaidPlan; reason: string }
 ) {
-  const { data, error } = await admin.rpc("start_premium_trial", {
-    p_user_id: input.userId,
-    p_owner_override: true,
-    p_granted_by: input.ownerId,
-    p_override_reason: input.reason,
-    p_override_plan: input.plan,
-    p_source: "owner_grant"
-  });
-  if (error || !data) throw new Error(error?.message ?? "trial_grant_failed");
-  await deliverPendingBestEffort(admin);
-  return data;
+  throw new Error("premium_trial_retired");
 }
 
 export async function revokeOwnerTrial(
@@ -206,73 +192,15 @@ export async function recordTrialFeatureUse(
   return !error || error.code === "23505";
 }
 
-export async function processTrialLifecycle(admin: Admin) {
-  const { data, error } = await admin.rpc("process_premium_trial_lifecycle", {});
-  if (error) throw new Error(error.message);
-  const delivered = await deliverPendingTrialNotifications(admin);
-  return Number(data ?? 0) + delivered;
+export async function processTrialLifecycle(_admin: Admin) {
+  return 0;
 }
 
-async function deliverPendingTrialNotifications(admin: Admin) {
-  const { data, error } = await admin.rpc("claim_premium_trial_notifications", { p_limit: 100 });
-  if (error) throw new Error(error.message);
-
-  let delivered = 0;
-  for (const row of data ?? []) {
-    const copy = trialNotificationCopy(row.notification_type);
-    const now = new Date().toISOString();
-    try {
-      await deliverNotification(admin, {
-        userId: row.user_id,
-        type: "subscription_update",
-        title: copy.title,
-        message: copy.message
-      });
-      await admin
-        .from("premium_trial_notifications")
-        .update({
-          delivery_status: "delivered",
-          delivered_at: now,
-          updated_at: now
-        })
-        .eq("id", row.id)
-        .eq("delivery_status", "processing");
-      delivered += 1;
-    } catch {
-      await admin
-        .from("premium_trial_notifications")
-        .update({
-          delivery_status: "failed",
-          updated_at: now
-        })
-        .eq("id", row.id)
-        .eq("delivery_status", "processing");
-    }
-  }
-  return delivered;
+async function deliverPendingTrialNotifications(_admin: Admin) {
+  // Do not claim or deliver historical premium-trial notifications.
+  return 0;
 }
 
-async function deliverPendingBestEffort(admin: Admin) {
-  try {
-    await deliverPendingTrialNotifications(admin);
-  } catch {
-    // The durable notification row remains pending for the lifecycle job.
-  }
-}
-
-function trialNotificationCopy(type: string) {
-  switch (type) {
-    case "started":
-      return { title: "Premium trial started", message: "Your premium trial is active." };
-    case "ending_soon":
-      return { title: "Premium trial ending soon", message: "Your premium trial ends within 24 hours." };
-    case "expired":
-      return { title: "Premium trial ended", message: "Your account has returned to the Free plan." };
-    case "converted":
-      return { title: "Premium plan active", message: "Your paid premium plan is now active." };
-    case "revoked":
-      return { title: "Premium trial ended", message: "Your premium trial access has been revoked." };
-    default:
-      return { title: "Premium trial update", message: "Your premium trial status changed." };
-  }
+async function deliverPendingBestEffort(_admin: Admin) {
+  return;
 }

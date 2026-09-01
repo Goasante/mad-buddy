@@ -26,7 +26,6 @@ export const SMART_CARD_IDS = [
   "birthday",
   "weekend_plans",
   "nearby_muddies",
-  "membership",
   "buddy_progress",
   "achievement",
   "suggestions"
@@ -50,7 +49,6 @@ export type SmartCardIllustration =
   | "birthday"
   | "calendar"
   | "people"
-  | "premium"
   | "trophy";
 
 /**

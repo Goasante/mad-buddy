@@ -1,8 +1,6 @@
 import { Suspense } from "react";
 import { MomentsPage } from "@/components/content/moments-page";
 import type { MomentMuddyOption } from "@/components/content/moment-composer";
-import { checkFeature } from "@/lib/billing/entitlements";
-import { resolveUserEntitlements } from "@/lib/billing/service";
 import { buildMomentFeed, buildSpotlightFeed } from "@/lib/content/service";
 import { redirect } from "next/navigation";
 import { isMomentsEnabled, isOpenMomentsEnabled } from "@/lib/features/feature-flags";
@@ -39,11 +37,10 @@ export default async function MomentsRoute({
   // what makes historical `moment:` notifications safe to leave in place.
   if (!(await isMomentsEnabled(admin))) redirect("/dashboard");
 
-  const [moments, muddies, spotlightEnabled, entitlements, profile, closeFriends, birthDetails] = await Promise.all([
+  const [moments, muddies, spotlightEnabled, profile, closeFriends, birthDetails] = await Promise.all([
     buildMomentFeed(admin, user.id),
     loadMuddies(admin, user.id),
     isOpenMomentsEnabled(admin),
-    resolveUserEntitlements(admin, user.id),
     admin.from("profiles").select("full_name, avatar_url").eq("user_id", user.id).maybeSingle(),
     admin.from("close_friend_relationships").select("id", { count: "exact", head: true }).eq("owner_id", user.id),
     admin.from("profile_birth_details").select("date_of_birth").eq("user_id", user.id).maybeSingle()
@@ -57,10 +54,6 @@ export default async function MomentsRoute({
       initialOpenMoments={spotlight}
       muddies={muddies}
       openMomentsEnabled={spotlightEnabled}
-      // Resolved on the SERVER through the canonical entitlement, honouring admin
-      // tier/user overrides and billing grace. The client is told the answer and
-      // never trusted to compute it; the create action re-checks it regardless.
-      canPublishOpenMoments={checkFeature(entitlements, "public_moments")}
       viewerName={profile.data?.full_name?.trim() || "You"}
       viewerAvatarUrl={profile.data?.avatar_url ?? null}
       // Close Friends is only offered when the viewer actually has some, so the

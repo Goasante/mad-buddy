@@ -51,7 +51,7 @@ const faqItems = [
   {
     question: "Is Mad Buddy free?",
     answer:
-      "Mad Buddy has a Free plan as well as Buddy Plus and Buddy Pro. Features, limits, current prices, and any eligible trial are shown on Pricing so the public explanation stays aligned with the product's billing authority."
+      "Mad Buddy Core is free. Mad Buddy Access is one optional subscription that expands Linkr and lets UpFor reach beyond your Muddies. Current prices and any eligible trial are shown on Pricing so the public explanation stays aligned with the product's billing authority."
   }
 ] as const;
 

@@ -27,8 +27,6 @@ export const TOUR_ROUTES: TourRouteOption[] = [
   { path: "/settings/privacy", label: "Privacy and safety" },
   { path: "/settings/glow-visibility", label: "Glow and visibility" },
   { path: "/settings/appearance/wallpaper", label: "Wallpaper" },
-  { path: "/billing", label: "Plan and billing" },
-  { path: "/upgrade", label: "Plans and pricing" }
 ];
 
 export const TOUR_TARGET_IDS = {
@@ -125,9 +123,6 @@ export const TOUR_TARGET_IDS = {
   GROUPS_LIST: "groups-list",
   GROUPS_INVITES: "groups-invites",
 
-  BILLING_OVERVIEW: "billing-overview",
-  BILLING_PLANS: "billing-plans",
-  BILLING_ACTIVITY: "billing-activity"
 } as const;
 
 export type TourTargetId = (typeof TOUR_TARGET_IDS)[keyof typeof TOUR_TARGET_IDS];
@@ -246,9 +241,6 @@ export const TOUR_TARGETS: TourTargetOption[] = [
   target(TOUR_TARGET_IDS.GROUPS_LIST, "Groups list", "/groups", "Real groups or the genuine empty state."),
   target(TOUR_TARGET_IDS.GROUPS_INVITES, "Group invitations", "/groups", "Pending group invitations, when present."),
 
-  target(TOUR_TARGET_IDS.BILLING_OVERVIEW, "Plan and billing", "/billing", "Current subscription and payment status."),
-  target(TOUR_TARGET_IDS.BILLING_PLANS, "Subscription plans", "/billing", "Free, Buddy Plus, and Buddy Pro from canonical billing data."),
-  target(TOUR_TARGET_IDS.BILLING_ACTIVITY, "Billing activity", "/billing", "Real subscription activity."),
 
   // The mobile bottom bar's five slots: Messages, Muddies, the Orb, Plans,
   // Me. The Orb is the centre AND Home, so nav-dashboard now targets it; the
@@ -302,7 +294,6 @@ export const FEATURE_GUIDES: FeatureGuideDefinition[] = [
   { slug: "badges-guide", label: "Achievements", group: "your-account", entryRoute: "/badges" },
   { slug: "buddy-score-guide", label: "Buddy Score", group: "your-account", entryRoute: "/buddy-score" },
   { slug: "settings-guide", label: "Settings", group: "your-account", entryRoute: "/settings" },
-  { slug: "subscription-guide", label: "Plan and billing", group: "your-account", entryRoute: "/billing" }
 ];
 
 export function findTarget(id: string): TourTargetOption | undefined {

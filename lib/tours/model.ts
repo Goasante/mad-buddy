@@ -131,8 +131,19 @@ export function isStepAvailable(step: TourStep, subject: TourSubject): boolean {
 
 /** Renderable steps in order, renumbered so "step 3 of 9" reflects reality. */
 export function resolveSteps(version: TourVersion, subject: TourSubject): TourStep[] {
+  // Historical monetization tours remain in the database for analytics, but
+  // never resolve into a current consumer walkthrough.
+  if (version.slug === "subscription-guide") return [];
+  const retiredStepKeys = new Set(["plans-and-pricing", "tiers"]);
   return version.steps
     .filter((step) => isStepAvailable(step, subject))
+    .filter((step) => !retiredStepKeys.has(step.stepKey))
+    .map((step) => ({
+      ...step,
+      entitlementKeys: [],
+      ctaLabel: step.ctaHref === "/upgrade" || step.ctaHref === "/billing" ? null : step.ctaLabel,
+      ctaHref: step.ctaHref === "/upgrade" || step.ctaHref === "/billing" ? null : step.ctaHref
+    }))
     .slice()
     .sort((a, b) => a.position - b.position);
 }
@@ -152,7 +163,6 @@ export function isEligibleForTour(
 ): boolean {
   if (progress && progress.status !== "started") return false;
   if (!isTourVersionLive(version, nowMs)) return false;
-  if (!version.audience.plans.includes(subject.plan)) return false;
   if (!matchesCohort(version, subject)) return false;
   // An all-steps-hidden tour (every step behind a disabled flag) is not worth
   // interrupting anyone for.

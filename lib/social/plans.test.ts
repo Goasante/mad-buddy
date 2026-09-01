@@ -36,7 +36,7 @@ describe("planTierLimitsFor", () => {
     expect(free.maxActivePlans).toBe(UNLIMITED);
     expect(free.maxPlanParticipants).toBe(UNLIMITED);
     expect(free.maxPollsPerPlan).toBe(UNLIMITED);
-    expect(free.maxHangoutCapacity).toBe(5);
+    expect(free.maxHangoutCapacity).toBe(50);
   });
 
   it("unlocks larger plans for paid tiers", () => {

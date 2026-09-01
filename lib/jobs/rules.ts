@@ -193,12 +193,10 @@ export const SCHEDULE: readonly ScheduleSpec[] = [
   { jobType: "billing.apply_scheduled_downgrade", everyMinutes: 60, priority: 3 },
   { jobType: "financial.capture_daily_snapshot", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "financial.reconcile_paystack_fees", everyMinutes: 60 * 24, priority: 6 },
-  { jobType: "trials.lifecycle", everyMinutes: 60, priority: 3 },
   { jobType: "access.welcome_reminders", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "streaks.close_expired_periods", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "recap.generate_monthly", everyMinutes: 60 * 24, priority: 7 },
   { jobType: "birthdays.notify", everyMinutes: 60, priority: 5 },
-  { jobType: "rewards.earned_premium", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "expiry.plans", everyMinutes: 60, priority: 5 },
   /* Plan Chat closure. Hourly, alongside the plan completion sweep it depends
      on: a plan reaches `completed` there, and its chat closes here. Priority 6

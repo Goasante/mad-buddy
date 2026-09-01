@@ -172,9 +172,11 @@ describe("isEligibleForTour", () => {
     expect(isEligibleForTour(v2, subject(), null, NOW)).toBe(true);
   });
 
-  it("respects plan targeting", () => {
+  it("no longer restricts eligibility by plan", () => {
+    // The tier ladder is retired: audience.plans is still parsed and
+    // defaulted, but a tour is never withheld on the strength of a plan.
     const proOnly = version({ audience: { plans: ["buddy_pro"], cohort: "all" } });
-    expect(isEligibleForTour(proOnly, subject({ plan: "free" }), null, NOW)).toBe(false);
+    expect(isEligibleForTour(proOnly, subject({ plan: "free" }), null, NOW)).toBe(true);
     expect(isEligibleForTour(proOnly, subject({ plan: "buddy_pro" }), null, NOW)).toBe(true);
   });
 

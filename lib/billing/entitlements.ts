@@ -1,5 +1,4 @@
 import type { SubscriptionPlan, SubscriptionStatus } from "@/lib/supabase/database.types";
-import { getTierOverrideCache } from "@/lib/billing/tier-overrides";
 
 /**
  * THE central entitlement registry (feature architecture batch 10, spec §7-§15).
@@ -102,8 +101,8 @@ const FREE: Entitlements = {
   max_group_members: UNLIMITED,
   // DEPRECATED as a paywall (Phase 0). See max_muddies.
   max_daily_moments: UNLIMITED,
-  max_active_nearby_moments: 5,
-  max_active_drops: 3,
+  max_active_nearby_moments: 50,
+  max_active_drops: 100,
   // SAFETY IS NEVER MONETIZED (Phase 0). Charging for a third emergency
   // contact is indefensible: the person who needs more contacts is the person
   // in more danger. Identical on every tier, and never behind a trial or a
@@ -111,10 +110,10 @@ const FREE: Entitlements = {
   max_safe_arrival_contacts: UNLIMITED,
   max_active_safe_arrivals: UNLIMITED,
   max_active_hangouts: 3,
-  max_hangout_capacity: 5,
+  max_hangout_capacity: 50,
   // FREE CORE. A poll is how a Plan gets decided; it belongs to Plans.
   max_polls_per_plan: UNLIMITED,
-  max_voice_note_seconds: 60,
+  max_voice_note_seconds: 300,
   // DEAD KEY (Phase 0 audit). Real anti-spam enforcement is the rate limiter's
   // "friends.request" rule (10/day, in lib/security/rate-limit.ts), which is
   // uniform across tiers and returns neutral rate-limit copy. This entitlement
@@ -130,81 +129,34 @@ const FREE: Entitlements = {
   // FREE CORE. Plan chat is Messages. Paying to keep a conversation you
   // already had is exactly what the continuity rule forbids.
   plan_chat_archive_days: UNLIMITED,
-  storage_limit_bytes: 500 * 1024 * 1024,
+  storage_limit_bytes: 50 * 1024 * 1024 * 1024,
 
-  advanced_visibility_schedules: false,
-  recurring_plans: false,
-  multiple_plan_polls: false,
+  advanced_visibility_schedules: true,
+  recurring_plans: true,
+  multiple_plan_polls: true,
   // Voice notes stay on Free: accessibility is never paywalled (spec §45 b7).
   voice_notes: true,
-  custom_glow_styles: false,
-  friendship_recaps: false,
-  event_circle_creation: false,
-  event_drops: false,
+  custom_glow_styles: true,
+  friendship_recaps: true,
+  event_circle_creation: true,
+  event_drops: true,
   photo_moments: true,
   // Core Air publishing is part of the free product (Phase 0): a network
   // effect that only paying users can contribute to starves itself. Advanced
   // Air (scheduling, analytics, boost, creator tools) remains a future paid
   // opportunity behind its own keys.
   public_moments: true,
-  qr_check_in: false,
-  attendance_export: false,
+  qr_check_in: true,
+  attendance_export: true,
   community_roles: false,
   moderation_dashboard: false,
   community_analytics: false,
   priority_support: false
 };
 
-const BUDDY_PLUS: Entitlements = {
-  /*
-   * MONETIZATION RESET. Nine keys that used to be listed here are gone, not
-   * changed: max_personal_circles, max_active_plans, max_plan_participants,
-   * max_private_groups, max_group_members, max_polls_per_plan,
-   * max_event_circle_members, event_circle_archive_days and
-   * plan_chat_archive_days now belong to the FREE CORE and are UNLIMITED on
-   * every tier.
-   *
-   * They had to be REMOVED rather than raised. These objects spread `...FREE`
-   * and then overrode it, so once free became UNLIMITED every one of those
-   * lines granted a paying subscriber LESS than a free account -- which the
-   * "never gives a paid tier less than free" invariant correctly rejected.
-   * Deleting the override makes them inherit UNLIMITED, so nobody loses
-   * anything in the migration.
-   */
-  ...FREE,
-  max_active_nearby_moments: 20,
-  max_active_drops: 20,
-  max_hangout_capacity: 50,
-  max_voice_note_seconds: 300,
-  storage_limit_bytes: 5 * 1024 * 1024 * 1024,
+const BUDDY_PLUS: Entitlements = { ...FREE };
 
-  advanced_visibility_schedules: true,
-  recurring_plans: true,
-  multiple_plan_polls: true,
-  custom_glow_styles: true,
-  friendship_recaps: true,
-  event_circle_creation: true,
-  event_drops: true
-};
-
-const BUDDY_PRO: Entitlements = {
-  ...BUDDY_PLUS,
-  // Safe Arrival watchers: Pro previously inherited Plus's 5, so the top tier
-  // bought nothing here. Kept a finite number rather than UNLIMITED — every
-  // watcher is a real person who gets a critical-priority notification on
-  // start/extend/arrive/overdue, so an unbounded fan-out is a notification
-  // problem, not a feature.
-  max_active_nearby_moments: 50,
-  max_active_drops: 100,
-  storage_limit_bytes: 50 * 1024 * 1024 * 1024,
-
-  qr_check_in: true,
-  attendance_export: true,
-  community_roles: true,
-  moderation_dashboard: true,
-  community_analytics: true,
-  priority_support: true
-};
+const BUDDY_PRO: Entitlements = { ...FREE };
 
 export const PLAN_ENTITLEMENTS: Record<SubscriptionPlan, Entitlements> = {
   free: FREE,
@@ -351,12 +303,9 @@ export function resolveEntitlements(input: {
   return base;
 }
 
-export function entitlementsFor(plan: SubscriptionPlan): Entitlements {
-  const base = PLAN_ENTITLEMENTS[plan] ?? PLAN_ENTITLEMENTS.free;
-  // Merge any admin-set tier overrides (empty on the client / cold cache, so
-  // this is a no-op there and callers get the code defaults).
-  const overrides = getTierOverrideCache()[plan];
-  return overrides ? ({ ...base, ...overrides } as Entitlements) : base;
+export function entitlementsFor(_plan: SubscriptionPlan): Entitlements {
+  // Historical plan names remain readable, but never decide live consumer capability.
+  return PLAN_ENTITLEMENTS.free;
 }
 
 // ---------------------------------------------------------------------------
@@ -412,32 +361,8 @@ export function serializeLimit(value: number): number | null {
  * Contextual, specific copy, never "Upgrade now to continue using Mad Buddy".
  * States the actual limit hit and what the upgrade actually gives.
  */
-export function upgradePromptFor(key: NumericEntitlementKey, currentPlan: SubscriptionPlan): string | null {
-  if (currentPlan !== "free") return null;
-  switch (key) {
-    case "max_personal_circles":
-      return "Free includes 3 circles. Buddy Plus includes unlimited personal circles.";
-    case "max_close_friends":
-      return "Free includes 8 Close Friends. Buddy Plus includes 30.";
-    case "max_plan_participants":
-      return "Free plans include up to 10 people. Buddy Plus includes up to 50.";
-    case "max_active_plans":
-      return "Free includes 5 active plans. Buddy Plus includes unlimited plans.";
-    case "max_group_members":
-      return "Free groups include up to 15 people. Buddy Plus includes up to 50.";
-    // Phase 0 removed the Moments-per-day, Muddies and Safe Arrival caps, so
-    // the prompts describing them are gone too. A prompt that outlives its
-    // entitlement is worse than none: it quotes numbers that no longer exist
-    // and sells something the user already has.
-    case "max_active_drops":
-      return "Free includes 3 active Drops. Buddy Plus includes 20.";
-    case "max_hangout_capacity":
-      return "Free hangouts include up to 5 people. Buddy Plus includes up to 50.";
-    case "max_polls_per_plan":
-      return "Free includes one poll per plan. Buddy Plus includes unlimited polls.";
-    default:
-      return null;
-  }
+export function upgradePromptFor(_key: NumericEntitlementKey, _currentPlan: SubscriptionPlan): string | null {
+  return null;
 }
 
 // ---------------------------------------------------------------------------

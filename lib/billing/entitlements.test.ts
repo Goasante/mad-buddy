@@ -72,30 +72,10 @@ describe("basic safety is never an entitlement (spec §1)", () => {
   });
 });
 
-describe("plan registry (spec §3, §4, §5)", () => {
-  it("increases capability upward without ever reducing it", () => {
-    const free = PLAN_ENTITLEMENTS.free;
-    const plus = PLAN_ENTITLEMENTS.buddy_plus;
-    const pro = PLAN_ENTITLEMENTS.buddy_pro;
-
-    for (const key of ["max_muddies", "max_close_friends", "max_plan_participants", "max_group_members"] as const) {
-      expect(plus[key], key).toBeGreaterThanOrEqual(free[key]);
-      expect(pro[key], key).toBeGreaterThanOrEqual(plus[key]);
-    }
-    // A boolean feature is never taken away on a higher tier.
-    for (const key of ["voice_notes", "photo_moments", "event_circle_creation"] as const) {
-      if (free[key]) expect(plus[key], key).toBe(true);
-      if (plus[key]) expect(pro[key], key).toBe(true);
-    }
-  });
-
-  it("gives community tools to Pro only", () => {
-    expect(PLAN_ENTITLEMENTS.buddy_plus.moderation_dashboard).toBe(false);
-    expect(PLAN_ENTITLEMENTS.buddy_pro.moderation_dashboard).toBe(true);
-    expect(PLAN_ENTITLEMENTS.buddy_pro.qr_check_in).toBe(true);
-    // Phase 0: core Air publishing is free. A network effect only paying
-    // users can contribute to starves itself.
-    expect(PLAN_ENTITLEMENTS.free.public_moments).toBe(true);
+describe("legacy plan registry is non-authoritative", () => {
+  it("returns identical consumer capability on every historical plan name", () => {
+    expect(PLAN_ENTITLEMENTS.buddy_plus).toEqual(PLAN_ENTITLEMENTS.free);
+    expect(PLAN_ENTITLEMENTS.buddy_pro).toEqual(PLAN_ENTITLEMENTS.free);
   });
 });
 
@@ -172,25 +152,25 @@ describe("overrides (spec §10, §11)", () => {
       overrides: [{ key: "max_active_nearby_moments", value: 25, startsAtMs: null, endsAtMs: NOW - 1 }],
       nowMs: NOW
     });
-    expect(expired.max_active_nearby_moments).toBe(5);
+    expect(expired.max_active_nearby_moments).toBe(50);
 
     const future = resolveEntitlements({
       state: state({ plan: "free", status: "free" }),
       overrides: [{ key: "max_active_nearby_moments", value: 25, startsAtMs: NOW + DAY, endsAtMs: null }],
       nowMs: NOW
     });
-    expect(future.max_active_nearby_moments).toBe(5);
+    expect(future.max_active_nearby_moments).toBe(50);
   });
 });
 
 describe("checks (spec §12, §14)", () => {
   it("allows within limit and rejects beyond it", () => {
     const entitlements = entitlementsFor("free");
-    expect(checkUsageLimit({ entitlements, key: "max_active_nearby_moments", current: 4 })).toMatchObject({
+    expect(checkUsageLimit({ entitlements, key: "max_active_nearby_moments", current: 49 })).toMatchObject({
       allowed: true,
       remaining: 1
     });
-    expect(checkUsageLimit({ entitlements, key: "max_active_nearby_moments", current: 5 })).toMatchObject({
+    expect(checkUsageLimit({ entitlements, key: "max_active_nearby_moments", current: 50 })).toMatchObject({
       allowed: false,
       remaining: 0
     });
@@ -199,10 +179,10 @@ describe("checks (spec §12, §14)", () => {
   it("validates a requested batch, not just one more", () => {
     const entitlements = entitlementsFor("free");
     expect(
-      checkUsageLimit({ entitlements, key: "max_active_nearby_moments", current: 3, requested: 5 }).allowed
+      checkUsageLimit({ entitlements, key: "max_active_nearby_moments", current: 48, requested: 5 }).allowed
     ).toBe(false);
     expect(
-      checkUsageLimit({ entitlements, key: "max_active_nearby_moments", current: 3, requested: 2 }).allowed
+      checkUsageLimit({ entitlements, key: "max_active_nearby_moments", current: 48, requested: 2 }).allowed
     ).toBe(true);
   });
 
@@ -218,27 +198,15 @@ describe("checks (spec §12, §14)", () => {
   });
 
   it("resolves boolean features", () => {
-    expect(checkFeature(entitlementsFor("free"), "recurring_plans")).toBe(false);
+    expect(checkFeature(entitlementsFor("free"), "recurring_plans")).toBe(true);
     expect(checkFeature(entitlementsFor("buddy_plus"), "recurring_plans")).toBe(true);
   });
 });
 
-describe("upgrade prompts (spec §37)", () => {
-  it("is specific about the limit hit and what Plus gives", () => {
-    expect(upgradePromptFor("max_personal_circles", "free")).toBe(
-      "Free includes 3 circles. Buddy Plus includes unlimited personal circles."
-    );
-  });
-
-  it("never uses the coercive 'upgrade to continue' framing", () => {
-    for (const key of ["max_personal_circles", "max_close_friends", "max_active_plans"] as const) {
-      const prompt = upgradePromptFor(key, "free");
-      expect(prompt).not.toMatch(/upgrade now to continue|continue using mad buddy/i);
-    }
-  });
-
-  it("doesn't nag people who already pay", () => {
-    expect(upgradePromptFor("max_personal_circles", "buddy_plus")).toBeNull();
+describe("retired upgrade prompts", () => {
+  it("never sells the retired tier ladder", () => {
+    expect(upgradePromptFor("max_personal_circles", "free")).toBeNull();
+    expect(upgradePromptFor("max_active_plans", "buddy_plus")).toBeNull();
   });
 });
 

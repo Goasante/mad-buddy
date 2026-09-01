@@ -332,9 +332,7 @@ export function validateVoiceNoteDuration(seconds: number, plan: SubscriptionPla
   const limits = messagingLimitsFor(plan);
   if (!Number.isFinite(seconds) || seconds < 1) return "That recording is too short.";
   if (seconds > limits.maxVoiceNoteSeconds) {
-    return plan === "free"
-      ? `Voice notes are up to ${limits.maxVoiceNoteSeconds} seconds on the free plan.`
-      : `Voice notes are up to ${limits.maxVoiceNoteSeconds} seconds.`;
+    return `Voice notes are up to ${limits.maxVoiceNoteSeconds} seconds.`;
   }
   return null;
 }

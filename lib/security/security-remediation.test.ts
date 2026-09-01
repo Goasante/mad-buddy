@@ -120,6 +120,8 @@ describe("state-changing cookie APIs use the centralized CSRF guard", () => {
   it("routes mutations through resolveApiUser or the explicit origin guard", () => {
     const offenders = apiMutationRoutes()
       .filter(({ path }) => !signedExemptions.has(path))
+      // A retired endpoint that only answers 410 has no state to guard.
+      .filter(({ source }) => !/status:\s*410/.test(source))
       .filter(
         ({ source }) =>
           !source.includes("resolveApiUser") &&

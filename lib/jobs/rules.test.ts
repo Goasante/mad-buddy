@@ -114,7 +114,6 @@ describe("schedule (spec §31)", () => {
       "billing.apply_scheduled_downgrade",
       "financial.capture_daily_snapshot",
       "financial.reconcile_paystack_fees",
-      "trials.lifecycle",
       "recap.generate_monthly",
       "streaks.close_expired_periods"
       ,"birthdays.notify"

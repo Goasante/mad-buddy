@@ -55,7 +55,6 @@ import { useUnreadMessageCount } from "@/hooks/use-unread-message-count";
 import { UnreadNotificationProvider } from "@/hooks/unread-notification-context";
 import { AppMenuProvider } from "@/hooks/app-menu-context";
 import { HomeSettingsSheet } from "@/components/dashboard/home-settings-sheet";
-import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { NavigationWatchdog } from "@/components/navigation/navigation-watchdog";
 
 // Camera code is intentionally absent from the normal Home bundle. The chunk
@@ -305,7 +304,6 @@ export type AppShellProps = {
    * can open it through AppMenuProvider without receiving these props itself.
    */
   currentDisplayName?: string;
-  subscriptionPlan?: SubscriptionPlan | null;
   buddyScoreLevelLabel?: string | null;
   profileCompletionPercent?: number;
   /**
@@ -346,7 +344,6 @@ function AppShellInner({
   hiddenNavigationHrefs = [],
   madCamEnabled = false,
   currentDisplayName = "",
-  subscriptionPlan = null,
   buddyScoreLevelLabel = null,
   profileCompletionPercent = 0,
   wallpaperPromise = resolvedDefaultWallpaper
@@ -592,7 +589,6 @@ function AppShellInner({
         displayName={currentDisplayName}
         currentUsername={currentUsername}
         currentAvatarUrl={currentAvatarUrl}
-        subscriptionPlan={subscriptionPlan}
         buddyScoreLevelLabel={buddyScoreLevelLabel}
         profileCompletionPercent={profileCompletionPercent}
         // Same server-resolved flag the sidebar's Admin item already uses, so

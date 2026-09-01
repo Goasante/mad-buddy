@@ -149,9 +149,9 @@ describe("tour visual language", () => {
     expect(reduced).toContain("transition: none");
   });
 
-  it("shows a brand mark on the invitation instead of a generic sparkle", () => {
-    expect(runner).toContain("BrandMark");
-    expect(runner).not.toContain("Sparkles");
+  it("keeps the unsolicited floating invitation off", () => {
+    expect(runner).toContain('if (phase === "invitation") return null;');
+    expect(runner).not.toContain("Take the tour");
   });
 
   it("has an accent progress indicator", () => {
@@ -195,35 +195,18 @@ describe("tour navigation and actions", () => {
   });
 });
 
-describe("subscription education uses canonical data only", () => {
+describe("consumer tours do not teach retired subscription tiers", () => {
   const runner = read("components/tours/tour-runner.tsx");
 
-  it("renders per-plan values from resolved entitlements, never literals", () => {
-    expect(runner).toContain("entry.free");
-    expect(runner).toContain("entry.buddyPlus");
-    expect(runner).toContain("entry.buddyPro");
+  it("renders no Free/Plus/Pro comparison or legacy price helper", () => {
+    for (const forbidden of ["Buddy Plus", "Buddy Pro", "planPrice(", "cheapestPaidPrice(", "stepEntitlements"]) {
+      expect(runner).not.toContain(forbidden);
+    }
   });
 
-  it("never hardcodes an unlimited or numeric plan claim in the component", () => {
-    // Values come from entitlementsFor() on the server; the component must not
-    // assert capability of its own.
-    const suspicious = runner.match(/"(Unlimited|Unlimited [A-Za-z]+)"/g) ?? [];
-    expect(suspicious).toEqual([]);
-  });
-
-  it("does not tell a Pro user to upgrade", () => {
-    expect(runner).toContain("You're on Buddy Pro");
-  });
-
-  it("keeps Free respectable rather than styling it as lesser", () => {
-    // Asserts the INTENT rather than one copy string, which changed when the
-    // vague promises ("The essentials.") were replaced with concrete ones.
-    expect(runner).toContain("Everything you need to start");
-    // Free gets a real promise and a real column, and is never dimmed or
-    // labelled as limited relative to the paid tiers.
-    const block = runner.slice(runner.indexOf("{stepEntitlements.length > 0 ? ("));
-    expect(block).toContain('{ key: "free", label: "Free"');
-    expect(block).not.toMatch(/free[\s\S]{0,120}opacity-\d/);
+  it("keeps ordinary tour CTAs while payment education is absent", () => {
+    expect(runner).toContain("tour_cta_clicked");
+    expect(runner).toContain('if (phase === "invitation") return null;');
   });
 });
 

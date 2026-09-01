@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   return withCors(NextResponse.json({ pings }), request);
 }
 
-// Send a new meeting ping. Shared with createMeetupRequestAction (Buddy Plus).
+// Send a new meeting ping. Shared with createMeetupRequestAction.
 export async function POST(request: Request) {
   const auth = await resolveApiUser(request);
   if (!auth) {

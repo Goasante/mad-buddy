@@ -23,7 +23,6 @@ export type BuddyScoreData = {
   progressPercent: number;
   categories: Array<{ label: string; points: number }>;
   recentActivity: BuddyScoreActivity[];
-  earnedReward: { plan: "buddy_plus" | "buddy_pro"; status: "active" | "grace"; expiresAt: string; graceEndsAt: string | null } | null;
 };
 
 function candidate(eventType: Candidate["event_type"], sourceReference: string): Candidate {
@@ -71,10 +70,7 @@ export async function reconcileBuddyScore(admin: Admin, userId: string, now = ne
 
 export async function loadBuddyScore(admin: Admin, userId: string): Promise<BuddyScoreData> {
   await reconcileBuddyScore(admin, userId);
-  const [{ data }, { data: reward }] = await Promise.all([
-    admin.from("buddy_score_ledger").select("id,event_type,points_delta,metadata,created_at").eq("user_id", userId).order("created_at", { ascending: false }),
-    admin.from("earned_premium_rewards").select("reward_plan,status,expires_at,grace_ends_at").eq("user_id", userId).in("status", ["active", "grace"]).order("granted_at", { ascending: false }).limit(1).maybeSingle()
-  ]);
+  const { data } = await admin.from("buddy_score_ledger").select("id,event_type,points_delta,metadata,created_at").eq("user_id", userId).order("created_at", { ascending: false });
   const rows = data ?? [];
   const total = calculateBuddyScoreTotal(rows);
   const progress = buddyScoreProgress(total);
@@ -91,8 +87,7 @@ export async function loadBuddyScore(admin: Admin, userId: string): Promise<Budd
     pointsToNext: progress.pointsToNext,
     progressPercent: progress.percent,
     categories: [...categoryMap].map(([label, points]) => ({ label, points })).sort((a, b) => b.points - a.points),
-    recentActivity: activities.slice(0, 12),
-    earnedReward: reward ? { plan: reward.reward_plan, status: reward.status as "active" | "grace", expiresAt: reward.expires_at, graceEndsAt: reward.grace_ends_at } : null
+    recentActivity: activities.slice(0, 12)
   };
 }
 

@@ -20,9 +20,9 @@ describe("tier limits (spec §16, §32)", () => {
   it("gives free users the documented caps", () => {
     const free = contentTierLimitsFor("free");
     expect(free.maxActiveMomentsPerDay).toBe(UNLIMITED);
-    expect(free.maxActiveNearbyMoments).toBe(5);
-    expect(free.maxActiveDrops).toBe(3);
-    expect(free.allowEventDrops).toBe(false);
+    expect(free.maxActiveNearbyMoments).toBe(50);
+    expect(free.maxActiveDrops).toBe(100);
+    expect(free.allowEventDrops).toBe(true);
   });
 
   it("unlocks more for paid tiers", () => {

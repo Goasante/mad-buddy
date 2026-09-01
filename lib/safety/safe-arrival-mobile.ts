@@ -2,7 +2,6 @@ import "server-only";
 
 import { z } from "zod";
 import { recordProductEvent } from "@/lib/analytics/track";
-import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import {
   eligibleTrustedContacts,
@@ -64,8 +63,7 @@ const createSchema = z.object({
   expectedArrivalAt: z.string().datetime({ offset: true }),
   gracePeriodMinutes: z.number().int(),
   note: z.string().max(200).optional(),
-  // Highest any plan allows; the caller's real plan limit is enforced below. A
-  // hardcoded 5 here silently capped Buddy Pro at the Plus allowance.
+  // Technical request bound only; payment state never changes safety capacity.
   contactIds: z.array(uuidSchema).min(1).max(50)
 });
 
@@ -163,10 +161,9 @@ export async function createSafeArrival(userId: string, input: unknown): Promise
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
   const admin = createSupabaseAdminClient();
-  const access = await getCurrentSubscriptionAccess(userId);
-  const limits = safeArrivalLimitsFor(access.plan);
+  const limits = safeArrivalLimitsFor("free");
 
-  const countError = validateContactCount(parsed.data.contactIds.length, access.plan);
+  const countError = validateContactCount(parsed.data.contactIds.length, "free");
   if (countError) return { ok: false, message: countError };
 
   const contacts = await eligibleTrustedContacts(admin, userId, parsed.data.contactIds);

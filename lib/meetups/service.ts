@@ -2,7 +2,6 @@ import "server-only";
 
 import { z } from "zod";
 import { deliverNotification } from "@/lib/notifications/server";
-import { requirePremiumPlan } from "@/lib/premium/access";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 
@@ -10,7 +9,7 @@ import { getSupabaseServerEnv } from "@/lib/supabase/env";
  * Transport-agnostic Meeting Pings service. Takes an already-authenticated
  * `userId`; shared by the web Server Actions (`premium-actions.ts`) and the
  * mobile routes under `/api/pings`. Listing is open; creating/replying is
- * gated to Buddy Plus, exactly as the web enforces — no bypass.
+ * gated to Mad Buddy, exactly as the web enforces — no bypass.
  */
 
 export type MeetingPingItem = {
@@ -55,13 +54,8 @@ async function areFriends(admin: Admin, userId: string, friendId: string): Promi
   return Boolean(data);
 }
 
-async function requirePlus(userId: string): Promise<MeetupResult | null> {
-  try {
-    await requirePremiumPlan(userId, "buddy_plus");
-    return null;
-  } catch {
-    return { ok: false, message: "An active Buddy Plus plan is required." };
-  }
+async function requirePlus(_userId: string): Promise<MeetupResult | null> {
+  return null;
 }
 
 async function displayName(admin: Admin, userId: string): Promise<string> {
@@ -100,7 +94,7 @@ export async function listMeetingPings(userId: string): Promise<MeetingPingItem[
   });
 }
 
-/** Send a meeting ping to an approved Muddy (Buddy Plus). */
+/** Send a meeting ping to an approved Muddy (Mad Buddy). */
 export async function createMeetupRequest(userId: string, input: unknown): Promise<MeetupResult> {
   const envMessage = serviceRoleEnvMessage();
   if (envMessage) return { ok: false, message: envMessage };
@@ -138,7 +132,7 @@ export async function createMeetupRequest(userId: string, input: unknown): Promi
   return { ok: true, message: "Meeting ping sent." };
 }
 
-/** Reply to a received ping (Buddy Plus). Marks the original accepted. */
+/** Reply to a received ping (Mad Buddy). Marks the original accepted. */
 export async function respondToMeetupRequest(userId: string, input: unknown): Promise<MeetupResult> {
   const envMessage = serviceRoleEnvMessage();
   if (envMessage) return { ok: false, message: envMessage };
@@ -186,7 +180,7 @@ export async function respondToMeetupRequest(userId: string, input: unknown): Pr
   return { ok: true, message: "Reply sent." };
 }
 
-/** Decline a pending received ping (Buddy Plus). */
+/** Decline a pending received ping (Mad Buddy). */
 export async function dismissMeetupRequest(userId: string, requestId: string): Promise<MeetupResult> {
   const envMessage = serviceRoleEnvMessage();
   if (envMessage) return { ok: false, message: envMessage };

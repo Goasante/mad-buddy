@@ -49,7 +49,6 @@ const ILLUSTRATIONS: Record<SmartCardIllustration, string> = {
   birthday: FALLBACK_ILLUSTRATION,
   calendar: FALLBACK_ILLUSTRATION,
   people: FALLBACK_ILLUSTRATION,
-  premium: FALLBACK_ILLUSTRATION,
   trophy: FALLBACK_ILLUSTRATION
 };
 

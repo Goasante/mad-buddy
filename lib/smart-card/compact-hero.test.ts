@@ -66,7 +66,6 @@ describe("which states are allowed to take space", () => {
   it("leaves Safe Arrival the highest-priority card it already was", () => {
     // Compaction must not have reordered which card wins Home.
     expect(SMART_CARD_IDS[0]).toBe("safe_arrival");
-    expect(SMART_CARD_PRIORITY.safe_arrival).toBeLessThan(SMART_CARD_PRIORITY.membership);
     expect(SMART_CARD_PRIORITY.safe_arrival).toBeLessThan(SMART_CARD_PRIORITY.suggestions);
   });
 });

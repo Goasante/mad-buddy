@@ -50,7 +50,7 @@ export async function loadNearbyForUser(admin: Admin, userId: string): Promise<S
   );
   if (friendIds.length === 0) return [];
 
-  const [locationsResult, profilesResult, blocksResult, subscriptionsResult, statusesResult] =
+  const [locationsResult, profilesResult, blocksResult, statusesResult] =
     await Promise.all([
       admin
         .from("user_locations")
@@ -64,7 +64,6 @@ export async function loadNearbyForUser(admin: Admin, userId: string): Promise<S
         .from("blocked_users")
         .select("blocker_id, blocked_id")
         .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`),
-      admin.from("subscriptions").select("user_id, plan, status").in("user_id", friendIds),
       admin
         .from("user_statuses")
         .select("user_id, availability_type, activity_type, custom_text, expires_at")
@@ -82,11 +81,7 @@ export async function loadNearbyForUser(admin: Admin, userId: string): Promise<S
   const profileByUserId = new Map(
     ((profilesResult.data ?? []) as ProfileRow[]).map((profile) => [profile.user_id, profile])
   );
-  const premiumUserIds = new Set(
-    (subscriptionsResult.data ?? [])
-      .filter((subscription) => subscription.status === "active" && subscription.plan !== "free")
-      .map((subscription) => subscription.user_id)
-  );
+  const premiumUserIds = new Set<string>();
   const statusByUserId = new Map(
     (statusesResult.data ?? []).map((status) => [status.user_id, status])
   );

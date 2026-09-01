@@ -22,7 +22,7 @@ const sections: { title: string; items: Entry[] }[] = [
     title: "You",
     items: [
       { label: "Profile", description: "Your name, username, bio", icon: User, to: "/profile" },
-      { label: "Plan & billing", description: "Your subscription", icon: Crown, to: "/subscription" },
+      { label: "Mad Buddy Access", description: "Linkr and UpFor expansion", icon: Crown, to: "/subscription" },
       { label: "Settings", description: "Visibility, notifications, account", icon: SettingsIcon, to: "/settings" }
     ]
   },

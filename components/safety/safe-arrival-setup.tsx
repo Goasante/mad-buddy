@@ -14,18 +14,12 @@ import {
   validateExpectedArrival
 } from "@/lib/safety/safe-arrival";
 import type { SafeArrivalWatcherOption } from "@/lib/safety/safe-arrival-service";
-import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { journeyDayTime } from "@/components/safety/journey-parts";
 
 /** Matches the grace options the reference shows; all within the domain bounds. */
 const GRACE_OPTIONS = [10, 20, 30, 60].filter((minutes) => minutes <= GRACE_PERIOD_MAX_MINUTES);
 
-const PLAN_LABEL: Record<SubscriptionPlan, string> = {
-  free: "Free",
-  buddy_plus: "Buddy Plus",
-  buddy_pro: "Buddy Pro"
-};
 
 export type SafeArrivalSetupInput = {
   destinationLabel: string;
@@ -53,7 +47,6 @@ export function SafeArrivalSetup({
   open,
   watcherOptions,
   maxWatchers,
-  plan,
   pending,
   error,
   nowMs,
@@ -63,7 +56,6 @@ export function SafeArrivalSetup({
   open: boolean;
   watcherOptions: SafeArrivalWatcherOption[];
   maxWatchers: number;
-  plan: SubscriptionPlan;
   pending: boolean;
   error: string | null;
   /** Passed in so the component body stays pure (react-hooks/purity). */
@@ -337,35 +329,14 @@ export function SafeArrivalSetup({
 
             <p className="text-xs text-muted-foreground" aria-live="polite">
               {selected.length} of {maxWatchers} chosen
-              {atLimit ? ` · ${PLAN_LABEL[plan]} limit reached` : ""}
+              {atLimit ? " · limit reached" : ""}
             </p>
 
             {limitNotice ? (
               <div className="rounded-xl border border-orange-400/25 bg-orange-400/10 p-3">
-                <p className="flex items-start gap-2 text-xs font-semibold text-orange-800 dark:text-orange-100">
-                  {/* REMOVED, not replaced. This states a plan limit -- how
-                      many Muddies may watch a journey -- inside a bordered,
-                      tinted callout that already marks it as a notice. The
-                      sentence names the plan itself, so an icon adds nothing a
-                      reader needs. */}
-                  {maxWatchers === 1
-                    ? `${PLAN_LABEL[plan]} lets one Muddy check in on a journey.`
-                    : `${PLAN_LABEL[plan]} lets ${maxWatchers} Muddies check in on a journey.`}
+                <p className="text-xs font-semibold text-orange-800 dark:text-orange-100">
+                  {maxWatchers === 1 ? "You can choose one Muddy." : `You can choose up to ${maxWatchers} Muddies.`}
                 </p>
-                {plan !== "buddy_pro" ? (
-                  <>
-                    <p className="mt-1 text-xs text-orange-800/80 dark:text-orange-100/80">
-                      Upgrade to have more Muddies checking in on one journey.
-                    </p>
-                    {/* The existing upgrade surface. No second checkout flow. */}
-                    <Link
-                      href="/upgrade"
-                      className="focus-ring safe-motion mt-2 inline-flex min-h-9 items-center rounded-full bg-orange-500 px-3 text-xs font-semibold text-white hover:bg-orange-600"
-                    >
-                      See plans
-                    </Link>
-                  </>
-                ) : null}
               </div>
             ) : null}
 

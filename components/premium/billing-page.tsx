@@ -111,7 +111,7 @@ export async function BillingPageContent() {
         </Button>
       </header>
 
-      <section data-tour-id={TOUR_TARGET_IDS.BILLING_OVERVIEW} className="grid gap-5 lg:grid-cols-[1.35fr_0.85fr]">
+      <section className="grid gap-5 lg:grid-cols-[1.35fr_0.85fr]">
         <Card className="overflow-hidden p-0">
           <div className="border-b border-border bg-primary/[0.04] p-5 sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -210,7 +210,7 @@ export async function BillingPageContent() {
         </div>
       </section>
 
-      <section id="membership-options" data-tour-id={TOUR_TARGET_IDS.BILLING_PLANS} aria-labelledby="membership-options-title">
+      <section id="membership-options" aria-labelledby="membership-options-title">
         <div className="mb-4">
           <h2 id="membership-options-title" className="text-xl font-semibold">Membership options</h2>
           <p className="mt-1 text-sm text-muted-foreground">Choose the access that fits how you use Mad Buddy.</p>
@@ -222,7 +222,7 @@ export async function BillingPageContent() {
         </div>
       </section>
 
-      <section id="activity" data-tour-id={TOUR_TARGET_IDS.BILLING_ACTIVITY} className="glass-panel rounded-[1.25rem] p-5 sm:p-6">
+      <section id="activity" className="glass-panel rounded-[1.25rem] p-5 sm:p-6">
         <div className="border-b border-border pb-3">
           <h2 className="text-lg font-semibold">Membership activity</h2>
           <p className="mt-1 text-sm text-muted-foreground">Your latest paid membership status.</p>

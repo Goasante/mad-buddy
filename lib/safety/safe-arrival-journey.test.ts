@@ -179,7 +179,6 @@ describe("safety capacity is equal on every tier", () => {
   it("is enforced server-side, not only hidden in the UI", () => {
     const actions = stripComments(read("app/(app)/safe-arrival-actions.ts"));
     expect(actions).toContain("validateContactCount");
-    expect(actions).toContain("getCurrentSubscriptionAccess");
     // The wire schema must not impose a lower cap than the top plan allows: a
     // hardcoded max(5) silently truncated Buddy Pro before plan logic ran.
     // The wire schema keeps a generous OPERATIONAL ceiling — a system limit,
@@ -190,7 +189,6 @@ describe("safety capacity is equal on every tier", () => {
 
   it("resolves the limit on the server and passes it down, never computing it in the component", () => {
     const page = stripComments(read("app/(app)/safe-arrival/page.tsx"));
-    expect(page).toContain("safeArrivalLimitsFor");
     expect(page).toContain("maxWatchers");
 
     const setup = stripComments(read("components/safety/safe-arrival-setup.tsx"));

@@ -95,7 +95,6 @@ export function MomentsPage({
   initialOpenMoments = [],
   muddies = [],
   openMomentsEnabled = false,
-  canPublishOpenMoments = false,
   viewerName = "You",
   viewerAvatarUrl = null,
   closeFriendsAvailable = false,
@@ -105,8 +104,6 @@ export function MomentsPage({
   initialOpenMoments?: VisibleMoment[];
   muddies?: MomentMuddyOption[];
   openMomentsEnabled?: boolean;
-  /** Resolved SERVER-side from the canonical entitlement. Presentation only. */
-  canPublishOpenMoments?: boolean;
   viewerName?: string;
   viewerAvatarUrl?: string | null;
   closeFriendsAvailable?: boolean;
@@ -693,7 +690,6 @@ export function MomentsPage({
         open={composerOpen}
         muddies={muddies}
         spotlightEnabled={openMomentsEnabled}
-        canPublishSpotlight={canPublishOpenMoments}
         closeFriendsAvailable={closeFriendsAvailable}
         birthdayTemplateAvailable={birthdayTemplateAvailable}
         onOpenChange={setComposerOpen}

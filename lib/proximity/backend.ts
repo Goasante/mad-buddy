@@ -359,7 +359,7 @@ export function buildSafeNearbyFriends(input: {
           status_text: "Last seen a while ago",
           last_active_estimate: "Last seen a while ago",
           freshness_state: "stale" as const,
-          is_premium_theme_unlocked: input.premiumUserIds.has(friendId),
+          is_premium_theme_unlocked: false,
           membership_tier: tierFor(friendId),
           confidence: "low" as const,
           ...statusFor(friendId)

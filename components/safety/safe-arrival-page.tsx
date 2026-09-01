@@ -18,7 +18,6 @@ import { useJourneyClock, useJourneyRealtime } from "@/hooks/use-journey-realtim
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { contactPeerSummary, EXTENSION_OPTIONS_MINUTES, gracePeriodEndMs } from "@/lib/safety/safe-arrival";
 import type { SafeArrivalJourney, SafeArrivalWatcherOption } from "@/lib/safety/safe-arrival-service";
-import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import {
@@ -51,7 +50,6 @@ export function SafeArrivalPage({
   checkingOn,
   watcherOptions,
   maxWatchers,
-  plan,
   focusedJourney,
   requestedSessionId
 }: {
@@ -59,7 +57,6 @@ export function SafeArrivalPage({
   checkingOn: SafeArrivalJourney[];
   watcherOptions: SafeArrivalWatcherOption[];
   maxWatchers: number;
-  plan: SubscriptionPlan;
   focusedJourney: SafeArrivalJourney | null;
   requestedSessionId: string | null;
 }) {
@@ -216,7 +213,6 @@ export function SafeArrivalPage({
         open={setupOpen}
         watcherOptions={watcherOptions}
         maxWatchers={maxWatchers}
-        plan={plan}
         pending={isPending}
         error={setupError}
         nowMs={nowMs}

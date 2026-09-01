@@ -2,8 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { checkFeature } from "@/lib/billing/entitlements";
-import { resolveUserEntitlements } from "@/lib/billing/service";
 import { isGlowColorId } from "@/lib/glow/custom-colors";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { areApprovedMuddies } from "@/lib/social/permissions";
@@ -25,9 +23,9 @@ async function getAuthedUserId(): Promise<string | null> {
 }
 
 /**
- * Assigns a palette colour to a Muddy's glow. Gated on the `custom_glow_styles`
- * entitlement (Buddy Plus / Pro, or a per-user admin grant) and on a real
- * mutual friendship — both checked server-side, never trusted from the client.
+ * Assigns a palette colour to a Muddy's glow. Part of the core product,
+ * gated only on a real mutual friendship — checked server-side, never
+ * trusted from the client.
  */
 export async function setFriendGlowColorAction(input: unknown): Promise<GlowColorActionState> {
   const env = getSupabaseServerEnv();
@@ -50,10 +48,6 @@ export async function setFriendGlowColorAction(input: unknown): Promise<GlowColo
 
   const admin = createSupabaseAdminClient();
 
-  const entitlements = await resolveUserEntitlements(admin, userId);
-  if (!checkFeature(entitlements, "custom_glow_styles")) {
-    return { ok: false, message: "Custom glow colours are a Buddy Plus feature." };
-  }
 
   const areFriends = await areApprovedMuddies(admin, userId, parsed.data.friendId);
   if (!areFriends) return { ok: false, message: "You can only set a glow colour for an approved Muddy." };
@@ -88,7 +82,7 @@ export async function clearFriendGlowColorAction(input: unknown): Promise<GlowCo
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
-  // No entitlement gate on removal: a downgraded user must always be able to
+  // No capability gate on removal: a downgraded user must always be able to
   // clear a colour they can no longer edit.
   const admin = createSupabaseAdminClient();
   const { error } = await admin

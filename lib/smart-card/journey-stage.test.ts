@@ -64,7 +64,7 @@ describe("staged journey card scoping", () => {
   });
 
   it("does not stage unrelated cards", () => {
-    for (const id of ["safe_arrival", "suggestions", "birthday", "membership"] as const) {
+    for (const id of ["safe_arrival", "suggestions", "birthday"] as const) {
       expect(isStagedJourneyCard(id)).toBe(false);
     }
   });

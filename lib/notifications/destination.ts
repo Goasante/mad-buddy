@@ -53,7 +53,7 @@ const DESTINATION_BY_BASE: Record<string, Route> = {
   achievement: "/badges" as Route,
   birthday: "/notifications" as Route,
   // Account
-  subscription_update: "/billing" as Route
+  subscription_update: "/settings/access" as Route
 };
 
 const UUID_PATTERN =

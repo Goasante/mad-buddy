@@ -21,10 +21,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useSecureLogout } from "@/components/auth/use-secure-logout";
-import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { premiumBadgeIdentity } from "@/lib/billing/premium-identity";
-import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 
 type SheetRow = {
@@ -42,7 +39,7 @@ type SheetRow = {
  */
 const QUICK_ACCESS: SheetRow[] = [
   { href: "/profile", label: "View My Profile", icon: UserRound },
-  { href: "/billing", label: "Membership", icon: CircleDollarSign },
+  { href: "/settings/access", label: "Mad Buddy Access", icon: CircleDollarSign },
   { href: "/buddy-score", label: "My Progress", icon: TrendingUp },
   { href: "/badges", label: "Achievements", icon: Award }
 ];
@@ -105,7 +102,6 @@ export function HomeSettingsSheet({
   displayName,
   currentUsername,
   currentAvatarUrl,
-  subscriptionPlan,
   buddyScoreLevelLabel,
   profileCompletionPercent,
   showAdminLink = false
@@ -115,7 +111,6 @@ export function HomeSettingsSheet({
   displayName: string;
   currentUsername: string | null;
   currentAvatarUrl: string | null;
-  subscriptionPlan: SubscriptionPlan | null | undefined;
   /** Display label only ("Trusted Buddy"); null when unavailable. */
   buddyScoreLevelLabel: string | null;
   /**
@@ -129,7 +124,6 @@ export function HomeSettingsSheet({
 }) {
   const { logout, isPending: logoutPending } = useSecureLogout();
   const initial = (displayName || currentUsername || "?").charAt(0).toUpperCase();
-  const identity = premiumBadgeIdentity(subscriptionPlan);
   const isProfileComplete = profileCompletionPercent >= 100;
 
   return (
@@ -154,7 +148,7 @@ export function HomeSettingsSheet({
                   name={initial}
                   size="sm"
                   decorative
-                  className={cn("h-full w-full", identity ? "border-2 border-background" : undefined)}
+                  className="h-full w-full"
                 />
               </span>
               <div className="min-w-0 flex-1">
@@ -162,7 +156,6 @@ export function HomeSettingsSheet({
                   <p className="min-w-0 truncate text-[1.0625rem] font-semibold leading-tight">
                     {displayName || currentUsername || "Your account"}
                   </p>
-                  <PremiumPlanBadge plan={subscriptionPlan} compact />
                 </div>
                 {currentUsername ? (
                   <p className="mt-0.5 truncate text-sm text-muted-foreground">@{currentUsername}</p>

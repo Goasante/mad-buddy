@@ -26,7 +26,7 @@ describe("the state reaches Home", () => {
      * Anchored on the big destructure, not the first `Promise.all` in the
      * file: the page opens with a small two-item batch for the client and
      * user, and slicing from there measured the wrong call. */
-    const start = route.indexOf("const [access, profile");
+    const start = route.indexOf("const [profile, statusResult");
     const batch = route.slice(start, route.indexOf("])", start));
     expect(batch).toContain("loadActivationProjection(user.id)");
     // And exactly once -- a second call would be a second round trip.

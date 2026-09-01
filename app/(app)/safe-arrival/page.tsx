@@ -1,6 +1,4 @@
 import { SafeArrivalPage } from "@/components/safety/safe-arrival-page";
-import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
-import { safeArrivalLimitsFor } from "@/lib/safety/safe-arrival";
 import {
   loadSafeArrivalJourneyById,
   loadSafeArrivalJourneys,
@@ -26,7 +24,6 @@ export default async function SafeArrivalRoute({
   let checkingOn: SafeArrivalJourney[] = [];
   let watcherOptions: SafeArrivalWatcherOption[] = [];
   let maxWatchers = 0;
-  let plan: "free" | "buddy_plus" | "buddy_pro" = "free";
   // A journey opened straight from a notification, which may be TERMINAL (an
   // "arrived safely" alert has to open the journey that just completed, not a
   // dead end) and so is fetched separately from the live lists.
@@ -34,19 +31,16 @@ export default async function SafeArrivalRoute({
 
   if (user && env.url && env.serviceRoleKey) {
     const admin = createSupabaseAdminClient();
-    const [journeys, options, access] = await Promise.all([
+    const [journeys, options] = await Promise.all([
       loadSafeArrivalJourneys(admin, user.id),
-      loadSafeArrivalWatcherOptions(admin, user.id),
-      getCurrentSubscriptionAccess(user.id)
+      loadSafeArrivalWatcherOptions(admin, user.id)
     ]);
 
     travelling = journeys.travelling;
     checkingOn = journeys.checkingOn;
     watcherOptions = options;
-    plan = access.plan;
-    // Resolved on the SERVER so admin tier overrides and grace periods are
-    // honoured. The client is told the number, never trusted to decide it.
-    maxWatchers = safeArrivalLimitsFor(access.plan).maxContacts;
+    // The selectable set is the technical ceiling. Payment state never changes safety capacity.
+    maxWatchers = options.length;
 
     const requested = params.session;
     if (requested && !journeys.checkingOn.some((journey: SafeArrivalJourney) => journey.id === requested)) {
@@ -63,7 +57,6 @@ export default async function SafeArrivalRoute({
       checkingOn={checkingOn}
       watcherOptions={watcherOptions}
       maxWatchers={maxWatchers}
-      plan={plan}
       focusedJourney={focusedJourney}
       requestedSessionId={params.session ?? null}
     />

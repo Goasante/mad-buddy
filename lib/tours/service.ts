@@ -1,10 +1,7 @@
 import "server-only";
 
 import { recordProductEvent } from "@/lib/analytics/track";
-import { BOOLEAN_ENTITLEMENTS, NUMERIC_ENTITLEMENTS } from "@/lib/billing/entitlement-catalog";
-import { entitlementsFor } from "@/lib/billing/entitlements";
 import { isFeatureEnabled, MANAGED_FEATURES } from "@/lib/features/feature-flags";
-import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import {
@@ -33,11 +30,9 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
  */
 
 /**
- * One entitlement, resolved to its real value on each plan. Built here on the
- * server because entitlementsFor() merges admin tier overrides that a client
- * has no access to — so this is the only place the numbers are trustworthy.
- * The tour renders these verbatim instead of carrying its own copy of what a
- * plan includes, which is what keeps it from promising something untrue.
+ * Retained as an empty projection: consumer tours no longer resolve or
+ * render per-tier entitlement tables, so there are no plan-conditional
+ * numbers for a walkthrough to promise.
  */
 export type ResolvedEntitlement = {
   key: string;
@@ -67,49 +62,8 @@ export type ResolvedTour = {
   progressStatus: TourProgressStatus | null;
 };
 
-function formatEntitlementValue(value: unknown): string {
-  if (typeof value === "boolean") return value ? "Included" : "Not included";
-  // Unlimited is Infinity internally; the API convention is null once it has
-  // been through JSON (see lib/billing/entitlements.ts). Both mean unlimited.
-  if (value === null) return "Unlimited";
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) return "Unlimited";
-    return new Intl.NumberFormat("en-GB").format(value);
-  }
-  return "—";
-}
-
-/**
- * Resolves every entitlement referenced by the given steps into real per-plan
- * values. An unknown key is dropped rather than rendered as a guess.
- */
-function resolveEntitlements(steps: TourStep[], plan: SubscriptionPlan): Record<string, ResolvedEntitlement> {
-  const keys = [...new Set(steps.flatMap((step) => step.entitlementKeys))];
-  if (keys.length === 0) return {};
-
-  const labels = new Map<string, string>(
-    [...NUMERIC_ENTITLEMENTS, ...BOOLEAN_ENTITLEMENTS].map((entry) => [entry.key as string, entry.label])
-  );
-  const byPlan = {
-    free: entitlementsFor("free") as unknown as Record<string, unknown>,
-    buddy_plus: entitlementsFor("buddy_plus") as unknown as Record<string, unknown>,
-    buddy_pro: entitlementsFor("buddy_pro") as unknown as Record<string, unknown>
-  };
-
-  const resolved: Record<string, ResolvedEntitlement> = {};
-  for (const key of keys) {
-    const label = labels.get(key);
-    if (!label) continue; // Not a real entitlement: never invent one.
-    resolved[key] = {
-      key,
-      label,
-      free: formatEntitlementValue(byPlan.free[key]),
-      buddyPlus: formatEntitlementValue(byPlan.buddy_plus[key]),
-      buddyPro: formatEntitlementValue(byPlan.buddy_pro[key]),
-      current: formatEntitlementValue(byPlan[plan]?.[key])
-    };
-  }
-  return resolved;
+function resolveEntitlements(_steps: TourStep[], _plan: SubscriptionPlan): Record<string, ResolvedEntitlement> {
+  return {};
 }
 
 const VERSION_SELECT =
@@ -187,8 +141,7 @@ function toVersion(row: VersionRow, steps: TourStep[]): TourVersion | null {
  * features are actually switched on. Never a client-supplied claim.
  */
 async function loadSubject(admin: Admin, userId: string): Promise<TourSubject | null> {
-  const [access, profileResult, ...flagResults] = await Promise.all([
-    getCurrentSubscriptionAccess(userId),
+  const [profileResult, ...flagResults] = await Promise.all([
     admin.from("profiles").select("created_at").eq("user_id", userId).maybeSingle(),
     ...MANAGED_FEATURES.map((feature) => isFeatureEnabled(admin, feature.key))
   ]);
@@ -200,7 +153,7 @@ async function loadSubject(admin: Admin, userId: string): Promise<TourSubject | 
     (feature) => feature.key as string
   );
 
-  return { plan: access.plan, signupAt, enabledFeatureFlags };
+  return { plan: "free", signupAt, enabledFeatureFlags };
 }
 
 async function loadPublishedVersions(admin: Admin): Promise<TourVersion[]> {

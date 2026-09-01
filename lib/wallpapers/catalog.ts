@@ -75,13 +75,13 @@ export function isWallpaperTier(value: string): value is WallpaperTier {
 }
 
 /** Hierarchical access: a plan reaches its own tier and every lower one. */
-export function canAccessTier(plan: SubscriptionPlan, tier: WallpaperTier): boolean {
-  return PLAN_RANK[plan] >= TIER_RANK[tier];
+export function canAccessTier(_plan: SubscriptionPlan, _tier: WallpaperTier): boolean {
+  return true; // ACCESS_CONVERGENCE: wallpaper choice is free core.
 }
 
 /** The minimum plan a tier requires (for upgrade prompts / labels). */
-export function requiredPlanForTier(tier: WallpaperTier): SubscriptionPlan {
-  return tier === "free" ? "free" : tier === "buddy_plus" ? "buddy_plus" : "buddy_pro";
+export function requiredPlanForTier(_tier: WallpaperTier): SubscriptionPlan {
+  return "free";
 }
 
 /**
@@ -185,7 +185,7 @@ export function resolveEffectiveWallpaper(input: {
   // Custom personal wallpaper — premium only, and only while still entitled.
   if (selectedSlug === "custom") {
     const custom = input.custom;
-    if (custom?.isActive && custom.url && plan !== "free") {
+    if (custom?.isActive && custom.url) {
       return { slug: "custom", renderMode: "image", lightUrl: custom.url, darkUrl: custom.url, fellBack: false };
     }
     // Downgraded (Free) or missing upload → safe fallback, do not delete data.

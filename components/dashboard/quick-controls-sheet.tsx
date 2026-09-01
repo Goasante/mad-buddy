@@ -174,7 +174,7 @@ export function QuickControlsSheet({
               {/* Profile first: it is the destination people reach for most,
                   and it moved here when the bottom nav made room for Linkr. */}
               <QuickLink href="/profile" icon={UserRound} label="Profile" description="How other people see you" />
-              <QuickLink href="/billing" icon={CircleDollarSign} label="Membership" description="Your plan and billing" divider />
+              <QuickLink href="/settings/access" icon={CircleDollarSign} label="Mad Buddy Access" description="Linkr and UpFor access" divider />
               <QuickLink href="/buddy-score" icon={TrendingUp} label="My Progress" description="Buddy Score and activity" divider />
               <QuickLink href="/settings" icon={SettingsIcon} label="Settings" description="Preferences and account" divider />
               {extraShortcuts}

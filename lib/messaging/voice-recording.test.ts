@@ -396,7 +396,7 @@ describe("voice recorder controller", () => {
 
 describe("Phase 4B boundaries and canonical limits", () => {
   it("gets Free, Plus, and Pro durations from canonical messaging rules", () => {
-    expect(messagingLimitsFor("free").maxVoiceNoteSeconds).toBe(60);
+    expect(messagingLimitsFor("free").maxVoiceNoteSeconds).toBe(300);
     expect(messagingLimitsFor("buddy_plus").maxVoiceNoteSeconds).toBe(300);
     expect(messagingLimitsFor("buddy_pro").maxVoiceNoteSeconds).toBe(300);
   });

@@ -1,7 +1,5 @@
 import "server-only";
 
-import { checkFeature, type Entitlements } from "@/lib/billing/entitlements";
-import { resolveUserEntitlements } from "@/lib/billing/service";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -14,14 +12,8 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
 export async function loadFriendGlowColors(
   admin: Admin,
   ownerId: string,
-  knownEntitlements?: Entitlements
+  _knownEntitlements?: unknown
 ): Promise<Record<string, string>> {
-  // Read-time enforcement is required because downgrade intentionally keeps
-  // saved preferences. Without this gate, an old paid colour would continue
-  // rendering even though writes are correctly blocked.
-  const entitlements = knownEntitlements ?? (await resolveUserEntitlements(admin, ownerId));
-  if (!checkFeature(entitlements, "custom_glow_styles")) return {};
-
   const { data, error } = await admin
     .from("friend_glow_colors")
     .select("friend_id, color_id")

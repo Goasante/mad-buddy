@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { recordProductEvent } from "@/lib/analytics/track";
 import { deliverNotification } from "@/lib/notifications/server";
-import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import {
   eligibleTrustedContacts,
@@ -81,9 +80,7 @@ const createSchema = z.object({
   expectedArrivalAt: z.string().datetime({ offset: true }),
   gracePeriodMinutes: z.number().int(),
   note: z.string().max(200).optional(),
-  // Upper bound is the highest any plan allows; the caller's ACTUAL plan limit
-  // is enforced below. This was previously a hardcoded 5, which silently capped
-  // a Buddy Pro traveller at the Plus allowance before plan logic ever ran.
+  // Technical request bound only; payment state never changes Safe Arrival capacity.
   contactIds: z.array(uuidSchema).min(1).max(50)
 });
 
@@ -114,12 +111,10 @@ export async function createSafeArrivalAction(input: unknown): Promise<SafeArriv
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
   const admin = createSupabaseAdminClient();
-  const access = await getCurrentSubscriptionAccess(userId);
-  const limits = safeArrivalLimitsFor(access.plan);
+  const limits = safeArrivalLimitsFor("free");
 
-  // Server-side tier enforcement. The client hides over-limit selection, but
-  // that is presentation: this is the check that actually holds.
-  const countError = validateContactCount(parsed.data.contactIds.length, access.plan);
+  // Server-side technical capacity enforcement. The client check is presentation only.
+  const countError = validateContactCount(parsed.data.contactIds.length, "free");
   if (countError) {
     // No upgrade prompt: Safe Arrival capacity is not a paid feature. Any
     // message here describes a system limit, never a plan.

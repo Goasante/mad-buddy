@@ -1,5 +1,5 @@
 /**
- * Custom glow colours (Buddy Plus / Pro entitlement `custom_glow_styles`).
+ * Custom glow colours are part of the free core product.
  *
  * A subscriber may assign a colour to each Muddy so they can tell who is
  * glowing nearby at a glance. This is a curated palette rather than a free hex

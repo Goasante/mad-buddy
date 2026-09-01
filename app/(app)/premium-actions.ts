@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { deliverNotification } from "@/lib/notifications/server";
-import { requirePremiumPlan } from "@/lib/premium/access";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -119,35 +118,19 @@ async function requireFriendship(userId: string, friendId: string) {
     .is("ended_at", null).maybeSingle();
 
   if (error || !data) {
-    throw new Error("Choose an accepted Muddy before using this premium feature.");
+    throw new Error("Choose an accepted Muddy before using this feature.");
   }
 }
 
 async function withPremiumAccess(
-  requiredPlan: "buddy_plus" | "buddy_pro",
+  _requiredPlan: "buddy_plus" | "buddy_pro",
   work: (userId: string) => Promise<PremiumActionState>
 ): Promise<PremiumActionState> {
   const missingEnv = missingSupabaseState();
-
-  if (missingEnv) {
-    return missingEnv;
-  }
-
+  if (missingEnv) return missingEnv;
   const userId = await getAuthedUserId();
-
-  if (!userId) {
-    return { ok: false, message: "Log in before changing premium settings." };
-  }
-
-  try {
-    await requirePremiumPlan(userId, requiredPlan);
-    return await work(userId);
-  } catch {
-    return {
-      ok: false,
-      message: `An active ${requiredPlan === "buddy_pro" ? "Buddy Pro" : "Buddy Plus"} plan is required.`
-    };
-  }
+  if (!userId) return { ok: false, message: "Log in before changing these settings." };
+  return work(userId);
 }
 
 export async function updateGlowThemeAction(input: unknown): Promise<PremiumActionState> {

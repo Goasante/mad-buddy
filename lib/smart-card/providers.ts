@@ -32,8 +32,6 @@ export type SmartCardInput = {
   weekendPlanCount: number;
   /** Muddies currently nearby. */
   nearbyCount: number;
-  /** Whether the viewer already has effective Buddy Plus or Pro. */
-  hasPremium: boolean;
   buddyScore: Pick<BuddyScoreData, "nextLevel" | "pointsToNext" | "progressPercent"> | null;
   /** Most recently earned achievement not yet acknowledged. */
   recentAchievement: { title: string } | null;
@@ -169,22 +167,7 @@ function nearbyMuddiesProvider(input: SmartCardInput): SmartCard | null {
   };
 }
 
-/** 7. Membership — only for users who don't already have it. */
-function membershipProvider(input: SmartCardInput): SmartCard | null {
-  if (input.hasPremium) return null;
-
-  return {
-    id: "membership",
-    priority: 6,
-    illustration: "premium",
-    title: "Unlock Buddy Plus",
-    subtitle: "Custom glow, richer presence, and more ways to stay close to your circle.",
-    cta: "See What's Included",
-    destination: "/billing"
-  };
-}
-
-/** 8. Buddy Progress — the next reputation level. */
+/** 7. Buddy Progress — the next reputation level. */
 function buddyProgressProvider(input: SmartCardInput): SmartCard | null {
   const score = input.buddyScore;
   // `nextLevel` is null at the top level, and `pointsToNext` is 0 there too —
@@ -258,7 +241,6 @@ export function smartCardProviders(input: SmartCardInput): readonly SmartCardPro
     { id: "birthday", build: () => birthdayProvider(input) },
     { id: "weekend_plans", build: () => weekendPlansProvider(input) },
     { id: "nearby_muddies", build: () => nearbyMuddiesProvider(input) },
-    { id: "membership", build: () => membershipProvider(input) },
     { id: "buddy_progress", build: () => buddyProgressProvider(input) },
     { id: "achievement", build: () => achievementProvider(input) },
     { id: "suggestions", build: () => suggestionsProvider(input) }

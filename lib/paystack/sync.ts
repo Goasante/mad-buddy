@@ -1,7 +1,6 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { deliverNotification } from "@/lib/notifications/server";
 import type { Database, SubscriptionPlan, SubscriptionStatus } from "@/lib/supabase/database.types";
 import { paidPlanToSubscriptionPlan, paystackPlanFromPlanCode, mapPaystackSubscriptionStatus } from "@/lib/paystack/subscriptions";
 import { paystackPlans } from "@/lib/paystack/config";
@@ -127,13 +126,6 @@ export async function syncPaystackSubscription(
     throw new Error(error.message);
   }
 
-  await deliverNotification(admin, {
-    userId: input.userId,
-    priority: "high",
-    type: "subscription_update",
-    title: "Subscription update",
-    message: `Your ${planLabel(plan)} subscription is ${statusLabel(status)}.`
-  });
 }
 
 export async function markPaystackSubscriptionStatus(
@@ -158,20 +150,4 @@ export async function markPaystackSubscriptionStatus(
   if (error) {
     throw new Error(error.message);
   }
-}
-
-function planLabel(plan: SubscriptionPlan) {
-  if (plan === "buddy_plus") {
-    return "Buddy Plus";
-  }
-
-  if (plan === "buddy_pro") {
-    return "Buddy Pro";
-  }
-
-  return "Free";
-}
-
-function statusLabel(status: SubscriptionStatus) {
-  return status.replace("_", " ");
 }

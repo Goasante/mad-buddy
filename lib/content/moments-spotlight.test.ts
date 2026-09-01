@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { PLAN_ENTITLEMENTS } from "@/lib/billing/entitlements";
 import {
   isSpotlightAudience,
   isSupportedReaction,
@@ -489,64 +488,33 @@ describe("creator hub exposes only public information", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Spotlight publishing entitlement
+// Air publishing is free core
 // ---------------------------------------------------------------------------
 
-describe("Spotlight publishing is server-enforced", () => {
-  it("reuses the existing canonical capability", () => {
-    // public_moments already WAS the Spotlight publishing entitlement, so a
-    // parallel spotlight_publish key would have been a second source of truth.
-    expect(ACTIONS).toContain('checkFeature(entitlements, "public_moments")');
-    const catalog = read("lib/billing/entitlement-catalog.ts");
-    expect(catalog).toContain('key: "public_moments"');
-    for (const file of ["lib/billing/entitlements.ts", "lib/billing/entitlement-catalog.ts"]) {
-      expect(read(file)).not.toContain("spotlight_publish");
-    }
-  });
-
-  it("takes the entitled tiers from canonical product configuration", () => {
-    // Phase 0: core Air publishing is free, so every tier is entitled. The
-    // server check still runs — it just no longer excludes anyone by plan.
-    const entitled = (["free", "buddy_plus", "buddy_pro"] as const).filter(
-      (plan) => PLAN_ENTITLEMENTS[plan].public_moments
-    );
-    expect(entitled).toEqual(["free", "buddy_plus", "buddy_pro"]);
-  });
-
-  it("enforces publishing in the action, not only in the UI", () => {
+describe("Air publishing is free core and server-enforced", () => {
+  it("keeps the feature flag and removes payment authority from the write path", () => {
     const create = declaration(ACTIONS, "export async function createMomentAction");
-    expect(create).toContain("resolveUserEntitlements");
-    expect(create.indexOf("checkFeature")).toBeLessThan(create.indexOf(".from(\"moments\")"));
+    expect(create).toContain("isOpenMomentsEnabled(admin)");
+    expect(create).not.toContain("resolveUserEntitlements");
+    expect(create).not.toContain("checkFeature");
+    expect(create).not.toContain("Buddy Pro");
   });
 
-  it("mirrors the rule at the RLS boundary too", () => {
-    const sql = read("supabase/migrations/20260724170000_open_moments_feature.sql");
-    expect(sql).toContain("public.can_publish_open_moments(auth.uid())");
+  it("updates the RLS helper additively so payment state cannot block Air", () => {
+    const sql = read("supabase/migrations/20260831193000_access_convergence_free_core.sql");
+    expect(sql).toContain("create or replace function public.can_publish_open_moments");
+    expect(sql).toContain("feature_flags");
+    expect(sql).not.toContain("subscriptions");
+    expect(sql).not.toContain("buddy_pro");
+    expect(sql).not.toContain("entitlement_overrides");
   });
 
-  it("lets every authenticated user VIEW Spotlight", () => {
-    const feed = declaration(SERVICE, "export async function buildSpotlightFeed");
-    // No entitlement gate on the read path, only the feature flag.
-    expect(feed).toContain("isOpenMomentsEnabled(admin)");
-    expect(feed).not.toContain("checkFeature");
-    expect(feed).not.toContain("public_moments");
-  });
-
-  it("explains the upgrade rather than silently disabling the row", () => {
+  it("keeps the composer plan-neutral", () => {
     const composer = read("components/content/moment-composer.tsx");
     expect(composer).toContain("Go On Air");
-    expect(composer).toContain("Share your Moment beyond your Muddies.");
-    // The body, plan name, price and benefits all come from canonical billing
-    // data rather than being written in the component.
-    expect(composer).toContain("spotlightUpgradeCopy()");
-    expect(composer).not.toMatch(/GHS\s?\d/);
-    // Routes into the EXISTING upgrade flow, not a second checkout.
-    expect(composer).toContain('href="/upgrade"');
-    expect(composer).not.toContain("paystack");
-    // No fake urgency.
-    for (const pressure of ["hurry", "limited time", "expires soon", "only today", "act now"]) {
-      expect(composer.toLowerCase()).not.toContain(pressure);
-    }
+    expect(composer).not.toContain("Premium");
+    expect(composer).not.toContain("spotlightUpgradeCopy");
+    expect(composer).not.toContain('href="/upgrade"');
   });
 });
 

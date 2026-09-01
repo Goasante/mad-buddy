@@ -149,7 +149,7 @@ describe("tier limits (spec §28, §45)", () => {
        value it asserts is what changed. */
     expect(free.maxPrivateGroups).toBe(UNLIMITED);
     expect(free.maxGroupMembers).toBe(UNLIMITED);
-    expect(free.maxVoiceNoteSeconds).toBe(60);
+    expect(free.maxVoiceNoteSeconds).toBe(300);
   });
 
   it("never puts voice notes behind a paywall entirely (accessibility, §45)", () => {
@@ -157,7 +157,7 @@ describe("tier limits (spec §28, §45)", () => {
   });
 
   it("bounds voice note duration by plan", () => {
-    expect(validateVoiceNoteDuration(90, "free")).toMatch(/60 seconds/);
+    expect(validateVoiceNoteDuration(330, "free")).toMatch(/300 seconds/);
     expect(validateVoiceNoteDuration(90, "buddy_plus")).toBeNull();
     expect(validateVoiceNoteDuration(0, "free")).toMatch(/too short/);
   });

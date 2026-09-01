@@ -5,7 +5,6 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
-import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import {
   loadCustomWallpaperSummary,
   registerCustomWallpaper,
@@ -50,7 +49,7 @@ export async function trackWallpaperPickerOpenedAction(): Promise<{ ok: boolean 
 }
 
 /** Selects a catalog wallpaper ('mad-buddy-default', 'plain', or a slug). */
-export async function setWallpaperPreferenceAction(slug: string): Promise<{ ok: boolean; message: string; upgrade?: boolean }> {
+export async function setWallpaperPreferenceAction(slug: string): Promise<{ ok: boolean; message: string }> {
   if (serviceUnavailable()) return { ok: false, message: "Wallpapers are unavailable right now." };
   if (typeof slug !== "string" || slug.length === 0 || slug.length > 64) {
     return { ok: false, message: "Pick a valid wallpaper." };
@@ -60,21 +59,9 @@ export async function setWallpaperPreferenceAction(slug: string): Promise<{ ok: 
   if (!userId) return { ok: false, message: "Log in to change your wallpaper." };
 
   const admin = createSupabaseAdminClient();
-  const access = await getCurrentSubscriptionAccess(userId);
-  const result = await setWallpaperSelection(admin, { userId, plan: access.plan, slug });
+  const result = await setWallpaperSelection(admin, { userId, plan: "free", slug });
 
   if (!result.ok) {
-    if (result.reason === "locked") {
-      // Server-authoritative refusal — surface the upgrade path, don't apply.
-      await recordProductEvent(admin, {
-        eventName: "premium_wallpaper_attempted",
-        actorId: userId,
-        resourceType: "wallpaper",
-        resourceId: slug,
-        featureKey: "wallpaper"
-      });
-      return { ok: false, upgrade: true, message: "That wallpaper needs Buddy Plus or Pro." };
-    }
     return { ok: false, message: "That wallpaper isn’t available." };
   }
 
@@ -89,24 +76,13 @@ export async function setWallpaperPreferenceAction(slug: string): Promise<{ ok: 
   return { ok: true, message: "Wallpaper updated." };
 }
 
-/** Re-applies the user's already-uploaded custom wallpaper (premium). */
-export async function applyCustomWallpaperAction(): Promise<{ ok: boolean; message: string; upgrade?: boolean }> {
+/** Re-applies the user's already-uploaded custom wallpaper . */
+export async function applyCustomWallpaperAction(): Promise<{ ok: boolean; message: string }> {
   if (serviceUnavailable()) return { ok: false, message: "Wallpapers are unavailable right now." };
   const userId = await currentUserId();
   if (!userId) return { ok: false, message: "Log in to change your wallpaper." };
 
   const admin = createSupabaseAdminClient();
-  const access = await getCurrentSubscriptionAccess(userId);
-  if (!access.hasPremium) {
-    await recordProductEvent(admin, {
-      eventName: "premium_wallpaper_attempted",
-      actorId: userId,
-      resourceType: "wallpaper",
-      resourceId: "custom",
-      featureKey: "wallpaper"
-    });
-    return { ok: false, upgrade: true, message: "Custom wallpapers are a Buddy Plus / Pro feature." };
-  }
 
   const summary = await loadCustomWallpaperSummary(admin, userId);
   if (!summary.hasActive) return { ok: false, message: "Upload a photo first." };
@@ -125,8 +101,8 @@ export async function applyCustomWallpaperAction(): Promise<{ ok: boolean; messa
   return { ok: true, message: "Your wallpaper is set." };
 }
 
-/** Uploads a personal wallpaper to private storage and applies it (premium). */
-export async function uploadCustomWallpaperAction(formData: FormData): Promise<{ ok: boolean; message: string; upgrade?: boolean }> {
+/** Uploads a personal wallpaper to private storage and applies it . */
+export async function uploadCustomWallpaperAction(formData: FormData): Promise<{ ok: boolean; message: string }> {
   if (serviceUnavailable()) return { ok: false, message: "Wallpapers are unavailable right now." };
 
   const userId = await currentUserId();
@@ -134,18 +110,6 @@ export async function uploadCustomWallpaperAction(formData: FormData): Promise<{
 
   const admin = createSupabaseAdminClient();
 
-  // Server-authoritative entitlement gate — a Free user cannot upload.
-  const access = await getCurrentSubscriptionAccess(userId);
-  if (!access.hasPremium) {
-    await recordProductEvent(admin, {
-      eventName: "premium_wallpaper_attempted",
-      actorId: userId,
-      resourceType: "wallpaper",
-      resourceId: "custom",
-      featureKey: "wallpaper"
-    });
-    return { ok: false, upgrade: true, message: "Custom wallpapers are a Buddy Plus / Pro feature." };
-  }
 
   const rateLimit = await consumeRateLimit({ action: "media.upload", userId });
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };

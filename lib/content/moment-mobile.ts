@@ -9,10 +9,7 @@ import {
 } from "@/lib/content/moments";
 import { detectLocationRisk, LOCATION_WARNING_MESSAGE } from "@/lib/content/safety";
 import { guardAction } from "@/lib/admin/enforcement";
-import { checkFeature } from "@/lib/billing/entitlements";
-import { resolveUserEntitlements } from "@/lib/billing/service";
 import { isOpenMomentsEnabled } from "@/lib/features/feature-flags";
-import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -89,19 +86,12 @@ export async function createTextMoment(userId: string, input: unknown): Promise<
   const guard = await guardAction(admin, { userId, surface: "moments" });
   if (!guard.allowed) return { ok: false, message: guard.message };
 
-  const access = await getCurrentSubscriptionAccess(userId);
-  const limits = contentTierLimitsFor(access.plan);
+  const limits = contentTierLimitsFor("free");
   const risk = detectLocationRisk(parsed.data.textContent);
 
   if (parsed.data.audienceType === "public") {
-    const [enabled, entitlements] = await Promise.all([
-      isOpenMomentsEnabled(admin),
-      resolveUserEntitlements(admin, userId, nowMs)
-    ]);
+    const enabled = await isOpenMomentsEnabled(admin);
     if (!enabled) return { ok: false, message: "Open Moments aren't available right now." };
-    if (!checkFeature(entitlements, "public_moments")) {
-      return { ok: false, message: "Publishing Open Moments is included with Buddy Pro." };
-    }
     if (!parsed.data.publicAudienceConfirmed) {
       return { ok: false, message: "Confirm that anyone on Mad Buddy may see this Moment." };
     }
@@ -134,10 +124,7 @@ export async function createTextMoment(userId: string, input: unknown): Promise<
     if ((nearbyCount ?? 0) >= limits.maxActiveNearbyMoments) {
       return {
         ok: false,
-        message:
-          access.plan === "free"
-            ? "Free plan allows one active nearby Moment at a time."
-            : "You've reached your active nearby Moment limit."
+        message: "You've reached your active nearby Moment limit."
       };
     }
   }

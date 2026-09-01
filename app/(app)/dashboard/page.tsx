@@ -1,7 +1,6 @@
 import { DashboardPageContent } from "@/components/dashboard/dashboard-page";
 import { loadActivationProjection } from "@/lib/activation/projection";
 import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
-import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
 import { loadSafeArrivalJourneys } from "@/lib/safety/safe-arrival-service";
 import { loadUpcomingAgenda } from "@/lib/social/upcoming-agenda";
@@ -35,9 +34,8 @@ export default async function DashboardPage() {
   // this page's own queries.
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
   const admin = createSupabaseAdminClient();
-  const [access, profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents, activation] = user
+  const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents, activation] = user
     ? await Promise.all([
-        getCurrentSubscriptionAccess(user.id),
         ensureProfileForUser(user),
         supabase
           .from("user_statuses")
@@ -84,7 +82,7 @@ export default async function DashboardPage() {
         // Batched with everything else, so Home costs no extra round trip.
         loadActivationProjection(user.id)
       ])
-    : [null, null, null, { items: [], hasMore: false }, null, null, {}, false, false, null, 0, null, null, [], [], [], null];
+    : [null, null, { items: [], hasMore: false }, null, null, {}, false, false, null, 0, null, null, [], [], [], null];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -130,7 +128,6 @@ export default async function DashboardPage() {
         // close when the server can prove it — which today it cannot, so it
         // declines rather than showing a number that might be wrong.
         nearbyCount: 0,
-        hasPremium: Boolean(access?.hasPremium),
         buddyScore,
         // No acknowledged-achievement projection exists yet; the provider
         // declines rather than re-surfacing an old badge on every visit.
@@ -151,8 +148,6 @@ export default async function DashboardPage() {
       planParticipationCount={activation?.planParticipationCount ?? 0}
       muddyCount={activation?.muddyCount ?? 0}
       serverNearby={activation?.nearby ?? []}
-      subscriptionPlan={access?.plan}
-      hasPremium={access?.hasPremium}
       initialVisibilityStatus={profile?.visibility_status ?? "visible"}
       displayName={profile?.full_name?.split(" ")[0] || ""}
       hasActiveStatus={hasActiveStatus}

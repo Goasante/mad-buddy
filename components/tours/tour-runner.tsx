@@ -6,12 +6,9 @@ import { ArrowRight, X } from "lucide-react";
 import { recordTourProgressAction, recordTourStepEventAction } from "@/app/(app)/tour-actions";
 import { exitTourPreviewAction } from "@/app/(admin)/admin/tours/preview-actions";
 import { endTourReplayAction } from "@/app/(app)/tour-replay-actions";
-import { BrandMark } from "@/components/brand/brand-mark";
 import { Button } from "@/components/ui/button";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
-import { cheapestPaidPrice, planPrice } from "@/lib/billing/upgrade-copy";
-import { PLAN_BILLING_INTERVAL } from "@/lib/billing/pricing";
 
 /**
  * The guided-tour engine.
@@ -41,23 +38,15 @@ type TourStepView = {
   entitlementKeys: string[];
 };
 
-type ResolvedEntitlementView = {
-  key: string;
-  label: string;
-  free: string;
-  buddyPlus: string;
-  buddyPro: string;
-  current: string;
-};
-
 export type TourRunnerProps = {
   tourVersionId: string;
   title: string;
   description: string;
   steps: TourStepView[];
   startIndex: number;
-  plan: "free" | "buddy_plus" | "buddy_pro";
-  entitlements: Record<string, ResolvedEntitlementView>;
+  /** Legacy server payload fields; ignored by the consumer runner. */
+  plan?: string;
+  entitlements?: Record<string, unknown>;
   /** Admin preview: renders identically but records nothing anywhere. */
   preview?: boolean;
   /** Skip the invitation and start immediately (manual replay). */
@@ -83,8 +72,8 @@ export function TourRunner({
   description,
   steps,
   startIndex,
-  plan,
-  entitlements,
+  plan: _plan,
+  entitlements: _entitlements,
   preview = false,
   autoStart = false,
   previewReturnTo,
@@ -285,9 +274,6 @@ export function TourRunner({
 
 
   const isLast = stepIndex === steps.length - 1;
-  const stepEntitlements = (step?.entitlementKeys ?? [])
-    .map((key) => entitlements[key])
-    .filter((entry): entry is ResolvedEntitlementView => Boolean(entry));
 
   return (
     <>
@@ -388,80 +374,6 @@ export function TourRunner({
           />
         ) : null}
 
-        {stepEntitlements.length > 0 ? (
-          // Subscription education. Deliberately a distinct, more substantial
-          // presentation than an ordinary feature step, because this is the ONE
-          // place tiers are explained: every other step is about a feature and
-          // carries no entitlement keys at all.
-          //
-          // Laid out as one stacked block PER PLAN rather than a four-column
-          // grid. The grid squeezed feature names into fragments like
-          // "Max active han...", which tells a user nothing; a full-width row
-          // per plan keeps every label readable down to 320px.
-          //
-          // Prices come from the canonical display-price source and per-plan
-          // values from the entitlement registry resolved on the server, so this
-          // can never disagree with Pricing or Plan and Billing.
-          <div className="mt-3 space-y-2">
-            {(
-              [
-                { key: "free", label: "Free", promise: "Everything you need to start" },
-                { key: "buddy_plus", label: "Buddy Plus", promise: "More room to connect" },
-                { key: "buddy_pro", label: "Buddy Pro", promise: "The full Mad Buddy experience" }
-              ] as const
-            ).map((tier) => {
-              const isCurrent = plan === tier.key;
-              return (
-                <div
-                  key={tier.key}
-                  className={cn(
-                    "rounded-xl border p-2.5",
-                    isCurrent ? "border-2 bg-primary/[0.06]" : "border-border/70",
-                    // Paid tiers carry a little more presence, but Free is never
-                    // styled as lesser: it stays a legitimate choice.
-                    tier.key !== "free" && !isCurrent && "bg-secondary/30"
-                  )}
-                  style={isCurrent ? { borderColor: "var(--color-brand-orange)" } : undefined}
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="min-w-0 text-xs font-semibold">{tier.label}</p>
-                    {isCurrent ? (
-                      <p
-                        className="shrink-0 text-[0.5625rem] font-bold uppercase tracking-wide"
-                        style={{ color: "var(--color-brand-orange)" }}
-                      >
-                        Your plan
-                      </p>
-                    ) : (
-                      <p className="shrink-0 text-[0.6875rem] font-semibold tabular-nums text-muted-foreground">
-                        {planPrice(tier.key)}
-                      </p>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-[0.6875rem] leading-4 text-muted-foreground">{tier.promise}</p>
-
-                  {/* Full-width label + value rows: nothing truncates. */}
-                  <dl className="mt-2 space-y-1">
-                    {stepEntitlements.map((entry) => (
-                      <div key={entry.key} className="flex items-baseline justify-between gap-3">
-                        <dt className="min-w-0 text-[0.6875rem] leading-4 text-muted-foreground">{entry.label}</dt>
-                        <dd className="shrink-0 text-[0.6875rem] font-medium tabular-nums">
-                          {tier.key === "free" ? entry.free : tier.key === "buddy_plus" ? entry.buddyPlus : entry.buddyPro}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
-              );
-            })}
-
-            <p className="text-[0.6875rem] leading-5 text-muted-foreground">
-              {plan === "buddy_pro"
-                ? "You're on Buddy Pro, so you already have the full Mad Buddy experience, including publishing to Air."
-                : `Nothing to decide now. Upgrade from as low as ${cheapestPaidPrice()} a ${PLAN_BILLING_INTERVAL} whenever you like.`}
-            </p>
-          </div>
-        ) : null}
 
         <div className="mt-4 flex items-center justify-between gap-2">
           <Button type="button" size="sm" variant="ghost" onClick={skip}>
@@ -475,7 +387,7 @@ export function TourRunner({
             ) : null}
             {/* A CTA never replaces Next: it is an extra, and only shown when
                 the step actually has one and the user isn't already entitled. */}
-            {step?.ctaHref && step.ctaLabel && plan !== "buddy_pro" ? (
+            {step?.ctaHref && step.ctaLabel ? (
               <Button
                 type="button"
                 size="sm"

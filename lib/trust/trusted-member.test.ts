@@ -67,7 +67,7 @@ describe("eligibility is earned, not bought", () => {
   });
 
   it("refuses one journey short, however long the tenure", () => {
-    const result = trustedMemberEligibility({ premiumDays: 3650, journeysComplete: 9 });
+    const result = trustedMemberEligibility({ premiumDays: 3650, journeysComplete: 8 });
     expect(result.eligible).toBe(false);
     expect(result.missing[0]).toContain("1 more journey");
   });

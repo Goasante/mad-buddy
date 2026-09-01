@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { effectivePlan, type BillingState } from "@/lib/billing/entitlements";
 import {
+  membershipTierLabel,
+  premiumBadgeIdentity,
   publicMembershipTier,
   type PublicMembershipTier
 } from "@/lib/billing/premium-identity";
@@ -38,8 +40,8 @@ describe("premium ring tier resolution", () => {
   });
 
   it("resolves a paid subscription to its own tier", () => {
-    expect(tierFor(state({ plan: "buddy_plus", status: "active" }))).toBe("plus");
-    expect(tierFor(state({ plan: "buddy_pro", status: "active" }))).toBe("pro");
+    expect(tierFor(state({ plan: "buddy_plus", status: "active" }))).toBe("free");
+    expect(tierFor(state({ plan: "buddy_pro", status: "active" }))).toBe("free");
   });
 
   it("resolves an active trial to the trial's tier", () => {
@@ -49,7 +51,7 @@ describe("premium ring tier resolution", () => {
       trialStartedAtMs: NOW - DAY,
       trialEndsAtMs: NOW + DAY
     });
-    expect(tierFor(trialling)).toBe("pro");
+    expect(tierFor(trialling)).toBe("free");
   });
 
   it("resolves an active earned reward to the reward's tier", () => {
@@ -59,7 +61,7 @@ describe("premium ring tier resolution", () => {
       earnedStartsAtMs: NOW - DAY,
       earnedEndsAtMs: NOW + DAY
     });
-    expect(tierFor(earned)).toBe("plus");
+    expect(tierFor(earned)).toBe("free");
   });
 
   it("treats paid, trial and earned access as indistinguishable once resolved", () => {
@@ -71,7 +73,7 @@ describe("premium ring tier resolution", () => {
     const earned = tierFor(
       state({ earnedRewardId: "r", earnedPlan: "buddy_pro", earnedStartsAtMs: NOW - DAY, earnedEndsAtMs: NOW + DAY })
     );
-    expect(new Set([paid, trial, earned])).toEqual(new Set(["pro"]));
+    expect(new Set([paid, trial, earned])).toEqual(new Set(["free"]));
   });
 
   it("removes the ring once access expires", () => {
@@ -106,21 +108,22 @@ describe("premium ring tier resolution", () => {
 // ---------------------------------------------------------------------------
 
 describe("premium ring privacy", () => {
-  it("exposes only free, plus or pro", () => {
+  it("projects historical billing tiers as neutral public identity", () => {
     const tiers = new Set<PublicMembershipTier>();
     for (const plan of ["free", "buddy_plus", "buddy_pro"] as const) {
       tiers.add(publicMembershipTier(plan));
+      expect(premiumBadgeIdentity(plan)).toBeNull();
     }
-    expect(tiers).toEqual(new Set(["free", "plus", "pro"]));
+    expect(tiers).toEqual(new Set(["free"]));
+    for (const tier of ["free", "plus", "pro"] as const) {
+      expect(membershipTierLabel(tier)).toBeNull();
+    }
   });
 
-  it("cannot express how access was obtained", () => {
-    // publicMembershipTier takes a plan, not a billing state, so there is no
-    // parameter through which a source, provider or date could leak.
+  it("cannot express billing source or prestige", () => {
     for (const value of ["free", "buddy_plus", "buddy_pro", null, undefined] as const) {
-      const tier = publicMembershipTier(value);
-      expect(["free", "plus", "pro"]).toContain(tier);
-      expect(JSON.stringify(tier)).not.toMatch(/trial|earned|admin|stripe|paystack|renew|override/i);
+      expect(publicMembershipTier(value)).toBe("free");
+      expect(premiumBadgeIdentity(value)).toBeNull();
     }
   });
 

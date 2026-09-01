@@ -490,9 +490,9 @@ export const handleReconcilePaystackFees: JobHandler = async (admin) => {
   return reconcileMissingPaystackFees(admin, 50);
 };
 
-export const handlePremiumTrialLifecycle: JobHandler = async (admin) => {
-  const { processTrialLifecycle } = await import("@/lib/trials/service");
-  return processTrialLifecycle(admin);
+export const handlePremiumTrialLifecycle: JobHandler = async (_admin) => {
+  // Historical queued jobs complete harmlessly; the retired trial lifecycle never runs.
+  return 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -1178,9 +1178,9 @@ export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
   "streaks.close_expired_periods": handleCloseExpiredStreaks,
   "recap.generate_monthly": handleGenerateMonthlyRecaps,
   "birthdays.notify": async (admin) => deliverBirthdayNotifications(admin),
-  "rewards.earned_premium": async (admin) => {
-    const { processEarnedRewards } = await import("@/lib/rewards/earned-premium-service");
-    return processEarnedRewards(admin);
+  "rewards.earned_premium": async (_admin) => {
+    // Historical queued reward jobs are acknowledged without granting tier access.
+    return 0;
   },
   "expiry.plans": handleCompletePastPlans,
   "plans.close_chats": handleClosePlanChats,

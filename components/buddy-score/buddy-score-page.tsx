@@ -1,34 +1,27 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
-import { ArrowUpRight, Award, BadgeCheck, CheckCircle2, CircleDashed, Clock3, ShieldCheck, Trophy, UserRound } from "lucide-react";
+import { ArrowUpRight, Award, CheckCircle2, CircleDashed, Clock3, ShieldCheck, Trophy, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { JourneyProgress } from "@/components/journey/journey-progress";
 import type { MyProgressData } from "@/lib/progress/my-progress";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { PageHeader } from "@/components/app-shell/page-header";
 
 export function BuddyScorePage({ progress }: { progress: MyProgressData }) {
-  const { score, membership, profileCompletion, achievements, milestones, timeline, journey } = progress;
+  const { score, profileCompletion, achievements, milestones, timeline, journey } = progress;
   return (
     <div className="mx-auto w-full max-w-[1040px] space-y-8 pb-8 md:pt-6">
-      {/* Reached from Me rather than a bottom-nav tab, so it uses the nested
-          Back variant. */}
       <PageHeader title="My Progress" backHref="/profile" />
-
       <header className="pt-1 md:pt-0">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Private to you</p>
-        {/* Hidden on mobile: the shared header carries the title there. */}
         <h1 className="mt-2 hidden text-3xl font-semibold tracking-tight md:block">My Progress</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">A calm view of the trust, connections, and meaningful participation you are building over time.</p>
       </header>
 
       <section aria-labelledby="progress-identity-title">
         <SectionHeading id="progress-identity-title" title="Identity" description="The essentials that shape your Mad Buddy identity." />
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <IdentityCard label="Membership" value={membership.planLabel} icon={BadgeCheck} accessory={<PremiumPlanBadge plan={membership.plan} compact />} />
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <IdentityCard label="Reputation" value={score.level.label} icon={ShieldCheck} />
           <IdentityCard label="Buddy Score" value={String(score.total)} icon={Award} hint="Visible only to you" />
           <IdentityCard label="Profile completion" value={`${profileCompletion.percent}%`} icon={UserRound} hint={`${profileCompletion.completed} of ${profileCompletion.total} essentials`} />
@@ -66,8 +59,6 @@ export function BuddyScorePage({ progress }: { progress: MyProgressData }) {
 
       <section aria-labelledby="progress-journey-title"><SectionHeading id="progress-journey-title" title="Journey Progress" description="Your completed steps and the next meaningful action." /><div className="mt-4"><JourneyProgress journey={journey} /></div></section>
 
-      <section aria-labelledby="progress-membership-title"><SectionHeading id="progress-membership-title" title="Membership Progress" description="Your current access and progress-earned rewards." /><Card className="mt-4 p-5"><div className="flex items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">Current membership</p><p className="mt-1 text-lg font-semibold">{membership.planLabel}</p></div><PremiumPlanBadge plan={membership.plan} /></div>{score.earnedReward ? <div className="mt-4 border-t border-border/60 pt-4"><p className="text-sm font-semibold">Earned {score.earnedReward.plan === "buddy_pro" ? "Buddy Pro" : "Buddy Plus"} access</p><p className="mt-1 text-xs text-muted-foreground">{score.earnedReward.status === "grace" ? "Grace period active" : `Active until ${formatDate(score.earnedReward.expiresAt)}`}</p></div> : <p className="mt-4 border-t border-border/60 pt-4 text-sm leading-6 text-muted-foreground">Trusted participation is reviewed automatically for earned rewards. Internal eligibility calculations stay private.</p>}</Card></section>
-
       <section aria-labelledby="progress-milestones-title">
         <SectionHeading id="progress-milestones-title" title="Milestones" description="Meaningful first steps you have completed." />
         {milestones.length ? <Card className="mt-4 divide-y divide-border/60 p-0">{milestones.map((milestone) => <div key={milestone.key} className="flex items-center gap-3 px-4 py-3.5"><CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" /><span className="min-w-0 flex-1 text-sm font-medium">{milestone.label}</span><time className="text-xs text-muted-foreground" dateTime={milestone.reachedAt}>{formatDate(milestone.reachedAt)}</time></div>)}</Card> : <Card className="mt-4 flex items-center gap-3 p-5"><CircleDashed className="h-5 w-5 text-muted-foreground" aria-hidden="true" /><p className="text-sm text-muted-foreground">Completed milestones will appear here.</p></Card>}
@@ -84,9 +75,6 @@ export function BuddyScorePage({ progress }: { progress: MyProgressData }) {
 }
 
 function SectionHeading({ id, title, description }: { id: string; title: string; description: string }) { return <div><h2 id={id} className="text-xl font-semibold tracking-tight">{title}</h2><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>; }
-
-function IdentityCard({ label, value, icon: Icon, hint, accessory }: { label: string; value: string; icon: typeof Award; hint?: string; accessory?: ReactNode }) { return <Card className="min-h-32 p-4"><div className="flex items-start justify-between gap-2"><Icon className="h-5 w-5 text-primary" aria-hidden="true" />{accessory}</div><p className="mt-5 text-xs text-muted-foreground">{label}</p><p className="mt-1 font-semibold">{value}</p>{hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}</Card>; }
-
+function IdentityCard({ label, value, icon: Icon, hint }: { label: string; value: string; icon: typeof Award; hint?: string }) { return <Card className="min-h-32 p-4"><Icon className="h-5 w-5 text-primary" aria-hidden="true" /><p className="mt-5 text-xs text-muted-foreground">{label}</p><p className="mt-1 font-semibold">{value}</p>{hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}</Card>; }
 function PointDelta({ points }: { points: number }) { return <span className={points >= 0 ? "text-sm font-semibold text-emerald-500" : "text-sm font-semibold text-red-500"}>{points > 0 ? "+" : ""}{points}</span>; }
-
 function formatDate(value: string) { return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(value)); }

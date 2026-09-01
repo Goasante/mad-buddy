@@ -40,10 +40,7 @@ import {
   videoUploadValidationMessage,
   type ImageKind
 } from "@/lib/media/validation";
-import { checkFeature } from "@/lib/billing/entitlements";
-import { resolveUserEntitlements } from "@/lib/billing/service";
 import { isMomentsEnabled, isOpenMomentsEnabled } from "@/lib/features/feature-flags";
-import { getCurrentSubscriptionAccess } from "@/lib/premium/access";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -380,8 +377,7 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
   const guard = await guardAction(admin, { userId, surface: "moments" });
   if (!guard.allowed) return { ok: false, message: guard.message };
 
-  const access = await getCurrentSubscriptionAccess(userId);
-  const limits = contentTierLimitsFor(access.plan);
+  const limits = contentTierLimitsFor("free");
   const risk = detectLocationRisk(`${parsed.data.textContent ?? ""} ${parsed.data.caption ?? ""}`);
 
   const isSpotlight = parsed.data.audienceType === SPOTLIGHT_AUDIENCE_TYPE;
@@ -394,19 +390,9 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
       featureKey: "moments"
     });
 
-    const [enabled, entitlements] = await Promise.all([
-      isOpenMomentsEnabled(admin),
-      resolveUserEntitlements(admin, userId, nowMs)
-    ]);
+    const enabled = await isOpenMomentsEnabled(admin);
     if (!enabled) {
       return { ok: false, message: "Spotlight isn't available right now." };
-    }
-    // The canonical publishing capability. `public_moments` already existed as
-    // the Spotlight entitlement, so no parallel `spotlight_publish` key is
-    // introduced. resolveUserEntitlements honours admin tier/user overrides and
-    // billing grace, and this check is the authority — the UI only explains it.
-    if (!checkFeature(entitlements, "public_moments")) {
-      return { ok: false, message: "Publishing to Spotlight is included with Buddy Pro." };
     }
     if (!parsed.data.publicAudienceConfirmed) {
       return { ok: false, message: "Confirm that anyone on Mad Buddy may see this Moment." };
@@ -445,10 +431,7 @@ export async function createMomentAction(input: unknown): Promise<MomentActionSt
     if ((nearbyCount ?? 0) >= limits.maxActiveNearbyMoments) {
       return {
         ok: false,
-        message:
-          access.plan === "free"
-            ? "Free plan allows one active nearby Moment at a time."
-            : "You've reached your active nearby Moment limit."
+        message: "You've reached your active nearby Moment limit."
       };
     }
   }

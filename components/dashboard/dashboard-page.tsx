@@ -26,7 +26,6 @@ import {
 import type { LucideIcon } from "lucide-react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { updateVisibilityStatusAction } from "@/app/(app)/settings-actions";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
@@ -40,7 +39,6 @@ import type { VisibleMoment } from "@/lib/content/service";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { usePullRefreshListener } from "@/components/ui/pull-to-refresh";
 import { appCache, cacheKeys } from "@/lib/cache/entity-cache";
-import type { PublicMembershipTier } from "@/lib/billing/premium-identity";
 import { useAppMenu } from "@/hooks/app-menu-context";
 import { useInteractionPause, useSequenceHighlight } from "@/hooks/use-sequence-highlight";
 import { QuickControlsSheet } from "@/components/dashboard/quick-controls-sheet";
@@ -67,7 +65,7 @@ import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import type { UpcomingAgendaItem } from "@/lib/social/upcoming-agenda";
 import { type FreshnessState } from "@/lib/proximity/freshness";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
-import type { ActivityType, AvailabilityType, SubscriptionPlan } from "@/lib/supabase/database.types";
+import type { ActivityType, AvailabilityType } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { SmartCardHero } from "@/components/journey/smart-card";
@@ -99,8 +97,6 @@ type DashboardFriend = {
   glowStrength: number;
   statusText: string;
   lastActiveEstimate: string;
-  isPremiumThemeUnlocked: boolean;
-  membershipTier: PublicMembershipTier;
   confidence: ConfidenceLevel;
   muddyStatusLabel: string | null;
   availability: string | null;
@@ -118,8 +114,6 @@ type NearbyFriendApiItem = {
   status_text: string;
   last_active_estimate: string;
   freshness_state: FreshnessState;
-  is_premium_theme_unlocked: boolean;
-  membership_tier: PublicMembershipTier;
   confidence: ConfidenceLevel;
   muddy_availability: string | null;
   muddy_activity: string | null;
@@ -127,8 +121,6 @@ type NearbyFriendApiItem = {
 };
 
 type DashboardPageContentProps = {
-  subscriptionPlan?: SubscriptionPlan;
-  hasPremium?: boolean;
   initialVisibilityStatus?: "visible" | "ghost" | "app_open_only";
   displayName?: string;
   hasActiveStatus?: boolean;
@@ -304,8 +296,6 @@ function firstName(name: string): string {
 }
 
 export function DashboardPageContent({
-  subscriptionPlan = "free",
-  hasPremium = false,
   initialVisibilityStatus = "visible",
   displayName = "",
   hasActiveStatus = false,
@@ -987,7 +977,6 @@ export function DashboardPageContent({
           with their own -mx-4. At md+ the shell's content column returns and
           this padding steps aside. */}
       <div className="mx-auto w-full max-w-[560px] space-y-5 px-4 pt-4 md:px-0">
-        <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
         <PendingInvitePrompt />
 
         {/* ONE greeting, not two.
@@ -2265,9 +2254,6 @@ function toDashboardFriend(friend: NearbyFriendApiItem): DashboardFriend {
     glowStrength: friend.glow_strength,
     statusText: friend.status_text,
     lastActiveEstimate: friend.last_active_estimate,
-    isPremiumThemeUnlocked: friend.is_premium_theme_unlocked,
-    // Server-resolved; never derived from the boolean above.
-    membershipTier: friend.membership_tier ?? "free",
     confidence: friend.confidence,
     muddyStatusLabel: formatMuddyStatusLabel({
       availability: friend.muddy_availability,
@@ -2277,32 +2263,4 @@ function toDashboardFriend(friend: NearbyFriendApiItem): DashboardFriend {
     availability: friend.muddy_availability,
     freshnessState: friend.freshness_state
   };
-}
-
-function SubscriptionStatusPortal({ plan, hasPremium }: { plan: SubscriptionPlan; hasPremium: boolean }) {
-  const [target, setTarget] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      setTarget(document.getElementById("sidebar-subscription-status"));
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-  /* MONETIZATION RESET. This said "Buddy Pro active" / "Buddy Plus active" /
-     "Free plan" and linked to the three-tier billing UI. There is one boundary
-     now, and "Free plan" was actively misleading -- most of Mad Buddy is free
-     for everybody, so it described the product rather than the person. */
-  const label = hasPremium ? "Mad Buddy Access active" : "Mad Buddy Access";
-  if (!target) return null;
-  return createPortal(
-    <Link
-      href="/settings/access"
-      aria-label="Mad Buddy Access"
-      title={label}
-      data-subscription-status={label}
-      className="focus-ring grid h-11 w-11 place-items-center rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground dark:hover:bg-white/[0.05]"
-    >
-      <CircleDollarSign className="h-5 w-5" aria-hidden="true" />
-    </Link>,
-    target
-  );
 }

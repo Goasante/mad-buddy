@@ -33,7 +33,7 @@ describe("tierLimitsFor", () => {
        model moves entirely onto Linkr and UpFor. The assertion is kept -- the
        value it asserts is what changed. */
     expect(free.maxPersonalCircles).toBe(UNLIMITED);
-    expect(free.maxCircleMembers).toBe(20);
+    expect(free.maxCircleMembers).toBe(UNLIMITED);
     expect(free.maxCloseFriends).toBe(UNLIMITED);
   });
 

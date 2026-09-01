@@ -103,7 +103,7 @@ export async function resolveWallpaperForRender(
   try {
     const [catalog, selectedSlug] = await Promise.all([loadWallpaperCatalog(admin), loadPreferenceSlug(admin, userId)]);
     // Only sign a custom URL when the user actually selected it AND is entitled.
-    const needsCustom = selectedSlug === "custom" && plan !== "free";
+    const needsCustom = selectedSlug === "custom";
     const custom = needsCustom
       ? (await loadActiveCustom(admin, userId, { sign: true })).state
       : { url: null, isActive: selectedSlug === "custom" };
@@ -189,7 +189,7 @@ export async function loadWallpaperPickerData(
   return {
     picker: buildPickerCatalog(catalog, plan),
     selectedSlug: selectedSlug ?? DEFAULT_WALLPAPER_SLUG,
-    custom: { hasActive: custom.state.isActive, thumbUrl: custom.state.url, canUse: plan !== "free" }
+    custom: { hasActive: custom.state.isActive, thumbUrl: custom.state.url, canUse: true }
   };
 }
 

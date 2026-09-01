@@ -1,4 +1,3 @@
-import type { MembershipIdentity } from "@/lib/billing/membership";
 import type { BuddyScoreData } from "@/lib/engagement/buddy-score-service";
 import type { JourneyData } from "@/lib/journey/journey";
 import type { MilestoneName } from "@/lib/supabase/database.types";
@@ -28,7 +27,6 @@ export type ProgressTimelineItem = {
 
 export type MyProgressData = {
   score: BuddyScoreData;
-  membership: MembershipIdentity;
   profileCompletion: { completed: number; total: number; percent: number };
   achievements: {
     unlockedCount: number;

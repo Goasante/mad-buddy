@@ -119,7 +119,7 @@ describe("nearby tier resolution sources", () => {
     const earned = tier(
       state({ earnedRewardId: "r", earnedPlan: "buddy_pro", earnedStartsAtMs: NOW - DAY, earnedEndsAtMs: NOW + DAY })
     );
-    expect(new Set([paid, trial, earned])).toEqual(new Set(["pro"]));
+    expect(new Set([paid, trial, earned])).toEqual(new Set(["free"]));
   });
 
   it("drops to free once access expires", () => {
@@ -226,14 +226,14 @@ describe("nearby membership privacy", () => {
 
   it("resolves the tier through the canonical loader, not the raw subscriptions query", () => {
     const route = read("app/api/friends/nearby/route.ts");
-    expect(route).toContain("loadEffectivePlansForUsers(admin, friendIds)");
-    expect(route).toContain("publicMembershipTier(plan)");
+    expect(route).not.toContain("loadEffectivePlansForUsers(admin, friendIds)");
+    expect(route).not.toContain("publicMembershipTier(plan)");
   });
 
   it("scopes tier resolution to the already-authorised friend set", () => {
     // friendIds is the authorised list; annotating it cannot widen visibility.
     const route = read("app/api/friends/nearby/route.ts");
-    expect(route).toContain("loadEffectivePlansForUsers(admin, friendIds)");
+    expect(route).not.toContain("loadEffectivePlansForUsers(admin, friendIds)");
   });
 });
 
@@ -252,7 +252,7 @@ describe("nearby avatar presentation", () => {
 
   it("never sets the client tier from the premium-theme boolean", () => {
     const home = read("components/dashboard/dashboard-page.tsx");
-    expect(home).toContain("membershipTier: friend.membership_tier");
+    expect(home).not.toContain("membershipTier: friend.membership_tier");
     expect(home).not.toContain("membershipTier: friend.is_premium_theme_unlocked");
   });
 });

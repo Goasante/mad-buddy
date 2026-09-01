@@ -7,8 +7,7 @@ export const JOURNEY_STEP_IDS = [
   "create_first_plan",
   "complete_first_safe_arrival",
   "share_first_moment",
-  "reach_trusted_buddy",
-  "unlock_buddy_plus"
+  "reach_trusted_buddy"
 ] as const;
 
 export type JourneyStepId = (typeof JOURNEY_STEP_IDS)[number];
@@ -44,8 +43,7 @@ export const JOURNEY_DEFINITIONS: readonly StepDefinition[] = [
   { id: "create_first_plan", title: "Create First Plan", description: "Turn a connection into real plans.", unlockCondition: "Create your first non-draft Plan.", destination: "/plans", guideSlug: "plans-guide" },
   { id: "complete_first_safe_arrival", title: "Complete First Safe Arrival", description: "Let your circle know you got there safely.", unlockCondition: "Confirm your first Safe Arrival.", destination: "/safe-arrival", guideSlug: "safe-arrival-guide" },
   { id: "share_first_moment", title: "Share First Moment", description: "Share something with the people you choose.", unlockCondition: "Share your first valid Moment.", destination: "/moments", guideSlug: "moments-guide" },
-  { id: "reach_trusted_buddy", title: "Become a Trusted Buddy", description: "Show friends you're ready for safer meetups.", unlockCondition: "Reach the Trusted Buddy reputation level.", destination: "/buddy-score", guideSlug: "buddy-score-guide" },
-  { id: "unlock_buddy_plus", title: "Unlock Buddy Plus", description: "Get more from every connection.", unlockCondition: "Gain effective Buddy Plus or Buddy Pro access.", destination: "/billing", guideSlug: "subscription-guide" }
+  { id: "reach_trusted_buddy", title: "Become a Trusted Buddy", description: "Show friends you're ready for safer meetups.", unlockCondition: "Reach the Trusted Buddy reputation level.", destination: "/buddy-score", guideSlug: "buddy-score-guide" }
 ] as const;
 
 /**

@@ -311,7 +311,7 @@ export async function createDropAction(input: unknown): Promise<DropActionState>
   const limits = contentTierLimitsFor(access.plan);
 
   if (parsed.data.dropType === "event" && !limits.allowEventDrops) {
-    return { ok: false, message: "Event Drops are a Buddy Plus feature." };
+    return { ok: false, message: "Event Drops are not available right now." };
   }
 
   const { count: activeDrops } = await admin

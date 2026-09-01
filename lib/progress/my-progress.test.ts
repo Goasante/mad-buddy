@@ -13,8 +13,7 @@ const score: BuddyScoreData = {
   recentActivity: [
     { id: "plan", eventType: "plan_completed", label: "Completed plan", category: "Plans", points: 40, createdAt: "2026-07-04T12:00:00.000Z" },
     { id: "achievement-ledger", eventType: "achievement_earned", label: "Achievement earned", category: "Achievements", points: 25, createdAt: "2026-07-03T12:00:00.000Z" }
-  ],
-  earnedReward: null
+  ]
 };
 
 const achievements: ProgressAchievement[] = [
