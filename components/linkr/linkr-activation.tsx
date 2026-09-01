@@ -12,6 +12,7 @@ import {
   resolveActivationRequirements
 } from "@/lib/linkr/rules";
 import { LinkrOrb } from "@/components/linkr/linkr-orb";
+import { LinkrStateArtwork } from "@/components/linkr/linkr-state-artwork";
 import { useImmersiveWhile } from "@/components/app-shell/immersive-mode";
 
 /**
@@ -176,7 +177,11 @@ export function LinkrOffScreen({
       </h1>
       <p className="linkr-off__privacy">{LINKR_COPY.offPrivacy}</p>
 
-      <LinkrOrb variant="off" />
+      <LinkrStateArtwork
+        variant="loading"
+        priority
+        className="my-2 w-full max-w-[20rem] sm:max-w-[22rem]"
+      />
 
       <button type="button" className="linkr-primary" onClick={() => setStage("consent")}>
         {LINKR_COPY.turnOn}
