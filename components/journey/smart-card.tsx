@@ -272,6 +272,18 @@ export function SmartCardHero({
           className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(100deg,rgba(254,251,243,0.96)_0%,rgba(254,251,243,0.90)_54%,rgba(254,251,243,0.48)_80%,rgba(254,251,243,0.12)_100%)] dark:bg-transparent"
         />
       ) : null}
+      {/* In dark mode a deferred advanced Journey still runs the prism, but its
+          brightest pass can be almost white. The card's deferred copy is also
+          light in dark mode, so the two collapse into each other. Keep the
+          earned prism identity, but put a deterministic dark veil over it so
+          the copy stays readable while the warm light remains visible at the
+          right edge. */}
+      {showPrism && deferred ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-[1] hidden bg-[linear-gradient(100deg,rgba(18,6,15,0.94)_0%,rgba(18,6,15,0.84)_54%,rgba(18,6,15,0.58)_80%,rgba(18,6,15,0.34)_100%)] dark:block"
+        />
+      ) : null}
       {prominent || showPrism ? null : (
         <GlareHover
           width="100%"
