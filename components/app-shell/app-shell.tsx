@@ -1372,7 +1372,7 @@ function MobileNav({
       * not scroll. Capping the <ul> did nothing because the OVERFLOW IS IN THE
       * CHILDREN. `min-w-0` lets each tab shrink; the label truncates and the
       * 44px icon target is unaffected. */}
-    <li className="min-w-0 flex-1 pb-1 pt-3">
+    <li className="min-w-0 flex-1 pb-0 pt-4">
           <MadBuddyOrb
             isActive={homeActive}
             onHomeReselect={onHomeReselect}
@@ -1418,7 +1418,7 @@ function MobileNavTab({
    * CHILDREN. `min-w-0` lets each tab shrink; the label truncates and the icon
    * target is unaffected. */
   return (
-    <li className="min-w-0 flex-1 pb-1 pt-3">
+    <li className="min-w-0 flex-1 pb-0 pt-4">
       <Link
         href={tab.href}
         prefetch={false}
