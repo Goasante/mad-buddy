@@ -20,25 +20,18 @@ import { getReadinessReport } from "@/lib/health/readiness";
 import { bucketTotal, bucketsFromDailyCounts, planMixFromCounts } from "@/lib/admin/overview";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
-// Validated reference palette — ordinal blue ramp for the plan tiers (dark surface).
 const PLAN_COLORS: Record<string, string> = {
-  free: "#86b6ef",
-  buddy_plus: "#3987e5",
-  buddy_pro: "#184f95"
+  free: "#77736f",
+  buddy_plus: "#E88C2B",
+  buddy_pro: "#b85f27"
 };
 
-// The layout above this already gates on admin auth + role before rendering
-// anything, so there is no security reason for THIS page's 11-query metrics
-// fetch to also block first paint. Splitting it into its own Suspense
-// boundary lets the header (and the surrounding AdminShell chrome) reach the
-// browser immediately, so the page never sits fully blank while Supabase
-// answers eleven parallel queries — it shows the shell, then the numbers.
 export default function AdminOverviewPage() {
   return (
-    <div className="space-y-7">
+    <div className="space-y-8">
       <AdminPageHeader
-        title="Overview"
-        description="A live operational summary of accounts, safety, support, billing, privacy, and platform readiness."
+        title="Command center"
+        description="See what needs attention across accounts, safety, support, access, privacy, and platform health — without digging through every tool first."
       />
       <Suspense fallback={<AdminOverviewSkeleton />}>
         <AdminOverviewData />
@@ -72,8 +65,6 @@ async function AdminOverviewData() {
     admin.from("friend_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
     admin.from("emergency_controls").select("control_key, is_disabled").order("control_key"),
     admin.from("admin_audit_events").select("id, action, target_type, created_at").order("created_at", { ascending: false }).limit(6),
-    // Grouped in Postgres (date_trunc+count / group by plan) instead of
-    // shipping up to 10,000 raw rows to the app server just to count them.
     admin.rpc("admin_daily_signup_counts", { p_since: since }),
     admin.rpc("admin_active_plan_mix")
   ]);
@@ -84,15 +75,52 @@ async function AdminOverviewData() {
   const planRows = planMixFromCounts(planMixResult.data ?? []).map((row) => ({
     label: row.label,
     value: row.count,
-    color: PLAN_COLORS[row.plan] ?? "#3987e5"
+    color: PLAN_COLORS[row.plan] ?? "#E88C2B"
   }));
   const hasQueryError = [usersResult, reportsResult, premiumResult, supportResult, privacyResult].some((result) => result.error);
+  const openWork = (reportsResult.count ?? 0) + (supportResult.count ?? 0) + (privacyResult.count ?? 0);
 
   return (
     <>
-      <div className="flex justify-end">
-        <AdminStatus label={readiness.ok ? "Systems ready" : "Needs attention"} tone={readiness.ok ? "success" : "warning"} />
-      </div>
+      <section className="grid gap-3 lg:grid-cols-[1.35fr_0.8fr_0.8fr]">
+        <Card className="relative overflow-hidden rounded-[24px] border-white/[0.08] bg-[linear-gradient(135deg,rgba(232,140,43,0.09),rgba(255,255,255,0.025))] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.14)]">
+          <span aria-hidden="true" className="pointer-events-none absolute -right-16 -top-20 h-44 w-44 rounded-full bg-[#E88C2B]/10 blur-3xl" />
+          <div className="relative flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[#d99b63]">Operational pulse</p>
+              <p className="mt-2 text-xl font-semibold tracking-[-0.025em] text-white">
+                {readiness.ok ? "Platform is ready" : "Platform needs attention"}
+              </p>
+              <p className="mt-1.5 max-w-lg text-xs leading-5 text-[#98938d]">
+                Readiness checks and emergency controls are summarized here so urgent platform state is visible immediately.
+              </p>
+            </div>
+            <AdminStatus label={readiness.ok ? "Systems ready" : "Review required"} tone={readiness.ok ? "success" : "warning"} />
+          </div>
+          <div className="relative mt-4 flex flex-wrap gap-2 border-t border-white/[0.07] pt-4">
+            <span className="rounded-full border border-white/[0.08] bg-black/10 px-3 py-1.5 text-xs text-[#aaa59f]">
+              <strong className="mr-1.5 font-semibold text-white">{disabledControls.length}</strong>
+              disabled controls
+            </span>
+            <span className="rounded-full border border-white/[0.08] bg-black/10 px-3 py-1.5 text-xs text-[#aaa59f]">
+              <strong className="mr-1.5 font-semibold text-white">{openWork}</strong>
+              open work items
+            </span>
+          </div>
+        </Card>
+
+        <Card className="rounded-[24px] border-white/[0.08] bg-white/[0.025] p-5 shadow-[0_16px_45px_rgba(0,0,0,0.12)]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#89847e]">14-day growth</p>
+          <p className="mt-3 text-3xl font-semibold tabular-nums tracking-[-0.04em] text-white">{signupTotal}</p>
+          <p className="mt-1.5 text-xs leading-5 text-[#89847e]">New accounts across the last two weeks.</p>
+        </Card>
+
+        <Card className="rounded-[24px] border-white/[0.08] bg-white/[0.025] p-5 shadow-[0_16px_45px_rgba(0,0,0,0.12)]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#89847e]">Pending connections</p>
+          <p className="mt-3 text-3xl font-semibold tabular-nums tracking-[-0.04em] text-white">{pendingRequestsResult.count ?? 0}</p>
+          <p className="mt-1.5 text-xs leading-5 text-[#89847e]">Friend requests currently in progress.</p>
+        </Card>
+      </section>
 
       {hasQueryError ? <AdminQueryError message="Some overview metrics could not be loaded. Available data is still shown." /> : null}
 
@@ -100,15 +128,15 @@ async function AdminOverviewData() {
         <AdminMetricCard icon={UsersRound} label="Total users" value={usersResult.count ?? 0} hint="Non-deleted profiles" href="/admin/users" />
         <AdminMetricCard icon={ShieldAlert} label="Safety queue" value={reportsResult.count ?? 0} hint="Open and reviewing reports" tone={(reportsResult.count ?? 0) > 0 ? "danger" : "success"} href="/admin/reports" />
         <AdminMetricCard icon={Headphones} label="Support queue" value={supportResult.count ?? 0} hint="Tickets awaiting resolution" tone={(supportResult.count ?? 0) > 0 ? "warning" : "success"} href="/admin/support" />
-        <AdminMetricCard icon={CreditCard} label="Premium accounts" value={premiumResult.count ?? 0} hint="Active or trialing" tone="orange" href="/admin/billing" />
+        <AdminMetricCard icon={CreditCard} label="Paid access" value={premiumResult.count ?? 0} hint="Active or trialing subscriptions" tone="orange" href="/admin/billing" />
       </section>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,0.9fr)]">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,0.9fr)]">
         <AdminSection title="New accounts" description="Sign-ups per day over the last 14 days. Counts only.">
-          <Card className="p-4">
-            <div className="mb-2 flex items-baseline gap-2">
-              <span className="text-2xl font-semibold tabular-nums">{signupTotal}</span>
-              <span className="text-xs text-muted-foreground">in the last 14 days</span>
+          <Card className="rounded-[24px] border-white/[0.08] bg-white/[0.025] p-5 shadow-[0_16px_45px_rgba(0,0,0,0.12)]">
+            <div className="mb-3 flex items-baseline gap-2">
+              <span className="text-2xl font-semibold tabular-nums tracking-[-0.03em] text-white">{signupTotal}</span>
+              <span className="text-xs text-[#89847e]">in the last 14 days</span>
             </div>
             {signupsResult.error ? (
               <AdminQueryError message="The sign-up trend could not be loaded." />
@@ -118,12 +146,12 @@ async function AdminOverviewData() {
           </Card>
         </AdminSection>
 
-        <AdminSection title="Premium plan mix" description="Active and trialing paid subscriptions.">
-          <Card className="p-4">
+        <AdminSection title="Access mix" description="Active and trialing subscriptions by plan.">
+          <Card className="rounded-[24px] border-white/[0.08] bg-white/[0.025] p-5 shadow-[0_16px_45px_rgba(0,0,0,0.12)]">
             {planMixResult.error ? (
-              <AdminQueryError message="The plan mix could not be loaded." />
+              <AdminQueryError message="The access mix could not be loaded." />
             ) : planRows.every((row) => row.value === 0) ? (
-              <AdminEmptyState icon={CreditCard} title="No paid subscriptions yet" description="Active plans will appear here." />
+              <AdminEmptyState icon={CreditCard} title="No paid access yet" description="Active subscriptions will appear here." />
             ) : (
               <BarList rows={planRows} unitLabel="accounts" />
             )}
@@ -131,9 +159,9 @@ async function AdminOverviewData() {
         </AdminSection>
       </div>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
         <AdminSection title="Operations queues" description="Current work that may require staff attention.">
-          <Card className="divide-y divide-border/70 overflow-hidden p-0">
+          <Card className="divide-y divide-white/[0.07] overflow-hidden rounded-[24px] border-white/[0.08] bg-white/[0.025] p-0 shadow-[0_16px_45px_rgba(0,0,0,0.12)]">
             <QueueRow label="Friend requests in progress" value={pendingRequestsResult.count ?? 0} href="/admin/users" />
             <QueueRow label="Privacy requests" value={privacyResult.count ?? 0} href="/admin/privacy" />
             <QueueRow label="Support tickets" value={supportResult.count ?? 0} href="/admin/support" />
@@ -145,22 +173,22 @@ async function AdminOverviewData() {
           title="Platform readiness"
           description="Environment checks and emergency-control state."
           action={
-            <Button variant="ghost" size="sm" asChild>
+            <Button variant="ghost" size="sm" className="text-[#aaa59f] hover:bg-white/[0.05] hover:text-white" asChild>
               <Link href="/admin/system">Open system <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
             </Button>
           }
         >
-          <Card className="space-y-3 p-4">
+          <Card className="space-y-4 rounded-[24px] border-white/[0.08] bg-white/[0.025] p-5 shadow-[0_16px_45px_rgba(0,0,0,0.12)]">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-muted-foreground">Readiness checks</span>
+              <span className="text-sm text-[#aaa59f]">Readiness checks</span>
               <AdminStatus label={readiness.ok ? "Passing" : "Review"} tone={readiness.ok ? "success" : "warning"} />
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-muted-foreground">Disabled controls</span>
-              <span className="text-sm font-semibold tabular-nums">{disabledControls.length}</span>
+            <div className="flex items-center justify-between gap-3 border-t border-white/[0.07] pt-4">
+              <span className="text-sm text-[#aaa59f]">Disabled controls</span>
+              <span className="text-sm font-semibold tabular-nums text-white">{disabledControls.length}</span>
             </div>
             {disabledControls.length > 0 ? (
-              <div className="flex flex-wrap gap-2 border-t border-border/70 pt-3">
+              <div className="flex flex-wrap gap-2 border-t border-white/[0.07] pt-4">
                 {disabledControls.map((control) => (
                   <AdminStatus key={control.control_key} label={humanizeAdminValue(control.control_key)} tone="danger" />
                 ))}
@@ -174,7 +202,7 @@ async function AdminOverviewData() {
         title="Recent admin activity"
         description="Append-only operational actions. Private content is not shown."
         action={
-          <Button variant="ghost" size="sm" asChild>
+          <Button variant="ghost" size="sm" className="text-[#aaa59f] hover:bg-white/[0.05] hover:text-white" asChild>
             <Link href="/admin/audit">View audit log <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
           </Button>
         }
@@ -183,14 +211,14 @@ async function AdminOverviewData() {
         {!auditResult.error && (auditResult.data ?? []).length === 0 ? (
           <AdminEmptyState icon={Activity} title="No admin activity yet" description="Audited staff actions will appear here." />
         ) : (
-          <Card className="divide-y divide-border/70 overflow-hidden p-0">
+          <Card className="divide-y divide-white/[0.07] overflow-hidden rounded-[24px] border-white/[0.08] bg-white/[0.025] p-0 shadow-[0_16px_45px_rgba(0,0,0,0.12)]">
             {(auditResult.data ?? []).map((event) => (
-              <div key={event.id} className="flex items-center justify-between gap-4 px-4 py-3.5">
+              <div key={event.id} className="flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-white/[0.025]">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{humanizeAdminValue(event.action)}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{event.target_type ? humanizeAdminValue(event.target_type) : "Platform"}</p>
+                  <p className="truncate text-sm font-medium text-[#eeeae5]">{humanizeAdminValue(event.action)}</p>
+                  <p className="mt-1 text-xs text-[#89847e]">{event.target_type ? humanizeAdminValue(event.target_type) : "Platform"}</p>
                 </div>
-                <time className="shrink-0 text-xs text-muted-foreground">{formatAdminDate(event.created_at, true)}</time>
+                <time className="shrink-0 text-xs text-[#77736f]">{formatAdminDate(event.created_at, true)}</time>
               </div>
             ))}
           </Card>
@@ -202,35 +230,38 @@ async function AdminOverviewData() {
 
 function QueueRow({ label, value, href }: { label: string; value: number; href: "/admin/users" | "/admin/privacy" | "/admin/support" | "/admin/reports" }) {
   return (
-    <Link href={href as Route} className="focus-ring safe-motion flex items-center justify-between gap-4 px-4 py-3.5 hover:bg-secondary/35">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="flex items-center gap-3 text-sm font-semibold tabular-nums">
+    <Link href={href as Route} className="focus-ring safe-motion group flex items-center justify-between gap-4 px-5 py-4 hover:bg-white/[0.03]">
+      <span className="text-sm text-[#aaa59f] group-hover:text-[#ded9d3]">{label}</span>
+      <span className="flex items-center gap-3 text-sm font-semibold tabular-nums text-white">
         {value}
-        <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <ArrowRight className="h-4 w-4 text-[#6f6b66] transition-transform group-hover:translate-x-0.5 group-hover:text-[#E88C2B]" aria-hidden="true" />
       </span>
     </Link>
   );
 }
 
-// Mirrors the loaded layout's approximate shape (metric-card grid, two
-// side-by-side sections) so nothing jumps when the real content swaps in.
 function AdminOverviewSkeleton() {
   return (
-    <div className="animate-pulse space-y-7" aria-hidden="true">
+    <div className="animate-pulse space-y-8" aria-hidden="true">
+      <section className="grid gap-3 lg:grid-cols-[1.35fr_0.8fr_0.8fr]">
+        <div className="h-44 rounded-[24px] bg-white/[0.035]" />
+        <div className="h-44 rounded-[24px] bg-white/[0.035]" />
+        <div className="h-44 rounded-[24px] bg-white/[0.035]" />
+      </section>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="h-24 rounded-2xl bg-secondary/60" />
+          <div key={index} className="h-32 rounded-[24px] bg-white/[0.035]" />
         ))}
       </section>
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,0.9fr)]">
-        <div className="h-64 rounded-2xl bg-secondary/60" />
-        <div className="h-64 rounded-2xl bg-secondary/60" />
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,0.9fr)]">
+        <div className="h-72 rounded-[24px] bg-white/[0.035]" />
+        <div className="h-72 rounded-[24px] bg-white/[0.035]" />
       </div>
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-        <div className="h-48 rounded-2xl bg-secondary/60" />
-        <div className="h-48 rounded-2xl bg-secondary/60" />
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+        <div className="h-52 rounded-[24px] bg-white/[0.035]" />
+        <div className="h-52 rounded-[24px] bg-white/[0.035]" />
       </div>
-      <div className="h-56 rounded-2xl bg-secondary/60" />
+      <div className="h-60 rounded-[24px] bg-white/[0.035]" />
     </div>
   );
 }
