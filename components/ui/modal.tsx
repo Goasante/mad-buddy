@@ -134,7 +134,7 @@ export function Modal({
             (event.currentTarget as HTMLElement | null)?.focus({ preventScroll: true });
           }}
           className={cn(
-            "flex flex-col overflow-hidden border border-border/80 bg-card outline-none",
+            "flex flex-col overflow-hidden border border-border/80 bg-card/95 outline-none supports-[backdrop-filter]:bg-card/90",
             compact ? "p-3" : "p-4",
             isSheet
               ? // Phone: pinned to the bottom, full width, safe-area padded,
@@ -215,18 +215,11 @@ export function Modal({
           <div
             data-modal-body="true"
             className={cn(
-              /* min-w-0 IS WHAT KEEPS THE CONTENTS FROM SLIDING SIDEWAYS.
-                 A flex child defaults to min-width:auto -- its intrinsic
-                 content minimum, not its container -- so one unbreakable child
-                 (a long word, a wide row, a grid track) makes this scroller
-                 wider than the panel. The panel is overflow-hidden, so the
-                 surplus does not scroll: it is simply clipped, and the content
-                 inside reads as shifted to one side while the dialog frame
-                 itself stays perfectly still. Exactly the reported symptom,
-                 and it appears only on the steps whose content happens to be
-                 wide, which is why it looked like a broken step transition
-                 rather than a width bug. */
-              "min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain",
+              /* This is a vertical scroller only. Explicitly hiding X overflow
+                 matters because overflow-y:auto can otherwise make overflow-x
+                 compute to auto as well, which lets touch/trackpad gestures pan
+                 the modal body sideways even though the panel itself is fixed. */
+              "min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-contain touch-pan-y",
               hideTitle ? "mt-0" : compact ? "mt-2.5" : "mt-4"
             )}
           >
