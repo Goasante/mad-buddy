@@ -179,10 +179,6 @@ export function ChatSettingsV4({
               ) : null}
             </section>
           ) : null}
-
-          <div className="rounded-[20px] border border-primary/16 bg-primary/7 p-3 text-xs leading-relaxed text-muted-foreground">
-            Chats are protected by Mad Buddy's server authorization and transport encryption. End-to-end encryption is not shown here because it requires a separate cryptographic key architecture, not a cosmetic switch.
-          </div>
         </div>
       </Modal>
 
