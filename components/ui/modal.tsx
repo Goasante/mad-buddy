@@ -134,7 +134,7 @@ export function Modal({
             (event.currentTarget as HTMLElement | null)?.focus({ preventScroll: true });
           }}
           className={cn(
-            "flex flex-col overflow-hidden border border-border/80 bg-card/95 outline-none supports-[backdrop-filter]:bg-card/90",
+            "flex flex-col overflow-hidden border border-border/80 bg-card outline-none",
             compact ? "p-3" : "p-4",
             isSheet
               ? // Phone: pinned to the bottom, full width, safe-area padded,
