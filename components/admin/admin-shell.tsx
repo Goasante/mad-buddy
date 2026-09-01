@@ -130,7 +130,7 @@ export function AdminShell({ children, email, isDevelopmentFallback, permissions
   const CurrentIcon = currentItem?.icon ?? Gauge;
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#090a0c] text-[#f7f4ef]">
+    <div className="relative min-h-screen min-h-[100svh] overflow-x-hidden bg-[#090a0c] text-[#f7f4ef]">
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_82%_2%,rgba(232,140,43,0.10),transparent_30%),radial-gradient(circle_at_15%_95%,rgba(78,4,1,0.20),transparent_34%)]"
@@ -150,7 +150,7 @@ export function AdminShell({ children, email, isDevelopmentFallback, permissions
             aria-label="Close admin navigation"
             onClick={() => setMobileNavigationOpen(false)}
           />
-          <aside className="absolute inset-y-2 left-2 flex w-[min(88vw,320px)] flex-col overflow-hidden rounded-[28px] border border-white/[0.10] bg-[#0f1013] shadow-[0_24px_80px_rgba(0,0,0,0.48)]">
+          <aside className="absolute bottom-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] left-[calc(env(safe-area-inset-left,0px)+0.5rem)] top-[calc(env(safe-area-inset-top,0px)+0.5rem)] flex w-[min(88vw,320px)] flex-col overflow-hidden rounded-[28px] border border-white/[0.10] bg-[#0f1013] shadow-[0_24px_80px_rgba(0,0,0,0.48)]">
             <div className="relative">
               <AdminRailHeader />
               <button
@@ -173,7 +173,7 @@ export function AdminShell({ children, email, isDevelopmentFallback, permissions
       ) : null}
 
       <div className="relative lg:pl-[300px]">
-        <header className="sticky top-0 z-30 px-3 pt-3 sm:px-5 lg:px-8 lg:pt-4">
+        <header className="sticky top-0 z-30 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[calc(env(safe-area-inset-top,0px)+0.75rem)] sm:pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(1.25rem,env(safe-area-inset-right))] lg:px-8 lg:pt-4">
           <div className="mx-auto flex min-h-16 max-w-[1560px] items-center justify-between gap-4 rounded-[22px] border border-white/[0.08] bg-[#0f1013]/86 px-3 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur-2xl sm:px-4 lg:px-5">
             <div className="flex min-w-0 items-center gap-3">
               <button
@@ -215,7 +215,7 @@ export function AdminShell({ children, email, isDevelopmentFallback, permissions
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1560px] px-3 pb-12 pt-5 sm:px-5 sm:pt-6 lg:px-8 lg:pb-16 lg:pt-7">
+        <main className="mx-auto w-full max-w-[1560px] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(3rem,env(safe-area-inset-bottom))] pt-5 sm:pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(1.25rem,env(safe-area-inset-right))] sm:pt-6 lg:px-8 lg:pb-16 lg:pt-7">
           {children}
         </main>
       </div>
