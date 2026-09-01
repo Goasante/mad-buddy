@@ -67,7 +67,7 @@ const CONTROLS: SheetRow[] = [
  * the invite row says Invite Buddies rather than Invite Friends.
  */
 const COMMUNITY: SheetRow[] = [
-  { href: "/invites", label: "Invite Buddies", subtitle: "Invite people you know", icon: UserPlus },
+  { href: "/invite", label: "Invite Buddies", subtitle: "Invite people you know", icon: UserPlus },
   { href: "/help", label: "Help & Support", subtitle: "Get help and contact us", icon: HelpCircle },
   { href: "/settings/feedback", label: "Send Feedback", subtitle: "Share your thoughts", icon: LifeBuoy },
   { href: "/about", label: "About Mad Buddy", subtitle: "Version, legal, and more", icon: Info }

@@ -57,7 +57,7 @@ describe("account hub destinations", () => {
     ["Settings", "Preferences & account", "/settings"],
     ["Privacy & Safety", "Control your data & safety", "/settings/privacy"],
     ["Glow & Visibility", "Manage your presence", "/settings/glow-visibility"],
-    ["Invite Buddies", "Invite people you know", "/invites"],
+    ["Invite Buddies", "Invite people you know", "/invite"],
     ["Help & Support", "Get help and contact us", "/help"],
     ["Send Feedback", "Share your thoughts", "/settings/feedback"],
     ["About Mad Buddy", "Version, legal, and more", "/about"]
