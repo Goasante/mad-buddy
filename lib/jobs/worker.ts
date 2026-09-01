@@ -98,6 +98,23 @@ async function failJob(
   return outcome.status === "dead_letter" ? "dead_letter" : "retrying";
 }
 
+function concreteFailureCode(caught: unknown): string {
+  if (caught instanceof JobError) return caught.code;
+
+  if (caught && typeof caught === "object") {
+    const raw = (caught as { code?: unknown }).code;
+    if (typeof raw === "string" && raw.trim()) {
+      // Keep the queue field bounded and useful. Supabase/Postgres/PostgREST
+      // codes are short (for example 42501, 42P01, PGRST202), and preserving
+      // them makes an operator able to diagnose the real failing dependency
+      // instead of every unexpected database error becoming INTERNAL_ERROR.
+      return raw.trim().slice(0, 64);
+    }
+  }
+
+  return "INTERNAL_ERROR";
+}
+
 /**
  * One tick: enqueue what's due, then drain a bounded batch. Bounded so a
  * single invocation can't exceed the platform's function time limit, the next
@@ -143,7 +160,7 @@ export async function runTick(admin: Admin, workerId: string): Promise<TickResul
       });
       void count;
     } catch (caught) {
-      const code = caught instanceof JobError ? caught.code : "INTERNAL_ERROR";
+      const code = concreteFailureCode(caught);
       const outcome = await failJob(admin, job, code);
       result.failed += 1;
       if (outcome === "dead_letter") result.deadLettered += 1;
