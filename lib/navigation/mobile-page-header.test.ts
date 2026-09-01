@@ -310,28 +310,28 @@ describe("stage 1b rollout", () => {
 describe("layout identity queries", () => {
   const layout = read("app/(app)/layout.tsx");
 
-  it("runs the identity loads in the existing parallel batch", () => {
+  it("runs the identity load in the existing parallel batch", () => {
     const start = layout.indexOf("const [adminContext");
     const batch = layout.slice(start, layout.indexOf("]);", start));
     expect(batch).toContain("await Promise.all([");
-    // Both new loads live inside that one batch, adding no serial latency.
-    expect(batch).toContain("loadBuddyScoreLevel");
-    expect(batch).toContain("bio, mood_status");
+    // The shell's identity comes from that one batch, adding no serial
+    // latency to a layout every authenticated page waits on.
+    expect(batch).toContain("username, avatar_url");
   });
 
-  it("loads the Buddy Score level exactly once app-wide", () => {
-    const callSites = layout.match(/loadBuddyScoreLevel\(/g) ?? [];
-    expect(callSites.length).toBe(1);
+  it("selects only the identity columns the shell actually renders", () => {
+    // The Account Hub's identity header shows name and avatar. It used to
+    // show a Buddy Score level and a profile-completion percentage as
+    // read-only status; removing that display removed the only consumer of
+    // the score load and of the bio/mood columns that fed the percentage.
+    expect(layout).not.toContain("loadBuddyScoreLevel");
+    expect(layout).not.toContain("profileCompletionPercent");
+    expect(layout).not.toContain("bio, mood_status");
     expect(read("app/(app)/dashboard/page.tsx")).not.toContain("loadBuddyScoreLevel");
   });
 
-  it("guards both loads on the server env, so a missing config cannot throw", () => {
+  it("guards the load on the server env, so a missing config cannot throw", () => {
     expect(layout).toContain("user && env.url && env.serviceRoleKey");
-  });
-
-  it("degrades to a base level rather than failing the shell", () => {
-    // loadBuddyScoreLevel ignores the query error and falls back to `[]`.
-    expect(read("lib/engagement/buddy-score-service.ts")).toContain("calculateBuddyScoreTotal(data ?? [])");
   });
 });
 
@@ -410,9 +410,10 @@ describe("app menu sheet", () => {
 
   it("resolves its identity once in the layout", () => {
     const layout = read("app/(app)/layout.tsx");
-    expect(layout).toContain("loadBuddyScoreLevel");
-    expect(layout).toContain("profileCompletionPercent(profileResult.data)");
-    // Home's duplicate level load is gone, so the ledger is read once.
+    // Name and avatar are read once here and handed to the shell, so no
+    // screen loads identity for the menu itself.
+    expect(layout).toContain("currentDisplayName={profileResult.data?.full_name");
+    expect(layout).toContain("currentAvatarUrl={profileResult.data?.avatar_url");
     expect(read("app/(app)/dashboard/page.tsx")).not.toContain("loadBuddyScoreLevel");
   });
 });

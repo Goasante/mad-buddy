@@ -261,10 +261,27 @@
   }
 }
 @media (min-width: 640px) {
+  /* The Account Hub is anchored top-RIGHT on desktop, so it scales out of
+     that corner rather than out of the middle of its own top edge. */
   .menu-sheet-panel[data-state="open"] {
     animation: modal-drop-panel-in 190ms cubic-bezier(0.16, 1, 0.3, 1);
-    transform-origin: top center;
+    transform-origin: top right;
   }
+}
+
+/* Sign out, in the Account Hub only.
+   --destructive is tuned for FILLED controls, where it is a background under
+   white text. As text on the hub's light card it measures 2.72:1, under the
+   4.5:1 minimum, so the light theme gets a darker red of the same hue here.
+   The dark theme already clears it (6.21:1) on its own surface and keeps the
+   shared token. Scoped to this class rather than changed globally: every
+   other destructive surface in the app is the filled shape the token was
+   built for. */
+.account-hub-danger {
+  color: hsl(0 74% 42%);
+}
+html.dark .account-hub-danger {
+  color: hsl(var(--destructive));
 }
 
 @keyframes journey-target-glow-pulse {
