@@ -29,6 +29,7 @@ type SignupFormProps = {
 
 export function SignupForm({ initialError = null }: SignupFormProps) {
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
+  const turnstileConfigMissing = process.env.NODE_ENV === "production" && !turnstileSiteKey;
   const [isPending, startTransition] = useTransition();
   const [showPassword, setShowPassword] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
@@ -51,6 +52,14 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
   });
 
   function onSubmit(values: SignupFormValues) {
+    if (turnstileConfigMissing) {
+      setActionState({
+        ok: false,
+        message: "Account creation is temporarily unavailable while security verification starts. Try again shortly."
+      });
+      return;
+    }
+
     setActionState(null);
     startTransition(async () => {
       try {
@@ -145,6 +154,13 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
         resetKey={turnstileResetKey}
       />
 
+      {turnstileConfigMissing ? (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm leading-6 text-amber-900 dark:text-amber-100" role="alert">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          Security verification is starting up. Try again shortly.
+        </div>
+      ) : null}
+
       {actionState ? (
         <div
           className={`flex items-start gap-2 rounded-xl border p-3 text-sm leading-6 ${
@@ -166,7 +182,7 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
       <Button
         type="submit"
         className="w-full"
-        disabled={isPending || Boolean(turnstileSiteKey && !turnstileToken)}
+        disabled={isPending || turnstileConfigMissing || Boolean(turnstileSiteKey && !turnstileToken)}
       >
         {isPending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
         {isPending ? "Creating account..." : "Create account"}
