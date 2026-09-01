@@ -6,6 +6,7 @@ import {
   ArrowDown,
   ArrowLeft,
   BarChart3,
+  Check,
   ChevronDown,
   ChevronUp,
   Loader2,
@@ -104,6 +105,10 @@ type InboxPreference = {
 type InboxPreferenceMap = Record<string, Partial<InboxPreference>>;
 type DeleteTarget = { message: ChatMessageView } | null;
 type ForwardTarget = { message: ChatMessageView } | null;
+type ThreadCacheEntry = {
+  messages: ChatMessageView[];
+  replyContexts: Record<string, ReplyContext>;
+};
 
 const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -206,6 +211,8 @@ export function MessagesPageV4({
   const nearBottomRef = useRef(true);
   const initialScrollPendingRef = useRef(false);
   const mountedRef = useRef(true);
+  const loadRequestIdRef = useRef(0);
+  const threadCacheRef = useRef<Map<string, ThreadCacheEntry>>(new Map());
 
   useImmersiveWhile(Boolean(selectedId));
 
@@ -256,41 +263,67 @@ export function MessagesPageV4({
         }
         return loaded;
       });
-      setReplyContexts(replies as Record<string, ReplyContext>);
+      const nextReplies = replies as Record<string, ReplyContext>;
+      setReplyContexts(nextReplies);
+      threadCacheRef.current.set(conversationId, { messages: loaded, replyContexts: nextReplies });
     } catch (error) {
       setFeedback(failureMessage(error));
     }
   }, []);
 
   const loadConversation = useCallback(async (conversationId: string) => {
-    setLoadingMessages(true);
+    const requestId = ++loadRequestIdRef.current;
+    const cached = threadCacheRef.current.get(conversationId);
+    setLoadingMessages(!cached);
     setFeedback("");
     setUnseenIncoming(0);
     nearBottomRef.current = true;
     initialScrollPendingRef.current = true;
+    setMentionCandidates([]);
+    if (cached) {
+      setMessages(cached.messages);
+      setReplyContexts(cached.replyContexts);
+    }
+
     try {
-      const [loaded, people, replies, ultimateState, role] = await Promise.all([
-        withTimeout(getMessagesAction(conversationId), { operation: "load conversation" }),
+      /* Only the message payload blocks first paint. Mentions, reply metadata,
+         settings/presence and read bookkeeping are secondary and hydrate after
+         the thread is already useful. */
+      const loaded = await withTimeout(getMessagesAction(conversationId), { operation: "load conversation" });
+      if (!mountedRef.current || requestId !== loadRequestIdRef.current) return;
+      const cachedReplies = threadCacheRef.current.get(conversationId)?.replyContexts ?? {};
+      setMessages(loaded);
+      threadCacheRef.current.set(conversationId, { messages: loaded, replyContexts: cachedReplies });
+      setLoadingMessages(false);
+
+      void Promise.all([
         getMentionCandidatesAction(conversationId).catch(() => []),
         getReplyContextsAction(conversationId).catch(() => ({})),
         getUltimateConversationStateAction(conversationId).catch(() => null),
         getConversationViewerRoleAction(conversationId).catch(() => null)
-      ]);
-      if (!mountedRef.current) return;
-      setMessages(loaded);
-      setMentionCandidates(people);
-      setReplyContexts(replies as Record<string, ReplyContext>);
-      setUltimate(ultimateState);
-      setViewerRole(role as ViewerRole);
-      await markConversationReadAction(conversationId).catch(() => ({ ok: false, message: "" }));
-      await updateConversationUserPreferencesAction({ conversationId, markedUnread: false }).catch(() => ({ ok: false, message: "" }));
-      setInboxPreferences((current) => current[conversationId] ? { ...current, [conversationId]: { ...current[conversationId], markedUnreadAt: null } } : current);
-      setConversations((current) => current.map((conversation) => conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation));
-      window.dispatchEvent(new Event(MESSAGES_UPDATED_EVENT));
+      ]).then(([people, replies, ultimateState, role]) => {
+        if (!mountedRef.current || requestId !== loadRequestIdRef.current) return;
+        const nextReplies = replies as Record<string, ReplyContext>;
+        setMentionCandidates(people);
+        setReplyContexts(nextReplies);
+        setUltimate(ultimateState);
+        setViewerRole(role as ViewerRole);
+        threadCacheRef.current.set(conversationId, { messages: loaded, replyContexts: nextReplies });
+      });
+
+      void Promise.all([
+        markConversationReadAction(conversationId).catch(() => ({ ok: false, message: "" })),
+        updateConversationUserPreferencesAction({ conversationId, markedUnread: false }).catch(() => ({ ok: false, message: "" }))
+      ]).then(() => {
+        if (!mountedRef.current || requestId !== loadRequestIdRef.current) return;
+        setInboxPreferences((current) => current[conversationId] ? { ...current, [conversationId]: { ...current[conversationId], markedUnreadAt: null } } : current);
+        setConversations((current) => current.map((conversation) => conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation));
+        window.dispatchEvent(new Event(MESSAGES_UPDATED_EVENT));
+      });
     } catch (error) {
-      setFeedback(failureMessage(error));
+      if (requestId === loadRequestIdRef.current) setFeedback(failureMessage(error));
     } finally {
-      if (mountedRef.current) setLoadingMessages(false);
+      if (mountedRef.current && requestId === loadRequestIdRef.current) setLoadingMessages(false);
     }
   }, []);
 
@@ -329,21 +362,28 @@ export function MessagesPageV4({
     }
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const refreshAll = () => {
+    const refreshThread = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         if (disposed) return;
         void refreshMessages(selectedId, true);
-        void refreshUltimate(selectedId);
         void syncConversations();
-      }, 100);
+        /* If the thread is on screen, an incoming message is read now. This is
+           intentionally background work; it also drives the sender's Seen
+           receipt through the existing message-status Realtime event. */
+        void markConversationReadAction(selectedId).catch(() => ({ ok: false, message: "" }));
+      }, 75);
+    };
+    const refreshPoll = () => {
+      refreshThread();
+      void refreshUltimate(selectedId);
     };
     const channel = supabase
       .channel(`chats-v4:${selectedId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `conversation_id=eq.${selectedId}` }, refreshAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `conversation_id=eq.${selectedId}` }, refreshThread)
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_presence", filter: `conversation_id=eq.${selectedId}` }, () => void refreshUltimate(selectedId))
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_message_pins", filter: `conversation_id=eq.${selectedId}` }, () => void refreshUltimate(selectedId))
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_polls", filter: `conversation_id=eq.${selectedId}` }, refreshAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_polls", filter: `conversation_id=eq.${selectedId}` }, refreshPoll)
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_poll_votes" }, () => void refreshUltimate(selectedId));
     void authenticateRealtime(supabase).then(() => {
       if (!disposed) channel.subscribe();
@@ -424,12 +464,14 @@ export function MessagesPageV4({
   const pinnedIds = useMemo(() => new Set((ultimate?.pins ?? []).map((pin) => pin.messageId)), [ultimate?.pins]);
 
   function openConversation(conversationId: string) {
+    const cached = threadCacheRef.current.get(conversationId);
     setSelectedId(conversationId);
-    setMessages([]);
+    setMessages(cached?.messages ?? []);
     setUltimate(null);
     setViewerRole(null);
-    setReplyContexts({});
+    setReplyContexts(cached?.replyContexts ?? {});
     setReplyingToId(null);
+    setMentionCandidates([]);
     setOptimistic([]);
     setThreadSearchOpen(false);
     setThreadQuery("");
@@ -543,8 +585,9 @@ export function MessagesPageV4({
         setFeedback(result.message);
         return;
       }
-      await refreshMessages(selectedId, false);
-      await syncConversations();
+      setOptimistic((current) => markRetrying(current, clientMessageId));
+      void refreshMessages(selectedId, false);
+      void syncConversations();
     });
   }
 
@@ -698,7 +741,7 @@ export function MessagesPageV4({
                   if (near && unseenIncoming > 0) setUnseenIncoming(0);
                 }}
               >
-                {loadingMessages ? <div className="grid h-full place-items-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div> : messages.length === 0 ? (
+                {loadingMessages && messages.length === 0 ? <div className="grid h-full place-items-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div> : messages.length === 0 ? (
                   <div className="flex h-full flex-col items-center justify-center px-8 text-center animate-in fade-in zoom-in-95"><UserAvatar name={selected.title} src={selected.avatarUrl} size="lg" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><h2 className="mt-4 text-lg font-semibold">{selected.title}</h2><p className="mt-1 text-sm text-muted-foreground">Say hello and start the chat.</p>{isGroup ? <div className="mt-4 flex flex-wrap justify-center gap-2"><Button size="sm" onClick={() => setPollOpen(true)}><BarChart3 className="h-4 w-4" />Create poll</Button><Button size="sm" variant="outline" onClick={() => router.push("/plans" as Route)}>Make a Plan</Button></div> : null}</div>
                 ) : (
                   messages.map((message, index) => {
@@ -744,7 +787,7 @@ export function MessagesPageV4({
                 {pendingMessages.map((message) => (
                   <div key={message.clientMessageId} className="mt-2 flex flex-col items-end animate-in fade-in slide-in-from-bottom-2">
                     <div className={cn("max-w-[84%] rounded-[21px] rounded-br-[7px] bg-primary px-3.5 py-2.5 text-sm leading-6 text-primary-foreground transition-opacity", message.status === "pending" && "opacity-65")}>{message.kind === "voice" ? `Voice message${message.durationSeconds ? ` · ${Math.round(message.durationSeconds)}s` : ""}` : message.text}</div>
-                    <div className="mt-1 flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">{message.status === "failed" ? <><span className="text-destructive">Not sent</span><button type="button" onClick={() => retryOptimistic(message.clientMessageId)} className="underline">{message.kind === "voice" ? "Record again" : "Retry"}</button><button type="button" onClick={() => setOptimistic((current) => discardOptimistic(current, message.clientMessageId))} className="underline">Delete</button></> : <span>Sending…</span>}</div>
+                    <div className="mt-1 flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">{message.status === "failed" ? <><span className="text-destructive">Not sent</span><button type="button" onClick={() => retryOptimistic(message.clientMessageId)} className="underline">{message.kind === "voice" ? "Record again" : "Retry"}</button><button type="button" onClick={() => setOptimistic((current) => discardOptimistic(current, message.clientMessageId))} className="underline">Delete</button></> : message.status === "sent" ? <span className="inline-flex items-center" title="Sent"><Check className="h-3.5 w-3.5" aria-label="Sent" /></span> : <span>Sending…</span>}</div>
                   </div>
                 ))}
               </div>
@@ -795,7 +838,7 @@ export function MessagesPageV4({
                 onFeedback={setFeedback}
                 onOptimisticSend={addOptimistic}
                 onOptimisticSettled={settleOptimistic}
-                onSent={async () => { await refreshSelected(); scrollToBottom(); }}
+                onSent={() => { void refreshMessages(selected.id, false); void syncConversations(); scrollToBottom(); }}
               />
               )}
             </>
