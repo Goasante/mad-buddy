@@ -130,7 +130,7 @@ export function SmartCardHero({
    */
   const journeyStage = isStagedJourneyCard(card.id) ? journeyStageForPercent(percent) : null;
   const showPrism = PRISM_CARD_IDS.has(card.id) || journeyStage === "advanced";
-  const prismAnimated = showPrism && !deferred && !reducedMotion;
+  const prismAnimated = showPrism && !reducedMotion;
 
   // The bar fills from 0 on mount via a real state transition — a plain CSS
   // transition would race its own initial value and never animate.
@@ -248,7 +248,7 @@ export function SmartCardHero({
           the canvas moves through, painted on the same near-black ground at
           the same z-0. A viewer who prefers reduced motion sees the advanced
           card they earned, simply holding still. */}
-      {showPrism && !deferred && !prismAnimated ? (
+      {showPrism && !prismAnimated ? (
         <span
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(120%_95%_at_82%_18%,rgba(233,64,142,0.62)_0%,rgba(196,36,120,0.42)_34%,rgba(120,20,88,0.24)_62%,rgba(18,6,15,0)_100%)]"
@@ -261,10 +261,16 @@ export function SmartCardHero({
           the text column sits, and fading out to the right so the artwork
           keeps the full colour. Applied to the still variant too, so the
           reduced-motion card clears the same contrast floor. */}
-      {showPrism && !deferred ? (
+      {showPrism ? (
         <span
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(100deg,rgba(10,4,9,0.72)_0%,rgba(10,4,9,0.40)_50%,rgba(10,4,9,0.05)_82%,rgba(10,4,9,0)_100%)]"
+        />
+      ) : null}
+      {showPrism && deferred ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(100deg,rgba(254,251,243,0.96)_0%,rgba(254,251,243,0.90)_54%,rgba(254,251,243,0.48)_80%,rgba(254,251,243,0.12)_100%)] dark:bg-transparent"
         />
       ) : null}
       {prominent || showPrism ? null : (

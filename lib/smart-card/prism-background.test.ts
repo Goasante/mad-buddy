@@ -130,9 +130,11 @@ describe("one animated background per card", () => {
     expect(card.match(/<PrismBackground/g) ?? []).toHaveLength(1);
   });
 
-  it("does not paint the dark prism over a deferred light-theme card", () => {
-    expect(card).toContain("const prismAnimated = showPrism && !deferred && !reducedMotion;");
-    expect(card).toContain("showPrism && !deferred && !prismAnimated");
+  it("keeps the prism visible while protecting deferred light-theme copy", () => {
+    expect(card).toContain("const prismAnimated = showPrism && !reducedMotion;");
+    expect(card).toContain("showPrism && deferred ?");
+    expect(card).toContain("rgba(254,251,243,0.96)");
+    expect(card).toContain("dark:bg-transparent");
   });
 });
 
@@ -166,7 +168,7 @@ describe("GlareHover survives for its own consumers", () => {
 describe("reduced motion", () => {
   it("renders no canvas at all, not a slower one", () => {
     // A slowed animation is still animation, so the canvas is gated on motion.
-    expect(card).toContain("const prismAnimated = showPrism && !deferred && !reducedMotion;");
+    expect(card).toContain("const prismAnimated = showPrism && !reducedMotion;");
     expect(card).toContain("{prismAnimated ? (");
     expect(card).toContain("useReducedMotion()");
   });
@@ -179,7 +181,7 @@ describe("reduced motion", () => {
     // decoration. Identity is now motion-blind and a still ground stands in
     // for the canvas.
     expect(card).not.toContain("const showPrism = PRISM_CARD_IDS.has(card.id) && !reducedMotion;");
-    expect(card).toContain("showPrism && !deferred && !prismAnimated");
+    expect(card).toContain("showPrism && !prismAnimated");
   });
 });
 
@@ -254,7 +256,7 @@ describe("the prism replaces the gradient rather than sitting on it", () => {
     // The guard sits just after the scrim's own comment block.
     const afterComment = card.slice(card.indexOf("Readability scrim"));
     const guard = afterComment.slice(0, afterComment.indexOf("<span"));
-    expect(guard).toContain("showPrism && !deferred ?");
+    expect(guard).toContain("showPrism ?");
   });
 });
 
