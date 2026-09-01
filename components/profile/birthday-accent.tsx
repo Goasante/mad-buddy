@@ -1,32 +1,18 @@
-import { CakeSlice } from "lucide-react";
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
 
-/** A celebration layer around an avatar. It never changes the avatar's own
- * proximity or premium glow classes, so the three visual systems stay separate. */
+/**
+ * Birthday profile decoration intentionally disabled.
+ *
+ * Birthday data, reminders, wishes, and privacy rules remain unchanged; this
+ * wrapper now preserves only its children so profile avatars keep their normal
+ * visual treatment without confetti, a birthday ring, or a cake badge.
+ */
 export function BirthdayAccent({
-  active,
-  children,
-  className
+  children
 }: {
   active: boolean;
   children: ReactNode;
   className?: string;
 }) {
-  if (!active) return <>{children}</>;
-  return (
-    <span className={cn("birthday-accent relative inline-grid place-items-center", className)}>
-      <span className="birthday-accent__ring" aria-hidden="true" />
-      <span className="birthday-accent__confetti birthday-accent__confetti--one" aria-hidden="true" />
-      <span className="birthday-accent__confetti birthday-accent__confetti--two" aria-hidden="true" />
-      {children}
-      <span
-        className="absolute -right-1 -top-1 z-20 grid h-7 w-7 place-items-center rounded-full border-2 border-background bg-amber-400 text-amber-950 shadow-md"
-        title="Birthday today"
-        aria-label="Birthday today"
-      >
-        <CakeSlice className="h-3.5 w-3.5" aria-hidden="true" />
-      </span>
-    </span>
-  );
+  return <>{children}</>;
 }
