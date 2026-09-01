@@ -133,8 +133,12 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   // wallpaper requires. Still time-boxed and still never throws: a slow or
   // failed resolve falls back to the safe Mad Buddy Default, same as before,
   // just without blocking anything to get there.
+  // The env guard rode on the subscription read until Access retired it, and
+  // createSupabaseAdminClient() asserts the service-role key rather than
+  // returning null -- so without it a missing config throws here instead of
+  // falling back to the default wallpaper.
   const wallpaperPromise: Promise<ResolvedWallpaper | null> =
-    user
+    user && env.url && env.serviceRoleKey
       ? withTimeout(resolveWallpaperForRender(createSupabaseAdminClient(), user.id, "free"), {
           operation: "resolveWallpaperForRender",
           timeoutMs: 3_000
