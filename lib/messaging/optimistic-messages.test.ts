@@ -49,6 +49,11 @@ describe("a confirmed message is shown exactly once", () => {
     expect(result).toHaveLength(2);
   });
 
+  it("marks a pending row sent as soon as the server accepts it", () => {
+    const result = markRetrying([pending("k1", "2026-08-20T10:00:00Z")], "k1");
+    expect(result[0].status).toBe("sent");
+  });
+
   it("does not match one person's key against another message's null key", () => {
     // Other people's rows carry null; null must never confirm anything.
     const result = pruneConfirmed([pending("k1", "2026-08-20T10:00:00Z")], [canonical(null, "2026-08-20T10:00:01Z")]);
