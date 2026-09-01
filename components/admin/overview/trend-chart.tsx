@@ -4,11 +4,10 @@ import { useId, useRef, useState } from "react";
 
 export type TrendPoint = { label: string; value: number };
 
-// Validated reference palette (dark surface): series-1 blue, muted axis, grid.
-const SERIES = "#3987e5";
-const AXIS = "#383835";
-const GRID = "#2c2c2a";
-const MUTED = "#898781";
+const SERIES = "#E88C2B";
+const AXIS = "#35312e";
+const GRID = "#292724";
+const MUTED = "#89847e";
 
 const W = 600;
 const H = 150;
@@ -50,7 +49,7 @@ export function TrendChart({ points, unitLabel = "", ariaLabel }: { points: Tren
   const activePoint = active !== null ? points[active] : null;
 
   return (
-    <div className="relative">
+    <div className="relative overflow-hidden rounded-[18px] bg-black/[0.08] px-2 pb-1 pt-2">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
@@ -62,25 +61,28 @@ export function TrendChart({ points, unitLabel = "", ariaLabel }: { points: Tren
         onMouseMove={handleMove}
         onMouseLeave={() => setActive(null)}
       >
-        {/* recessive baseline */}
+        <defs>
+          <linearGradient id={`${tableId}-fill`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={SERIES} stopOpacity="0.24" />
+            <stop offset="100%" stopColor={SERIES} stopOpacity="0.015" />
+          </linearGradient>
+        </defs>
         <line x1={PAD_X} y1={PAD_TOP + plotH} x2={W - PAD_X} y2={PAD_TOP + plotH} stroke={AXIS} strokeWidth={1} />
-        {/* a single mid gridline for reference */}
-        <line x1={PAD_X} y1={PAD_TOP + plotH / 2} x2={W - PAD_X} y2={PAD_TOP + plotH / 2} stroke={GRID} strokeWidth={1} strokeDasharray="2 4" />
+        <line x1={PAD_X} y1={PAD_TOP + plotH / 2} x2={W - PAD_X} y2={PAD_TOP + plotH / 2} stroke={GRID} strokeWidth={1} strokeDasharray="2 5" />
 
-        {areaPath ? <path d={areaPath} fill={SERIES} fillOpacity={0.12} /> : null}
-        {linePath ? <path d={linePath} fill="none" stroke={SERIES} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" /> : null}
+        {areaPath ? <path d={areaPath} fill={`url(#${tableId}-fill)`} /> : null}
+        {linePath ? <path d={linePath} fill="none" stroke={SERIES} strokeWidth={2.25} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" /> : null}
 
         {activePoint ? (
           <>
             <line x1={x(active!)} y1={PAD_TOP} x2={x(active!)} y2={PAD_TOP + plotH} stroke={MUTED} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-            <circle cx={x(active!)} cy={y(activePoint.value)} r={4} fill={SERIES} stroke="#0d0e10" strokeWidth={2} />
+            <circle cx={x(active!)} cy={y(activePoint.value)} r={4} fill={SERIES} stroke="#111317" strokeWidth={2} />
           </>
         ) : null}
       </svg>
 
-      {/* x-axis end labels only (avoid crowding) */}
       {points.length > 0 ? (
-        <div className="mt-1 flex justify-between px-1 text-[10px]" style={{ color: MUTED }}>
+        <div className="mt-1 flex justify-between px-1 pb-1 text-[10px]" style={{ color: MUTED }}>
           <span>{points[0].label}</span>
           {points.length > 2 ? <span>{points[Math.floor(points.length / 2)].label}</span> : null}
           <span>{points[points.length - 1].label}</span>
@@ -88,14 +90,13 @@ export function TrendChart({ points, unitLabel = "", ariaLabel }: { points: Tren
       ) : null}
 
       {activePoint ? (
-        <div className="pointer-events-none absolute left-2 top-1 rounded-lg border border-white/10 bg-[#111214] px-2.5 py-1.5 text-xs shadow-lg">
-          <span className="font-semibold tabular-nums">{activePoint.value}</span>
-          {unitLabel ? <span className="text-muted-foreground"> {unitLabel}</span> : null}
-          <span className="text-muted-foreground"> · {activePoint.label}</span>
+        <div className="pointer-events-none absolute left-3 top-3 rounded-xl border border-white/[0.10] bg-[#141518]/96 px-3 py-2 text-xs shadow-[0_12px_30px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+          <span className="font-semibold tabular-nums text-white">{activePoint.value}</span>
+          {unitLabel ? <span className="text-[#9a958f]"> {unitLabel}</span> : null}
+          <span className="text-[#77736f]"> · {activePoint.label}</span>
         </div>
       ) : null}
 
-      {/* Accessible, non-visual data table. */}
       <table id={tableId} className="sr-only">
         <caption>{ariaLabel}</caption>
         <thead><tr><th>Day</th><th>{unitLabel || "Value"}</th></tr></thead>
