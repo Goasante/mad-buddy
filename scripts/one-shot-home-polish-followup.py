@@ -64,6 +64,11 @@ replace_exact(
 )
 replace_exact(
     "lib/smart-card/prism-background.test.ts",
+    'expect(guard).toContain("showPrism && !deferred ?");',
+    'expect(guard).toContain("showPrism ?");',
+)
+replace_exact(
+    "lib/smart-card/prism-background.test.ts",
     '''  it("does not paint the dark prism over a deferred light-theme card", () => {\n    expect(card).toContain("const prismAnimated = showPrism && !reducedMotion;");\n    expect(card).toContain("showPrism && !prismAnimated");\n  });''',
     '''  it("keeps the prism visible while protecting deferred light-theme copy", () => {\n    expect(card).toContain("const prismAnimated = showPrism && !reducedMotion;");\n    expect(card).toContain("showPrism && deferred ?");\n    expect(card).toContain("rgba(254,251,243,0.96)");\n    expect(card).toContain("dark:bg-transparent");\n  });''',
 )
