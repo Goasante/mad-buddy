@@ -58,6 +58,7 @@ import {
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import { LinkrStateArtwork } from "@/components/socialize/linkr-state-artwork";
 
 function capitalize(text: string): string {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
@@ -946,11 +947,36 @@ export function SocializePage({
               <div
                 role={announcesState(displayState) ? "status" : undefined}
                 aria-live={announcesState(displayState) ? "polite" : "off"}
-                className="mx-auto w-full max-w-[22rem] px-4 py-10 text-center"
+                className={cn(
+                  "socialize-state mx-auto w-full px-4 text-center",
+                  displayState === "empty" || displayState === "loading" || displayState === "activating"
+                    ? "linkr-illustrated-state max-w-[31rem] py-4 sm:py-7"
+                    : "max-w-[22rem] py-10"
+                )}
               >
-                <p className="text-[0.9375rem] font-medium leading-snug">{stateCopy.message}</p>
+                {displayState === "empty" ? (
+                  <LinkrStateArtwork
+                    variant="opened"
+                    className="mx-auto w-full max-w-[25rem]"
+                  />
+                ) : displayState === "loading" || displayState === "activating" ? (
+                  <LinkrStateArtwork
+                    variant="loading"
+                    className="mx-auto w-full max-w-[23rem]"
+                  />
+                ) : null}
+                <p
+                  className={cn(
+                    "font-medium leading-snug",
+                    displayState === "empty" || displayState === "loading" || displayState === "activating"
+                      ? "mt-1 text-xl font-bold tracking-tight sm:text-2xl"
+                      : "text-[0.9375rem]"
+                  )}
+                >
+                  {stateCopy.message}
+                </p>
                 {stateCopy.detail ? (
-                  <p className="mt-1.5 text-[0.8125rem] leading-relaxed text-muted-foreground">
+                  <p className="mx-auto mt-2 max-w-[25rem] text-[0.8125rem] leading-relaxed text-muted-foreground sm:text-sm">
                     {stateCopy.detail}
                   </p>
                 ) : null}
