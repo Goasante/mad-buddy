@@ -143,18 +143,22 @@ describe("no refetch loop", () => {
 });
 
 describe("both approved layouts still hydrate", () => {
-  it("keeps the single-nearby hero", () => {
-    expect(nearSection).toContain("const heroFriend =");
+  it("keeps the single-nearby hero, now scoped to a count of exactly one", () => {
+    expect(nearSection).toContain("friends.length === 1 ? friends[0] : null");
     expect(nearSection).toContain('size="lg"');
   });
 
-  it("keeps the multi-nearby supporting list", () => {
-    expect(nearSection).toContain("Also close");
-    expect(nearSection).toContain("NEARBY_SUPPORTING_LIMIT");
+  it("replaces the vertical supporting list with one horizontal rail", () => {
+    /* "Also close" grew Home taller with every extra nearby Muddy, which is a
+     * contact list rather than a proximity moment. Two or more people now share
+     * the rail as equals and it scrolls sideways instead. */
+    expect(nearSection).not.toContain("Also close");
+    expect(nearSection).not.toContain("NEARBY_SUPPORTING_LIMIT");
+    expect(nearSection).toContain("overflow-x-auto");
   });
 
-  it("keeps See all honest", () => {
-    expect(nearSection).toContain('href={hiddenCount > 0 ? "/friends" : undefined}');
+  it("needs no See all, because the rail hides nobody", () => {
+    expect(nearSection).not.toContain("hiddenCount");
   });
 });
 

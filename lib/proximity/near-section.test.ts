@@ -42,11 +42,15 @@ describe("Near section header", () => {
     expect(sectionHeader).toContain('actionLabel = "See all"');
   });
 
-  it("hides See all unless somebody is genuinely hidden", () => {
-    /* Was `total > 0`, then `total > 1` -- both still offered to expand people
-     * who were already on screen. Only a real hidden remainder earns the link;
-     * the zero case is covered because hiddenCount is 0 there too. */
-    expect(nearSection).toContain('href={hiddenCount > 0 ? "/friends" : undefined}');
+  it("offers no See all at all, because nobody is ever hidden", () => {
+    /* Was `total > 0`, then `total > 1`, then a real hidden remainder. The rail
+     * now carries EVERY nearby Muddy and scrolls to reach them, so there is no
+     * remainder left for the link to reveal -- it would point at what is
+     * already on screen. The header renders the title alone. */
+    expect(nearSection).not.toContain("hiddenCount");
+    expect(nearSection).not.toContain('href={hiddenCount');
+    const header = nearSection.slice(nearSection.indexOf("<PageSectionHeader"));
+    expect(header.slice(0, header.indexOf("/>"))).not.toContain("href=");
   });
 });
 
@@ -57,8 +61,11 @@ describe("Near section header", () => {
 describe("Near section layout", () => {
   it("is a single horizontally scrolling row that never wraps", () => {
     expect(nearSection).toContain("overflow-x-auto");
-    // shrink-0 on every column is what prevents wrapping/squashing.
-    expect(nearSection).toContain("w-[4.75rem] shrink-0");
+    /* shrink-0 on every column is what prevents wrapping/squashing. The width
+       itself moved to `.near-rail-item` so it can be four-per-viewport on
+       mobile and the proven fixed column at md+; the class is the contract. */
+    expect(nearSection).toContain("near-rail-item");
+    expect(nearSection).toContain("near-rail-item focus-ring safe-motion group flex shrink-0");
     expect(nearSection).not.toContain("flex-wrap");
   });
 
@@ -331,7 +338,9 @@ describe("Near section loading", () => {
 
   it("matches the real column footprint so nothing resizes on load", () => {
     const skeleton = nearSection.slice(nearSection.indexOf("!loaded"), nearSection.indexOf("A bare horizontal rail"));
-    expect(skeleton).toContain("w-[4.75rem] shrink-0");
+    /* The SAME class the real positions use, so the placeholders cannot drift
+       away from the row they stand in for. */
+    expect(skeleton).toContain("near-rail-item flex shrink-0");
     expect(skeleton).toContain("h-16 w-16");
   });
 

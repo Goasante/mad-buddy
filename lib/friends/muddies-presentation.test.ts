@@ -307,6 +307,62 @@ describe("the aura is never clipped into a rectangle", () => {
     // The avatar alone is 4.75rem; the rest is room for the glow.
     expect(Number(width?.[1])).toBeGreaterThanOrEqual(7);
   });
+
+  it("does not adopt Home's four-up width, which would merge the lg auras", () => {
+    /* Home shows four positions per mobile viewport at `md` (a 118.46px glow
+     * field). This rail renders `lg` (160.78px), and a quarter of a 390px
+     * viewport is 5.4rem -- under the 7rem the rule above exists to protect,
+     * so adjacent auras would run together into one smeared glow. Preserving
+     * the canonical Glow outranks matching a column count. */
+    const mobile = css.slice(css.indexOf("@media (max-width: 767px)", css.indexOf(".muddies-rail-item {")));
+    // Up to the next top-level rule, which is the end of this media block.
+    const scope = mobile.slice(0, mobile.indexOf("\n.", 1));
+    expect(scope).not.toContain(".muddies-rail-button");
+  });
+});
+
+describe("the closest rail speaks Home's rail language", () => {
+  it("is horizontal and never grows downward", () => {
+    const track = css.slice(css.indexOf(".muddies-rail-track {"));
+    const block = track.slice(0, track.indexOf("}"));
+    expect(block).toContain("display: flex");
+    expect(block).toContain("overflow-x: auto");
+    expect(block).not.toContain("flex-wrap");
+    expect(block).not.toContain("flex-direction: column");
+  });
+
+  it("renders everyone it is given, with no visible cap and no +N tile", () => {
+    /* Scoped to the COMPONENT. The upstream selector still applies
+       MUDDIES_RAIL_LIMIT, which is a data decision this tranche did not touch;
+       what matters here is that the rail neither trims that list further nor
+       spends a position on a tile that stands in for the rest. */
+    const rail = readFileSync("components/friends/muddies-closest-rail.tsx", "utf8");
+    expect(rail).toContain("people.map((person)");
+    expect(rail).not.toContain(".slice(");
+    expect(rail).not.toContain("+{");
+  });
+
+  it("centres a single person instead of pinning them to the left edge", () => {
+    /* One Muddy in a mostly empty row reads as a list that failed to load.
+       `:only-child` is the count test -- nothing for the component to pass. */
+    const mobile = css.slice(css.indexOf("@media (max-width: 767px)", css.indexOf(".muddies-rail-item {")));
+    expect(mobile.slice(0, mobile.indexOf("\n.", 1))).toContain(".muddies-rail-item:only-child");
+    const only = mobile.slice(mobile.indexOf(".muddies-rail-item:only-child"));
+    expect(only.slice(0, only.indexOf("}"))).toContain("margin-inline: auto");
+  });
+
+  it("starts two or more from the left rather than centring the group", () => {
+    /* Equal-width items in a flex-start row do this on their own: two land in
+       the first two positions, three spread across the width. There must be no
+       justify-content that would centre the whole group instead. */
+    const track = css.slice(css.indexOf(".muddies-rail-track {"));
+    expect(track.slice(0, track.indexOf("}"))).not.toContain("justify-content: center");
+  });
+
+  it("keeps the horizontal-swipe exemption so a drag scrolls rather than changing tab", () => {
+    const rail = readFileSync("components/friends/muddies-closest-rail.tsx", "utf8");
+    expect(rail).toContain("SWIPE_OPT_OUT_ATTRIBUTE");
+  });
 });
 
 describe("the pill row keeps its labels readable", () => {

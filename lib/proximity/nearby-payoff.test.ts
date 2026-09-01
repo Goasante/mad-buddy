@@ -24,10 +24,12 @@ const solo = nearSection.slice(
 );
 
 describe("one nearby Muddy gets a hero, not a rail cell", () => {
-  it("has its own branch", () => {
-    /* Generalised in 3G.1: one person still leads, but the hero now applies at
-     * any nearby count with the others compact beneath. */
+  it("has its own branch, entered only at a count of exactly one", () => {
+    /* Generalised in 3G.1 to any count, then narrowed back here: promoting one
+     * person out of several and stacking the rest vertically is what turned
+     * this into a growing contact list. The hero is a COUNT state again. */
     expect(nearSection).toContain("const heroFriend =");
+    expect(nearSection).toContain("friends.length === 1 ? friends[0] : null");
     expect(nearSection).toContain("heroFriend ? (");
   });
 
@@ -45,9 +47,13 @@ describe("one nearby Muddy gets a hero, not a rail cell", () => {
     expect(solo).toContain("firstName(heroFriend.displayName || heroFriend.username)");
   });
 
-  it("leads with the relationship the selector already chose", () => {
-    // Not a second ranking system: the same focus the rest of Home uses.
-    expect(nearSection).toContain("friends.find((f) => f.friendId === focusedId)");
+  it("still lets the canonical selector lead, as ORDER rather than size", () => {
+    /* The focus selector keeps its authority over which Muddy comes first in
+     * the rail. What it no longer buys is a bigger stage: at two or more people
+     * every position is equal, so focus orders the row instead of promoting
+     * somebody out of it. */
+    expect(nearSection).toContain("b.friendId === focusedId");
+    expect(nearSection).not.toContain("friends.find((f) => f.friendId === focusedId)");
   });
 });
 
@@ -75,10 +81,12 @@ describe("the Glow stays truthful", () => {
     expect(heroGlow).not.toContain("intensity={");
   });
 
-  it("damps the supporting rows rather than amplifying them", () => {
-    const supportingBlock = solo.slice(solo.indexOf("Also close"));
-    expect(supportingBlock).toContain("intensity={NEAR_GLOW_INTENSITY}");
-    expect(supportingBlock).toContain('size="sm"');
+  it("carries no supporting rows to damp", () => {
+    /* The "Also close" list they belonged to is retired. The rail below keeps
+     * the same NEAR_GLOW_INTENSITY damping for everybody, which is asserted
+     * against the rail itself further down. */
+    expect(solo).not.toContain("Also close");
+    expect(nearSection).toContain("intensity={NEAR_GLOW_INTENSITY}");
   });
 
   it("respects reduced motion", () => {
@@ -198,19 +206,70 @@ describe("the action hierarchy at the moment of proximity", () => {
   });
 });
 
-describe("several nearby Muddies keep the compact rail", () => {
-  it("renders exactly one hero however many are nearby", () => {
-    // Everyone else is filtered out of the supporting list by id.
-    expect(nearSection).toContain("friends.filter((f) => f.friendId !== heroFriend.friendId)");
-    expect(nearSection).toContain("NEARBY_SUPPORTING_LIMIT");
+describe("two or more nearby Muddies share ONE horizontal rail", () => {
+  it("renders no hero at all above a count of one", () => {
+    /* The hero branch is gated on the count itself, so there is nothing left
+     * to filter "everyone else" out of. */
+    expect(nearSection).toContain("friends.length === 1 ? friends[0] : null");
+    expect(nearSection).not.toContain("friends.filter((f) => f.friendId !== heroFriend.friendId)");
+    expect(nearSection).not.toContain("NEARBY_SUPPORTING_LIMIT");
   });
 
-  it("caps how many positions are shown", () => {
-    expect(nearSection).toContain("NEARBY_MAX_POSITIONS");
+  it("never builds a vertical list beneath the rail", () => {
+    /* This is the regression that matters: Home must not grow taller because
+     * more people are nearby. */
+    expect(nearSection).not.toContain("Also close");
+    expect(nearSection).not.toContain("supporting");
   });
 
-  it("offers See all only when somebody is genuinely hidden", () => {
-    expect(nearSection).toContain('href={hiddenCount > 0 ? "/friends" : undefined}');
+  it("caps nothing -- every nearby Muddy stays in the rail", () => {
+    expect(nearSection).not.toContain("NEARBY_MAX_POSITIONS");
+    /* The rail maps the full list. Scoped to the map itself: a `.slice` in some
+     * other component further down the file says nothing about this rail. */
+    expect(nearSection).toContain("railFriends.map((friend)");
+    expect(nearSection).not.toContain("friends.slice(");
+  });
+
+  it("uses no +N replacement slot", () => {
+    /* A "+N More" tile spent one of four scarce positions saying that other
+     * positions existed, instead of just showing the next person. */
+    expect(nearSection).not.toContain("+{remaining}");
+    expect(nearSection).not.toContain("remaining");
+    expect(nearSection).not.toContain("overflow ?");
+  });
+
+  it("scrolls horizontally rather than wrapping or stacking", () => {
+    /* The CONTAINER's own class list, not its children: each item stacks its
+     * avatar over the name internally, which is correct and unrelated. */
+    const open = nearSection.lastIndexOf('className="near-strip');
+    const container = nearSection.slice(open, nearSection.indexOf(">", open));
+    expect(container).toContain("overflow-x-auto");
+    expect(container).not.toContain("flex-wrap");
+    expect(container).not.toContain("flex-col");
+  });
+
+  it("hides the scrollbar but keeps native touch scrolling", () => {
+    expect(nearSection).toContain("[scrollbar-width:none]");
+    expect(nearSection).toContain("[&::-webkit-scrollbar]:hidden");
+    // No forced snapping: ordinary momentum scrolling reads better here.
+    expect(nearSection).not.toContain("snap-x");
+  });
+
+  it("shows four equal positions per mobile viewport", () => {
+    /* The width lives in CSS so the count is one rule rather than a class
+     * ladder; equal-width items in a flex-start row are also what make two
+     * people left-aligned and three evenly spread, with no per-count branch. */
+    expect(nearSection).toContain("near-rail-item");
+    const css = readFileSync("app/globals.css", "utf8");
+    const rule = css.slice(css.indexOf(".near-rail-item {"));
+    expect(rule.slice(0, rule.indexOf("}"))).toContain("/ 4");
+  });
+
+  it("keeps the old fixed column at md+ rather than forcing phone geometry", () => {
+    const css = readFileSync("app/globals.css", "utf8");
+    const wide = css.slice(css.indexOf("@media (min-width: 768px)", css.indexOf(".near-rail-item {")));
+    const rule = wide.slice(wide.indexOf(".near-rail-item"));
+    expect(rule.slice(0, rule.indexOf("}"))).toContain("width: 4.75rem");
   });
 
   it("keeps the server/client consistency guarantee", () => {

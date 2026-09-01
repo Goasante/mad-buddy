@@ -34,6 +34,74 @@ describe("Linkr owns one complete mobile safe-area shell", () => {
   });
 });
 
+describe("the primary mobile surfaces are full bleed", () => {
+  const shell = read("components/app-shell/app-shell.tsx");
+
+  it("routes Home, Muddies, Linkr and Messages through the one route-aware contract", () => {
+    /* One list, checked by one helper -- not a per-page negative margin. A
+       shell-level -mx hack would have to be undone by every page that is NOT
+       full bleed, which is how two surfaces start disagreeing about the
+       gutter. */
+    const list = shell.slice(shell.indexOf("const FULL_BLEED_PAGES"));
+    const declaration = list.slice(0, list.indexOf(";"));
+    for (const route of ["/messages", "/dashboard", "/friends", "/linkr"]) {
+      expect(declaration).toContain(`"${route}"`);
+    }
+    expect(shell).toContain("function isFullBleed(pathname: string)");
+  });
+
+  it("drops only the shell's own gutter, and only below md", () => {
+    expect(shell).toContain('fullBleed ? "px-0 md:px-6 lg:px-8" : "px-4 sm:px-6 lg:px-8"');
+  });
+
+  it("uses no negative-margin hack at the shell level", () => {
+    const main = shell.slice(shell.indexOf("fullBleed ? \"px-0"));
+    expect(main.slice(0, 400)).not.toContain("-mx-");
+  });
+
+  it("keeps a page's own side padding, so nothing sits on the screen edge", () => {
+    /* Full bleed removes the SHELL's competing gutter; it does not push text
+       into the bezel. Home and Muddies had no horizontal padding of their own
+       -- they leaned entirely on the shell's px-4 -- so each now supplies the
+       same 1rem itself and hands it back at md+. Linkr already had its own via
+       .linkr-shell. */
+    expect(read("components/dashboard/dashboard-page.tsx")).toContain("space-y-5 px-4 pt-4 md:px-0");
+    expect(read("components/friends/friends-page.tsx")).toContain("overflow-x-clip px-4 md:px-0");
+    const shellStart = css.indexOf(".linkr-shell {");
+    expect(css.slice(shellStart, css.indexOf("}", shellStart))).toContain("padding:");
+  });
+});
+
+describe("Linkr dark mode belongs to the app shell", () => {
+  it("paints the shell's near-black canvas rather than the warm --background", () => {
+    /* --background in dark mode is hue 8 (a warm brown), so painting it here
+       produced a brown slab inside the shell's #111112 frame -- two competing
+       surfaces. Same defect Messages had, same fix. */
+    const start = css.indexOf("html.dark .linkr-safe-screen {");
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(css.slice(start, css.indexOf("}", start))).toContain("#111112");
+  });
+
+  it("does not repaint that canvas further down the tree", () => {
+    // The card stage sat on top of the page canvas painting --background again.
+    const start = css.indexOf(".linkr-card-stage {");
+    expect(css.slice(start, css.indexOf("}", start))).toContain("background: transparent");
+  });
+
+  it("leaves the candidate card its own colour, so it still lifts off the ground", () => {
+    /* "Remove the competing page canvas" is not "make everything black": the
+       card, overlays and sheets keep their --card surfaces. */
+    const start = css.lastIndexOf(".linkr-card {");
+    expect(css.slice(start, css.indexOf("}", start))).not.toContain("#111112");
+  });
+
+  it("leaves light mode on Warm Paper", () => {
+    // The override is scoped to html.dark; the base rule is untouched.
+    const base = css.slice(css.indexOf(".linkr-safe-screen {"));
+    expect(base.slice(0, base.indexOf("}"))).toContain("background: hsl(var(--background))");
+  });
+});
+
 describe("Profile to Linkr continuity", () => {
   it("keeps Profile mounted and replaces the handoff history entry exactly once", () => {
     const save = profile.slice(profile.indexOf("function saveProfile"), profile.indexOf("function selectAvatar"));

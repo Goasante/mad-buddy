@@ -250,18 +250,13 @@ const PROXIMITY_ORDER: Record<ProximityLevel, number> = {
   hidden: 3
 };
 
-/**
- * Positions rendered in the Near row before the rest collapse into a "+N"
- * tile. The row scrolls horizontally, so this is no longer bounded by what
- * fits on screen (~5 at 390px) — it caps how much Home renders and keeps
- * "See all" meaningful for a large circle.
- */
-const NEARBY_MAX_POSITIONS = 8;
-/* How many nearby Muddies appear BENEATH the focused one.
+/* NEARBY_MAX_POSITIONS and NEARBY_SUPPORTING_LIMIT are deliberately GONE.
  *
- * Small on purpose: Home surfaces the moment, /friends is the directory. Three
- * keeps a phone screen calm while still saying "several people are around". */
-const NEARBY_SUPPORTING_LIMIT = 3;
+ * Both existed only to feed the retired layout: one capped the row so the
+ * remainder could collapse into a "+N" tile, the other capped the vertical
+ * "Also close" list beneath the hero. The Near section is now a single
+ * horizontal rail that carries every nearby Muddy and scrolls to reach them,
+ * so there is no remainder to hide and no second list to bound. */
 
 function capitalize(name: string) {
   return name ? name.charAt(0).toUpperCase() + name.slice(1) : name;
@@ -982,8 +977,16 @@ export function DashboardPageContent({
           it stays narrow on every width rather than spreading into a dashboard.
           The header is FIXED, so its own padding no longer contributes to the
           gap below it — <main> reserves the height and this supplies the
-          breathing room between the header rule and the greeting. */}
-      <div className="mx-auto w-full max-w-[560px] space-y-5 pt-4">
+          breathing room between the header rule and the greeting.
+
+          THE PAGE OWNS ITS OWN SIDE PADDING. Home is a full-bleed route now
+          (see FULL_BLEED_PAGES), so the shell no longer contributes px-4 below
+          md. Full bleed means the SHELL stops painting a competing gutter, not
+          that text runs into the screen edge -- so the same 1rem it used to
+          supply lives here instead, and the rails inside still bleed past it
+          with their own -mx-4. At md+ the shell's content column returns and
+          this padding steps aside. */}
+      <div className="mx-auto w-full max-w-[560px] space-y-5 px-4 pt-4 md:px-0">
         <SubscriptionStatusPortal plan={subscriptionPlan} hasPremium={hasPremium} />
         <PendingInvitePrompt />
 
@@ -1429,28 +1432,30 @@ function NearbyHero({
   focusedId?: string | null;
   onSelect: (friendId: string) => void;
 }) {
-  // Over the cap, keep the three strongest and give the 4th slot to "+N".
-  const overflow = total > NEARBY_MAX_POSITIONS;
-  const shown = overflow ? friends.slice(0, NEARBY_MAX_POSITIONS - 1) : friends.slice(0, NEARBY_MAX_POSITIONS);
-  const remaining = total - shown.length;
-  /* ONE PERSON LEADS, WHATEVER THE COUNT.
+  /* THE HERO IS A COUNT-OF-ONE STATE, NOT A RANKING.
    *
-   * With two nearby Muddies the rail gave both identical 76px cells and no
-   * action, so a live social moment read as a directory. Home picks the same
-   * relationship the rest of the product already focuses on -- `focusedId`
-   * comes from the canonical selector -- and the others stay visible beneath
-   * at lower weight rather than competing for the same attention.
+   * One nearby Muddy is the moment the product exists for and still gets the
+   * large centred treatment. Beyond that there is no hero: promoting one
+   * person out of several and stacking the rest vertically underneath turned
+   * a proximity moment into a growing contact list, which is what /friends is
+   * for. Two or more people share one horizontal rail as equals. */
+  const heroFriend = friends.length === 1 ? friends[0] : null;
+  /* ONE ROW, HOWEVER MANY PEOPLE -- ORDERED, NEVER TRIMMED.
    *
-   * Falls back to the first result only when the selector has no opinion, so
-   * the hero can never be empty while somebody is genuinely nearby. */
-  const heroFriend = friends.length > 0 ? friends.find((f) => f.friendId === focusedId) ?? friends[0] : null;
-  /* Everyone else, capped. Home is not the nearby directory -- /friends is. */
-  const supporting = heroFriend
-    ? friends.filter((f) => f.friendId !== heroFriend.friendId).slice(0, NEARBY_SUPPORTING_LIMIT)
-    : [];
-  /* Genuinely hidden people, not merely "more than one". Two visible Muddies
-     beside a "See all" was an offer to expand what was already expanded. */
-  const hiddenCount = total - (heroFriend ? 1 : 0) - supporting.length;
+   * Nothing is sliced away and nothing is replaced by a "+N" tile: every
+   * nearby Muddy this surface received stays in the rail, and the rest are
+   * reached by scrolling sideways rather than by leaving for /friends. The row
+   * shows four positions per viewport, so Home's HEIGHT is the same whether
+   * one Muddy is nearby or a hundred.
+   *
+   * The canonical focus selector still has an opinion about which Muddy
+   * matters most, so that person leads the rail -- but as the first equal
+   * position, not as a giant. The sort is stable and runs on a COPY, so
+   * everyone else keeps the server's order and `friends` is never mutated. */
+  const railFriends =
+    focusedId && friends.length > 1
+      ? [...friends].sort((a, b) => Number(b.friendId === focusedId) - Number(a.friendId === focusedId))
+      : friends;
 
   return (
     // data-tour-id is the guided tour's stable targeting contract; the tour
@@ -1461,11 +1466,15 @@ function NearbyHero({
       <PageSectionHeader
         id="home-nearby-heading"
         title="Near"
-        /* "See all" only when somebody is genuinely HIDDEN.
-           `total > 1` still offered to expand two people who were both already
-           on screen -- a link to what you are looking at. */
-        href={hiddenCount > 0 ? "/friends" : undefined}
-        actionAriaLabel={`See all ${total} nearby Muddies`}
+        /* NO "See all", at any count.
+           The link earned its place only while Home HID people -- first behind
+           `total > 1`, then behind a real hidden remainder. The rail now
+           carries every nearby Muddy and scrolls to reach them, so the link
+           would offer to reveal exactly what is already on screen. /friends
+           remains the directory, reached from the nav.
+
+           With no href and no onAction the header renders the title alone, so
+           actionAriaLabel would describe a control that is not there. */
       />
 
       {/* Skeletons ONLY while the state is genuinely unknown.
@@ -1479,10 +1488,13 @@ function NearbyHero({
         // Lightweight skeletons matching the real column footprint exactly, so
         // the row does not resize when data arrives. No large loading card.
         // gap-4 matches the real rail below: a different gap here would shift
-        // every avatar sideways the moment data arrives.
+        // every avatar sideways the moment data arrives -- and so does
+        // `near-rail-item`, which is why the placeholders use the same class
+        // as the real positions rather than a fixed width of their own. Four
+        // of them, because four is what a mobile viewport shows.
         <div className="near-strip -mx-4 flex items-start gap-4 overflow-hidden px-4 sm:-mx-6 sm:px-6" aria-hidden="true">
-          {[0, 1, 2, 3, 4].map((index) => (
-            <div key={index} className="flex w-[4.75rem] shrink-0 flex-col items-center gap-2.5">
+          {[0, 1, 2, 3].map((index) => (
+            <div key={index} className="near-rail-item flex shrink-0 flex-col items-center gap-2.5">
               <span className="h-16 w-16 animate-pulse rounded-full bg-secondary/70 motion-reduce:animate-none" />
               <span className="h-3 w-12 animate-pulse rounded bg-secondary/70 motion-reduce:animate-none" />
               <span className="h-2.5 w-9 animate-pulse rounded bg-secondary/50 motion-reduce:animate-none" />
@@ -1490,7 +1502,7 @@ function NearbyHero({
           ))}
         </div>
       ) : heroFriend ? (
-        /* ONE PERSON IS THE EVENT, NOT A LIST ITEM.
+        /* EXACTLY ONE PERSON IS THE EVENT, NOT A LIST ITEM.
          *
          * A genuine nearby Muddy is the moment the whole product exists for,
          * and it was rendering as a 76px cell in a scroll rail with a "See
@@ -1499,7 +1511,11 @@ function NearbyHero({
          *
          * Same components, same tokens, more room: the Glow does the talking,
          * the name is legible, and the action is right there instead of behind
-         * a tap into a modal. */
+         * a tap into a modal.
+         *
+         * This is the ONLY count that gets the large centred stage. With two or
+         * more nearby, the rail below treats them as equals -- see the
+         * derivation above. */
         <div className="flex flex-col items-center gap-3 py-2 text-center">
           <button
             type="button"
@@ -1546,52 +1562,6 @@ function NearbyHero({
 
           {soloActions}
 
-          {/* ALSO CLOSE — present, deliberately quieter.
-              Relationship vocabulary, not discovery: these are Muddies, so
-              never "people nearby" or "other users". Each row carries the same
-              canonical proximity label and opens the same profile the hero
-              does; no second Say hi is offered, because asking somebody to
-              greet two new people at once is homework, not a moment. */}
-          {supporting.length > 0 ? (
-            <div className="mt-4 w-full">
-              <p className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Also close
-              </p>
-              <ul className="mt-2 flex flex-col gap-1">
-                {supporting.map((friend) => {
-                  const name = capitalize(firstName(friend.displayName || friend.username));
-                  // Visible text stays first-name; the accessible name does
-                  // not truncate (MB-GOD-045).
-                  const fullName = friend.displayName || friend.username;
-                  return (
-                    <li key={friend.friendId}>
-                      <button
-                        type="button"
-                        onClick={() => onSelect(friend.friendId)}
-                        className="focus-ring safe-motion flex w-full items-center gap-3 rounded-2xl px-1 py-1.5 text-left transition-transform active:scale-[0.99] motion-reduce:active:scale-100"
-                        aria-label={`${fullName}, ${proximityBandLabel(friend.proximityBand)}. Open profile`}
-                      >
-                        <ProximityGlowAvatar
-                          name={friend.displayName || friend.username}
-                          src={friend.avatarUrl}
-                          band={friend.proximityBand}
-                          decorative
-                          glowColorId={glowColorByFriendId[friend.friendId] ?? null}
-                          size="sm"
-                          reducedMotion={reducedMotion}
-                          intensity={NEAR_GLOW_INTENSITY}
-                        />
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
-                        <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                          {proximityBandLabel(friend.proximityBand)}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ) : null}
         </div>
       ) : total > 0 ? (
         // A bare horizontal rail, not a panel — the avatars themselves are the
@@ -1605,21 +1575,33 @@ function NearbyHero({
         // globals.css), not here: `overflow-x: auto` clips on every side, and
         // the 8px this used to carry was less than half the ~15.5px the two
         // closest states actually reach.
+        //
+        // ONE ROW AT EVERY COUNT. Two people start from the LEFT rather than
+        // centring (a centred pair reads as the whole population); three
+        // spread across the width; four fill the viewport; beyond four the
+        // row scrolls sideways. Home's height never grows with the count --
+        // `near-rail-item` sizes each position as a fraction of the viewport
+        // below md, so the row is always exactly one avatar tall.
         <div
           className="near-strip -mx-4 flex items-start gap-4 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6"
           aria-label="Nearby Muddies"
+          data-nearby-count={total}
         >
-          {shown.map((friend) => {
+          {railFriends.map((friend) => {
             const name = friend.displayName || friend.username;
             return (
               <button
                 key={friend.friendId}
                 type="button"
                 onClick={() => onSelect(friend.friendId)}
-                // Fixed width so every column is identical and the distance
-                // labels line up across the row regardless of name length.
-                // shrink-0 is what keeps the row from wrapping or squashing.
-                className="focus-ring safe-motion group flex w-[4.75rem] shrink-0 flex-col items-center gap-2.5 text-center transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
+                // Equal-width positions so the distance labels line up across
+                // the row regardless of name length. shrink-0 is what keeps the
+                // row from wrapping or squashing. `near-rail-item` makes that
+                // width a quarter of the viewport on mobile -- four positions
+                // visible, the rest reached by scrolling -- and hands back the
+                // fixed 4.75rem column at md+, where a desktop content column
+                // should not inherit phone geometry.
+                className="near-rail-item focus-ring safe-motion group flex shrink-0 flex-col items-center gap-2.5 text-center transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
                 /* Full name for assistive technology; the 4.75rem column below
                    still shows only the first (MB-GOD-045). */
                 aria-label={`${friend.displayName || friend.username}, ${proximityBandLabel(friend.proximityBand)}`}
@@ -1678,23 +1660,6 @@ function NearbyHero({
             );
           })}
 
-          {overflow ? (
-            <Link
-              href="/friends"
-              className="focus-ring safe-motion flex w-[4.75rem] shrink-0 flex-col items-center gap-2.5 text-center transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
-              aria-label={`See all ${total} nearby Muddies`}
-            >
-              {/* Matches the avatar's footprint exactly so the row's baseline
-                  and label alignment hold. */}
-              <span className="grid h-16 w-16 place-items-center rounded-full border border-dashed border-border bg-secondary/40 text-sm font-semibold">
-                +{remaining}
-              </span>
-              <span className="w-full truncate text-sm font-semibold leading-none text-muted-foreground">
-                More
-              </span>
-              <span className="text-xs font-medium text-[var(--color-brand-orange)]">See all</span>
-            </Link>
-          ) : null}
         </div>
       ) : (
         // Lightweight empty state — no card, no large placeholder. Reuses the
