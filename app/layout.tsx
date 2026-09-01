@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme/theme-provider";
 import { resolveBuildId } from "@/lib/pwa/update";
 import { getSiteUrl } from "@/lib/seo";
 import "./globals.css";
+import "./icon-polish.css";
 
 /**
  * iOS "Add to Home Screen" splash images (portrait only, this app is
