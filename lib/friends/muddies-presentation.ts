@@ -80,19 +80,31 @@ export function proximityRank(level: ProximityLevel | undefined): number {
   return level ? PROXIMITY_RANK[level] : PROXIMITY_RANK.hidden;
 }
 
-/** How many people the closest rail shows before "View map" takes over. */
-export const MUDDIES_RAIL_LIMIT = 8;
-
 /**
  * The people on the closest rail: those with a live proximity signal, nearest
  * first. Anyone hidden or without a signal is left out entirely rather than
  * shown greyed — an empty ring on a rail called "Who's closest to you" would
  * imply a distance nobody actually reported.
+ *
+ * NOT TRUNCATED.
+ *
+ * This used to end in `.slice(0, MUDDIES_RAIL_LIMIT)` — eight people, capped
+ * "before View map takes over". No View map surface was ever built, so the cap
+ * protected nothing and simply dropped the 9th nearest Muddy on the floor.
+ *
+ * That was survivable while the rail was a short strip. It is not survivable
+ * now: the rail scrolls horizontally and presents itself as complete, so a
+ * silent cap made the UI only LOOK uncapped — somebody with twelve Muddies
+ * nearby could scroll to the end and never reach the last four, with nothing
+ * on screen admitting they existed.
+ *
+ * Eligibility, ordering and privacy are deliberately untouched: the filter and
+ * the sort below are exactly what they were. The only thing removed is the
+ * presentation-oriented truncation at the end.
  */
 export function closestMuddies<T extends { id: string; displayName: string }>(
   people: readonly T[],
-  proximityById: Readonly<Record<string, MuddyProximity>>,
-  limit: number = MUDDIES_RAIL_LIMIT
+  proximityById: Readonly<Record<string, MuddyProximity>>
 ): T[] {
   return people
     .filter((person) => {
@@ -104,8 +116,7 @@ export function closestMuddies<T extends { id: string; displayName: string }>(
         proximityRank(proximityById[a.id]?.proximityLevel) -
           proximityRank(proximityById[b.id]?.proximityLevel) ||
         a.displayName.localeCompare(b.displayName)
-    )
-    .slice(0, limit);
+    );
 }
 
 /**
