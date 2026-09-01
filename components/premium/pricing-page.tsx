@@ -23,7 +23,7 @@ export function PricingPageContent() {
           <h1 className="mt-4 text-balance text-4xl font-semibold tracking-tight text-[#4E0401] dark:text-[#FFF8F1] sm:text-5xl">
             Your existing social world is free. Expanding it is paid.
           </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-pretty text-base leading-7 text-[#4E0401]/65 dark:text-[#FFF8F1]/68 sm:text-lg">
+          <p className="mx-auto mt-5 max-w-2xl text-pretty text-base leading-7 text-[#4E0401]/65 dark:text-[#D8CCC5] sm:text-lg">
             Mad Buddy stays useful without a subscription. Access is one simple monthly product for Linkr and the stranger-discovery side of UpFor.
           </p>
         </section>
@@ -35,16 +35,16 @@ export function PricingPageContent() {
                 <MessagesSquare className="h-5 w-5" aria-hidden="true" />
               </span>
               <div>
-                <p className="text-sm font-medium text-[#4E0401]/55 dark:text-[#FFF8F1]/60">Mad Buddy Core</p>
+                <p className="text-sm font-medium text-[#4E0401]/55 dark:text-[#C5B6AF]">Mad Buddy Core</p>
                 <h2 className="text-2xl font-semibold text-[#4E0401] dark:text-[#FFF8F1]">Free</h2>
               </div>
             </div>
-            <p className="mt-5 text-sm leading-6 text-[#4E0401]/65 dark:text-[#FFF8F1]/68">
+            <p className="mt-5 text-sm leading-6 text-[#4E0401]/65 dark:text-[#D8CCC5]">
               Everything built around people you already know remains available.
             </p>
             <ul className="mt-5 grid gap-3">
               {FREE_CORE.map((item) => (
-                <li key={item} className="flex gap-3 text-sm leading-6 text-[#4E0401]/80 dark:text-[#FFF8F1]/80">
+                <li key={item} className="flex gap-3 text-sm leading-6 text-[#4E0401]/80 dark:text-[#E9E0DA]">
                   <Check className="mt-1 h-4 w-4 shrink-0 text-[#A45A18]" aria-hidden="true" />
                   <span>{item}</span>
                 </li>
@@ -101,10 +101,10 @@ export function PricingPageContent() {
           <h2 id="welcome-access-title" className="text-lg font-semibold text-[#4E0401] dark:text-[#FFF8F1]">
             Your first 14 days of Access
           </h2>
-          <p className="mt-2 text-sm leading-6 text-[#4E0401]/65 dark:text-[#FFF8F1]/68">
+          <p className="mt-2 text-sm leading-6 text-[#4E0401]/65 dark:text-[#D8CCC5]">
             Welcome Access starts when you add your first Muddy—not when you sign up. No card is required, no payment method is taken, and nothing is automatically charged when it ends.
           </p>
-          <p className="mt-3 text-sm leading-6 text-[#4E0401]/65 dark:text-[#FFF8F1]/68">
+          <p className="mt-3 text-sm leading-6 text-[#4E0401]/65 dark:text-[#D8CCC5]">
             When Welcome Access ends, Linkr and stranger expansion in UpFor lock until you choose Access. Your Muddies, existing Linkr connections, conversations, Plans and Plan Chats stay exactly where they are.
           </p>
         </section>
@@ -118,7 +118,7 @@ export function PricingPageContent() {
           ].map(([question, answer]) => (
             <article key={question} className="rounded-2xl border border-[#4E0401]/10 bg-white/70 p-4 dark:border-white/10 dark:bg-white/[0.04]">
               <h3 className="text-sm font-semibold text-[#4E0401] dark:text-[#FFF8F1]">{question}</h3>
-              <p className="mt-1 text-sm leading-6 text-[#4E0401]/65 dark:text-[#FFF8F1]/68">{answer}</p>
+              <p className="mt-1 text-sm leading-6 text-[#4E0401]/65 dark:text-[#D8CCC5]">{answer}</p>
             </article>
           ))}
         </section>
