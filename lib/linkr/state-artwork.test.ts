@@ -11,6 +11,7 @@ const artwork = read("components/linkr/linkr-state-artwork.tsx");
 const loading = read("app/(app)/linkr/loading.tsx");
 const moments = read("components/linkr/linkr-moments.tsx");
 const activation = read("components/linkr/linkr-activation.tsx");
+const css = read("app/globals.css");
 
 describe("Linkr illustrated loading and opened states", () => {
   it("uses the three-person artwork for the Linkr loading screen", () => {
@@ -32,11 +33,18 @@ describe("Linkr illustrated loading and opened states", () => {
   });
 
   it("keeps the illustration transparent and theme-owned instead of painting a hard card behind it", () => {
-    expect(artwork).toContain("bg-primary/10");
-    expect(artwork).toContain("dark:bg-primary/15");
-    expect(artwork).toContain("bg-card/80");
-    expect(artwork).toContain("dark:bg-white/[0.04]");
+    expect(artwork).toContain("linkr-state-artwork__veil");
     expect(artwork).toContain("object-contain");
+    expect(css).toContain("hsl(var(--background) / 0.56)");
+    expect(css).toContain("rgb(17 17 18 / 0.62)");
+  });
+
+  it("calms the artwork consistently without hiding it", () => {
+    expect(artwork).toContain("linkr-state-artwork__image");
+    expect(css).toMatch(/\.linkr-state-artwork__image \{[\s\S]*?opacity: 0\.76/);
+    expect(css).toMatch(/\.linkr-state-artwork__image \{[\s\S]*?saturate\(0\.8\)/);
+    expect(css).toMatch(/\.dark \.linkr-state-artwork__image \{[\s\S]*?opacity: 0\.72/);
+    expect(css).not.toContain("drop-shadow-2xl");
   });
 
   it("commits real PNG files so production cannot render a broken image placeholder", () => {

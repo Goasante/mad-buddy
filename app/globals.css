@@ -7926,6 +7926,86 @@ html.dark .linkr-safe-screen {
 .linkr-back svg { width: 1.125rem; height: 1.125rem; }
 
 /* --- Linkr off + activation ----------------------------------------------- */
+.linkr-state-artwork__ambient,
+.linkr-state-artwork__veil {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* A restrained ambient field, not a glow. The art should belong to the page
+   surface rather than appearing to float above it. */
+.linkr-state-artwork__ambient {
+  z-index: 0;
+  border-radius: 999px;
+}
+
+.linkr-state-artwork__ambient--outer {
+  inset: 18%;
+  background: hsl(var(--primary) / 0.055);
+  filter: blur(2.25rem);
+}
+
+.linkr-state-artwork__ambient--inner {
+  inset: 26%;
+  background: hsl(var(--card) / 0.38);
+  filter: blur(1.75rem);
+}
+
+.linkr-state-artwork__image {
+  opacity: 0.76;
+  filter: saturate(0.8) brightness(0.94) contrast(0.9)
+    drop-shadow(0 10px 20px hsl(var(--shadow) / 0.07));
+}
+
+/* Theme-coloured edge and lower fade. It lives above the bitmap but below
+   every surrounding heading/action, softening transparent cutout edges
+   without painting a rectangular card behind the illustration. */
+.linkr-state-artwork__veil {
+  z-index: 2;
+  inset: -1px;
+  background:
+    linear-gradient(
+      to bottom,
+      hsl(var(--background) / 0.08) 0%,
+      transparent 34%,
+      hsl(var(--background) / 0.56) 100%
+    ),
+    radial-gradient(
+      circle at 50% 48%,
+      transparent 44%,
+      hsl(var(--background) / 0.64) 100%
+    );
+}
+
+.dark .linkr-state-artwork__ambient--outer {
+  background: hsl(var(--primary) / 0.07);
+}
+
+.dark .linkr-state-artwork__ambient--inner {
+  background: rgb(17 17 18 / 0.34);
+}
+
+.dark .linkr-state-artwork__image {
+  opacity: 0.72;
+  filter: saturate(0.74) brightness(0.82) contrast(0.88)
+    drop-shadow(0 10px 22px rgb(0 0 0 / 0.16));
+}
+
+.dark .linkr-state-artwork__veil {
+  background:
+    linear-gradient(
+      to bottom,
+      rgb(17 17 18 / 0.1) 0%,
+      transparent 32%,
+      rgb(17 17 18 / 0.62) 100%
+    ),
+    radial-gradient(
+      circle at 50% 48%,
+      transparent 40%,
+      rgb(17 17 18 / 0.72) 100%
+    );
+}
+
 .linkr-off,
 .linkr-activate,
 .linkr-empty,

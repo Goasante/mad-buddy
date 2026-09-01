@@ -35,16 +35,16 @@ export function LinkrStateArtwork({
 
   return (
     <div
-      className={cn("relative isolate", className)}
+      className={cn("linkr-state-artwork relative isolate", className)}
       data-linkr-state-artwork={variant}
     >
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-[14%] rounded-full bg-primary/10 blur-3xl dark:bg-primary/15"
+        className="linkr-state-artwork__ambient linkr-state-artwork__ambient--outer"
       />
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-[24%] rounded-full bg-card/80 blur-3xl dark:bg-white/[0.04]"
+        className="linkr-state-artwork__ambient linkr-state-artwork__ambient--inner"
       />
       <Image
         src={artwork.src}
@@ -53,8 +53,9 @@ export function LinkrStateArtwork({
         height={1254}
         priority={priority}
         sizes="(max-width: 480px) 88vw, 430px"
-        className="relative z-[1] h-auto w-full object-contain drop-shadow-lg dark:drop-shadow-2xl"
+        className="linkr-state-artwork__image relative z-[1] h-auto w-full object-contain"
       />
+      <span aria-hidden="true" className="linkr-state-artwork__veil" />
     </div>
   );
 }
