@@ -773,7 +773,13 @@ export function FriendsPageContent({
   );
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-[1200px] space-y-4 overflow-x-clip">
+    /* THE PAGE OWNS ITS OWN SIDE PADDING. Muddies is a full-bleed route now
+       (see FULL_BLEED_PAGES in the app shell), so the shell no longer
+       contributes px-4 below md. Full bleed removes the shell's competing
+       gutter; it does not push content against the screen edge, so the same
+       1rem lives here instead. The closest rail still bleeds past it with its
+       own negative margin. At md+ the shell's content column returns. */
+    <div className="mx-auto w-full min-w-0 max-w-[1200px] space-y-4 overflow-x-clip px-4 md:px-0">
       {/* Canonical mobile header. Muddies is a bottom-nav root, so it keeps
           Notifications and Add Muddy; Quick Controls stays on Home, whose
           sheet (visibility, ghost mode, refresh Nearby) has no equivalent

@@ -921,6 +921,46 @@ html.dark .home-ambient-bg {
   margin-block: -1.5rem;
 }
 
+/* HOME'S NEAR RAIL IS ONE ROW AT EVERY COUNT.
+ *
+ * The old layout promoted one Muddy to a hero and stacked the others in a
+ * vertical "Also close" list, so Home grew taller with every extra person
+ * nearby -- a proximity moment turning into a contact list. There is now one
+ * horizontal rail, and the only thing that changes with the count is how far
+ * it scrolls.
+ *
+ * Four positions per viewport on mobile. The width is derived rather than
+ * fixed so the fourth avatar lands ON the edge of the viewport instead of
+ * halfway past it.
+ *
+ * `100%` here is the scroll container's CONTENT box, which already has the
+ * padding taken off it -- and that padding is `.near-strip`'s own
+ * padding-inline: 1.75rem, which overrides the element's Tailwind px-4 rather
+ * than adding to it. So only the three 1rem gaps between four items still have
+ * to come out; subtracting the gutter again would double-count it and leave
+ * the fourth avatar short of the edge.
+ *
+ * Two people therefore occupy the first two positions from the LEFT and three
+ * spread across the width, both falling straight out of equal-width flex items
+ * in a flex-start row -- no per-count centring rule, and nothing to keep in
+ * sync with the component. */
+.near-rail-item {
+  width: calc((100% - 3 * 1rem) / 4);
+  /* Never narrower than the avatar it holds; on a very small phone the row
+     simply scrolls sooner rather than crushing the 64px Glow. */
+  min-width: 4.25rem;
+}
+
+@media (min-width: 768px) {
+  /* DESKTOP KEEPS ITS OWN SIZING. A content column is not a phone viewport,
+     and stretching four positions across it would leave the avatars adrift in
+     their own whitespace. Back to the proven fixed column. */
+  .near-rail-item {
+    width: 4.75rem;
+    min-width: 0;
+  }
+}
+
 /* Home's Near strip reserves ROOM for the canonical Glow; it does not restyle
  * it. The ring tightening and the core's inner bloom that used to live here as
  * `.near-strip` overrides are now part of the canonical geometry and the
@@ -5209,6 +5249,36 @@ select {
   scroll-snap-align: start;
 }
 
+/* SAME RAIL LANGUAGE AS HOME'S NEAR SECTION -- WITH ONE DELIBERATE DIFFERENCE.
+ *
+ * The rail was already horizontal and uncapped, so 2/3/4+ already behave as
+ * specified: equal-width items in a flex-start row put two people in the first
+ * two positions from the left, spread three across the width, and scroll for
+ * the rest. Nothing was rebuilt here.
+ *
+ * WHAT IS NOT COPIED FROM HOME: the four-positions-per-viewport width.
+ *
+ * This rail renders the Glow at `lg`, whose canonical field is 160.78px
+ * (10rem) against Home's 118.46px (7.4rem) at `md`. The 7rem column below was
+ * chosen precisely because narrower cards let one person's aura run into the
+ * next, reading as a single smeared glow rather than one ring per person --
+ * see the aura test in lib/friends/muddies-presentation.test.ts. A quarter of
+ * a 390px viewport is 5.4rem, which would reintroduce exactly that.
+ *
+ * Preserving the canonical Glow outranks matching a column count, so the lg
+ * rail keeps the width its own geometry requires and shows ~3 per viewport.
+ * The scroll affordance and the uncapped list are identical to Home's. */
+@media (max-width: 767px) {
+  /* ONE PERSON IS CENTRED. With a single Muddy the row is mostly empty, and a
+     lone avatar pinned to the left edge reads as a list that failed to load
+     rather than as the one person who is actually close. `:only-child` is the
+     count test -- no prop, no class, nothing for the component to keep in
+     sync. Anything above one stays flex-start. */
+  .muddies-rail-item:only-child {
+    margin-inline: auto;
+  }
+}
+
 .muddies-rail-button {
   display: flex;
   flex-direction: column;
@@ -7085,7 +7155,19 @@ select {
   padding-left: var(--linkr-safe-left, env(safe-area-inset-left, 0px));
   overflow-x: hidden;
   overflow-x: clip;
+  /* ONE CANVAS, THE SHELL'S OWN.
+     In dark mode --background is a warm brown (hue 8), while the app shell
+     paints #111112. Linkr's page canvas therefore rendered a brown slab inside
+     a near-black frame and the two read as different surfaces -- the same
+     defect Messages had, fixed the same way. Only the PAGE canvas changes: the
+     candidate card, overlays and sheets keep their own --card colours, so the
+     card still lifts off the ground rather than everything going black.
+     Light mode keeps Warm Paper untouched. */
   background: hsl(var(--background));
+}
+
+html.dark .linkr-safe-screen {
+  background: #111112;
 }
 
 @media (min-width: 768px) {
@@ -7209,7 +7291,10 @@ select {
   display: flex;
   flex-direction: column;
   gap: 0.875rem;
-  background: hsl(var(--background));
+  /* Inherits the page canvas rather than repainting --background over it;
+     otherwise the stage reintroduces the brown slab this screen just removed.
+     Staying transparent keeps one continuous ground in both themes. */
+  background: transparent;
   /* Owns the leftover height so the card can fill it rather than floating in
      a band of empty background. `min-height: 0` lets the flexed card actually
      shrink inside this column on short screens instead of overflowing it. */

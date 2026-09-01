@@ -269,8 +269,15 @@ function hasImmersiveHeader(pathname: string): boolean {
  * rather than one room. The page keeps its own internal padding; only the
  * shell's horizontal inset steps aside, and only below md where the gutters
  * exist.
+ *
+ * The same reading applies to the other primary mobile surfaces. Home, Muddies
+ * and Linkr each paint a full-width canvas of their own, so the shell's px-4
+ * framed each of them the way it framed Messages. Full bleed here means the
+ * SHELL stops contributing a competing outer gutter -- every page keeps the
+ * internal padding it already had, so no card or line of text ends up flush
+ * against the physical screen edge.
  */
-const FULL_BLEED_PAGES: readonly string[] = ["/messages"];
+const FULL_BLEED_PAGES: readonly string[] = ["/messages", "/dashboard", "/friends", "/linkr"];
 
 function isFullBleed(pathname: string): boolean {
   return FULL_BLEED_PAGES.some((href) => pathname === href || pathname.startsWith(`${href}/`));

@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 import { stripComments } from "@/lib/content/strip-comments";
 import {
   MUDDIES_FILTERS,
-  MUDDIES_RAIL_LIMIT,
   closestMuddies,
   matchesMuddiesFilter,
   railDistanceLabel,
@@ -20,12 +19,20 @@ const page = stripComments(read("components/friends/friends-page.tsx"));
 const css = read("app/globals.css");
 
 const person = (id: string, displayName: string) => ({ id, displayName });
+/** N nearby Muddies with stable, name-sortable labels. */
+const many = (count: number) =>
+  Array.from({ length: count }, (_, index) =>
+    person(`u${index}`, `Muddy ${String(index).padStart(2, "0")}`)
+  );
 const at = (level: MuddyProximity["proximityLevel"], lastActiveEstimate?: string): MuddyProximity => ({
   proximityLevel: level,
   glowStrength: 50,
   confidence: "high",
   lastActiveEstimate
 });
+/** Every one of them at the same band, so only the COUNT varies. */
+const allClose = (people: ReturnType<typeof many>) =>
+  Object.fromEntries(people.map((entry) => [entry.id, at("close")]));
 
 // ---------------------------------------------------------------------------
 // The closest rail
@@ -55,12 +62,64 @@ describe("the closest rail orders by distance", () => {
     expect(result).toEqual([]);
   });
 
-  it("caps the rail rather than rendering an unbounded row", () => {
-    const many = Array.from({ length: 20 }, (_, index) =>
-      person(`u${index}`, `Muddy ${String(index).padStart(2, "0")}`)
-    );
-    const proximity = Object.fromEntries(many.map((entry) => [entry.id, at("close")]));
-    expect(closestMuddies(many, proximity)).toHaveLength(MUDDIES_RAIL_LIMIT);
+  /* THE RAIL IS NOT TRUNCATED.
+   *
+   * The old `.slice(0, MUDDIES_RAIL_LIMIT)` capped this at eight "before View
+   * map takes over" -- a surface that was never built. Once the rail became a
+   * horizontal scroller presenting itself as complete, that cap made the UI
+   * only LOOK uncapped: a user with twelve nearby Muddies could scroll to the
+   * end and never reach the last four. */
+  it("returns all eight when eight are nearby", () => {
+    const people = many(8);
+    expect(closestMuddies(people, allClose(people))).toHaveLength(8);
+  });
+
+  it("returns the ninth and beyond rather than dropping them at the old cap", () => {
+    const people = many(12);
+    const result = closestMuddies(people, allClose(people));
+    expect(result).toHaveLength(12);
+    // The records that the cap used to discard, by identity not just count.
+    expect(result.map((entry) => entry.id)).toContain("u8");
+    expect(result.map((entry) => entry.id)).toContain("u11");
+  });
+
+  it("stays uncapped at a large count", () => {
+    const people = many(100);
+    expect(closestMuddies(people, allClose(people))).toHaveLength(100);
+  });
+
+  it("still filters and orders exactly as before, past the old cap", () => {
+    /* Removing the truncation must not have loosened eligibility or reordered
+       anybody: the 9th+ entries obey the same nearest-first, then-by-name rule
+       as the first eight, and people with no live signal are still excluded. */
+    const people = [
+      person("far1", "Zoe"),
+      person("close1", "Bea"),
+      person("none", "Ghost"),
+      person("near1", "Yaw"),
+      person("close2", "Ama")
+    ];
+    const result = closestMuddies(people, {
+      far1: at("far"),
+      close1: at("close"),
+      near1: at("near"),
+      close2: at("close")
+    });
+    expect(result.map((entry) => entry.displayName)).toEqual(["Ama", "Bea", "Yaw", "Zoe"]);
+    expect(result.map((entry) => entry.id)).not.toContain("none");
+  });
+
+  it("exposes no cap constant for a caller to reintroduce", () => {
+    /* Comments may still explain the removal; what must be gone is the export
+       and the truncation themselves. */
+    const source = stripComments(read("lib/friends/muddies-presentation.ts"));
+    expect(source).not.toContain("MUDDIES_RAIL_LIMIT");
+    expect(source).not.toContain(".slice(");
+    expect(source).not.toContain("limit");
+  });
+
+  it("is called with no limit argument by the page", () => {
+    expect(page).toContain("closestMuddies(friendUsers, proximityByFriendId)");
   });
 });
 
@@ -306,6 +365,96 @@ describe("the aura is never clipped into a rectangle", () => {
     const width = /width:\s*([\d.]+)rem/.exec(button.slice(0, button.indexOf("}")));
     // The avatar alone is 4.75rem; the rest is room for the glow.
     expect(Number(width?.[1])).toBeGreaterThanOrEqual(7);
+  });
+
+  it("does not adopt Home's four-up width, which would merge the lg auras", () => {
+    /* Home shows four positions per mobile viewport at `md` (a 118.46px glow
+     * field). This rail renders `lg` (160.78px), and a quarter of a 390px
+     * viewport is 5.4rem -- under the 7rem the rule above exists to protect,
+     * so adjacent auras would run together into one smeared glow. Preserving
+     * the canonical Glow outranks matching a column count. */
+    const mobile = css.slice(css.indexOf("@media (max-width: 767px)", css.indexOf(".muddies-rail-item {")));
+    // Up to the next top-level rule, which is the end of this media block.
+    const scope = mobile.slice(0, mobile.indexOf("\n.", 1));
+    expect(scope).not.toContain(".muddies-rail-button");
+  });
+});
+
+describe("the closest rail speaks Home's rail language", () => {
+  it("is horizontal and never grows downward", () => {
+    const track = css.slice(css.indexOf(".muddies-rail-track {"));
+    const block = track.slice(0, track.indexOf("}"));
+    expect(block).toContain("display: flex");
+    expect(block).toContain("overflow-x: auto");
+    expect(block).not.toContain("flex-wrap");
+    expect(block).not.toContain("flex-direction: column");
+  });
+
+  it("renders everyone it is given, with no visible cap and no +N tile", () => {
+    /* End to end now: the selector no longer truncates (see the uncapped tests
+       above) and the component does not trim what it receives either, so the
+       list the user can scroll IS the eligible nearby set. No position is spent
+       on a tile that stands in for the people it replaced. */
+    const railSource = readFileSync("components/friends/muddies-closest-rail.tsx", "utf8");
+    expect(railSource).toContain("people.map((person)");
+    expect(railSource).not.toContain(".slice(");
+    expect(railSource).not.toContain("+{");
+  });
+
+  it("keeps the row one avatar tall however many people arrive", () => {
+    /* The point of lifting the cap is more SCROLL, never more rows. */
+    const track = css.slice(css.indexOf(".muddies-rail-track {"));
+    const block = track.slice(0, track.indexOf("}"));
+    expect(block).not.toContain("flex-wrap");
+    expect(block).toContain("overflow-x: auto");
+    const item = css.slice(css.indexOf(".muddies-rail-item {"));
+    expect(item.slice(0, item.indexOf("}"))).toContain("flex: 0 0 auto");
+  });
+
+  it("centres a single person instead of pinning them to the left edge", () => {
+    /* One Muddy in a mostly empty row reads as a list that failed to load.
+       `:only-child` is the count test -- nothing for the component to pass. */
+    const mobile = css.slice(css.indexOf("@media (max-width: 767px)", css.indexOf(".muddies-rail-item {")));
+    expect(mobile.slice(0, mobile.indexOf("\n.", 1))).toContain(".muddies-rail-item:only-child");
+    const only = mobile.slice(mobile.indexOf(".muddies-rail-item:only-child"));
+    expect(only.slice(0, only.indexOf("}"))).toContain("margin-inline: auto");
+  });
+
+  it("starts two or more from the left rather than centring the group", () => {
+    /* Equal-width items in a flex-start row do this on their own: two land in
+       the first two positions, three spread across the width. There must be no
+       justify-content that would centre the whole group instead. */
+    const track = css.slice(css.indexOf(".muddies-rail-track {"));
+    expect(track.slice(0, track.indexOf("}"))).not.toContain("justify-content: center");
+  });
+
+  it("keeps the horizontal-swipe exemption so a drag scrolls rather than changing tab", () => {
+    const railSource = readFileSync("components/friends/muddies-closest-rail.tsx", "utf8");
+    expect(railSource).toContain("SWIPE_OPT_OUT_ATTRIBUTE");
+  });
+
+  it("hands the rail exactly the count it should render, 1 through 9+", () => {
+    /* The CSS above decides how each count is laid out (1 centred via
+       :only-child, 2/3 left-aligned by flex-start, 4+ scrolling). This proves
+       the selector actually delivers those counts -- including past the old
+       cap, where the layout rules were previously unreachable. */
+    for (const count of [1, 2, 3, 4, 8, 9, 20]) {
+      const people = many(count);
+      expect(closestMuddies(people, allClose(people))).toHaveLength(count);
+    }
+  });
+
+  it("changes nothing about the Glow the rail renders", () => {
+    /* Lifting a data cap must not touch the identity signal: same canonical
+       component, same lg size, same band/colour/reduced-motion inputs. */
+    const railSource = readFileSync("components/friends/muddies-closest-rail.tsx", "utf8");
+    expect(railSource).toContain("<ProximityGlowAvatar");
+    expect(railSource).toContain('size="lg"');
+    expect(railSource).toContain("band={proximity?.proximityBand ?? null}");
+    expect(railSource).toContain("glowColorId={glowColorByFriendId?.[person.id] ?? null}");
+    expect(railSource).toContain("reducedMotion={reducedMotion}");
+    // No per-count or per-index intensity fiddling introduced by this change.
+    expect(railSource).not.toContain("intensity={");
   });
 });
 

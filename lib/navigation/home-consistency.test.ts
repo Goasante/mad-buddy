@@ -159,7 +159,11 @@ describe("loading states", () => {
       home.indexOf("Lightweight skeletons matching the real column footprint"),
       home.indexOf("A bare horizontal rail")
     );
-    expect(skeleton).toContain("w-[4.75rem] shrink-0");
+    /* The width moved to `.near-rail-item` so the row can show four positions
+     * per mobile viewport and the proven fixed column at md+. The placeholders
+     * use that SAME class, which is what keeps them from drifting away from
+     * the row they stand in for. */
+    expect(skeleton).toContain("near-rail-item flex shrink-0");
     expect(skeleton).toContain("h-16 w-16");
   });
 
