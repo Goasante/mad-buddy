@@ -4,6 +4,7 @@ import { recordProductEvent } from "@/lib/analytics/track";
 import { openDirectConversation, sendMessage } from "@/lib/messaging/mobile";
 import { DEFAULT_RECIPIENT_TIMEZONE, normalizePreferences } from "@/lib/notifications/preferences";
 import { deliverNotification } from "@/lib/notifications/server";
+import { errorType, logBackendEvent } from "@/lib/observability/logger";
 import { dateKeyInTimeZone } from "@/lib/profile/birth-date";
 import {
   birthdayMonthDay,
@@ -96,17 +97,22 @@ export async function deliverBirthdayNotifications(admin: Admin, now = new Date(
     p_day: day,
     p_include_feb_29: leapDayFallback
   });
-  if (error) throw new Error(error.message);
+  // Preserve the Postgres/PostgREST code for the worker. Wrapping this in a
+  // plain Error used to erase the only useful production diagnostic and made
+  // every schema/permission/RPC fault appear in Admin as INTERNAL_ERROR.
+  if (error) throw error;
 
   let delivered = 0;
   for (const birthdayUser of (birthdayUsers ?? []).slice(0, 200)) {
     const ownerId = birthdayUser.user_id;
-    const { data: friendships } = await admin
+    const { data: friendships, error: friendshipsError } = await admin
       .from("friendships")
       .select("user_one_id, user_two_id")
       .or(`user_one_id.eq.${ownerId},user_two_id.eq.${ownerId}`)
       .is("ended_at", null)
       .limit(1000);
+    if (friendshipsError) throw friendshipsError;
+
     const recipients = [
       ...new Set(
         (friendships ?? []).map((row) => (row.user_one_id === ownerId ? row.user_two_id : row.user_one_id))
@@ -122,7 +128,7 @@ export async function deliverBirthdayNotifications(admin: Admin, now = new Date(
         .insert({ birthday_user_id: ownerId, recipient_id: recipientId, birthday_day: dayKey })
         .select("id")
         .maybeSingle();
-      if (claimError && claimError.code !== "23505") throw new Error(claimError.message);
+      if (claimError && claimError.code !== "23505") throw claimError;
 
       let claimId = insertedClaim?.id ?? null;
       if (!claimId) {
@@ -167,23 +173,38 @@ export async function deliverBirthdayNotifications(admin: Admin, now = new Date(
           priority: "normal",
           type: `birthday:${ownerId}`,
           title: birthdayTitle(eligibility.displayName),
-          message: "Send a birthday wish."
+          message: "Send a birthday wish.",
+          // Independent idempotency at the notification table. The birthday
+          // delivery ledger is still the primary claim, but if a transport or
+          // later bookkeeping step fails after the in-app row was persisted,
+          // the hourly retry cannot create a duplicate birthday notification.
+          dedupeKey: `birthday:${ownerId}:${recipientId}:${dayKey}`
         });
       } catch (deliveryError) {
         await admin
           .from("birthday_notification_deliveries")
           .update({ status: "pending", claimed_at: null })
           .eq("id", claimId);
-        throw deliveryError;
+        // A single recipient/transport problem must not poison the global
+        // birthday scan and turn every hourly schedule into a dead letter.
+        // Leave the claim pending so the next hourly scan can retry it, and log
+        // only the error class/code — never birthday dates or recipient data.
+        logBackendEvent("warn", {
+          route: "birthdays/notify-recipient",
+          errorType: errorType(deliveryError)
+        });
+        continue;
       }
+
       const completedAt = new Date().toISOString();
-      await admin
+      const { error: completionError } = await admin
         .from("birthday_notification_deliveries")
         .update({
           status: result.inApp || result.push ? "delivered" : "suppressed",
           completed_at: completedAt
         })
         .eq("id", claimId);
+      if (completionError) throw completionError;
 
       if (result.inApp || result.push) {
         delivered += 1;
