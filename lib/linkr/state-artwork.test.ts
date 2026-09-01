@@ -10,12 +10,19 @@ const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0
 const artwork = read("components/linkr/linkr-state-artwork.tsx");
 const loading = read("app/(app)/linkr/loading.tsx");
 const moments = read("components/linkr/linkr-moments.tsx");
+const activation = read("components/linkr/linkr-activation.tsx");
 
 describe("Linkr illustrated loading and opened states", () => {
   it("uses the three-person artwork for the Linkr loading screen", () => {
     expect(loading).toContain('variant="loading"');
     expect(loading).toContain("Refreshing your Linkr…");
     expect(artwork).toContain('src: "/illustrations/linkr/linkr-loading.png"');
+  });
+
+  it("uses the three-person artwork when Linkr is off", () => {
+    expect(activation).toContain('variant="loading"');
+    expect(activation).not.toContain('<LinkrOrb variant="off" />');
+    expect(activation).toContain("LINKR_COPY.turnOn");
   });
 
   it("uses the two-person artwork for the opened empty deck", () => {
