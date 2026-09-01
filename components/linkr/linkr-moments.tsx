@@ -3,7 +3,7 @@
 import { ArrowLeft, Eye, Hand, MapPinOff, ShieldCheck, Users } from "lucide-react";
 
 import { HOW_LINKR_WORKS, LINKR_COPY } from "@/lib/linkr/rules";
-import { LinkrOrb } from "@/components/linkr/linkr-orb";
+import { LinkrStateArtwork } from "@/components/linkr/linkr-state-artwork";
 
 /**
  * The screens that are moments rather than surfaces: the match, the empty
@@ -88,7 +88,10 @@ export type EmptyStateProps = {
 export function LinkrEmptyState({ onWiden, canWiden }: EmptyStateProps) {
   return (
     <section className="linkr-empty" aria-labelledby="linkr-empty-title">
-      <LinkrOrb variant="empty" />
+      <LinkrStateArtwork
+        variant="opened"
+        className="w-full max-w-[19rem] sm:max-w-[21rem]"
+      />
       <h1 id="linkr-empty-title" className="linkr-empty__title">
         {LINKR_COPY.emptyTitle} <span aria-hidden>👀</span>
       </h1>
