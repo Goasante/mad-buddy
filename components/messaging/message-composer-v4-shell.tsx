@@ -70,8 +70,7 @@ export function MessageComposerV4Shell({
       }).catch(() => {
         // The current textarea keeps the draft in memory if the network drops.
       });
-    },
-    [conversationId]
+    }, [conversationId]
   );
 
   useEffect(() => {
@@ -108,8 +107,7 @@ export function MessageComposerV4Shell({
       serverTimerRef.current = setTimeout(() => {
         syncDraftToServer(value);
       }, SERVER_DRAFT_DEBOUNCE_MS);
-    },
-    [syncDraftToServer]
+    }, [syncDraftToServer]
   );
 
   const publishTyping = useCallback(
@@ -117,8 +115,7 @@ export function MessageComposerV4Shell({
       void heartbeatConversationPresenceAction({ conversationId, typing }).catch(() => {
         // Presence is transient and must never block composing a message.
       });
-    },
-    [conversationId]
+    }, [conversationId]
   );
 
   useEffect(() => {
@@ -140,11 +137,14 @@ export function MessageComposerV4Shell({
     typingTimerRef.current = setTimeout(() => publishTyping(false), TYPING_IDLE_MS);
   }
 
-  async function handleSent() {
+  function handleSent() {
     persistDraft("");
     publishTyping(false);
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-    await onSent();
+    /* The server has already accepted the message at this point. Thread/inbox
+       reconciliation is background work and must not keep the composer in its
+       sending transition or make the user wait before sending the next text. */
+    void onSent();
   }
 
   return (
