@@ -18,7 +18,7 @@
  */
 
 /** What an optimistic row adds to a canonical message. */
-export type OptimisticStatus = "pending" | "failed";
+export type OptimisticStatus = "pending" | "sent" | "failed";
 
 /**
  * A locally drawn message, keyed by the same idempotency key the send uses.
@@ -90,9 +90,9 @@ export function mergeForDisplay<T extends CanonicalLike>(
   return [...canonical, ...ordered];
 }
 
-/** True for the placeholder rows, so a renderer can branch without casting. */
+/** True for placeholder rows, so a renderer can branch without casting. */
 export function isOptimistic(message: { clientMessageId?: string | null; status?: unknown }): message is OptimisticMessage {
-  return message.status === "pending" || message.status === "failed";
+  return message.status === "pending" || message.status === "sent" || message.status === "failed";
 }
 
 /**
@@ -108,10 +108,22 @@ export function markFailed(optimistic: OptimisticMessage[], clientMessageId: str
   );
 }
 
-/** Returns a failed row to pending for a retry, reusing its key (§18). */
+/**
+ * Advances an optimistic row according to where the acknowledgement came from.
+ *
+ * The same helper is used in two places:
+ * - pending -> sent when the server has accepted the original send;
+ * - failed -> pending when the person explicitly retries.
+ *
+ * That distinction lets the UI show the first delivery tick immediately on the
+ * server acknowledgement without falsely showing a retry as sent before its
+ * network request succeeds.
+ */
 export function markRetrying(optimistic: OptimisticMessage[], clientMessageId: string): OptimisticMessage[] {
   return optimistic.map((message) =>
-    message.clientMessageId === clientMessageId ? { ...message, status: "pending" as const } : message
+    message.clientMessageId === clientMessageId
+      ? { ...message, status: message.status === "failed" ? "pending" as const : "sent" as const }
+      : message
   );
 }
 
