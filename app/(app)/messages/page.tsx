@@ -1,4 +1,5 @@
 import { MessagesPageV4 } from "@/components/messages/messages-page-v4";
+import { MessageDeliveryAck } from "@/components/messages/message-delivery-ack";
 import { getConversationsAction, getVoiceRecorderConfigAction } from "@/app/(app)/messaging-actions";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ export default async function MessagesPage() {
 
   return (
     <div className="-mt-[var(--mobile-header-height)] md:mt-0">
+      <MessageDeliveryAck />
       <MessagesPageV4 initialConversations={conversations} voiceRecorderConfig={voiceRecorderConfig} />
     </div>
   );
