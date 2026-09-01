@@ -875,11 +875,6 @@ export function MessageComposerV3({
           </button>
         )}
       </form>
-      {!canSendText && voiceSupported ? (
-        <p className="px-4 pb-1 text-center text-xs font-medium text-muted-foreground/75">
-          {micHint ?? "Tap mic for hands-free · hold & release to send · ← cancel · ↑ lock"}
-        </p>
-      ) : null}
       {voiceError ? <p className="voice-bar-error" role="alert">{voiceError}</p> : null}
     </div>
   );
