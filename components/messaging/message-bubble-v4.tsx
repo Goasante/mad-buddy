@@ -208,6 +208,11 @@ export function MessageBubbleV4({
         </div>
       ) : null}
 
+      {/* The reply icon deliberately renders 42px outside this box, and the
+          drag pushes the bubble further right. Neither may widen the thread's
+          scroll area -- that is clamped by `overflow-x-hidden` on the scroll
+          container itself, which stops the sideways panning without cropping
+          the icon the gesture needs to reveal. Clipping here would hide it. */}
       <div className="relative">
         <div aria-hidden="true" className={cn("absolute inset-y-0 left-0 grid w-12 place-items-center text-primary transition-opacity", dragX > 14 ? "opacity-100" : "opacity-0")} style={{ transform: "translateX(-42px)" }}>
           <Reply className={cn("h-5 w-5 transition-transform", thresholdHit && "scale-125")} />

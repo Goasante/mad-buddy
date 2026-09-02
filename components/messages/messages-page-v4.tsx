@@ -63,6 +63,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { useTransientFeedback } from "@/hooks/use-transient-feedback";
 import { MESSAGES_UPDATED_EVENT } from "@/hooks/use-unread-message-count";
 import { conversationContext, dayLabel, startsNewDay, startsNewRun } from "@/lib/messaging/conversation-presence";
 import type { AttachmentView } from "@/lib/messaging/attachments";
@@ -77,6 +78,7 @@ import {
 } from "@/lib/messaging/optimistic-messages";
 import {
   bindThreadCacheOwner,
+  hydrateThreadFromStore,
   readThread,
   writeThreadMessages,
   writeThreadOptimistic,
@@ -218,7 +220,11 @@ export function MessagesPageV4({
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterId>("all");
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const [feedback, setFeedback] = useState("");
+  /* Confirmations expire, failures stay until the person deals with them.
+     V4 was still using plain useState, so every "Deleted." and "Copied." sat
+     on screen indefinitely -- unacceptable now the banner floats over the
+     thread. The hook is a drop-in for useState. */
+  const [feedback, setFeedback] = useTransientFeedback();
   const [newMessageOpen, setNewMessageOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [threadSearchOpen, setThreadSearchOpen] = useState(false);
@@ -266,6 +272,12 @@ export function MessagesPageV4({
   useEffect(() => {
     viewerIdRef.current = viewerId;
   }, [viewerId]);
+  /* Which load request has already been answered by the SERVER.
+     The device read and the network request race by design -- whichever
+     returns first paints. This records that the authoritative one landed, so a
+     slow disk read arriving afterwards cannot overwrite fresh rows with stale
+     ones. */
+  const loadedFromServerRef = useRef(0);
 
   useImmersiveWhile(Boolean(selectedId));
 
@@ -322,7 +334,9 @@ export function MessagesPageV4({
     } catch (error) {
       setFeedback(failureMessage(error));
     }
-  }, []);
+    /* setFeedback is referentially stable by contract (useTransientFeedback
+       wraps it in useCallback), so listing it cannot retrigger this. */
+  }, [setFeedback]);
 
   const loadConversation = useCallback(async (conversationId: string) => {
     const requestId = ++loadRequestIdRef.current;
@@ -341,6 +355,20 @@ export function MessagesPageV4({
     if (cached) {
       setMessages(cached.messages);
       setReplyContexts(cached.replyContexts);
+    } else {
+      /* Nothing in memory: this is a fresh app launch or a refresh. Try the
+         device before falling back to the spinner. Deliberately not awaited
+         before the network request is fired -- whichever answers first paints,
+         and storage almost always wins, so the reader sees their messages while
+         the server round trip is still in flight. */
+      void hydrateThreadFromStore(viewerIdRef.current, conversationId).then((stored) => {
+        if (!stored || !mountedRef.current || requestId !== loadRequestIdRef.current) return;
+        // The network may already have answered; never overwrite fresher rows.
+        if (loadedFromServerRef.current === requestId) return;
+        setMessages(stored.messages);
+        setReplyContexts(stored.replyContexts);
+        setLoadingMessages(false);
+      });
     }
 
     try {
@@ -353,6 +381,7 @@ export function MessagesPageV4({
          media correct: a cached row's signed attachment URL may have expired,
          and these are freshly signed. The cached copy was only ever the first
          paint -- this is the truth it is reconciled to. */
+      loadedFromServerRef.current = requestId;
       setMessages(loaded);
       writeThreadMessages(viewerIdRef.current, conversationId, loaded);
       setLoadingMessages(false);
@@ -389,7 +418,7 @@ export function MessagesPageV4({
     } finally {
       if (mountedRef.current && requestId === loadRequestIdRef.current) setLoadingMessages(false);
     }
-  }, []);
+  }, [setFeedback]);
 
   useEffect(() => {
     void syncConversations();
@@ -762,8 +791,19 @@ export function MessagesPageV4({
 
   return (
     <div className="mx-auto w-full max-w-[1240px] bg-background pb-3 text-foreground dark:bg-[#111112]">
+      {/* FLOATS ABOVE THE THREAD, deliberately.
+          An open conversation is `fixed inset-0 z-30` -- a full-screen overlay
+          on phones. This banner used to sit in normal flow above that overlay,
+          which meant every message it carried was rendered somewhere the
+          reader could not see: a delete that was refused, a send that failed,
+          a copy that succeeded, all silent. Anything the product says about an
+          action has to appear over the surface the action happened on, so this
+          is fixed and z-40. */}
       {feedback ? (
-        <div role="status" className="mb-2 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-foreground animate-in fade-in slide-in-from-top-1">
+        <div
+          role="status"
+          className="fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-40 mx-auto max-w-md rounded-2xl border border-primary/20 bg-background/95 px-4 py-3 text-sm text-foreground shadow-[0_12px_34px_rgba(78,4,1,.18)] backdrop-blur-xl animate-in fade-in slide-in-from-top-2 md:inset-x-auto md:left-1/2 md:-translate-x-1/2"
+        >
           {feedback}
         </div>
       ) : null}
@@ -847,7 +887,14 @@ export function MessagesPageV4({
 
               <div
                 ref={threadRef}
-                className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4 pt-3 md:px-5 md:pt-4"
+                /* overflow-x-hidden is load-bearing, not cosmetic. Each bubble
+                   parks its swipe-to-reply icon 42px outside its own left edge
+                   and translates right while dragging, so without a horizontal
+                   clamp the whole thread pans sideways as well as scrolling --
+                   which is what made the chat feel like it was sliding around.
+                   The vertical axis stays scrollable; only the horizontal one
+                   is pinned. */
+                className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 pb-4 pt-3 md:px-5 md:pt-4"
                 onScroll={(event) => {
                   const node = event.currentTarget;
                   const near = node.scrollHeight - node.scrollTop - node.clientHeight < 90;
@@ -997,13 +1044,28 @@ export function MessagesPageV4({
 
       <DeleteMessageModal target={deleteTarget} pending={isPending} onClose={() => setDeleteTarget(null)} onDelete={(forEveryone) => {
         if (!deleteTarget || !selectedId) return;
+        const messageId = deleteTarget.message.id;
+        const conversationId = selectedId;
+        const previousMessages = messages;
+        /* Close the sheet and remove the message NOW.
+           Both halves were the reported "nothing happens": the sheet stayed
+           open for the whole round trip, and the bubble only moved once a full
+           refetch came back -- so a delete looked like a dead button even when
+           the server had accepted it. The row is restored below if the server
+           refuses, which it does for "delete for everyone" outside its window. */
+        setDeleteTarget(null);
+        setMessages((current) => current.filter((message) => message.id !== messageId));
         startTransition(async () => {
-          const result = await deleteMessageAction(deleteTarget.message.id, forEveryone).catch(() => ({ ok: false, message: "Could not delete." }));
+          const result = await deleteMessageAction(messageId, forEveryone).catch(() => ({ ok: false, message: "Could not delete." }));
           setFeedback(result.message);
-          if (result.ok) setDeleteTarget(null);
-          await refreshMessages(selectedId, false);
+          if (!result.ok) {
+            // Put it back. A refused delete must not look like a successful one.
+            setMessages(previousMessages);
+            return;
+          }
+          await refreshMessages(conversationId, false);
           await syncConversations();
-          await refreshUltimate(selectedId);
+          await refreshUltimate(conversationId);
         });
       }} />
 

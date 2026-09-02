@@ -92,15 +92,33 @@ if (typeof window !== "undefined") {
  * the server still refuses the data itself.
  */
 export function bindThreadCacheOwner(ownerId: string | null): void {
-  if (state.ownerId === ownerId) return;
+  const previousOwner = state.ownerId;
+  if (previousOwner === ownerId) return;
   state.threads.clear();
   state.ownerId = ownerId;
+  /* The previous account's messages are now at rest on this device, so
+     changing accounts has to erase them rather than merely stop reading them.
+     Only the OUTGOING owner is wiped: signing in as somebody else must not
+     discard the threads of an account that may sign back in. */
+  if (previousOwner && typeof window !== "undefined") {
+    void import("@/lib/messaging/thread-store")
+      .then(({ clearPersistedThreads }) => clearPersistedThreads(previousOwner))
+      .catch(() => {
+        // Best effort: memory is already cleared above.
+      });
+  }
 }
 
-/** Drops everything. Call on logout. */
+/** Drops everything, in memory and on the device. Call on logout. */
 export function clearThreadCache(): void {
   state.threads.clear();
   state.ownerId = null;
+  if (typeof window === "undefined") return;
+  void import("@/lib/messaging/thread-store")
+    .then(({ clearAllPersistedThreads }) => clearAllPersistedThreads())
+    .catch(() => {
+      // Memory is cleared regardless; storage is wiped again on next sign-in.
+    });
 }
 
 function ownedBy(ownerId: string | null): boolean {
@@ -131,10 +149,55 @@ function evictIfNeeded(): void {
   }
 }
 
+/**
+ * Mirrors a thread to durable storage, fire-and-forget.
+ *
+ * Never awaited and never allowed to reject: persistence is a courtesy to the
+ * NEXT app launch, and a device that refuses to store must not make this one
+ * slower or noisier. The in-memory cache is already correct by the time this
+ * runs.
+ */
+function persist(conversationId: string, entry: CachedThread): void {
+  const ownerId = state.ownerId;
+  if (!ownerId || typeof window === "undefined") return;
+  void import("@/lib/messaging/thread-store")
+    .then(({ savePersistedThread }) => savePersistedThread(ownerId, conversationId, entry))
+    .catch(() => {
+      // Storage is optional. Messaging works without it.
+    });
+}
+
 function put(conversationId: string, entry: CachedThread): void {
   state.threads.delete(conversationId);
   state.threads.set(conversationId, entry);
   evictIfNeeded();
+  persist(conversationId, entry);
+}
+
+/**
+ * Seeds the in-memory cache from durable storage.
+ *
+ * Returns the thread so a caller can paint it, and only fills a conversation
+ * the memory cache does not already hold -- memory is always the fresher of
+ * the two, so a stored copy must never overwrite it.
+ */
+export async function hydrateThreadFromStore(
+  ownerId: string | null,
+  conversationId: string
+): Promise<CachedThread | null> {
+  if (!ownedBy(ownerId) || typeof window === "undefined") return null;
+  if (state.threads.has(conversationId)) return state.threads.get(conversationId) ?? null;
+  try {
+    const { loadPersistedThread } = await import("@/lib/messaging/thread-store");
+    const stored = await loadPersistedThread(ownerId, conversationId);
+    // Re-check ownership: the account can change while this await is pending.
+    if (!stored || !ownedBy(ownerId) || state.threads.has(conversationId)) return null;
+    state.threads.set(conversationId, stored);
+    evictIfNeeded();
+    return stored;
+  } catch {
+    return null;
+  }
 }
 
 /**

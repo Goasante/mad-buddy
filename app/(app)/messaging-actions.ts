@@ -326,10 +326,14 @@ export async function deleteMessageAction(
   const admin = createSupabaseAdminClient();
 
   if (!forEveryone) {
-    // Delete for me: hide locally, leave the other participant's copy alone.
-    await admin
+    /* Delete for me: hide locally, leave the other participant's copy alone.
+       The error was previously discarded, so a hide that failed still reported
+       success and the message came back on the next refresh with nothing
+       explaining why. */
+    const { error: hideError } = await admin
       .from("message_hides")
       .upsert({ message_id: messageId, user_id: userId }, { onConflict: "message_id,user_id" });
+    if (hideError) return { ok: false, message: "Couldn't remove that message. Try again." };
     return { ok: true, message: "Message removed for you." };
   }
 
