@@ -1,6 +1,6 @@
 "use client";
 
-import { BellOff, Bookmark, ChevronRight, Clock3, Image, Pin, Search, ShieldCheck, Star, UsersRound } from "lucide-react";
+import { BellOff, Bookmark, ChevronRight, Clock3, Pin, Search, ShieldCheck, Star, UsersRound } from "lucide-react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useState, useTransition } from "react";
 
@@ -17,14 +17,6 @@ import { cn } from "@/lib/utils";
 
 type ViewerRole = "owner" | "admin" | "moderator" | "member" | null;
 type CollectionTab = "saved" | "pinned";
-
-const THEMES = [
-  { id: "default", label: "Paper", preview: "linear-gradient(145deg,#fffdfc,#f8eee3)" },
-  { id: "apricot", label: "Apricot", preview: "linear-gradient(145deg,#fff4e5,#f5c18a)" },
-  { id: "maroon", label: "Maroon", preview: "linear-gradient(145deg,#4E0401,#9b493e)" },
-  { id: "sunset", label: "Sunset", preview: "linear-gradient(145deg,#f5a85a,#d96655)" },
-  { id: "forest", label: "Forest", preview: "linear-gradient(145deg,#264d3a,#8da78c)" }
-] as const;
 
 const LIFETIMES = [
   { seconds: null, label: "Forever" },
@@ -64,7 +56,7 @@ export function ChatSettingsV4({
   onFeedback: (message: string) => void;
 }) {
   const [isPending, startTransition] = useTransition();
-  const [expanded, setExpanded] = useState<"notifications" | "theme" | "lifetime" | "group" | null>(null);
+  const [expanded, setExpanded] = useState<"notifications" | "lifetime" | "group" | null>(null);
   const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [collectionTab, setCollectionTab] = useState<CollectionTab>("saved");
   const isGroup = conversation.kind === "group";
@@ -78,10 +70,6 @@ export function ChatSettingsV4({
       onFeedback(result.message);
       if (result.ok) await onRefresh();
     });
-  }
-
-  function setTheme(themeKey: string) {
-    run(() => updateConversationUserPreferencesAction({ conversationId: conversation.id, themeKey }));
   }
 
   function setLifetime(messageLifetimeSeconds: number | null) {
@@ -134,23 +122,6 @@ export function ChatSettingsV4({
             <SettingRow icon={Search} title="Search in chat" subtitle="Find messages and jump between results" onClick={onSearch} />
             <SettingRow icon={Bookmark} title="Saved messages" subtitle="Private messages and folders only you can see" onClick={() => openCollection("saved")} />
             <SettingRow icon={Pin} title="Pinned messages" subtitle={ultimate?.pins.length ? `${ultimate.pins.length} pinned in this chat` : "Shared navigation for important messages"} onClick={() => openCollection("pinned")} />
-
-            <SettingRow icon={Image} title="Conversation theme" subtitle={THEMES.find((theme) => theme.id === (prefs?.themeKey ?? "default"))?.label ?? "Paper"} onClick={() => setExpanded(expanded === "theme" ? null : "theme")} />
-            {expanded === "theme" ? (
-              <div className="border-t border-border/50 px-3 py-3 animate-in slide-in-from-top-1 fade-in">
-                <div className="grid grid-cols-5 gap-2">
-                  {THEMES.map((theme) => {
-                    const active = (prefs?.themeKey ?? "default") === theme.id;
-                    return (
-                      <button key={theme.id} type="button" disabled={isPending} onClick={() => setTheme(theme.id)} className="focus-ring group flex flex-col items-center gap-1.5 rounded-xl p-1.5 text-xs font-medium">
-                        <span className={cn("block h-10 w-10 rounded-full border-2 shadow-sm transition-transform group-active:scale-90", active ? "border-primary scale-110" : "border-white dark:border-white/10")} style={{ background: theme.preview }} />
-                        {theme.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
 
             <SettingRow icon={Clock3} title="Message lifetime" subtitle={LIFETIMES.find((item) => item.seconds === (settings?.messageLifetimeSeconds ?? null))?.label ?? "Forever"} onClick={() => setExpanded(expanded === "lifetime" ? null : "lifetime")} />
             {expanded === "lifetime" ? (
