@@ -3,7 +3,11 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { messageAttachmentCanBeSigned } from "@/lib/messaging/attachment-retention";
-import { canCreateDirectConversation, resolveConversationAccess } from "@/lib/messaging/service";
+import {
+  canCreateDirectConversation,
+  resolveConversationAccess,
+  type ConversationAccess
+} from "@/lib/messaging/service";
 import {
   MEDIA_SIGNED_URL_TTL_SECONDS,
   mediaSignedUrlExpiresAt
@@ -69,13 +73,29 @@ export async function signAttachmentsForMessages(
   admin: Admin,
   viewerId: string,
   conversationId: string,
-  messageIds: readonly string[]
+  messageIds: readonly string[],
+  /**
+   * An access result already resolved for THIS viewer, THIS conversation,
+   * earlier in THIS request.
+   *
+   * Purely an optimization, and deliberately shaped so it cannot become a
+   * loophole: it is the same value this function would compute, computed
+   * microseconds earlier in the same server action, and every caller that
+   * omits it still resolves access here exactly as before. It is never
+   * persisted, never carried across requests, and never passed between users,
+   * so membership, block and privacy state remain as fresh as they were.
+   *
+   * The direct-eligibility check below is NOT skipped -- only the membership
+   * lookup is reused, because that is the part the caller has already paid
+   * for on the same round trip.
+   */
+  precomputedAccess?: ConversationAccess
 ): Promise<Map<string, AttachmentView>> {
   const byId = new Map<string, AttachmentView>();
   const uniqueMessageIds = [...new Set(messageIds.filter(Boolean))];
   if (uniqueMessageIds.length === 0) return byId;
 
-  const access = await resolveConversationAccess(admin, viewerId, conversationId);
+  const access = precomputedAccess ?? (await resolveConversationAccess(admin, viewerId, conversationId));
   if (!access.canView || access.status !== "active") return byId;
 
   if (access.conversationType === "direct") {

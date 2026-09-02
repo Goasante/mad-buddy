@@ -75,6 +75,13 @@ import {
   pruneConfirmed,
   type OptimisticMessage
 } from "@/lib/messaging/optimistic-messages";
+import {
+  bindThreadCacheOwner,
+  readThread,
+  writeThreadMessages,
+  writeThreadOptimistic,
+  writeThreadReplyContexts
+} from "@/lib/messaging/thread-cache";
 import type { UltimateConversationState } from "@/lib/messaging/ultimate-types";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
@@ -105,12 +112,12 @@ type InboxPreference = {
 type InboxPreferenceMap = Record<string, Partial<InboxPreference>>;
 type DeleteTarget = { message: ChatMessageView } | null;
 type ForwardTarget = { message: ChatMessageView } | null;
-type ThreadCacheEntry = {
-  messages: ChatMessageView[];
-  replyContexts: Record<string, ReplyContext>;
-};
 
 const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** One shared empty array, so a thread with nothing pending keeps a stable
+ *  identity across renders instead of allocating a new [] every time. */
+const EMPTY_OPTIMISTIC: OptimisticMessage[] = [];
 
 function isConversationId(value: string | null): value is string {
   return Boolean(value) && CONVERSATION_ID.test(value as string);
@@ -169,20 +176,41 @@ function presenceLabel(ultimate: UltimateConversationState | null, isGroup: bool
 
 export function MessagesPageV4({
   initialConversations = [],
-  voiceRecorderConfig = { enabled: false, maxDurationSeconds: 0 }
+  voiceRecorderConfig = { enabled: false, maxDurationSeconds: 0 },
+  viewerId = null
 }: {
   initialConversations?: ConversationView[];
   voiceRecorderConfig?: VoiceRecorderConfig;
+  /** Scopes the thread cache to this account. Presentation only, never access. */
+  viewerId?: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedConversationId = searchParams.get("conversation");
 
+  /* Bind the cache to this account BEFORE first render reads from it.
+     Done during render rather than in an effect because the very first paint
+     of a warm thread depends on the cache already being owned -- an effect
+     would run after that paint and the instant open would be lost. Binding is
+     idempotent and only mutates on an actual account change, where it clears
+     the previous account's threads. */
+  bindThreadCacheOwner(viewerId);
+
   const [conversations, setConversations] = useState(initialConversations);
   const [inboxPreferences, setInboxPreferences] = useState<InboxPreferenceMap>({});
   const [selectedId, setSelectedId] = useState<string | null>(() => isConversationId(requestedConversationId) ? requestedConversationId : null);
-  const [messages, setMessages] = useState<ChatMessageView[]>([]);
-  const [replyContexts, setReplyContexts] = useState<Record<string, ReplyContext>>({});
+  /* Seeded from the cache on the FIRST render, not in an effect.
+     This is what makes a remount of /messages -- coming back from another
+     bottom-nav tab -- paint the thread immediately instead of flashing a
+     spinner while the network answers. */
+  const [messages, setMessages] = useState<ChatMessageView[]>(() => {
+    const id = isConversationId(requestedConversationId) ? requestedConversationId : null;
+    return id ? readThread(viewerId, id)?.messages ?? [] : [];
+  });
+  const [replyContexts, setReplyContexts] = useState<Record<string, ReplyContext>>(() => {
+    const id = isConversationId(requestedConversationId) ? requestedConversationId : null;
+    return id ? readThread(viewerId, id)?.replyContexts ?? {} : {};
+  });
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
   const [ultimate, setUltimate] = useState<UltimateConversationState | null>(null);
@@ -203,16 +231,41 @@ export function MessagesPageV4({
   const [forwardTarget, setForwardTarget] = useState<ForwardTarget>(null);
   const [pollOpen, setPollOpen] = useState(false);
   const [unseenIncoming, setUnseenIncoming] = useState(0);
-  const [optimistic, setOptimistic] = useState<OptimisticMessage[]>([]);
+  /**
+   * Outgoing rows for EVERY conversation, keyed by conversation id (M2).
+   *
+   * This used to be a flat array that `openConversation` reset to []. A person
+   * who sent a message and immediately switched chats lost the pending row: the
+   * send still completed, but a failure became invisible and unretryable, and
+   * the message appeared to vanish. A pending or failed send belongs to its own
+   * thread, so it is keyed by one and survives any amount of switching.
+   */
+  const [optimisticByConversation, setOptimisticByConversation] = useState<Record<string, OptimisticMessage[]>>(() => {
+    const id = isConversationId(requestedConversationId) ? requestedConversationId : null;
+    const cached = id ? readThread(viewerId, id)?.optimistic ?? [] : [];
+    return cached.length > 0 && id ? { [id]: cached } : {};
+  });
   const [isPending, startTransition] = useTransition();
 
-  const retryDraftsRef = useRef<Map<string, { clientMessageId: string; text: string | null; kind: "text" | "voice"; durationSeconds: number | null }>>(new Map());
+  /* Retry drafts carry their own conversationId so a failed send can be
+     retried into the thread it came from, not the one currently on screen. */
+  const retryDraftsRef = useRef<Map<string, { conversationId: string; clientMessageId: string; text: string | null; kind: "text" | "voice"; durationSeconds: number | null }>>(new Map());
   const threadRef = useRef<HTMLDivElement | null>(null);
   const nearBottomRef = useRef(true);
   const initialScrollPendingRef = useRef(false);
   const mountedRef = useRef(true);
   const loadRequestIdRef = useRef(0);
-  const threadCacheRef = useRef<Map<string, ThreadCacheEntry>>(new Map());
+  /* The cache is a module singleton now, not component state -- that is the
+     whole point of M1. Held in a ref only so the stable useCallbacks below can
+     read the current viewer without taking it as a dependency and tearing down
+     the Realtime subscription on every render. Assigned in an effect rather
+     than during render: React forbids mutating a ref while rendering, and the
+     initial value is already correct, so the effect only matters if the
+     account ever changes under a live mount. */
+  const viewerIdRef = useRef(viewerId);
+  useEffect(() => {
+    viewerIdRef.current = viewerId;
+  }, [viewerId]);
 
   useImmersiveWhile(Boolean(selectedId));
 
@@ -265,7 +318,7 @@ export function MessagesPageV4({
       });
       const nextReplies = replies as Record<string, ReplyContext>;
       setReplyContexts(nextReplies);
-      threadCacheRef.current.set(conversationId, { messages: loaded, replyContexts: nextReplies });
+      writeThreadMessages(viewerIdRef.current, conversationId, loaded, nextReplies);
     } catch (error) {
       setFeedback(failureMessage(error));
     }
@@ -273,8 +326,13 @@ export function MessagesPageV4({
 
   const loadConversation = useCallback(async (conversationId: string) => {
     const requestId = ++loadRequestIdRef.current;
-    const cached = threadCacheRef.current.get(conversationId);
-    setLoadingMessages(!cached);
+    const cached = readThread(viewerIdRef.current, conversationId);
+    const hasCachedMessages = Boolean(cached && cached.messages.length > 0);
+    /* THE INSTANT OPEN. A cached thread is the UI's source, not merely an
+       optimization: it paints now and the network reconciles underneath it. The
+       blocking spinner is reserved for a genuine first load -- a conversation
+       this session has never opened. */
+    setLoadingMessages(!hasCachedMessages);
     setFeedback("");
     setUnseenIncoming(0);
     nearBottomRef.current = true;
@@ -291,9 +349,12 @@ export function MessagesPageV4({
          the thread is already useful. */
       const loaded = await withTimeout(getMessagesAction(conversationId), { operation: "load conversation" });
       if (!mountedRef.current || requestId !== loadRequestIdRef.current) return;
-      const cachedReplies = threadCacheRef.current.get(conversationId)?.replyContexts ?? {};
+      /* Server rows replace cached rows wholesale, which is also what keeps
+         media correct: a cached row's signed attachment URL may have expired,
+         and these are freshly signed. The cached copy was only ever the first
+         paint -- this is the truth it is reconciled to. */
       setMessages(loaded);
-      threadCacheRef.current.set(conversationId, { messages: loaded, replyContexts: cachedReplies });
+      writeThreadMessages(viewerIdRef.current, conversationId, loaded);
       setLoadingMessages(false);
 
       void Promise.all([
@@ -308,7 +369,10 @@ export function MessagesPageV4({
         setReplyContexts(nextReplies);
         setUltimate(ultimateState);
         setViewerRole(role as ViewerRole);
-        threadCacheRef.current.set(conversationId, { messages: loaded, replyContexts: nextReplies });
+        /* Only the reply metadata is written here. Writing `loaded` again
+           would clobber any newer rows a Realtime patch had already applied
+           while this slower auxiliary request was still in flight. */
+        writeThreadReplyContexts(viewerIdRef.current, conversationId, nextReplies);
       });
 
       void Promise.all([
@@ -447,7 +511,15 @@ export function MessagesPageV4({
     });
   }, [activeFilter, displayConversations, inboxPreferences, query]);
 
-  const pendingMessages = useMemo(() => pruneConfirmed(optimistic, messages), [messages, optimistic]);
+  /* Only the selected thread's outgoing rows are drawn. The others stay in
+     state, still pending or still retryable, waiting for their own thread to
+     be opened again. `pruneConfirmed` drops any row the server has now
+     echoed back, which is what stops an optimistic bubble and its canonical
+     message being shown as two messages. */
+  const pendingMessages = useMemo(() => {
+    const outgoing = selectedId ? optimisticByConversation[selectedId] : undefined;
+    return outgoing && outgoing.length > 0 ? pruneConfirmed(outgoing, messages) : EMPTY_OPTIMISTIC;
+  }, [messages, optimisticByConversation, selectedId]);
   const replyMessage = replyingToId ? messages.find((message) => message.id === replyingToId) ?? null : null;
   const matchingIds = useMemo(() => {
     const term = threadQuery.trim().toLowerCase();
@@ -464,7 +536,7 @@ export function MessagesPageV4({
   const pinnedIds = useMemo(() => new Set((ultimate?.pins ?? []).map((pin) => pin.messageId)), [ultimate?.pins]);
 
   function openConversation(conversationId: string) {
-    const cached = threadCacheRef.current.get(conversationId);
+    const cached = readThread(viewerId, conversationId);
     setSelectedId(conversationId);
     setMessages(cached?.messages ?? []);
     setUltimate(null);
@@ -472,7 +544,10 @@ export function MessagesPageV4({
     setReplyContexts(cached?.replyContexts ?? {});
     setReplyingToId(null);
     setMentionCandidates([]);
-    setOptimistic([]);
+    /* NOT cleared. Outgoing rows are keyed by conversation, so switching
+       threads leaves every pending and failed send exactly where it belongs.
+       Clearing here was the bug: a send that failed after the person moved on
+       had nowhere to be shown and no way to be retried. */
     setThreadSearchOpen(false);
     setThreadQuery("");
     void loadConversation(conversationId);
@@ -557,36 +632,75 @@ export function MessagesPageV4({
     });
   }
 
-  function addOptimistic(draft: { clientMessageId: string; text: string | null; kind: "text" | "voice"; durationSeconds: number | null }) {
-    retryDraftsRef.current.set(draft.clientMessageId, draft);
-    setOptimistic((current) => [
+  /**
+   * Applies one change to a single conversation's outgoing rows.
+   *
+   * Every optimistic mutation goes through here so the component state and the
+   * thread cache can never disagree about what is still in flight -- that
+   * disagreement is what would let a pending row survive a switch in one place
+   * and vanish in the other.
+   */
+  const updateOptimistic = useCallback(
+    (conversationId: string, change: (current: OptimisticMessage[]) => OptimisticMessage[]) => {
+      setOptimisticByConversation((all) => {
+        const next = change(all[conversationId] ?? []);
+        writeThreadOptimistic(viewerIdRef.current, conversationId, next);
+        if (next.length === 0) {
+          // Drop the key rather than keeping an empty array around forever.
+          if (!(conversationId in all)) return all;
+          const rest = { ...all };
+          delete rest[conversationId];
+          return rest;
+        }
+        return { ...all, [conversationId]: next };
+      });
+    },
+    []
+  );
+
+  function addOptimistic(
+    conversationId: string,
+    draft: { clientMessageId: string; text: string | null; kind: "text" | "voice"; durationSeconds: number | null }
+  ) {
+    retryDraftsRef.current.set(draft.clientMessageId, { ...draft, conversationId });
+    updateOptimistic(conversationId, (current) => [
       ...current.filter((message) => message.clientMessageId !== draft.clientMessageId),
       { ...draft, createdAt: new Date().toISOString(), status: "pending" }
     ]);
   }
 
-  function settleOptimistic(clientMessageId: string, outcome: "sent" | "failed") {
-    setOptimistic((current) => outcome === "failed" ? markFailed(current, clientMessageId) : markRetrying(current, clientMessageId));
+  function settleOptimistic(conversationId: string, clientMessageId: string, outcome: "sent" | "failed") {
+    updateOptimistic(conversationId, (current) =>
+      outcome === "failed" ? markFailed(current, clientMessageId) : markRetrying(current, clientMessageId)
+    );
   }
 
   function retryOptimistic(clientMessageId: string) {
     const draft = retryDraftsRef.current.get(clientMessageId);
-    if (!draft || !selectedId) return;
+    if (!draft) return;
+    /* Retry targets the message's OWN conversation, not whichever one is
+       selected. The two are usually the same, but a failed row is reachable
+       after the person has moved on, and retrying it must not post into the
+       chat they happen to be looking at. */
+    const conversationId = draft.conversationId;
     if (draft.kind === "voice") {
       setFeedback("That recording could not be uploaded. Record it again so Mad Buddy can verify the audio before sending.");
-      setOptimistic((current) => discardOptimistic(current, clientMessageId));
+      updateOptimistic(conversationId, (current) => discardOptimistic(current, clientMessageId));
       return;
     }
-    setOptimistic((current) => markRetrying(current, clientMessageId));
+    updateOptimistic(conversationId, (current) => markRetrying(current, clientMessageId));
     startTransition(async () => {
-      const result = await sendMessageAction({ conversationId: selectedId, text: draft.text ?? "", clientMessageId }).catch(() => ({ ok: false, message: "Could not retry." }));
+      /* The SAME clientMessageId. The server's unique (sender_id,
+         client_message_id) makes a retry of a send that actually landed return
+         the original message instead of posting a second one. */
+      const result = await sendMessageAction({ conversationId, text: draft.text ?? "", clientMessageId }).catch(() => ({ ok: false, message: "Could not retry." }));
       if (!result.ok) {
-        setOptimistic((current) => markFailed(current, clientMessageId));
+        updateOptimistic(conversationId, (current) => markFailed(current, clientMessageId));
         setFeedback(result.message);
         return;
       }
-      setOptimistic((current) => markRetrying(current, clientMessageId));
-      void refreshMessages(selectedId, false);
+      updateOptimistic(conversationId, (current) => markRetrying(current, clientMessageId));
+      void refreshMessages(conversationId, false);
       void syncConversations();
     });
   }
@@ -787,7 +901,7 @@ export function MessagesPageV4({
                 {pendingMessages.map((message) => (
                   <div key={message.clientMessageId} className="mt-2 flex flex-col items-end animate-in fade-in slide-in-from-bottom-2">
                     <div className={cn("max-w-[84%] rounded-[21px] rounded-br-[7px] bg-primary px-3.5 py-2.5 text-sm leading-6 text-primary-foreground transition-opacity", message.status === "pending" && "opacity-65")}>{message.kind === "voice" ? `Voice message${message.durationSeconds ? ` · ${Math.round(message.durationSeconds)}s` : ""}` : message.text}</div>
-                    <div className="mt-1 flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">{message.status === "failed" ? <><span className="text-destructive">Not sent</span><button type="button" onClick={() => retryOptimistic(message.clientMessageId)} className="underline">{message.kind === "voice" ? "Record again" : "Retry"}</button><button type="button" onClick={() => setOptimistic((current) => discardOptimistic(current, message.clientMessageId))} className="underline">Delete</button></> : message.status === "sent" ? <span className="inline-flex items-center" title="Sent"><Check className="h-3.5 w-3.5" aria-label="Sent" /></span> : <span>Sending…</span>}</div>
+                    <div className="mt-1 flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">{message.status === "failed" ? <><span className="text-destructive">Not sent</span><button type="button" onClick={() => retryOptimistic(message.clientMessageId)} className="underline">{message.kind === "voice" ? "Record again" : "Retry"}</button><button type="button" onClick={() => updateOptimistic(selected.id, (current) => discardOptimistic(current, message.clientMessageId))} className="underline">Delete</button></> : message.status === "sent" ? <span className="inline-flex items-center" title="Sent"><Check className="h-3.5 w-3.5" aria-label="Sent" /></span> : <span>Sending…</span>}</div>
                   </div>
                 ))}
               </div>
@@ -836,8 +950,20 @@ export function MessagesPageV4({
                 replyPreview={replyMessage ? { senderName: replyMessage.senderName, text: messagePreview(replyMessage) } : null}
                 onCancelReply={() => setReplyingToId(null)}
                 onFeedback={setFeedback}
-                onOptimisticSend={addOptimistic}
-                onOptimisticSettled={settleOptimistic}
+                /* Bound to THIS conversation at the call site. The composer
+                   reports an outgoing row without knowing which thread owns
+                   it, and the send is already in flight by the time the person
+                   can switch -- so the id is captured here, where it is still
+                   unambiguous, rather than read from `selectedId` later. */
+                onOptimisticSend={(draft) => addOptimistic(selected.id, draft)}
+                onOptimisticSettled={(clientMessageId, outcome) => settleOptimistic(selected.id, clientMessageId, outcome)}
+                /* Reconciliation stays, but it never gates the composer: the
+                   optimistic row is already drawn and already reads "sent", so
+                   this only replaces it with the canonical one and refreshes
+                   the inbox preview. Kept rather than left to the Realtime echo
+                   alone, because a send must resolve even when the socket is
+                   down -- that is the one path where the person is watching
+                   their own message. */
                 onSent={() => { void refreshMessages(selected.id, false); void syncConversations(); scrollToBottom(); }}
               />
               )}

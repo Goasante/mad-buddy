@@ -1136,15 +1136,31 @@ export async function listMessages(userId: string, conversationId: string): Prom
   const rows = (messages ?? []).reverse();
   if (rows.length === 0) return [];
 
+  /* Bounded to THIS page's message ids.
+   *
+   * Hides and reactions used to be fetched by user_id alone, which pulled the
+   * viewer's entire product-wide history -- every reaction and every hide they
+   * had ever made, in every conversation -- only to filter it down to the 200
+   * rows on screen. The cost grew with the person's lifetime activity rather
+   * than with the thread, and `message_reactions` has no user_id index, so it
+   * was a sequential scan on the critical path of every chat open.
+   *
+   * Adding the message-id bound lets both use their existing message-keyed
+   * indexes (`message_hides_unique` and `message_reactions_unique`, both
+   * leading on message_id) and makes the work proportional to the page. No
+   * migration needed; the semantics are identical because every row outside
+   * this page was discarded anyway. */
+  const pageMessageIds = rows.map((row) => row.id);
   const [{ data: hides }, { data: reactions }, { data: mentionRows }] = await Promise.all([
-    admin.from("message_hides").select("message_id").eq("user_id", userId),
-    admin.from("message_reactions").select("message_id, reaction_type").eq("user_id", userId),
+    admin.from("message_hides").select("message_id").eq("user_id", userId).in("message_id", pageMessageIds),
+    admin
+      .from("message_reactions")
+      .select("message_id, reaction_type")
+      .eq("user_id", userId)
+      .in("message_id", pageMessageIds),
     // One query for every mention on the page, matching how hides and
     // reactions are already fetched. Never one per message.
-    admin
-      .from("message_mentions")
-      .select("message_id, mentioned_user_id")
-      .in("message_id", rows.map((row) => row.id))
+    admin.from("message_mentions").select("message_id, mentioned_user_id").in("message_id", pageMessageIds)
   ]);
   const hiddenIds = new Set((hides ?? []).map((row) => row.message_id));
   const myReactions = new Map((reactions ?? []).map((row) => [row.message_id, row.reaction_type]));
@@ -1253,21 +1269,31 @@ export async function listMessages(userId: string, conversationId: string): Prom
     mentionsByMessage.set(row.message_id, list);
   }
 
-  // Attachments, signed ONCE for the whole page and deduped by media id.
-  // Signing per message (or worse, per render) would mint dozens of storage
-  // URLs for one thread and change their identity on every pass, defeating
-  // browser caching entirely.
-  const { signAttachmentsForMessages } = await import("@/lib/messaging/attachments");
-  const attachmentsById = await signAttachmentsForMessages(
-    admin,
-    userId,
-    conversationId,
-    rows.map((row) => row.id)
-  );
-  const { projectVoiceMessages } = await import("@/lib/messaging/voice-message-service");
-  const voicesByMessageId = await projectVoiceMessages(admin, userId, conversationId, rows.map((row) => row.id));
-
-  const myPrefs = await loadCommunicationPreferences(admin, userId);
+  /* Attachments, voice and preferences together rather than one after another.
+   *
+   * These three are independent -- none reads the others' output -- but they
+   * used to be awaited in sequence, so a thread paid for all three latencies
+   * end to end before its first message could render. Media is also where the
+   * page's deepest queries live, so serializing them was the single largest
+   * avoidable delay on the open-chat critical path.
+   *
+   * `access` is passed through to both media helpers. Each one re-resolved the
+   * SAME membership for the SAME viewer that this function had already
+   * resolved at the top, costing two extra round trips per open to re-derive a
+   * fact seven lines above. Authorization is unchanged: the value is this
+   * request's own, computed moments earlier, and each helper still performs
+   * its own direct-eligibility and block checks.
+   */
+  const messageIds = rows.map((row) => row.id);
+  const [{ signAttachmentsForMessages }, { projectVoiceMessages }] = await Promise.all([
+    import("@/lib/messaging/attachments"),
+    import("@/lib/messaging/voice-message-service")
+  ]);
+  const [attachmentsById, voicesByMessageId, myPrefs] = await Promise.all([
+    signAttachmentsForMessages(admin, userId, conversationId, messageIds, access),
+    projectVoiceMessages(admin, userId, conversationId, messageIds, access),
+    loadCommunicationPreferences(admin, userId)
+  ]);
 
   return rows
     .filter((row) => !hiddenIds.has(row.id))

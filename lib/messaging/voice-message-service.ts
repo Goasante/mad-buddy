@@ -6,7 +6,11 @@ import { resolveUserEntitlements } from "@/lib/billing/service";
 import { isSupportedVoiceContentType } from "@/lib/media/audio-inspection";
 import { MAX_UPLOAD_BYTES } from "@/lib/media/validation";
 import { messageAttachmentCanBeSigned } from "@/lib/messaging/attachment-retention";
-import { canCreateDirectConversation, resolveConversationAccess } from "@/lib/messaging/service";
+import {
+  canCreateDirectConversation,
+  resolveConversationAccess,
+  type ConversationAccess
+} from "@/lib/messaging/service";
 import type { PreparedVoiceAsset } from "@/lib/messaging/voice-playback";
 import { validateVoiceWaveform } from "@/lib/messaging/voice-waveform";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -135,12 +139,14 @@ export async function projectVoiceMessages(
   admin: Admin,
   viewerId: string,
   conversationId: string,
-  messageIds: readonly string[]
+  messageIds: readonly string[],
+  /** See `signAttachmentsForMessages`: same-request reuse only, never cached. */
+  precomputedAccess?: ConversationAccess
 ): Promise<Map<string, PreparedVoiceAsset>> {
   const byMessageId = new Map<string, PreparedVoiceAsset>();
   const ids = [...new Set(messageIds.filter(Boolean))];
   if (ids.length === 0) return byMessageId;
-  const access = await resolveConversationAccess(admin, viewerId, conversationId);
+  const access = precomputedAccess ?? (await resolveConversationAccess(admin, viewerId, conversationId));
   if (!access.canView || access.status !== "active") return byMessageId;
   if (access.conversationType === "direct") {
     const otherId = access.directKey?.split(":").find((id) => id !== viewerId);
