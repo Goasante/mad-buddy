@@ -177,6 +177,21 @@
     0 4px 10px -5px rgb(136 32 44 / 0.68);
 }
 
+/* ---------------------------------------------------------------------
+ * Landing — hero cleanup
+ *
+ * The "Privacy-first proximity" pill is retired. Removing it from layout,
+ * rather than making it transparent, lets the headline become the first real
+ * hero element and avoids preserving the pill's old vertical gap.
+ * ------------------------------------------------------------------ */
+#hero .max-w-2xl > p:first-child {
+  display: none;
+}
+
+#hero .max-w-2xl > h1:first-of-type {
+  margin-top: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .upfor-ideas .upfor-idea {
     transition: none;
