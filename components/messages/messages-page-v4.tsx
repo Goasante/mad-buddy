@@ -508,7 +508,21 @@ export function MessagesPageV4({
 
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
   const selectedContext = selected ? conversationContext(selected) : { subtitle: null, shared: false };
-  const isGroup = selected?.kind === "group";
+  /* MULTI-PARTY, not the literal 'group' type (BETA-012).
+   *
+   * `kind` is the conversation_type enum: direct | group | plan | event |
+   * safe_arrival. Testing `=== "group"` made every Plan chat, Event Room and
+   * Safe Arrival thread claim to be a two-person conversation, and the sender
+   * identity block in MessageBubbleV4 is gated on `isGroup` -- so in exactly
+   * those threads incoming messages rendered with no avatar and no name, and
+   * the only way to tell Ama from Kojo was to guess from message order.
+   *
+   * The correct question is "are there more than two people here", and its
+   * answer is "this is not a direct conversation". The composer three hundred
+   * lines below already asked it that way (`selected.kind !== "direct"`), so
+   * one screen held two different definitions of a group and only the half
+   * that renders other people's names had the wrong one. */
+  const isGroup = Boolean(selected) && selected?.kind !== "direct";
 
   const displayConversations = useMemo(() => conversations.map((conversation) => {
     const pref = inboxPreferences[conversation.id];
@@ -989,7 +1003,7 @@ export function MessagesPageV4({
                 key={selected.id}
                 conversationId={selected.id}
                 initialDraft={ultimate?.preferences.draftText ?? inboxPreferences[selected.id]?.draftText ?? null}
-                isGroup={selected.kind !== "direct"}
+                isGroup={isGroup}
                 mentionCandidates={mentionCandidates}
                 voiceRecorderConfig={voiceRecorderConfig}
                 placeholder={`Message ${selected.title}`}

@@ -409,7 +409,16 @@ export async function loadActivationProjection(userId: string): Promise<Activati
   const acknowledgeFirstMuddy = shouldAcknowledgeFirstMuddy({
     muddyCount: muddyCount ?? 0,
     firstMuddyReachedAtMs: Number.isFinite(firstMuddyReachedAtMs) ? firstMuddyReachedAtMs : null,
-    nowMs: Date.now()
+    nowMs: Date.now(),
+    /* The completion half of the question (BETA-011).
+     *
+     * The card asks somebody to say hi, so it has to stop asking once they
+     * have. `milestones` is the set already built above from the same rows
+     * this function reads for everything else -- no extra query, no second
+     * source of truth, and the answer is the account's rather than this
+     * device's, so back-navigation, refresh, relogin and a second phone all
+     * agree. */
+    milestones
   });
 
   let firstMuddy: ActivationProjection["firstMuddy"] = null;
