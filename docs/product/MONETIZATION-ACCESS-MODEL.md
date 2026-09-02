@@ -76,7 +76,7 @@ The two seams where the obvious gate would have been wrong, both in code today:
 | --- | --- |
 | Internal name | `WELCOME_ACCESS` |
 | Duration | **14 days** |
-| Starts at | **`first_muddy_added`** |
+| Starts at | **Account creation, or `first_muddy_added` — whichever is first** |
 | Card required | **No** |
 | Auto-renew | **No** |
 | Payment method taken | **None** |
@@ -85,20 +85,32 @@ The two seams where the obvious gate would have been wrong, both in code today:
 to users. No payment instrument exists, nothing renews, and nothing can be
 charged when it ends.
 
-### Why it starts at the first Muddy
+### Why it starts at signup
 
-An auth row can exist before there is any product identity, and finishing
-onboarding is still setup. `first_muddy_added` requires **another person to
-agree**, so it is the first moment the product has demonstrably delivered
-something. Waiting any later would make the clock depend on somebody else's
-response.
+It originally started only at `first_muddy_added`, on the reasoning that a
+friendship is the first moment the product has demonstrably delivered
+something. That produced a result nobody intended and was **changed on
+2026-09-02** after production reports: somebody who signed up and opened UpFor
+or Linkr before adding anyone had no grant, so the first thing a new user saw
+was a payment screen.
 
-### Why the trigger is in the database
+The window now opens when the account is created. The `first_muddy_added`
+trigger is **kept, not replaced** — the partial unique index means whichever
+fires first wins and the other is a no-op, so accounts created before this
+change still start their window at their first Muddy, and nobody mid-window
+has it moved or shortened.
 
-`first_muddy_added` is recorded today by one application path, but friendships
-are created inside RPCs. A future path that created one would silently fail to
-start the clock. The trigger on `friendships` is the one place every friendship
-passes through.
+The change is **not retroactive**. Existing accounts were not backfilled:
+handing a fresh 14 days to everyone who signed up months ago, and to people
+whose window has already been spent, is a giveaway decision rather than a
+migration.
+
+### Why the triggers are in the database
+
+Two triggers, same argument. Accounts are created through `lib/auth/bootstrap.ts`
+today and friendships are created inside RPCs; in either case a future path
+would silently fail to start the clock. `profiles` is the one row every account
+has, and `friendships` is the one place every friendship passes through.
 
 ### Why it cannot be reset
 

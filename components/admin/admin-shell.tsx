@@ -17,6 +17,7 @@ import {
   Gauge,
   Headphones,
   Image as ImageIcon,
+  KeyRound,
   Menu,
   PowerOff,
   ShieldAlert,
@@ -43,6 +44,7 @@ type AdminHref =
   | "/admin/support"
   | "/admin/repairs"
   | "/admin/billing"
+  | "/admin/access"
   | "/admin/entitlements"
   | "/admin/analytics"
   | "/admin/revenue"
@@ -83,6 +85,7 @@ const adminNavigationGroups: AdminNavigationGroup[] = [
     label: "Platform",
     items: [
       { href: "/admin/billing", label: "Billing", icon: CreditCard, permission: "admin.billing.view" },
+      { href: "/admin/access", label: "Mad Buddy Access", icon: KeyRound, permission: "admin.entitlements.view" },
       { href: "/admin/entitlements", label: "Entitlements", icon: SlidersHorizontal, permission: "admin.entitlements.view" },
       { href: "/admin/analytics", label: "Analytics", icon: ChartNoAxesCombined, permission: "admin.analytics.view" },
       { href: "/admin/revenue", label: "Revenue", icon: CircleDollarSign, permission: "admin.revenue.view" },

@@ -241,3 +241,46 @@ export async function listGrantsForUser(
     .limit(limit);
   return data ?? [];
 }
+
+/**
+ * Presentation state for the global-window table, resolved once.
+ *
+ * A helper rather than inline JSX for two reasons. The clock is read a single
+ * time, so two rows in the same table can never disagree about whether a window
+ * is open. And it keeps `Date.now()` out of a React component body, where
+ * reading it is impure -- the page renders the strings this returns and makes
+ * no time decisions of its own.
+ */
+export function summarizeGlobalWindows(
+  windows: Awaited<ReturnType<typeof listGlobalWindows>>,
+  now: Date = new Date()
+) {
+  const nowMs = now.getTime();
+  const rows = windows.map((row) => {
+    const closed = Boolean(row.revoked_at);
+    const lapsed = !closed && row.expires_at ? Date.parse(row.expires_at) <= nowMs : false;
+    return {
+      id: row.id,
+      reason: row.reason,
+      startedLabel: new Date(row.starts_at).toLocaleDateString(),
+      endsLabel: row.expires_at ? new Date(row.expires_at).toLocaleDateString() : "Until revoked",
+      state: closed ? "Closed" : lapsed ? "Ended" : "Open",
+      isOpen: !closed && !lapsed,
+      expiresAt: row.expires_at
+    };
+  });
+
+  const open = rows.find((row) => row.isOpen);
+  return {
+    rows,
+    openWindow: open
+      ? {
+          id: open.id,
+          reason: open.reason,
+          expiresLabel: open.expiresAt
+            ? `until ${new Date(open.expiresAt).toLocaleString()}`
+            : "until this window is closed"
+        }
+      : null
+  };
+}
