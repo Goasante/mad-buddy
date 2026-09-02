@@ -434,19 +434,63 @@ export const FIRST_MUDDY_ACKNOWLEDGEMENT_MS = 6 * 60 * 60 * 1000;
  * who connects and returns a week later sees ordinary Home, because by then the
  * news is not news. Somebody who was mid-session sees it, which is the moment
  * it is worth anything.
+ *
+ * IT ALSO RETIRES ON COMPLETION, not only on time (BETA-011).
+ *
+ * The card carries the "Say hi" call to action, so its lifetime is really the
+ * lifetime of an INSTRUCTION -- and an instruction must stop being given the
+ * moment it is carried out. Recency alone could not see that: a fresh account
+ * that added a Muddy, opened the conversation, sent a real message and came
+ * back to Home was told to say hi again, because `reached_at` was still minutes
+ * old. Six hours of being asked to do something already done is what the beta
+ * tester reported as being stuck.
+ *
+ * The completion signal is the SAME milestone the product already treats as
+ * first social value, written at the canonical send boundary. So this reads
+ * evidence that already exists rather than storing a "have we shown this" flag
+ * -- the derivation principle is preserved, and correctness follows the account
+ * rather than the device: another browser, a relogin and a hard refresh all
+ * agree, because they all read the same row.
+ *
+ * `first_wave_sent` and `first_plan_created` count too. All three are the act
+ * this card exists to provoke, and having done a bigger version of it must not
+ * leave somebody still being nudged toward the smaller one.
+ *
+ * Milestones are OPTIONAL so existing callers keep their exact behaviour; the
+ * only caller that can answer the question passes them.
  */
 export function shouldAcknowledgeFirstMuddy(input: {
   muddyCount: number;
   firstMuddyReachedAtMs: number | null;
   nowMs: number;
+  milestones?: ReadonlySet<string>;
 }): boolean {
   if (input.muddyCount === 0) return false;
   if (input.firstMuddyReachedAtMs === null) return false;
+  if (input.milestones && hasCompletedFirstSocialAct(input.milestones)) return false;
   const age = input.nowMs - input.firstMuddyReachedAtMs;
   // A negative age means clock skew between server and client; treat it as
   // "just happened" rather than hiding a moment somebody earned.
   if (age < 0) return true;
   return age <= FIRST_MUDDY_ACKNOWLEDGEMENT_MS;
+}
+
+/**
+ * Has the person performed the social act the first-Muddy card asks for?
+ *
+ * NARROWER THAN `hasReachedFirstValue`, deliberately, and not a duplicate of
+ * it. That function answers "has this account arrived", and counts
+ * `first_status_created` -- broadcasting a status. A status is expression, not
+ * reaching out to the person this card names, so it must NOT dismiss a nudge to
+ * say hi to them. This asks only whether an act directed at another human has
+ * happened.
+ */
+export function hasCompletedFirstSocialAct(milestones: ReadonlySet<string>): boolean {
+  return (
+    milestones.has("first_message_sent") ||
+    milestones.has("first_wave_sent") ||
+    milestones.has("first_plan_created")
+  );
 }
 
 export function shouldTeachGlow(input: ActivationInputs): boolean {
