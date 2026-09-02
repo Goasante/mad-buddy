@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { normalizeVoiceAudioMime } from "@/lib/media/audio-inspection";
 import {
@@ -96,7 +97,31 @@ export async function sendMessageAction(input: unknown): Promise<MessagingAction
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
-  return sendMessage(userId, input);
+  const result = await sendMessage(userId, input);
+
+  /* Home reads activation from the server; sending happens on another route
+   * (BETA-011).
+   *
+   * `sendMessage` records `first_message_sent`, so the account's activation
+   * state changes here -- but Home is a server component on /dashboard, and
+   * the Client Router Cache replays whatever RSC payload it already holds when
+   * the person navigates back. The projection was therefore correct while the
+   * screen showed a stale copy of it: a hard refresh advanced Home and an
+   * ordinary back-tap did not. That asymmetry is the half of "stuck on Say hi"
+   * that no amount of correct milestone-writing could fix, because nothing was
+   * ever wrong on the server.
+   *
+   * ONLY ON A REAL SEND. Guarded on `result.ok` so a rejected, rate-limited,
+   * blocked or failed send invalidates nothing -- a failure must not be able to
+   * move the journey forward, and an optimistic bubble is not evidence.
+   *
+   * Home only. The messaging surfaces refresh through their own realtime
+   * subscription and `refreshThread`, so invalidating them here would discard
+   * warm thread state and re-fetch a conversation that is already current --
+   * paying for the open-chat latency the messaging work deliberately removed. */
+  if (result.ok) revalidatePath("/dashboard");
+
+  return result;
 }
 
 export async function getMessageableFriendsAction(): Promise<MessageableFriend[]> {
