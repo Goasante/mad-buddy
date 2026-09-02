@@ -9,6 +9,8 @@
  *    in the DOM as a harmless fallback source but are visually suppressed.
  * 2) Landing success / negative markers: turn the old loose line glyphs into
  *    the approved filled-circle check and filled-circle X treatment.
+ * 3) Profile identity: clean the avatar/name/status/visibility/edit cluster
+ *    without changing Profile data, navigation, uploads or privacy behaviour.
  */
 
 /* ---------------------------------------------------------------------
@@ -190,6 +192,202 @@
 
 #hero .max-w-2xl > h1:first-of-type {
   margin-top: 0;
+}
+
+/* ---------------------------------------------------------------------
+ * Profile — identity header cleanup
+ *
+ * Scope is the canonical tour target so the change cannot leak into Muddy,
+ * Linkr or message avatars. The source component and every action stay intact;
+ * this is a composition pass over the existing identity controls only.
+ * ------------------------------------------------------------------ */
+[data-tour-id="profile-photo"] {
+  position: relative;
+  isolation: isolate;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 0.95rem !important;
+  overflow: hidden;
+  margin-inline: 0.2rem;
+  padding: 1.15rem 1rem 1rem !important;
+  border: 1px solid hsl(var(--border) / 0.62);
+  border-radius: 1.5rem;
+  background:
+    radial-gradient(circle at 50% -18%, rgb(232 140 43 / 0.13), transparent 48%),
+    linear-gradient(145deg, hsl(var(--card) / 0.88), hsl(var(--background) / 0.72));
+  box-shadow:
+    inset 0 1px 0 hsl(var(--foreground) / 0.035),
+    0 18px 42px -34px hsl(var(--shadow) / 0.52);
+}
+
+[data-tour-id="profile-photo"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 50%;
+  z-index: -1;
+  width: 8rem;
+  height: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, rgb(232 140 43 / 0.72), transparent);
+  pointer-events: none;
+}
+
+/* Keep the identity photo clean. The old utility gradient supplied a second
+ * decorative ring around the avatar even though the camera control and Glow
+ * system already carry meaning. */
+[data-tour-id="profile-photo"] .profile-avatar-open > span {
+  padding: 0 !important;
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 999px;
+  background: transparent !important;
+  box-shadow: 0 14px 32px -22px hsl(var(--shadow) / 0.72) !important;
+}
+
+[data-tour-id="profile-photo"] > .relative.shrink-0 {
+  justify-self: center;
+}
+
+[data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left {
+  display: grid;
+  width: min(100%, 34rem);
+  grid-template-columns: auto auto;
+  justify-content: center;
+  align-items: center;
+  column-gap: 0.6rem;
+  text-align: center;
+}
+
+/* Name owns the hierarchy. Membership is deliberately not used as a social
+ * status here; the retired PremiumPlanBadge already renders nothing. */
+[data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > div:first-child {
+  grid-column: 1 / -1;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+[data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > div:first-child h2 {
+  max-width: 100%;
+  font-size: clamp(1.5rem, 6.5vw, 1.78rem) !important;
+  font-weight: 700;
+  line-height: 1.05 !important;
+  letter-spacing: -0.035em !important;
+}
+
+[data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > p:nth-child(2) {
+  grid-column: 1 / -1;
+  margin-top: 0.32rem !important;
+  font-size: 0.8rem;
+  letter-spacing: 0.01em;
+}
+
+/* The existing short profile line becomes the calm status surface instead of
+ * floating as a third loose line of copy. Long bios still clamp exactly as the
+ * component already requires. */
+[data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > p:nth-child(3) {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  margin-top: 0.72rem !important;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid hsl(var(--border) / 0.46);
+  border-radius: 0.9rem;
+  background: hsl(var(--secondary) / 0.38);
+  color: hsl(var(--foreground) / 0.78) !important;
+  line-height: 1.35 !important;
+  text-align: center;
+}
+
+/* Visibility and Edit Profile form one compact control row rather than two
+ * unrelated pills stacked under the identity. */
+[data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > a[data-tour-id="profile-privacy"] {
+  grid-column: 1;
+  min-height: 2.5rem;
+  margin-top: 0.72rem !important;
+  padding: 0.45rem 0.72rem !important;
+  border: 1px solid hsl(var(--border) / 0.62);
+  border-radius: 999px !important;
+  background: hsl(var(--background) / 0.56);
+  color: hsl(var(--muted-foreground));
+  box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.025);
+}
+
+[data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > div:last-child {
+  grid-column: 2;
+  margin-top: 0.72rem !important;
+  gap: 0 !important;
+}
+
+[data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > div:last-child > button {
+  min-height: 2.5rem !important;
+  height: 2.5rem !important;
+  padding-inline: 0.85rem !important;
+  border-color: transparent !important;
+  border-radius: 999px !important;
+  background: #4e0401 !important;
+  color: #fff !important;
+  box-shadow: 0 9px 22px -16px rgb(78 4 1 / 0.72);
+}
+
+[data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > div:last-child > button:hover {
+  background: #68120d !important;
+}
+
+html.dark [data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > div:last-child > button {
+  background: #e88c2b !important;
+  color: #24120a !important;
+  box-shadow: 0 9px 24px -15px rgb(232 140 43 / 0.62);
+}
+
+html.dark [data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > div:last-child > button:hover {
+  background: #f09b45 !important;
+}
+
+/* Photo upload/save feedback remains full-width and centred if it appears in
+ * the same identity block. */
+[data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > div[role="progressbar"],
+[data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > div[class*="max-w-[260px]"] {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+@media (min-width: 640px) {
+  [data-tour-id="profile-photo"] {
+    grid-template-columns: auto minmax(0, 1fr);
+    justify-items: stretch;
+    gap: 1.35rem !important;
+    padding: 1.25rem 1.35rem !important;
+  }
+
+  [data-tour-id="profile-photo"]::before {
+    left: 1.35rem;
+    width: 7rem;
+    transform: none;
+  }
+
+  [data-tour-id="profile-photo"] > .relative.shrink-0 {
+    justify-self: start;
+  }
+
+  [data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left {
+    width: 100%;
+    justify-content: start;
+    text-align: left;
+  }
+
+  [data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > div:first-child {
+    justify-content: flex-start;
+  }
+
+  [data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > p:nth-child(3) {
+    width: min(100%, 36rem);
+    justify-self: start;
+    text-align: left;
+  }
+
+  [data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > div[role="progressbar"],
+  [data-tour-id="profile-photo"] > .min-w-0.flex-1.text-left > div[class*="max-w-[260px]"] {
+    justify-self: start;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
