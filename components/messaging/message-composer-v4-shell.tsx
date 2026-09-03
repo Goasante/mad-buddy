@@ -39,7 +39,8 @@ export function MessageComposerV4Shell({
   onFeedback,
   onOptimisticSend,
   onOptimisticSettled,
-  onSent
+  onSent,
+  confirmedClientMessageIds
 }: {
   conversationId: string;
   initialDraft?: string | null;
@@ -52,8 +53,9 @@ export function MessageComposerV4Shell({
   onCancelReply?: () => void;
   onFeedback: (message: string) => void;
   onOptimisticSend?: (message: OptimisticSendDraftV3) => void;
-  onOptimisticSettled?: (clientMessageId: string, outcome: "sent" | "failed") => void;
+  onOptimisticSettled?: (clientMessageId: string, outcome: "sent" | "failed" | "pending") => void;
   onSent: () => void | Promise<void>;
+  confirmedClientMessageIds?: ReadonlySet<string>;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const hydratedConversationRef = useRef<string | null>(null);
@@ -148,7 +150,7 @@ export function MessageComposerV4Shell({
   }
 
   return (
-    <div ref={shellRef} onInputCapture={onInputCapture} className="relative">
+    <div ref={shellRef} data-chat-composer onInputCapture={onInputCapture} className="relative shrink-0">
       {!online ? (
         <div className="absolute bottom-full left-1/2 z-20 mb-1 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border/70 bg-card/95 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-md animate-in fade-in slide-in-from-bottom-1">
           <CloudOff className="h-3 w-3" />
@@ -168,6 +170,7 @@ export function MessageComposerV4Shell({
         onOptimisticSend={onOptimisticSend}
         onOptimisticSettled={onOptimisticSettled}
         onSent={handleSent}
+        confirmedClientMessageIds={confirmedClientMessageIds}
         className="w-full border-0 bg-transparent pb-[max(.45rem,env(safe-area-inset-bottom))] lg:pb-1"
       />
     </div>

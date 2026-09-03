@@ -36,9 +36,13 @@ export type OptimisticMessage = {
   kind: "text" | "voice";
   /** Local duration for a voice bubble, so it is not a bare grey box. */
   durationSeconds: number | null;
+  /** Already-uploaded media reused by an idempotent retry; never re-uploaded. */
+  mediaId?: string;
   /** When the person pressed Send. Orders the row against canonical rows. */
   createdAt: string;
   status: OptimisticStatus;
+  /** Set only when the client stopped waiting without a definitive outcome. */
+  confirmationState?: "unknown";
 };
 
 /** The shape this module needs from a canonical message. Widened by callers. */
@@ -108,6 +112,18 @@ export function markFailed(optimistic: OptimisticMessage[], clientMessageId: str
   );
 }
 
+/** Keeps an ambiguous timeout pending while a bounded resolver checks truth. */
+export function markAwaitingConfirmation(
+  optimistic: OptimisticMessage[],
+  clientMessageId: string
+): OptimisticMessage[] {
+  return optimistic.map((message) =>
+    message.clientMessageId === clientMessageId
+      ? { ...message, status: "pending" as const, confirmationState: "unknown" as const }
+      : message
+  );
+}
+
 /**
  * Advances an optimistic row according to where the acknowledgement came from.
  *
@@ -122,7 +138,11 @@ export function markFailed(optimistic: OptimisticMessage[], clientMessageId: str
 export function markRetrying(optimistic: OptimisticMessage[], clientMessageId: string): OptimisticMessage[] {
   return optimistic.map((message) =>
     message.clientMessageId === clientMessageId
-      ? { ...message, status: message.status === "failed" ? "pending" as const : "sent" as const }
+      ? {
+          ...message,
+          status: message.status === "failed" ? "pending" as const : "sent" as const,
+          confirmationState: undefined
+        }
       : message
   );
 }

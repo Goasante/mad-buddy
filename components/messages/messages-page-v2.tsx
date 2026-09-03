@@ -538,9 +538,9 @@ export function MessagesPageV2({
     ]);
   }, []);
 
-  const settleOptimistic = useCallback((clientMessageId: string, outcome: "sent" | "failed") => {
+  const settleOptimistic = useCallback((clientMessageId: string, outcome: "sent" | "failed" | "pending") => {
     setOptimistic((current) =>
-      outcome === "failed" ? markFailed(current, clientMessageId) : markRetrying(current, clientMessageId)
+      outcome === "pending" ? current : outcome === "failed" ? markFailed(current, clientMessageId) : markRetrying(current, clientMessageId)
     );
   }, []);
 

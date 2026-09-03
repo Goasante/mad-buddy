@@ -11,6 +11,7 @@ import {
 } from "@/lib/messaging/thread-store";
 import type { CachedThread } from "@/lib/messaging/thread-cache";
 import type { ChatMessageView } from "@/lib/messaging/mobile";
+import { DEFAULT_CHAT_SETTINGS, DEFAULT_CONVERSATION_USER_PREFERENCES } from "@/lib/messaging/ultimate-types";
 
 /**
  * Durable thread storage.
@@ -148,6 +149,21 @@ describe("a thread survives closing the app", () => {
 
     const restored = await loadPersistedThread(VIEWER, CHAT_A);
     expect(restored?.optimistic[0].status).toBe("failed");
+  });
+
+  it("restores the lightweight settings snapshot after a restart", async () => {
+    await savePersistedThread(VIEWER, CHAT_A, thread({
+      controls: {
+        settings: { ...DEFAULT_CHAT_SETTINGS, messageLifetimeSeconds: 604800 },
+        preferences: { ...DEFAULT_CONVERSATION_USER_PREFERENCES, notifyMentionsWhenMuted: false },
+        viewerRole: "member",
+        updatedAt: 456
+      }
+    }));
+
+    const restored = await loadPersistedThread(VIEWER, CHAT_A);
+    expect(restored?.controls?.settings.messageLifetimeSeconds).toBe(604800);
+    expect(restored?.controls?.preferences.notifyMentionsWhenMuted).toBe(false);
   });
 
   it("stores only the recent tail, not the whole window", async () => {

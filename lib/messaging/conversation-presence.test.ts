@@ -232,7 +232,8 @@ describe("composer", () => {
     // Send stays disabled until there is text or a photo, and while an
     // attachment is still uploading.
     expect(composer).toContain("const canSendText = Boolean(draft.trim() || attachment);");
-    expect(composer).toContain("disabled={!canSendText || uploadBusy || isPending}");
+    expect(composer).toContain("disabled={!canSendText || uploadBusy}");
+    expect(composer).not.toContain("disabled={!canSendText || uploadBusy || isPending}");
   });
 
   it("still labels the send action for assistive tech", () => {

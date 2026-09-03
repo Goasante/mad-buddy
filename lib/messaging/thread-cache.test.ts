@@ -8,11 +8,13 @@ import {
   patchThreadMessage,
   readThread,
   writeThreadMessages,
+  writeThreadControls,
   writeThreadOptimistic,
   writeThreadReplyContexts
 } from "@/lib/messaging/thread-cache";
 import type { OptimisticMessage } from "@/lib/messaging/optimistic-messages";
 import type { ChatMessageView } from "@/lib/messaging/mobile";
+import { DEFAULT_CHAT_SETTINGS, DEFAULT_CONVERSATION_USER_PREFERENCES } from "@/lib/messaging/ultimate-types";
 
 /**
  * The cache that makes reopening a chat instant (M1), and the store that keeps
@@ -56,6 +58,20 @@ beforeEach(() => {
 });
 
 describe("a cached thread survives what a component mount does not", () => {
+  it("keeps lightweight control state beside the thread without caching presence", () => {
+    writeThreadControls(VIEWER, CHAT_A, {
+      settings: { ...DEFAULT_CHAT_SETTINGS, messageLifetimeSeconds: 86400 },
+      preferences: { ...DEFAULT_CONVERSATION_USER_PREFERENCES, notificationPreview: "never" },
+      viewerRole: "admin",
+      updatedAt: 123
+    });
+
+    const cached = readThread(VIEWER, CHAT_A);
+    expect(cached?.controls?.settings.messageLifetimeSeconds).toBe(86400);
+    expect(cached?.controls?.preferences.notificationPreview).toBe("never");
+    expect(cached?.controls).not.toHaveProperty("presence");
+  });
+
   it("returns the messages written for a conversation", () => {
     writeThreadMessages(VIEWER, CHAT_A, [message("m1", "2026-01-01T00:00:00.000Z")]);
 
@@ -103,6 +119,17 @@ describe("a cached thread survives what a component mount does not", () => {
 describe("the cache is bound to one account", () => {
   it("refuses to serve a thread to a different viewer", () => {
     writeThreadMessages(VIEWER, CHAT_A, [message("m1", "2026-01-01T00:00:00.000Z")]);
+
+    expect(readThread(OTHER_VIEWER, CHAT_A)).toBeNull();
+  });
+
+  it("refuses to serve cached controls to a different viewer", () => {
+    writeThreadControls(VIEWER, CHAT_A, {
+      settings: DEFAULT_CHAT_SETTINGS,
+      preferences: DEFAULT_CONVERSATION_USER_PREFERENCES,
+      viewerRole: "owner",
+      updatedAt: 123
+    });
 
     expect(readThread(OTHER_VIEWER, CHAT_A)).toBeNull();
   });

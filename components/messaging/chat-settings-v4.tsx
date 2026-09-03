@@ -2,9 +2,8 @@
 
 import { BellOff, Bookmark, ChevronRight, Clock3, Pin, Search, ShieldCheck, Star, UsersRound } from "lucide-react";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 
-import { muteConversationAction } from "@/app/(app)/messaging-actions";
 import {
   updateConversationChatSettingsAction,
   updateConversationUserPreferencesAction
@@ -12,7 +11,8 @@ import {
 import { ChatCollectionsV4 } from "@/components/messaging/chat-collections-v4";
 import { Modal } from "@/components/ui/modal";
 import type { ConversationView } from "@/lib/messaging/mobile";
-import type { UltimateConversationState } from "@/lib/messaging/ultimate-types";
+import type { CachedConversationControls } from "@/lib/messaging/thread-cache";
+import { runOptimisticControlMutation } from "@/lib/messaging/optimistic-control";
 import { cn } from "@/lib/utils";
 
 type ViewerRole = "owner" | "admin" | "moderator" | "member" | null;
@@ -36,44 +36,95 @@ export function ChatSettingsV4({
   open,
   onOpenChange,
   conversation,
-  ultimate,
+  controls,
+  pinsCount,
   viewerRole,
   onFavorite,
+  onMute,
+  onControlPatch,
   onSearch,
   onGroupDetails,
-  onRefresh,
   onFeedback
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conversation: ConversationView;
-  ultimate: UltimateConversationState | null;
+  controls: CachedConversationControls | null;
+  pinsCount: number | null;
   viewerRole: ViewerRole;
   onFavorite: () => void;
+  onMute: (hours: number) => Promise<{ ok: boolean; message: string }>;
+  onControlPatch: (patch: {
+    settings?: Partial<CachedConversationControls["settings"]>;
+    preferences?: Partial<CachedConversationControls["preferences"]>;
+  }) => void;
   onSearch: () => void;
   onGroupDetails: () => void;
-  onRefresh: () => void | Promise<void>;
   onFeedback: (message: string) => void;
 }) {
-  const [isPending, startTransition] = useTransition();
+  const [pendingControls, setPendingControls] = useState<Set<string>>(() => new Set());
   const [expanded, setExpanded] = useState<"notifications" | "lifetime" | "group" | null>(null);
   const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [collectionTab, setCollectionTab] = useState<CollectionTab>("saved");
   const isGroup = conversation.kind === "group";
   const canManageGroup = viewerRole === "owner" || viewerRole === "admin";
-  const settings = ultimate?.settings;
-  const prefs = ultimate?.preferences;
+  const settings = controls?.settings;
+  const prefs = controls?.preferences;
 
-  function run(task: () => Promise<{ ok: boolean; message: string }>) {
-    startTransition(async () => {
-      const result = await task();
-      onFeedback(result.message);
-      if (result.ok) await onRefresh();
+  async function run(
+    key: string,
+    task: () => Promise<{ ok: boolean; message: string }>,
+    optimistic?: () => void,
+    rollback?: () => void
+  ) {
+    if (pendingControls.has(key)) return;
+    setPendingControls((current) => new Set(current).add(key));
+    const result = await runOptimisticControlMutation({ optimistic, rollback, mutation: task });
+    onFeedback(result.message);
+    setPendingControls((current) => {
+      const next = new Set(current);
+      next.delete(key);
+      return next;
     });
   }
 
   function setLifetime(messageLifetimeSeconds: number | null) {
-    run(() => updateConversationChatSettingsAction({ conversationId: conversation.id, messageLifetimeSeconds }));
+    if (!settings) return;
+    const previous = settings.messageLifetimeSeconds;
+    void run(
+      "messageLifetimeSeconds",
+      () => updateConversationChatSettingsAction({ conversationId: conversation.id, messageLifetimeSeconds }),
+      () => onControlPatch({ settings: { messageLifetimeSeconds } }),
+      () => onControlPatch({ settings: { messageLifetimeSeconds: previous } })
+    );
+  }
+
+  function setPreference<K extends "notifyMentionsWhenMuted" | "notifyRepliesWhenMuted" | "notificationPreview">(
+    key: K,
+    value: CachedConversationControls["preferences"][K]
+  ) {
+    if (!prefs) return;
+    const previous = prefs[key];
+    void run(
+      key,
+      () => updateConversationUserPreferencesAction({ conversationId: conversation.id, [key]: value }),
+      () => onControlPatch({ preferences: { [key]: value } }),
+      () => onControlPatch({ preferences: { [key]: previous } })
+    );
+  }
+
+  function setChatSetting<K extends "defaultMediaMode" | "whoCanPin" | "whoCanCreatePolls" | "whoCanUseEveryone" | "whoCanAddMembers">(
+    key: K,
+    value: CachedConversationControls["settings"][K]
+  ) {
+    if (!settings) return;
+    const previous = settings[key];
+    void run(
+      key,
+      () => updateConversationChatSettingsAction({ conversationId: conversation.id, [key]: value }),
+      () => onControlPatch({ settings: { [key]: value } }),
+      () => onControlPatch({ settings: { [key]: previous } })
+    );
   }
 
   function openCollection(tab: CollectionTab) {
@@ -104,33 +155,33 @@ export function ChatSettingsV4({
               <div className="border-t border-border/50 px-3 py-3 animate-in slide-in-from-top-1 fade-in">
                 <div className="flex flex-wrap gap-2">
                   {[{h:1,l:"1 hour"},{h:8,l:"8 hours"},{h:24,l:"Today"},{h:168,l:"1 week"},{h:87600,l:"Indefinitely"},{h:0,l:"Unmute"}].map((item) => (
-                    <button key={item.l} type="button" disabled={isPending} onClick={() => run(() => muteConversationAction(conversation.id, item.h))} className="focus-ring min-h-10 rounded-full border border-border/70 px-3 text-xs font-semibold transition hover:border-primary/45 hover:bg-primary/8 active:scale-95">{item.l}</button>
+                    <button key={item.l} type="button" disabled={pendingControls.has("mute")} onClick={() => void run("mute", () => onMute(item.h))} className="focus-ring min-h-10 rounded-full border border-border/70 px-3 text-xs font-semibold transition hover:border-primary/45 hover:bg-primary/8 active:scale-95 disabled:opacity-50">{item.l}</button>
                   ))}
                 </div>
                 {prefs ? (
                   <div className="mt-3 space-y-2 border-t border-border/40 pt-3">
-                    <ToggleRow label="Still notify me for @mentions" checked={prefs.notifyMentionsWhenMuted} disabled={isPending} onChange={(checked) => run(() => updateConversationUserPreferencesAction({ conversationId: conversation.id, notifyMentionsWhenMuted: checked }))} />
-                    <ToggleRow label="Still notify me for direct replies" checked={prefs.notifyRepliesWhenMuted} disabled={isPending} onChange={(checked) => run(() => updateConversationUserPreferencesAction({ conversationId: conversation.id, notifyRepliesWhenMuted: checked }))} />
+                    <ToggleRow label="Still notify me for @mentions" checked={prefs.notifyMentionsWhenMuted} disabled={pendingControls.has("notifyMentionsWhenMuted")} onChange={(checked) => setPreference("notifyMentionsWhenMuted", checked)} />
+                    <ToggleRow label="Still notify me for direct replies" checked={prefs.notifyRepliesWhenMuted} disabled={pendingControls.has("notifyRepliesWhenMuted")} onChange={(checked) => setPreference("notifyRepliesWhenMuted", checked)} />
                     <p className="pt-1 text-xs font-medium text-muted-foreground">Notification preview</p>
-                    <Segmented value={prefs.notificationPreview} options={[{id:"always",label:"Always"},{id:"when_unlocked",label:"Unlocked"},{id:"never",label:"Never"}]} onChange={(value) => run(() => updateConversationUserPreferencesAction({ conversationId: conversation.id, notificationPreview: value }))} />
+                    <Segmented disabled={pendingControls.has("notificationPreview")} value={prefs.notificationPreview} options={[{id:"always",label:"Always"},{id:"when_unlocked",label:"Unlocked"},{id:"never",label:"Never"}]} onChange={(value) => setPreference("notificationPreview", value)} />
                   </div>
-                ) : null}
+                ) : <RowSkeleton label="Syncing notification preferences" />}
               </div>
             ) : null}
 
             <SettingRow icon={Star} title={conversation.pinned ? "Favorite chat" : "Add to favorites"} subtitle="Keep important chats easy to reach" onClick={onFavorite} active={conversation.pinned} />
             <SettingRow icon={Search} title="Search in chat" subtitle="Find messages and jump between results" onClick={onSearch} />
             <SettingRow icon={Bookmark} title="Saved messages" subtitle="Private messages and folders only you can see" onClick={() => openCollection("saved")} />
-            <SettingRow icon={Pin} title="Pinned messages" subtitle={ultimate?.pins.length ? `${ultimate.pins.length} pinned in this chat` : "Shared navigation for important messages"} onClick={() => openCollection("pinned")} />
+            <SettingRow icon={Pin} title="Pinned messages" subtitle={pinsCount === null ? "Open to view pinned messages" : pinsCount > 0 ? `${pinsCount} pinned in this chat` : "Shared navigation for important messages"} onClick={() => openCollection("pinned")} />
 
-            <SettingRow icon={Clock3} title="Message lifetime" subtitle={LIFETIMES.find((item) => item.seconds === (settings?.messageLifetimeSeconds ?? null))?.label ?? "Forever"} onClick={() => setExpanded(expanded === "lifetime" ? null : "lifetime")} />
+            <SettingRow icon={Clock3} title="Message lifetime" subtitle={settings ? LIFETIMES.find((item) => item.seconds === settings.messageLifetimeSeconds)?.label ?? "Forever" : "Syncing chat controls…"} onClick={() => setExpanded(expanded === "lifetime" ? null : "lifetime")} />
             {expanded === "lifetime" ? (
               <div className="border-t border-border/50 px-3 py-3 animate-in slide-in-from-top-1 fade-in">
-                <p className="mb-2 text-xs leading-relaxed text-muted-foreground">New messages use this lifetime. Keeping a message in chat prevents its normal expiry.</p>
-                <Segmented value={String(settings?.messageLifetimeSeconds ?? "forever")} options={LIFETIMES.map((item) => ({ id: String(item.seconds ?? "forever"), label: item.label }))} onChange={(value) => setLifetime(value === "forever" ? null : Number(value))} />
+                {settings ? <><p className="mb-2 text-xs leading-relaxed text-muted-foreground">New messages use this lifetime. Keeping a message in chat prevents its normal expiry.</p>
+                <Segmented disabled={pendingControls.has("messageLifetimeSeconds")} value={String(settings.messageLifetimeSeconds ?? "forever")} options={LIFETIMES.map((item) => ({ id: String(item.seconds ?? "forever"), label: item.label }))} onChange={(value) => setLifetime(value === "forever" ? null : Number(value))} />
                 <p className="mb-2 mt-4 text-xs font-semibold">Default media behaviour</p>
-                <Segmented value={settings?.defaultMediaMode === "24h" ? "24h" : "keep"} options={[{id:"keep",label:"Keep"},{id:"24h",label:"24h"}]} onChange={(value) => run(() => updateConversationChatSettingsAction({ conversationId: conversation.id, defaultMediaMode: value }))} />
-                <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">View-once is intentionally not offered until Mad Buddy has a dedicated one-view authorization ledger. We do not label 24-hour media as view-once.</p>
+                <Segmented disabled={pendingControls.has("defaultMediaMode")} value={settings.defaultMediaMode === "24h" ? "24h" : "keep"} options={[{id:"keep",label:"Keep"},{id:"24h",label:"24h"}]} onChange={(value) => setChatSetting("defaultMediaMode", value)} />
+                <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">View-once is intentionally not offered until Mad Buddy has a dedicated one-view authorization ledger. We do not label 24-hour media as view-once.</p></> : <RowSkeleton label="Syncing chat controls" />}
               </div>
             ) : null}
 
@@ -142,10 +193,10 @@ export function ChatSettingsV4({
               <SettingRow icon={ShieldCheck} title="Group permissions" subtitle="Who can coordinate this conversation" onClick={() => setExpanded(expanded === "group" ? null : "group")} />
               {expanded === "group" ? (
                 <div className="space-y-4 border-t border-border/50 px-3 py-4 animate-in slide-in-from-top-1 fade-in">
-                  <PermissionRow label="Pin messages" value={settings.whoCanPin} onChange={(value) => run(() => updateConversationChatSettingsAction({ conversationId: conversation.id, whoCanPin: value }))} />
-                  <PermissionRow label="Create polls" value={settings.whoCanCreatePolls} onChange={(value) => run(() => updateConversationChatSettingsAction({ conversationId: conversation.id, whoCanCreatePolls: value }))} />
-                  <PermissionRow label="Use @everyone" value={settings.whoCanUseEveryone} onChange={(value) => run(() => updateConversationChatSettingsAction({ conversationId: conversation.id, whoCanUseEveryone: value }))} />
-                  <PermissionRow label="Add members" value={settings.whoCanAddMembers} onChange={(value) => run(() => updateConversationChatSettingsAction({ conversationId: conversation.id, whoCanAddMembers: value }))} />
+                  <PermissionRow disabled={pendingControls.has("whoCanPin")} label="Pin messages" value={settings.whoCanPin} onChange={(value) => setChatSetting("whoCanPin", value)} />
+                  <PermissionRow disabled={pendingControls.has("whoCanCreatePolls")} label="Create polls" value={settings.whoCanCreatePolls} onChange={(value) => setChatSetting("whoCanCreatePolls", value)} />
+                  <PermissionRow disabled={pendingControls.has("whoCanUseEveryone")} label="Use @everyone" value={settings.whoCanUseEveryone} onChange={(value) => setChatSetting("whoCanUseEveryone", value)} />
+                  <PermissionRow disabled={pendingControls.has("whoCanAddMembers")} label="Add members" value={settings.whoCanAddMembers} onChange={(value) => setChatSetting("whoCanAddMembers", value)} />
                 </div>
               ) : null}
             </section>
@@ -183,19 +234,23 @@ function ToggleRow({ label, checked, disabled, onChange }: { label: string; chec
   );
 }
 
-function Segmented<T extends string>({ value, options, onChange }: { value: T; options: readonly { id: T; label: string }[]; onChange: (value: T) => void }) {
+function Segmented<T extends string>({ value, options, onChange, disabled }: { value: T; options: readonly { id: T; label: string }[]; onChange: (value: T) => void; disabled?: boolean }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      {options.map((option) => <button key={option.id} type="button" onClick={() => onChange(option.id)} className={cn("focus-ring min-h-9 rounded-full border px-3 text-xs font-medium transition active:scale-95", value === option.id ? "border-primary bg-primary text-white" : "border-border/70 bg-card")}>{option.label}</button>)}
+      {options.map((option) => <button key={option.id} type="button" disabled={disabled} onClick={() => onChange(option.id)} className={cn("focus-ring min-h-9 rounded-full border px-3 text-xs font-medium transition active:scale-95 disabled:opacity-50", value === option.id ? "border-primary bg-primary text-white" : "border-border/70 bg-card")}>{option.label}</button>)}
     </div>
   );
 }
 
-function PermissionRow({ label, value, onChange }: { label: string; value: "all_members" | "admins" | "owner" | "disabled"; onChange: (value: "all_members" | "admins" | "owner" | "disabled") => void }) {
+function PermissionRow({ label, value, onChange, disabled }: { label: string; value: "all_members" | "admins" | "owner" | "disabled"; onChange: (value: "all_members" | "admins" | "owner" | "disabled") => void; disabled?: boolean }) {
   return (
     <div>
       <p className="mb-2 text-xs font-semibold">{label}</p>
-      <Segmented value={value} options={CAPABILITY_OPTIONS} onChange={onChange} />
+      <Segmented value={value} options={CAPABILITY_OPTIONS} onChange={onChange} disabled={disabled} />
     </div>
   );
+}
+
+function RowSkeleton({ label }: { label: string }) {
+  return <div role="status" aria-label={label} className="space-y-2 py-1"><div className="h-3 w-2/3 animate-pulse rounded-full bg-muted" /><div className="h-9 w-full animate-pulse rounded-full bg-muted/70" /></div>;
 }
