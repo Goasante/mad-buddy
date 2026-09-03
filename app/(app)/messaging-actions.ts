@@ -176,6 +176,20 @@ export async function getMessageAction(
 }
 
 /**
+ * Resolves one ambiguous send without downloading the conversation window.
+ * Access is checked by listMessages and the lookup is additionally scoped to
+ * the current sender plus their private idempotency key.
+ */
+export async function getMessageByClientMessageIdAction(
+  conversationId: string,
+  clientMessageId: string
+): Promise<ChatMessageView | null> {
+  const userId = await getAuthedUserId();
+  if (!userId) return null;
+  return (await listMessages(userId, conversationId, { clientMessageId }))[0] ?? null;
+}
+
+/**
  * BETA-009. Who may be @mentioned in this conversation.
  *
  * Returns [] rather than throwing for an unauthorized caller, matching every

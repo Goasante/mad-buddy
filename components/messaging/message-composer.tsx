@@ -15,7 +15,7 @@ type MessageComposerProps = {
   onFeedback: (message: string) => void;
   onSent: () => void | Promise<void>;
   onOptimisticSend?: (message: OptimisticSendDraft) => void;
-  onOptimisticSettled?: (clientMessageId: string, outcome: "sent" | "failed") => void;
+  onOptimisticSettled?: (clientMessageId: string, outcome: "sent" | "failed" | "pending") => void;
   voiceRecorderConfig: VoiceRecorderConfig;
   className?: string;
   isGroup?: boolean;

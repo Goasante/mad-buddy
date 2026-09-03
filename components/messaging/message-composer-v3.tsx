@@ -34,6 +34,7 @@ export type OptimisticSendDraftV3 = {
   text: string | null;
   kind: "text" | "voice";
   durationSeconds: number | null;
+  mediaId?: string;
 };
 
 type Props = {
@@ -42,7 +43,7 @@ type Props = {
   onFeedback: (message: string) => void;
   onSent: () => void | Promise<void>;
   onOptimisticSend?: (message: OptimisticSendDraftV3) => void;
-  onOptimisticSettled?: (clientMessageId: string, outcome: "sent" | "failed") => void;
+  onOptimisticSettled?: (clientMessageId: string, outcome: "sent" | "failed" | "pending") => void;
   voiceRecorderConfig: VoiceRecorderConfig;
   className?: string;
   isGroup?: boolean;
@@ -50,6 +51,7 @@ type Props = {
   replyToMessageId?: string | null;
   replyPreview?: { senderName: string; text: string } | null;
   onCancelReply?: () => void;
+  confirmedClientMessageIds?: ReadonlySet<string>;
 };
 
 type VoiceGesture = "idle" | "holding" | "cancel" | "lock";
@@ -89,7 +91,8 @@ export function MessageComposerV3({
   mentionCandidates = [],
   replyToMessageId = null,
   replyPreview = null,
-  onCancelReply
+  onCancelReply,
+  confirmedClientMessageIds
 }: Props) {
   const [draft, setDraft] = useState("");
   const [mentions, setMentions] = useState<StructuredMention[]>([]);
@@ -103,9 +106,10 @@ export function MessageComposerV3({
   const [attachments, setAttachments] = useState<SelectedAttachment[]>([]);
   const attachment = attachments[0] ?? null;
   const [uploadState, setUploadState] = useState<AttachmentUploadLifecycle>("idle");
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const clientMessageIdRef = useRef<string | null>(null);
+  const ambiguousVoiceIdRef = useRef<string | null>(null);
 
   const voice = useVoiceRecorder(conversationId, voiceRecorderConfig);
   const getVoiceState = voice.getState;
@@ -113,6 +117,14 @@ export function MessageComposerV3({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [playedSeconds, setPlayedSeconds] = useState(0);
+
+  useEffect(() => {
+    const clientMessageId = ambiguousVoiceIdRef.current;
+    if (!clientMessageId || !confirmedClientMessageIds?.has(clientMessageId)) return;
+    ambiguousVoiceIdRef.current = null;
+    voiceUpload.reset();
+    voice.cancel();
+  }, [confirmedClientMessageIds, voice, voiceUpload]);
   const [locked, setLocked] = useState(false);
   const [gesture, setGesture] = useState<VoiceGesture>("idle");
   const [micHint, setMicHint] = useState<string | null>(null);
@@ -157,7 +169,7 @@ export function MessageComposerV3({
   const reviewing = voice.state.kind === "preview";
   const voiceSupported = voiceRecorderConfig.enabled && voice.capability.supported;
   const canSendText = Boolean(draft.trim() || attachment);
-  const busySending = isPending || voiceUpload.state.kind === "uploading" || voiceUpload.state.kind === "finalizing";
+  const busySending = voiceUpload.state.kind === "uploading" || voiceUpload.state.kind === "finalizing";
 
   const mentionSuggestions = useMemo(
     () => (trigger ? filterMentionCandidates(mentionCandidates, trigger.query) : []),
@@ -244,7 +256,8 @@ export function MessageComposerV3({
         clientMessageId: send.clientMessageId,
         text: send.text || null,
         kind: "text",
-        durationSeconds: null
+        durationSeconds: null,
+        mediaId: send.mediaId
       });
     }
     setDraft("");
@@ -290,13 +303,17 @@ export function MessageComposerV3({
           }
           onOptimisticSettled?.(send.clientMessageId, "sent");
         } catch (error) {
-          onOptimisticSettled?.(send.clientMessageId, "failed");
-          if (send.attachment) unsent.push(send.attachment);
-          onFeedback(
-            isRequestTimeoutError(error)
-              ? "Sending took too long. Your message was kept so you can try again."
-              : "The message could not be sent. Try again."
-          );
+          if (isRequestTimeoutError(error)) {
+            // The request may already have committed. Keep the local row calm
+            // and pending; its clientMessageId is resolved in the background.
+            // In particular, do not restore/re-upload an attachment whose
+            // canonical message may already exist.
+            onOptimisticSettled?.(send.clientMessageId, "pending");
+          } else {
+            onOptimisticSettled?.(send.clientMessageId, "failed");
+            if (send.attachment) unsent.push(send.attachment);
+            onFeedback("The message could not be sent. Try again.");
+          }
         }
       }
       /* Only the failures come back. Appending rather than replacing, because
@@ -328,6 +345,16 @@ export function MessageComposerV3({
           onOptimisticSettled?.(clientMessageId, "failed");
           return;
         }
+        // Persist the prepared media identity with the optimistic row before
+        // the request. A timeout can then retry the exact asset/idempotency key
+        // without recording or uploading a duplicate.
+        onOptimisticSend?.({
+          clientMessageId,
+          text: null,
+          kind: "voice",
+          durationSeconds: take.durationSeconds,
+          mediaId: prepared.mediaId
+        });
         const result = await withTimeout(
           sendMessageAction({
             conversationId,
@@ -353,12 +380,15 @@ export function MessageComposerV3({
         setMicHint(null);
         await onSent();
       } catch (error) {
-        onOptimisticSettled?.(clientMessageId, "failed");
-        onFeedback(
-          isRequestTimeoutError(error)
-            ? "Sending took too long. Your recording was kept so you can try again."
-            : "Couldn't send that voice message. Try again."
-        );
+        if (isRequestTimeoutError(error)) {
+          // Preserve both the bubble and original recording until canonical
+          // confirmation resolves the ambiguous request.
+          ambiguousVoiceIdRef.current = clientMessageId;
+          onOptimisticSettled?.(clientMessageId, "pending");
+        } else {
+          onOptimisticSettled?.(clientMessageId, "failed");
+          onFeedback("Couldn't send that voice message. Try again.");
+        }
       } finally {
         sendingRef.current = false;
       }
@@ -565,7 +595,7 @@ export function MessageComposerV3({
       setMicHint("Remove the photo before recording a voice message.");
       return;
     }
-    if (uploadBusy || isPending) return;
+    if (uploadBusy) return;
     event.preventDefault();
     clearPermissionPromptTimer();
     setMicHint(null);
@@ -822,7 +852,6 @@ export function MessageComposerV3({
             onLifecycleChange={setUploadState}
             onFeedback={onFeedback}
             onStructuredSent={onSent}
-            disabled={isPending}
           />
           <textarea
             ref={textareaRef}
@@ -833,7 +862,6 @@ export function MessageComposerV3({
             placeholder={attachment ? "Add a caption" : placeholder}
             aria-label={attachment ? "Photo caption" : placeholder}
             maxLength={2000}
-            disabled={isPending}
             className="composer-field"
           />
           {isGroup && mentionCandidates.length > 0 ? (
@@ -858,15 +886,15 @@ export function MessageComposerV3({
         </div>
 
         {canSendText || !voiceSupported ? (
-          <button type="submit" disabled={!canSendText || uploadBusy || isPending} className="composer-action is-send" aria-label="Send message">
-            {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+          <button type="submit" disabled={!canSendText || uploadBusy} className="composer-action is-send" aria-label="Send message">
+            <Send className="h-5 w-5" />
           </button>
         ) : (
           <button
             type="button"
             onPointerDown={startHold}
             onContextMenu={(event) => event.preventDefault()}
-            disabled={uploadBusy || isPending}
+            disabled={uploadBusy}
             aria-label="Tap to record hands-free. Hold to record and release to send. Slide left to cancel or up to lock."
             className="composer-action touch-none select-none"
             title="Tap: record hands-free · Hold: release to send · ← cancel · ↑ lock"

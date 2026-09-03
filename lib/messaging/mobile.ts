@@ -1115,11 +1115,12 @@ export async function listConversations(userId: string): Promise<ConversationVie
 export async function listMessages(
   userId: string,
   conversationId: string,
-  options: { limit?: number; messageId?: string } = {}
+  options: { limit?: number; messageId?: string; clientMessageId?: string } = {}
 ): Promise<ChatMessageView[]> {
   if (!hasServiceRoleEnv()) return [];
   if (!uuidSchema.safeParse(conversationId).success) return [];
   if (options.messageId && !uuidSchema.safeParse(options.messageId).success) return [];
+  if (options.clientMessageId && (options.clientMessageId.length < 1 || options.clientMessageId.length > 64)) return [];
 
   const admin = createSupabaseAdminClient();
   const access = await resolveConversationAccess(admin, userId, conversationId);
@@ -1138,12 +1139,17 @@ export async function listMessages(
     .gte("created_at", access.historyVisibleFrom ?? new Date(0).toISOString());
   const { data: messages } = options.messageId
     ? await baseQuery.eq("id", options.messageId).limit(1)
+    : options.clientMessageId
+      ? await baseQuery
+          .eq("sender_id", userId)
+          .eq("client_message_id", options.clientMessageId)
+          .limit(1)
     : await baseQuery
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
         .limit(pageLimit);
 
-  const rows = options.messageId ? (messages ?? []) : (messages ?? []).reverse();
+  const rows = options.messageId || options.clientMessageId ? (messages ?? []) : (messages ?? []).reverse();
   if (rows.length === 0) return [];
 
   /* Bounded to THIS page's message ids.

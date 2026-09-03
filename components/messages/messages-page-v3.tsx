@@ -403,8 +403,8 @@ export function MessagesPageV3({
     ]);
   }, []);
 
-  const settleOptimistic = useCallback((clientMessageId: string, outcome: "sent" | "failed") => {
-    setOptimistic((current) => (outcome === "failed" ? markFailed(current, clientMessageId) : markRetrying(current, clientMessageId)));
+  const settleOptimistic = useCallback((clientMessageId: string, outcome: "sent" | "failed" | "pending") => {
+    setOptimistic((current) => outcome === "pending" ? current : outcome === "failed" ? markFailed(current, clientMessageId) : markRetrying(current, clientMessageId));
   }, []);
 
   function retryOptimistic(clientMessageId: string) {

@@ -176,7 +176,8 @@ describe("send button", () => {
   });
 
   it("blocks send while an attachment is still uploading", () => {
-    expect(composer).toContain("disabled={!canSendText || uploadBusy || isPending}");
+    expect(composer).toContain("disabled={!canSendText || uploadBusy}");
+    expect(composer).not.toContain("disabled={!canSendText || uploadBusy || isPending}");
   });
 });
 
