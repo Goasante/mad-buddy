@@ -11,7 +11,8 @@
     "preflight": "node scripts/preflight.mjs",
     "preflight:production": "node scripts/preflight.mjs --production",
     "preflight:paystack": "node scripts/preflight.mjs --paystack",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed:staging": "node scripts/seed-staging.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-secure-storage": "^8.0.0",

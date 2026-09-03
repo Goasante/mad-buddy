@@ -63,3 +63,6 @@ qa-shots/
 # a real one elsewhere in the tree visible.
 /AGENTS.md
 /CLAUDE.md
+
+# Staging seed manifest: synthetic ids, machine-specific, never committed.
+staging-manifest.local.json
