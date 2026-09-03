@@ -14,7 +14,7 @@ import {
   isBirthdayWish,
   type BirthdayWish
 } from "@/lib/profile/birthday-experience";
-import { isBlockedEitherDirection } from "@/lib/social/permissions";
+import { batchBlockedIds, isBlockedEitherDirection } from "@/lib/social/permissions";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -24,6 +24,65 @@ type BirthdayEligibility = {
   displayName: string;
   dayKey: string;
 };
+
+/**
+ * The owner-scoped half of birthday eligibility: everything that depends on
+ * the birthday person alone and NOT on who is being told.
+ *
+ * Split out because the hourly job asks the same four questions -- profile,
+ * date of birth, field privacy, notification preference -- once per RECIPIENT,
+ * and the answers cannot differ between recipients of the same owner. Loading
+ * them once per owner is the whole N+1 fix; the per-pair facts (friendship,
+ * block) stay per-pair because they genuinely are.
+ */
+type BirthdayOwnerFacts = {
+  /** False when the owner is deleted/ghost/not-having-a-birthday/opted out. */
+  shareable: boolean;
+  displayName: string;
+};
+
+async function loadBirthdayOwnerFacts(
+  admin: Admin,
+  birthdayUserId: string,
+  dayKey: string
+): Promise<BirthdayOwnerFacts> {
+  const [profileResult, birthResult, privacyResult, preferenceResult] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("full_name, visibility_status, deleted_at")
+      .eq("user_id", birthdayUserId)
+      .maybeSingle(),
+    admin.from("profile_birth_details").select("date_of_birth").eq("user_id", birthdayUserId).maybeSingle(),
+    admin
+      .from("profile_field_privacy")
+      .select("visibility")
+      .eq("user_id", birthdayUserId)
+      .eq("field_name", "birthday")
+      .maybeSingle(),
+    admin
+      .from("user_preferences")
+      .select("notification_preferences")
+      .eq("user_id", birthdayUserId)
+      .maybeSingle()
+  ]);
+
+  const profile = profileResult.data;
+  const birth = birthResult.data;
+  const ownerPrefs = normalizePreferences(preferenceResult.data?.notification_preferences);
+
+  return {
+    shareable: Boolean(
+      profile &&
+        !profile.deleted_at &&
+        profile.visibility_status !== "ghost" &&
+        birth?.date_of_birth &&
+        isBirthdayActive(birth.date_of_birth, dayKey) &&
+        privacyResult.data?.visibility === "approved_muddies" &&
+        ownerPrefs.birthdayAnnouncementsEnabled
+    ),
+    displayName: profile?.full_name?.trim() || "A Muddy"
+  };
+}
 
 async function canShareBirthdayWith(
   admin: Admin,
@@ -119,9 +178,30 @@ export async function deliverBirthdayNotifications(admin: Admin, now = new Date(
       )
     ].filter((recipientId) => recipientId !== ownerId);
 
+    /* The N+1 fix (scale hardening). This loop used to call
+       canShareBirthdayWith once per recipient, and that helper ran SIX queries
+       -- four of which asked about the OWNER and so returned an identical
+       answer every time. A person with 300 Muddies cost ~1,800 queries to
+       notify; the whole hourly job was O(birthday people x their Muddies).
+
+       Now: the four owner facts load once per owner, and the block check --
+       the only other per-pair query -- is answered for every recipient at once
+       by batchBlockedIds, which exists for exactly this shape. Friendship was
+       already proven by the `friendships` read above, so re-asking it per
+       recipient was pure duplication.
+
+       Semantics are unchanged: same four owner conditions, same friendship
+       requirement, same either-direction block rule, same order of precedence.
+       canShareBirthdayWith is kept for the single-pair callers (sendBirthdayWish),
+       where six queries for one pair is correct. */
+    const ownerFacts = await loadBirthdayOwnerFacts(admin, ownerId, dayKey);
+    if (!ownerFacts.shareable) continue;
+
+    const blockedRecipients = await batchBlockedIds(admin, ownerId, recipients);
+
     for (const recipientId of recipients) {
-      const eligibility = await canShareBirthdayWith(admin, ownerId, recipientId, now);
-      if (!eligibility.eligible) continue;
+      if (blockedRecipients.has(recipientId)) continue;
+      const eligibility = { eligible: true, displayName: ownerFacts.displayName, dayKey };
 
       const { data: insertedClaim, error: claimError } = await admin
         .from("birthday_notification_deliveries")

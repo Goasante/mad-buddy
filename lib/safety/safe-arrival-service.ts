@@ -336,14 +336,26 @@ export async function loadSafeArrivalJourneys(
       .in("status", LIVE_SAFE_ARRIVAL_STATUSES)
       .order("expected_arrival_at", { ascending: true });
     const candidates = (data ?? []) as JourneyRow[];
-    const current = await Promise.all(
-      candidates.map(async (row) =>
-        (await areApprovedMuddies(admin, row.traveller_id, userId)) &&
-        !(await isBlockedEitherDirection(admin, row.traveller_id, userId)) &&
-        myStateBySession.get(row.id) !== "declined"
-      )
+
+    /* Two queries for the whole list rather than two per journey.
+
+       This ran areApprovedMuddies + isBlockedEitherDirection once per invited
+       journey. batchEligibleMuddyIds folds exactly that pair -- currently
+       Muddies AND not blocked either way -- into one pass, and both relations
+       are symmetric (each is queried in both directions), so pivoting on the
+       constant viewer instead of the per-row traveller gives the same answer.
+
+       The revocation rule is unchanged and still enforced here: a block or an
+       ended friendship drops the journey from this projection immediately. */
+    const eligibleTravellers = await batchEligibleMuddyIds(
+      admin,
+      userId,
+      candidates.map((row) => row.traveller_id)
     );
-    invitedRows = candidates.filter((_, index) => current[index]);
+    invitedRows = candidates.filter(
+      (row) =>
+        eligibleTravellers.has(row.traveller_id) && myStateBySession.get(row.id) !== "declined"
+    );
   }
 
   const allRows = [...((ownRows ?? []) as JourneyRow[]), ...invitedRows];

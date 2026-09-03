@@ -126,6 +126,51 @@ export async function loadLinkrMedia(
   return byUser;
 }
 
+/**
+ * Many people's Linkr-safe galleries in a fixed number of queries.
+ *
+ * `loadLinkrMedia` and `signMediaUrls` are both already batch functions, but
+ * `loadLinkrGallery` calls each with a single id -- so a list screen calling it
+ * per person paid four round trips per card. The Linkr collections (Clicked /
+ * Your clicks) do exactly that, which is the N+1 this exists to remove.
+ *
+ * Identical per-person semantics to loadLinkrGallery: same "no primary means
+ * no gallery" rule, same primary-first ordering, same dropping of assets that
+ * did not sign.
+ */
+export async function loadLinkrGalleries(
+  admin: Admin,
+  userIds: string[]
+): Promise<Map<string, string[]>> {
+  const galleries = new Map<string, string[]>();
+  if (userIds.length === 0) return galleries;
+
+  const mediaByUser = await loadLinkrMedia(admin, userIds);
+
+  // Every asset id needed by every person, signed in one call.
+  const assetIds = [
+    ...new Set(
+      [...mediaByUser.values()].flatMap((media) =>
+        [media.primaryAssetId, ...media.showcaseAssetIds].filter((id): id is string => Boolean(id))
+      )
+    )
+  ];
+  const urls = await signMediaUrls(admin, assetIds);
+
+  for (const userId of userIds) {
+    const media = mediaByUser.get(userId);
+    if (!media || (!media.primaryUrl && !media.primaryAssetId)) continue;
+    const primary = media.primaryUrl ?? (media.primaryAssetId ? urls.get(media.primaryAssetId) : null);
+    if (!primary) continue;
+    galleries.set(userId, [
+      primary,
+      ...media.showcaseAssetIds.map((id) => urls.get(id)).filter((url): url is string => Boolean(url))
+    ]);
+  }
+
+  return galleries;
+}
+
 /** One person's Linkr-safe gallery, as signed URLs ready to render. */
 export async function loadLinkrGallery(admin: Admin, userId: string): Promise<string[]> {
   const media = (await loadLinkrMedia(admin, [userId])).get(userId);
