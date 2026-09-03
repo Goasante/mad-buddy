@@ -32,10 +32,35 @@ describe("Linkr illustrated loading and opened states", () => {
   });
 
   it("keeps the illustration transparent and theme-owned instead of painting a hard card behind it", () => {
-    expect(artwork).toContain("bg-primary/10");
-    expect(artwork).toContain("dark:bg-primary/15");
-    expect(artwork).toContain("bg-card/80");
-    expect(artwork).toContain("dark:bg-white/[0.04]");
+    /* THE CONTRACT IS "THEME-OWNED AND SOFT", NOT FOUR EXACT OPACITIES.
+     *
+     * This pinned `bg-primary/10`, `dark:bg-primary/15`, `bg-card/80` and
+     * `dark:bg-white/[0.04]` verbatim. `7470786` ("soften state artwork")
+     * deliberately retuned those values -- primary/[0.055], card/[0.38] and a
+     * dark surface -- and the artwork became MORE theme-owned, not less: the
+     * light scrim now interpolates `hsl(var(--background))` rather than a
+     * fixed white.
+     *
+     * Pinning the numbers meant any future tuning of the same, correct design
+     * broke the build, while a genuine regression -- swapping the tokens for a
+     * solid card, or letting the image fill rather than fit -- could slip past
+     * as long as those four strings survived. So the assertions are now about
+     * the properties that actually carry the contract. */
+
+    // Tinted from the theme's own tokens, never a hardcoded card colour.
+    expect(artwork).toMatch(/bg-primary\/\[?[\d.]+\]?/);
+    expect(artwork).toMatch(/bg-card\/\[?[\d.]+\]?/);
+    // Dark mode is handled explicitly rather than inheriting the light values.
+    expect(artwork).toMatch(/dark:bg-/);
+    // The scrims read the background token instead of assuming a page colour.
+    expect(artwork).toContain("hsl(var(--background)");
+
+    /* Soft, not a hard card: the layers behind the art are blurred and
+       translucent, so no opaque plate appears behind the illustration. */
+    expect(artwork).toMatch(/blur-\[/);
+    expect(artwork).not.toMatch(/\bbg-(white|black)\b(?!\/)/);
+
+    // The PNG keeps its aspect ratio rather than being cropped to fill.
     expect(artwork).toContain("object-contain");
   });
 

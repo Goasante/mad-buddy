@@ -291,9 +291,25 @@ describe("group settings surface", () => {
   });
 
   it("reuses the canonical identity components", () => {
+    /* The contract is that a member is drawn with the PRODUCT'S OWN identity
+     * components rather than a bespoke avatar/name treatment invented here.
+     *
+     * This also asserted `publicMembershipTier(member.plan)`, from when a paid
+     * tier was part of how a person was presented. That product decision was
+     * deliberately reversed: `publicMembershipTier` now returns "free" for
+     * every plan and `PremiumPlanBadge` renders null, under the rule recorded
+     * in lib/billing/premium-identity.ts -- "Access is permission, not social
+     * status". Threading a plan through to compute a tier that can only ever
+     * be "free" was dead code, so it went.
+     *
+     * Keeping that assertion would pin a retired product decision and force
+     * the badge back into a members list it was intentionally removed from.
+     * What still matters -- the canonical avatar -- is asserted below. */
     expect(page).toContain("<UserAvatar");
-    expect(page).toContain("<PremiumPlanBadge");
-    expect(page).toContain("publicMembershipTier(member.plan)");
+
+    /* No bespoke identity chrome sneaking back in: a member's face comes from
+     * UserAvatar, not a hand-rolled <img> or initials block. */
+    expect(page).not.toMatch(/<img[^>]*member\.(avatar|photo)/);
   });
 
   it("uses the canonical anchored menu, not a bespoke popover", () => {

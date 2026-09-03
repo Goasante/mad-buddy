@@ -6,8 +6,24 @@ on:
   pull_request:
     branches: [main]
 
+# TWO INDEPENDENT SIGNALS, DELIBERATELY NOT CHAINED.
+#
+# `build` used to be the last step of the single `quality` job, so a failing
+# unit test SKIPPED it and GitHub reported nothing at all about whether the
+# production bundle still compiled. Half the evidence disappeared exactly when
+# something was already wrong -- and that is the moment it is most useful.
+#
+# `build` therefore has no `needs:` on `quality`. They run at the same time and
+# report separately, so a red pipeline still says WHICH half is red:
+#
+#     quality = FAIL   build = PASS   -> a test regressed; the app compiles
+#     quality = PASS   build = FAIL   -> the bundle broke; the tests missed it
+#
+# Overall CI is still red if either fails, which is correct. The point is not
+# to hide a failure but to stop one failure from erasing the other's result.
 jobs:
   quality:
+    name: Quality (lint, types, tests)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +48,25 @@ jobs:
       - name: Unit tests (privacy + route protection)
         run: npm test
 
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    # No `needs:` on purpose -- see the comment above. This must still report
+    # when the test job fails.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Deliberately minimal: lint, types and tests are the other job's answer.
+      # This job exists to answer ONE question -- does the production bundle
+      # still compile -- so it does not re-run them.
       - name: Production build
         run: npm run build
         env:
