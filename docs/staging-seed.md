@@ -75,7 +75,7 @@ Rerunning must never double the dataset. Each set has a natural key:
 | Conversations (direct) | `direct_key` = sorted `a:b`, matching the SQL |
 | Conversations (group) | fixed deterministic `context_id` |
 | Members | `(conversation_id, user_id)` |
-| Messages | `(conversation_id, client_message_id)` — the app's own dedupe column |
+| Messages | `(sender_id, client_message_id)` — the partial unique index `messages_idempotency_unique` |
 | Media assets | `storage_key` (UNIQUE) |
 
 ## Cohorts
