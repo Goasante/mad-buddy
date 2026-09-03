@@ -4,7 +4,7 @@ import { loadBuddyScore, type BuddyScoreData } from "@/lib/engagement/buddy-scor
 import { buildJourney, type JourneyData, type JourneyEvidence } from "@/lib/journey/journey";
 import { profileCompletion } from "@/lib/profile/identity";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getReplayableTours } from "@/lib/tours/service";
+import { getReplayableTourRefs } from "@/lib/tours/service";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -28,7 +28,7 @@ export async function loadJourney(
     admin.from("safe_arrival_sessions").select("id", { count: "exact", head: true }).eq("traveller_id", userId).eq("status", "completed"),
     admin.from("moments").select("id", { count: "exact", head: true }).eq("author_id", userId).in("status", ["active", "expired"]),
     context.score ? Promise.resolve(context.score) : loadBuddyScore(admin, userId),
-    getReplayableTours(userId)
+    getReplayableTourRefs(userId)
   ]);
 
   const profile = profileResult.data;
@@ -45,5 +45,8 @@ export async function loadJourney(
     share_first_moment: (moments.count ?? 0) > 0,
     reach_trusted_buddy: score.total >= 200
   };
+  // Journey needs only slug -> live version id. getReplayableTourRefs applies
+  // the same server-side eligibility as getReplayableTours without building
+  // every step body, media and CTA that this map immediately discards.
   return buildJourney(evidence, new Map(tours.map((tour) => [tour.slug, tour.tourVersionId])));
 }

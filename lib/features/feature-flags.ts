@@ -171,6 +171,39 @@ export function resolveGlobalFeatureFlag(row: GlobalFeatureFlagRow | null | unde
   return row.default_value;
 }
 
+/**
+ * Batched sibling of isFeatureEnabled(): resolves several global flags in ONE
+ * request instead of one request per key.
+ *
+ * Tours called isFeatureEnabled() once per managed feature, so a single
+ * getReplayableTours() issued nine near-identical single-row queries against
+ * the same small table. The resolution rule is unchanged -- both paths call
+ * resolveGlobalFeatureFlag on the same columns -- so a key that resolves true
+ * here resolves true there. A key with no row resolves false, exactly as the
+ * single-key path does when maybeSingle() returns null.
+ */
+export async function loadGlobalFeatureFlags(
+  admin: Admin,
+  keys: readonly string[]
+): Promise<Set<string>> {
+  if (keys.length === 0) return new Set();
+
+  const { data, error } = await admin
+    .from("feature_flags")
+    .select("key, status, default_value")
+    .in("key", [...keys]);
+
+  // Same failure posture as isFeatureEnabled: an error resolves everything off
+  // rather than accidentally enabling a gated feature.
+  if (error) return new Set();
+
+  const enabled = new Set<string>();
+  for (const row of data ?? []) {
+    if (resolveGlobalFeatureFlag(row)) enabled.add(row.key);
+  }
+  return enabled;
+}
+
 export async function isFeatureEnabled(admin: Admin, key: string): Promise<boolean> {
   const { data, error } = await admin
     .from("feature_flags")
