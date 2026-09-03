@@ -4,6 +4,7 @@ import {
   bindThreadCacheOwner,
   cacheSizeForTests,
   clearThreadCache,
+  mergeThreadPatches,
   patchThreadMessage,
   readThread,
   writeThreadMessages,
@@ -202,6 +203,18 @@ describe("a realtime row is patched in, not refetched", () => {
     writeThreadMessages(VIEWER, CHAT_A, [message("m1", "2026-01-01T00:00:00.000Z")]);
 
     expect(patchThreadMessage(OTHER_VIEWER, CHAT_A, message("m2", "2026-01-01T00:01:00.000Z"))).toBeNull();
+  });
+
+  it("keeps Realtime rows that race a stale hydration snapshot", () => {
+    const snapshot = [message("m1", "2026-01-01T00:00:00.000Z")];
+    const patches = [
+      message("m2", "2026-01-01T00:01:00.000Z"),
+      message("m1", "2026-01-01T00:00:00.000Z", { text: "edited" })
+    ];
+
+    const merged = mergeThreadPatches(snapshot, patches);
+    expect(merged.map((row) => row.id)).toEqual(["m1", "m2"]);
+    expect(merged[0].text).toBe("edited");
   });
 });
 
