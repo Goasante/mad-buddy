@@ -156,11 +156,34 @@ describe("G6/G7 — server load, realtime and cache agree", () => {
   });
 
   it("G6 — realtime re-reads through that same projection", () => {
-    /* The realtime handler calls refreshThread rather than building a message
-     * view from the payload, so an INSERT cannot produce a bubble with weaker
-     * identity than a refresh would. */
+    /* The realtime handler never builds a message view out of the Realtime
+     * payload, so an INSERT cannot produce a bubble with weaker identity than
+     * a refresh would.
+     *
+     * INTEGRATION NOTE (beta + instant-messaging). This originally asserted
+     * that the handler called `refreshThread`, because at the time refetching
+     * the whole thread was the only way it re-read through the projection.
+     * The performance work replaced that with `getMessageAction`, which
+     * projects the ONE changed row through the very same `listMessages` path
+     * (same authorisation, same sender-identity fields) instead of reprojecting
+     * 200 rows for every incoming message.
+     *
+     * The contract was never "call refreshThread" -- it was "identity comes
+     * from the server projection, never from the payload". So this now asserts
+     * that directly: the payload is read ONLY to learn which message changed,
+     * and the ambiguous cases still fall back to a full authoritative refresh. */
     const subscription = v4Page.slice(v4Page.indexOf('table: "messages"'));
-    expect(subscription.slice(0, 200)).toContain("refreshThread");
+    const handler = subscription.slice(0, 400);
+
+    // The id is the only thing taken from the payload...
+    expect(handler).toContain("patchMessage");
+    // ...and anything unresolvable still falls back to the full refresh.
+    expect(handler).toContain("refreshThread");
+
+    /* No field of a rendered bubble is ever read off the Realtime record.
+       Sender identity in particular must come back from the projection. */
+    expect(v4Page).not.toMatch(/payload\.(new|old)\.(sender|text|body|content)/);
+    expect(v4Page).toContain("getMessageAction");
   });
 
   it("G7 — the durable cache stores whole message views, losing no field", () => {
