@@ -1,3 +1,5 @@
+export const journeyMarks: Record<string, number> = {};
+
 import "server-only";
 
 import { loadBuddyScore, type BuddyScoreData } from "@/lib/engagement/buddy-score-service";
@@ -18,6 +20,9 @@ export async function loadJourney(
     profileCompletion?: { completed: number; total: number; percent: number };
   } = {}
 ): Promise<JourneyData> {
+  // FORENSICS ONLY: per-phase timings, no identifiers recorded.
+  journeyMarks.score = 0;
+  journeyMarks.tours = 0;
   const [profileResult, friendships, milestones, waves, messages, plans, safeArrivals, moments, score, tours] = await Promise.all([
     context.profileCompletion ? Promise.resolve({ data: null }) : admin.from("profiles").select("avatar_url,bio,mood_status").eq("user_id", userId).maybeSingle(),
     admin.from("friendships").select("id", { count: "exact", head: true }).or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
@@ -27,8 +32,20 @@ export async function loadJourney(
     admin.from("plans").select("id", { count: "exact", head: true }).eq("creator_id", userId).neq("status", "draft"),
     admin.from("safe_arrival_sessions").select("id", { count: "exact", head: true }).eq("traveller_id", userId).eq("status", "completed"),
     admin.from("moments").select("id", { count: "exact", head: true }).eq("author_id", userId).in("status", ["active", "expired"]),
-    context.score ? Promise.resolve(context.score) : loadBuddyScore(admin, userId),
-    getReplayableTours(userId)
+    context.score
+      ? Promise.resolve(context.score)
+      : (async () => {
+          const s = performance.now();
+          const r = await loadBuddyScore(admin, userId);
+          journeyMarks.score = performance.now() - s;
+          return r;
+        })(),
+    (async () => {
+      const s = performance.now();
+      const r = await getReplayableTours(userId);
+      journeyMarks.tours = performance.now() - s;
+      return r;
+    })()
   ]);
 
   const profile = profileResult.data;
