@@ -76,3 +76,5 @@ qa-shots/
 #   supabase link --project-ref <ref>
 supabase/.temp/
 **/supabase/.temp/
+# Staging seed manifest: synthetic ids, machine-specific, never committed.
+staging-manifest.local.json
