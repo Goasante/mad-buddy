@@ -102,26 +102,58 @@ async function closePlanChatNow(admin: ReturnType<typeof createSupabaseAdminClie
     )
     .eq("status", "joined");
 
-  for (const member of members ?? []) {
-    await admin
-      .from("conversation_user_preferences")
-      .upsert(
-        {
-          conversation_id: member.conversation_id,
-          user_id: member.user_id,
-          archived_at: nowIso,
-          updated_at: nowIso
-        },
-        { onConflict: "conversation_id,user_id", ignoreDuplicates: true }
-      );
-    // Fills only an empty archived_at, so a member's own earlier choice stands.
-    await admin
-      .from("conversation_user_preferences")
-      .update({ archived_at: nowIso, updated_at: nowIso })
-      .eq("conversation_id", member.conversation_id)
-      .eq("user_id", member.user_id)
-      .is("archived_at", null);
+  /* Two writes for the whole membership, not two per member.
+
+     This was a sequential per-member loop: a 50-person Plan cost 100 round
+     trips to close one chat. The two statements exist for different reasons
+     and both are still needed -- the upsert CREATES missing preference rows,
+     the update FILLS an empty archived_at on rows that already existed -- so
+     the fix is to widen each to the whole member set rather than to merge
+     them.
+
+     The semantics that matter are preserved exactly:
+       - ignoreDuplicates keeps an existing row untouched by the insert, so a
+         member's own earlier archived_at is never overwritten;
+       - `.is("archived_at", null)` still scopes the update to rows that have
+         no timestamp yet, so a member who deliberately un-archived is not
+         re-archived behind their back. */
+  const memberRows = members ?? [];
+  if (memberRows.length === 0) return;
+
+  await admin.from("conversation_user_preferences").upsert(
+    memberRows.map((member) => ({
+      conversation_id: member.conversation_id,
+      user_id: member.user_id,
+      archived_at: nowIso,
+      updated_at: nowIso
+    })),
+    { onConflict: "conversation_id,user_id", ignoreDuplicates: true }
+  );
+
+  /* Fills only an empty archived_at, so a member's own earlier choice stands.
+
+     Grouped BY CONVERSATION rather than filtered by two independent `.in()`
+     lists: `.in(conversation).in(user)` would be a cross product, and would
+     archive a member in a conversation they were never in the moment this
+     ever closed more than one. One statement per closed conversation is
+     bounded by conversations-per-Plan (one in practice), not by members. */
+  const membersByConversation = new Map<string, string[]>();
+  for (const member of memberRows) {
+    const existing = membersByConversation.get(member.conversation_id);
+    if (existing) existing.push(member.user_id);
+    else membersByConversation.set(member.conversation_id, [member.user_id]);
   }
+
+  await Promise.all(
+    [...membersByConversation].map(([conversationId, userIds]) =>
+      admin
+        .from("conversation_user_preferences")
+        .update({ archived_at: nowIso, updated_at: nowIso })
+        .eq("conversation_id", conversationId)
+        .in("user_id", userIds)
+        .is("archived_at", null)
+    )
+  );
 }
 
 export async function cancelPlanAction(planId: string): Promise<PlanActionState> {

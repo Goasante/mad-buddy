@@ -36,8 +36,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Deliberately non-blocking: preflight checks that environment variables
+      # are PRESENT, and a PR build legitimately has no production secrets.
+      # The security gates below ask questions that CAN be answered without
+      # credentials, so those are allowed to fail the build.
       - name: Environment preflight (structure only, no secrets required)
         run: node scripts/preflight.mjs || true
+
+      # Fails the build on a committed credential. Never prints the value.
+      - name: Secret scan (working tree)
+        run: node scripts/security/scan-secrets.mjs
+
+      # The lockfile must already satisfy package.json. `npm ci` above would
+      # have failed on a mismatch, so this pins the intent: no silent drift,
+      # and no install that resolves differently from what was reviewed.
+      - name: Lockfile integrity
+        run: npm ci --ignore-scripts --dry-run
+
+      # Scoped to what actually ships. A High in a build-time-only native
+      # tool (Capacitor CLI, image tooling) does not reach the deployed
+      # runtime, and failing on it trains people to ignore the gate --
+      # so this audits production dependencies only.
+      - name: Dependency audit (runtime dependencies)
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Lint
         run: npm run lint
