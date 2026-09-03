@@ -377,8 +377,6 @@ async function ensureGroupConversation(admin, userIdByIndex) {
 }
 
 async function seedMessages(admin, conversationId, planned, userIdByIndex) {
-  // client_message_id is the app's own idempotency column, so a rerun cannot
-  // duplicate history.
   const rows = planned.map((message) => ({
     conversation_id: conversationId,
     sender_id: userIdByIndex.get(message.senderIndex),
@@ -389,8 +387,41 @@ async function seedMessages(admin, conversationId, planned, userIdByIndex) {
     status: "sent"
   }));
 
-  await upsert(admin, "messages", rows, "conversation_id,client_message_id");
+  await insertMissingMessages(admin, conversationId, rows);
   log(`  ${rows.length} messages`);
+}
+
+/**
+ * Insert only the messages this conversation does not already have.
+ *
+ * The real idempotency key is `messages_idempotency_unique`, a PARTIAL unique
+ * index on (sender_id, client_message_id) WHERE both are non-null. PostgREST
+ * cannot target a partial index with on_conflict, so a rerun discovers the
+ * existing client_message_ids first and inserts only the difference. Same
+ * guarantee, expressed against the constraint that actually exists.
+ */
+async function insertMissingMessages(admin, conversationId, rows) {
+  const existing = new Set();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await admin
+      .from("messages")
+      .select("client_message_id")
+      .eq("conversation_id", conversationId)
+      .not("client_message_id", "is", null)
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`read messages failed: ${error.message}`);
+    for (const row of data) existing.add(row.client_message_id);
+    if (data.length < PAGE) break;
+  }
+
+  const missing = rows.filter((row) => !existing.has(row.client_message_id));
+  if (missing.length === 0) return;
+
+  for (let i = 0; i < missing.length; i += 200) {
+    const { error } = await admin.from("messages").insert(missing.slice(i, i + 200));
+    if (error) throw new Error(`insert messages failed: ${error.message}`);
+  }
 }
 
 async function seedMedia(admin, userIdByIndex, conversations) {
@@ -415,31 +446,26 @@ async function seedMedia(admin, userIdByIndex, conversations) {
     bytes: buildVoiceWav()
   });
 
-  await upsert(
-    admin,
-    "messages",
-    [
-      {
-        conversation_id: conversations.primary,
-        sender_id: owner,
-        message_type: "image",
-        media_id: image,
-        client_message_id: `${STAGING_MARKER}:attachment`,
-        status: "sent"
-      },
-      {
-        conversation_id: conversations.primary,
-        sender_id: owner,
-        message_type: "voice_note",
-        media_id: voice,
-        duration_seconds: VOICE_FIXTURE.durationSeconds,
-        waveform_data: buildWaveform(),
-        client_message_id: `${STAGING_MARKER}:voice`,
-        status: "sent"
-      }
-    ],
-    "conversation_id,client_message_id"
-  );
+  await insertMissingMessages(admin, conversations.primary, [
+    {
+      conversation_id: conversations.primary,
+      sender_id: owner,
+      message_type: "image",
+      media_id: image,
+      client_message_id: `${STAGING_MARKER}:attachment`,
+      status: "sent"
+    },
+    {
+      conversation_id: conversations.primary,
+      sender_id: owner,
+      message_type: "voice_note",
+      media_id: voice,
+      duration_seconds: VOICE_FIXTURE.durationSeconds,
+      waveform_data: buildWaveform(),
+      client_message_id: `${STAGING_MARKER}:voice`,
+      status: "sent"
+    }
+  ]);
   log("  1 attachment, 1 voice note");
 }
 
