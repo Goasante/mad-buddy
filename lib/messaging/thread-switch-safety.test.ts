@@ -168,3 +168,12 @@ describe("the destructive reset is gone", () => {
     expect(source).not.toMatch(/useState<OptimisticMessage\[\]>\(\[\]\)/);
   });
 });
+
+describe("restart recovery", () => {
+  it("restores persisted optimistic rows and rebuilds their retry drafts", () => {
+    const source = readFileSync("components/messages/messages-page-v4.tsx", "utf8");
+
+    expect(source).toContain("stored.optimistic.length > 0");
+    expect(source).toContain("retryDraftsRef.current.set(message.clientMessageId");
+  });
+});

@@ -89,13 +89,11 @@ describe("leaving /messages and returning never blocks on the network", () => {
 });
 
 describe("the spinner is reserved for a real first load", () => {
-  it("shows the loading state only when there is nothing cached to paint", () => {
+  it("treats a cached empty thread as known rather than loading", () => {
     const source = readFileSync("components/messages/messages-page-v4.tsx", "utf8");
 
-    // setLoadingMessages is driven by whether the cache had messages, not by
-    // whether a request is in flight. A warm thread therefore never blanks.
-    expect(source).toContain("const hasCachedMessages = Boolean(cached && cached.messages.length > 0)");
-    expect(source).toContain("setLoadingMessages(!hasCachedMessages)");
+    expect(source).toContain("const hasCachedThread = Boolean(cached)");
+    expect(source).toContain("setLoadingMessages(!hasCachedThread)");
   });
 
   it("still guards the spinner on an empty message list at render", () => {
@@ -104,6 +102,23 @@ describe("the spinner is reserved for a real first load", () => {
     // Belt and braces: even if loading were true, a thread with cached
     // messages renders them rather than the spinner.
     expect(source).toContain("loadingMessages && messages.length === 0");
+  });
+
+  it("warms likely inbox rows before they are tapped", () => {
+    const source = readFileSync("components/messages/messages-page-v4.tsx", "utf8");
+    const row = readFileSync("components/messaging/conversation-row-v4.tsx", "utf8");
+
+    expect(source).toContain("selectWarmConversations(conversations, selectedId)");
+    expect(source).toContain("Promise.all(candidates.map((conversation)");
+    expect(source).toContain("getRecentMessagesAction(conversation.id)");
+    expect(row).toContain("onPointerEnter={onIntent}");
+  });
+
+  it("projects one Realtime message rather than reloading 200 rows", () => {
+    const source = readFileSync("components/messages/messages-page-v4.tsx", "utf8");
+
+    expect(source).toContain("getMessageAction(selectedId, messageId)");
+    expect(source).toContain("patchThreadMessage(viewerIdRef.current, selectedId, projected)");
   });
 
   it("seeds the first render from the cache rather than an effect", () => {
@@ -121,7 +136,7 @@ describe("reconciliation replaces the cached copy rather than trusting it", () =
   it("writes the server rows back into the cache after every load", () => {
     const source = readFileSync("components/messages/messages-page-v4.tsx", "utf8");
 
-    expect(source).toContain("writeThreadMessages(viewerIdRef.current, conversationId, loaded)");
+    expect(source).toContain("writeThreadMessages(viewerIdRef.current, conversationId, reconciled)");
   });
 
   it("keeps the server as the authority for a conversation the viewer lost access to", () => {

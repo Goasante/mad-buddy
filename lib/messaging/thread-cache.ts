@@ -276,17 +276,34 @@ export function patchThreadMessage(
   const existing = state.threads.get(conversationId);
   if (!existing) return null;
 
-  const index = existing.messages.findIndex((row) => row.id === message.id);
-  const next =
-    index >= 0
-      ? existing.messages.map((row) => (row.id === message.id ? message : row))
-      : [...existing.messages, message].sort((a, b) => {
-          const byTime = Date.parse(a.createdAt) - Date.parse(b.createdAt);
-          return byTime !== 0 ? byTime : a.id.localeCompare(b.id);
-        });
+  const next = mergeThreadMessage(existing.messages, message);
 
   put(conversationId, { ...existing, messages: next, updatedAt: Date.now() });
   return next;
+}
+
+/** Pure merge used by both the cache and the selected-thread React state. */
+export function mergeThreadMessage(
+  messages: ChatMessageView[],
+  message: ChatMessageView
+): ChatMessageView[] {
+  const index = messages.findIndex((row) => row.id === message.id);
+  return index >= 0
+    ? messages.map((row) => (row.id === message.id ? message : row))
+    : [...messages, message].sort((a, b) => {
+        const byTime = Date.parse(a.createdAt) - Date.parse(b.createdAt);
+        return byTime !== 0 ? byTime : a.id.localeCompare(b.id);
+      });
+}
+
+/** Applies several independently projected Realtime rows deterministically. */
+export function mergeThreadPatches(
+  messages: ChatMessageView[],
+  patches: Iterable<ChatMessageView>
+): ChatMessageView[] {
+  let merged = messages;
+  for (const patch of patches) merged = mergeThreadMessage(merged, patch);
+  return merged;
 }
 
 /** Test/diagnostic view. Never used to make product decisions. */

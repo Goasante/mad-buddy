@@ -46,6 +46,7 @@ import {
 import type { MentionCandidateView } from "@/lib/messaging/mobile";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import type { AuthorizedVoicePlayback } from "@/lib/messaging/voice-playback";
+import { PROACTIVE_WARM_MESSAGE_LIMIT } from "@/lib/messaging/thread-warmup";
 
 // The read/send views + logic (and these view types) live in
 // lib/messaging/mobile.ts so the mobile /api/messages/* routes share them.
@@ -147,6 +148,31 @@ export async function getMessagesAction(conversationId: string): Promise<ChatMes
   if (!userId) return [];
 
   return listMessages(userId, conversationId);
+}
+
+/**
+ * Small authorised tail used to warm likely-next inbox conversations.
+ *
+ * This is deliberately a separate fixed-budget action: the client cannot turn
+ * prefetch into an unbounded account download, and an ordinary open still
+ * performs the canonical reconciliation above.
+ */
+export async function getRecentMessagesAction(conversationId: string): Promise<ChatMessageView[]> {
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+
+  return listMessages(userId, conversationId, { limit: PROACTIVE_WARM_MESSAGE_LIMIT });
+}
+
+/** Projects one Realtime entity through the same access and privacy path. */
+export async function getMessageAction(
+  conversationId: string,
+  messageId: string
+): Promise<ChatMessageView | null> {
+  const userId = await getAuthedUserId();
+  if (!userId) return null;
+
+  return (await listMessages(userId, conversationId, { messageId }))[0] ?? null;
 }
 
 /**

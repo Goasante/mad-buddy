@@ -22,6 +22,7 @@ function haptic(pattern: number | number[]) {
 
 export function ConversationRowV4({
   conversation,
+  onIntent,
   onOpen,
   onMarkUnread,
   onFavorite,
@@ -29,6 +30,7 @@ export function ConversationRowV4({
   onArchive
 }: {
   conversation: ConversationView;
+  onIntent?: () => void;
   onOpen: () => void;
   onMarkUnread: () => void;
   onFavorite: () => void;
@@ -52,6 +54,7 @@ export function ConversationRowV4({
 
   function begin(event: React.PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
+    onIntent?.();
     startRef.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
     movedRef.current = false;
     thresholdRef.current = null;
@@ -136,6 +139,8 @@ export function ConversationRowV4({
         role="button"
         tabIndex={0}
         aria-label={`Open chat with ${conversation.title}`}
+        onPointerEnter={onIntent}
+        onFocus={onIntent}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();

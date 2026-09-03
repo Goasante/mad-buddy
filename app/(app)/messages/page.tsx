@@ -39,6 +39,7 @@ export default async function MessagesPage() {
     <div className="-mt-[var(--mobile-header-height)] md:mt-0">
       <MessageDeliveryAck />
       <MessagesPageV4
+        key={user?.id ?? "signed-out"}
         initialConversations={conversations}
         voiceRecorderConfig={voiceRecorderConfig}
         viewerId={user?.id ?? null}
