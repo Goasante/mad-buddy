@@ -120,7 +120,37 @@ describe("brand and navigation are preserved", () => {
 
   it("uses primary/muted tokens rather than a literal palette", () => {
     expect(card).toContain("text-primary");
-    expect(card).not.toMatch(/#[0-9a-fA-F]{6}/);
+
+    /* THE CONTRACT IS THE PALETTE, NOT EVERY LITERAL COLOUR.
+     *
+     * This asserted `not.toMatch(/#[0-9a-fA-F]{6}/)` over the whole file, and
+     * the photo-backed "open your plan" variant later added a dark scrim
+     * (`bg-[#160b08]`) behind /home/open-your-plan-bg.webp so white text stays
+     * legible on a photograph. That is not a bespoke brand palette competing
+     * with the design tokens -- it is image legibility, and there is no token
+     * for "whatever keeps text readable over THIS picture".
+     *
+     * The blanket regex was also already inconsistent: it never caught the
+     * `rgba(...)` in the very same className, so the rule it appeared to
+     * enforce was not the rule it actually enforced.
+     *
+     * So: the CHROME must still be tokens, and the only literal colours
+     * allowed are the ones layered over the background image. Anything that
+     * hardcodes a colour outside that scrim still fails, which is what the
+     * test was written to prevent. */
+    const scrimLines = card
+      .split("\n")
+      .filter((line) => /bg-\[#|linear-gradient\(/.test(line));
+    const outsideScrim = card
+      .split("\n")
+      .filter((line) => !scrimLines.includes(line))
+      .join("\n");
+
+    expect(outsideScrim).not.toMatch(/#[0-9a-fA-F]{6}/);
+    expect(outsideScrim).not.toMatch(/rgba?\(/);
+
+    // And the scrim really is only ever used with the background image.
+    expect(card).toContain("open-your-plan-bg");
   });
 });
 
