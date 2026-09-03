@@ -805,30 +805,57 @@ export const handleClosePlanChats: JobHandler = async (admin) => {
     .in("conversation_id", closedIds)
     .eq("status", "joined");
 
-  for (const member of members ?? []) {
-    /* Only fills an empty archived_at. A member who had already archived this
-       chat keeps their own timestamp, and -- more importantly -- a member who
-       un-archives a closed chat later is not re-archived by the next tick,
-       because the conversation is no longer 'active' and never reaches this
-       code again. */
-    await admin
-      .from("conversation_user_preferences")
-      .upsert(
-        {
-          conversation_id: member.conversation_id,
-          user_id: member.user_id,
-          archived_at: nowIso,
-          updated_at: nowIso
-        },
-        { onConflict: "conversation_id,user_id", ignoreDuplicates: true }
-      );
-    await admin
-      .from("conversation_user_preferences")
-      .update({ archived_at: nowIso, updated_at: nowIso })
-      .eq("conversation_id", member.conversation_id)
-      .eq("user_id", member.user_id)
-      .is("archived_at", null);
+  /* Bounded by conversations closed this tick, not by total membership.
+
+     This was two sequential writes PER MEMBER. Unlike the single-Plan action,
+     this handler closes every eligible Plan Chat in one tick, so the cost was
+     (chats x their members) round trips -- the job's worst amplification, and
+     the one most likely to time out exactly when a backlog makes it largest.
+
+     Both statements are still required and still mean what they did:
+       - the upsert CREATES preference rows that do not exist yet, and
+         ignoreDuplicates leaves an existing row (and its archived_at) alone;
+       - the update FILLS an empty archived_at on rows that already existed.
+
+     The update is grouped by conversation rather than filtered by two
+     independent `.in()` lists: with many conversations in one tick,
+     `.in(conversation).in(user)` is a cross product and would archive a chat
+     for someone who was never in it. */
+  const memberRows = members ?? [];
+  if (memberRows.length === 0) return closed.length;
+
+  await admin.from("conversation_user_preferences").upsert(
+    memberRows.map((member) => ({
+      conversation_id: member.conversation_id,
+      user_id: member.user_id,
+      archived_at: nowIso,
+      updated_at: nowIso
+    })),
+    { onConflict: "conversation_id,user_id", ignoreDuplicates: true }
+  );
+
+  /* Only fills an empty archived_at. A member who had already archived this
+     chat keeps their own timestamp, and -- more importantly -- a member who
+     un-archives a closed chat later is not re-archived by the next tick,
+     because the conversation is no longer 'active' and never reaches this
+     code again. */
+  const membersByConversation = new Map<string, string[]>();
+  for (const member of memberRows) {
+    const existing = membersByConversation.get(member.conversation_id);
+    if (existing) existing.push(member.user_id);
+    else membersByConversation.set(member.conversation_id, [member.user_id]);
   }
+
+  await Promise.all(
+    [...membersByConversation].map(([conversationId, userIds]) =>
+      admin
+        .from("conversation_user_preferences")
+        .update({ archived_at: nowIso, updated_at: nowIso })
+        .eq("conversation_id", conversationId)
+        .in("user_id", userIds)
+        .is("archived_at", null)
+    )
+  );
 
   return closed.length;
 };

@@ -63,6 +63,38 @@ export async function grantAchievement(admin: Admin, userId: string, code: strin
  * Count-based grant: awards `code` only once `count` meets the definition's
  * transparent criteria_value (spec §32, criteria are public reference data).
  */
+/**
+ * Achievement DEFINITIONS are non-personal reference data -- the same public
+ * criteria for every user (spec §32) -- so one lookup can answer for a whole
+ * batch. The nightly jobs grant count-based achievements per user, which
+ * re-read the identical definition row once per user; a 10,000-user tick
+ * fetched the same two rows 20,000 times.
+ *
+ * Deliberately NOT a shared server cache. It is a short-lived, process-local
+ * memo of PUBLIC criteria, holding no user data and keyed by nothing
+ * viewer-specific, so it cannot leak between people. The TTL keeps an Admin
+ * edit to a definition taking effect promptly without a deploy.
+ */
+const DEFINITION_TTL_MS = 60_000;
+const definitionMemo = new Map<
+  string,
+  { value: { criteria_value: number; is_active: boolean } | null; expiresAt: number }
+>();
+
+async function loadAchievementDefinition(admin: Admin, code: string) {
+  const cached = definitionMemo.get(code);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const { data } = await admin
+    .from("achievement_definitions")
+    .select("criteria_value, is_active")
+    .eq("code", code)
+    .maybeSingle();
+
+  definitionMemo.set(code, { value: data ?? null, expiresAt: Date.now() + DEFINITION_TTL_MS });
+  return data ?? null;
+}
+
 export async function grantCountAchievement(
   admin: Admin,
   userId: string,
@@ -70,11 +102,7 @@ export async function grantCountAchievement(
   count: number
 ): Promise<void> {
   try {
-    const { data: definition } = await admin
-      .from("achievement_definitions")
-      .select("criteria_value, is_active")
-      .eq("code", code)
-      .maybeSingle();
+    const definition = await loadAchievementDefinition(admin, code);
     if (!definition?.is_active || count < definition.criteria_value) return;
     await grantAchievement(admin, userId, code);
   } catch {

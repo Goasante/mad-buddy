@@ -27,9 +27,11 @@ import {
   deleteMessageAction,
   editMessageAction,
   getConversationsAction,
+  getMessageAction,
   getMessageableFriendsAction,
   getMessagesAction,
   getMentionCandidatesAction,
+  getRecentMessagesAction,
   markConversationReadAction,
   muteConversationAction,
   openDirectConversationAction,
@@ -79,11 +81,15 @@ import {
 import {
   bindThreadCacheOwner,
   hydrateThreadFromStore,
+  mergeThreadMessage,
+  mergeThreadPatches,
+  patchThreadMessage,
   readThread,
   writeThreadMessages,
   writeThreadOptimistic,
   writeThreadReplyContexts
 } from "@/lib/messaging/thread-cache";
+import { selectWarmConversations, shouldRefreshWarmThread } from "@/lib/messaging/thread-warmup";
 import type { UltimateConversationState } from "@/lib/messaging/ultimate-types";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
@@ -272,12 +278,32 @@ export function MessagesPageV4({
   useEffect(() => {
     viewerIdRef.current = viewerId;
   }, [viewerId]);
+  useEffect(() => {
+    // Rebuild retry payloads restored from IndexedDB/module cache. The local
+    // row carries the original idempotency key, so retry remains duplicate-safe.
+    for (const [conversationId, outgoing] of Object.entries(optimisticByConversation)) {
+      for (const message of outgoing) {
+        if (retryDraftsRef.current.has(message.clientMessageId)) continue;
+        retryDraftsRef.current.set(message.clientMessageId, {
+          conversationId,
+          clientMessageId: message.clientMessageId,
+          text: message.text,
+          kind: message.kind,
+          durationSeconds: message.durationSeconds
+        });
+      }
+    }
+  }, [optimisticByConversation]);
   /* Which load request has already been answered by the SERVER.
      The device read and the network request race by design -- whichever
      returns first paints. This records that the authoritative one landed, so a
      slow disk read arriving afterwards cannot overwrite fresh rows with stale
      ones. */
   const loadedFromServerRef = useRef(0);
+  const warmInFlightRef = useRef<Map<string, Promise<void>>>(new Map());
+  /* Server-projected Realtime rows that landed while device/network hydration
+     was pending. A slower snapshot must merge these rather than erase them. */
+  const realtimePatchesRef = useRef<Map<string, Map<string, ChatMessageView>>>(new Map());
 
   useImmersiveWhile(Boolean(selectedId));
 
@@ -304,6 +330,38 @@ export function MessagesPageV4({
     }
   }, []);
 
+  /**
+   * Makes an inbox row local before it is tapped. Device storage is checked
+   * first; the fixed 32-message server tail is used only when the inbox says
+   * the local tail is missing or behind.
+   */
+  const warmConversation = useCallback((conversation: ConversationView): Promise<void> => {
+    const existing = warmInFlightRef.current.get(conversation.id);
+    if (existing) return existing;
+
+    const task = (async () => {
+      const ownerId = viewerIdRef.current;
+      const memory = readThread(ownerId, conversation.id);
+      const local = memory ?? await hydrateThreadFromStore(ownerId, conversation.id);
+      if (!shouldRefreshWarmThread(local, conversation.lastMessageAt)) return;
+      const loaded = await getRecentMessagesAction(conversation.id);
+      // The account may have changed while storage/network was pending.
+      if (viewerIdRef.current !== ownerId) return;
+      // A preview timestamp plus an empty warm response is ambiguous (offline,
+      // auth failure, or a transient server problem). Keep the last local copy;
+      // the explicit open path will authoritatively clear revoked content.
+      if (conversation.lastMessageAt && loaded.length === 0) return;
+      writeThreadMessages(ownerId, conversation.id, loaded);
+    })().catch(() => {
+      // Warming is opportunistic. A tap still has the canonical load path.
+    }).finally(() => {
+      warmInFlightRef.current.delete(conversation.id);
+    });
+
+    warmInFlightRef.current.set(conversation.id, task);
+    return task;
+  }, []);
+
   const refreshUltimate = useCallback(async (conversationId: string) => {
     try {
       const next = await getUltimateConversationStateAction(conversationId);
@@ -320,17 +378,22 @@ export function MessagesPageV4({
         getReplyContextsAction(conversationId).catch(() => ({}))
       ]);
       if (!mountedRef.current) return;
+      const patches = realtimePatchesRef.current.get(conversationId);
+      const reconciled = loaded.length === 0
+        ? loaded
+        : mergeThreadPatches(loaded, patches?.values() ?? []);
+      realtimePatchesRef.current.delete(conversationId);
       setMessages((current) => {
         if (countIncoming && !nearBottomRef.current) {
           const known = new Set(current.map((message) => message.id));
-          const incoming = loaded.filter((message) => !known.has(message.id) && !message.isMine).length;
+          const incoming = reconciled.filter((message) => !known.has(message.id) && !message.isMine).length;
           if (incoming > 0) setUnseenIncoming((count) => count + incoming);
         }
-        return loaded;
+        return reconciled;
       });
       const nextReplies = replies as Record<string, ReplyContext>;
       setReplyContexts(nextReplies);
-      writeThreadMessages(viewerIdRef.current, conversationId, loaded, nextReplies);
+      writeThreadMessages(viewerIdRef.current, conversationId, reconciled, nextReplies);
     } catch (error) {
       setFeedback(failureMessage(error));
     }
@@ -341,12 +404,12 @@ export function MessagesPageV4({
   const loadConversation = useCallback(async (conversationId: string) => {
     const requestId = ++loadRequestIdRef.current;
     const cached = readThread(viewerIdRef.current, conversationId);
-    const hasCachedMessages = Boolean(cached && cached.messages.length > 0);
+    const hasCachedThread = Boolean(cached);
     /* THE INSTANT OPEN. A cached thread is the UI's source, not merely an
        optimization: it paints now and the network reconciles underneath it. The
        blocking spinner is reserved for a genuine first load -- a conversation
        this session has never opened. */
-    setLoadingMessages(!hasCachedMessages);
+    setLoadingMessages(!hasCachedThread);
     setFeedback("");
     setUnseenIncoming(0);
     nearBottomRef.current = true;
@@ -355,6 +418,9 @@ export function MessagesPageV4({
     if (cached) {
       setMessages(cached.messages);
       setReplyContexts(cached.replyContexts);
+      setOptimisticByConversation((current) => cached.optimistic.length > 0
+        ? { ...current, [conversationId]: cached.optimistic }
+        : current);
     } else {
       /* Nothing in memory: this is a fresh app launch or a refresh. Try the
          device before falling back to the spinner. Deliberately not awaited
@@ -365,8 +431,14 @@ export function MessagesPageV4({
         if (!stored || !mountedRef.current || requestId !== loadRequestIdRef.current) return;
         // The network may already have answered; never overwrite fresher rows.
         if (loadedFromServerRef.current === requestId) return;
-        setMessages(stored.messages);
+        const patches = realtimePatchesRef.current.get(conversationId);
+        const hydrated = mergeThreadPatches(stored.messages, patches?.values() ?? []);
+        setMessages(hydrated);
         setReplyContexts(stored.replyContexts);
+        setOptimisticByConversation((current) => stored.optimistic.length > 0
+          ? { ...current, [conversationId]: stored.optimistic }
+          : current);
+        writeThreadMessages(viewerIdRef.current, conversationId, hydrated, stored.replyContexts);
         setLoadingMessages(false);
       });
     }
@@ -382,8 +454,13 @@ export function MessagesPageV4({
          and these are freshly signed. The cached copy was only ever the first
          paint -- this is the truth it is reconciled to. */
       loadedFromServerRef.current = requestId;
-      setMessages(loaded);
-      writeThreadMessages(viewerIdRef.current, conversationId, loaded);
+      const patches = realtimePatchesRef.current.get(conversationId);
+      const reconciled = loaded.length === 0
+        ? loaded
+        : mergeThreadPatches(loaded, patches?.values() ?? []);
+      realtimePatchesRef.current.delete(conversationId);
+      setMessages(reconciled);
+      writeThreadMessages(viewerIdRef.current, conversationId, reconciled);
       setLoadingMessages(false);
 
       void Promise.all([
@@ -424,6 +501,25 @@ export function MessagesPageV4({
     void syncConversations();
     void syncInboxPreferences();
   }, [syncConversations, syncInboxPreferences]);
+
+  useEffect(() => {
+    const candidates = selectWarmConversations(conversations, selectedId);
+    let cancelled = false;
+    // Hydrate every bounded candidate in parallel so a slow network miss for
+    // row one cannot delay a durable hit for row two. Network warming remains
+    // sequential below to cap radio/database pressure.
+    void (async () => {
+      const ownerId = viewerIdRef.current;
+      await Promise.all(candidates.map((conversation) =>
+        hydrateThreadFromStore(ownerId, conversation.id)
+      ));
+      for (const conversation of candidates) {
+        if (cancelled) return;
+        await warmConversation(conversation);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [conversations, selectedId, warmConversation]);
 
   useEffect(() => {
     if (!isConversationId(requestedConversationId)) return;
@@ -471,9 +567,38 @@ export function MessagesPageV4({
       refreshThread();
       void refreshUltimate(selectedId);
     };
+    const patchMessage = (messageId: string) => {
+      void getMessageAction(selectedId, messageId).then((projected) => {
+        if (disposed || !mountedRef.current) return;
+        if (!projected) {
+          // Hard delete, hide, or revoked access: only the authoritative full
+          // response can distinguish these safely.
+          refreshThread();
+          return;
+        }
+        const byMessage = realtimePatchesRef.current.get(selectedId) ?? new Map<string, ChatMessageView>();
+        byMessage.set(projected.id, projected);
+        realtimePatchesRef.current.set(selectedId, byMessage);
+        setMessages((current) => {
+          const next = mergeThreadMessage(current, projected);
+          if (!nearBottomRef.current && !current.some((row) => row.id === projected.id) && !projected.isMine) {
+            setUnseenIncoming((count) => count + 1);
+          }
+          return next;
+        });
+        patchThreadMessage(viewerIdRef.current, selectedId, projected);
+        void syncConversations();
+        void markConversationReadAction(selectedId).catch(() => ({ ok: false, message: "" }));
+      }).catch(refreshThread);
+    };
     const channel = supabase
       .channel(`chats-v4:${selectedId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `conversation_id=eq.${selectedId}` }, refreshThread)
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `conversation_id=eq.${selectedId}` }, (payload) => {
+        const record = payload.eventType === "DELETE" ? payload.old : payload.new;
+        const messageId = typeof record?.id === "string" ? record.id : null;
+        if (messageId) patchMessage(messageId);
+        else refreshThread();
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_presence", filter: `conversation_id=eq.${selectedId}` }, () => void refreshUltimate(selectedId))
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_message_pins", filter: `conversation_id=eq.${selectedId}` }, () => void refreshUltimate(selectedId))
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_polls", filter: `conversation_id=eq.${selectedId}` }, refreshPoll)
@@ -508,7 +633,21 @@ export function MessagesPageV4({
 
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
   const selectedContext = selected ? conversationContext(selected) : { subtitle: null, shared: false };
-  const isGroup = selected?.kind === "group";
+  /* MULTI-PARTY, not the literal 'group' type (BETA-012).
+   *
+   * `kind` is the conversation_type enum: direct | group | plan | event |
+   * safe_arrival. Testing `=== "group"` made every Plan chat, Event Room and
+   * Safe Arrival thread claim to be a two-person conversation, and the sender
+   * identity block in MessageBubbleV4 is gated on `isGroup` -- so in exactly
+   * those threads incoming messages rendered with no avatar and no name, and
+   * the only way to tell Ama from Kojo was to guess from message order.
+   *
+   * The correct question is "are there more than two people here", and its
+   * answer is "this is not a direct conversation". The composer three hundred
+   * lines below already asked it that way (`selected.kind !== "direct"`), so
+   * one screen held two different definitions of a group and only the half
+   * that renders other people's names had the wrong one. */
+  const isGroup = Boolean(selected) && selected?.kind !== "direct";
 
   const displayConversations = useMemo(() => conversations.map((conversation) => {
     const pref = inboxPreferences[conversation.id];
@@ -837,7 +976,7 @@ export function MessagesPageV4({
           <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 md:px-3">
             {filteredConversations.length === 0 ? <EmptyState icon={MessageCircle} title={activeFilter === "archived" ? "No archived chats" : "No chats here"} description={activeFilter === "archived" ? "Chats you archive will wait here quietly." : "Try another filter or start a new chat."} action={activeFilter === "archived" ? undefined : <Button onClick={() => setNewMessageOpen(true)}>New chat</Button>} /> : (
               <ul className="space-y-1">
-                {filteredConversations.map((conversation) => <li key={conversation.id} className="animate-in fade-in slide-in-from-bottom-1"><ConversationRowV4 conversation={conversation} onOpen={() => openConversation(conversation.id)} onMarkUnread={() => markUnread(conversation)} onFavorite={() => toggleFavorite(conversation)} onMute={() => toggleMute(conversation)} onArchive={() => toggleArchive(conversation)} /></li>)}
+                {filteredConversations.map((conversation) => <li key={conversation.id} className="animate-in fade-in slide-in-from-bottom-1"><ConversationRowV4 conversation={conversation} onIntent={() => { void warmConversation(conversation); }} onOpen={() => openConversation(conversation.id)} onMarkUnread={() => markUnread(conversation)} onFavorite={() => toggleFavorite(conversation)} onMute={() => toggleMute(conversation)} onArchive={() => toggleArchive(conversation)} /></li>)}
               </ul>
             )}
           </div>
@@ -902,7 +1041,7 @@ export function MessagesPageV4({
                   if (near && unseenIncoming > 0) setUnseenIncoming(0);
                 }}
               >
-                {loadingMessages && messages.length === 0 ? <div className="grid h-full place-items-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div> : messages.length === 0 ? (
+                {loadingMessages && messages.length === 0 ? <div className="space-y-3 px-1 py-6" role="status" aria-label="Loading recent messages"><div className="h-14 w-2/3 animate-pulse rounded-[21px] rounded-bl-[7px] bg-muted/55" /><div className="ml-auto h-11 w-1/2 animate-pulse rounded-[21px] rounded-br-[7px] bg-primary/12" /><div className="h-20 w-3/4 animate-pulse rounded-[21px] rounded-bl-[7px] bg-muted/55" /></div> : messages.length === 0 ? (
                   <div className="flex h-full flex-col items-center justify-center px-8 text-center animate-in fade-in zoom-in-95"><UserAvatar name={selected.title} src={selected.avatarUrl} size="lg" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><h2 className="mt-4 text-lg font-semibold">{selected.title}</h2><p className="mt-1 text-sm text-muted-foreground">Say hello and start the chat.</p>{isGroup ? <div className="mt-4 flex flex-wrap justify-center gap-2"><Button size="sm" onClick={() => setPollOpen(true)}><BarChart3 className="h-4 w-4" />Create poll</Button><Button size="sm" variant="outline" onClick={() => router.push("/plans" as Route)}>Make a Plan</Button></div> : null}</div>
                 ) : (
                   messages.map((message, index) => {
@@ -989,7 +1128,7 @@ export function MessagesPageV4({
                 key={selected.id}
                 conversationId={selected.id}
                 initialDraft={ultimate?.preferences.draftText ?? inboxPreferences[selected.id]?.draftText ?? null}
-                isGroup={selected.kind !== "direct"}
+                isGroup={isGroup}
                 mentionCandidates={mentionCandidates}
                 voiceRecorderConfig={voiceRecorderConfig}
                 placeholder={`Message ${selected.title}`}

@@ -1112,9 +1112,14 @@ export async function listConversations(userId: string): Promise<ConversationVie
   return views;
 }
 
-export async function listMessages(userId: string, conversationId: string): Promise<ChatMessageView[]> {
+export async function listMessages(
+  userId: string,
+  conversationId: string,
+  options: { limit?: number; messageId?: string } = {}
+): Promise<ChatMessageView[]> {
   if (!hasServiceRoleEnv()) return [];
   if (!uuidSchema.safeParse(conversationId).success) return [];
+  if (options.messageId && !uuidSchema.safeParse(options.messageId).success) return [];
 
   const admin = createSupabaseAdminClient();
   const access = await resolveConversationAccess(admin, userId, conversationId);
@@ -1125,15 +1130,20 @@ export async function listMessages(userId: string, conversationId: string): Prom
   // visibility cutoff instead — once an active conversation passed 200
   // total messages, every message sent after that point silently stopped
   // appearing here, forever, because the same oldest slice kept winning.
-  const { data: messages } = await admin
+  const pageLimit = Math.max(1, Math.min(200, Math.trunc(options.limit ?? 200)));
+  const baseQuery = admin
     .from("messages")
     .select("id, sender_id, message_type, text_content, quick_action_type, media_id, status, client_message_id, created_at, edited_at, deleted_at")
     .eq("conversation_id", conversationId)
-    .gte("created_at", access.historyVisibleFrom ?? new Date(0).toISOString())
-    .order("created_at", { ascending: false })
-    .limit(200);
+    .gte("created_at", access.historyVisibleFrom ?? new Date(0).toISOString());
+  const { data: messages } = options.messageId
+    ? await baseQuery.eq("id", options.messageId).limit(1)
+    : await baseQuery
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(pageLimit);
 
-  const rows = (messages ?? []).reverse();
+  const rows = options.messageId ? (messages ?? []) : (messages ?? []).reverse();
   if (rows.length === 0) return [];
 
   /* Bounded to THIS page's message ids.

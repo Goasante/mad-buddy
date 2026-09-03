@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { normalizeVoiceAudioMime } from "@/lib/media/audio-inspection";
 import {
@@ -45,6 +46,7 @@ import {
 import type { MentionCandidateView } from "@/lib/messaging/mobile";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import type { AuthorizedVoicePlayback } from "@/lib/messaging/voice-playback";
+import { PROACTIVE_WARM_MESSAGE_LIMIT } from "@/lib/messaging/thread-warmup";
 
 // The read/send views + logic (and these view types) live in
 // lib/messaging/mobile.ts so the mobile /api/messages/* routes share them.
@@ -96,7 +98,31 @@ export async function sendMessageAction(input: unknown): Promise<MessagingAction
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
-  return sendMessage(userId, input);
+  const result = await sendMessage(userId, input);
+
+  /* Home reads activation from the server; sending happens on another route
+   * (BETA-011).
+   *
+   * `sendMessage` records `first_message_sent`, so the account's activation
+   * state changes here -- but Home is a server component on /dashboard, and
+   * the Client Router Cache replays whatever RSC payload it already holds when
+   * the person navigates back. The projection was therefore correct while the
+   * screen showed a stale copy of it: a hard refresh advanced Home and an
+   * ordinary back-tap did not. That asymmetry is the half of "stuck on Say hi"
+   * that no amount of correct milestone-writing could fix, because nothing was
+   * ever wrong on the server.
+   *
+   * ONLY ON A REAL SEND. Guarded on `result.ok` so a rejected, rate-limited,
+   * blocked or failed send invalidates nothing -- a failure must not be able to
+   * move the journey forward, and an optimistic bubble is not evidence.
+   *
+   * Home only. The messaging surfaces refresh through their own realtime
+   * subscription and `refreshThread`, so invalidating them here would discard
+   * warm thread state and re-fetch a conversation that is already current --
+   * paying for the open-chat latency the messaging work deliberately removed. */
+  if (result.ok) revalidatePath("/dashboard");
+
+  return result;
 }
 
 export async function getMessageableFriendsAction(): Promise<MessageableFriend[]> {
@@ -122,6 +148,31 @@ export async function getMessagesAction(conversationId: string): Promise<ChatMes
   if (!userId) return [];
 
   return listMessages(userId, conversationId);
+}
+
+/**
+ * Small authorised tail used to warm likely-next inbox conversations.
+ *
+ * This is deliberately a separate fixed-budget action: the client cannot turn
+ * prefetch into an unbounded account download, and an ordinary open still
+ * performs the canonical reconciliation above.
+ */
+export async function getRecentMessagesAction(conversationId: string): Promise<ChatMessageView[]> {
+  const userId = await getAuthedUserId();
+  if (!userId) return [];
+
+  return listMessages(userId, conversationId, { limit: PROACTIVE_WARM_MESSAGE_LIMIT });
+}
+
+/** Projects one Realtime entity through the same access and privacy path. */
+export async function getMessageAction(
+  conversationId: string,
+  messageId: string
+): Promise<ChatMessageView | null> {
+  const userId = await getAuthedUserId();
+  if (!userId) return null;
+
+  return (await listMessages(userId, conversationId, { messageId }))[0] ?? null;
 }
 
 /**
