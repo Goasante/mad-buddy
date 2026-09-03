@@ -70,6 +70,25 @@ export async function reconcileBuddyScore(admin: Admin, userId: string, now = ne
 
 export async function loadBuddyScore(admin: Admin, userId: string): Promise<BuddyScoreData> {
   await reconcileBuddyScore(admin, userId);
+  return readBuddyScoreSnapshot(admin, userId);
+}
+
+/**
+ * Read-only Buddy Score projection, for surfaces that DISPLAY the score.
+ *
+ * Identical output to loadBuddyScore(), minus the reconciliation. That
+ * difference matters: reconcileBuddyScore() runs seven parallel queries, an
+ * auth.admin.getUserById lookup, a conditional plans read AND a ledger UPSERT.
+ * Paying that on a presentation GET made /api/profile a write endpoint --
+ * twice per request, because Identity and Journey each loaded the score
+ * independently.
+ *
+ * This follows the precedent loadBuddyScoreLevel() already sets: a display
+ * surface can never mutate score state. /buddy-score remains the canonical
+ * page that reconciles (via loadMyProgress -> loadBuddyScore), so progression
+ * still becomes current there; nothing is silently dropped.
+ */
+export async function readBuddyScoreSnapshot(admin: Admin, userId: string): Promise<BuddyScoreData> {
   const { data } = await admin.from("buddy_score_ledger").select("id,event_type,points_delta,metadata,created_at").eq("user_id", userId).order("created_at", { ascending: false });
   const rows = data ?? [];
   const total = calculateBuddyScoreTotal(rows);

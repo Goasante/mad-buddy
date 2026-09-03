@@ -1,7 +1,7 @@
 import "server-only";
 
 import { ACHIEVEMENT_BY_CODE } from "@/lib/achievements/achievement-catalog";
-import { loadBuddyScore } from "@/lib/engagement/buddy-score-service";
+import { loadBuddyScore, type BuddyScoreData } from "@/lib/engagement/buddy-score-service";
 import { profileIdentityAccess, type ProfileIdentitySummary } from "@/lib/profile/identity";
 import type { ViewerRelationship } from "@/lib/profile/rules";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -37,7 +37,11 @@ async function loadOwnActivity(admin: Admin, userId: string): Promise<NonNullabl
 export async function loadProfileIdentitySummary(
   admin: Admin,
   userId: string,
-  relationship: ViewerRelationship
+  relationship: ViewerRelationship,
+  // Optional preloaded score, so a caller that already resolved one (e.g. the
+  // Profile route, which also needs it for Journey) does not pay for a second
+  // load. Backward compatible: callers that omit it behave exactly as before.
+  context: { score?: BuddyScoreData } = {}
 ): Promise<ProfileIdentitySummary> {
   const access = profileIdentityAccess(relationship);
   let achievementsQuery = admin
@@ -47,7 +51,11 @@ export async function loadProfileIdentitySummary(
   if (relationship !== "self") achievementsQuery = achievementsQuery.eq("hidden", false);
 
   const [score, achievementsResult, activity] = await Promise.all([
-    access.showBuddyScore ? loadBuddyScore(admin, userId) : Promise.resolve(null),
+    access.showBuddyScore
+      ? context.score
+        ? Promise.resolve(context.score)
+        : loadBuddyScore(admin, userId)
+      : Promise.resolve(null),
     access.showAchievements
       ? achievementsQuery.order("earned_at", { ascending: false }).limit(3)
       : Promise.resolve(null),

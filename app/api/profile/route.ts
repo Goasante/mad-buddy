@@ -8,6 +8,7 @@ import { loadEffectivePlan } from "@/lib/billing/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { loadProfileIdentitySummary } from "@/lib/profile/identity-service";
 import { loadJourney } from "@/lib/journey/journey-service";
+import { readBuddyScoreSnapshot } from "@/lib/engagement/buddy-score-service";
 
 export function OPTIONS(request: Request) {
   return preflightResponse(request);
@@ -20,6 +21,15 @@ export async function GET(request: Request) {
   }
 
   const admin = createSupabaseAdminClient();
+
+  // Resolve the Buddy Score ONCE, read-only, and share it with both consumers.
+  // Identity and Journey each used to load it independently, and loadBuddyScore
+  // reconciles -- so a plain GET performed two reconciliations, two
+  // auth.admin.getUserById lookups and two ledger UPSERTs. Presentation must
+  // not mutate score state; /buddy-score remains the canonical page that
+  // reconciles.
+  const score = await readBuddyScoreSnapshot(admin, auth.user.id);
+
   const [{ data: birthDetails }, { data: privacy }, plan, identity, journey] = await Promise.all([
     auth.supabase
       .from("profile_birth_details")
@@ -32,8 +42,8 @@ export async function GET(request: Request) {
       .eq("user_id", auth.user.id)
       .in("field_name", ["birthday", "age", "zodiac"]),
     loadEffectivePlan(admin, auth.user.id),
-    loadProfileIdentitySummary(admin, auth.user.id, "self"),
-    loadJourney(admin, auth.user.id)
+    loadProfileIdentitySummary(admin, auth.user.id, "self", { score }),
+    loadJourney(admin, auth.user.id, new Date(), { score })
   ]);
   const dayKey = dateKeyInTimeZone(new Date(), DEFAULT_RECIPIENT_TIMEZONE);
   const birthProfile = birthDetails?.date_of_birth ? deriveBirthProfile(birthDetails.date_of_birth, dayKey) : null;
