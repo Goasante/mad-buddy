@@ -13,13 +13,21 @@ export type CanonicalTransition = {
 
 export async function transitionSafeArrival(
   admin: Admin,
-  input: { sessionId: string; actorId: string; action: "arrive" | "cancel" | "extend"; extraMinutes?: number }
+  input: {
+    sessionId: string;
+    actorId: string;
+    action: "arrive" | "cancel" | "extend";
+    extraMinutes?: number;
+    /** One user intent, one id. Replaying it must not extend the clock twice. */
+    clientMutationId?: string | null;
+  }
 ): Promise<CanonicalTransition> {
   const { data, error } = await admin.rpc("transition_safe_arrival", {
     p_session_id: input.sessionId,
     p_actor_id: input.actorId,
     p_action: input.action,
-    p_extra_minutes: input.extraMinutes ?? null
+    p_extra_minutes: input.extraMinutes ?? null,
+    p_client_mutation_id: input.clientMutationId ?? null
   });
   if (error) throw error;
   const row = data?.[0];

@@ -1,7 +1,7 @@
 "use client";
 
 import { BellRing, ChevronRight, Clock, MapPin, RefreshCcw, ShieldCheck, UserRound, WifiOff } from "lucide-react";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   acknowledgeSafeArrivalAction,
@@ -114,15 +114,37 @@ export function SafeArrivalPage({
     [checkingOn, watcherFocus]
   );
 
+  /* SYNCHRONOUS, not `isPending`.
+   *
+   * `isPending` only disables the buttons once React has rendered the
+   * transition, and two taps can both enter before that paint. On an ordinary
+   * control that is cosmetic; here a duplicate Extend moves
+   * expected_arrival_at twice and quietly postpones the moment contacts are
+   * told somebody has not arrived. A ref flips in the same tick as the tap, so
+   * the second activation never reaches the server.
+   *
+   * This is the client half. The canonical half -- a per-intent mutation id
+   * claimed inside the transition -- lives in the RPC, because a lock in one
+   * browser cannot stop a retried or replayed request. */
+  const inFlightRef = useRef(false);
+
   function runAction(action: () => Promise<{ ok: boolean; message: string; journey?: SafeArrivalJourney | null }>) {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     startTransition(async () => {
-      const result = await action();
-      setToast(result.message);
-      if (!result.ok) return;
-      // Adopt the canonical journey the server returned, then reconcile. `null`
-      // (a cancel) clears the local copy so the Home screen returns at once.
-      setOptimistic(result.journey ?? null);
-      router.refresh();
+      try {
+        const result = await action();
+        setToast(result.message);
+        if (!result.ok) return;
+        // Adopt the canonical journey the server returned, then reconcile. `null`
+        // (a cancel) clears the local copy so the Home screen returns at once.
+        setOptimistic(result.journey ?? null);
+        router.refresh();
+      } finally {
+        // Released even on a thrown action, or one failure would strand every
+        // later mutation on this screen.
+        inFlightRef.current = false;
+      }
     });
   }
 
@@ -187,7 +209,12 @@ export function SafeArrivalPage({
           nowMs={nowMs}
           isPending={isPending}
           onConfirm={() => runAction(() => confirmSafeArrivalAction(activeJourney.id))}
-          onExtend={(minutes) => runAction(() => extendSafeArrivalAction(activeJourney.id, minutes))}
+          onExtend={(minutes) => {
+            /* Minted per activation, so a retry of THIS intent is idempotent while a
+               later, deliberate extension is a new intent with a new id. */
+            const mutationId = crypto.randomUUID();
+            runAction(() => extendSafeArrivalAction(activeJourney.id, minutes, mutationId));
+          }}
           onCancel={() => runAction(() => cancelSafeArrivalAction(activeJourney.id))}
         />
       ) : (
