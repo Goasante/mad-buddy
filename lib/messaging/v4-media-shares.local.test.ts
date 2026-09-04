@@ -448,7 +448,21 @@ describeLocal("Private media authorization", () => {
 }, DB_TIMEOUT);
 
 describeLocal("Structured shares", () => {
-  it("shares a contact carrying only the chosen fields", async () => {
+  /**
+   * CONTACT SHARING IS NOT EXPOSED.
+   *
+   * The R2 structured share contract is Place and Agenda (Plan/Event); the
+   * composer offers no Contact action and sendSchema is a discriminated union
+   * of those two alone. This test previously expected a contact send to
+   * succeed, which the product has never done -- test-contract drift, not a
+   * defect. It now pins the real contract in both directions: the send is
+   * refused, and nothing is written.
+   *
+   * The message_contacts table, the "contact" message_type and the contact
+   * payload reader stay: they serve historical messages, and the reader is
+   * covered by "refuses a structured payload read to an outsider" below.
+   */
+  it("does not expose contact sharing, and writes nothing when one is attempted", async () => {
     actAs(USERS.A);
     const sent = await structured.sendStructuredChatMessageAction({
       kind: "contact",
@@ -456,20 +470,22 @@ describeLocal("Structured shares", () => {
       clientMessageId: clientId(),
       displayName: "Yaa Mensah",
       phone: "+233200000000"
-      // email and organization deliberately omitted
     });
-    expect(sent.ok).toBe(true);
+    expect(sent.ok).toBe(false);
 
     const { data: rows } = await admin
       .from("message_contacts")
-      .select("display_name, phone, email, organization")
+      .select("display_name")
       .eq("display_name", "Yaa Mensah");
-    const row = (rows ?? [])[0];
-    expect(row).toBeTruthy();
-    expect(row.phone).toBe("+233200000000");
-    // What the sender did not choose must not be invented or back-filled.
-    expect(row.email ?? null).toBeNull();
-    expect(row.organization ?? null).toBeNull();
+    expect((rows ?? []).length).toBe(0);
+
+    // Not even an empty carrier message may survive a refused share.
+    const { data: carriers } = await admin
+      .from("messages")
+      .select("id")
+      .eq("conversation_id", CONVERSATIONS.group)
+      .eq("message_type", "contact");
+    expect((carriers ?? []).length).toBe(0);
   });
 
   /**
