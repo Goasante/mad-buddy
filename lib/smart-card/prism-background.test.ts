@@ -240,7 +240,15 @@ describe("the prism replaces the gradient rather than sitting on it", () => {
   });
 
   it("keeps the artwork above the canvas", () => {
-    expect(card).toContain("top-[66%] z-[1]");
+    // The invariant is the STACKING: the illustration sits at z-[1], above the
+    // prism canvas at z-0. It used to be asserted as the literal "top-[66%]
+    // z-[1]", which broke when Journey earned its own vertical offset -- the
+    // classes are now `absolute z-[1]` with top- chosen per card. Pin the
+    // layer, and pin each card's offset separately, so a real regression still
+    // fails but a legitimate reposition does not.
+    expect(card).toMatch(/pointer-events-none absolute z-\[1\]/);
+    expect(card).toContain("-right-12 top-[66%]");   // routine artwork
+    expect(card).toContain("-right-1 top-[60%]");    // Journey target
   });
 
   it("protects the copy with a scrim over the animation", () => {
