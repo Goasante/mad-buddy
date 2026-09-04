@@ -30,6 +30,33 @@ export async function GET(request: Request) {
   // reconciles.
   const score = await readBuddyScoreSnapshot(admin, auth.user.id);
 
+  // Identity and Journey each counted the same three facts with byte-identical
+  // filters, so a Profile GET issued them twice. Resolve them once here and
+  // pass them to both. Plans are NOT shared: Identity wants completed plans,
+  // Journey wants non-draft ones -- same table, different question.
+  const [muddyResult, momentResult, safeArrivalResult] = await Promise.all([
+    admin
+      .from("friendships")
+      .select("id", { count: "exact", head: true })
+      .or(`user_one_id.eq.${auth.user.id},user_two_id.eq.${auth.user.id}`)
+      .is("ended_at", null),
+    admin
+      .from("moments")
+      .select("id", { count: "exact", head: true })
+      .eq("author_id", auth.user.id)
+      .in("status", ["active", "expired"]),
+    admin
+      .from("safe_arrival_sessions")
+      .select("id", { count: "exact", head: true })
+      .eq("traveller_id", auth.user.id)
+      .eq("status", "completed")
+  ]);
+  const activity = {
+    muddyCount: muddyResult.count ?? 0,
+    momentCount: momentResult.count ?? 0,
+    completedSafeArrivalCount: safeArrivalResult.count ?? 0
+  };
+
   const [{ data: birthDetails }, { data: privacy }, plan, identity, journey] = await Promise.all([
     auth.supabase
       .from("profile_birth_details")
@@ -42,8 +69,8 @@ export async function GET(request: Request) {
       .eq("user_id", auth.user.id)
       .in("field_name", ["birthday", "age", "zodiac"]),
     loadEffectivePlan(admin, auth.user.id),
-    loadProfileIdentitySummary(admin, auth.user.id, "self", { score }),
-    loadJourney(admin, auth.user.id, new Date(), { score })
+    loadProfileIdentitySummary(admin, auth.user.id, "self", { score, activity }),
+    loadJourney(admin, auth.user.id, new Date(), { score, activity })
   ]);
   const dayKey = dateKeyInTimeZone(new Date(), DEFAULT_RECIPIENT_TIMEZONE);
   const birthProfile = birthDetails?.date_of_birth ? deriveBirthProfile(birthDetails.date_of_birth, dayKey) : null;

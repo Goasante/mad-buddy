@@ -59,8 +59,10 @@ describe("the Profile GET resolves one read-only score", () => {
   it("shares that one score with BOTH consumers", () => {
     // If either consumer is left without context it silently loads its own,
     // which is exactly the defect this tranche removes.
-    expect(profileRoute).toMatch(/loadProfileIdentitySummary\([^;]*\{\s*score\s*\}\s*\)/);
-    expect(profileRoute).toMatch(/loadJourney\([^;]*\{\s*score\s*\}\s*\)/);
+    // Matches `{ score }` and `{ score, ... }` alike: the contract is that the
+    // one resolved score reaches both consumers, not that it travels alone.
+    expect(profileRoute).toMatch(/loadProfileIdentitySummary\([^;]*\{\s*score\b[^;]*\}\s*\)/);
+    expect(profileRoute).toMatch(/loadJourney\([^;]*\{\s*score\b[^;]*\}\s*\)/);
   });
 });
 
