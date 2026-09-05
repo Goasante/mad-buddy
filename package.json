@@ -12,7 +12,10 @@
     "preflight:production": "node scripts/preflight.mjs --production",
     "preflight:paystack": "node scripts/preflight.mjs --paystack",
     "test": "vitest run",
-    "seed:staging": "node scripts/seed-staging.mjs"
+    "seed:staging": "node scripts/seed-staging.mjs",
+    "test:local": "vitest run --config vitest.local.config.ts",
+    "test:release": "npm run test && npm run test:local",
+    "seed:local-tests": "node scripts/seed-local-tests.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-secure-storage": "^8.0.0",

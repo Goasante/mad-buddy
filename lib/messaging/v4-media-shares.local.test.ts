@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { actAs, installActingUser, USERS, CONVERSATIONS, EVENT_ID, ABSENT_UUID } from "@/lib/test/acting-user";
 
@@ -105,6 +105,29 @@ beforeAll(async () => {
 
   GROUP_MESSAGE = await seedMessage(CONVERSATIONS.group, USERS.A);
 }, DB_TIMEOUT);
+
+/* THIS SUITE BUILDS AN OUTSIDER'S OWN GROUP, AND MUST TAKE IT AWAY AGAIN.
+ *
+ * "does not deliver into a target the sender does not belong to" creates a
+ * group owned by C so forwarding has somewhere unreachable to aim at. Left
+ * behind, C is no longer a person with no membership anywhere -- and that is
+ * precisely the premise of v4-actions' "refuses every action to an
+ * authenticated but unrelated user". The sibling then failed its IDOR
+ * baseline for reasons that had nothing to do with authorization.
+ *
+ * Scoped to conversations C created, which no fixture ever does. */
+afterAll(async () => {
+  if (!isLocal || !admin) return;
+  const { data: strays } = await admin
+    .from("conversations")
+    .select("id")
+    .eq("created_by", USERS.C);
+  const ids = (strays ?? []).map((row: { id: string }) => row.id);
+  if (ids.length === 0) return;
+  await admin.from("conversation_members").delete().in("conversation_id", ids);
+  await admin.from("messages").delete().in("conversation_id", ids);
+  await admin.from("conversations").delete().in("id", ids);
+});
 
 describeLocal("Retention: Keep and 24h", () => {
   it("reports Keep for a message with no expiry", async () => {
