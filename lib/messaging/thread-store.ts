@@ -29,7 +29,11 @@
 
 import type { ChatMessageView } from "@/lib/messaging/mobile";
 import type { OptimisticMessage } from "@/lib/messaging/optimistic-messages";
-import type { CachedThread, ReplyContextMap } from "@/lib/messaging/thread-cache";
+import type {
+  CachedConversationControls,
+  CachedThread,
+  ReplyContextMap
+} from "@/lib/messaging/thread-cache";
 
 const DB_NAME = "mad-buddy:messaging";
 const DB_VERSION = 1;
@@ -57,6 +61,7 @@ type StoredThread = {
   messages: ChatMessageView[];
   replyContexts: ReplyContextMap;
   optimistic: OptimisticMessage[];
+  controls?: CachedConversationControls;
   updatedAt: number;
 };
 
@@ -151,6 +156,7 @@ export async function loadPersistedThread(
     messages: stored.messages ?? [],
     replyContexts: stored.replyContexts ?? {},
     optimistic: stored.optimistic ?? [],
+    controls: stored.controls,
     updatedAt: stored.updatedAt ?? 0
   };
 }
@@ -173,6 +179,7 @@ export async function savePersistedThread(
        the app was closed is still visible -- and still retryable -- when it is
        reopened, rather than silently disappearing with the tab. */
     optimistic: thread.optimistic,
+    controls: thread.controls,
     updatedAt: thread.updatedAt || Date.now()
   };
   await transact("readwrite", (store) => store.put(record));

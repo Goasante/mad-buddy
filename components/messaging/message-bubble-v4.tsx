@@ -263,7 +263,13 @@ export function MessageBubbleV4({
             {!message.deleted && message.messageType === "poll" && poll ? (
               <ChatPollCard poll={poll} mine={message.isMine} onChanged={onPollChanged} />
             ) : null}
-            {message.text ? <SafeMessageText text={message.deleted ? DELETED_MESSAGE_PLACEHOLDER : message.text} mentions={message.mentions} /> : null}
+            {/* A tombstone carries no text -- the projection nulls it -- so the deleted
+                state must be checked BEFORE message.text, or the placeholder never renders. */}
+            {message.deleted ? (
+              <SafeMessageText text={DELETED_MESSAGE_PLACEHOLDER} />
+            ) : message.text ? (
+              <SafeMessageText text={message.text} mentions={message.mentions} />
+            ) : null}
             {message.editedAt && !message.deleted ? <span className={cn("ml-1 text-xs", message.isMine ? "text-white/55" : "text-muted-foreground")}>edited</span> : null}
             <div className={cn("mt-1 flex items-center justify-end gap-1 text-xs font-normal", message.isMine ? "text-white/55" : "text-muted-foreground/75")}>
               {saved ? <Bookmark className="h-3 w-3 fill-current" aria-label="Saved" /> : null}

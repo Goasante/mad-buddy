@@ -4,7 +4,11 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["lib/**/*.test.ts"]
+    include: ["lib/**/*.test.ts"],
+    /* DB-backed suites live in vitest.local.config.ts. They share one local
+       database and one globalThis acting identity, so running them in these
+       parallel workers is a correctness problem, not a speed one. */
+    exclude: ["**/node_modules/**", "**/dist/**", "lib/**/*.local.test.ts"]
   },
   resolve: {
     alias: {

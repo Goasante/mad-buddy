@@ -208,7 +208,37 @@ export async function getUltimateConversationStateAction(
     ];
   });
 
-  const pollRows = (pollsResult.data ?? []) as Array<Record<string, unknown>>;
+  /* A poll is readable only while its parent message is alive.
+   *
+   * chat_polls was built around a hard delete -- the poll id IS the message id,
+   * so `on delete cascade` used to revoke the payload. Delete-for-everyone now
+   * tombstones the message instead (deleted_at set, text nulled) and the row
+   * survives by design, so that cascade never fires. Loading polls by
+   * conversation_id alone therefore kept serving a deleted poll's question,
+   * option labels and votes. This client is the ADMIN client and bypasses RLS,
+   * so the parent check has to happen here as well as in the policies.
+   *
+   * Filtering the poll ids revokes options and votes with them: both are
+   * fetched by `in(pollIds)` below. */
+  const candidatePolls = (pollsResult.data ?? []) as Array<Record<string, unknown>>;
+  const candidateIds = candidatePolls
+    .map((row) => (typeof row.message_id === "string" ? row.message_id : null))
+    .filter((id): id is string => Boolean(id));
+  const liveParentIds = new Set<string>();
+  if (candidateIds.length > 0) {
+    const { data: liveParents } = await db
+      .from("messages")
+      .select("id")
+      .in("id", candidateIds)
+      .is("deleted_at", null)
+      .neq("status", "deleted");
+    for (const row of (liveParents ?? []) as Array<Record<string, unknown>>) {
+      if (typeof row.id === "string") liveParentIds.add(row.id);
+    }
+  }
+  const pollRows = candidatePolls.filter(
+    (row) => typeof row.message_id === "string" && liveParentIds.has(row.message_id)
+  );
   const pollIds = pollRows
     .map((row) => (typeof row.message_id === "string" ? row.message_id : null))
     .filter((id): id is string => Boolean(id));

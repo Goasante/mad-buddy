@@ -194,19 +194,33 @@ export async function updateProfile(
     (previousPrivacyResult.data ?? []).map((row) => [row.field_name, row.visibility])
   );
 
+  /* UPDATE, not UPSERT.
+   *
+   * Editing a profile is not creating one. The upsert this replaced needed
+   * table-level INSERT on `profiles` -- PostgreSQL requires it for ON CONFLICT
+   * DO UPDATE even when every written column is granted individually -- so a
+   * browser-role save failed 42501 and the bio silently never changed. Buying
+   * that back with a table-wide INSERT grant would hand every signed-in person
+   * authority over columns the owner policy does not scope (trusted_member_since
+   * is granted by staff review; is_onboarded and deleted_at are written only by
+   * the admin client), which is exactly what the column grants exist to prevent.
+   *
+   * Creating a missing profile is already somebody else's job:
+   * ensureProfileForUser() does it through the admin client on dashboard load,
+   * OAuth sign-in and the friend paths. Bootstrap creates, edit updates.
+   *
+   * user_id is deliberately absent from the payload -- it is the row's identity
+   * and the owner filter, never an editable field. */
   const { data: savedProfile, error } = await rlsClient
     .from("profiles")
-    .upsert(
-      {
-        user_id: userId,
-        full_name: parsed.data.fullName,
-        username: parsed.data.username,
-        username_normalized: parsed.data.username,
-        bio: parsed.data.bio ?? null,
-        mood_status: parsed.data.moodStatus ?? null
-      },
-      { onConflict: "user_id" }
-    )
+    .update({
+      full_name: parsed.data.fullName,
+      username: parsed.data.username,
+      username_normalized: parsed.data.username,
+      bio: parsed.data.bio ?? null,
+      mood_status: parsed.data.moodStatus ?? null
+    })
+    .eq("user_id", userId)
     .select("user_id")
     .maybeSingle();
 

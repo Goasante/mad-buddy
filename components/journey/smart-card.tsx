@@ -312,19 +312,19 @@ export function SmartCardHero({
         // Hidden entirely on the prism card: the animation IS the visual
         // interest there, and a cut-out illustration on top of it makes two
         // focal points competing in the same corner.
-        // The Journey target is pulled back in from the shared -right-12
-        // bleed. Measured at 168px with that offset, only 68.5% of the
-        // artwork stayed inside the card and the crop fell exactly across the
-        // arrow -- removing the one element that carries "aim at a
-        // destination", which is the whole point of the early state. A
-        // smaller, less-bled target keeps the arrow and the rings intact.
-        // Other illustrations keep the original framing: they are abstract
-        // enough that a bleed costs them nothing.
-        className={`pointer-events-none absolute top-[66%] z-[1] -translate-y-1/2 opacity-90 ${
-          journeyStage ? "-right-5" : "-right-12"
+        //
+        // Journey is intentionally different from the routine artwork frame.
+        // The previous 8.25rem target read like a small icon floating in an
+        // otherwise empty right half. Use the full prominent 168px footprint
+        // and keep almost all of it inside the card: the rings and arrow stay
+        // intact, while the artwork finally carries enough visual weight to
+        // balance the copy column. Routine illustrations retain their original
+        // bleed because their crop is decorative rather than semantic.
+        className={`pointer-events-none absolute z-[1] -translate-y-1/2 opacity-90 ${
+          journeyStage ? "-right-1 top-[60%]" : "-right-12 top-[66%]"
         } ${showPrism ? "hidden" : ""} ${
           journeyStage
-            ? "h-[8.25rem] w-[8.25rem]"
+            ? "h-[10.5rem] w-[10.5rem]"
             : prominent
               ? "h-[10.5rem] w-[10.5rem]"
               : "h-[9rem] w-[9rem]"

@@ -28,6 +28,28 @@
 import { registerUserScopedMemoryStore } from "@/lib/auth/client-session";
 import type { ChatMessageView } from "@/lib/messaging/mobile";
 import type { OptimisticMessage } from "@/lib/messaging/optimistic-messages";
+import type {
+  ConversationChatSettingsView,
+  ConversationUserPreferencesView
+} from "@/lib/messaging/ultimate-types";
+
+export type CachedViewerRole = "owner" | "admin" | "moderator" | "member" | null;
+
+/**
+ * Lightweight, durable presentation state for controls that should already be
+ * visible when Settings opens. Live presence, pins, polls and saved-message
+ * collections deliberately stay out of this record: they are ephemeral or
+ * potentially large and continue to reconcile through their existing paths.
+ *
+ * `viewerRole` is presentation only. Callers must obtain a fresh role before
+ * exposing privileged controls or authorising a mutation.
+ */
+export type CachedConversationControls = {
+  settings: ConversationChatSettingsView;
+  preferences: ConversationUserPreferencesView;
+  viewerRole: CachedViewerRole;
+  updatedAt: number;
+};
 
 export type ReplyContextMap = Record<
   string,
@@ -46,6 +68,8 @@ export type CachedThread = {
    * destroy somebody's unsent message.
    */
   optimistic: OptimisticMessage[];
+  /** Small settings/preferences snapshot; never an authorization source. */
+  controls?: CachedConversationControls;
   /** When the server rows were last reconciled. Drives staleness display only. */
   updatedAt: number;
 };
@@ -221,6 +245,7 @@ export function writeThreadMessages(
     messages,
     replyContexts: replyContexts ?? existing?.replyContexts ?? {},
     optimistic: existing?.optimistic ?? [],
+    controls: existing?.controls,
     updatedAt: Date.now()
   });
 }
@@ -235,6 +260,23 @@ export function writeThreadReplyContexts(
   const existing = state.threads.get(conversationId);
   if (!existing) return;
   put(conversationId, { ...existing, replyContexts });
+}
+
+/** Stores the bounded control snapshot without disturbing the message tail. */
+export function writeThreadControls(
+  ownerId: string | null,
+  conversationId: string,
+  controls: CachedConversationControls
+): void {
+  if (!ownedBy(ownerId)) return;
+  const existing = state.threads.get(conversationId);
+  put(conversationId, {
+    messages: existing?.messages ?? [],
+    replyContexts: existing?.replyContexts ?? {},
+    optimistic: existing?.optimistic ?? [],
+    controls,
+    updatedAt: existing?.updatedAt ?? 0
+  });
 }
 
 /**
@@ -254,6 +296,7 @@ export function writeThreadOptimistic(
     messages: existing?.messages ?? [],
     replyContexts: existing?.replyContexts ?? {},
     optimistic,
+    controls: existing?.controls,
     updatedAt: existing?.updatedAt ?? 0
   });
 }
@@ -276,17 +319,34 @@ export function patchThreadMessage(
   const existing = state.threads.get(conversationId);
   if (!existing) return null;
 
-  const index = existing.messages.findIndex((row) => row.id === message.id);
-  const next =
-    index >= 0
-      ? existing.messages.map((row) => (row.id === message.id ? message : row))
-      : [...existing.messages, message].sort((a, b) => {
-          const byTime = Date.parse(a.createdAt) - Date.parse(b.createdAt);
-          return byTime !== 0 ? byTime : a.id.localeCompare(b.id);
-        });
+  const next = mergeThreadMessage(existing.messages, message);
 
   put(conversationId, { ...existing, messages: next, updatedAt: Date.now() });
   return next;
+}
+
+/** Pure merge used by both the cache and the selected-thread React state. */
+export function mergeThreadMessage(
+  messages: ChatMessageView[],
+  message: ChatMessageView
+): ChatMessageView[] {
+  const index = messages.findIndex((row) => row.id === message.id);
+  return index >= 0
+    ? messages.map((row) => (row.id === message.id ? message : row))
+    : [...messages, message].sort((a, b) => {
+        const byTime = Date.parse(a.createdAt) - Date.parse(b.createdAt);
+        return byTime !== 0 ? byTime : a.id.localeCompare(b.id);
+      });
+}
+
+/** Applies several independently projected Realtime rows deterministically. */
+export function mergeThreadPatches(
+  messages: ChatMessageView[],
+  patches: Iterable<ChatMessageView>
+): ChatMessageView[] {
+  let merged = messages;
+  for (const patch of patches) merged = mergeThreadMessage(merged, patch);
+  return merged;
 }
 
 /** Test/diagnostic view. Never used to make product decisions. */

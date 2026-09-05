@@ -27,9 +27,12 @@ import {
   deleteMessageAction,
   editMessageAction,
   getConversationsAction,
+  getMessageAction,
+  getMessageByClientMessageIdAction,
   getMessageableFriendsAction,
   getMessagesAction,
   getMentionCandidatesAction,
+  getRecentMessagesAction,
   markConversationReadAction,
   muteConversationAction,
   openDirectConversationAction,
@@ -71,6 +74,7 @@ import type { ChatMessageView, ConversationView, MessageableFriend } from "@/lib
 import type { MentionCandidate } from "@/lib/messaging/mentions";
 import {
   discardOptimistic,
+  markAwaitingConfirmation,
   markFailed,
   markRetrying,
   pruneConfirmed,
@@ -78,12 +82,18 @@ import {
 } from "@/lib/messaging/optimistic-messages";
 import {
   bindThreadCacheOwner,
+  type CachedConversationControls,
   hydrateThreadFromStore,
+  mergeThreadMessage,
+  mergeThreadPatches,
+  patchThreadMessage,
   readThread,
   writeThreadMessages,
+  writeThreadControls,
   writeThreadOptimistic,
   writeThreadReplyContexts
 } from "@/lib/messaging/thread-cache";
+import { selectWarmConversations, shouldRefreshWarmThread } from "@/lib/messaging/thread-warmup";
 import type { UltimateConversationState } from "@/lib/messaging/ultimate-types";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
@@ -120,6 +130,7 @@ const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 /** One shared empty array, so a thread with nothing pending keeps a stable
  *  identity across renders instead of allocating a new [] every time. */
 const EMPTY_OPTIMISTIC: OptimisticMessage[] = [];
+const SEND_CONFIRMATION_DELAYS_MS = [2_000, 8_000, 30_000] as const;
 
 function isConversationId(value: string | null): value is string {
   return Boolean(value) && CONVERSATION_ID.test(value as string);
@@ -217,6 +228,10 @@ export function MessagesPageV4({
   const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
   const [ultimate, setUltimate] = useState<UltimateConversationState | null>(null);
   const [viewerRole, setViewerRole] = useState<ViewerRole>(null);
+  const [controlState, setControlState] = useState<CachedConversationControls | null>(() => {
+    const id = isConversationId(requestedConversationId) ? requestedConversationId : null;
+    return id ? readThread(viewerId, id)?.controls ?? null : null;
+  });
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterId>("all");
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -255,12 +270,16 @@ export function MessagesPageV4({
 
   /* Retry drafts carry their own conversationId so a failed send can be
      retried into the thread it came from, not the one currently on screen. */
-  const retryDraftsRef = useRef<Map<string, { conversationId: string; clientMessageId: string; text: string | null; kind: "text" | "voice"; durationSeconds: number | null }>>(new Map());
+  const retryDraftsRef = useRef<Map<string, { conversationId: string; clientMessageId: string; text: string | null; kind: "text" | "voice"; durationSeconds: number | null; mediaId?: string }>>(new Map());
   const threadRef = useRef<HTMLDivElement | null>(null);
   const nearBottomRef = useRef(true);
   const initialScrollPendingRef = useRef(false);
   const mountedRef = useRef(true);
   const loadRequestIdRef = useRef(0);
+  const controlLoadedFromServerRef = useRef(0);
+  const selectedIdRef = useRef(selectedId);
+  const viewerRoleRef = useRef<ViewerRole>(viewerRole);
+  const confirmationTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   /* The cache is a module singleton now, not component state -- that is the
      whole point of M1. Held in a ref only so the stable useCallbacks below can
      read the current viewer without taking it as a dependency and tearing down
@@ -272,18 +291,50 @@ export function MessagesPageV4({
   useEffect(() => {
     viewerIdRef.current = viewerId;
   }, [viewerId]);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+  useEffect(() => {
+    viewerRoleRef.current = viewerRole;
+  }, [viewerRole]);
+  useEffect(() => {
+    // Rebuild retry payloads restored from IndexedDB/module cache. The local
+    // row carries the original idempotency key, so retry remains duplicate-safe.
+    for (const [conversationId, outgoing] of Object.entries(optimisticByConversation)) {
+      for (const message of outgoing) {
+        if (retryDraftsRef.current.has(message.clientMessageId)) continue;
+        retryDraftsRef.current.set(message.clientMessageId, {
+          conversationId,
+          clientMessageId: message.clientMessageId,
+          text: message.text,
+          kind: message.kind,
+          durationSeconds: message.durationSeconds,
+          mediaId: message.mediaId
+        });
+      }
+    }
+  }, [optimisticByConversation]);
   /* Which load request has already been answered by the SERVER.
      The device read and the network request race by design -- whichever
      returns first paints. This records that the authoritative one landed, so a
      slow disk read arriving afterwards cannot overwrite fresh rows with stale
      ones. */
   const loadedFromServerRef = useRef(0);
+  const warmInFlightRef = useRef<Map<string, Promise<void>>>(new Map());
+  /* Server-projected Realtime rows that landed while device/network hydration
+     was pending. A slower snapshot must merge these rather than erase them. */
+  const realtimePatchesRef = useRef<Map<string, Map<string, ChatMessageView>>>(new Map());
 
   useImmersiveWhile(Boolean(selectedId));
 
   useEffect(() => {
+    const timers = confirmationTimersRef.current;
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
   }, []);
 
   const syncConversations = useCallback(async () => {
@@ -304,10 +355,53 @@ export function MessagesPageV4({
     }
   }, []);
 
+  /**
+   * Makes an inbox row local before it is tapped. Device storage is checked
+   * first; the fixed 32-message server tail is used only when the inbox says
+   * the local tail is missing or behind.
+   */
+  const warmConversation = useCallback((conversation: ConversationView): Promise<void> => {
+    const existing = warmInFlightRef.current.get(conversation.id);
+    if (existing) return existing;
+
+    const task = (async () => {
+      const ownerId = viewerIdRef.current;
+      const memory = readThread(ownerId, conversation.id);
+      const local = memory ?? await hydrateThreadFromStore(ownerId, conversation.id);
+      if (!shouldRefreshWarmThread(local, conversation.lastMessageAt)) return;
+      const loaded = await getRecentMessagesAction(conversation.id);
+      // The account may have changed while storage/network was pending.
+      if (viewerIdRef.current !== ownerId) return;
+      // A preview timestamp plus an empty warm response is ambiguous (offline,
+      // auth failure, or a transient server problem). Keep the last local copy;
+      // the explicit open path will authoritatively clear revoked content.
+      if (conversation.lastMessageAt && loaded.length === 0) return;
+      writeThreadMessages(ownerId, conversation.id, loaded);
+    })().catch(() => {
+      // Warming is opportunistic. A tap still has the canonical load path.
+    }).finally(() => {
+      warmInFlightRef.current.delete(conversation.id);
+    });
+
+    warmInFlightRef.current.set(conversation.id, task);
+    return task;
+  }, []);
+
   const refreshUltimate = useCallback(async (conversationId: string) => {
     try {
       const next = await getUltimateConversationStateAction(conversationId);
-      if (mountedRef.current) setUltimate(next);
+      if (!mountedRef.current || selectedIdRef.current !== conversationId) return;
+      setUltimate(next);
+      if (next) {
+        const controls: CachedConversationControls = {
+          settings: next.settings,
+          preferences: next.preferences,
+          viewerRole: viewerRoleRef.current,
+          updatedAt: Date.now()
+        };
+        setControlState(controls);
+        writeThreadControls(viewerIdRef.current, conversationId, controls);
+      }
     } catch {
       // New schema may not yet be applied in a preview. V4 degrades to core chat.
     }
@@ -320,33 +414,43 @@ export function MessagesPageV4({
         getReplyContextsAction(conversationId).catch(() => ({}))
       ]);
       if (!mountedRef.current) return;
+      const patches = realtimePatchesRef.current.get(conversationId);
+      const reconciled = loaded.length === 0
+        ? loaded
+        : mergeThreadPatches(loaded, patches?.values() ?? []);
+      realtimePatchesRef.current.delete(conversationId);
+      settleCanonicalOptimistic(conversationId, reconciled);
       setMessages((current) => {
         if (countIncoming && !nearBottomRef.current) {
           const known = new Set(current.map((message) => message.id));
-          const incoming = loaded.filter((message) => !known.has(message.id) && !message.isMine).length;
+          const incoming = reconciled.filter((message) => !known.has(message.id) && !message.isMine).length;
           if (incoming > 0) setUnseenIncoming((count) => count + incoming);
         }
-        return loaded;
+        return reconciled;
       });
       const nextReplies = replies as Record<string, ReplyContext>;
       setReplyContexts(nextReplies);
-      writeThreadMessages(viewerIdRef.current, conversationId, loaded, nextReplies);
+      writeThreadMessages(viewerIdRef.current, conversationId, reconciled, nextReplies);
     } catch (error) {
       setFeedback(failureMessage(error));
     }
     /* setFeedback is referentially stable by contract (useTransientFeedback
        wraps it in useCallback), so listing it cannot retrigger this. */
+  // The confirmation helper reads account/thread state through refs and the
+  // stable optimistic updater; subscribing this loader to its render identity
+  // would recreate the critical open callback on every paint.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setFeedback]);
 
   const loadConversation = useCallback(async (conversationId: string) => {
     const requestId = ++loadRequestIdRef.current;
     const cached = readThread(viewerIdRef.current, conversationId);
-    const hasCachedMessages = Boolean(cached && cached.messages.length > 0);
+    const hasCachedThread = Boolean(cached);
     /* THE INSTANT OPEN. A cached thread is the UI's source, not merely an
        optimization: it paints now and the network reconciles underneath it. The
        blocking spinner is reserved for a genuine first load -- a conversation
        this session has never opened. */
-    setLoadingMessages(!hasCachedMessages);
+    setLoadingMessages(!hasCachedThread);
     setFeedback("");
     setUnseenIncoming(0);
     nearBottomRef.current = true;
@@ -355,6 +459,9 @@ export function MessagesPageV4({
     if (cached) {
       setMessages(cached.messages);
       setReplyContexts(cached.replyContexts);
+      setOptimisticByConversation((current) => cached.optimistic.length > 0
+        ? { ...current, [conversationId]: cached.optimistic }
+        : current);
     } else {
       /* Nothing in memory: this is a fresh app launch or a refresh. Try the
          device before falling back to the spinner. Deliberately not awaited
@@ -365,8 +472,17 @@ export function MessagesPageV4({
         if (!stored || !mountedRef.current || requestId !== loadRequestIdRef.current) return;
         // The network may already have answered; never overwrite fresher rows.
         if (loadedFromServerRef.current === requestId) return;
-        setMessages(stored.messages);
+        const patches = realtimePatchesRef.current.get(conversationId);
+        const hydrated = mergeThreadPatches(stored.messages, patches?.values() ?? []);
+        setMessages(hydrated);
         setReplyContexts(stored.replyContexts);
+        if (stored.controls && controlLoadedFromServerRef.current !== requestId) {
+          setControlState(stored.controls);
+        }
+        setOptimisticByConversation((current) => stored.optimistic.length > 0
+          ? { ...current, [conversationId]: stored.optimistic }
+          : current);
+        writeThreadMessages(viewerIdRef.current, conversationId, hydrated, stored.replyContexts);
         setLoadingMessages(false);
       });
     }
@@ -382,8 +498,14 @@ export function MessagesPageV4({
          and these are freshly signed. The cached copy was only ever the first
          paint -- this is the truth it is reconciled to. */
       loadedFromServerRef.current = requestId;
-      setMessages(loaded);
-      writeThreadMessages(viewerIdRef.current, conversationId, loaded);
+      const patches = realtimePatchesRef.current.get(conversationId);
+      const reconciled = loaded.length === 0
+        ? loaded
+        : mergeThreadPatches(loaded, patches?.values() ?? []);
+      realtimePatchesRef.current.delete(conversationId);
+      settleCanonicalOptimistic(conversationId, reconciled);
+      setMessages(reconciled);
+      writeThreadMessages(viewerIdRef.current, conversationId, reconciled);
       setLoadingMessages(false);
 
       void Promise.all([
@@ -398,6 +520,17 @@ export function MessagesPageV4({
         setReplyContexts(nextReplies);
         setUltimate(ultimateState);
         setViewerRole(role as ViewerRole);
+        if (ultimateState) {
+          const controls: CachedConversationControls = {
+            settings: ultimateState.settings,
+            preferences: ultimateState.preferences,
+            viewerRole: role as ViewerRole,
+            updatedAt: Date.now()
+          };
+          controlLoadedFromServerRef.current = requestId;
+          setControlState(controls);
+          writeThreadControls(viewerIdRef.current, conversationId, controls);
+        }
         /* Only the reply metadata is written here. Writing `loaded` again
            would clobber any newer rows a Realtime patch had already applied
            while this slower auxiliary request was still in flight. */
@@ -418,6 +551,8 @@ export function MessagesPageV4({
     } finally {
       if (mountedRef.current && requestId === loadRequestIdRef.current) setLoadingMessages(false);
     }
+  // See refreshMessages above: canonical settlement is intentionally ref-fed.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setFeedback]);
 
   useEffect(() => {
@@ -426,8 +561,31 @@ export function MessagesPageV4({
   }, [syncConversations, syncInboxPreferences]);
 
   useEffect(() => {
+    const candidates = selectWarmConversations(conversations, selectedId);
+    let cancelled = false;
+    // Hydrate every bounded candidate in parallel so a slow network miss for
+    // row one cannot delay a durable hit for row two. Network warming remains
+    // sequential below to cap radio/database pressure.
+    void (async () => {
+      const ownerId = viewerIdRef.current;
+      await Promise.all(candidates.map((conversation) =>
+        hydrateThreadFromStore(ownerId, conversation.id)
+      ));
+      for (const conversation of candidates) {
+        if (cancelled) return;
+        await warmConversation(conversation);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [conversations, selectedId, warmConversation]);
+
+  useEffect(() => {
     if (!isConversationId(requestedConversationId)) return;
+    const cached = readThread(viewerIdRef.current, requestedConversationId);
     setSelectedId(requestedConversationId);
+    setControlState(cached?.controls ?? null);
+    setViewerRole(null);
+    setUltimate(null);
     void loadConversation(requestedConversationId);
   }, [loadConversation, requestedConversationId]);
 
@@ -471,9 +629,42 @@ export function MessagesPageV4({
       refreshThread();
       void refreshUltimate(selectedId);
     };
+    const patchMessage = (messageId: string) => {
+      void getMessageAction(selectedId, messageId).then((projected) => {
+        if (disposed || !mountedRef.current) return;
+        if (!projected) {
+          // Hard delete, hide, or revoked access: only the authoritative full
+          // response can distinguish these safely.
+          refreshThread();
+          return;
+        }
+        const byMessage = realtimePatchesRef.current.get(selectedId) ?? new Map<string, ChatMessageView>();
+        byMessage.set(projected.id, projected);
+        realtimePatchesRef.current.set(selectedId, byMessage);
+        setMessages((current) => {
+          const next = mergeThreadMessage(current, projected);
+          if (!nearBottomRef.current && !current.some((row) => row.id === projected.id) && !projected.isMine) {
+            setUnseenIncoming((count) => count + 1);
+          }
+          return next;
+        });
+        patchThreadMessage(viewerIdRef.current, selectedId, projected);
+        if (projected.clientMessageId) {
+          cancelSendConfirmation(projected.clientMessageId);
+          updateOptimistic(selectedId, (current) => discardOptimistic(current, projected.clientMessageId!));
+        }
+        void syncConversations();
+        void markConversationReadAction(selectedId).catch(() => ({ ok: false, message: "" }));
+      }).catch(refreshThread);
+    };
     const channel = supabase
       .channel(`chats-v4:${selectedId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `conversation_id=eq.${selectedId}` }, refreshThread)
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `conversation_id=eq.${selectedId}` }, (payload) => {
+        const record = payload.eventType === "DELETE" ? payload.old : payload.new;
+        const messageId = typeof record?.id === "string" ? record.id : null;
+        if (messageId) patchMessage(messageId);
+        else refreshThread();
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_presence", filter: `conversation_id=eq.${selectedId}` }, () => void refreshUltimate(selectedId))
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_message_pins", filter: `conversation_id=eq.${selectedId}` }, () => void refreshUltimate(selectedId))
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_polls", filter: `conversation_id=eq.${selectedId}` }, refreshPoll)
@@ -486,6 +677,9 @@ export function MessagesPageV4({
       if (timer) clearTimeout(timer);
       void supabase.removeChannel(channel);
     };
+  // The settlement callbacks are ref-fed and must not churn the Realtime
+  // subscription each time optimistic state paints.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshMessages, refreshUltimate, selectedId, syncConversations]);
 
   function scrollToBottom(behavior: ScrollBehavior = "smooth") {
@@ -508,7 +702,21 @@ export function MessagesPageV4({
 
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
   const selectedContext = selected ? conversationContext(selected) : { subtitle: null, shared: false };
-  const isGroup = selected?.kind === "group";
+  /* MULTI-PARTY, not the literal 'group' type (BETA-012).
+   *
+   * `kind` is the conversation_type enum: direct | group | plan | event |
+   * safe_arrival. Testing `=== "group"` made every Plan chat, Event Room and
+   * Safe Arrival thread claim to be a two-person conversation, and the sender
+   * identity block in MessageBubbleV4 is gated on `isGroup` -- so in exactly
+   * those threads incoming messages rendered with no avatar and no name, and
+   * the only way to tell Ama from Kojo was to guess from message order.
+   *
+   * The correct question is "are there more than two people here", and its
+   * answer is "this is not a direct conversation". The composer three hundred
+   * lines below already asked it that way (`selected.kind !== "direct"`), so
+   * one screen held two different definitions of a group and only the half
+   * that renders other people's names had the wrong one. */
+  const isGroup = Boolean(selected) && selected?.kind !== "direct";
 
   const displayConversations = useMemo(() => conversations.map((conversation) => {
     const pref = inboxPreferences[conversation.id];
@@ -569,6 +777,9 @@ export function MessagesPageV4({
     setSelectedId(conversationId);
     setMessages(cached?.messages ?? []);
     setUltimate(null);
+    setControlState(cached?.controls ?? null);
+    // Cached roles are never used to reveal privileged controls. The fresh
+    // role request below remains the authorization presentation boundary.
     setViewerRole(null);
     setReplyContexts(cached?.replyContexts ?? {});
     setReplyingToId(null);
@@ -587,6 +798,7 @@ export function MessagesPageV4({
     setSelectedId(null);
     setMessages([]);
     setUltimate(null);
+    setControlState(null);
     setViewerRole(null);
     setReplyContexts({});
     setReplyingToId(null);
@@ -609,6 +821,27 @@ export function MessagesPageV4({
         ...patch
       }
     }));
+  }
+
+  function patchControlState(
+    conversationId: string,
+    patch: {
+      settings?: Partial<CachedConversationControls["settings"]>;
+      preferences?: Partial<CachedConversationControls["preferences"]>;
+    }
+  ) {
+    if (selectedIdRef.current !== conversationId) return;
+    setControlState((current) => {
+      if (!current) return current;
+      const next: CachedConversationControls = {
+        ...current,
+        settings: { ...current.settings, ...patch.settings },
+        preferences: { ...current.preferences, ...patch.preferences },
+        updatedAt: Date.now()
+      };
+      writeThreadControls(viewerIdRef.current, conversationId, next);
+      return next;
+    });
   }
 
   function markUnread(conversation: ConversationView) {
@@ -640,11 +873,21 @@ export function MessagesPageV4({
     });
   }
 
+  async function setMuteHours(conversation: ConversationView, hours: number) {
+    const previous = conversation.muted;
+    const next = hours > 0;
+    setConversations((current) => current.map((row) => row.id === conversation.id ? { ...row, muted: next } : row));
+    const result = await muteConversationAction(conversation.id, hours).catch(() => ({ ok: false, message: "Mute could not be updated." }));
+    if (!result.ok) {
+      setConversations((current) => current.map((row) => row.id === conversation.id ? { ...row, muted: previous } : row));
+      setFeedback(result.message);
+    }
+    return result;
+  }
+
   function toggleMute(conversation: ConversationView) {
     startTransition(async () => {
-      const result = await muteConversationAction(conversation.id, conversation.muted ? 0 : 8).catch(() => ({ ok: false, message: "Mute could not be updated." }));
-      if (!result.ok) { setFeedback(result.message); return; }
-      setConversations((current) => current.map((row) => row.id === conversation.id ? { ...row, muted: !conversation.muted } : row));
+      await setMuteHours(conversation, conversation.muted ? 0 : 8);
     });
   }
 
@@ -687,9 +930,72 @@ export function MessagesPageV4({
     []
   );
 
+  function confirmationKey(clientMessageId: string) {
+    return clientMessageId;
+  }
+
+  function cancelSendConfirmation(clientMessageId: string) {
+    const key = confirmationKey(clientMessageId);
+    const timer = confirmationTimersRef.current.get(key);
+    if (timer) clearTimeout(timer);
+    confirmationTimersRef.current.delete(key);
+  }
+
+  function settleCanonicalOptimistic(conversationId: string, canonical: ChatMessageView[]) {
+    const outgoing = readThread(viewerIdRef.current, conversationId)?.optimistic ?? [];
+    if (outgoing.length === 0) return;
+    const confirmed = new Set(
+      canonical.map((message) => message.clientMessageId).filter((id): id is string => Boolean(id))
+    );
+    const matched = outgoing.filter((message) => confirmed.has(message.clientMessageId));
+    if (matched.length === 0) return;
+    for (const message of matched) cancelSendConfirmation(message.clientMessageId);
+    updateOptimistic(conversationId, (current) => pruneConfirmed(current, canonical));
+  }
+
+  function scheduleSendConfirmation(conversationId: string, clientMessageId: string, attempt = 0) {
+    const key = confirmationKey(clientMessageId);
+    if (confirmationTimersRef.current.has(key)) return;
+    const delay = SEND_CONFIRMATION_DELAYS_MS[attempt];
+    if (delay === undefined) {
+      updateOptimistic(conversationId, (current) => markFailed(current, clientMessageId));
+      return;
+    }
+    const timer = setTimeout(() => {
+      confirmationTimersRef.current.delete(key);
+      void getMessageByClientMessageIdAction(conversationId, clientMessageId)
+        .then((projected) => {
+          if (!mountedRef.current) return;
+          if (projected) {
+            patchThreadMessage(viewerIdRef.current, conversationId, projected);
+            if (selectedIdRef.current === conversationId) {
+              setMessages((current) => mergeThreadMessage(current, projected));
+            }
+            updateOptimistic(conversationId, (current) => discardOptimistic(current, clientMessageId));
+            return;
+          }
+          scheduleSendConfirmation(conversationId, clientMessageId, attempt + 1);
+        })
+        .catch(() => scheduleSendConfirmation(conversationId, clientMessageId, attempt + 1));
+    }, delay);
+    confirmationTimersRef.current.set(key, timer);
+  }
+
+  useEffect(() => {
+    for (const [conversationId, outgoing] of Object.entries(optimisticByConversation)) {
+      for (const message of outgoing) {
+        if (message.status === "pending" && message.confirmationState === "unknown") {
+          scheduleSendConfirmation(conversationId, message.clientMessageId);
+        }
+      }
+    }
+  // Scheduling is idempotent per clientMessageId; its inputs live in refs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [optimisticByConversation]);
+
   function addOptimistic(
     conversationId: string,
-    draft: { clientMessageId: string; text: string | null; kind: "text" | "voice"; durationSeconds: number | null }
+    draft: { clientMessageId: string; text: string | null; kind: "text" | "voice"; durationSeconds: number | null; mediaId?: string }
   ) {
     retryDraftsRef.current.set(draft.clientMessageId, { ...draft, conversationId });
     updateOptimistic(conversationId, (current) => [
@@ -698,10 +1004,16 @@ export function MessagesPageV4({
     ]);
   }
 
-  function settleOptimistic(conversationId: string, clientMessageId: string, outcome: "sent" | "failed") {
+  function settleOptimistic(conversationId: string, clientMessageId: string, outcome: "sent" | "failed" | "pending") {
     updateOptimistic(conversationId, (current) =>
-      outcome === "failed" ? markFailed(current, clientMessageId) : markRetrying(current, clientMessageId)
+      outcome === "failed"
+        ? markFailed(current, clientMessageId)
+        : outcome === "pending"
+          ? markAwaitingConfirmation(current, clientMessageId)
+          : markRetrying(current, clientMessageId)
     );
+    if (outcome === "pending") scheduleSendConfirmation(conversationId, clientMessageId);
+    else cancelSendConfirmation(clientMessageId);
   }
 
   function retryOptimistic(clientMessageId: string) {
@@ -712,7 +1024,7 @@ export function MessagesPageV4({
        after the person has moved on, and retrying it must not post into the
        chat they happen to be looking at. */
     const conversationId = draft.conversationId;
-    if (draft.kind === "voice") {
+    if (draft.kind === "voice" && !draft.mediaId) {
       setFeedback("That recording could not be uploaded. Record it again so Mad Buddy can verify the audio before sending.");
       updateOptimistic(conversationId, (current) => discardOptimistic(current, clientMessageId));
       return;
@@ -722,7 +1034,7 @@ export function MessagesPageV4({
       /* The SAME clientMessageId. The server's unique (sender_id,
          client_message_id) makes a retry of a send that actually landed return
          the original message instead of posting a second one. */
-      const result = await sendMessageAction({ conversationId, text: draft.text ?? "", clientMessageId }).catch(() => ({ ok: false, message: "Could not retry." }));
+      const result = await sendMessageAction({ conversationId, text: draft.text ?? "", mediaId: draft.mediaId, clientMessageId }).catch(() => ({ ok: false, message: "Could not retry." }));
       if (!result.ok) {
         updateOptimistic(conversationId, (current) => markFailed(current, clientMessageId));
         setFeedback(result.message);
@@ -790,7 +1102,7 @@ export function MessagesPageV4({
   const peopleHere = ultimate?.presence.filter((person) => person.isInChat).slice(0, 3) ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-[1240px] bg-background pb-3 text-foreground dark:bg-[#111112]">
+    <div className="mx-auto h-full min-h-0 w-full max-w-[1240px] overflow-hidden bg-background text-foreground dark:bg-[#111112] md:pb-3">
       {/* FLOATS ABOVE THE THREAD, deliberately.
           An open conversation is `fixed inset-0 z-30` -- a full-screen overlay
           on phones. This banner used to sit in normal flow above that overlay,
@@ -808,7 +1120,7 @@ export function MessagesPageV4({
         </div>
       ) : null}
 
-      <div className="grid min-h-[620px] overflow-hidden md:rounded-[28px] md:border md:border-border/60 md:bg-card/45 md:shadow-[0_24px_80px_rgba(78,4,1,0.08)] lg:grid-cols-[390px_minmax(0,1fr)]">
+      <div className="grid h-full min-h-0 overflow-hidden md:min-h-[620px] md:rounded-[28px] md:border md:border-border/60 md:bg-card/45 md:shadow-[0_24px_80px_rgba(78,4,1,0.08)] lg:grid-cols-[390px_minmax(0,1fr)]">
         <aside className={cn("min-w-0 bg-background dark:bg-[#111112] lg:border-r lg:border-border/60", selectedId && "hidden lg:flex lg:flex-col")}>
           <div className="sticky top-0 z-10 border-b border-black/[0.04] bg-background/95 px-3 pb-3 pt-[max(.55rem,env(safe-area-inset-top))] backdrop-blur-xl dark:border-white/[0.06] dark:bg-background/95 sm:px-4 md:px-5">
             <div className="flex items-center justify-between gap-3">
@@ -837,18 +1149,18 @@ export function MessagesPageV4({
           <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 md:px-3">
             {filteredConversations.length === 0 ? <EmptyState icon={MessageCircle} title={activeFilter === "archived" ? "No archived chats" : "No chats here"} description={activeFilter === "archived" ? "Chats you archive will wait here quietly." : "Try another filter or start a new chat."} action={activeFilter === "archived" ? undefined : <Button onClick={() => setNewMessageOpen(true)}>New chat</Button>} /> : (
               <ul className="space-y-1">
-                {filteredConversations.map((conversation) => <li key={conversation.id} className="animate-in fade-in slide-in-from-bottom-1"><ConversationRowV4 conversation={conversation} onOpen={() => openConversation(conversation.id)} onMarkUnread={() => markUnread(conversation)} onFavorite={() => toggleFavorite(conversation)} onMute={() => toggleMute(conversation)} onArchive={() => toggleArchive(conversation)} /></li>)}
+                {filteredConversations.map((conversation) => <li key={conversation.id} className="animate-in fade-in slide-in-from-bottom-1"><ConversationRowV4 conversation={conversation} onIntent={() => { void warmConversation(conversation); }} onOpen={() => openConversation(conversation.id)} onMarkUnread={() => markUnread(conversation)} onFavorite={() => toggleFavorite(conversation)} onMute={() => toggleMute(conversation)} onArchive={() => toggleArchive(conversation)} /></li>)}
               </ul>
             )}
           </div>
         </aside>
 
-        <main className={cn("min-w-0 bg-background dark:bg-[#111112]", "fixed inset-0 z-30 flex h-[100dvh] flex-col lg:static lg:z-auto lg:h-[min(790px,calc(100dvh-3rem))]", !selectedId && "hidden lg:flex")} style={themeStyle(ultimate?.preferences.themeKey)}>
+        <main data-chat-pane className={cn("min-h-0 min-w-0 overflow-hidden bg-background dark:bg-[#111112]", "fixed inset-0 z-30 flex h-[100dvh] flex-col lg:static lg:z-auto lg:h-[min(790px,calc(100dvh-3rem))]", !selectedId && "hidden lg:flex")} style={themeStyle(controlState?.preferences.themeKey)}>
           {!selected ? (
             <div className="flex flex-1 flex-col items-center justify-center px-8 text-center"><div className="grid h-20 w-20 place-items-center rounded-[28px] bg-primary/10 text-primary"><MessageCircle className="h-8 w-8" /></div><h2 className="mt-5 text-xl font-semibold tracking-tight">Choose a chat</h2><p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">Message a Muddy, continue a Group, or pick up a Plan chat.</p></div>
           ) : (
             <>
-              <header className="shrink-0 border-b border-black/[0.05] bg-background/95 pt-[max(.35rem,env(safe-area-inset-top))] backdrop-blur-xl dark:border-white/[0.06] lg:pt-0">
+              <header data-chat-header className="relative z-10 shrink-0 border-b border-black/[0.05] bg-background/95 pt-[max(.35rem,env(safe-area-inset-top))] backdrop-blur-xl dark:border-white/[0.06] lg:pt-0">
                 <div className="flex min-h-[64px] items-center gap-1.5 px-2.5 md:px-4">
                   <button type="button" onClick={closeConversation} aria-label="Back to Chats" className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full transition-transform active:scale-90 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] lg:hidden"><ArrowLeft className="h-5 w-5" /></button>
                   <button type="button" onClick={() => setSettingsOpen(true)} className="focus-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl p-1 text-left hover:bg-black/[0.035] dark:hover:bg-white/[0.05]">
@@ -887,6 +1199,7 @@ export function MessagesPageV4({
 
               <div
                 ref={threadRef}
+                data-message-scroll-owner
                 /* overflow-x-hidden is load-bearing, not cosmetic. Each bubble
                    parks its swipe-to-reply icon 42px outside its own left edge
                    and translates right while dragging, so without a horizontal
@@ -902,7 +1215,7 @@ export function MessagesPageV4({
                   if (near && unseenIncoming > 0) setUnseenIncoming(0);
                 }}
               >
-                {loadingMessages && messages.length === 0 ? <div className="grid h-full place-items-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div> : messages.length === 0 ? (
+                {loadingMessages && messages.length === 0 ? <div className="space-y-3 px-1 py-6" role="status" aria-label="Loading recent messages"><div className="h-14 w-2/3 animate-pulse rounded-[21px] rounded-bl-[7px] bg-muted/55" /><div className="ml-auto h-11 w-1/2 animate-pulse rounded-[21px] rounded-br-[7px] bg-primary/12" /><div className="h-20 w-3/4 animate-pulse rounded-[21px] rounded-bl-[7px] bg-muted/55" /></div> : messages.length === 0 ? (
                   <div className="flex h-full flex-col items-center justify-center px-8 text-center animate-in fade-in zoom-in-95"><UserAvatar name={selected.title} src={selected.avatarUrl} size="lg" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><h2 className="mt-4 text-lg font-semibold">{selected.title}</h2><p className="mt-1 text-sm text-muted-foreground">Say hello and start the chat.</p>{isGroup ? <div className="mt-4 flex flex-wrap justify-center gap-2"><Button size="sm" onClick={() => setPollOpen(true)}><BarChart3 className="h-4 w-4" />Create poll</Button><Button size="sm" variant="outline" onClick={() => router.push("/plans" as Route)}>Make a Plan</Button></div> : null}</div>
                 ) : (
                   messages.map((message, index) => {
@@ -948,7 +1261,7 @@ export function MessagesPageV4({
                 {pendingMessages.map((message) => (
                   <div key={message.clientMessageId} className="mt-2 flex flex-col items-end animate-in fade-in slide-in-from-bottom-2">
                     <div className={cn("max-w-[84%] rounded-[21px] rounded-br-[7px] bg-primary px-3.5 py-2.5 text-sm leading-6 text-primary-foreground transition-opacity", message.status === "pending" && "opacity-65")}>{message.kind === "voice" ? `Voice message${message.durationSeconds ? ` · ${Math.round(message.durationSeconds)}s` : ""}` : message.text}</div>
-                    <div className="mt-1 flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">{message.status === "failed" ? <><span className="text-destructive">Not sent</span><button type="button" onClick={() => retryOptimistic(message.clientMessageId)} className="underline">{message.kind === "voice" ? "Record again" : "Retry"}</button><button type="button" onClick={() => updateOptimistic(selected.id, (current) => discardOptimistic(current, message.clientMessageId))} className="underline">Delete</button></> : message.status === "sent" ? <span className="inline-flex items-center" title="Sent"><Check className="h-3.5 w-3.5" aria-label="Sent" /></span> : <span>Sending…</span>}</div>
+                    <div className="mt-1 flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">{message.status === "failed" ? <><span className="text-destructive">Not sent</span><button type="button" onClick={() => retryOptimistic(message.clientMessageId)} className="underline">{message.kind === "voice" && !message.mediaId ? "Record again" : "Retry"}</button><button type="button" onClick={() => updateOptimistic(selected.id, (current) => discardOptimistic(current, message.clientMessageId))} className="underline">Delete</button></> : message.status === "sent" ? <span className="inline-flex items-center" title="Sent"><Check className="h-3.5 w-3.5" aria-label="Sent" /></span> : <span>Sending…</span>}</div>
                   </div>
                 ))}
               </div>
@@ -988,8 +1301,8 @@ export function MessagesPageV4({
               <MessageComposerV4Shell
                 key={selected.id}
                 conversationId={selected.id}
-                initialDraft={ultimate?.preferences.draftText ?? inboxPreferences[selected.id]?.draftText ?? null}
-                isGroup={selected.kind !== "direct"}
+                initialDraft={controlState?.preferences.draftText ?? inboxPreferences[selected.id]?.draftText ?? null}
+                isGroup={isGroup}
                 mentionCandidates={mentionCandidates}
                 voiceRecorderConfig={voiceRecorderConfig}
                 placeholder={`Message ${selected.title}`}
@@ -1004,6 +1317,7 @@ export function MessagesPageV4({
                    unambiguous, rather than read from `selectedId` later. */
                 onOptimisticSend={(draft) => addOptimistic(selected.id, draft)}
                 onOptimisticSettled={(clientMessageId, outcome) => settleOptimistic(selected.id, clientMessageId, outcome)}
+                confirmedClientMessageIds={new Set(messages.map((message) => message.clientMessageId).filter((id): id is string => Boolean(id)))}
                 /* Reconciliation stays, but it never gates the composer: the
                    optimistic row is already drawn and already reads "sent", so
                    this only replaces it with the canonical one and refreshes
@@ -1029,7 +1343,7 @@ export function MessagesPageV4({
         });
       }} onOpenGroups={() => { setNewMessageOpen(false); router.push("/groups" as Route); }} />
 
-      {selected ? <ChatSettingsV4 open={settingsOpen} onOpenChange={setSettingsOpen} conversation={selected} ultimate={ultimate} viewerRole={viewerRole} onFavorite={() => toggleFavorite(selected)} onSearch={() => { setSettingsOpen(false); setThreadSearchOpen(true); }} onGroupDetails={() => router.push(`/groups/${selected.id}` as Route)} onRefresh={refreshSelected} onFeedback={setFeedback} /> : null}
+      {selected ? <ChatSettingsV4 open={settingsOpen} onOpenChange={setSettingsOpen} conversation={selected} controls={controlState} pinsCount={ultimate?.pins.length ?? null} viewerRole={viewerRole} onFavorite={() => toggleFavorite(selected)} onMute={(hours) => setMuteHours(selected, hours)} onControlPatch={(patch) => patchControlState(selected.id, patch)} onSearch={() => { setSettingsOpen(false); setThreadSearchOpen(true); }} onGroupDetails={() => router.push(`/groups/${selected.id}` as Route)} onFeedback={setFeedback} /> : null}
 
       <EditMessageModal message={editTarget} draft={editDraft} setDraft={setEditDraft} pending={isPending} onClose={() => setEditTarget(null)} onSave={() => {
         if (!editTarget || !selectedId || !editDraft.trim()) return;

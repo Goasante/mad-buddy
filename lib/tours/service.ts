@@ -1,7 +1,7 @@
 import "server-only";
 
 import { recordProductEvent } from "@/lib/analytics/track";
-import { isFeatureEnabled, MANAGED_FEATURES } from "@/lib/features/feature-flags";
+import { loadGlobalFeatureFlags, MANAGED_FEATURES } from "@/lib/features/feature-flags";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import {
@@ -141,15 +141,20 @@ function toVersion(row: VersionRow, steps: TourStep[]): TourVersion | null {
  * features are actually switched on. Never a client-supplied claim.
  */
 async function loadSubject(admin: Admin, userId: string): Promise<TourSubject | null> {
-  const [profileResult, ...flagResults] = await Promise.all([
+  // One batched flag read, not one per managed feature. This used to issue
+  // nine near-identical single-row queries against feature_flags for every
+  // getReplayableTours() call -- and Journey calls it on every Profile GET.
+  // Resolution semantics are unchanged: loadGlobalFeatureFlags applies the
+  // same resolveGlobalFeatureFlag rule, and a missing row stays disabled.
+  const [profileResult, enabledKeys] = await Promise.all([
     admin.from("profiles").select("created_at").eq("user_id", userId).maybeSingle(),
-    ...MANAGED_FEATURES.map((feature) => isFeatureEnabled(admin, feature.key))
+    loadGlobalFeatureFlags(admin, MANAGED_FEATURES.map((feature) => feature.key))
   ]);
 
   const signupAt = profileResult.data?.created_at;
   if (!signupAt) return null;
 
-  const enabledFeatureFlags = MANAGED_FEATURES.filter((_, index) => flagResults[index]).map(
+  const enabledFeatureFlags = MANAGED_FEATURES.filter((feature) => enabledKeys.has(feature.key)).map(
     (feature) => feature.key as string
   );
 
@@ -295,6 +300,36 @@ export async function getReplayableTours(userId: string): Promise<ResolvedTour[]
     return replayableTours(versions, subject, Date.now()).map((version) =>
       resolve(version, subject, progressByVersion.get(version.id) ?? null)
     );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Slug -> live tour version id, for callers that need only the REFERENCE.
+ *
+ * Journey (and therefore every /api/profile GET) called getReplayableTours()
+ * and then used exactly two fields: `slug` and `tourVersionId`. Building the
+ * full ResolvedTour payload for that -- every step's body, media, CTA and
+ * entitlement keys, then resolving copy and progress per tour -- was pure
+ * waste on the hot path.
+ *
+ * Eligibility is IDENTICAL and stays server-side: same loadSubject, same
+ * loadPublishedVersions, same replayableTours() filter (live window plus at
+ * least one step the subject may see). Only the per-tour `resolve()` step and
+ * the progress read are skipped, because a reference needs neither.
+ */
+export async function getReplayableTourRefs(userId: string): Promise<Array<{ slug: string; tourVersionId: string }>> {
+  try {
+    const admin = createSupabaseAdminClient();
+    const subject = await loadSubject(admin, userId);
+    if (!subject) return [];
+
+    const versions = await loadPublishedVersions(admin);
+    return replayableTours(versions, subject, Date.now()).map((version) => ({
+      slug: version.slug,
+      tourVersionId: version.id
+    }));
   } catch {
     return [];
   }

@@ -289,12 +289,9 @@ export function MessagesPageContent({
    * canonical message carrying its key arrives, so the bubble never blinks out
    * in the gap between the response and the refetch that follows it.
    */
-  const settleOptimistic = useCallback((clientMessageId: string, outcome: "sent" | "failed") => {
-    if (outcome === "failed") {
-      setOptimistic((current) => markFailed(current, clientMessageId));
-      return;
-    }
-    setOptimistic((current) => markRetrying(current, clientMessageId));
+  const settleOptimistic = useCallback((clientMessageId: string, outcome: "sent" | "failed" | "pending") => {
+    if (outcome === "pending") return;
+    setOptimistic((current) => outcome === "failed" ? markFailed(current, clientMessageId) : markRetrying(current, clientMessageId));
   }, []);
 
   /**

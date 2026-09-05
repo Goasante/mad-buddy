@@ -63,3 +63,18 @@ qa-shots/
 # a real one elsewhere in the tree visible.
 /AGENTS.md
 /CLAUDE.md
+
+# Supabase CLI workspace state (generated, machine-local).
+#
+# NOT a secret -- a project ref is not a password -- but committing it is an
+# OPERATIONAL hazard: it makes every clone of this repository arrive already
+# linked to the production project, so `supabase db reset` / `db push` in a
+# worktree that looks local can target production. It also churns on every
+# CLI version bump. Supabase's own repositories ignore it for the same reason.
+#
+# Each person links their own workspace with:
+#   supabase link --project-ref <ref>
+supabase/.temp/
+**/supabase/.temp/
+# Staging seed manifest: synthetic ids, machine-specific, never committed.
+staging-manifest.local.json

@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { actAs, installActingUser, USERS, CONVERSATIONS, EVENT_ID, ABSENT_UUID } from "@/lib/test/acting-user";
 
@@ -105,6 +105,29 @@ beforeAll(async () => {
 
   GROUP_MESSAGE = await seedMessage(CONVERSATIONS.group, USERS.A);
 }, DB_TIMEOUT);
+
+/* THIS SUITE BUILDS AN OUTSIDER'S OWN GROUP, AND MUST TAKE IT AWAY AGAIN.
+ *
+ * "does not deliver into a target the sender does not belong to" creates a
+ * group owned by C so forwarding has somewhere unreachable to aim at. Left
+ * behind, C is no longer a person with no membership anywhere -- and that is
+ * precisely the premise of v4-actions' "refuses every action to an
+ * authenticated but unrelated user". The sibling then failed its IDOR
+ * baseline for reasons that had nothing to do with authorization.
+ *
+ * Scoped to conversations C created, which no fixture ever does. */
+afterAll(async () => {
+  if (!isLocal || !admin) return;
+  const { data: strays } = await admin
+    .from("conversations")
+    .select("id")
+    .eq("created_by", USERS.C);
+  const ids = (strays ?? []).map((row: { id: string }) => row.id);
+  if (ids.length === 0) return;
+  await admin.from("conversation_members").delete().in("conversation_id", ids);
+  await admin.from("messages").delete().in("conversation_id", ids);
+  await admin.from("conversations").delete().in("id", ids);
+});
 
 describeLocal("Retention: Keep and 24h", () => {
   it("reports Keep for a message with no expiry", async () => {
@@ -448,7 +471,21 @@ describeLocal("Private media authorization", () => {
 }, DB_TIMEOUT);
 
 describeLocal("Structured shares", () => {
-  it("shares a contact carrying only the chosen fields", async () => {
+  /**
+   * CONTACT SHARING IS NOT EXPOSED.
+   *
+   * The R2 structured share contract is Place and Agenda (Plan/Event); the
+   * composer offers no Contact action and sendSchema is a discriminated union
+   * of those two alone. This test previously expected a contact send to
+   * succeed, which the product has never done -- test-contract drift, not a
+   * defect. It now pins the real contract in both directions: the send is
+   * refused, and nothing is written.
+   *
+   * The message_contacts table, the "contact" message_type and the contact
+   * payload reader stay: they serve historical messages, and the reader is
+   * covered by "refuses a structured payload read to an outsider" below.
+   */
+  it("does not expose contact sharing, and writes nothing when one is attempted", async () => {
     actAs(USERS.A);
     const sent = await structured.sendStructuredChatMessageAction({
       kind: "contact",
@@ -456,20 +493,22 @@ describeLocal("Structured shares", () => {
       clientMessageId: clientId(),
       displayName: "Yaa Mensah",
       phone: "+233200000000"
-      // email and organization deliberately omitted
     });
-    expect(sent.ok).toBe(true);
+    expect(sent.ok).toBe(false);
 
     const { data: rows } = await admin
       .from("message_contacts")
-      .select("display_name, phone, email, organization")
+      .select("display_name")
       .eq("display_name", "Yaa Mensah");
-    const row = (rows ?? [])[0];
-    expect(row).toBeTruthy();
-    expect(row.phone).toBe("+233200000000");
-    // What the sender did not choose must not be invented or back-filled.
-    expect(row.email ?? null).toBeNull();
-    expect(row.organization ?? null).toBeNull();
+    expect((rows ?? []).length).toBe(0);
+
+    // Not even an empty carrier message may survive a refused share.
+    const { data: carriers } = await admin
+      .from("messages")
+      .select("id")
+      .eq("conversation_id", CONVERSATIONS.group)
+      .eq("message_type", "contact");
+    expect((carriers ?? []).length).toBe(0);
   });
 
   /**

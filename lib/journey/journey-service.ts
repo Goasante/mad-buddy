@@ -4,7 +4,8 @@ import { loadBuddyScore, type BuddyScoreData } from "@/lib/engagement/buddy-scor
 import { buildJourney, type JourneyData, type JourneyEvidence } from "@/lib/journey/journey";
 import { profileCompletion } from "@/lib/profile/identity";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getReplayableTours } from "@/lib/tours/service";
+import { getReplayableTourRefs } from "@/lib/tours/service";
+import type { SharedActivityCounts } from "@/lib/profile/identity-service";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -16,19 +17,28 @@ export async function loadJourney(
   context: {
     score?: BuddyScoreData;
     profileCompletion?: { completed: number; total: number; percent: number };
+    // Counts the caller already resolved. Filters must match this file's own
+    // queries exactly; see SharedActivityCounts.
+    activity?: SharedActivityCounts;
   } = {}
 ): Promise<JourneyData> {
   const [profileResult, friendships, milestones, waves, messages, plans, safeArrivals, moments, score, tours] = await Promise.all([
     context.profileCompletion ? Promise.resolve({ data: null }) : admin.from("profiles").select("avatar_url,bio,mood_status").eq("user_id", userId).maybeSingle(),
-    admin.from("friendships").select("id", { count: "exact", head: true }).or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
+    context.activity?.muddyCount !== undefined
+      ? Promise.resolve({ count: context.activity.muddyCount })
+      : admin.from("friendships").select("id", { count: "exact", head: true }).or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
     admin.from("activation_milestones").select("milestone").eq("user_id", userId),
     admin.from("waves").select("id", { count: "exact", head: true }).eq("sender_id", userId),
     admin.from("messages").select("id", { count: "exact", head: true }).eq("sender_id", userId).in("status", ["sent", "delivered", "read"]),
     admin.from("plans").select("id", { count: "exact", head: true }).eq("creator_id", userId).neq("status", "draft"),
-    admin.from("safe_arrival_sessions").select("id", { count: "exact", head: true }).eq("traveller_id", userId).eq("status", "completed"),
-    admin.from("moments").select("id", { count: "exact", head: true }).eq("author_id", userId).in("status", ["active", "expired"]),
+    context.activity?.completedSafeArrivalCount !== undefined
+      ? Promise.resolve({ count: context.activity.completedSafeArrivalCount })
+      : admin.from("safe_arrival_sessions").select("id", { count: "exact", head: true }).eq("traveller_id", userId).eq("status", "completed"),
+    context.activity?.momentCount !== undefined
+      ? Promise.resolve({ count: context.activity.momentCount })
+      : admin.from("moments").select("id", { count: "exact", head: true }).eq("author_id", userId).in("status", ["active", "expired"]),
     context.score ? Promise.resolve(context.score) : loadBuddyScore(admin, userId),
-    getReplayableTours(userId)
+    getReplayableTourRefs(userId)
   ]);
 
   const profile = profileResult.data;
@@ -45,5 +55,8 @@ export async function loadJourney(
     share_first_moment: (moments.count ?? 0) > 0,
     reach_trusted_buddy: score.total >= 200
   };
+  // Journey needs only slug -> live version id. getReplayableTourRefs applies
+  // the same server-side eligibility as getReplayableTours without building
+  // every step body, media and CTA that this map immediately discards.
   return buildJourney(evidence, new Map(tours.map((tour) => [tour.slug, tour.tourVersionId])));
 }

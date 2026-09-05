@@ -2,8 +2,8 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { isBlockedEitherDirection } from "@/lib/social/permissions";
-import { loadLinkrGallery } from "@/lib/linkr/media-projection";
+import { batchBlockedIds } from "@/lib/social/permissions";
+import { loadLinkrGalleries } from "@/lib/linkr/media-projection";
 import { conversationHasActivity } from "@/lib/linkr/mutual-resolution";
 
 /**
@@ -69,13 +69,18 @@ async function describePeople(
 
   // Media comes from the canonical Profile projection, so a face shown here is
   // the same stranger-safe face the candidate card was allowed to show.
-  const galleries = await Promise.all(
-    (profiles ?? []).map(async (profile) => ({
-      userId: profile.user_id,
-      photo: (await loadLinkrGallery(admin, profile.user_id))[0] ?? null
-    }))
+  //
+  // Batched: this used to call loadLinkrGallery once per profile, and that
+  // helper itself runs a media lookup plus a signing call, so a 40-person
+  // collection cost ~160 round trips to render. loadLinkrGalleries answers the
+  // whole page with the same per-person rules.
+  const galleries = await loadLinkrGalleries(
+    admin,
+    (profiles ?? []).map((profile) => profile.user_id)
   );
-  const photoByUser = new Map(galleries.map((entry) => [entry.userId, entry.photo]));
+  const photoByUser = new Map(
+    [...galleries].map(([userId, photos]) => [userId, photos[0] ?? null])
+  );
 
   for (const profile of profiles ?? []) {
     // A deleted account is dropped entirely rather than rendered as a ghost.
@@ -88,19 +93,21 @@ async function describePeople(
   return described;
 }
 
-/** Blocks win here too: a blocked pair disappears from both collections. */
+/** Blocks win here too: a blocked pair disappears from both collections.
+ *
+ *  One query for the whole collection. This previously called
+ *  isBlockedEitherDirection once per person -- concurrently, so it was not a
+ *  latency waterfall, but still one `blocked_users` round trip per card, which
+ *  is what batchBlockedIds was written to replace. Identical semantics: the
+ *  batched helper returns the ids blocked in EITHER direction, so the allowed
+ *  set is its complement. */
 async function withoutBlocked(
   admin: Admin,
   viewerId: string,
   userIds: string[]
 ): Promise<Set<string>> {
-  const allowed = new Set<string>();
-  await Promise.all(
-    userIds.map(async (otherId) => {
-      if (!(await isBlockedEitherDirection(admin, viewerId, otherId))) allowed.add(otherId);
-    })
-  );
-  return allowed;
+  const blocked = await batchBlockedIds(admin, viewerId, userIds);
+  return new Set(userIds.filter((otherId) => !blocked.has(otherId)));
 }
 
 /**

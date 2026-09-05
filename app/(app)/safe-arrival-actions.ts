@@ -283,7 +283,11 @@ export async function confirmSafeArrivalAction(sessionId: string): Promise<SafeA
 
 export async function extendSafeArrivalAction(
   sessionId: string,
-  extraMinutes: number
+  extraMinutes: number,
+  /* One extension INTENT carries one id, so a double tap, a retry or a replayed
+     request adds the minutes once. Optional: an older client that sends nothing
+     keeps working, it simply has no replay protection. */
+  clientMutationId?: string
 ): Promise<SafeArrivalActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
@@ -297,9 +301,19 @@ export async function extendSafeArrivalAction(
 
   const admin = createSupabaseAdminClient();
   try {
-    const result = await transitionSafeArrival(admin, { sessionId, actorId: userId, action: "extend", extraMinutes });
+    const result = await transitionSafeArrival(admin, {
+      sessionId, actorId: userId, action: "extend", extraMinutes,
+      clientMutationId: clientMutationId ?? null
+    });
     const journey = await loadSafeArrivalJourneyById(admin, userId, sessionId);
-    if (!result.changed) return { ok: false, message: "This journey is already closed.", sessionId, journey };
+    /* changed=false with a live journey means this intent was already applied:
+       a replay, not a failure. Report the canonical state as success rather
+       than telling somebody their journey is closed when it is not. */
+    if (!result.changed) {
+      const closed = journey === null || ["completed", "cancelled", "expired"].includes(String(journey.status));
+      if (closed) return { ok: false, message: "This journey is already closed.", sessionId, journey };
+      return { ok: true, message: "Already extended.", sessionId, journey };
+    }
     return { ok: true, message: `Extended by ${extraMinutes} minutes.`, sessionId, journey };
   } catch {
     return { ok: false, message: "Couldn't extend the journey." };

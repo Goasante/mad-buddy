@@ -56,8 +56,38 @@ describe.skipIf(!isLocal)("Linkr Tranche 2 -- live local journey", () => {
   let connectionId = "";
   let conversationId = "";
 
-  beforeAll(() => {
+  /* THIS SUITE CONSUMES ITS OWN FIXTURE.
+   *
+   * The cases walk one pair through a decision journey -- pass, undo, connect,
+   * reciprocate -- so by case 3 the "no decision yet" state the privacy
+   * assertions rely on has already been spent. Re-running the file therefore
+   * failed on a persistent database while passing on a fresh one, which reads
+   * exactly like a product regression. The fixture SQL is idempotent and
+   * deliberately resets the pair to a pre-decision state, so clearing this
+   * suite's own rows here makes the file self-contained and order-independent.
+   * Scoped strictly to the four fixture identities. */
+  beforeAll(async () => {
     expect(isLocal, "must run against local Supabase").toBe(true);
+    const db = admin();
+    const fixtureIds = [A, B, C, D];
+    await db.from("linkr_actions").delete().in("actor_id", fixtureIds);
+    await db.from("linkr_actions").delete().in("target_id", fixtureIds);
+    await db.from("linkr_connections").delete().in("user_low", fixtureIds);
+    await db.from("linkr_connections").delete().in("user_high", fixtureIds);
+    await db.from("notifications").delete().in("user_id", fixtureIds).like("type", "linkr_connection%");
+    /* Case 12 asserts "before any message"; case 13 sends one. Without this the
+       conversation and its message survive into the next run and 12 resolves to
+       `conversation` instead of `mutual`. */
+    const { data: convs } = await db
+      .from("conversations")
+      .select("id")
+      .eq("conversation_type", "direct")
+      .in("created_by", fixtureIds);
+    const convIds = (convs ?? []).map((row: { id: string }) => row.id);
+    if (convIds.length > 0) {
+      await db.from("messages").delete().in("conversation_id", convIds);
+      await db.from("conversations").delete().in("id", convIds);
+    }
   });
 
   it("1. Pass then Undo restores the candidate", async () => {

@@ -26,12 +26,16 @@ function fakeClient(options: FakeOptions = {}) {
   return {
     from(table: string) {
       if (table === "profiles") {
+        /* UPDATE, not upsert: editing a profile never creates one, and the
+           upsert this replaced needed table-level INSERT that the browser role
+           deliberately does not hold. The .eq() link is part of the contract --
+           the write must be scoped to the caller's own row. */
         return {
-          upsert() {
-            return { select: () => ({ maybeSingle: async () => ({
+          update() {
+            return { eq: () => ({ select: () => ({ maybeSingle: async () => ({
               data: options.profileError ? null : { user_id: "user-1" },
               error: options.profileError ?? null
-            }) }) };
+            }) }) }) };
           }
         };
       }
