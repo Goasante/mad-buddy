@@ -3,28 +3,11 @@ import { execFileSync } from "node:child_process";
 import { beforeAll, describe, expect, it } from "vitest";
 
 /**
- * Default privileges, measured rather than read.
+ * Default privileges, measured rather than inferred from migration text.
  *
- * browser-default-privileges.test.ts asserts the migration's SQL text. This
- * creates real future objects and reads the ACL they are born with, which is
- * the only way to know what the default actually does -- and here the two
- * answers differ in a way that matters.
- *
- * TABLES and SEQUENCES: the normalization works. A new table or sequence gives
- * anon and authenticated nothing, and service_role everything it needs.
- *
- * FUNCTIONS: it does NOT work, and cannot. Measured on PostgreSQL 17.6, a new
- * function is born with proacl NULL and PostgreSQL applies its BUILT-IN default
- * of EXECUTE TO PUBLIC. That built-in grant sits underneath pg_default_acl:
- * driving the default ACL to `postgres=X service_role=X` (PUBLIC absent) still
- * produces `=X/postgres ...` on the next CREATE FUNCTION. No ALTER DEFAULT
- * PRIVILEGES form suppresses it.
- *
- * That is exactly the SEC-001 mechanism, so this suite pins the limitation
- * instead of pretending it is closed. The durable control is the contract in
- * schema-authority-contract.local.test.ts, which fails the build if any VOLATILE
- * non-trigger function in `public` is reachable by anon or PUBLIC -- meaning a
- * new mutating RPC must carry its own explicit REVOKE.
+ * TABLES/SEQUENCES are normalized per-schema. FUNCTIONS require a GLOBAL
+ * default-privilege revoke because PostgreSQL's built-in EXECUTE-to-PUBLIC
+ * default is global; a schema-local revoke cannot subtract it.
  */
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -46,12 +29,6 @@ function psql(sql: string): string {
   }
 }
 
-/**
- * Create disposable future objects, read their birth ACL, roll back.
- *
- * psql echoes a command tag per statement (BEGIN, CREATE TABLE, ROLLBACK...),
- * so the result row is picked out rather than taking the whole output.
- */
 function probe(select: string): string {
   const raw = psql(`
     begin;
@@ -82,7 +59,7 @@ beforeAll(() => {
 });
 
 describe("a future TABLE gives browser roles nothing", () => {
-  it("grants anon no privilege at all", () => {
+  it("grants anon no DML", () => {
     const out = probe(`
       select has_table_privilege('anon','public._adp_probe_t','SELECT')::text || ',' ||
              has_table_privilege('anon','public._adp_probe_t','INSERT')::text || ',' ||
@@ -92,7 +69,7 @@ describe("a future TABLE gives browser roles nothing", () => {
     expect(out).toBe("false,false,false,false");
   });
 
-  it("grants authenticated no privilege at all", () => {
+  it("grants authenticated no DML", () => {
     const out = probe(`
       select has_table_privilege('authenticated','public._adp_probe_t','SELECT')::text || ',' ||
              has_table_privilege('authenticated','public._adp_probe_t','INSERT')::text || ',' ||
@@ -103,8 +80,6 @@ describe("a future TABLE gives browser roles nothing", () => {
   });
 
   it("keeps service_role fully able to use it", () => {
-    // 20260903120000 owns this; a fresh database was once app-wide 42501
-    // because service_role had no authority on new tables.
     const out = probe(`
       select has_table_privilege('service_role','public._adp_probe_t','SELECT')::text || ',' ||
              has_table_privilege('service_role','public._adp_probe_t','INSERT')::text || ',' ||
@@ -116,7 +91,7 @@ describe("a future TABLE gives browser roles nothing", () => {
 });
 
 describe("a future SEQUENCE gives browser roles nothing", () => {
-  it("denies anon and authenticated USAGE, keeps service_role", () => {
+  it("denies anon/authenticated USAGE and keeps service_role", () => {
     const out = probe(`
       select has_sequence_privilege('anon','public._adp_probe_s','USAGE')::text || ',' ||
              has_sequence_privilege('authenticated','public._adp_probe_s','USAGE')::text || ',' ||
@@ -125,9 +100,7 @@ describe("a future SEQUENCE gives browser roles nothing", () => {
     expect(out).toBe("false,false,true");
   });
 
-  it("covers the implicit sequence behind a bigserial column too", () => {
-    // An identity/serial column creates its own sequence; it inherits the same
-    // default, and a browser INSERT into such a table needs USAGE on it.
+  it("covers the implicit sequence behind bigserial", () => {
     const out = probe(`
       select has_sequence_privilege('authenticated','public._adp_probe_t_id_seq','USAGE')::text || ',' ||
              has_sequence_privilege('service_role','public._adp_probe_t_id_seq','USAGE')::text;
@@ -136,46 +109,39 @@ describe("a future SEQUENCE gives browser roles nothing", () => {
   });
 });
 
-describe("a future FUNCTION is still PUBLIC-executable -- a database limitation, not a gap in the migration", () => {
-  it("is born publicly executable despite the default-privilege revoke", () => {
-    /* Deliberately asserts the UNDESIRED value. If a future PostgreSQL version
-       (or a Supabase platform change) makes ALTER DEFAULT PRIVILEGES able to
-       suppress the built-in PUBLIC EXECUTE, this test fails -- and that failure
-       is good news: delete this case, flip the expectation, and the SEC-001
-       class is closed at the default layer. Until then it documents why the
-       contract test below is load-bearing. */
+describe("a future FUNCTION is server-only by default", () => {
+  it("removes PostgreSQL's built-in PUBLIC EXECUTE", () => {
     const out = probe(`
-      select has_function_privilege('public','public._adp_probe_f()','EXECUTE')::text;
+      select has_function_privilege('public','public._adp_probe_f()','EXECUTE')::text || ',' ||
+             has_function_privilege('anon','public._adp_probe_f()','EXECUTE')::text || ',' ||
+             has_function_privilege('authenticated','public._adp_probe_f()','EXECUTE')::text || ',' ||
+             has_function_privilege('service_role','public._adp_probe_f()','EXECUTE')::text;
     `);
-    expect(out).toBe("true");
+    expect(out).toBe("false,false,false,true");
   });
 
-  it("has PUBLIC removed from the default ACL even so", () => {
-    // The migration's revoke is not useless: it keeps anon and authenticated
-    // out of the default ACL itself. It just cannot beat the built-in grant.
+  it("stores the PUBLIC revoke in the GLOBAL postgres function default ACL", () => {
     const out = psql(`
       select coalesce(array_to_string(defaclacl, ' '), '(empty)')
       from pg_default_acl
       where defaclrole = 'postgres'::regrole
-        and defaclnamespace = 'public'::regnamespace
+        and defaclnamespace = 0
         and defaclobjtype = 'f'
     `);
-    expect(out).not.toMatch(/(^|\s)=X\//); // no PUBLIC entry
+    expect(out).not.toMatch(/(^|\s)=X\//);
     expect(out).not.toMatch(/\banon=/);
     expect(out).not.toMatch(/\bauthenticated=/);
+    expect(out).toMatch(/\bservice_role=X\//);
   });
 
-  it("leaves no mutating function reachable by anon in the shipped schema", () => {
-    // The control that actually holds the SEC-001 line. Trigger functions are
-    // excluded: PostgREST cannot invoke a function returning `trigger`.
+  it("leaves no mutating shipped function reachable by anon/PUBLIC", () => {
     const out = psql(`
       select coalesce(string_agg(p.proname, ', '), 'NONE')
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
       where n.nspname = 'public' and p.prokind = 'f' and p.provolatile = 'v'
         and pg_get_function_result(p.oid) <> 'trigger'
-        and (p.proacl is null
-             or exists (select 1 from unnest(p.proacl) a
-                        where a::text like '=X/%' or a::text like 'anon=%'))
+        and (has_function_privilege('anon', p.oid, 'EXECUTE')
+             or has_function_privilege('public', p.oid, 'EXECUTE'))
     `);
     expect(out).toBe("NONE");
   });
