@@ -26,7 +26,7 @@ const localGrants = readFileSync(path.join(ROOT, "scripts", "hardening", "local-
   .join("\n")
   .toLowerCase();
 
-function statement(owner: "supabase_admin" | "postgres", kind: "tables" | "sequences" | "functions") {
+function schemaStatement(owner: "supabase_admin" | "postgres", kind: "tables" | "sequences") {
   const match = sql.match(
     new RegExp(
       `alter\\s+default\\s+privileges\\s+for\\s+role\\s+${owner}\\s+in\\s+schema\\s+public[\\s\\S]*?on\\s+${kind}[\\s\\S]*?;`,
@@ -37,25 +37,33 @@ function statement(owner: "supabase_admin" | "postgres", kind: "tables" | "seque
 }
 
 describe("browser default privileges are deny-by-default", () => {
-  it.each(["supabase_admin", "postgres"] as const)("normalizes %s table defaults", (owner) => {
-    const s = statement(owner, "tables");
+  it.each(["supabase_admin", "postgres"] as const)("normalizes %s table defaults where alterable", (owner) => {
+    const s = schemaStatement(owner, "tables");
     expect(s).not.toBe("");
     expect(s).toMatch(/revoke\s+all\s+privileges/);
     expect(s).toMatch(/from\s+public\s*,\s*anon\s*,\s*authenticated/);
   });
 
-  it.each(["supabase_admin", "postgres"] as const)("normalizes %s sequence defaults", (owner) => {
-    const s = statement(owner, "sequences");
+  it.each(["supabase_admin", "postgres"] as const)("normalizes %s sequence defaults where alterable", (owner) => {
+    const s = schemaStatement(owner, "sequences");
     expect(s).not.toBe("");
     expect(s).toMatch(/revoke\s+all\s+privileges/);
     expect(s).toMatch(/from\s+public\s*,\s*anon\s*,\s*authenticated/);
   });
 
-  it.each(["supabase_admin", "postgres"] as const)("normalizes %s function defaults", (owner) => {
-    const s = statement(owner, "functions");
-    expect(s).not.toBe("");
-    expect(s).toMatch(/revoke\s+execute/);
-    expect(s).toMatch(/from\s+public\s*,\s*anon\s*,\s*authenticated/);
+  it("uses a GLOBAL postgres function revoke to suppress built-in PUBLIC EXECUTE", () => {
+    expect(sql).toMatch(
+      /alter\s+default\s+privileges\s+for\s+role\s+postgres\s+revoke\s+execute\s+on\s+functions\s+from\s+public\s*,\s*anon\s*,\s*authenticated\s*;/i
+    );
+    expect(sql).toMatch(
+      /alter\s+default\s+privileges\s+for\s+role\s+postgres\s+grant\s+execute\s+on\s+functions\s+to\s+service_role\s*;/i
+    );
+  });
+
+  it("does not pretend a schema-limited PUBLIC function revoke closes the built-in default", () => {
+    expect(sql).not.toMatch(
+      /alter\s+default\s+privileges\s+for\s+role\s+postgres\s+in\s+schema\s+public\s+revoke\s+execute\s+on\s+functions\s+from\s+public/i
+    );
   });
 
   it("does not subtract service_role authority", () => {
