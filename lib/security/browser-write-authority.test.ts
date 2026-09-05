@@ -45,6 +45,12 @@ const allSql = readdirSync(MIGRATIONS)
 const d4 = sqlOf(
   readFileSync(path.join(MIGRATIONS, "20260904180000_browser_role_write_grant_reproducibility.sql"), "utf8")
 );
+/* 20260905090000 is the FINAL authority: it revokes the platform-default
+   table-wide DML that a hosted database starts with, drops the column INSERT
+   D4 needed for the old upsert, and restates the owner-editable UPDATE set. */
+const hardening = sqlOf(
+  readFileSync(path.join(MIGRATIONS, "20260905090000_profiles_authority_hardening.sql"), "utf8")
+);
 
 /** Columns of `profiles` that browser-role code legitimately writes. */
 const BROWSER_WRITABLE = ["full_name", "username", "username_normalized", "bio", "mood_status", "visibility_status"];
@@ -55,6 +61,40 @@ const BROWSER_WRITABLE = ["full_name", "username", "username_normalized", "bio",
  * only through the admin client.
  */
 const PROTECTED = ["trusted_member_since", "is_onboarded", "deleted_at", "created_at", "user_id"];
+
+describe("the deployed authority matches the design", () => {
+  it("revokes the platform-default table-wide DML from both browser roles", () => {
+    // A migrations-only database never had these; a Supabase-hosted one starts
+    // with arwdDxtm on every new table for anon and authenticated.
+    expect(hardening).toMatch(/revoke insert \([^)]*\)[\s\S]{0,8}on public\.profiles from authenticated/i);
+    expect(hardening).toMatch(/revoke insert \([^)]*\)[\s\S]{0,8}on public\.profiles from authenticated/i);
+  });
+
+  it("leaves the browser roles no INSERT at all", () => {
+    // D6 made creation server-side, so the column INSERT D4 needed is dropped.
+    expect(hardening).toMatch(/revoke insert \([^)]*\)[\s\S]{0,8}on public\.profiles from authenticated/i);
+    expect(hardening).not.toMatch(/grant insert[^;]*on public\.profiles to (anon|authenticated)/i);
+  });
+
+  it("restates only the six owner-editable UPDATE columns", () => {
+    const cols = /grant update \(([^)]*)\)[\s\S]{0,8}on public\.profiles to authenticated/i.exec(hardening)?.[1] ?? "";
+    expect(cols).not.toBe("");
+    for (const c of ["full_name", "username", "username_normalized", "bio", "mood_status", "visibility_status"]) {
+      expect(cols).toContain(c);
+    }
+    for (const c of ["trusted_member_since", "is_onboarded", "deleted_at", "created_at", "user_id", "avatar_url"]) {
+      expect(cols, `${c} must not be browser-writable`).not.toContain(c);
+    }
+  });
+
+  it("keeps service_role whole after the revokes", () => {
+    expect(hardening).toMatch(/grant select, insert, update, delete on public\.profiles to service_role/i);
+  });
+
+  it("grants anon nothing", () => {
+    expect(hardening).not.toMatch(/grant[^;]*on public\.profiles to anon/i);
+  });
+});
 
 describe("the visibility blocker is repaired", () => {
   it("grants UPDATE on visibility_status to authenticated", () => {
