@@ -1,0 +1,3016 @@
+{
+  "generated": "2026-09-05T18:22:56.305Z",
+  "source": "local database at migration 133 (same lineage as production) + traced call sites",
+  "caveat": "Local is migrations-only, so its GRANTS differ from production: hosted tables inherit supabase_admin's default ACL (arwdDxtm) while local tables are postgres-owned (Dxtm, no DML). Policy/column/caller facts are identical; grant counts are not.",
+  "A_browser_write_allowlist": {
+    "profiles": {
+      "ops": [
+        "update"
+      ],
+      "callers": [
+        "lib/settings/service.ts:40",
+        "lib/profile/service.ts:215",
+        "app/(app)/premium-actions.ts:173"
+      ]
+    },
+    "profile_field_privacy": {
+      "ops": [
+        "upsert"
+      ],
+      "callers": [
+        "lib/profile/service.ts:256"
+      ]
+    },
+    "push_subscriptions": {
+      "ops": [
+        "upsert",
+        "delete"
+      ],
+      "callers": [
+        "app/(app)/push-actions.ts:33",
+        "app/(app)/push-actions.ts:55",
+        "app/(auth)/actions.ts:615"
+      ]
+    },
+    "user_preferences": {
+      "ops": [
+        "upsert"
+      ],
+      "callers": [
+        "app/(app)/premium-actions.ts:145",
+        "app/(app)/premium-actions.ts:169"
+      ]
+    },
+    "event_modes": {
+      "ops": [
+        "insert"
+      ],
+      "callers": [
+        "app/(app)/premium-actions.ts:492"
+      ]
+    },
+    "app_feedback": {
+      "ops": [
+        "insert"
+      ],
+      "callers": [
+        "app/(app)/settings-actions.ts:314"
+      ]
+    },
+    "best_buddies": {
+      "ops": [
+        "upsert"
+      ],
+      "callers": [
+        "app/(app)/premium-actions.ts:203"
+      ]
+    },
+    "blocked_users": {
+      "ops": [
+        "upsert",
+        "delete"
+      ],
+      "callers": [
+        "app/(app)/actions.ts:462",
+        "app/(app)/actions.ts:542"
+      ]
+    },
+    "circle_members": {
+      "ops": [
+        "insert"
+      ],
+      "callers": [
+        "app/(app)/premium-actions.ts:416"
+      ]
+    },
+    "friend_circles": {
+      "ops": [
+        "insert"
+      ],
+      "callers": [
+        "app/(app)/premium-actions.ts:390"
+      ]
+    },
+    "privacy_zones": {
+      "ops": [
+        "insert"
+      ],
+      "callers": [
+        "app/(app)/premium-actions.ts:438"
+      ]
+    },
+    "reports": {
+      "ops": [
+        "insert"
+      ],
+      "callers": [
+        "app/(app)/actions.ts:585"
+      ]
+    },
+    "support_tickets": {
+      "ops": [
+        "insert"
+      ],
+      "callers": [
+        "app/(app)/help-actions.ts:46"
+      ]
+    }
+  },
+  "B_revoke_queue": [
+    {
+      "table": "access_global_windows",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "access_grants",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "access_launch",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "access_reminder_log",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "account_deletion_requests",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "account_trust_events",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "account_verifications",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "achievement_definitions",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "activation_milestones",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "admin_assignments",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "admin_audit_events",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "admin_role_permissions",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "admin_roles",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "admin_users",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "analytics_daily_user_facts",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "appeals",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "INSERT,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "billing_events",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "birthday_notification_deliveries",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "buddy_score_ledger",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "business_alert_rules",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "case_actions",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "case_evidence",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "chat_poll_options",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "chat_poll_votes",
+      "rls": true,
+      "policies": 3,
+      "policy_cmds": "DELETE,INSERT,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "chat_polls",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "check_ins",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "close_friend_relationships",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "consent_logs",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "INSERT,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "contact_match_sessions",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "content_reports",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "INSERT,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "conversation_chat_settings",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "conversation_members",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "conversation_message_pins",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "conversation_pins",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "conversation_presence",
+      "rls": true,
+      "policies": 4,
+      "policy_cmds": "DELETE,INSERT,SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "conversation_user_preferences",
+      "rls": true,
+      "policies": 4,
+      "policy_cmds": "DELETE,INSERT,SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "conversations",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "custom_wallpapers",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "deletion_audit_logs",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "device_push_tokens",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "discoverability_identifiers",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "discovery_passes",
+      "rls": true,
+      "policies": 4,
+      "policy_cmds": "DELETE,INSERT,SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "domain_events",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "downgrade_adjustments",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "drop_audience_targets",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "drop_unlocks",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "earned_premium_rewards",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "emergency_controls",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "engagement_preferences",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "entitlement_overrides",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "event_admins",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "event_announcement_reactions",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "event_announcements",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "event_audience_targets",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "event_circle_group_targets",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "event_circle_invitations",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "event_circle_members",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "event_circles",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "event_linkr_opt_ins",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "event_locations",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "event_rsvps",
+      "rls": true,
+      "policies": 3,
+      "policy_cmds": "INSERT,SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "event_update_reactions",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "event_updates",
+      "rls": true,
+      "policies": 3,
+      "policy_cmds": "INSERT,SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "events",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "experiment_assignments",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "experiment_exposures",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "experiment_testers",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "experiment_variants",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "experiments",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "feature_flag_rules",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "feature_flags",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "financial_snapshots",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "friend_glow_colors",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "friend_requests",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "INSERT,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "friendship_recaps",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "friendship_streaks",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "friendships",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "DELETE,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "group_settings",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "hangout_audience_targets",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "hangout_requests",
+      "rls": true,
+      "policies": 3,
+      "policy_cmds": "INSERT,SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "hangout_sessions",
+      "rls": true,
+      "policies": 3,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "hidden_content",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "idempotency_keys",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "incident_actions",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "invite_links",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "jobs",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "life_timeline_resets",
+      "rls": true,
+      "policies": 4,
+      "policy_cmds": "DELETE,INSERT,SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "linkr_actions",
+      "rls": true,
+      "policies": 4,
+      "policy_cmds": "DELETE,INSERT,SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "linkr_connections",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "linkr_interests",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "linkr_profiles",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "maintenance_mode",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "media_assets",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "media_deletion_queue",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "media_variants",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "meeting_ping_responses",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "meeting_pings",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "meetup_requests",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "INSERT,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "message_contacts",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "message_event_refs",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "message_files",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "message_hides",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "message_mentions",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "message_places",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "message_reactions",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "messages",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "moderation_actions",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "moment_audience_targets",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "moment_reactions",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "moment_views",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "moments",
+      "rls": true,
+      "policies": 6,
+      "policy_cmds": "DELETE,INSERT,SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "muddy_drops",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "notification_budget_usage",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "notifications",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "onboarding_progress",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "paystack_webhook_events",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "plan_participants",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "plan_poll_options",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "plan_poll_votes",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "plan_polls",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "plans",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "premium_trial_config",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "premium_trial_events",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "premium_trial_notifications",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "premium_trials",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "privacy_requests",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "INSERT,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "privacy_setup_versions",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "profile_birth_details",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "profile_photos",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "promotion_codes",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "promotion_redemptions",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "provider_cost_records",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "proximity_events",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "qr_sessions",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "rate_limits",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "recap_preferences",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "relationship_notes",
+      "rls": true,
+      "policies": 4,
+      "policy_cmds": "DELETE,INSERT,SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "safe_arrival_blocks",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "safe_arrival_contacts",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "safe_arrival_events",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "safe_arrival_sessions",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "saved_message_folders",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "saved_messages",
+      "rls": true,
+      "policies": 4,
+      "policy_cmds": "DELETE,INSERT,SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "scheduler_incidents",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "security_incidents",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "sensitive_access_log",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "smart_card_acknowledgements",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "INSERT,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "socialize_sessions",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "status_visibility_targets",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "streak_qualifying_events",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "stripe_webhook_events",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "subscription_changes",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "subscriptions",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "support_internal_notes",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "support_requests",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "INSERT,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "support_ticket_events",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "support_ticket_messages",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "INSERT,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "temporary_plans",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "tier_entitlement_overrides",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "tour_steps",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "tour_versions",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "tours",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "trust_safety_cases",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "trusted_member_applications",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "INSERT,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "tune_ins",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "user_achievements",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "user_interests",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "user_locations",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "user_phone_identities",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "user_restrictions",
+      "rls": true,
+      "policies": 0,
+      "policy_cmds": "(none)",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "user_statuses",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "ALL,SELECT",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "user_tour_progress",
+      "rls": true,
+      "policies": 3,
+      "policy_cmds": "INSERT,SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "user_wallpaper_preferences",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "visibility_sessions",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "visibility_targets",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "wallpapers",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "SELECT",
+      "has_write_policy": false,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "dead authority"
+    },
+    {
+      "table": "wave_mutes",
+      "rls": true,
+      "policies": 1,
+      "policy_cmds": "ALL",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    },
+    {
+      "table": "waves",
+      "rls": true,
+      "policies": 2,
+      "policy_cmds": "SELECT,UPDATE",
+      "has_write_policy": true,
+      "required_authenticated": {
+        "INSERT": false,
+        "UPDATE": false,
+        "DELETE": false
+      },
+      "required_service_role": "retained",
+      "revoke_risk": "policy exists but no caller -- confirm before revoke"
+    }
+  ],
+  "C_mixed_authority": [
+    {
+      "table": "app_feedback",
+      "browser_ops": [
+        "insert"
+      ],
+      "callers": [
+        "app/(app)/settings-actions.ts:314"
+      ],
+      "authority_columns": [
+        {
+          "column": "user_id",
+          "kind": "ownership"
+        },
+        {
+          "column": "created_at",
+          "kind": "audit"
+        },
+        {
+          "column": "updated_at",
+          "kind": "audit"
+        },
+        {
+          "column": "status",
+          "kind": "lifecycle"
+        }
+      ],
+      "needs_column_grant": true
+    },
+    {
+      "table": "best_buddies",
+      "browser_ops": [
+        "upsert"
+      ],
+      "callers": [
+        "app/(app)/premium-actions.ts:203"
+      ],
+      "authority_columns": [
+        {
+          "column": "user_id",
+          "kind": "ownership"
+        },
+        {
+          "column": "created_at",
+          "kind": "audit"
+        }
+      ],
+      "needs_column_grant": true
+    },
+    {
+      "table": "blocked_users",
+      "browser_ops": [
+        "upsert",
+        "delete"
+      ],
+      "callers": [
+        "app/(app)/actions.ts:462",
+        "app/(app)/actions.ts:542"
+      ],
+      "authority_columns": [
+        {
+          "column": "created_at",
+          "kind": "audit"
+        }
+      ],
+      "needs_column_grant": true
+    },
+    {
+      "table": "circle_members",
+      "browser_ops": [
+        "insert"
+      ],
+      "callers": [
+        "app/(app)/premium-actions.ts:416"
+      ],
+      "authority_columns": [
+        {
+          "column": "created_at",
+          "kind": "audit"
+        }
+      ],
+      "needs_column_grant": true
+    },
+    {
+      "table": "event_modes",
+      "browser_ops": [
+        "insert"
+      ],
+      "callers": [
+        "app/(app)/premium-actions.ts:492"
+      ],
+      "authority_columns": [
+        {
+          "column": "user_id",
+          "kind": "ownership"
+        },
+        {
+          "column": "created_at",
+          "kind": "audit"
+        },
+        {
+          "column": "updated_at",
+          "kind": "audit"
+        },
+        {
+          "column": "visibility_rule",
+          "kind": "visibility"
+        }
+      ],
+      "needs_column_grant": true
+    },
+    {
+      "table": "friend_circles",
+      "browser_ops": [
+        "insert"
+      ],
+      "callers": [
+        "app/(app)/premium-actions.ts:390"
+      ],
+      "authority_columns": [
+        {
+          "column": "user_id",
+          "kind": "ownership"
+        },
+        {
+          "column": "created_at",
+          "kind": "audit"
+        },
+        {
+          "column": "updated_at",
+          "kind": "audit"
+        },
+        {
+          "column": "archived_at",
+          "kind": "soft-delete"
+        },
+        {
+          "column": "visibility_rule",
+          "kind": "visibility"
+        }
+      ],
+      "needs_column_grant": true
+    },
+    {
+      "table": "privacy_zones",
+      "browser_ops": [
+        "insert"
+      ],
+      "callers": [
+        "app/(app)/premium-actions.ts:438"
+      ],
+      "authority_columns": [
+        {
+          "column": "user_id",
+          "kind": "ownership"
+        },
+        {
+          "column": "created_at",
+          "kind": "audit"
+        },
+        {
+          "column": "updated_at",
+          "kind": "audit"
+        }
+      ],
+      "needs_column_grant": true
+    },
+    {
+      "table": "profile_field_privacy",
+      "browser_ops": [
+        "upsert"
+      ],
+      "callers": [
+        "lib/profile/service.ts:256"
+      ],
+      "authority_columns": [
+        {
+          "column": "user_id",
+          "kind": "ownership"
+        },
+        {
+          "column": "created_at",
+          "kind": "audit"
+        },
+        {
+          "column": "updated_at",
+          "kind": "audit"
+        },
+        {
+          "column": "visibility",
+          "kind": "visibility"
+        }
+      ],
+      "needs_column_grant": true
+    },
+    {
+      "table": "profiles",
+      "browser_ops": [
+        "update"
+      ],
+      "callers": [
+        "lib/settings/service.ts:40",
+        "lib/profile/service.ts:215",
+        "app/(app)/premium-actions.ts:173"
+      ],
+      "authority_columns": [
+        {
+          "column": "user_id",
+          "kind": "ownership"
+        },
+        {
+          "column": "visibility_status",
+          "kind": "lifecycle"
+        },
+        {
+          "column": "deleted_at",
+          "kind": "soft-delete"
+        },
+        {
+          "column": "created_at",
+          "kind": "audit"
+        },
+        {
+          "column": "updated_at",
+          "kind": "audit"
+        },
+        {
+          "column": "trusted_member_since",
+          "kind": "trust"
+        },
+        {
+          "column": "mood_status",
+          "kind": "lifecycle"
+        }
+      ],
+      "needs_column_grant": true
+    },
+    {
+      "table": "push_subscriptions",
+      "browser_ops": [
+        "upsert",
+        "delete"
+      ],
+      "callers": [
+        "app/(app)/push-actions.ts:33",
+        "app/(app)/push-actions.ts:55",
+        "app/(auth)/actions.ts:615"
+      ],
+      "authority_columns": [
+        {
+          "column": "user_id",
+          "kind": "ownership"
+        },
+        {
+          "column": "created_at",
+          "kind": "audit"
+        }
+      ],
+      "needs_column_grant": true
+    },
+    {
+      "table": "reports",
+      "browser_ops": [
+        "insert"
+      ],
+      "callers": [
+        "app/(app)/actions.ts:585"
+      ],
+      "authority_columns": [
+        {
+          "column": "status",
+          "kind": "lifecycle"
+        },
+        {
+          "column": "created_at",
+          "kind": "audit"
+        },
+        {
+          "column": "updated_at",
+          "kind": "audit"
+        }
+      ],
+      "needs_column_grant": true
+    },
+    {
+      "table": "support_tickets",
+      "browser_ops": [
+        "insert"
+      ],
+      "callers": [
+        "app/(app)/help-actions.ts:46"
+      ],
+      "authority_columns": [
+        {
+          "column": "user_id",
+          "kind": "ownership"
+        },
+        {
+          "column": "created_at",
+          "kind": "audit"
+        },
+        {
+          "column": "updated_at",
+          "kind": "audit"
+        },
+        {
+          "column": "status",
+          "kind": "lifecycle"
+        }
+      ],
+      "needs_column_grant": true
+    },
+    {
+      "table": "user_preferences",
+      "browser_ops": [
+        "upsert"
+      ],
+      "callers": [
+        "app/(app)/premium-actions.ts:145",
+        "app/(app)/premium-actions.ts:169"
+      ],
+      "authority_columns": [
+        {
+          "column": "user_id",
+          "kind": "ownership"
+        },
+        {
+          "column": "scheduled_visibility",
+          "kind": "visibility"
+        },
+        {
+          "column": "created_at",
+          "kind": "audit"
+        },
+        {
+          "column": "updated_at",
+          "kind": "audit"
+        },
+        {
+          "column": "mood_status",
+          "kind": "lifecycle"
+        }
+      ],
+      "needs_column_grant": true
+    }
+  ],
+  "D_default_privileges": [
+    {
+      "owner": "supabase_admin",
+      "schema": "public",
+      "objtype": "SEQUENCES",
+      "acl": "postgres=rwU/supabase_admin  anon=rwU/supabase_admin  authenticated=rwU/supabase_admin  service_role=rwU/supabase_admin"
+    },
+    {
+      "owner": "supabase_admin",
+      "schema": "public",
+      "objtype": "TABLES",
+      "acl": "postgres=arwdDxtm/supabase_admin  anon=arwdDxtm/supabase_admin  authenticated=arwdDxtm/supabase_admin  service_role=arwdDxtm/supabase_admin"
+    },
+    {
+      "owner": "supabase_admin",
+      "schema": "public",
+      "objtype": "FUNCTIONS",
+      "acl": "postgres=X/supabase_admin  anon=X/supabase_admin  authenticated=X/supabase_admin  service_role=X/supabase_admin"
+    },
+    {
+      "owner": "postgres",
+      "schema": "public",
+      "objtype": "FUNCTIONS",
+      "acl": "postgres=X/postgres"
+    },
+    {
+      "owner": "postgres",
+      "schema": "public",
+      "objtype": "TABLES",
+      "acl": "postgres=arwdDxtm/postgres  anon=Dxtm/postgres  authenticated=Dxtm/postgres  service_role=arwdDxtm/postgres"
+    },
+    {
+      "owner": "postgres",
+      "schema": "public",
+      "objtype": "SEQUENCES",
+      "acl": "postgres=rwU/postgres  anon=w/postgres  authenticated=w/postgres  service_role=rwU/postgres"
+    }
+  ],
+  "counts": {
+    "total_public_tables": 191,
+    "A": 13,
+    "B": 178,
+    "B_with_write_policy": 76,
+    "B_dead_authority": 102,
+    "C": 13
+  },
+  "C_notes": {
+    "support_tickets": "DEFENDED: WITH CHECK pins status, priority, assigned_to, resolved_at. Pattern to copy.",
+    "reports": "GAP: INSERT policy pins only reporter_id, so a reporter can choose status on insert (default open). Candidate for a column grant or a pinned WITH CHECK in SEC-003.",
+    "conversation_members": "DEFENDED (in set B): WITH CHECK re-selects the row and pins role and status. Reference pattern.",
+    "profiles": "Already hardened in R2.0.1 -- 6 owner-editable UPDATE columns only."
+  },
+  "D_notes": {
+    "TYPES": "No pg_default_acl entry for TYPES in schema public under either owner -- PostgreSQL defaults apply (USAGE to PUBLIC). Stated explicitly rather than omitted.",
+    "root_cause": "supabase_admin grants arwdDxtm on TABLES and X on FUNCTIONS to anon+authenticated for every new object; postgres grants only Dxtm on TABLES and nothing on FUNCTIONS. Hosted objects inherit supabase_admins default, local ones inherit postgres. SEC-001 came from the FUNCTIONS row; SEC-002 and SEC-003 from the TABLES row.",
+    "sequences": "Both owners grant write on sequences to browser roles (rwU hosted, w local). Not yet audited."
+  }
+}

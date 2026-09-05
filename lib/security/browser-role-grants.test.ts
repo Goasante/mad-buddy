@@ -100,9 +100,31 @@ describe("browser-role grant migration", () => {
 });
 
 describe("deliberate security revokes are preserved", () => {
+  /**
+   * Tables whose authority a LATER migration deliberately narrowed.
+   *
+   * This test reads 20260903140000 -- the historical grant migration -- and
+   * fails if anything it grants was revoked afterwards, on the reasoning that
+   * a revoke is a security decision and re-granting undoes it. That direction
+   * is right, but it cannot see the opposite move: revoke the broad grant and
+   * re-grant something SMALLER.
+   *
+   * SEC-003 does exactly that. 20260903140000 gave `authenticated` table-wide
+   * INSERT on `reports`, which let a reporter set `status` and file a report
+   * already marked resolved. 20260905194000 revokes it and grants INSERT on
+   * (reporter_id, reported_user_id, reason, description) only -- strictly less
+   * authority, plus an RLS check pinning status to 'open'.
+   *
+   * Listing the table here asserts that narrowing was intentional. The
+   * follow-up test below then proves it really is narrower, so an entry here
+   * cannot be used to quietly restore table-wide authority.
+   */
+  const NARROWED_BY_LATER_MIGRATION = new Set(["reports"]);
+
   it("never grants an operation that migration history explicitly revoked", () => {
     // This is the invariant that separates a repair from a regression.
     for (const statement of parseGrants(grantSql)) {
+      if (NARROWED_BY_LATER_MIGRATION.has(statement.table)) continue;
       for (const role of statement.roles) {
         if (role !== "anon" && role !== "authenticated") continue;
         for (const op of statement.ops) {
@@ -114,6 +136,35 @@ describe("deliberate security revokes are preserved", () => {
       }
     }
   });
+
+  it.each([...NARROWED_BY_LATER_MIGRATION])(
+    "%s is narrowed to specific columns, never re-granted table-wide",
+    (table) => {
+      /* Only migrations AFTER the historical grant are examined: that grant is
+         the broad one being narrowed, and it necessarily still exists in
+         history. What matters is that nothing since has widened it back. */
+      const laterSql = bySource
+        .filter((f) => GRANT_MIGRATION !== undefined && f.name > GRANT_MIGRATION)
+        .map((f) => f.sql)
+        .join("\n")
+        .toLowerCase();
+
+      const tableWide = new RegExp(
+        `\\bgrant\\s+[a-z,\\s]*\\b(?:insert|update|delete)\\b[a-z,\\s]*\\s+on\\s+(?:table\\s+)?public\\.${table}\\s+to\\s+[^;]*\\b(?:anon|authenticated)\\b`,
+        "i"
+      );
+      expect(
+        laterSql.match(tableWide),
+        `${table} must stay column-scoped for browser roles, never re-granted table-wide`
+      ).toBeNull();
+
+      const columnScoped = new RegExp(
+        `\\bgrant\\s+insert\\s*\\([^)]+\\)\\s*\\n?\\s*on\\s+(?:table\\s+)?public\\.${table}\\s+to\\s+authenticated`,
+        "i"
+      );
+      expect(laterSql).toMatch(columnScoped);
+    }
+  );
 
   it.each([
     ["notifications", "insert"],
