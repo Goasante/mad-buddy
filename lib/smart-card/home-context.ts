@@ -65,6 +65,31 @@ export type PlanChatDecisionForCard = {
 };
 
 /**
+ * What Mad Buddy Access permits this viewer, reduced to the ONE question Home
+ * asks: may they expand their social world right now?
+ *
+ * DELIBERATELY NARROWER THAN `AccessState`. The providers must not be able to
+ * reason about sources, expiry dates or days remaining, because every one of
+ * those invites a card that counts down, nags, or sells. `canExpand` is the
+ * whole entitlement vocabulary Home gets.
+ *
+ * THE RULE THIS ENCODES, which is `lib/access/guard.ts`'s rule verbatim:
+ * expiry stops the NEXT EXPANSION, it never destroys an EXISTING COMMITMENT.
+ * So this flag gates only states that would start something new -- and never
+ * an existing Linkr mutual, an UpFor already in flight, a Plan, a message, a
+ * birthday, Safe Arrival or anything else in the free core.
+ *
+ * `hadWelcomeAccess` exists so copy can be honest about what ENDED rather than
+ * implying Mad Buddy itself has stopped working.
+ */
+export type AccessForCard = {
+  /** False when a gated expansion would be refused by the server anyway. */
+  canExpand: boolean;
+  /** True when this account once held Welcome Access, whatever its state now. */
+  hadWelcomeAccess: boolean;
+};
+
+/**
  * A feature the viewer explicitly turned ON that their profile now blocks.
  *
  * Not profile completion. `requirement` is the canonical outstanding sentence

@@ -97,6 +97,19 @@ async function makeHomeMature() {
 const ids = { event: null, plan: null, poll: null, conversation: null, pollMessage: null };
 
 async function clearFixtures() {
+  /* UPFOR TOO, even though this harness never creates one.
+     The core proof (smart-card-visual-proof.mjs) does, and both scripts run
+     against the SAME local database and the same fixture user. A leftover live
+     UpFor with pending requests is tier 1, so it outranks every state measured
+     here and each scenario reports the wrong card. Two harnesses sharing a
+     fixture user must each clear what the other can create. */
+  const { data: ownedSessions } = await admin.from("hangout_sessions").select("id").in("owner_id", [A, B]);
+  for (const session of ownedSessions ?? []) {
+    await admin.from("hangout_requests").delete().eq("hangout_session_id", session.id);
+  }
+  await admin.from("hangout_requests").delete().in("requester_id", [A, B]);
+  await admin.from("hangout_sessions").delete().in("owner_id", [A, B]);
+
   await admin.from("linkr_connections").delete().or(`user_low.eq.${A},user_high.eq.${A}`);
   await admin.from("birthday_notification_deliveries").delete().eq("recipient_id", A);
   await admin.from("event_linkr_opt_ins").delete().eq("user_id", A);
@@ -114,11 +127,28 @@ async function clearFixtures() {
     await admin.from("messages").delete().eq("id", ids.pollMessage);
     ids.pollMessage = null;
   }
-  if (ids.plan) {
-    await admin.from("plan_participants").delete().eq("plan_id", ids.plan);
-    await admin.from("plans").delete().eq("id", ids.plan);
-    ids.plan = null;
+  /* EVERY fixture Plan, not just the one this run last tracked.
+     `ids.plan` holds only the most recent id, so a scenario that created a
+     second Plan leaked the first -- and Plans have an ACTIVE LIMIT, so the
+     leak surfaced later as PLAN_ACTIVE_LIMIT_REACHED in an unrelated suite
+     (lib/social/upfor-plan-handoff.local), looking exactly like a product
+     defect. Sweeping by creator removes anything this harness could have made. */
+  const { data: fixturePlans } = await admin
+    .from("plans")
+    .select("id")
+    .in("creator_id", [A, B]);
+  for (const plan of fixturePlans ?? []) {
+    const { data: polls } = await admin.from("plan_polls").select("id").eq("plan_id", plan.id);
+    for (const poll of polls ?? []) {
+      await admin.from("plan_poll_votes").delete().eq("poll_id", poll.id);
+      await admin.from("plan_poll_options").delete().eq("poll_id", poll.id);
+    }
+    await admin.from("plan_polls").delete().eq("plan_id", plan.id);
+    await admin.from("plan_participants").delete().eq("plan_id", plan.id);
+    await admin.from("plans").delete().eq("id", plan.id);
   }
+  ids.plan = null;
+  ids.poll = null;
   if (ids.conversation) {
     await admin.from("conversation_members").delete().eq("conversation_id", ids.conversation);
     await admin.from("conversations").delete().eq("id", ids.conversation);
@@ -287,6 +317,44 @@ async function fixtureBlockedFeature() {
   await admin.from("profiles").update({ avatar_url: null, profile_media_id: null }).eq("user_id", A);
 }
 
+/**
+ * ENTITLEMENT FIXTURES.
+ *
+ * Real `access_grants` rows, because the resolver reads them and evaluates
+ * expiry against SERVER time -- there is no flag to flip. An expired grant is
+ * simply one whose `expires_at` has passed, which is exactly the state a person
+ * whose Welcome Access ran out is in.
+ */
+async function clearAccess() {
+  await admin.from("access_grants").delete().eq("user_id", A);
+}
+
+async function grantAccess() {
+  await clearAccess();
+  must(
+    "access_grant_active",
+    await admin.from("access_grants").insert({
+      user_id: A,
+      source: "welcome_access",
+      starts_at: new Date(Date.now() - 36e5).toISOString(),
+      expires_at: new Date(Date.now() + 30 * 864e5).toISOString()
+    })
+  );
+}
+
+async function expireAccess() {
+  await clearAccess();
+  must(
+    "access_grant_expired",
+    await admin.from("access_grants").insert({
+      user_id: A,
+      source: "welcome_access",
+      starts_at: new Date(Date.now() - 60 * 864e5).toISOString(),
+      expires_at: new Date(Date.now() - 864e5).toISOString()
+    })
+  );
+}
+
 async function restoreAvatar() {
   await admin.from("profiles").update({ avatar_url: "avatar.jpg" }).eq("user_id", A);
 }
@@ -348,6 +416,12 @@ async function look(label, { width, dark = false, textScale = 1, reducedMotion =
       .filter((t) => t.t);
     return {
       cardText: card ? text(card) : "",
+      /* The Smart Card's PRIMARY action href, so a destination claim can be
+         checked against the rendered anchor rather than against source. */
+      primaryHref: (() => {
+        const link = card?.querySelector("a[href]");
+        return link ? link.getAttribute("href") : null;
+      })(),
       articleTexts: articles.map((a) => text(a).slice(0, 160)),
       treatment: (() => {
         if (!card) return "none";
@@ -372,6 +446,33 @@ async function look(label, { width, dark = false, textScale = 1, reducedMotion =
   return { ...probe, errors, onHome };
 }
 
+/**
+ * Follow a rendered href and report where it actually lands.
+ *
+ * A destination claim is only worth making if the link resolves: asserting the
+ * provider's string proves the provider, not the product.
+ */
+async function follow(href, label) {
+  const context = await browser.newContext({
+    viewport: { width: 393, height: 900 },
+    deviceScaleFactor: 2,
+    hasTouch: true,
+    isMobile: true,
+    baseURL: "http://127.0.0.1:3000",
+    storageState: authState
+  });
+  const page = await context.newPage();
+  await page.goto(href, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(3000);
+  await page.screenshot({ path: `${SHOTS}/${label}.png`, fullPage: false });
+  const url = page.url();
+  const heading = await page
+    .evaluate(() => document.body.innerText.replace(/\s+/g, " ").slice(0, 120))
+    .catch(() => "");
+  await context.close();
+  return { url, heading };
+}
+
 /** Assert the layout invariants every scenario must satisfy. */
 function assertLayout(label, r) {
   record(`${label}: landed on Home`, r.onHome, r.onHome ? "" : "REDIRECTED");
@@ -387,6 +488,11 @@ function assertLayout(label, r) {
 console.log("=== SMART CARD V2 -- FAMILIES 3-5 RUNTIME PROOF ===\n");
 await clearFixtures();
 await makeHomeMature();
+/* ENTITLEMENT BASELINE. Sections A-H measure states OTHER than entitlement,
+   so the viewer must hold Access -- otherwise the two gated expansions are
+   suppressed for a reason those sections are not testing. Section I varies
+   it deliberately, and the run clears it at the end. */
+await grantAccess();
 
 // ---- A. Linkr mutual WITH Event context, at all three widths.
 console.log("--- A. linkr_mutual_event (relationship, media-backed) ---");
@@ -593,7 +699,112 @@ console.log("\n--- G. Nearby is still not duplicated ---");
   );
 }
 
+// ---- H. Deep links: a card that names one thing must OPEN that thing.
+console.log("\n--- H. deep links land on the named item ---");
+{
+  await clearFixtures();
+  await makeHomeMature();
+  await grantAccess();
+  await fixturePlanDecision("Friday Dinner", "Where should we eat?");
+
+  const planCard = await look("deeplink-plan-decision-393", { width: 393 });
+  const planHref = planCard.primaryHref ?? "";
+  record(
+    "Vote now points at the exact Plan, not the Plans index",
+    planHref.includes(`plan=${ids.plan}`),
+    planHref
+  );
+
+  const landed = await follow(planHref, "deeplink-plan-open-393");
+  record(
+    "and opening it lands on that Plan's detail, not a list",
+    landed.url.includes(`plan=${ids.plan}`) && !landed.url.includes("/login"),
+    `${landed.url} :: ${landed.heading}`
+  );
+}
+
+// ---- I. Entitlement: expansions stop, commitments survive.
+console.log("\n--- I. entitlement (HAS / NO / EXPIRED-WITH-COMMITMENT) ---");
+{
+  await clearFixtures();
+  await makeHomeMature();
+
+  // HAS ACCESS: the Event Linkr offer is made.
+  await grantAccess();
+  const eventId = await makeEvent("Acoustic Night");
+  await fixtureCheckedInNoConsent(eventId);
+  const withAccess = await look("entitlement-has-access-393", { width: 393 });
+  record(
+    "HAS ACCESS: Event Linkr is offered",
+    /Meet people at Acoustic Night\?/i.test(withAccess.cardText),
+    withAccess.cardText.slice(0, 80)
+  );
+
+  // NO ACCESS: same fixtures, the expansion disappears.
+  await expireAccess();
+  const noAccess = await look("entitlement-no-access-393", { width: 393 });
+  assertLayout("no access", noAccess);
+  record(
+    "NO ACCESS: the expansion is not offered",
+    !/Meet people at/i.test(noAccess.cardText),
+    noAccess.cardText.slice(0, 80)
+  );
+  record(
+    "NO ACCESS: Home never says the product expired, and never sells",
+    !/expired|upgrade|subscri|unlock|renew/i.test(noAccess.cardText),
+    noAccess.cardText.slice(0, 80)
+  );
+
+  // EXPIRED ACCESS WITH AN EXISTING COMMITMENT: the relationship survives.
+  await admin.from("check_ins").delete().eq("user_id", A);
+  await fixtureLinkrMutualEvent(eventId);
+  const commitment = await look("entitlement-expired-commitment-393", { width: 393 });
+  assertLayout("expired with commitment", commitment);
+  record(
+    "EXPIRED + COMMITMENT: the existing Linkr mutual still shows",
+    /You connected at Acoustic Night/i.test(commitment.cardText),
+    commitment.cardText.slice(0, 90)
+  );
+  record(
+    "EXPIRED + COMMITMENT: Say hi is still offered on it",
+    /Say hi/i.test(commitment.cardText),
+    commitment.targets.map((t) => t.t).join(" | ")
+  );
+
+  /* HOME IS NEVER BLANK FOR AN UNENTITLED VIEWER.
+     Which card fills the slot depends on this account's own state -- this
+     fixture user has a completed Journey, so the tier-5 milestone legitimately
+     wins long before the tier-6 UpFor fallback is ever reached. Asserting the
+     fallback's copy here would be asserting the fixture, not the product, and
+     would flip with the day of the week and the Journey's progress alike.
+     What must hold, and what is checked, is the invariant: a card renders, it
+     is not an expansion, and it neither sells nor claims the product ended.
+     The fallback's own no-Access copy is pinned in the unit tests, where the
+     competing states can be held still. */
+  await admin.from("linkr_connections").delete().or(`user_low.eq.${A},user_high.eq.${A}`);
+  const fallback = await look("entitlement-expired-fallback-393", { width: 393 });
+  assertLayout("expired fallback", fallback);
+  record(
+    "EXPIRED: Home is never blank -- a card still renders",
+    fallback.cardText.length > 0,
+    fallback.cardText.slice(0, 90)
+  );
+  record(
+    "EXPIRED: whatever renders is not a gated expansion",
+    !/Meet people at/i.test(fallback.cardText) && !/Linkr is on/i.test(fallback.cardText),
+    fallback.cardText.slice(0, 90)
+  );
+  record(
+    "EXPIRED: and it neither sells nor says the product ended",
+    !/expired|upgrade|subscri|unlock|renew/i.test(fallback.cardText),
+    fallback.cardText.slice(0, 90)
+  );
+
+  await grantAccess();
+}
+
 await clearFixtures();
+await clearAccess();
 await restoreAvatar();
 await browser.close();
 

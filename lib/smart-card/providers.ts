@@ -9,12 +9,14 @@
 import type { HomeUpForContext } from "@/lib/social/home-upfor-context";
 import type { LinkrMutualForCard } from "@/lib/smart-card/linkr-context";
 import type {
+  AccessForCard,
   BlockedFeatureForCard,
   EventLinkrOfferForCard,
   MuddyBirthdayForCard,
   PlanChatDecisionForCard,
   PlanDecisionForCard
 } from "@/lib/smart-card/home-context";
+import { conversationHref } from "@/lib/messaging/open-conversation";
 import { upForActivitySmartCardMedia } from "@/lib/smart-card/visuals";
 import type { BuddyScoreData } from "@/lib/engagement/buddy-score-service";
 import type { JourneyData } from "@/lib/journey/journey";
@@ -93,6 +95,15 @@ export type SmartCardInput = {
    * from using. Absent means nothing is blocked.
    */
   blockedFeature?: BlockedFeatureForCard | null;
+  /**
+   * Mad Buddy Access, reduced to "may this viewer expand right now".
+   *
+   * Optional so every existing caller and test keeps compiling, and ABSENT
+   * MEANS UNGATED on purpose: a missing entitlement fact must never silently
+   * withhold somebody's existing social life. The dashboard supplies it; a
+   * failed resolve degrades to full continuity rather than a locked Home.
+   */
+  access?: AccessForCard | null;
   /** Count of plans starting inside the current weekend window. */
   weekendPlanCount: number;
   /** Privacy-safe server projection; never coordinates or numerical distance. */
@@ -466,8 +477,31 @@ function suggestionsProvider(input: SmartCardInput): SmartCard | null {
   };
 }
 
-/** Guaranteed fallback: social intent, not progression or product promotion. */
-function upForFallbackProvider(): SmartCard {
+/**
+ * Guaranteed fallback: social intent, not progression or product promotion.
+ *
+ * THIS CARD MUST ALWAYS RETURN SOMETHING. It is the last provider, so a null
+ * here blanks Home. That is why entitlement changes the WORDING rather than
+ * removing the card: creating an UpFor is an expansion that needs Access, but a
+ * viewer without Access is still a person Home has to say something true to.
+ *
+ * The no-Access copy points at Muddies rather than dressing up a locked door,
+ * and never says Mad Buddy has ended -- almost all of it is still free.
+ */
+function upForFallbackProvider(input: SmartCardInput): SmartCard {
+  if (input.access && !input.access.canExpand) {
+    return {
+      id: "upfor_fallback",
+      priority: 0,
+      illustration: "people",
+      eyebrow: "TODAY",
+      title: "Catch up with your Muddies",
+      subtitle: "Messages, Plans, Events and Glow are all still yours.",
+      cta: "Open Muddies",
+      destination: "/friends"
+    };
+  }
+
   return {
     id: "upfor_fallback",
     priority: 0,
@@ -755,6 +789,14 @@ function eventLinkrReadyProvider(input: SmartCardInput): SmartCard | null {
   const offer = input.eventLinkrOffer;
   if (!offer) return null;
 
+  /* ENTITLEMENT. Being discovered by new people at an Event is Linkr discovery,
+     which is one of the two gated expansions -- and the server refuses the
+     opt-in without Access anyway. Offering it here would send somebody to a
+     door that will not open, so the card simply does not appear.
+     Nothing they already have is touched: their existing mutuals, their
+     conversations and their Plans are all elsewhere in this file and ungated. */
+  if (input.access && !input.access.canExpand) return null;
+
   return {
     id: "event_linkr_ready",
     priority: 0,
@@ -796,7 +838,12 @@ function muddyBirthdayProvider(input: SmartCardInput): SmartCard | null {
       birthdays.length > 1
         ? birthdays.length + " of your Muddies are celebrating today."
         : "Send them a birthday wish.",
-    cta: "Send a message",
+    /* "Open birthday wishes", not "Send a message". The tap opens Notifications,
+       where the birthday row opens the wish composer -- it does not open a
+       composer directly, and it certainly does not send anything. Building a
+       second birthday-message flow on Home to justify the shorter label would
+       be two surfaces answering one question. */
+    cta: "Open birthday wishes",
     destination: "/notifications"
   };
 }
@@ -841,7 +888,11 @@ function planDecisionProvider(input: SmartCardInput): SmartCard | null {
        than making the person open it to find out. */
     meta: first.question,
     cta: "Vote now",
-    destination: "/plans"
+    /* THE PLAN THAT HOLDS THE POLL, not the Plans list. `?plan=<id>` is the
+       canonical deep link Home already uses for a Plan invitation, and it
+       opens that Plan's detail sheet where the poll lives. Landing on the
+       index would make the person find again the thing the card just named. */
+    destination: `/plans?plan=${first.planId}`
   };
 }
 
@@ -871,7 +922,11 @@ function planChatDecisionProvider(input: SmartCardInput): SmartCard | null {
     title: first.planTitle ? first.planTitle + " is deciding" : "A Plan is deciding",
     subtitle: first.question,
     cta: "Open chat",
-    destination: "/messages"
+    /* THE THREAD ITSELF, through the canonical helper. `conversationHref` exists
+       because three surfaces once navigated to a bare `/messages` and left the
+       person hunting the inbox for the conversation they had just been shown;
+       this card must not become the fourth. */
+    destination: conversationHref(first.conversationId)
   };
 }
 
@@ -895,6 +950,13 @@ function planChatDecisionProvider(input: SmartCardInput): SmartCard | null {
 function profileBlockingProvider(input: SmartCardInput): SmartCard | null {
   const blocked = input.blockedFeature;
   if (!blocked) return null;
+
+  /* ENTITLEMENT. This card promises that finishing the profile makes the viewer
+     discoverable. Without Access, Linkr discovery is gated anyway, so the
+     promise would not come true and the person would have done the work for
+     nothing. Access is the nearer blocker, and it is not this card's job to
+     sell it -- so the card stays silent rather than pointing at the wrong fix. */
+  if (input.access && !input.access.canExpand) return null;
 
   return {
     id: "profile_blocking",
@@ -938,6 +1000,6 @@ export function smartCardProviders(input: SmartCardInput): readonly SmartCardPro
     { id: "achievement", build: () => achievementProvider(input) },
     { id: "suggestions", build: () => suggestionsProvider(input) },
     { id: "profile_blocking", build: () => profileBlockingProvider(input) },
-    { id: "upfor_fallback", build: () => upForFallbackProvider() }
+    { id: "upfor_fallback", build: () => upForFallbackProvider(input) }
   ];
 }

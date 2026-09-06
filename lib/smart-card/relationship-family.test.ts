@@ -179,12 +179,20 @@ describe("a Muddy birthday repeats a permitted fact, never a date", () => {
     expect(smartCardTier("muddy_birthday")).toBe(3);
   });
 
-  it("names the person and offers the canonical wish surface", () => {
+  /**
+   * The label describes the TAP. /notifications opens the notifications LIST;
+   * the birthday row there opens the wish composer. So the button cannot say
+   * "Send a message" -- it neither opens a composer nor sends anything, and
+   * building a second birthday flow on Home to justify the shorter label would
+   * be two surfaces answering one question.
+   */
+  it("names the person and describes what the tap actually opens", () => {
     const card = pick({ muddyBirthdays: [birthday()] });
     expect(card?.id).toBe("muddy_birthday");
     expect(card?.title).toBe("It's Ama's birthday 🎉");
-    expect(card?.cta).toBe("Send a message");
+    expect(card?.cta).toBe("Open birthday wishes");
     expect(card?.destination).toBe("/notifications");
+    expect(card?.cta).not.toMatch(/^Send a message$/i);
   });
 
   it("counts a crowd without naming the rest of it", () => {

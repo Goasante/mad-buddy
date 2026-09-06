@@ -126,31 +126,41 @@ async function withoutBlocked(
 /**
  * Which of these conversations have a message anybody can still read.
  *
- * ONE query for the whole collection. This replaces a per-connection
- * `conversationHasActivity` call -- concurrent, but still one `messages` round
- * trip per card, so a 40-person collection cost 40 of them. Home now depends on
- * this reader for its Smart Card, which makes the shape worth fixing rather
- * than paying on every Home render.
+ * ONE BOUNDED ROUND TRIP: `conversation_previews` returns exactly one row per
+ * conversation, whatever the size of its history.
  *
- * Semantics are unchanged, deliberately including the deleted-message rule: a
- * conversation whose only message was deleted has nothing to continue, so it is
- * absent here and the CTA stays "Say hi". Selecting the ids and building a set
- * asks the same question `count` did, for every conversation at once.
+ * Two wrong shapes were tried on the way here, and both are worth naming.
+ * Originally this called `conversationHasActivity` once per connection, so a
+ * 40-person collection cost 40 `messages` round trips. Replacing that with a
+ * single `messages.select("conversation_id").in(...)` fixed the round trips and
+ * introduced a worse problem: it transferred EVERY undeleted message row across
+ * every Linkr conversation just to learn which ids appeared at least once. One
+ * query, unbounded payload -- and Home pays it on every render.
+ *
+ * The RPC is the shape that is bounded in both directions. Its `lateral ...
+ * limit 1` already filters `deleted_at is null`, so `last_created_at != null`
+ * answers exactly the question this helper asks, and the deleted-message rule
+ * survives unchanged: a conversation whose only message was deleted has no
+ * last message, so it stays absent here and the CTA stays "Say hi".
  */
 async function conversationsWithActivity(
   admin: Admin,
+  viewerId: string,
   conversationIds: string[]
 ): Promise<Set<string>> {
   const unique = [...new Set(conversationIds)];
   if (unique.length === 0) return new Set();
 
-  const { data } = await admin
-    .from("messages")
-    .select("conversation_id")
-    .in("conversation_id", unique)
-    .is("deleted_at", null);
+  const { data } = await admin.rpc("conversation_previews", {
+    p_user_id: viewerId,
+    p_conversation_ids: unique
+  });
 
-  return new Set((data ?? []).map((row) => row.conversation_id));
+  return new Set(
+    (data ?? [])
+      .filter((row) => row.last_created_at !== null)
+      .map((row) => row.conversation_id)
+  );
 }
 
 /**
@@ -206,6 +216,7 @@ export async function loadClickedPeople(viewerId: string): Promise<ClickedPerson
     withoutBlocked(admin, viewerId, otherIds),
     conversationsWithActivity(
       admin,
+      viewerId,
       rows.map((row) => row.conversation_id).filter((id): id is string => Boolean(id))
     ),
     describeConnectionEvents(admin, rows.map((row) => row.event_id))

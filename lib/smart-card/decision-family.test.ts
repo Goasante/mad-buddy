@@ -5,6 +5,7 @@ import type {
   PlanChatDecisionForCard,
   PlanDecisionForCard
 } from "@/lib/smart-card/home-context";
+import { conversationHref } from "@/lib/messaging/open-conversation";
 import { smartCardProviders, type SmartCardInput } from "@/lib/smart-card/providers";
 import { resolveSmartCard } from "@/lib/smart-card/smart-card";
 
@@ -92,9 +93,10 @@ describe("a Plan decision is an answer only the viewer can give", () => {
    * where the vote is actually cast -- it does not mutate from Home, and it
    * does not claim to.
    */
-  it("opens the canonical poll surface", () => {
-    expect(pick({ planDecisions: [decision()] })?.cta).toBe("Vote now");
-    expect(pick({ planDecisions: [decision()] })?.destination).toBe("/plans");
+  it("opens the PLAN that holds the poll, not the Plans index", () => {
+    const card = pick({ planDecisions: [decision({ planId: "p42" })] });
+    expect(card?.cta).toBe("Vote now");
+    expect(card?.destination).toBe("/plans?plan=p42");
   });
 
   /**
@@ -118,6 +120,16 @@ describe("a Plan Chat decision is structured, never message text", () => {
     expect(card?.id).toBe("plan_chat_decision");
     expect(card?.title).toBe("Friday Dinner is deciding");
     expect(card?.subtitle).toBe("Which venue?");
+  });
+
+  /* The inbox is not the thread. conversationHref exists because several
+     surfaces once dropped people on /messages to hunt for the conversation
+     they had just been shown; this card must not become another. */
+  it("opens the exact Plan Chat, not the inbox", () => {
+    const card = pick({ planChatDecisions: [chatDecision({ conversationId: "c42" })] });
+    expect(card?.cta).toBe("Open chat");
+    expect(card?.destination).toBe(conversationHref("c42"));
+    expect(card?.destination).toBe("/messages?conversation=c42");
   });
 
   it("still works when the Plan title is unavailable", () => {
@@ -167,6 +179,24 @@ describe("button copy does not promise a mutation", () => {
         expect(card.secondaryAction.label, `${card.id} secondary`).not.toMatch(PROMISES_MUTATION);
       }
     }
+  });
+
+  /**
+   * A card that NAMES one thing must OPEN that thing.
+   *
+   * Both decision states carry the id of the exact Plan or conversation they
+   * describe, so landing on the index would make the person find again what the
+   * card just showed them. Asserted together because the same mistake was made
+   * twice, in two different families, for the same reason.
+   */
+  it("a state that names a specific item links to that item", () => {
+    const plan = pick({ planDecisions: [decision({ planId: "p7" })] });
+    expect(plan?.destination).not.toBe("/plans");
+    expect(plan?.destination).toContain("p7");
+
+    const chat = pick({ planChatDecisions: [chatDecision({ conversationId: "c7" })] });
+    expect(chat?.destination).not.toBe("/messages");
+    expect(chat?.destination).toContain("c7");
   });
 
   it("a Plan invitation says Respond, because tapping opens the Plan", () => {

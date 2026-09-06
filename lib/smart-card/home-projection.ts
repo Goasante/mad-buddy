@@ -1,5 +1,7 @@
 import "server-only";
 
+import { hasEverHadWelcomeAccess } from "@/lib/access/guard";
+import { resolveAccessForUser } from "@/lib/access/resolver";
 import { resolveEventLinkrEligibility } from "@/lib/events/linkr-consent";
 import { resolveActivationRequirements } from "@/lib/linkr/rules";
 import { resolveAge } from "@/lib/linkr/profile-service";
@@ -9,6 +11,7 @@ import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { dateKeyInTimeZone } from "@/lib/profile/birth-date";
 import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 import type {
+  AccessForCard,
   BlockedFeatureForCard,
   EventLinkrOfferForCard,
   MuddyBirthdayForCard,
@@ -337,12 +340,38 @@ export async function loadBlockedFeature(
   };
 }
 
+/**
+ * What Access permits, reduced to Home's one question.
+ *
+ * Reads the SAME `resolveAccessForUser` every gated Linkr and UpFor mutation
+ * resolves through, so Home cannot offer an expansion the server would then
+ * refuse -- and cannot withhold one the server would allow.
+ *
+ * FAILS OPEN, which is the opposite of the guard and deliberately so. The guard
+ * protects a mutation, where the safe answer to "I do not know" is no. This
+ * only decides what Home SAYS, where the safe answer is to keep the person's
+ * existing social life visible: a failed entitlement read must never blank
+ * somebody's Muddies, Plans or conversations.
+ */
+export async function loadAccessForCard(userId: string): Promise<AccessForCard> {
+  try {
+    const [access, hadWelcome] = await Promise.all([
+      resolveAccessForUser(userId),
+      hasEverHadWelcomeAccess(userId)
+    ]);
+    return { canExpand: access.hasAccess, hadWelcomeAccess: hadWelcome };
+  } catch {
+    return { canExpand: true, hadWelcomeAccess: false };
+  }
+}
+
 export type HomeSmartCardProjection = {
   eventLinkrOffer: EventLinkrOfferForCard | null;
   muddyBirthdays: MuddyBirthdayForCard[];
   planDecisions: PlanDecisionForCard[];
   planChatDecisions: PlanChatDecisionForCard[];
   blockedFeature: BlockedFeatureForCard | null;
+  access: AccessForCard;
 };
 
 const EMPTY: HomeSmartCardProjection = {
@@ -350,7 +379,9 @@ const EMPTY: HomeSmartCardProjection = {
   muddyBirthdays: [],
   planDecisions: [],
   planChatDecisions: [],
-  blockedFeature: null
+  blockedFeature: null,
+  /* Ungated: an absent projection must not withhold anybody's existing life. */
+  access: { canExpand: true, hadWelcomeAccess: false }
 };
 
 /**
@@ -371,16 +402,24 @@ export async function loadHomeSmartCardProjection(input: {
   const admin = createSupabaseAdminClient();
 
   try {
-    const [eventLinkrOffer, muddyBirthdays, planDecisions, planChatDecisions, blockedFeature] =
+    const [eventLinkrOffer, muddyBirthdays, planDecisions, planChatDecisions, blockedFeature, access] =
       await Promise.all([
         loadEventLinkrOffer(admin, input.userId),
         loadMuddyBirthdays(admin, input.userId, input.now),
         loadPlanDecisions(admin, input.userId, input.planIds, input.planTitleById, input.now),
         loadPlanChatDecisions(admin, input.userId, input.planTitleById),
-        loadBlockedFeature(admin, input.userId)
+        loadBlockedFeature(admin, input.userId),
+        loadAccessForCard(input.userId)
       ]);
 
-    return { eventLinkrOffer, muddyBirthdays, planDecisions, planChatDecisions, blockedFeature };
+    return {
+      eventLinkrOffer,
+      muddyBirthdays,
+      planDecisions,
+      planChatDecisions,
+      blockedFeature,
+      access
+    };
   } catch {
     return EMPTY;
   }
