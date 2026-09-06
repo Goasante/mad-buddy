@@ -4,6 +4,20 @@ This checklist exists because source code cannot prove who owns external account
 
 **Do not paste passwords, API secret values, private keys, recovery codes, card numbers, or database credentials into this document.** Record only ownership/status and the vault path where the real secret is stored.
 
+## Founder-attested facts — 2026-09-06
+
+The following facts have now been supplied by the founder. Because the repository is public, login email addresses are intentionally not repeated here; store login identity in the private provider/vault record.
+
+- **Domain registrar:** currently unknown/forgotten. Recovery task remains open.
+- **Cloudflare:** founder-controlled account.
+- **Vercel:** founder-owned personal project/account; currently on the free plan.
+- **Supabase Production:** founder-controlled personal account/project; founder reports being the current owner/admin.
+- **Paystack:** merchant/business and settlement account are under founder/business control.
+- **Google Play Console:** not yet established.
+- **Apple Developer / App Store Connect:** not yet established.
+
+These facts close ownership-identification questions only. They do **not** prove 2FA, recovery, backups, provider alerting, billing renewal, webhook settings, Auth settings, or signing readiness. Those remain separate checklist items below.
+
 ## Private vault
 
 - [ ] Choose the Mad Buddy private password-manager vault.
@@ -34,28 +48,38 @@ Value: NEVER COPY HERE
 
 ## Domain / Cloudflare
 
-- [ ] Confirm where `mad-buddy.com` is registered.
-- [ ] Confirm registrant/login account.
+- [ ] **OPEN — recover registrar:** confirm where `mad-buddy.com` is registered. Founder currently does not remember the registrar/company.
+- [ ] Confirm registrant/login account once registrar is recovered.
 - [ ] Confirm auto-renewal is enabled.
 - [ ] Confirm billing method owner.
 - [ ] Confirm domain-lock / transfer protection.
-- [ ] Confirm Cloudflare account owner and backup admin.
+- [x] Confirm Cloudflare account owner — founder-controlled.
+- [ ] Confirm Cloudflare backup admin.
 - [ ] Confirm 2FA/recovery.
 - [ ] Confirm Turnstile production site exists and intended hostnames are allowed.
 
+Registrar recovery routes, in preferred order:
+
+1. Search original purchase/renewal email for `mad-buddy.com`.
+2. Search card/mobile-money/bank history for the domain purchase/renewal merchant.
+3. Check Cloudflare domain/registrar UI to see whether the domain is registered there or only using Cloudflare DNS.
+4. Use ICANN/RDAP to identify the current registrar of record. Note that the accredited registrar shown by RDAP may be the backend for a reseller brand.
+5. Once recovered, store registrar login identity, renewal date and recovery information in the private vault/provider record — not in this public file.
+
 ## Vercel
 
-- [ ] Confirm team/account that owns project `mad-buddy`.
-- [ ] Confirm billing plan and billing owner.
-- [ ] Confirm backup admin.
+- [x] Confirm team/account that owns project `mad-buddy` — founder-owned personal account/project.
+- [x] Confirm current billing plan — free plan at founder attestation date.
+- [ ] Confirm backup admin/recovery path.
 - [ ] Confirm production environment values exist for all current required server/public variables.
 - [ ] Confirm preview/staging scopes do not accidentally reuse Production-only secrets when separation is available.
-- [ ] Configure usage/spend alerts and route them to more than one trusted operator if possible.
+- [ ] Configure usage/spend alerts if/when paid usage begins and route them to more than one trusted operator if possible.
 
 ## Supabase Production
 
-- [ ] Confirm Production project ref is `cabkhxxnrybzhkbtoiiz`.
-- [ ] Confirm organization/project owner.
+- [x] Confirm Production project ref is `cabkhxxnrybzhkbtoiiz`.
+- [x] Confirm organization/project owner — founder-controlled; founder reports being current owner/admin.
+- [ ] Confirm whether any additional organization/project administrators currently exist.
 - [ ] Record region and plan.
 - [ ] Check managed backups / PITR status and retention.
 - [ ] Confirm latest backup health.
@@ -68,16 +92,17 @@ Value: NEVER COPY HERE
 
 ## Supabase Staging
 
-- [ ] Confirm staging ref is `ivaydmciwmjdjsrovbqb`.
+- [x] Confirm staging ref is `ivaydmciwmjdjsrovbqb`.
+- [ ] Confirm staging owner/access list.
 - [ ] Confirm it remains synthetic-data-only.
 - [ ] Confirm no human accounts/data have been introduced.
 - [ ] Confirm staging keys are not mistaken for Production keys in Vercel/local envs.
 
 ## Paystack
 
-- [ ] Confirm merchant account owner.
-- [ ] Confirm settlement bank/account ownership.
-- [ ] Confirm live/test mode access is understood.
+- [x] Confirm merchant account owner/control — founder/business controlled.
+- [x] Confirm settlement bank/account ownership/control — founder/business controlled.
+- [ ] Confirm live/test mode access is understood and clearly separated.
 - [ ] Confirm Mad Buddy Access plan in Paystack matches current source authority.
 - [ ] Confirm webhook endpoint/configuration.
 - [ ] Confirm refund/dispute permissions and who is responsible.
@@ -96,9 +121,10 @@ Value: NEVER COPY HERE
 
 ## Google Play Console / Android
 
-- [ ] Confirm Play Console account owner.
-- [ ] Confirm app `com.madbuddy.app` exists or record that it has not yet been created.
-- [ ] Confirm whether Play App Signing is enabled.
+- [x] Record current status — no Play Console account/app ownership established yet.
+- [ ] Before Android store release, create/confirm the Play Console owner account.
+- [ ] Create/confirm app `com.madbuddy.app`.
+- [ ] Enable/confirm Play App Signing.
 - [ ] Identify the upload/release keystore owner.
 - [ ] Back up the keystore outside the development laptop.
 - [ ] Store keystore passwords/alias metadata in the private vault.
@@ -106,7 +132,8 @@ Value: NEVER COPY HERE
 
 ## Apple Developer / App Store Connect
 
-- [ ] Confirm Apple Developer membership/account exists or record that it does not yet exist.
+- [x] Record current status — no Apple Developer/App Store Connect account established yet.
+- [ ] Before iOS distribution, create/confirm Apple Developer membership/account.
 - [ ] Record Team ID.
 - [ ] Record Account Holder and backup Admin.
 - [ ] Confirm bundle id `com.madbuddy.app` registration.
