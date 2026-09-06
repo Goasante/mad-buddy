@@ -3,6 +3,7 @@ import { loadActivationProjection } from "@/lib/activation/projection";
 import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
 import { loadSafeArrivalJourneys } from "@/lib/safety/safe-arrival-service";
+import { loadClickedPeople } from "@/lib/linkr/collections-service";
 import { loadHomeUpForContext } from "@/lib/social/home-upfor-context";
 import { loadUpcomingAgenda } from "@/lib/social/upcoming-agenda";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -37,7 +38,7 @@ function isStatusActiveAtRequestTime(expiresAt: string) {
 export default async function DashboardPage() {
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
   const admin = createSupabaseAdminClient();
-  const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents, activation, upForContext] = user
+  const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents, activation, upForContext, linkrMutuals] = user
     ? await Promise.all([
         ensureProfileForUser(user),
         supabase
@@ -63,9 +64,10 @@ export default async function DashboardPage() {
         buildSpotlightFeed(admin, user.id),
         getRankedUpcomingEvents(user.id, { limit: HOME_RANKED_EVENTS_LIMIT }),
         loadActivationProjection(user.id),
-        loadHomeUpForContext(admin, user.id)
+        loadHomeUpForContext(admin, user.id),
+        loadClickedPeople(user.id)
       ])
-    : [null, null, { items: [], hasMore: false }, null, null, {}, false, false, null, 0, null, null, [], [], [], null, null];
+    : [null, null, { items: [], hasMore: false }, null, null, {}, false, false, null, 0, null, null, [], [], [], null, null, []];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -120,6 +122,11 @@ export default async function DashboardPage() {
         recentAchievement: null,
         suggestionCount: 0,
         upFor: upForContext,
+        /* Both are facts Home already owns: the request count feeds its header
+           badge, and Linkr mutuals are only ever MUTUAL matches, so a card
+           built from them reveals nothing one-sided. */
+        incomingRequestCount: incomingRequestCount ?? 0,
+        linkrMutuals: linkrMutuals ?? [],
         /* NearbyHero owns the proximity payoff and the Activation card owns
            cold-start people discovery. Excluding them HERE (rather than after
            resolution) means that when one of them ranks highest the engine

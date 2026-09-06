@@ -7,6 +7,7 @@
  */
 
 import type { HomeUpForContext } from "@/lib/social/home-upfor-context";
+import type { LinkrMutualForCard } from "@/lib/smart-card/linkr-context";
 import { upForActivitySmartCardMedia } from "@/lib/smart-card/visuals";
 import type { BuddyScoreData } from "@/lib/engagement/buddy-score-service";
 import type { JourneyData } from "@/lib/journey/journey";
@@ -48,6 +49,19 @@ export type SmartCardInput = {
    * "no UpFor context", which yields no UpFor card rather than a wrong one.
    */
   upFor?: HomeUpForContext | null;
+  /**
+   * Muddy requests waiting on the viewer. Home already counts these for its
+   * header badge, so this is a fact it owns rather than a new read.
+   */
+  incomingRequestCount?: number;
+  /**
+   * Linkr mutual connections, newest first, from loadClickedPeople.
+   *
+   * Only MUTUAL matches appear here -- Linkr's privacy model means a one-sided
+   * interest is never surfaced -- and `hasConversation` is what separates a
+   * genuine "say hi" from a pair who are already talking.
+   */
+  linkrMutuals?: readonly LinkrMutualForCard[];
   /** Count of plans starting inside the current weekend window. */
   weekendPlanCount: number;
   /** Privacy-safe server projection; never coordinates or numerical distance. */
@@ -533,11 +547,68 @@ function upForScheduledProvider(input: SmartCardInput): SmartCard | null {
   };
 }
 
+
+/* ---------------------------------------------------------------------------
+ * Relationships.
+ *
+ * Card A owns the FIRST Muddy and cold-start discovery, so nothing here
+ * duplicates them: these are states about people the viewer already has some
+ * relationship with.
+ * ------------------------------------------------------------------------ */
+
+/** Tier 1: somebody asked to connect and is waiting on an answer. */
+function muddyRequestProvider(input: SmartCardInput): SmartCard | null {
+  const count = input.incomingRequestCount ?? 0;
+  if (count <= 0) return null;
+
+  return {
+    id: "muddy_request",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "NEEDS YOUR RESPONSE",
+    title:
+      count === 1 ? "Someone wants to be your Muddy" : count + " people want to be your Muddies",
+    subtitle: "They are waiting to hear back from you.",
+    cta: "Review requests",
+    destination: "/friends"
+  };
+}
+
+/**
+ * Tier 3: a Linkr match who has not been spoken to yet.
+ *
+ * GROUNDED, NOT A RECOMMENDATION. This never surfaces a Linkr suggestion --
+ * only a MUTUAL connection, where both people already chose each other. A pair
+ * who are already talking is not a moment, so hasConversation filters them
+ * out rather than nagging about a conversation that exists.
+ */
+function linkrMutualProvider(input: SmartCardInput): SmartCard | null {
+  const unspoken = (input.linkrMutuals ?? []).filter((person) => !person.hasConversation);
+  if (unspoken.length === 0) return null;
+  const first = unspoken[0];
+
+  return {
+    id: "linkr_mutual",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "YOU BOTH CONNECTED",
+    title: "You and " + first.displayName + " connected",
+    subtitle:
+      unspoken.length > 1
+        ? unspoken.length + " Linkr connections are waiting for a first message."
+        : "Neither of you has said anything yet.",
+    cta: "Say hi",
+    destination: "/linkr",
+    media: first.photo ? { url: first.photo, alt: first.displayName } : undefined
+  };
+}
+
 export function smartCardProviders(input: SmartCardInput): readonly SmartCardProvider[] {
   return [
     { id: "safe_arrival", build: () => safeArrivalProvider(input) },
     { id: "plan_rsvp", build: () => planRsvpProvider(input) },
     { id: "upfor_requests", build: () => upForRequestsProvider(input) },
+    { id: "muddy_request", build: () => muddyRequestProvider(input) },
     { id: "plan_starting", build: () => planStartingProvider(input) },
     { id: "event_live", build: () => eventLiveProvider(input) },
     { id: "upfor_active_muddy", build: () => upForActiveMuddyProvider(input) },
@@ -546,6 +617,7 @@ export function smartCardProviders(input: SmartCardInput): readonly SmartCardPro
     { id: "owned_upfor_starting", build: () => ownedUpForStartingProvider(input) },
     { id: "nearby_muddies", build: () => nearbyMuddiesProvider(input) },
     { id: "event_starting", build: () => eventStartingProvider(input) },
+    { id: "linkr_mutual", build: () => linkrMutualProvider(input) },
     { id: "birthday", build: () => birthdayProvider(input) },
     { id: "weekend_plans", build: () => weekendPlansProvider(input) },
     { id: "upfor_scheduled", build: () => upForScheduledProvider(input) },

@@ -19,6 +19,10 @@ export const SMART_CARD_IDS = [
      unanswered Plan invitation. It sits second because a Plan has a time
      attached and a request does not. */
   "upfor_requests",
+  /* Tier 1: somebody asked to connect and is waiting. Last of the tier-1 group
+     because a Plan and an UpFor both carry a time pressure a friend request
+     does not -- but still above everything that is merely happening. */
+  "muddy_request",
   "plan_starting",
   "event_live",
   /* Tier 2. `upfor_accepted` leads the group: somebody saying yes to you is the
@@ -29,8 +33,11 @@ export const SMART_CARD_IDS = [
   "owned_upfor_starting",
   "upfor_active_muddy",
   "nearby_muddies",
-  "event_starting",
+  /* Tier 3: relationship momentum. Both are about a specific person, which is
+     why they outrank the tier-4 opportunities below. */
+  "linkr_mutual",
   "birthday",
+  "event_starting",
   "weekend_plans",
   "upfor_scheduled",
   /* Cold-start people help outranks Journey deliberately.
