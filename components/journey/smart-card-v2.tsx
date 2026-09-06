@@ -9,19 +9,19 @@ import { useEffect, useState, useTransition } from "react";
 import { acknowledgeSmartCardAction } from "@/app/(app)/smart-card-actions";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import type { SmartCard, SmartCardIllustration } from "@/lib/smart-card/smart-card";
+import { smartCardVisualTreatment } from "@/lib/smart-card/visuals";
 import { cn } from "@/lib/utils";
 
 /**
  * Smart Card V2 presentation.
  *
- * The existing Smart Card is intentionally left in place as a rollback while
- * V2 is runtime-reviewed. V2 changes the composition, not the selection
- * authority: the server still chooses exactly one SmartCard.
+ * Home has TWO adaptive card families: the separate Activation / Relationship
+ * card and this cross-product Smart Card. `deferred` is therefore a product
+ * rule, not a dimming trick: when the Activation card owns the screen this card
+ * becomes visually quiet so Home never shows two competing billboards.
  *
- * Important difference from V1: the card is no longer one giant link. V2 can
- * present a real primary and secondary action without nesting interactive
- * elements. This is the presentation seam required for future cards whose
- * actions differ (e.g. Say hi / Make a Plan, Interested / Details).
+ * V2 is also not one giant link. It can present a real primary and secondary
+ * action without nesting interactive elements.
  */
 
 const FALLBACK_ILLUSTRATION = "/brand/journey-target.webp";
@@ -44,7 +44,7 @@ const PROMINENT_CARD_IDS = new Set<SmartCard["id"]>([
 
 function cardTone(card: SmartCard) {
   if (card.id === "safe_arrival") {
-    return "from-[#4e0401] via-[#74140d] to-[#a1331c]";
+    return "from-[#4e0401] via-[#64110c] to-[#852116]";
   }
   if (card.id === "plan_rsvp") {
     return "from-[#6a0b08] via-[#8f1c12] to-[#d56822]";
@@ -76,12 +76,15 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
   const reducedMotion = useReducedMotion();
   const percent = card.progress?.percent ?? 0;
   const prominent = PROMINENT_CARD_IDS.has(card.id);
+  const treatment = smartCardVisualTreatment(card, deferred);
+  const showHeroMedia = treatment === "media";
+  const showQuietMedia = treatment === "quiet" && Boolean(card.media?.url);
+  const showFallbackArt = treatment === "branded";
+  const quiet = treatment === "quiet";
+  const safety = treatment === "safety";
 
   useEffect(() => {
-    if (reducedMotion) {
-      setAnimatedPercent(percent);
-      return;
-    }
+    if (reducedMotion) return;
     const frame = requestAnimationFrame(() => setAnimatedPercent(percent));
     return () => cancelAnimationFrame(frame);
   }, [percent, reducedMotion]);
@@ -93,33 +96,53 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
     });
   }
 
-  const hasMedia = Boolean(card.media?.url);
+  const displayedPercent = reducedMotion ? percent : animatedPercent;
 
   return (
     <article
       aria-busy={pending || undefined}
+      data-smart-card-visual={treatment}
       className={cn(
         "safe-motion relative isolate overflow-hidden rounded-[1.75rem] border",
-        deferred
-          ? "border-border/70 bg-card/80 shadow-sm"
+        quiet
+          ? "border-border/70 bg-card/82 text-foreground shadow-sm"
           : "border-white/10 bg-gradient-to-br text-white shadow-[0_14px_34px_hsl(var(--shadow)/0.20)]",
-        !deferred && cardTone(card),
-        prominent ? "min-h-[15rem]" : "min-h-[12rem]"
+        !quiet && cardTone(card),
+        prominent && !quiet ? "min-h-[15rem]" : "min-h-[12rem]"
       )}
     >
-      {hasMedia ? (
-        <div className="pointer-events-none absolute inset-y-0 right-0 z-0 w-[58%]" aria-hidden="true">
+      {showHeroMedia ? (
+        <div className="pointer-events-none absolute inset-y-0 right-0 z-0 w-[60%]" aria-hidden="true">
           <Image
             src={card.media!.url}
             alt=""
             fill
-            sizes="(max-width: 768px) 60vw, 360px"
+            sizes="(max-width: 768px) 62vw, 360px"
             className="object-cover"
             style={{ objectPosition: mediaPosition(card) }}
           />
-          <span className="absolute inset-0 bg-[linear-gradient(90deg,rgba(30,5,3,0.96)_0%,rgba(30,5,3,0.58)_45%,rgba(30,5,3,0.18)_100%)]" />
+          <span className="absolute inset-0 bg-[linear-gradient(90deg,rgba(30,5,3,0.98)_0%,rgba(30,5,3,0.70)_38%,rgba(30,5,3,0.20)_100%)]" />
         </div>
-      ) : (
+      ) : null}
+
+      {showQuietMedia ? (
+        <div
+          className="pointer-events-none absolute right-4 top-4 z-0 h-[4.75rem] w-[4.75rem] overflow-hidden rounded-[1.15rem] border border-border/50 opacity-80"
+          aria-hidden="true"
+        >
+          <Image
+            src={card.media!.url}
+            alt=""
+            fill
+            sizes="76px"
+            className="object-cover"
+            style={{ objectPosition: mediaPosition(card) }}
+          />
+          <span className="absolute inset-0 bg-gradient-to-t from-background/20 to-transparent" />
+        </div>
+      ) : null}
+
+      {showFallbackArt ? (
         <div
           className="pointer-events-none absolute -bottom-6 -right-7 z-0 h-[11rem] w-[11rem] opacity-[0.34] sm:h-[12rem] sm:w-[12rem]"
           aria-hidden="true"
@@ -133,22 +156,31 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
             className="object-contain"
           />
         </div>
-      )}
+      ) : null}
 
-      {!deferred ? (
+      {/* Safety stays calm: branded tone and a restrained glow, never a photo,
+          prism or decorative animation. */}
+      {safety ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-16 -top-20 z-0 h-56 w-56 rounded-full bg-[#e88c2b]/10 blur-3xl"
+        />
+      ) : null}
+
+      {!quiet && !safety ? (
         <span
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_12%_0%,rgba(255,194,71,0.18),transparent_38%)]"
         />
       ) : null}
 
-      <div className={cn("relative z-10 flex h-full flex-col", prominent ? "p-5" : "p-4.5 sm:p-5")}>
+      <div className={cn("relative z-10 flex h-full flex-col", prominent && !quiet ? "p-5" : "p-4.5 sm:p-5")}>
         {card.eyebrow ? (
           <div>
             <span
               className={cn(
                 "inline-flex min-h-7 items-center rounded-full px-3 py-1 text-[0.6875rem] font-bold tracking-[0.09em]",
-                deferred
+                quiet
                   ? "bg-primary/10 text-primary"
                   : "border border-white/15 bg-black/20 text-[#ffe0a3] backdrop-blur-sm"
               )}
@@ -158,12 +190,17 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
           </div>
         ) : null}
 
-        <div className={cn("mt-3", hasMedia ? "max-w-[63%]" : "max-w-[70%]")}>
+        <div
+          className={cn(
+            "mt-3",
+            showHeroMedia ? "max-w-[63%]" : showQuietMedia ? "max-w-[72%]" : "max-w-[70%]"
+          )}
+        >
           <h2
             className={cn(
               "font-bold leading-[1.08] tracking-[-0.02em]",
-              prominent ? "text-[1.65rem]" : "text-[1.4rem]",
-              deferred ? "text-foreground" : "text-white"
+              prominent && !quiet ? "text-[1.65rem]" : "text-[1.4rem]",
+              quiet ? "text-foreground" : "text-white"
             )}
           >
             {card.title}
@@ -171,7 +208,7 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
           <p
             className={cn(
               "mt-2 text-[0.875rem] leading-[1.45]",
-              deferred ? "text-muted-foreground" : "text-white/90"
+              quiet ? "text-muted-foreground" : "text-white/90"
             )}
           >
             {card.subtitle}
@@ -180,12 +217,12 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
           {card.meta || card.socialProof ? (
             <div className="mt-3 space-y-1">
               {card.meta ? (
-                <p className={cn("text-xs font-semibold", deferred ? "text-foreground/80" : "text-white/85")}>
+                <p className={cn("text-xs font-semibold", quiet ? "text-foreground/80" : "text-white/85")}>
                   {card.meta}
                 </p>
               ) : null}
               {card.socialProof ? (
-                <p className={cn("text-xs", deferred ? "text-muted-foreground" : "text-white/75")}>
+                <p className={cn("text-xs", quiet ? "text-muted-foreground" : "text-white/75")}>
                   {card.socialProof}
                 </p>
               ) : null}
@@ -196,17 +233,17 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
         {card.progress ? (
           <div className="mt-4 max-w-[72%]">
             <div className="flex items-baseline justify-between gap-3">
-              <span className={cn("text-sm font-bold tabular-nums", deferred ? "text-foreground" : "text-white")}>
+              <span className={cn("text-sm font-bold tabular-nums", quiet ? "text-foreground" : "text-white")}>
                 {card.progress.percent}%
               </span>
-              <span className={cn("text-xs", deferred ? "text-muted-foreground" : "text-white/75")}>
+              <span className={cn("text-xs", quiet ? "text-muted-foreground" : "text-white/75")}>
                 {card.progress.label}
               </span>
             </div>
-            <div className={cn("mt-2 h-1.5 overflow-hidden rounded-full", deferred ? "bg-muted" : "bg-white/20")}>
+            <div className={cn("mt-2 h-1.5 overflow-hidden rounded-full", quiet ? "bg-muted" : "bg-white/20")}>
               <div
                 className="h-full origin-left rounded-full bg-[#ffc247] transition-transform duration-[700ms] ease-out motion-reduce:duration-0"
-                style={{ transform: `scaleX(${animatedPercent / 100})` }}
+                style={{ transform: `scaleX(${displayedPercent / 100})` }}
               />
             </div>
           </div>
@@ -218,7 +255,7 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
             onClick={acknowledgeIfNeeded}
             className={cn(
               "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-transform active:scale-[0.98] motion-reduce:active:scale-100",
-              deferred
+              quiet
                 ? "bg-primary text-primary-foreground"
                 : "bg-[#f7a01f] text-[#4e0401] shadow-[0_8px_20px_rgba(232,140,43,0.26)]"
             )}
@@ -232,7 +269,7 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
               href={card.secondaryAction.destination as Route}
               className={cn(
                 "focus-ring inline-flex min-h-11 items-center justify-center rounded-full border px-4 py-2.5 text-sm font-semibold",
-                deferred
+                quiet
                   ? "border-border bg-background/70 text-foreground"
                   : "border-white/35 bg-black/10 text-white backdrop-blur-sm"
               )}
