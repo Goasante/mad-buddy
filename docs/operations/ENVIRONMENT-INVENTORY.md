@@ -7,6 +7,7 @@ This is the operational inventory of Mad Buddy configuration. It records **names
 - **PUBLIC** — intentionally shipped to browser/native clients.
 - **SERVER SECRET** — may exist only in server/provider secret stores.
 - **OPERATOR SECRET** — used by CLI/release/operator tooling, never by clients.
+- **SERVER CONFIG** — not cryptographic secret material, but server-controlled and change-sensitive.
 - **PROVIDER DASHBOARD** — configured in an external provider rather than an application env var.
 - **AUTOMATIC** — supplied by Vercel/Node/build tooling.
 - **LEGACY / REVIEW** — still referenced somewhere but not current product authority.
@@ -23,7 +24,7 @@ This is the operational inventory of Mad Buddy configuration. It records **names
 | `SUPABASE_DB_PASSWORD` | OPERATOR SECRET | Supabase CLI / direct database operator access | Private vault / local operator env only |
 | `NEXT_PUBLIC_APP_URL` | PUBLIC | Canonical application URL | Production should resolve to `https://mad-buddy.com` |
 | `NEXT_PUBLIC_GA_MEASUREMENT_ID` | PUBLIC | GA4 measurement id | Vercel/public config |
-| `ADMIN_EMAILS` | SERVER CONFIG | Coarse admin-email allowlist used by server code | Vercel env; value itself is not a cryptographic secret but controls privilege and should be change-controlled |
+| `ADMIN_EMAILS` | SERVER CONFIG | Coarse admin-email allowlist used by server code | Vercel env; not cryptographic, but privilege-controlling and change-controlled |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | PUBLIC | Cloudflare Turnstile site key | Vercel/public config |
 | `TURNSTILE_SECRET_KEY` | SERVER SECRET | Turnstile verification | Vercel server env / vault |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | PUBLIC | Browser push subscription public key | Vercel/public config |
@@ -43,15 +44,15 @@ Current consumer authority is `lib/access/product.ts` and `docs/product/MONETIZA
 
 | Variable | Class | Purpose | Status |
 | --- | --- | --- | --- |
-| `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | PUBLIC | Paystack client/public key where browser checkout needs it | Current Paystack integration dependency |
+| `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | PUBLIC | Paystack public/provider key used by current Paystack transport/readiness path | Current integration dependency |
 | `PAYSTACK_SECRET_KEY` | SERVER SECRET | Paystack API verification/checkout | Vault + Vercel server env |
-| `PAYSTACK_WEBHOOK_SECRET` | SERVER SECRET | Webhook verification override; falls back to Paystack secret in current legacy config helper | Prefer explicit separate value where supported |
+| `PAYSTACK_WEBHOOK_SECRET` | SERVER SECRET | Webhook verification override; current helper falls back to Paystack secret if unset | Prefer an explicit value and rotate independently where operationally possible |
 | `MAD_BUDDY_ACCESS_AMOUNT_MINOR` | SERVER CONFIG | Test/staging override for current Access price | Optional; source default is current production authority |
 | `MAD_BUDDY_ACCESS_PLAN_CODE` | SERVER CONFIG | Test/staging override for current Access Paystack plan | Optional; source default is current production authority |
-| `PAYSTACK_BUDDY_PLUS_PLAN_CODE` | LEGACY / REVIEW | Old Buddy Plus plan code | Retired product model; still referenced by legacy readiness/config docs and must be reconciled |
-| `PAYSTACK_BUDDY_PRO_PLAN_CODE` | LEGACY / REVIEW | Old Buddy Pro plan code | Retired product model; still referenced by legacy readiness/config docs and must be reconciled |
+| `PAYSTACK_BUDDY_PLUS_PLAN_CODE` | LEGACY / REVIEW | Old Buddy Plus plan code | Retired product model; retained only for legacy compatibility paths |
+| `PAYSTACK_BUDDY_PRO_PLAN_CODE` | LEGACY / REVIEW | Old Buddy Pro plan code | Retired product model; retained only for legacy compatibility paths |
 
-**Current source authority:** Mad Buddy Access is one monthly product. The old Plus/Pro ladder is not the current consumer model. Do not restore old billing simply because a legacy env name remains in source or docs.
+**Current source authority:** Mad Buddy Access is one monthly product. The old Plus/Pro ladder is not the current consumer model. Readiness, preflight, README and deployment onboarding on this branch have been reconciled so they no longer require the retired plan codes.
 
 ## Native bundle (`mobile/`)
 
@@ -82,10 +83,13 @@ These are files/credentials rather than ordinary env vars:
 | Item | Class | Storage |
 | --- | --- | --- |
 | Distribution certificates/private keys (`.p12`) | OPERATOR SECRET | Private vault / Keychain; never Git |
+| App Store Connect/APNs private keys (`.p8`) | OPERATOR SECRET | Private vault; never Git |
 | Provisioning profiles (`.mobileprovision`) | SENSITIVE OPERATOR FILE | Apple developer tooling / vault backup; never Git |
 | `ios/App/App/GoogleService-Info.plist` | SENSITIVE CLIENT CONFIG | Local/CI build input; root `.gitignore` excludes it |
 | APNs keys/certificates | OPERATOR SECRET | Apple Developer account + vault |
 | Apple recovery codes / account recovery | OPERATOR SECRET | Vault; owner + backup operator |
+
+The iOS project `.gitignore` on this branch explicitly excludes common signing/export material in addition to generated build output.
 
 ## Provider/dashboard configuration that is not represented by an application secret
 
@@ -103,11 +107,35 @@ These must be recorded in `PROVIDER-REGISTRY.md` and verified in the provider UI
 
 ## Automatic environment variables
 
-The application also consumes platform/runtime variables supplied automatically, including Vercel deployment/build identifiers such as `VERCEL_URL`, `VERCEL_PROJECT_PRODUCTION_URL`, and `VERCEL_GIT_COMMIT_SHA`, plus Node/Next runtime variables such as `NODE_ENV` and `NEXT_RUNTIME`. These are not founder-managed secrets.
+The application also consumes platform/runtime variables supplied automatically, including Vercel deployment/build identifiers such as:
 
-## Known inventory gaps to reconcile
+- `VERCEL_URL`
+- `VERCEL_PROJECT_PRODUCTION_URL`
+- `VERCEL_GIT_COMMIT_SHA`
+- `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA` where a public build identifier is deliberately exposed
 
-At creation of this file, root `.env.example` does not yet enumerate all current variables. Specifically, newer code references at least `CRON_DB_SECRET`, `FIREBASE_SERVICE_ACCOUNT_BASE64`, `MOBILE_ALLOWED_ORIGIN`, and current Mad Buddy Access override names. A later reconciliation commit should update `.env.example` after legacy Paystack checks are cleaned up.
+and Node/Next runtime values such as:
+
+- `NODE_ENV`
+- `NEXT_RUNTIME`
+
+These are not founder-managed secrets.
+
+## Script / QA-only variables
+
+Some Playwright/hardening/fixture scripts accept convenience variables such as local base URLs, fixture login identities, output directories or auth-state file paths. These are **not production runtime configuration**. They should use disposable local/staging identities and must never be populated with real-user passwords or committed authenticated browser state.
+
+## Reconciliation status
+
+Initial runtime-documentation drift identified by this operations tranche has been corrected on the branch:
+
+- root `.env.example` now lists the current high-impact runtime/operator variables;
+- `CRON_DB_SECRET`, `FIREBASE_SERVICE_ACCOUNT_BASE64`, `MOBILE_ALLOWED_ORIGIN` and current Access override names are documented;
+- retired Plus/Pro plan-code variables are marked legacy rather than current authority;
+- current readiness/preflight no longer requires the retired Plus/Pro plan codes;
+- README and deployment onboarding point to Mad Buddy Access and the operations handoff.
+
+Remaining work is provider-dashboard verification (owner-supplied facts), full Git-history secret scanning from a complete clone, and clean-environment runbook validation.
 
 ## Rotation rule
 
