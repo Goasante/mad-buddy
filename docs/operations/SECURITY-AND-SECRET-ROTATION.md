@@ -38,7 +38,7 @@ Never store them in:
 
 ## Repository scanner
 
-Mad Buddy already includes:
+Mad Buddy includes:
 
 ```bash
 node scripts/security/scan-secrets.mjs
@@ -47,7 +47,16 @@ node scripts/security/scan-secrets.mjs --history
 
 The scanner reports type/location and deliberately does not print matched values.
 
-Current CI runs the tracked-tree scan. Full-history scanning is an explicit operator task until a dedicated history workflow is added.
+Normal CI runs the tracked-tree scan. A separate manual GitHub Actions workflow now exists at `.github/workflows/security-history-audit.yml`; it performs a full-depth checkout, verifies the repository is not shallow, and runs the complete-history scan without needing production credentials.
+
+Use the history workflow:
+
+- before onboarding external developers,
+- after discovering a suspected historical leak,
+- after importing/migrating repository history,
+- and periodically as an explicit security audit.
+
+A failed history scan means **rotate first**. Do not try to make the workflow green by deleting text before the affected credential is revoked.
 
 ## If a secret is exposed
 
