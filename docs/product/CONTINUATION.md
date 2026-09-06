@@ -1242,3 +1242,68 @@ pass `--linked`. See `INCIDENT-2026-08-24-migration-drift.md`.
   real key.
 
 ### Next: watch beta feedback. Do NOT start Capacitor/native work.
+
+---
+
+## Security programme — CLOSED (2026-09-06)
+
+```
+CURRENT MAIN SHA                        35651932d642c513010fc2a6a6013c662bca8679
+PRODUCTION MIGRATION COUNT              137
+SCHEMA-WIDE BROWSER AUTHORITY SECURITY  CLOSED
+LAST CLOSED TRANCHE                     admin revenue RPC authority hotfix
+AUTHENTICATED PROD FULL E2E             NOT EXECUTED
+NEXT EXACT ACTION                       app-wide UX/UI redesign evaluation,
+                                        then Smart Home
+```
+
+### What the programme closed
+
+| | finding | fix |
+|---|---|---|
+| SEC-001 | `transition_safe_arrival` authorised on a caller-supplied `p_actor_id` and its 5-arg overload kept the default `EXECUTE TO PUBLIC`; an unauthenticated caller cancelled another person's Safe Arrival session, stopping watcher escalation | migration 132 |
+| SEC-002 | `plan_participants` RLS pinned only `user_id`, so a participant could set their own `role` to `host`/`co_host` — four code paths honour that value | migration 133 |
+| SEC-003 | 165 tables carried browser DML from the hosted platform default; `reports` let a reporter file a report already marked resolved | migrations 134–136 |
+| SEC-004 | Two ungated `SECURITY DEFINER` RPCs exposed revenue and media-storage aggregates to any anon caller | migration 137 |
+
+### Production authority baseline
+
+```
+anon table writes                 0
+authenticated write tables        13 (the audited allowlist)
+RLS enabled                       191 of 191
+public sequences                  0 (all identifiers are UUIDs)
+mutating anon-reachable functions 4, all SAFE_GATED and proven at runtime to
+                                  reject a NULL auth.uid()
+postgres GLOBAL function default  postgres=X  service_role=X (no PUBLIC)
+supabase_admin defaults           NOT ALTERABLE by the migration role
+                                  (migration role is `postgres`, not a superuser
+                                  and not a member of supabase_admin)
+```
+
+The authoritative table/column contract is `docs/security/browser-authority-audit.json`.
+Effective-privilege contracts live in `lib/security/*.local.test.ts` — they read the
+catalog, not migration text, because correct migrations over a disagreeing hosted
+database is exactly how the profiles defect shipped.
+
+### Two traps worth remembering
+
+- **PostgREST upsert needs table-level `UPDATE`.** It checks the table privilege
+  before resolving columns, so a column-scoped grant fails `.upsert()` with
+  `403 42501` even when every written column is granted.
+- **`ALTER DEFAULT PRIVILEGES` on functions must be GLOBAL.** The schema-scoped
+  form cannot subtract PostgreSQL's built-in `EXECUTE TO PUBLIC`.
+
+### Still open (unchanged by this programme)
+
+- Live GHS 5 payment test NOT RUN — see the section above.
+- No clean production QA identities exist, so every authenticated production E2E
+  remains NOT EXECUTED. Design is in the schema-wide audit report; creating the
+  accounts needs separate authorisation. Never reuse a real customer account.
+- Dead 4-argument `transition_safe_arrival` overload — unreachable by any caller
+  (PostgreSQL cannot disambiguate it), harmless, worth dropping in a future
+  cleanup.
+- `v4-actions.local.test.ts` flakes once on the first local run after
+  `db reset` + seed; passes in isolation and on re-runs.
+- The `storage` schema still grants browser EXECUTE on postgres-owned functions.
+  Supabase platform territory, deliberately untouched.
