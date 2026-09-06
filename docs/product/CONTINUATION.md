@@ -1307,3 +1307,155 @@ database is exactly how the profiles defect shipped.
   `db reset` + seed; passes in isolation and on re-runs.
 - The `storage` schema still grants browser EXECUTE on postgres-owned functions.
   Supabase platform territory, deliberately untouched.
+
+---
+
+## Smart Card V2 — Home's one adaptive card
+
+```
+CURRENT MAIN            5d50c19dea4744e678de18e5990de5a00992d9b4
+PRODUCTION MIGRATIONS   137 (unchanged — this programme added none)
+SMART CARD PR           #27 (DRAFT)
+SMART CARD FINAL HEAD   see PR #27 head; last code commit 8b40448
+STATUS                  COMPLETE / READY FOR CHATGPT FINAL REVIEW
+PRODUCTION              UNTOUCHED
+```
+
+### The architecture, in one place
+
+Home runs three surfaces with different jobs, and they are never collapsed:
+
+```
+CARD A       FirstMuddyCard / ActivationCard   activation + relationship progression
+CARD B       SmartCardHeroV2                   obligations, live context, opportunity
+NEARBY HERO  NearbyHero                        the proximity payoff
+```
+
+Eligibility is decided by TIER, not by a list of ids, so a new catalog state
+inherits the right behaviour without anybody editing Home. Tiers 0–2 always
+qualify; 3–6 wait until early activation stops owning the screen. Card B renders
+quiet whenever Card A is on screen — except tier 0, which keeps full authority
+because a live Safe Arrival outranks every teaching moment.
+
+### What closed
+
+- **Family 1 HOME/V2** and **Family 2 UPFOR** — complete before this tranche.
+- **Family 3 LINKR/RELATIONSHIP** — `linkr_mutual_event`, `event_linkr_ready`,
+  `muddy_birthday` wired on top of the existing `muddy_request` + `linkr_mutual`.
+- **Family 4 DECISIONS** — `plan_decision`, `plan_chat_decision`.
+- **Family 5 GROWTH/RECOVERY** — `profile_blocking`.
+- Action, media and query/fanout audits; runtime proof extended.
+
+```
+TOTAL APPROVED CATALOG STATES   54
+WIRED CARD B                    28 catalog entries / 27 providers
+                                (safe_arrival_overdue + safe_arrival_action
+                                 share one live-journey provider)
+CARD A OWNED                    1   suggestions
+NEARBY HERO OWNED               2   nearby_muddy, nearby_muddies
+DELIBERATELY UNWIRED            23
+```
+
+The catalog is a product vocabulary, not a quota. Several states are correctly
+absent, and the reasons are recorded as tests in
+`lib/smart-card/recovery-family.test.ts` so a future provider cannot be added
+without confronting the gap.
+
+### Deliberately unwired, and why
+
+| State | Missing authority |
+|---|---|
+| `plan_changed` | No plan-edit action exists at all (create/cancel/RSVP/poll only), so there is no meaningful change to review. `plan_participants.viewed_at` is dead schema nothing writes, so there is no unseen-state authority either. **Both** halves are missing. |
+| `invited_friend_joined` | `invite_links.creator_id` exists, but accepting an invite creates a pending Muddy request — already owned by `muddy_request` — and records `invite_signup` only through `recordProductEvent`, which is best-effort analytics, not a product reader. |
+| `linkr_opportunity` | `sharedInterests` is computed inside candidate ranking and never exposed on `LinkrCandidate`, so there is no grounded reason to show. Reproducing discovery on Home would also run the ~12-query candidate reader every render and pre-expose a person outside Linkr. |
+| `event_invitation` | No `event_invitations` table; RSVP is only `interested`/`going`/`not_going`. `event_circle_invitations` are Room invites, a different state. |
+| `notification_action_bundle` | The only classification that exists is "has a destination", which counts ordinary updates like `friend_request_accepted`. A second actionability definition would give the product two answers to one question. |
+| `message_context` | Needs the ~6-query inbox reader per render; the only cheap fact is a bare unread count — the inbox duplication the ranking exists to prevent. |
+| `returning_user` | No user-level last-visit record. `push_subscriptions.last_seen_at` is device-token freshness; `conversation_presence` is per-conversation. |
+| `offline_status`, `failed_action` | Pending/failed sends live in the Messages page's own client state, invisible to a server-rendered Home. No durable server failure queue exists. |
+| `location_permission`, `notification_permission` | Card A owns permissions. |
+| `feature_announcement`, `access_status` | No canonical announcement source; monetization gating is paused. |
+
+**Moments = NONE.** Absent from the catalog entirely, asserted whole-word (so
+`upfor_momentum` does not false-positive) and from the wired set.
+
+### Privacy contract
+
+Proximity stays qualitative; Event Linkr stays consent-aware; Linkr stays
+mutual-only; messaging stays membership-aware; Plans stay participant-aware.
+
+- **No date of birth is read to build Home.** `muddy_birthday` reads the birthday
+  *delivery ledger* — a row exists only because the job already established the
+  owner's field privacy, announcement preference, live friendship and no block.
+  `MuddyBirthdayForCard` carries no date field to leak.
+- **Event context on a mutual is stored, never inferred.**
+  `linkr_connections.event_id` is the pair's own fact, written when they matched
+  through Event Mode — not an overlap computed from two attendance histories.
+- **Consent is offered, never granted from Home.** `event_linkr_ready` appears
+  only on `no_consent` against a live check-in and links to the Event, where the
+  opt-in control lives. Proven at runtime in both directions: granting consent
+  removes the offer; removing the check-in removes it too.
+- **No message text reaches Home.** `plan_chat_decision` reads `chat_polls` in
+  conversations the viewer has *joined* — membership first, so a poll in a chat
+  they are not in is never fetched rather than filtered afterwards.
+
+### Query/fanout
+
+```
+HOME BATCH READERS   18 before -> 18 after (unchanged)
+NEW READER            1  loadHomeSmartCardProjection (one parallel batch)
+PROVIDER QUERIES      0  (providers remain pure)
+DUPLICATES            0
+N+1                   0  — and one pre-existing N+1 FIXED
+```
+
+The projection is bounded by facts Home already owns: the agenda's plan ids
+(already permission-filtered), the viewer's own check-ins, today's delivered
+birthday rows. Its one loop iterates the viewer's own live check-ins, capped at
+three and returning on the first match, so its cost does not grow with data.
+
+`loadClickedPeople` previously called `conversationHasActivity` once per
+connection — one `messages` count per card, ~40 queries for a 40-person
+collection. Now one batched query, semantics unchanged.
+
+### Button copy
+
+Every wired Card B action is a **link** that opens the surface owning the
+decision; none mutates from Home. The Plan invitation's "RSVP" became
+**"Respond"** for that reason. A test now rejects any label phrased as a
+completed mutation.
+
+### Runtime proof
+
+Two harnesses against the **real rendered Home** (`next start`, real login flow,
+local fixtures only — never `next dev`, never production):
+
+```
+scripts/hardening/smart-card-visual-proof.mjs     core V2      PASS
+scripts/hardening/smart-card-families-proof.mjs   families 3-5 85/85 PASS
+```
+
+360/393/430 · light + dark · 200% text · reduced motion · no overflow ·
+44px targets · no nested interactive elements · Nearby not duplicated ·
+no coordinates, distances, dates of birth or ages anywhere on the page.
+
+### Two harness traps worth remembering
+
+- **A fixture that fails must stop the run.** The first families run used two
+  invalid enum values (`plan_type: "hangout"`, `events.status: "published"`),
+  created nothing, and reported eleven convincing "product defects" that were
+  just a Home with no fixture on it. `must()` now hard-stops on any fixture error.
+- **`weekend_plans` is tier 4 and eligible Friday evening to Sunday**, so it
+  legitimately outranks tier-5 `profile_blocking` — and that scenario passed or
+  failed depending on the day the proof ran. It now acknowledges the weekend card
+  first, measuring the card instead of the calendar.
+
+### Quality at the final head
+
+```
+test:release   8330 passed (8187 + 143 local), 0 failures, 0 skips
+tsc            0 errors
+eslint         0 errors (112 pre-existing warnings in hardening scripts)
+build          PASS
+migrations     137, zero diff against main under supabase/
+```
