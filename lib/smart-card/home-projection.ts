@@ -74,6 +74,11 @@ export async function loadEventLinkrOffer(
   const eventIds = [...new Set((checkIns ?? []).map((row) => row.context_id))];
   if (eventIds.length === 0) return null;
 
+  /* BOUNDED AT THREE, AND IT RETURNS ON THE FIRST MATCH. This is a loop over
+     the viewer's own live check-ins, capped by the query above, so its cost
+     does not grow with the size of any table -- it is not an N+1. Being
+     checked in to more than one Event at once is already unusual, and the
+     ordinary case is a single pass. */
   for (const eventId of eventIds) {
     const eligibility = await resolveEventLinkrEligibility(admin, userId, eventId);
     /* ONLY the not-yet-asked case. `eligible` means they already consented, and

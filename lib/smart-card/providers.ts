@@ -174,7 +174,11 @@ function planRsvpProvider(input: SmartCardInput): SmartCard | null {
         ? `${plan.goingCount} ${plan.goingCount === 1 ? "person is" : "people are"} already going.`
         : `${plan.organiserName} invited you.`,
     socialProof: plan.attendees.length > 0 ? `${plan.attendees.map((person) => person.name).slice(0, 2).join(", ")} ${plan.goingCount > 2 ? `+${plan.goingCount - 2}` : ""}`.trim() : undefined,
-    cta: "RSVP",
+    /* "Respond", not "RSVP". The tap OPENS the Plan, where the real RSVP
+       controls live; it does not answer on the viewer's behalf. A button
+       reading "RSVP" promises the answer is being given by pressing it, which
+       is a small lie the moment the next screen asks the question again. */
+    cta: "Respond",
     destination: `/plans?plan=${plan.id}`
   };
 }

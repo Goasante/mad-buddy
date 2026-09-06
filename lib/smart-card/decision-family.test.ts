@@ -143,6 +143,61 @@ describe("a Plan Chat decision is structured, never message text", () => {
 });
 
 /**
+ * BUTTON COPY MUST MATCH WHAT THE ACTION DOES.
+ *
+ * Every wired Card B action is a LINK -- it opens the surface that owns the
+ * decision -- and none of them mutates from Home. So no label may be phrased as
+ * though pressing it completes the action: a button reading "RSVP" promises the
+ * answer is given by pressing it, which becomes a small lie the moment the next
+ * screen asks the same question again.
+ */
+describe("button copy does not promise a mutation", () => {
+  const PROMISES_MUTATION = /^(RSVP|Accept|Decline|I'?m interested|I'?ve arrived|Confirm|Join)$/i;
+
+  it("no wired state offers a button that claims to complete the action", () => {
+    const built = input({
+      planDecisions: [decision()],
+      planChatDecisions: [chatDecision()]
+    });
+    for (const provider of smartCardProviders(built)) {
+      const card = provider.build();
+      if (!card) continue;
+      expect(card.cta, `${card.id} cta`).not.toMatch(PROMISES_MUTATION);
+      if (card.secondaryAction) {
+        expect(card.secondaryAction.label, `${card.id} secondary`).not.toMatch(PROMISES_MUTATION);
+      }
+    }
+  });
+
+  it("a Plan invitation says Respond, because tapping opens the Plan", () => {
+    const card = pick({
+      agenda: [
+        {
+          kind: "plan",
+          id: "p9",
+          title: "Sunday Brunch",
+          startsAt: new Date(NOW.getTime() + 26 * 60 * 60_000).toISOString(),
+          endsAt: null,
+          startAt: new Date(NOW.getTime() + 26 * 60 * 60_000).toISOString(),
+          organiserName: "Kofi",
+          myRsvp: "invited",
+          invitedCount: 3,
+          goingCount: 1,
+          maybeCount: 0,
+          placeText: null,
+          category: null,
+          coverImageUrl: null,
+          attendees: []
+        }
+      ]
+    });
+    expect(card?.id).toBe("plan_rsvp");
+    expect(card?.cta).toBe("Respond");
+    expect(card?.destination).toBe("/plans?plan=p9");
+  });
+});
+
+/**
  * THE RANKING CONFLICTS the programme asked for by name. Each is a pair that
  * could plausibly be ordered either way, decided once here so the answer cannot
  * drift when a later state is added between them.
