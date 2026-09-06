@@ -1,48 +1,40 @@
 /**
- * Smart Card Engine — the canonical selection rules for Home's single card.
+ * Smart Card Engine — canonical selection rules for Home's single adaptive card.
  *
- * Home shows exactly ONE Smart Card, always. It is never a carousel, never a
- * list, and never absent: the last provider is a guaranteed fallback, so
- * `resolveSmartCard` always returns a card. What changes is only the content.
+ * Home renders exactly ONE Smart Card. Providers are pure and deterministic;
+ * data loading lives in smart-card-service.ts and presentation lives in
+ * components/journey/smart-card.tsx.
  *
- * This module is pure — no Supabase, no `server-only`, no clock of its own —
- * so the whole priority order is testable without a database. Data loading
- * lives in `smart-card-service.ts`, presentation in `components/journey`.
+ * The product-wide approved state catalog lives in catalog.ts. SMART_CARD_IDS
+ * below is narrower on purpose: it contains only states whose provider is
+ * actually wired today. This prevents a planned state from pretending to be
+ * implemented merely because its name exists in a roadmap.
  */
 
-/**
- * Card identities, in priority order. First match wins.
- *
- * The order is the product rule, encoded once:
- *  - safety outranks everything (a live Safe Arrival is time-critical)
- *  - activation outranks engagement (finish onboarding before we upsell)
- *  - a dated moment outranks an evergreen nudge (a birthday happens once)
- *  - the fallback is last and always applies
- */
 export const SMART_CARD_IDS = [
   "safe_arrival",
-  "journey",
-  "journey_complete",
+  "plan_rsvp",
+  "plan_starting",
+  "event_live",
+  "nearby_muddies",
+  "event_starting",
   "birthday",
   "weekend_plans",
-  "nearby_muddies",
+  "journey",
+  "journey_complete",
   "buddy_progress",
   "achievement",
-  "suggestions"
+  "suggestions",
+  "upfor_fallback"
 ] as const;
 
 export type SmartCardId = (typeof SMART_CARD_IDS)[number];
 
-/** Lower number = higher priority. Derived from the array so the two can't drift. */
+/** Lower number = higher priority. Derived from one ordered list. */
 export const SMART_CARD_PRIORITY: Record<SmartCardId, number> = Object.fromEntries(
   SMART_CARD_IDS.map((id, index) => [id, index])
 ) as Record<SmartCardId, number>;
 
-/**
- * Which illustration the card renders. A closed set rather than a free path:
- * the component owns the artwork, so a provider cannot point Home at an
- * arbitrary image or a missing file.
- */
 export type SmartCardIllustration =
   | "target"
   | "celebration"
@@ -51,101 +43,78 @@ export type SmartCardIllustration =
   | "people"
   | "trophy";
 
-/**
- * Optional progress meter. Providers that have no meaningful progress simply
- * omit it and the card renders without a bar.
- */
 export type SmartCardProgress = {
-  /** 0–100, already clamped by `smartCardProgress`. */
   percent: number;
-  /** Supporting line under the percentage, e.g. "3 steps remaining". */
   label: string;
+};
+
+/**
+ * V2 presentation fields are additive so existing states keep rendering while
+ * richer providers are introduced. `cta` + `destination` remain the primary
+ * action authority for the current renderer. `secondaryAction` is reserved for
+ * the next renderer tranche where states such as Nearby (Say hi / Make a Plan)
+ * and UpFor (I'm interested / Details) can expose a second honest action.
+ */
+export type SmartCardAction = {
+  label: string;
+  destination: string;
+};
+
+export type SmartCardMedia = {
+  /** A signed/user-safe URL or a curated in-app asset path. */
+  url: string;
+  alt: string;
+  focalX?: number | null;
+  focalY?: number | null;
 };
 
 export type SmartCard = {
   id: SmartCardId;
   priority: number;
   illustration: SmartCardIllustration;
+  /** Small context label such as NEEDS YOUR RESPONSE or HAPPENING NOW. */
+  eyebrow?: string;
   title: string;
   subtitle: string;
   cta: string;
   destination: string;
+  secondaryAction?: SmartCardAction;
+  /** Optional truthful context line such as "2 Muddies might join". */
+  socialProof?: string;
+  /** Optional privacy-safe metadata line such as "Close By · This evening". */
+  meta?: string;
+  /** Optional real/curated media for V2 visual treatment. */
+  media?: SmartCardMedia;
   progress?: SmartCardProgress;
-  /**
-   * Wall-clock expiry. A card past this instant is skipped as though its
-   * provider had not matched at all — this is what stops a Friday "weekend
-   * plans" card leaking into Monday if a page is left open.
-   */
   expiresAt?: number;
-  /**
-   * Whether acknowledging this card retires it permanently. Only cards whose
-   * underlying condition never becomes false again need this (see the
-   * `smart_card_acknowledgements` migration).
-   */
   dismissible?: boolean;
 };
 
-/** A provider returns its card when it applies, or null to pass. */
 export type SmartCardProvider = {
   id: SmartCardId;
   build: () => SmartCard | null;
 };
 
-/** Clamp + round a raw ratio into a card-safe percent. */
 export function smartCardProgress(completed: number, total: number, label: string): SmartCardProgress {
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
   return { percent: Math.min(100, Math.max(0, percent)), label };
 }
 
-/**
- * How far along the Journey a viewer is, as a visual stage.
- *
- * Three stages rather than a continuous ramp: the card has to read as a
- * deliberate state someone can recognise ("I'm well into this"), not as a
- * gradient that shifts imperceptibly with every completed step.
- *
- * Derived from the percent that already exists on the card — there is no
- * second stored value. `smartCardProgress` computes that percent from
- * completed/total at the domain layer, so the stage cannot drift from the
- * meter the viewer is reading right above it.
- */
 export type JourneyStage = "early" | "progressing" | "advanced";
-
-/** Inclusive lower bounds. Below the first, the stage is `early`. */
 export const JOURNEY_STAGE_THRESHOLDS = { progressing: 40, advanced: 70 } as const;
 
 export function journeyStageForPercent(percent: number): JourneyStage {
-  // Guards a NaN percent into the quietest state rather than the loudest:
-  // a broken input must never award the advanced treatment.
   if (!Number.isFinite(percent)) return "early";
   if (percent >= JOURNEY_STAGE_THRESHOLDS.advanced) return "advanced";
   if (percent >= JOURNEY_STAGE_THRESHOLDS.progressing) return "progressing";
   return "early";
 }
 
-/**
- * Whether a card gets the staged Journey treatment at all.
- *
- * Only the `journey` card progresses. `journey_complete` is a separate,
- * already-earned reward state with its own copy and artwork, and it is NOT
- * folded into the advanced stage — completing the Journey is a different
- * fact from being 70% through it.
- */
 export function isStagedJourneyCard(id: SmartCardId): boolean {
   return id === "journey";
 }
 
-/**
- * Pick the single card Home renders.
- *
- * Providers are sorted by the canonical priority rather than trusting call
- * order, so registration order in the service can never silently change the
- * product rule. A provider is skipped when it declines (returns null), when
- * its card has expired, or when the user has already acknowledged it.
- *
- * Returns null only if every provider declines — the service registers a
- * fallback that never does, so in practice Home always has a card.
- */
+/** First applicable provider wins after canonical priority sorting. */
 export function resolveSmartCard(
   providers: readonly SmartCardProvider[],
   options: { now: number; acknowledgedIds?: ReadonlySet<string> } = { now: Date.now() }
@@ -157,35 +126,24 @@ export function resolveSmartCard(
 
   for (const provider of ordered) {
     if (acknowledged.has(provider.id)) continue;
-
     const card = provider.build();
     if (!card) continue;
     if (card.expiresAt !== undefined && card.expiresAt <= options.now) continue;
-
-    // Priority is authoritative from the id, not from whatever the provider
-    // put in the field — so a provider cannot promote itself.
     return { ...card, priority: SMART_CARD_PRIORITY[card.id] };
   }
 
   return null;
 }
 
-/**
- * Weekend window: Friday 17:00 through end of Sunday, in the viewer's local
- * time. Used by the weekend-plans provider and exported so the tests can
- * assert the boundaries directly.
- */
 export function isWeekendPlanningWindow(date: Date): boolean {
   const day = date.getDay();
   if (day === 5) return date.getHours() >= 17;
   return day === 6 || day === 0;
 }
 
-/** The instant the weekend window closes: end of the coming Sunday, local time. */
 export function weekendWindowExpiry(date: Date): number {
   const end = new Date(date);
   const day = end.getDay();
-  // Friday (5) -> +2 days, Saturday (6) -> +1, Sunday (0) -> same day.
   const daysUntilSunday = day === 0 ? 0 : 7 - day;
   end.setDate(end.getDate() + daysUntilSunday);
   end.setHours(23, 59, 59, 999);
