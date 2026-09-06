@@ -130,7 +130,11 @@ Value: NEVER COPY HERE
 
 ## Historical-secret audit
 
-- [ ] Run the repository's full history scanner from a trusted local clone:
+Preferred repository audit path:
+
+- [ ] In GitHub Actions, run **Secret history audit** (`.github/workflows/security-history-audit.yml`) manually. It checks out full history and runs the scanner without production credentials.
+- [ ] Confirm the workflow proves the checkout is not shallow.
+- [ ] If GitHub Actions is unavailable, run from a trusted full local clone:
 
 ```bash
 node scripts/security/scan-secrets.mjs --history
