@@ -6,7 +6,6 @@ export const JOURNEY_STEP_IDS = [
   "start_first_conversation",
   "create_first_plan",
   "complete_first_safe_arrival",
-  "share_first_moment",
   "reach_trusted_buddy"
 ] as const;
 
@@ -34,6 +33,13 @@ export type JourneyEvidence = Record<JourneyStepId, boolean>;
 
 type StepDefinition = Omit<JourneyStep, "state" | "guide"> & { guideSlug: string | null };
 
+/**
+ * Canonical Journey for the current product.
+ *
+ * Moments is intentionally absent. The feature is paused/discontinued for this
+ * phase, so Journey must never block completion on creating content the current
+ * product is not asking people to use.
+ */
 export const JOURNEY_DEFINITIONS: readonly StepDefinition[] = [
   { id: "complete_profile", title: "Complete Profile", description: "Help your Muddies recognise you.", unlockCondition: "Add a photo, bio, and mood.", destination: "/profile", guideSlug: "profile-guide" },
   { id: "add_first_muddy", title: "Add First Muddy", description: "Connect with someone you already know.", unlockCondition: "Create your first approved Muddy connection.", destination: "/friends", guideSlug: "muddies-guide" },
@@ -42,16 +48,9 @@ export const JOURNEY_DEFINITIONS: readonly StepDefinition[] = [
   { id: "start_first_conversation", title: "Start First Conversation", description: "Take a Muddy from nearby to talking.", unlockCondition: "Send your first conversation message.", destination: "/messages", guideSlug: "messages-guide" },
   { id: "create_first_plan", title: "Create First Plan", description: "Turn a connection into real plans.", unlockCondition: "Create your first non-draft Plan.", destination: "/plans", guideSlug: "plans-guide" },
   { id: "complete_first_safe_arrival", title: "Complete First Safe Arrival", description: "Let your circle know you got there safely.", unlockCondition: "Confirm your first Safe Arrival.", destination: "/safe-arrival", guideSlug: "safe-arrival-guide" },
-  { id: "share_first_moment", title: "Share First Moment", description: "Share something with the people you choose.", unlockCondition: "Share your first valid Moment.", destination: "/moments", guideSlug: "moments-guide" },
   { id: "reach_trusted_buddy", title: "Become a Trusted Buddy", description: "Show friends you're ready for safer meetups.", unlockCondition: "Reach the Trusted Buddy reputation level.", destination: "/buddy-score", guideSlug: "buddy-score-guide" }
 ] as const;
 
-/**
- * Canonical "first-time / low-progress" signal, derived from real Journey
- * completion rather than inferred client-side. A user is "first-time" until
- * they've cleared the very first activation step (adding a Muddy) — after
- * that they're treated as an active user even if later steps are still open.
- */
 export function isFirstTimeJourneyState(journey: JourneyData): boolean {
   return !journey.steps.some((step) => step.id === "add_first_muddy" && step.state === "completed");
 }
