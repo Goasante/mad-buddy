@@ -13,6 +13,8 @@ const invitedPlan: UpcomingAgendaItem = {
   title: "Dinner Friday",
   startAt: "2026-08-05T12:00:00.000Z",
   endAt: "2026-08-05T14:00:00.000Z",
+  startsAt: "2026-08-05T12:00:00.000Z",
+  endsAt: "2026-08-05T14:00:00.000Z",
   organiserName: "Ama",
   myRsvp: "invited",
   invitedCount: 4,
