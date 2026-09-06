@@ -48,6 +48,13 @@ export type HomeUpForOwnedSession = {
 
 export type HomeUpForJoinedSession = {
   id: string;
+  /**
+   * The owner's user id, so an accepted card can offer to message THEM.
+   *
+   * Free: `owner_id` is already selected to resolve the owner's name and to
+   * drop the viewer's own sessions, so carrying it costs no extra read.
+   */
+  ownerId: string;
   ownerName: string;
   activityType: HangoutActivityType;
   activityLabel: string;
@@ -55,6 +62,22 @@ export type HomeUpForJoinedSession = {
   myStatus: "pending" | "accepted" | "maybe";
   startsAt: string | null;
   endsAt: string | null;
+  /**
+   * Whether the viewer is CERTAIN to be an approved Muddy of the owner.
+   *
+   * Derived from the session's own audience, which `canViewHangout` already
+   * enforces: every audience except `selected_groups` refuses a non-Muddy
+   * outright, so being in the session at all proves mutuality for those. A
+   * public Group UpFor is the one audience that deliberately reaches beyond
+   * one social hop, so a joiner there may be a stranger.
+   *
+   * This is a CONSERVATIVE hint, not an authorization. Direct messaging
+   * requires approved-Muddy or an active Linkr connection
+   * (resolveDirectMessageEligibility), and that decision stays on the server at
+   * click time. Home only uses this to avoid OFFERING a message it can already
+   * tell would be refused -- and never to grant one.
+   */
+  ownerIsCertainMuddy: boolean;
 };
 
 export type HomeUpForContext = {
@@ -156,7 +179,7 @@ export async function loadHomeUpForContext(
   if (joinedSessionIds.length > 0) {
     const { data: sessions } = await admin
       .from("hangout_sessions")
-      .select("id, owner_id, activity_type, status, starts_at, ends_at")
+      .select("id, owner_id, activity_type, status, starts_at, ends_at, audience_type")
       .in("id", joinedSessionIds)
       .eq("status", "active");
 
@@ -180,12 +203,17 @@ export async function loadHomeUpForContext(
       if (session.owner_id === viewerId) continue;
       joined.push({
         id: session.id,
+        ownerId: session.owner_id,
         ownerName: nameById.get(session.owner_id) ?? "A Muddy",
         activityType: session.activity_type as HangoutActivityType,
         activityLabel: activityLabelFor(session.activity_type as HangoutActivityType),
         myStatus: request.status as HomeUpForJoinedSession["myStatus"],
         startsAt: session.starts_at,
-        endsAt: session.ends_at
+        endsAt: session.ends_at,
+        /* See ownerIsCertainMuddy. `selected_groups` is the only audience that
+           admits somebody who is not already a Muddy, so it is the only one
+           this cannot vouch for. */
+        ownerIsCertainMuddy: session.audience_type !== "selected_groups"
       });
     }
   }

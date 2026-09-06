@@ -117,6 +117,32 @@ export type SmartCardAction = {
   destination: string;
 };
 
+/**
+ * A primary action that needs an AUTHORIZED SERVER ACTION before it can go
+ * anywhere, rather than a destination that is already known.
+ *
+ * WHY THIS EXISTS, and why it is not a general framework. The closeout for V2
+ * said "every Smart Card action is a link". That was too rigid: it is true of
+ * navigation, and false the moment the next step is "open the conversation with
+ * this person", because the canonical conversation may not exist yet and only
+ * the server may decide whether the pair is allowed one at all.
+ *
+ * The corrected principle: a Smart Card action uses the CANONICAL OWNER of the
+ * next product step. Navigation stays a link when navigation is enough; a
+ * server action is used when opening the next surface requires an authorized
+ * mutation. Everything else on the card remains a link.
+ *
+ * The intent carries an id and nothing else. It grants no permission and
+ * asserts no eligibility -- `openDirectConversationAction` re-checks blocks,
+ * relationship and rate limits at click time, and Home never pre-creates a
+ * conversation while rendering.
+ */
+export type SmartCardActionIntent = {
+  kind: "open_direct_conversation";
+  /** Whose conversation to open. Authorization is decided server-side. */
+  targetUserId: string;
+};
+
 export type SmartCardMedia = {
   /** A signed/user-safe URL or a curated in-app asset path. */
   url: string;
@@ -136,6 +162,12 @@ export type SmartCard = {
   cta: string;
   destination: string;
   secondaryAction?: SmartCardAction;
+  /**
+   * When present, the PRIMARY action runs this instead of navigating to
+   * `destination`. `destination` remains set as the honest fallback surface, so
+   * a card is never actionless if the intent cannot be completed.
+   */
+  primaryIntent?: SmartCardActionIntent;
   /** Optional truthful context line such as "2 Muddies might join". */
   socialProof?: string;
   /** Optional privacy-safe metadata line such as "Close By · This evening". */

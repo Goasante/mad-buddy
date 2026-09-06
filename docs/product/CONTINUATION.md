@@ -1537,8 +1537,19 @@ ever consumed it.
 
 ### Button copy
 
-Every wired Card B action is a **link** that opens the surface owning the
-decision; none mutates from Home. The Plan invitation's "RSVP" became
+Every wired Card B action uses the **canonical owner of the next product
+step**. Navigation stays a link when navigation is enough; a canonical server
+action is used when opening the next surface requires an authorized mutation.
+
+> An earlier revision of this document said "every Smart Card action is a
+> link". That was too rigid, and a real user report broke it: an accepted UpFor
+> needs to open the conversation with the person who said yes, and that
+> conversation may not exist yet — only the server may decide whether the pair
+> is allowed one. `SmartCardActionIntent` is the one narrow variant, carrying a
+> single id; `destination` stays set as the honest fallback, so no card is ever
+> actionless.
+
+None of it mutates from Home while rendering. The Plan invitation's "RSVP" became
 **"Respond"** for that reason, and a test rejects any label phrased as a
 completed mutation.
 
@@ -1553,6 +1564,33 @@ name a specific object now does:
 | `muddy_request` | `/friends?tab=requests` — `/friends` defaults to the **all** tab, so the card named a screen and opened a different one. |
 | 5 single-session UpFor states | `/hangout-mode?hangout=<id>`, which the page centres. `upfor_requests` stays generic because it summarises across every UpFor the viewer owns. |
 | `muddy_birthday` | `/notifications` — and the label is **"Open birthday wishes"**, because that opens the notifications *list*; the wish composer opens from the birthday row there. |
+| `upfor_accepted` | **Message &lt;owner&gt;** via `openDirectConversationAction`, then `conversationHref`. Secondary `View UpFor` → `/hangout-mode?hangout=<id>`. See below. |
+
+### Accepted UpFor is a transition, not a destination
+
+Reported from real phone use: after somebody accepted the viewer's request to
+join their UpFor, Home said "You are in" and offered **Open UpFor** — sending
+them back into the surface whose question had just been answered. The discovery
+loop had already succeeded; the next job was to coordinate.
+
+- **accepted, unconverted** → coordinate with the owner (`Message <name>`), with
+  the UpFor detail demoted to secondary.
+- **converted to Plan** → Plan / Plan Chat authority takes over. No code was
+  needed for that: `loadHomeUpForContext` reads joined sessions as
+  `status = 'active'` and the canonical lifecycle sets `converted_to_plan`, so
+  the session simply leaves the joined set and the accepted card yields. It is
+  deliberately *not* kept alive so it can say "Open Plan Chat".
+
+**The offer is withheld where messaging could not be allowed.** Direct messaging
+requires approved-Muddy or an active Linkr connection, and an accepted UpFor is
+neither on its own. Every audience except `selected_groups` already refuses a
+non-Muddy, so being in the session proves mutuality for those; a public Group
+UpFor is the one audience that admits a stranger, and there the card keeps the
+truthful UpFor route as its primary. The hint can only ever *remove* an offer —
+the server still decides at click time.
+
+Cost: **zero** extra Home reads. `ownerId` and the audience hint ride the
+`hangout_sessions` select that already ran to resolve the owner's name.
 
 ### Runtime proof
 

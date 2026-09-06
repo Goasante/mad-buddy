@@ -159,6 +159,29 @@ function linkrPairDestination(connectionId: string): string {
  * every UpFor the viewer owns, so there is no single session to point at, and
  * pretending otherwise would pick one arbitrarily.
  */
+/**
+ * "You're studying together." -- momentum, not system status.
+ *
+ * Generated only for the activities where the natural English is a plain
+ * present participle. Anything else keeps the safe existing sentence rather
+ * than risking a phrase like "You're anything together": the important fix in
+ * this card is the next ACTION, and brittle copy generation would be a poor
+ * trade for it.
+ */
+const TOGETHER_LINE: Record<string, string> = {
+  Study: "You're studying together.",
+  Coffee: "You're getting coffee together.",
+  Gym: "You're heading to the gym together.",
+  Food: "You're eating together.",
+  Walk: "You're going for a walk together.",
+  Movie: "You're watching a movie together.",
+  Drinks: "You're getting drinks together."
+};
+
+function acceptedTogetherLine(activityLabel: string): string {
+  return TOGETHER_LINE[activityLabel] ?? "You are going to " + activityLabel.toLowerCase() + ".";
+}
+
 function upForSessionDestination(sessionId: string): string {
   return `/hangout-mode?hangout=${encodeURIComponent(sessionId)}`;
 }
@@ -643,15 +666,37 @@ function upForAcceptedProvider(input: SmartCardInput): SmartCard | null {
   if (accepted.length === 0) return null;
   const first = accepted[0];
 
+  /* MESSAGE THE OWNER, NOT "OPEN UPFOR".
+   *
+   * The discovery loop has already SUCCEEDED here: they asked, the owner said
+   * yes, they are in. Sending them back into UpFor returns them to a screen
+   * whose question has been answered. The next real job is to coordinate with
+   * the person they are now going with.
+   *
+   * The offer is withheld when the session's audience cannot vouch for
+   * mutuality (`selected_groups` is the one audience that admits a stranger),
+   * because direct messaging requires approved-Muddy or an active Linkr
+   * connection and a primary action that is knowingly going to be refused is
+   * worse than a modest one. In that case the card keeps the truthful UpFor
+   * route as its primary. */
+  const canOfferMessage = first.ownerIsCertainMuddy;
+  const upForHref = upForSessionDestination(first.id);
+
   return {
     id: "upfor_accepted",
     priority: 0,
     illustration: "celebration",
-    eyebrow: "YOU ARE IN",
+    eyebrow: "YOU'RE IN",
     title: first.ownerName + " said yes",
-    subtitle: "You are going to " + first.activityLabel.toLowerCase() + ".",
-    cta: "Open UpFor",
-    destination: upForSessionDestination(first.id),
+    subtitle: acceptedTogetherLine(first.activityLabel),
+    cta: canOfferMessage ? "Message " + first.ownerName : "View UpFor",
+    /* `destination` stays a real surface even when an intent is present: it is
+       the honest fallback if the conversation cannot be opened. */
+    destination: upForHref,
+    primaryIntent: canOfferMessage
+      ? { kind: "open_direct_conversation", targetUserId: first.ownerId }
+      : undefined,
+    secondaryAction: canOfferMessage ? { label: "View UpFor", destination: upForHref } : undefined,
     media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
   };
 }

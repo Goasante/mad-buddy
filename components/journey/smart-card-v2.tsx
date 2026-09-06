@@ -6,7 +6,11 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 
+import { useRouter } from "next/navigation";
+
 import { acknowledgeSmartCardAction } from "@/app/(app)/smart-card-actions";
+import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
+import { conversationHref } from "@/lib/messaging/open-conversation";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import type { SmartCard, SmartCardIllustration } from "@/lib/smart-card/smart-card";
 import { smartCardVisualTreatment } from "@/lib/smart-card/visuals";
@@ -73,6 +77,9 @@ function mediaPosition(card: SmartCard): string {
 export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; deferred?: boolean }) {
   const [pending, startTransition] = useTransition();
   const [animatedPercent, setAnimatedPercent] = useState(0);
+  const [intentPending, setIntentPending] = useState(false);
+  const [intentError, setIntentError] = useState<string | null>(null);
+  const router = useRouter();
   const reducedMotion = useReducedMotion();
   const percent = card.progress?.percent ?? 0;
   const prominent = PROMINENT_CARD_IDS.has(card.id);
@@ -106,6 +113,52 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
       void acknowledgeSmartCardAction(card.id);
     });
   }
+
+  /**
+   * Run the card's primary INTENT, for the cases where the next surface can
+   * only be opened by an authorized server action.
+   *
+   * Nothing is created while Home renders -- this runs on tap and only on tap.
+   * The canonical action re-checks blocks, relationship and rate limits, and is
+   * idempotent (it resolves the direct conversation by `direct_key`), so a
+   * second tap cannot produce a second conversation. `intentPending` still
+   * guards the button, because two in-flight opens would race their
+   * navigations even when the rows are identical.
+   *
+   * A refusal shows the action's OWN user-facing sentence. Raw server or
+   * database errors are never surfaced: the action already translates
+   * eligibility reasons into honest copy that deliberately does not disclose,
+   * for instance, that somebody blocked you.
+   */
+  async function runPrimaryIntent() {
+    const intent = card.primaryIntent;
+    if (!intent || intentPending) return;
+
+    setIntentPending(true);
+    setIntentError(null);
+    try {
+      const result = await openDirectConversationAction(intent.targetUserId);
+      if (result.ok && result.conversationId) {
+        acknowledgeIfNeeded();
+        router.push(conversationHref(result.conversationId));
+        return;
+      }
+      setIntentError(result.message || "That didn't work. Try again.");
+    } catch {
+      /* Never surface the thrown value: it can carry transport or database
+         detail that means nothing to a person and may say too much. */
+      setIntentError("That didn't work. Try again.");
+    } finally {
+      setIntentPending(false);
+    }
+  }
+
+  const primaryClassName = cn(
+    "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-transform active:scale-[0.98] motion-reduce:active:scale-100",
+    quiet
+      ? "bg-primary text-primary-foreground"
+      : "bg-[#f7a01f] text-[#4e0401] shadow-[0_8px_20px_rgba(232,140,43,0.26)]"
+  );
 
   const displayedPercent = reducedMotion ? percent : animatedPercent;
 
@@ -261,19 +314,33 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
         ) : null}
 
         <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
-          <Link
-            href={card.destination as Route}
-            onClick={acknowledgeIfNeeded}
-            className={cn(
-              "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-transform active:scale-[0.98] motion-reduce:active:scale-100",
-              quiet
-                ? "bg-primary text-primary-foreground"
-                : "bg-[#f7a01f] text-[#4e0401] shadow-[0_8px_20px_rgba(232,140,43,0.26)]"
-            )}
-          >
-            {card.cta}
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
+          {/* PRIMARY. A link when navigation is enough; a button when the next
+              surface can only be opened by an authorized server action. Both
+              branches render one interactive element, never nested. */}
+          {card.primaryIntent ? (
+            <button
+              type="button"
+              onClick={runPrimaryIntent}
+              disabled={intentPending}
+              aria-busy={intentPending}
+              className={cn(
+                primaryClassName,
+                intentPending && "opacity-70"
+              )}
+            >
+              {intentPending ? "Opening…" : card.cta}
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : (
+            <Link
+              href={card.destination as Route}
+              onClick={acknowledgeIfNeeded}
+              className={primaryClassName}
+            >
+              {card.cta}
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          )}
 
           {card.secondaryAction ? (
             <Link
@@ -289,6 +356,21 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
             </Link>
           ) : null}
         </div>
+
+        {/* A refusal has to be SEEN. Without this the button would appear to do
+            nothing at all, which is the failure mode that makes people tap
+            repeatedly. `role="status"` announces it without stealing focus. */}
+        {intentError ? (
+          <p
+            role="status"
+            className={cn(
+              "mt-2.5 text-xs font-medium",
+              quiet ? "text-muted-foreground" : "text-white/85"
+            )}
+          >
+            {intentError}
+          </p>
+        ) : null}
       </div>
     </article>
   );
