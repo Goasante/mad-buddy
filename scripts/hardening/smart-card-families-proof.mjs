@@ -36,6 +36,7 @@ const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_RO
 
 const A = "4a000000-0000-4000-8000-00000000004a"; // viewer
 const B = "4b000000-0000-4000-8000-00000000004b"; // a Muddy
+const C = "4c000000-0000-4000-8000-00000000004c"; // someone not yet connected
 
 const LOGIN_EMAIL = "a@v4test.local";
 const LOGIN_PASSWORD = "ProofPass123!";
@@ -112,6 +113,7 @@ async function clearFixtures() {
 
   await admin.from("linkr_connections").delete().or(`user_low.eq.${A},user_high.eq.${A}`);
   await admin.from("birthday_notification_deliveries").delete().eq("recipient_id", A);
+  await clearBirthdayAuthorization();
   await admin.from("event_linkr_opt_ins").delete().eq("user_id", A);
   await admin.from("check_ins").delete().eq("user_id", A);
   if (ids.poll) {
@@ -219,7 +221,15 @@ async function fixtureCheckedInNoConsent(eventId) {
   );
 }
 
-/** A delivered birthday notification: the privacy-safe derived projection. */
+/**
+ * A birthday the viewer may act on: delivered AND still authorized.
+ *
+ * The delivery row alone is NOT enough any more, and that is the point. It
+ * proves only that the viewer was allowed to be told this morning; Home now
+ * re-checks the revocable facts -- live friendship, no block, birthday still
+ * shared with approved Muddies, announcements still on -- before offering a
+ * wish that `sendBirthdayWish` would otherwise refuse.
+ */
 async function fixtureMuddyBirthday() {
   const dayKey = new Intl.DateTimeFormat("en-CA", {
     timeZone: "UTC",
@@ -227,6 +237,41 @@ async function fixtureMuddyBirthday() {
     month: "2-digit",
     day: "2-digit"
   }).format(new Date());
+
+  must(
+    "birthday_privacy",
+    await admin
+      .from("profile_field_privacy")
+      .upsert(
+        { user_id: B, field_name: "birthday", visibility: "approved_muddies" },
+        { onConflict: "user_id,field_name" }
+      )
+  );
+  must(
+    "birthday_preference",
+    await admin
+      .from("user_preferences")
+      .upsert(
+        { user_id: B, notification_preferences: { birthdayAnnouncementsEnabled: true } },
+        { onConflict: "user_id" }
+      )
+  );
+  const low = A < B ? A : B;
+  const high = A < B ? B : A;
+  const { data: existing } = await admin
+    .from("friendships")
+    .select("id")
+    .eq("user_one_id", low)
+    .eq("user_two_id", high)
+    .is("ended_at", null)
+    .maybeSingle();
+  if (!existing) {
+    must(
+      "birthday_friendship",
+      await admin.from("friendships").insert({ user_one_id: low, user_two_id: high })
+    );
+  }
+
   must(
     "birthday_delivery",
     await admin.from("birthday_notification_deliveries").insert({
@@ -236,6 +281,20 @@ async function fixtureMuddyBirthday() {
       status: "delivered"
     })
   );
+}
+
+/** Revoke the birthday authorization the way a real block would. */
+async function blockBirthdayOwner() {
+  must(
+    "birthday_block",
+    await admin.from("blocked_users").insert({ blocker_id: B, blocked_id: A })
+  );
+}
+
+async function clearBirthdayAuthorization() {
+  await admin.from("blocked_users").delete().in("blocker_id", [A, B]);
+  await admin.from("profile_field_privacy").delete().eq("user_id", B).eq("field_name", "birthday");
+  await admin.from("user_preferences").delete().eq("user_id", B);
 }
 
 /** A Plan on the viewer's agenda with an OPEN poll they have not voted in. */
@@ -508,6 +567,24 @@ console.log("--- A. linkr_mutual_event (relationship, media-backed) ---");
       r.cardText.slice(0, 90)
     );
   }
+  /* THE PAIR, NOT THE PRODUCT. The card names one connection, so its primary
+     action must carry that connection id -- `/linkr?connection=<id>` re-resolves
+     at open time, which is what makes a block or a newly-started conversation
+     change the answer after Home rendered. */
+  const paired = await look("linkr-mutual-event-pair-393", { width: 393 });
+  const pairHref = paired.primaryHref ?? "";
+  record(
+    "Say hi points at THIS pair, not the Linkr index",
+    /^\/linkr\?connection=[0-9a-f-]{36}$/i.test(pairHref),
+    pairHref
+  );
+  const openedPair = await follow(pairHref, "linkr-mutual-event-pair-open-393");
+  record(
+    "and it opens Linkr for that connection rather than an error",
+    !openedPair.url.includes("/login") && openedPair.url.includes("connection="),
+    `${openedPair.url} :: ${openedPair.heading.slice(0, 60)}`
+  );
+
   const two = await look("linkr-mutual-event-two-actions-393", { width: 393 });
   record(
     "two-action card offers Say hi and Make a Plan",
@@ -618,6 +695,24 @@ console.log("\n--- D. muddy_birthday (branded fallback, no media) ---");
     !/\b\d{4}-\d{2}-\d{2}\b/.test(r.bodySample) && !/\b\d{1,2} years old\b/i.test(r.bodySample),
     ""
   );
+
+  /* AUTHORIZATION IS RE-CHECKED, NOT REMEMBERED. The delivery row proves the
+     viewer was told this morning; a block since then must remove the card,
+     because the wish itself would now be refused. */
+  await blockBirthdayOwner();
+  const afterBlock = await look("muddy-birthday-blocked-393", { width: 393 });
+  record(
+    "a block after delivery removes the birthday card",
+    !/birthday/i.test(afterBlock.cardText),
+    afterBlock.cardText.slice(0, 80)
+  );
+  await admin.from("blocked_users").delete().in("blocker_id", [A, B]);
+  const restored = await look("muddy-birthday-restored-393", { width: 393 });
+  record(
+    "and lifting the block brings it back",
+    /birthday/i.test(restored.cardText),
+    restored.cardText.slice(0, 80)
+  );
 }
 
 // ---- E. Longest real copy, at the narrowest width.
@@ -721,6 +816,38 @@ console.log("\n--- H. deep links land on the named item ---");
     landed.url.includes(`plan=${ids.plan}`) && !landed.url.includes("/login"),
     `${landed.url} :: ${landed.heading}`
   );
+}
+
+// ---- H2. Muddy request opens the Requests tab, not the Muddies index.
+console.log("\n--- H2. muddy_request opens the Requests tab ---");
+{
+  await clearFixtures();
+  await makeHomeMature();
+  await grantAccess();
+  /* From a NON-FRIEND. The database refuses a request between people who are
+     already Muddies (`users_are_already_friends`), and the birthday fixture
+     above makes A and B friends -- so this scenario uses a third identity. */
+  await admin.from("friend_requests").delete().eq("receiver_id", A);
+  must(
+    "friend_request",
+    await admin.from("friend_requests").insert({ sender_id: C, receiver_id: A, status: "pending" })
+  );
+
+  const card = await look("muddy-request-393", { width: 393 });
+  const href = card.primaryHref ?? "";
+  record(
+    "Review requests carries the requests tab",
+    href === "/friends?tab=requests",
+    `${href} :: ${card.cardText.slice(0, 70)}`
+  );
+  const opened = await follow(href, "muddy-request-open-393");
+  record(
+    "and lands on Muddies with Requests selected",
+    opened.url.includes("tab=requests") && !opened.url.includes("/login"),
+    `${opened.url} :: ${opened.heading.slice(0, 70)}`
+  );
+
+  await admin.from("friend_requests").delete().eq("receiver_id", A);
 }
 
 // ---- I. Entitlement: expansions stop, commitments survive.
