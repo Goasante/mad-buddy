@@ -17,12 +17,10 @@ export async function loadJourney(
   context: {
     score?: BuddyScoreData;
     profileCompletion?: { completed: number; total: number; percent: number };
-    // Counts the caller already resolved. Filters must match this file's own
-    // queries exactly; see SharedActivityCounts.
     activity?: SharedActivityCounts;
   } = {}
 ): Promise<JourneyData> {
-  const [profileResult, friendships, milestones, waves, messages, plans, safeArrivals, moments, score, tours] = await Promise.all([
+  const [profileResult, friendships, milestones, waves, messages, plans, safeArrivals, score, tours] = await Promise.all([
     context.profileCompletion ? Promise.resolve({ data: null }) : admin.from("profiles").select("avatar_url,bio,mood_status").eq("user_id", userId).maybeSingle(),
     context.activity?.muddyCount !== undefined
       ? Promise.resolve({ count: context.activity.muddyCount })
@@ -34,9 +32,6 @@ export async function loadJourney(
     context.activity?.completedSafeArrivalCount !== undefined
       ? Promise.resolve({ count: context.activity.completedSafeArrivalCount })
       : admin.from("safe_arrival_sessions").select("id", { count: "exact", head: true }).eq("traveller_id", userId).eq("status", "completed"),
-    context.activity?.momentCount !== undefined
-      ? Promise.resolve({ count: context.activity.momentCount })
-      : admin.from("moments").select("id", { count: "exact", head: true }).eq("author_id", userId).in("status", ["active", "expired"]),
     context.score ? Promise.resolve(context.score) : loadBuddyScore(admin, userId),
     getReplayableTourRefs(userId)
   ]);
@@ -52,11 +47,8 @@ export async function loadJourney(
     start_first_conversation: (messages.count ?? 0) > 0,
     create_first_plan: (plans.count ?? 0) > 0,
     complete_first_safe_arrival: (safeArrivals.count ?? 0) > 0,
-    share_first_moment: (moments.count ?? 0) > 0,
     reach_trusted_buddy: score.total >= 200
   };
-  // Journey needs only slug -> live version id. getReplayableTourRefs applies
-  // the same server-side eligibility as getReplayableTours without building
-  // every step body, media and CTA that this map immediately discards.
+
   return buildJourney(evidence, new Map(tours.map((tour) => [tour.slug, tour.tourVersionId])));
 }
