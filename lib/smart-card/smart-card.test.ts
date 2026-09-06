@@ -2,9 +2,58 @@ import { describe, expect, it } from "vitest";
 import { smartCardProviders, type SmartCardInput } from "@/lib/smart-card/providers";
 import { resolveSmartCard, SMART_CARD_IDS } from "@/lib/smart-card/smart-card";
 import type { JourneyData } from "@/lib/journey/journey";
+import type { UpcomingAgendaItem } from "@/lib/social/upcoming-agenda-projection";
 
-const NOW = new Date(2026, 7, 5, 10, 0, 0);
-const completeJourney: JourneyData = { completedCount: 9, totalCount: 9, currentStep: null, steps: [] };
+const NOW = new Date("2026-08-05T10:00:00.000Z");
+const completeJourney: JourneyData = { completedCount: 8, totalCount: 8, currentStep: null, steps: [] };
+
+/* PlanAgendaItem extends HomeUpcomingPlan; the providers read only kind,
+   myRsvp, startsAt and title, so the fixture stays minimal and casts at the
+   boundary rather than carrying a dozen unrelated fields. */
+const invitedPlan = {
+  kind: "plan",
+  id: "11111111-1111-4111-8111-111111111111",
+  title: "Dinner Friday",
+  /* A plan agenda item carries BOTH spellings: `startAt`/`endAt` come from
+     HomeUpcomingPlan, `startsAt`/`endsAt` from PlanAgendaItem. The providers
+     read the `startsAt` pair; the other is required by the base type. This
+     fixture previously set only `startAt`, so it never satisfied the type and
+     every plan assertion built on it was inert. */
+  startAt: "2026-08-05T12:00:00.000Z",
+  startsAt: "2026-08-05T12:00:00.000Z",
+  endAt: "2026-08-05T14:00:00.000Z",
+  endsAt: "2026-08-05T14:00:00.000Z",
+  organiserName: "Ama",
+  myRsvp: "invited",
+  invitedCount: 4,
+  goingCount: 2,
+  maybeCount: 0,
+  placeText: "Osu",
+  category: null,
+  coverImageUrl: null,
+  attendees: [
+    { name: "Ama", avatarUrl: null },
+    { name: "Kofi", avatarUrl: null }
+  ]
+} as unknown as UpcomingAgendaItem;
+
+const liveEvent: UpcomingAgendaItem = {
+  kind: "event",
+  id: "22222222-2222-4222-8222-222222222222",
+  title: "Acoustic Night",
+
+  startsAt: "2026-08-05T09:00:00.000Z",
+
+  endsAt: "2026-08-05T13:00:00.000Z",
+  locationLabel: "Osu",
+  href: "/events?event=22222222-2222-4222-8222-222222222222",
+  isHost: false,
+  myRsvp: "going",
+  hostName: "Nana",
+  coverUrl: null,
+  coverFocalX: null,
+  coverFocalY: null
+};
 
 function input(overrides: Partial<SmartCardInput> = {}): SmartCardInput {
   return {
@@ -12,11 +61,18 @@ function input(overrides: Partial<SmartCardInput> = {}): SmartCardInput {
     journey: completeJourney,
     safeArrival: null,
     birthday: null,
+    agenda: [],
     weekendPlanCount: 0,
-    nearbyCount: 0,
+    nearbyFriends: [],
+    locationFreshForProximity: false,
+    muddyCount: 1,
     buddyScore: null,
     recentAchievement: null,
     suggestionCount: 0,
+    /* Entitlement KNOWN and present, so the two expansion-only states are
+       eligible and these cases measure the state itself rather than the gate.
+       Entitlement is exercised deliberately in access-entitlement.test.ts. */
+    access: { canExpand: true },
     ...overrides
   };
 }
@@ -33,11 +89,88 @@ describe("Home Smart Card convergence", () => {
       now: built.now.getTime(),
       acknowledgedIds: new Set(["journey_complete"])
     });
-    expect(card?.id).toBe("suggestions");
+    expect(card?.id).toBe("upfor_fallback");
+    expect(card?.destination).toBe("/hangout-mode");
   });
 
-  it("still prioritizes safety over ordinary engagement", () => {
-    const built = input({ safeArrival: { travelling: true, watcherCount: 2 } });
+  it("keeps cold-start people help ahead of the UpFor fallback", () => {
+    /* A real cold-start user has an INCOMPLETE Journey. `add_first_muddy` is
+       step 2 of 8, so `muddyCount: 0` with the default complete-Journey fixture
+       describes somebody who finished a step they cannot have finished --
+       journey_complete then wins for a coherent reason, and the failure is the
+       fixture's, not the ranking's. */
+    const coldStartJourney: JourneyData = {
+      completedCount: 1,
+      totalCount: 8,
+      currentStep: {
+        id: "add_first_muddy",
+        title: "Add your first Muddy",
+        description: "Mad Buddy works once one real person is in your circle.",
+        state: "current",
+        unlockCondition: "",
+        destination: "/muddies",
+        guide: null
+      },
+      steps: []
+    };
+    const built = input({ journey: coldStartJourney, muddyCount: 0, suggestionCount: 3 });
+    expect(resolveSmartCard(smartCardProviders(built), { now: built.now.getTime() })?.id).toBe("suggestions");
+  });
+
+  it("still prioritizes safety over every ordinary state", () => {
+    const built = input({
+      safeArrival: { travelling: true, watcherCount: 2 },
+      agenda: [invitedPlan, liveEvent]
+    });
     expect(resolveSmartCard(smartCardProviders(built), { now: built.now.getTime() })?.id).toBe("safe_arrival");
+  });
+
+  it("puts a real unanswered Plan above a live Event", () => {
+    const built = input({ agenda: [liveEvent, invitedPlan] });
+    const card = resolveSmartCard(smartCardProviders(built), { now: built.now.getTime() });
+    expect(card?.id).toBe("plan_rsvp");
+    expect(card?.title).toContain("needs your answer");
+  });
+
+  it("puts a live Event above progression when no answer is owed", () => {
+    const currentStep = {
+      id: "add_first_muddy" as const,
+      title: "Find a Muddy",
+      description: "Start with someone you know.",
+      state: "current" as const,
+      unlockCondition: "Create your first approved Muddy connection.",
+      destination: "/friends",
+      guide: null
+    };
+    const activeJourney: JourneyData = {
+      completedCount: 2,
+      totalCount: 8,
+      currentStep,
+      steps: [currentStep]
+    };
+    const built = input({ journey: activeJourney, agenda: [liveEvent] });
+    expect(resolveSmartCard(smartCardProviders(built), { now: built.now.getTime() })?.id).toBe("event_live");
+  });
+
+  it("allows only fresh privacy-safe proximity to win", () => {
+    const nearby = {
+      friend_id: "33333333-3333-4333-8333-333333333333",
+      display_name: "Ama",
+      username: "ama",
+      avatar_url: null,
+      proximity_band: "close_by" as const,
+      freshness_state: "live" as const
+    };
+    const fresh = input({ nearbyFriends: [nearby], locationFreshForProximity: true });
+    const card = resolveSmartCard(smartCardProviders(fresh), { now: fresh.now.getTime() });
+    expect(card?.id).toBe("nearby_muddies");
+    expect(card?.meta).toBe("Close By");
+    expect(card?.destination).toBe("/friends/ama");
+
+    const stale = input({
+      nearbyFriends: [{ ...nearby, freshness_state: "stale" }],
+      locationFreshForProximity: true
+    });
+    expect(resolveSmartCard(smartCardProviders(stale), { now: stale.now.getTime() })?.id).not.toBe("nearby_muddies");
   });
 });

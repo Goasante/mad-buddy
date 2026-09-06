@@ -67,7 +67,14 @@ describe("eligibility is earned, not bought", () => {
   });
 
   it("refuses one journey short, however long the tenure", () => {
-    const result = trustedMemberEligibility({ premiumDays: 3650, journeysComplete: 8 });
+    /* Derived, not hardcoded. TRUSTED_MEMBER_REQUIRED_JOURNEYS is
+       JOURNEY_STEP_IDS.length, so this literal was 9 until Share First Moment
+       was removed and silently became "already eligible" -- the test passed
+       for years and then asserted the opposite of its own name. */
+    const result = trustedMemberEligibility({
+      premiumDays: 3650,
+      journeysComplete: TRUSTED_MEMBER_REQUIRED_JOURNEYS - 1
+    });
     expect(result.eligible).toBe(false);
     expect(result.missing[0]).toContain("1 more journey");
   });

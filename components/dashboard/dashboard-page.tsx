@@ -68,7 +68,7 @@ import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/li
 import type { ActivityType, AvailabilityType } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
-import { SmartCardHero } from "@/components/journey/smart-card";
+import { SmartCardHeroV2 } from "@/components/journey/smart-card-v2";
 import { ActivationCard } from "@/components/activation/activation-card";
 import { FirstMuddyCard } from "@/components/activation/first-muddy-card";
 import type { ActivationAction, ActivationState } from "@/lib/activation/state";
@@ -80,10 +80,12 @@ import { conversationHref } from "@/lib/messaging/open-conversation";
 import {
   composeHome,
   earlyActivationHiddenActionHrefs,
+  isEarlyActivation,
   type NextBestAction
 } from "@/lib/activation/home-composition";
 import { TopEventsHome } from "@/components/events/top-events-home";
 import type { RankedEvent } from "@/lib/events/ranked-events";
+import { shouldShowSmartCardOnHome } from "@/lib/smart-card/home-gate";
 import type { SmartCard } from "@/lib/smart-card/smart-card";
 
 type DashboardFriend = {
@@ -853,6 +855,23 @@ export function DashboardPageContent({
   );
   const composition = useMemo(() => composeHome(compositionInputs), [compositionInputs]);
 
+  /* Card B's eligibility and volume, from the canonical tier.
+   *
+   * `firstMuddy || activationState` is deliberate: FirstMuddyCard REPLACES
+   * ActivationCard, so checking only the second would miss the state where the
+   * relationship payoff owns the screen and let Card B compete with it. */
+  const smartCardGate = useMemo(
+    () =>
+      smartCard
+        ? shouldShowSmartCardOnHome({
+            id: smartCard.id,
+            earlyActivation: isEarlyActivation(compositionInputs),
+            cardAVisible: Boolean(firstMuddy || activationState)
+          })
+        : { eligible: false, deferred: false, tier: 6 as const },
+    [smartCard, compositionInputs, firstMuddy, activationState]
+  );
+
   /* THE PAYOFF'S ACTIONS, from the one engine.
    *
    * Only when exactly one Muddy is nearby and the projection's focused
@@ -1071,17 +1090,27 @@ export function DashboardPageContent({
             }
           />
         ) : null}
-        {/* SAFETY ALWAYS; A SECOND ACTIVATION GUIDE NEVER.
-            safe_arrival is a live journey somebody is on -- it outranks
-            activation and keeps its full treatment. The `journey` card is
-            Mad Buddy's OTHER activation system, and its "Turn On Visibility"
-            step repeats this screen's instruction with a different
-            destination, so it stands down rather than merely dimming. */}
-        {smartCard && (smartCard.id === "safe_arrival" || composition.showJourneyCard) ? (
-          <SmartCardHero
-            card={smartCard}
-            deferred={Boolean(activationState) && smartCard.id !== "safe_arrival"}
-          />
+        {/* CARD B, gated by TIER rather than by a list of ids.
+
+            The old condition here was `smartCard.id === "safe_arrival" ||
+            composition.showJourneyCard`. It admitted two of the fourteen states
+            the engine builds, so Plan RSVP, live Events and the rest were
+            computed on every load and discarded. A longer list of ids would
+            reintroduce the same defect one state at a time, so the rule now
+            reads the canonical tier:
+
+              0    safety            always, at full volume
+              1-2  answer owed /     always, quiet beside Card A
+                   happening now
+              3-6  momentum,         only once activation has stopped
+                   progression,      being Home's main guide
+                   fallback
+
+            `cardAVisible` counts FirstMuddyCard as well as ActivationCard:
+            either one owns the screen, and deferring against only the second
+            would let Card B compete with the first Muddy payoff. */}
+        {smartCard && smartCardGate.eligible ? (
+          <SmartCardHeroV2 card={smartCard} deferred={smartCardGate.deferred} />
         ) : null}
 
         {/* HERO: Nearby Muddies.

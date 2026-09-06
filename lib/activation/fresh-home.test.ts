@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { stripComments } from "@/lib/content/strip-comments";
+import { shouldShowSmartCardOnHome } from "@/lib/smart-card/home-gate";
 
 /**
  * The first screen a new account ever sees.
@@ -160,24 +161,47 @@ describe("the Smart Card yields while activation owns the screen", () => {
     expect(smart).toContain('deferred ? "text-foreground" : "text-white"');
   });
 
+  /* These used to assert the literal text of Home's old gate:
+   *   smartCard.id === "safe_arrival" || composition.showJourneyCard
+   *   deferred={Boolean(activationState) && smartCard.id !== "safe_arrival"}
+   *
+   * That gate admitted two of the fourteen states the engine builds. The
+   * decision now comes from the canonical TIER in shouldShowSmartCardOnHome,
+   * so those strings are gone while every rule they protected still holds --
+   * asserted against the helper rather than against Home's source text. What
+   * remains source-level here is that Home actually DELEGATES to it. */
+
+  it("delegates the decision to the canonical tier helper", () => {
+    expect(home).toContain("shouldShowSmartCardOnHome");
+    expect(home).toContain("smartCardGate.eligible");
+  });
+
   it("never defers a safety state", () => {
-    // A live Safe Arrival outranks activation by design.
-    expect(home).toContain('smartCard.id !== "safe_arrival"');
+    // Tier 0 short-circuits before the deferral rule is reached.
+    expect(
+      shouldShowSmartCardOnHome({ id: "safe_arrival", earlyActivation: true, cardAVisible: true })
+    ).toEqual({ eligible: true, deferred: false, tier: 0 });
   });
 
-  it("no longer exempts the Journey card", () => {
-    /* This USED to assert `smartCard.id !== "journey"`, on the belief that the
-     * Journey outranked activation. It does not: the Journey IS a second
-     * activation system, and its "Turn On Visibility" step gave the same
-     * instruction as the card above it with a different destination. It is now
-     * suppressed outright during early activation rather than exempted from
-     * dimming. */
-    expect(home).not.toContain('smartCard.id !== "journey"');
-    expect(home).toContain("composition.showJourneyCard");
+  it("still suppresses the Journey card while activation is teaching", () => {
+    /* The Journey IS Mad Buddy's other activation system -- its "Turn On
+     * Visibility" step gives the same instruction as the card above it with a
+     * different destination -- so it stands down rather than merely dimming. */
+    expect(
+      shouldShowSmartCardOnHome({ id: "journey", earlyActivation: true, cardAVisible: true }).eligible
+    ).toBe(false);
+    expect(
+      shouldShowSmartCardOnHome({ id: "journey", earlyActivation: false, cardAVisible: false }).eligible
+    ).toBe(true);
   });
 
-  it("only defers while an activation state exists", () => {
-    expect(home).toContain("Boolean(activationState) &&");
+  it("only defers while Card A is on screen", () => {
+    expect(
+      shouldShowSmartCardOnHome({ id: "plan_rsvp", earlyActivation: false, cardAVisible: true }).deferred
+    ).toBe(true);
+    expect(
+      shouldShowSmartCardOnHome({ id: "plan_rsvp", earlyActivation: false, cardAVisible: false }).deferred
+    ).toBe(false);
   });
 });
 
