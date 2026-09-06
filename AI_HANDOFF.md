@@ -1,4 +1,9 @@
-# AI Handoff
+# AI Handoff — HISTORICAL ONLY
+
+> **Do not use this file as current onboarding or release authority.**
+> It records a July 2026 visual-polish checkpoint only. Current developer/AI
+> continuation begins at `docs/operations/START-HERE.md` and
+> `docs/product/CONTINUATION.md`.
 
 - Date/time: 2026-07-10
 - What was changed: Refined the Mad Buddy frontend visual system across the main app surfaces with more premium glass surfaces, stronger button/card styling, improved spacing on the landing, dashboard, friends, profile, settings, and pricing experiences, and a more polished glow-card presentation while preserving existing routes and behavior.
