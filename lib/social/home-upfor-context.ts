@@ -48,6 +48,8 @@ export type HomeUpForOwnedSession = {
 
 export type HomeUpForJoinedSession = {
   id: string;
+  /** Canonical user id already present on the joined session read. */
+  ownerId: string;
   ownerName: string;
   activityType: HangoutActivityType;
   activityLabel: string;
@@ -150,7 +152,12 @@ export async function loadHomeUpForContext(
 
   /* Sessions the viewer asked to join. Owner names and activity come from the
      session rows, so a request whose session has ended or been withdrawn
-     simply drops out rather than rendering a card about nothing. */
+     simply drops out rather than rendering a card about nothing.
+
+     owner_id is already selected here for filtering and the name batch below.
+     Carrying it into the projection therefore adds ZERO Home queries; it lets
+     an accepted Smart Card ask the existing messaging authority to coordinate
+     with this exact owner only after the viewer taps. */
   const joinedSessionIds = joinedRows.map((row) => row.hangout_session_id);
   const joined: HomeUpForJoinedSession[] = [];
   if (joinedSessionIds.length > 0) {
@@ -180,6 +187,7 @@ export async function loadHomeUpForContext(
       if (session.owner_id === viewerId) continue;
       joined.push({
         id: session.id,
+        ownerId: session.owner_id,
         ownerName: nameById.get(session.owner_id) ?? "A Muddy",
         activityType: session.activity_type as HangoutActivityType,
         activityLabel: activityLabelFor(session.activity_type as HangoutActivityType),
