@@ -45,13 +45,14 @@ if (mode === "production") {
 
 if (mode === "production" || mode === "paystack") {
   groups.push({
-    name: "Paystack",
+    name: "Paystack / Mad Buddy Access",
     required: [
+      // The current Access checkout is server-owned. The source definition in
+      // lib/access/product.ts owns price + plan code by default; these are the
+      // provider transport values the live checkout/webhook path requires.
       "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY",
       "PAYSTACK_SECRET_KEY",
-      "PAYSTACK_WEBHOOK_SECRET",
-      "PAYSTACK_BUDDY_PLUS_PLAN_CODE",
-      "PAYSTACK_BUDDY_PRO_PLAN_CODE"
+      "PAYSTACK_WEBHOOK_SECRET"
     ]
   });
 }
@@ -74,6 +75,20 @@ for (const group of groups) {
       console.log(`  MISSING ${label}`);
       failures.push(label);
     }
+  }
+}
+
+if (mode === "production" || mode === "paystack") {
+  const legacyConfigured = hasValue(env.PAYSTACK_BUDDY_PLUS_PLAN_CODE) || hasValue(env.PAYSTACK_BUDDY_PRO_PLAN_CODE);
+  if (legacyConfigured) {
+    console.log("\nLegacy Paystack ladder");
+    console.log("  INFO Buddy Plus / Buddy Pro plan-code variables are present for retired compatibility paths.");
+    console.log("  INFO They are NOT current Mad Buddy Access product authority.");
+  }
+
+  if (hasValue(env.MAD_BUDDY_ACCESS_AMOUNT_MINOR) || hasValue(env.MAD_BUDDY_ACCESS_PLAN_CODE)) {
+    console.log("\nMad Buddy Access overrides");
+    console.log("  INFO Access price/plan override detected. Production should use this only when deliberately reviewed.");
   }
 }
 

@@ -11,3 +11,15 @@ capacitor-cordova-ios-plugins
 # Generated Config files
 App/App/capacitor.config.json
 App/App/config.xml
+
+# iOS signing/export secrets and local provisioning material.
+# Never commit distribution certificates/private keys or provisioning profiles.
+*.p12
+*.p8
+*.mobileprovision
+*.cer
+*.provisionprofile
+ExportOptions.plist
+
+# Local Xcode signing/account state.
+*.xcuserstate

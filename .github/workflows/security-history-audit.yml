@@ -1,0 +1,39 @@
+name: Secret history audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  history-scan:
+    name: Full Git history secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify checkout is not shallow
+        shell: bash
+        run: |
+          test "$(git rev-parse --is-shallow-repository)" = "false"
+          echo "Commits available: $(git rev-list --count HEAD)"
+
+      - name: Scan complete Git history for credential patterns
+        run: node scripts/security/scan-secrets.mjs --history
+
+      - name: Rotation instruction on failure
+        if: failure()
+        run: |
+          echo "A history finding must be treated as compromised."
+          echo "Rotate the credential in its provider first; do not paste the value into GitHub or chat."
+          echo "The scanner reports only credential type and Git location, never the matched secret value."
