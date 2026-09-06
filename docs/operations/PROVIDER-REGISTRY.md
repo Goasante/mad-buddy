@@ -16,22 +16,38 @@ Every production-critical provider should have:
 - a documented process to revoke a developer,
 - a backup trusted operator where the provider permits it.
 
+## Founder-attested status — 2026-09-06
+
+These facts were supplied directly by the founder. Because this repository is public, login email addresses and other account identifiers are intentionally **not** repeated here; store those in the private Mad Buddy vault/provider record instead.
+
+| Provider / area | Founder-attested status | Still to verify |
+| --- | --- | --- |
+| **Domain registrar** | Registrar/company name currently forgotten. | Recover registrar name from original purchase/renewal email, card statement, ICANN/RDAP lookup, DNS/provider history, or Cloudflare registrar view. Then record renewal date, registrant account and recovery path. |
+| **Cloudflare** | Founder-controlled account. Login identity is known to founder and should be stored only in the private vault/provider record. | 2FA/recovery, backup admin, billing, domain-lock/registrar relationship, Turnstile hostnames. |
+| **Vercel** | Founder-owned personal account/project. Currently on free plan. | Backup admin/recovery, environment-scope review, billing/spend-alert posture if plan changes. |
+| **Supabase Production** | Founder-controlled personal account/project; founder reports being the current owner/admin. | Confirm whether any additional org/project admins exist, plan/region, backups/PITR, recovery path and Auth dashboard settings. |
+| **Paystack** | Founder/business controlled. Settlement account is under founder/business control. | 2FA/recovery, refund/dispute operators, webhook/alert settings, live-plan/dashboard verification. |
+| **Google Play Console** | No account/app ownership established yet. | Create before Android store release; configure owner/recovery and Play App Signing. |
+| **Apple Developer / App Store Connect** | No account/membership established yet. | Create before iOS distribution; configure Account Holder/Admin recovery, Team ID, signing and APNs. |
+
+The absence of Play Console / Apple Developer accounts is not a current web-release blocker. It becomes a hard prerequisite when the native store-release phase starts.
+
 ## Registry
 
 | Provider | Mad Buddy resource | Known technical authority | Owner / recovery information to fill |
 | --- | --- | --- | --- |
 | **GitHub** | `Goasante/mad-buddy` | Public repository; default branch `main` | Account owner, backup recovery, 2FA method, trusted collaborators |
-| **Vercel** | Project `mad-buddy` | Production domain `https://mad-buddy.com`; Next.js deployment | Team/account owner, billing owner, backup admin, 2FA/recovery |
-| **Supabase Production** | Production project | Project ref `cabkhxxnrybzhkbtoiiz`; canonical Auth/Postgres/Storage/Realtime | Organization/project owner, billing plan, region, backup/PITR status, recovery |
+| **Vercel** | Project `mad-buddy` | Production domain `https://mad-buddy.com`; Next.js deployment | Founder-owned personal project; free plan now. Still record recovery/backup admin and future billing owner. |
+| **Supabase Production** | Production project | Project ref `cabkhxxnrybzhkbtoiiz`; canonical Auth/Postgres/Storage/Realtime | Founder-controlled; record plan, region, backup/PITR status and recovery. |
 | **Supabase Staging** | Synthetic-data staging project | Project ref `ivaydmciwmjdjsrovbqb`; never contains human data by design | Owner, plan, reset authority, backup/recovery expectations |
-| **Cloudflare** | DNS / Turnstile / possible registrar controls | `mad-buddy.com`; Turnstile used by signup/recovery | Account owner, registrar, billing/renewal, domain lock, 2FA, recovery |
-| **Paystack** | Merchant + Mad Buddy Access subscription product | Current product authority is `lib/access/product.ts`; server owns price and plan selection | Merchant owner, settlement account owner, live/test access, dispute/refund operator, 2FA/recovery |
+| **Cloudflare** | DNS / Turnstile / possible registrar controls | `mad-buddy.com`; Turnstile used by signup/recovery | Founder-controlled; record backup admin, registrar relationship, billing/renewal, domain lock, 2FA and recovery. |
+| **Paystack** | Merchant + Mad Buddy Access subscription product | Current product authority is `lib/access/product.ts`; server owns price and plan selection | Founder/business-controlled; settlement account controlled. Still record refund/dispute operator and 2FA/recovery. |
 | **Google Cloud / OAuth** | Google sign-in provider configuration | Web Google OAuth is routed through Supabase; native clients require platform-specific setup | Cloud project owner, OAuth client owners, consent-screen owner, recovery |
 | **Firebase** | FCM/native push | Server uses `FIREBASE_SERVICE_ACCOUNT_BASE64`; Android/iOS client config files are build inputs | Firebase project owner, service-account rotation authority, backup admin |
-| **Google Play Console** | Android app | Application id `com.madbuddy.app` | Account owner, Play App Signing status, upload-key owner, backup admin, recovery |
-| **Apple Developer / App Store Connect** | iOS app | Bundle id `com.madbuddy.app` | Team ID, Account Holder, Admin backup, signing/APNs owners, recovery |
+| **Google Play Console** | Android app | Application id `com.madbuddy.app` | Not yet established; create before Android store release. |
+| **Apple Developer / App Store Connect** | iOS app | Bundle id `com.madbuddy.app` | Not yet established; create before iOS store release. |
 | **Google Analytics** | GA4 | Client uses `NEXT_PUBLIC_GA_MEASUREMENT_ID` | Property owner, stream id, backup administrator, retention settings |
-| **Domain registrar** | `mad-buddy.com` | May or may not be the same account as Cloudflare DNS; verify | Registrar name, registrant account, auto-renewal, payment method owner, recovery |
+| **Domain registrar** | `mad-buddy.com` | May or may not be the same account as Cloudflare DNS; verify | Registrar currently unknown to founder; recovery task OPEN. |
 | **Password manager / vault** | Mad Buddy production vault | Must remain outside Git | Vault product, vault owner, emergency recovery process, backup trusted person |
 
 ## Required founder fields
@@ -39,7 +55,7 @@ Every production-critical provider should have:
 For each row above, record privately or in the non-secret columns of this document:
 
 - **Account / organization name**
-- **Login email** (safe to document only if the owner approves it as operational metadata)
+- **Login email** (safe to document only if the owner approves it as operational metadata; for this public repo prefer the private vault/provider record)
 - **Primary owner**
 - **Backup owner/admin**
 - **Billing owner**
