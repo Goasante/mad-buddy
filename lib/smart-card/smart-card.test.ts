@@ -121,13 +121,16 @@ describe("Home Smart Card convergence", () => {
     const nearby = {
       friend_id: "33333333-3333-4333-8333-333333333333",
       display_name: "Ama",
+      username: "ama",
       avatar_url: null,
       proximity_band: "close_by" as const,
       freshness_state: "live" as const
     };
     const fresh = input({ nearbyFriends: [nearby], locationFreshForProximity: true });
-    expect(resolveSmartCard(smartCardProviders(fresh), { now: fresh.now.getTime() })?.id).toBe("nearby_muddies");
-    expect(resolveSmartCard(smartCardProviders(fresh), { now: fresh.now.getTime() })?.meta).toBe("Close By");
+    const card = resolveSmartCard(smartCardProviders(fresh), { now: fresh.now.getTime() });
+    expect(card?.id).toBe("nearby_muddies");
+    expect(card?.meta).toBe("Close By");
+    expect(card?.destination).toBe("/friends/ama");
 
     const stale = input({
       nearbyFriends: [{ ...nearby, freshness_state: "stale" }],
