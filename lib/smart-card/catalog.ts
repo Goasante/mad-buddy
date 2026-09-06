@@ -75,7 +75,14 @@ export const SMART_CARD_APPROVED_STATES = [
   { id: "birthday", tier: 3, family: "profile", purpose: "The viewer's own birthday moment." },
 
   { id: "event_friend_context", tier: 4, family: "events", purpose: "Muddies are attending a relevant Event." },
-  { id: "event_starting", tier: 4, family: "events", purpose: "A saved/going Event starts soon." },
+  /* Two states, because "starts soon" means different things depending on
+     whether the viewer COMMITTED. Hosting or going is a commitment with a time
+     attached, so it belongs beside the other tier-2 obligations and reaches a
+     new viewer during activation. Merely being interested is consideration, and
+     interrupting somebody who has not yet made a first connection for an Event
+     they only bookmarked is the kind of noise this ranking exists to prevent. */
+  { id: "event_commitment_starting", tier: 2, family: "events", purpose: "An Event the viewer hosts or is going to starts soon." },
+  { id: "event_starting", tier: 4, family: "events", purpose: "An Event the viewer is only interested in starts soon." },
   { id: "event_saved", tier: 4, family: "events", purpose: "A saved Event is approaching." },
   { id: "linkr_opportunity", tier: 4, family: "linkr", purpose: "A grounded Linkr opportunity has a clear reason." },
   { id: "plan_upcoming", tier: 4, family: "plans", purpose: "An upcoming commitment is worth keeping visible." },

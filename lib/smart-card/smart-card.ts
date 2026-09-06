@@ -32,6 +32,10 @@ export const SMART_CARD_IDS = [
   "upfor_momentum",
   "owned_upfor_starting",
   "upfor_active_muddy",
+  /* Hosting or going, starting soon: a commitment with a time attached, so it
+     ranks with the other tier-2 states rather than with Events the viewer only
+     bookmarked. */
+  "event_commitment_starting",
   "nearby_muddies",
   /* Tier 3: relationship momentum. Both are about a specific person, which is
      why they outrank the tier-4 opportunities below. */

@@ -222,14 +222,72 @@ function nearbyMuddiesProvider(input: SmartCardInput): SmartCard | null {
   };
 }
 
-/** Tier 4: a relevant Event is close, but not more urgent than live social context. */
-function eventStartingProvider(input: SmartCardInput): SmartCard | null {
-  const event = input.agenda.find((item) => {
+/**
+ * Events that start soon, split by whether the viewer actually COMMITTED.
+ *
+ * `isHost` or an RSVP of `going` is a commitment with a time attached, which
+ * is the same shape as a Plan starting soon -- tier 2, and worth reaching a new
+ * viewer during activation. `interested` is consideration: interrupting somebody
+ * who has not yet made a first connection about an Event they merely bookmarked
+ * is the noise this ranking exists to prevent, so it stays tier 4.
+ *
+ * One agenda pass, two states. The canonical fields decide; nothing re-queries
+ * Events, and no runtime flag pretends one id means two things.
+ */
+function findEventStartingSoon(
+  input: SmartCardInput,
+  committed: boolean
+): Extract<UpcomingAgendaItem, { kind: "event" }> | null {
+  const found = input.agenda.find((item) => {
     if (item.kind !== "event") return false;
+    const isCommitment = item.isHost || item.myRsvp === "going";
+    if (isCommitment !== committed) return false;
     const delta = Date.parse(item.startsAt) - input.now.getTime();
     return Number.isFinite(delta) && delta > 0 && delta <= THREE_HOURS_MS;
   });
-  if (!event || event.kind !== "event") return null;
+  return found && found.kind === "event" ? found : null;
+}
+
+function eventMedia(event: Extract<UpcomingAgendaItem, { kind: "event" }>) {
+  /* The agenda already signed this cover in one batched pass. A card must never
+     sign its own, or a stack of Events becomes a stack of round trips. */
+  return event.coverUrl
+    ? {
+        url: event.coverUrl,
+        alt: event.title + " cover",
+        focalX: event.coverFocalX,
+        focalY: event.coverFocalY
+      }
+    : undefined;
+}
+
+/** Tier 2: the viewer is hosting or going, and it starts soon. */
+function eventCommitmentStartingProvider(input: SmartCardInput): SmartCard | null {
+  const event = findEventStartingSoon(input, true);
+  if (!event) return null;
+  const minutes = minutesUntil(event.startsAt, input.now);
+  const when = minutes === null ? "is starting soon" : soonLabel(minutes).toLowerCase();
+
+  return {
+    id: "event_commitment_starting",
+    priority: 0,
+    illustration: "calendar",
+    eyebrow: event.isHost ? "YOU ARE HOSTING" : "STARTING SOON",
+    title: event.isHost ? "You are hosting " + event.title : event.title,
+    subtitle: event.isHost
+      ? "It " + when + ". People are counting on you being there."
+      : "It " + when + ".",
+    meta: event.locationLabel ?? undefined,
+    media: eventMedia(event),
+    cta: "View Event",
+    destination: event.href
+  };
+}
+
+/** Tier 4: interested only. Useful, not urgent. */
+function eventStartingProvider(input: SmartCardInput): SmartCard | null {
+  const event = findEventStartingSoon(input, false);
+  if (!event) return null;
   const minutes = minutesUntil(event.startsAt, input.now);
 
   return {
@@ -240,7 +298,7 @@ function eventStartingProvider(input: SmartCardInput): SmartCard | null {
     title: event.title,
     subtitle: minutes === null ? "This Event is coming up." : soonLabel(minutes),
     meta: event.locationLabel ?? undefined,
-    media: event.coverUrl ? { url: event.coverUrl, alt: `${event.title} cover`, focalX: event.coverFocalX, focalY: event.coverFocalY } : undefined,
+    media: eventMedia(event),
     cta: "View Event",
     destination: event.href
   };
@@ -611,6 +669,7 @@ export function smartCardProviders(input: SmartCardInput): readonly SmartCardPro
     { id: "muddy_request", build: () => muddyRequestProvider(input) },
     { id: "plan_starting", build: () => planStartingProvider(input) },
     { id: "event_live", build: () => eventLiveProvider(input) },
+    { id: "event_commitment_starting", build: () => eventCommitmentStartingProvider(input) },
     { id: "upfor_active_muddy", build: () => upForActiveMuddyProvider(input) },
     { id: "upfor_momentum", build: () => upForMomentumProvider(input) },
     { id: "upfor_accepted", build: () => upForAcceptedProvider(input) },
