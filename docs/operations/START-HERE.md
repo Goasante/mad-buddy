@@ -79,14 +79,17 @@ The current consumer product is **Mad Buddy Access**, not the old Buddy Plus / B
 
 ## Current known operational debt
 
-This handoff tranche has already identified these items for reconciliation:
+This handoff tranche identified and resolved several reconciliation items on this branch:
 
-- `.env.example` is incomplete for newer runtime variables such as native Firebase service-account configuration and the independent database cron credential.
-- Some payment/readiness/deployment documentation still refers to the retired Buddy Plus / Buddy Pro configuration while the current product is Mad Buddy Access.
-- `AI_HANDOFF.md` is historical and should not be treated as current onboarding authority.
-- iOS ignore rules are thinner than Android signing-secret protections and should be hardened before release signing work.
-- CI scans the tracked tree for common credential patterns, but the repository's full Git history still needs an explicit historical secret scan.
-- `main` is currently unprotected; before external developers join, require a reviewed PR/CI workflow appropriate to the team's size.
+- `.env.example` now lists the newer runtime variables, including native Firebase service-account configuration and the independent database cron credential.
+- Payment/readiness/deployment documentation now leads with Mad Buddy Access; retired Buddy Plus / Buddy Pro references are explicitly labeled legacy compatibility only.
+- `AI_HANDOFF.md` and the root `CONTINUATION.md` are explicitly marked historical and point to current authority.
+- `ios/.gitignore` now excludes signing/export material to the same standard as Android.
+- A full Git history secret scan (`node scripts/security/scan-secrets.mjs --history`) has been run from a complete, non-shallow clone and returned clean. `.github/workflows/security-history-audit.yml` lets this be re-run on demand.
+
+One item remains genuinely open:
+
+- `main` is currently unprotected (confirmed via the GitHub API at this checkpoint); before external developers join, configure the branch protection described in `GITHUB-ACCESS-AND-REVIEW.md`.
 
 ## Secret incident rule
 

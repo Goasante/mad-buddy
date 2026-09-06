@@ -135,7 +135,7 @@ Initial runtime-documentation drift identified by this operations tranche has be
 - current readiness/preflight no longer requires the retired Plus/Pro plan codes;
 - README and deployment onboarding point to Mad Buddy Access and the operations handoff.
 
-Remaining work is provider-dashboard verification (owner-supplied facts), full Git-history secret scanning from a complete clone, and clean-environment runbook validation.
+A full Git-history secret scan from a complete, non-shallow clone has since been run (`node scripts/security/scan-secrets.mjs --history`) and returned clean. Provider-dashboard ownership facts have also been supplied by the founder and recorded in `FOUNDER-CHECKLIST.md`. Remaining work is deeper provider-dashboard configuration verification (2FA, backups, Auth settings, webhook configuration — the unchecked items in `FOUNDER-CHECKLIST.md`) and clean-environment runbook validation.
 
 ## Rotation rule
 
