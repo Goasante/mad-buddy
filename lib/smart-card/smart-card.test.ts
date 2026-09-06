@@ -98,11 +98,20 @@ describe("Home Smart Card convergence", () => {
   });
 
   it("puts a live Event above progression when no answer is owed", () => {
+    const currentStep = {
+      id: "add_first_muddy" as const,
+      title: "Find a Muddy",
+      description: "Start with someone you know.",
+      state: "current" as const,
+      unlockCondition: "Create your first approved Muddy connection.",
+      destination: "/friends",
+      guide: null
+    };
     const activeJourney: JourneyData = {
       completedCount: 2,
       totalCount: 9,
-      currentStep: { id: "find-a-muddy", title: "Find a Muddy", description: "Start with someone you know.", destination: "/friends" },
-      steps: []
+      currentStep,
+      steps: [currentStep]
     };
     const built = input({ journey: activeJourney, agenda: [liveEvent] });
     expect(resolveSmartCard(smartCardProviders(built), { now: built.now.getTime() })?.id).toBe("event_live");
