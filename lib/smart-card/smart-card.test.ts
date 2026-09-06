@@ -5,7 +5,7 @@ import type { JourneyData } from "@/lib/journey/journey";
 import type { UpcomingAgendaItem } from "@/lib/social/upcoming-agenda-projection";
 
 const NOW = new Date("2026-08-05T10:00:00.000Z");
-const completeJourney: JourneyData = { completedCount: 9, totalCount: 9, currentStep: null, steps: [] };
+const completeJourney: JourneyData = { completedCount: 8, totalCount: 8, currentStep: null, steps: [] };
 
 const invitedPlan: UpcomingAgendaItem = {
   kind: "plan",
@@ -109,7 +109,7 @@ describe("Home Smart Card convergence", () => {
     };
     const activeJourney: JourneyData = {
       completedCount: 2,
-      totalCount: 9,
+      totalCount: 8,
       currentStep,
       steps: [currentStep]
     };
