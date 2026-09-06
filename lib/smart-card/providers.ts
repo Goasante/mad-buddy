@@ -1,17 +1,14 @@
 /**
- * The ten Smart Card providers.
+ * Pure Smart Card providers.
  *
- * Every provider is a pure function of `SmartCardInput` — no queries, no
- * clock, no randomness — so the entire priority order can be tested by
- * building an input and asserting which card wins. Loading that input is the
- * service's job.
- *
- * A provider returns null to decline. Declining is normal: on any given day
- * most providers decline and one wins.
+ * Every provider is a deterministic function of SmartCardInput. No queries,
+ * no randomness and no hidden ranking model live here. Home loads canonical
+ * facts once, then the engine chooses the first truthful applicable state.
  */
 
 import type { BuddyScoreData } from "@/lib/engagement/buddy-score-service";
 import type { JourneyData } from "@/lib/journey/journey";
+import type { UpcomingAgendaItem } from "@/lib/social/upcoming-agenda-projection";
 import {
   isWeekendPlanningWindow,
   smartCardProgress,
@@ -20,26 +17,73 @@ import {
   type SmartCardProvider
 } from "@/lib/smart-card/smart-card";
 
+export type SmartCardNearbyFriend = {
+  friend_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  proximity_band:
+    | "right_here"
+    | "around_you"
+    | "close_by"
+    | "nearby"
+    | "around_town"
+    | "further_away"
+    | "outside_range";
+  freshness_state: "live" | "recent" | "older" | "stale";
+};
+
 export type SmartCardInput = {
   now: Date;
-  /** Null when the Journey could not be loaded — providers must not assume it. */
   journey: JourneyData | null;
-  /** A live Safe Arrival the viewer is travelling on, if any. */
   safeArrival: { travelling: boolean; watcherCount: number } | null;
-  /** Viewer's own birthday state. Never another user's. */
   birthday: { birthdayToday: boolean; birthdayTomorrow: boolean } | null;
-  /** Count of plans starting within the weekend window. */
+  /** Canonical Home agenda — Plans + Events, already permission-filtered. */
+  agenda: readonly UpcomingAgendaItem[];
+  /** Count of plans starting inside the current weekend window. */
   weekendPlanCount: number;
-  /** Muddies currently nearby. */
-  nearbyCount: number;
+  /** Privacy-safe server projection; never coordinates or numerical distance. */
+  nearbyFriends: readonly SmartCardNearbyFriend[];
+  locationFreshForProximity: boolean;
+  muddyCount: number;
   buddyScore: Pick<BuddyScoreData, "nextLevel" | "pointsToNext" | "progressPercent"> | null;
-  /** Most recently earned achievement not yet acknowledged. */
   recentAchievement: { title: string } | null;
-  /** Muddy suggestions available to the viewer. */
   suggestionCount: number;
 };
 
-/** 1. Safe Arrival — a live journey outranks every other card. */
+const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+
+function minutesUntil(iso: string, now: Date): number | null {
+  const ms = Date.parse(iso) - now.getTime();
+  if (!Number.isFinite(ms)) return null;
+  return Math.max(0, Math.round(ms / 60_000));
+}
+
+function soonLabel(minutes: number): string {
+  if (minutes < 60) return `Starts in ${Math.max(1, minutes)} min`;
+  const hours = Math.max(1, Math.round(minutes / 60));
+  return `Starts in ${hours} ${hours === 1 ? "hour" : "hours"}`;
+}
+
+function proximityLabel(band: SmartCardNearbyFriend["proximity_band"]): string | null {
+  switch (band) {
+    case "right_here":
+      return "Right Here";
+    case "around_you":
+      return "Just Around";
+    case "close_by":
+      return "Close By";
+    case "nearby":
+      return "In Your Area";
+    case "around_town":
+      return "Around Town";
+    case "further_away":
+      return "Across Town";
+    case "outside_range":
+      return null;
+  }
+}
+
+/** Tier 0: a live Safe Arrival remains the absolute Home override. */
 function safeArrivalProvider(input: SmartCardInput): SmartCard | null {
   if (!input.safeArrival?.travelling) return null;
   const { watcherCount } = input.safeArrival;
@@ -47,26 +91,186 @@ function safeArrivalProvider(input: SmartCardInput): SmartCard | null {
     id: "safe_arrival",
     priority: 0,
     illustration: "people",
+    eyebrow: "SAFE ARRIVAL",
     title: "You're on a journey",
     subtitle:
       watcherCount > 0
         ? `${watcherCount} ${watcherCount === 1 ? "Muddy is" : "Muddies are"} checking on you. Confirm when you arrive.`
-        : "Confirm your arrival so your circle knows you're safe.",
-    cta: "Confirm Arrival",
+        : "Confirm your arrival when you get there.",
+    cta: "Open Safe Arrival",
     destination: "/safe-arrival"
   };
 }
 
-/** 2. Journey — the activation card, shown until every step is done. */
+/** Tier 1: a Plan invitation is a real person waiting for an answer. */
+function planRsvpProvider(input: SmartCardInput): SmartCard | null {
+  const plan = input.agenda.find(
+    (item) => item.kind === "plan" && (item.myRsvp === "invited" || item.myRsvp === "viewed")
+  );
+  if (!plan || plan.kind !== "plan") return null;
+
+  return {
+    id: "plan_rsvp",
+    priority: 0,
+    illustration: "calendar",
+    eyebrow: "NEEDS YOUR RESPONSE",
+    title: `${plan.title} needs your answer`,
+    subtitle:
+      plan.goingCount > 0
+        ? `${plan.goingCount} ${plan.goingCount === 1 ? "person is" : "people are"} already going.`
+        : `${plan.organiserName} invited you.`,
+    socialProof: plan.attendees.length > 0 ? `${plan.attendees.map((person) => person.name).slice(0, 2).join(", ")} ${plan.goingCount > 2 ? `+${plan.goingCount - 2}` : ""}`.trim() : undefined,
+    cta: "RSVP",
+    destination: `/plans?plan=${plan.id}`
+  };
+}
+
+/** Tier 2: a Plan the viewer is already part of is close enough to matter now. */
+function planStartingProvider(input: SmartCardInput): SmartCard | null {
+  const plan = input.agenda.find((item) => {
+    if (item.kind !== "plan") return false;
+    if (item.myRsvp === "invited" || item.myRsvp === "viewed" || item.myRsvp === "not_going") return false;
+    const delta = Date.parse(item.startsAt) - input.now.getTime();
+    return Number.isFinite(delta) && delta >= 0 && delta <= THREE_HOURS_MS;
+  });
+  if (!plan || plan.kind !== "plan") return null;
+  const minutes = minutesUntil(plan.startsAt, input.now);
+
+  return {
+    id: "plan_starting",
+    priority: 0,
+    illustration: "calendar",
+    eyebrow: "STARTING SOON",
+    title: plan.title,
+    subtitle: minutes === null ? "Your Plan is coming up." : `${soonLabel(minutes)}. Open it for the latest details.`,
+    meta: plan.placeText ?? undefined,
+    socialProof: plan.goingCount > 0 ? `${plan.goingCount} going${plan.maybeCount > 0 ? ` · ${plan.maybeCount} maybe` : ""}` : undefined,
+    cta: "Open Plan",
+    destination: `/plans?plan=${plan.id}`
+  };
+}
+
+/** Tier 2: a relevant Event that is actually live, not merely discoverable. */
+function eventLiveProvider(input: SmartCardInput): SmartCard | null {
+  const event = input.agenda.find((item) => {
+    if (item.kind !== "event") return false;
+    const start = Date.parse(item.startsAt);
+    const end = Date.parse(item.endsAt);
+    const now = input.now.getTime();
+    return Number.isFinite(start) && Number.isFinite(end) && start <= now && end > now;
+  });
+  if (!event || event.kind !== "event") return null;
+
+  return {
+    id: "event_live",
+    priority: 0,
+    illustration: "calendar",
+    eyebrow: "HAPPENING NOW",
+    title: `${event.title} is happening now`,
+    subtitle: event.isHost ? "You're hosting. Open the Event to see what's happening." : "You're connected to this Event right now.",
+    meta: event.locationLabel ?? undefined,
+    media: event.coverUrl ? { url: event.coverUrl, alt: `${event.title} cover`, focalX: event.coverFocalX, focalY: event.coverFocalY } : undefined,
+    cta: "View Event",
+    destination: event.href
+  };
+}
+
+/** Tier 2: fresh server-proven proximity only. Stale state can never win Home. */
+function nearbyMuddiesProvider(input: SmartCardInput): SmartCard | null {
+  if (!input.locationFreshForProximity) return null;
+  const fresh = input.nearbyFriends.filter(
+    (friend) => (friend.freshness_state === "live" || friend.freshness_state === "recent") && proximityLabel(friend.proximity_band)
+  );
+  if (fresh.length === 0) return null;
+
+  const first = fresh[0];
+  const label = proximityLabel(first.proximity_band) ?? "Nearby";
+  const many = fresh.length > 1;
+  return {
+    id: "nearby_muddies",
+    priority: 0,
+    illustration: "people",
+    eyebrow: many ? "MUDDIES AROUND" : label.toUpperCase(),
+    title: many ? `${fresh.length} Muddies are around` : `${first.display_name} is ${label}`,
+    subtitle: many ? "See who's around and decide if you want to say hi." : "They're nearby. Proximity never means they're automatically available.",
+    meta: many ? `${first.display_name} is ${label}` : label,
+    cta: many ? "See Muddies" : "Say Hi",
+    destination: many ? "/friends" : `/friends/${first.friend_id}`
+  };
+}
+
+/** Tier 4: a relevant Event is close, but not more urgent than live social context. */
+function eventStartingProvider(input: SmartCardInput): SmartCard | null {
+  const event = input.agenda.find((item) => {
+    if (item.kind !== "event") return false;
+    const delta = Date.parse(item.startsAt) - input.now.getTime();
+    return Number.isFinite(delta) && delta > 0 && delta <= THREE_HOURS_MS;
+  });
+  if (!event || event.kind !== "event") return null;
+  const minutes = minutesUntil(event.startsAt, input.now);
+
+  return {
+    id: "event_starting",
+    priority: 0,
+    illustration: "calendar",
+    eyebrow: "COMING UP",
+    title: event.title,
+    subtitle: minutes === null ? "This Event is coming up." : soonLabel(minutes),
+    meta: event.locationLabel ?? undefined,
+    media: event.coverUrl ? { url: event.coverUrl, alt: `${event.title} cover`, focalX: event.coverFocalX, focalY: event.coverFocalY } : undefined,
+    cta: "View Event",
+    destination: event.href
+  };
+}
+
+function birthdayProvider(input: SmartCardInput): SmartCard | null {
+  if (!input.birthday) return null;
+  const { birthdayToday, birthdayTomorrow } = input.birthday;
+  if (!birthdayToday && !birthdayTomorrow) return null;
+
+  const expiry = new Date(input.now);
+  if (birthdayTomorrow) expiry.setDate(expiry.getDate() + 1);
+  expiry.setHours(23, 59, 59, 999);
+
+  return {
+    id: "birthday",
+    priority: 0,
+    illustration: "birthday",
+    eyebrow: birthdayToday ? "YOUR DAY" : "TOMORROW",
+    title: birthdayToday ? "Happy birthday!" : "Your birthday is tomorrow",
+    subtitle: birthdayToday ? "Make the day yours with the people who matter." : "Want to put something together?",
+    cta: birthdayToday ? "See Your Profile" : "Make a Plan",
+    destination: birthdayToday ? "/profile" : "/plans",
+    expiresAt: expiry.getTime()
+  };
+}
+
+function weekendPlansProvider(input: SmartCardInput): SmartCard | null {
+  if (!isWeekendPlanningWindow(input.now)) return null;
+  const count = input.weekendPlanCount;
+  return {
+    id: "weekend_plans",
+    priority: 0,
+    illustration: "calendar",
+    eyebrow: "THIS WEEKEND",
+    title: count > 0 ? "Your weekend is taking shape" : "Make weekend plans",
+    subtitle: count > 0 ? `You have ${count} ${count === 1 ? "Plan" : "Plans"} coming up.` : "Nothing on yet. Put something together with your Muddies.",
+    cta: count > 0 ? "View Plans" : "Create a Plan",
+    destination: "/plans",
+    expiresAt: weekendWindowExpiry(input.now)
+  };
+}
+
+/** Tier 5: progression is useful, but never outranks real social life. */
 function journeyProvider(input: SmartCardInput): SmartCard | null {
   const journey = input.journey;
   if (!journey?.currentStep) return null;
-
   const remaining = Math.max(0, journey.totalCount - journey.completedCount);
   return {
     id: "journey",
-    priority: 1,
+    priority: 0,
     illustration: "target",
+    eyebrow: "YOUR JOURNEY",
     title: journey.currentStep.title,
     subtitle: journey.currentStep.description,
     cta: "Continue Journey",
@@ -79,26 +283,16 @@ function journeyProvider(input: SmartCardInput): SmartCard | null {
   };
 }
 
-/**
- * 3. Journey Complete — the reward state.
- *
- * Journey completion is derived, so this condition is true forever once
- * earned. That is exactly why the card is dismissible: acknowledging it is
- * what retires it, and the engine then permanently advances to whatever
- * applies next. A higher-priority card still overrides it in the meantime
- * without consuming the acknowledgement.
- */
 function journeyCompleteProvider(input: SmartCardInput): SmartCard | null {
   const journey = input.journey;
-  if (!journey || journey.totalCount === 0) return null;
-  if (journey.completedCount < journey.totalCount) return null;
-
+  if (!journey || journey.totalCount === 0 || journey.completedCount < journey.totalCount) return null;
   return {
     id: "journey_complete",
-    priority: 2,
+    priority: 0,
     illustration: "celebration",
+    eyebrow: "MILESTONE",
     title: "Journey complete",
-    subtitle: "You've unlocked everything Mad Buddy has to offer. Here's how far you've come.",
+    subtitle: "You've completed the current Journey. See how far you've come.",
     cta: "View My Progress",
     destination: "/buddy-score",
     progress: smartCardProgress(journey.totalCount, journey.totalCount, "All steps complete"),
@@ -106,80 +300,16 @@ function journeyCompleteProvider(input: SmartCardInput): SmartCard | null {
   };
 }
 
-/** 4. Birthday — a dated moment, so it outranks every evergreen nudge. */
-function birthdayProvider(input: SmartCardInput): SmartCard | null {
-  if (!input.birthday) return null;
-  const { birthdayToday, birthdayTomorrow } = input.birthday;
-  if (!birthdayToday && !birthdayTomorrow) return null;
-
-  // Expires at the end of the birthday itself.
-  const expiry = new Date(input.now);
-  if (birthdayTomorrow) expiry.setDate(expiry.getDate() + 1);
-  expiry.setHours(23, 59, 59, 999);
-
-  return {
-    id: "birthday",
-    priority: 3,
-    illustration: "birthday",
-    title: birthdayToday ? "Happy birthday!" : "Your birthday is tomorrow",
-    subtitle: birthdayToday
-      ? "Your Muddies can celebrate with you today."
-      : "Let your Muddies know how you'd like to celebrate.",
-    cta: birthdayToday ? "See Your Day" : "Plan Something",
-    destination: birthdayToday ? "/profile" : "/plans",
-    expiresAt: expiry.getTime()
-  };
-}
-
-/** 5. Weekend Plans — Friday evening through Sunday. */
-function weekendPlansProvider(input: SmartCardInput): SmartCard | null {
-  if (!isWeekendPlanningWindow(input.now)) return null;
-
-  const count = input.weekendPlanCount;
-  return {
-    id: "weekend_plans",
-    priority: 4,
-    illustration: "calendar",
-    title: count > 0 ? "Your weekend is filling up" : "Make weekend plans",
-    subtitle:
-      count > 0
-        ? `You have ${count} ${count === 1 ? "plan" : "plans"} coming up. Keep the momentum going.`
-        : "Nothing on yet. See who's free and put something together.",
-    cta: count > 0 ? "View Plans" : "Create a Plan",
-    destination: "/plans",
-    expiresAt: weekendWindowExpiry(input.now)
-  };
-}
-
-/** 6. Nearby Muddies — someone is actually around right now. */
-function nearbyMuddiesProvider(input: SmartCardInput): SmartCard | null {
-  if (input.nearbyCount <= 0) return null;
-
-  const count = input.nearbyCount;
-  return {
-    id: "nearby_muddies",
-    priority: 5,
-    illustration: "people",
-    title: count === 1 ? "A Muddy is nearby" : `${count} Muddies are nearby`,
-    subtitle: "Say hello while you're both in the area.",
-    cta: "See Who's Close",
-    destination: "/friends"
-  };
-}
-
-/** 7. Buddy Progress — the next reputation level. */
 function buddyProgressProvider(input: SmartCardInput): SmartCard | null {
   const score = input.buddyScore;
-  // `nextLevel` is null at the top level, and `pointsToNext` is 0 there too —
-  // either way there is no "next" to nudge toward.
   if (!score?.nextLevel || score.pointsToNext <= 0) return null;
-
   return {
     id: "buddy_progress",
-    priority: 7,
+    priority: 0,
     illustration: "trophy",
+    eyebrow: "BUDDY SCORE",
     title: `${score.pointsToNext} points to ${score.nextLevel.label}`,
-    subtitle: "Keep showing up for your Muddies and your Buddy Score keeps climbing.",
+    subtitle: "Progress matters after the real social stuff, not instead of it.",
     cta: "View My Progress",
     destination: "/buddy-score",
     progress: {
@@ -189,60 +319,66 @@ function buddyProgressProvider(input: SmartCardInput): SmartCard | null {
   };
 }
 
-/** 9. Achievement — a recently earned badge worth surfacing once. */
 function achievementProvider(input: SmartCardInput): SmartCard | null {
   if (!input.recentAchievement) return null;
-
   return {
     id: "achievement",
-    priority: 8,
+    priority: 0,
     illustration: "trophy",
+    eyebrow: "MILESTONE",
     title: input.recentAchievement.title,
-    subtitle: "You earned a new achievement. See it alongside everything else you've unlocked.",
-    cta: "View Achievements",
+    subtitle: "A new achievement is ready in your Journey.",
+    cta: "View Achievement",
     destination: "/buddy-score",
     dismissible: true
   };
 }
 
-/**
- * 10. Suggestions — the guaranteed fallback.
- *
- * This provider never declines. It is what makes "there is always exactly one
- * Smart Card" true, so its copy has to work for a user with no suggestions at
- * all as well as one with plenty.
- */
-function suggestionsProvider(input: SmartCardInput): SmartCard {
+/** Cold-start people help. Once the viewer has Muddies, this yields to UpFor. */
+function suggestionsProvider(input: SmartCardInput): SmartCard | null {
+  if (input.muddyCount > 0) return null;
   const count = input.suggestionCount;
   return {
     id: "suggestions",
-    priority: 9,
+    priority: 0,
     illustration: "people",
-    title: count > 0 ? "People you may know" : "Grow your circle",
-    subtitle:
-      count > 0
-        ? `${count} ${count === 1 ? "person" : "people"} you might already know are on Mad Buddy.`
-        : "Mad Buddy works best with your real circle. Find the people you already know.",
+    eyebrow: "START WITH PEOPLE YOU KNOW",
+    title: count > 0 ? "People you may know" : "Find your first Muddy",
+    subtitle: count > 0 ? `${count} ${count === 1 ? "person" : "people"} you might already know are on Mad Buddy.` : "Mad Buddy gets useful fast once one real person is in your circle.",
     cta: count > 0 ? "See Suggestions" : "Find Muddies",
     destination: "/friends"
   };
 }
 
-/**
- * Build the full provider list for a viewer. Registration order here is
- * irrelevant — `resolveSmartCard` sorts by the canonical priority — but it is
- * kept in priority order for readability.
- */
+/** Guaranteed fallback: social intent, not progression or product promotion. */
+function upForFallbackProvider(): SmartCard {
+  return {
+    id: "upfor_fallback",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "UPFOR",
+    title: "What are you UpFor today?",
+    subtitle: "Put out a lightweight intent and see who wants in.",
+    cta: "Open UpFor",
+    destination: "/hangout-mode"
+  };
+}
+
 export function smartCardProviders(input: SmartCardInput): readonly SmartCardProvider[] {
   return [
     { id: "safe_arrival", build: () => safeArrivalProvider(input) },
-    { id: "journey", build: () => journeyProvider(input) },
-    { id: "journey_complete", build: () => journeyCompleteProvider(input) },
+    { id: "plan_rsvp", build: () => planRsvpProvider(input) },
+    { id: "plan_starting", build: () => planStartingProvider(input) },
+    { id: "event_live", build: () => eventLiveProvider(input) },
+    { id: "nearby_muddies", build: () => nearbyMuddiesProvider(input) },
+    { id: "event_starting", build: () => eventStartingProvider(input) },
     { id: "birthday", build: () => birthdayProvider(input) },
     { id: "weekend_plans", build: () => weekendPlansProvider(input) },
-    { id: "nearby_muddies", build: () => nearbyMuddiesProvider(input) },
+    { id: "journey", build: () => journeyProvider(input) },
+    { id: "journey_complete", build: () => journeyCompleteProvider(input) },
     { id: "buddy_progress", build: () => buddyProgressProvider(input) },
     { id: "achievement", build: () => achievementProvider(input) },
-    { id: "suggestions", build: () => suggestionsProvider(input) }
+    { id: "suggestions", build: () => suggestionsProvider(input) },
+    { id: "upfor_fallback", build: () => upForFallbackProvider() }
   ];
 }
