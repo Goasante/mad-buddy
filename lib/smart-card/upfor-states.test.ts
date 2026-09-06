@@ -30,6 +30,8 @@ const owned = (over: Partial<HomeUpForContext["ownedLive"][number]> = {}) => ({
 
 const joined = (over: Partial<HomeUpForContext["joined"][number]> = {}) => ({
   id: "j1",
+  ownerId: "owner-1",
+  ownerIsCertainMuddy: true,
   ownerName: "Kofi",
   activityType: "gym" as const,
   activityLabel: "Gym",
@@ -163,11 +165,17 @@ describe("momentum and obligation are never the same card", () => {
 });
 
 describe("the viewer's own request states", () => {
-  it("celebrates being accepted", () => {
+  /* Accepted is a TRANSITION into coordination, not a destination: the primary
+     action moves the person toward the Muddy they are now going with rather
+     than back into UpFor. Fully covered in
+     upfor-accepted-coordination.test.ts. */
+  it("celebrates being accepted and points at coordination", () => {
     const card = pick(context({ joined: [joined({ myStatus: "accepted" })] }));
     expect(card?.id).toBe("upfor_accepted");
     expect(card?.title).toBe("Kofi said yes");
-    expect(card?.subtitle).toBe("You are going to gym.");
+    expect(card?.subtitle).toBe("You're heading to the gym together.");
+    expect(card?.cta).toBe("Message Kofi");
+    expect(card?.secondaryAction?.label).toBe("View UpFor");
   });
 
   it("reports a pending request honestly", () => {

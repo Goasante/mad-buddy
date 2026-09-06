@@ -101,6 +101,8 @@ const muddySideJoined = (
   joined: [
     {
       id: "j1",
+      ownerId: "owner-kofi",
+      ownerIsCertainMuddy: true,
       ownerName: "Kofi",
       activityType: "coffee",
       activityLabel: "Coffee",
