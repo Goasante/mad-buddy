@@ -14,6 +14,11 @@
 export const SMART_CARD_IDS = [
   "safe_arrival",
   "plan_rsvp",
+  /* Tier 1, immediately after the invitation itself: a Plan you have already
+     joined asking which venue -- an answer only you can give, and one the rest
+     of the group is blocked on. It sits below plan_rsvp because answering
+     whether you are coming comes before helping decide the details. */
+  "plan_decision",
   /* Tier 1 alongside plan_rsvp: people are waiting on the owner's answer, and
      an unanswered join request is the same shape of obligation as an
      unanswered Plan invitation. It sits second because a Plan has a time
@@ -36,10 +41,25 @@ export const SMART_CARD_IDS = [
      ranks with the other tier-2 states rather than with Events the viewer only
      bookmarked. */
   "event_commitment_starting",
+  /* Tier 2. A decision inside a Plan Chat is coordination happening NOW, and
+     unlike plan_decision it has no deadline of its own -- it ranks here because
+     the conversation is live, not because a clock is running. */
+  "plan_chat_decision",
+  /* Tier 2. Being checked in somewhere is the most current thing about this
+     viewer, and the offer only exists while they are still there. Below the
+     live commitments above it: what you are already committed to outranks an
+     optional extra at the place you have arrived. */
+  "event_linkr_ready",
   "nearby_muddies",
-  /* Tier 3: relationship momentum. Both are about a specific person, which is
-     why they outrank the tier-4 opportunities below. */
+  /* Tier 3: relationship momentum. All are about a specific person, which is
+     why they outrank the tier-4 opportunities below.
+     The Event variant leads: a shared Event gives the pair something to open
+     with, so it is strictly more useful than the same card without one. */
+  "linkr_mutual_event",
   "linkr_mutual",
+  /* Someone else's birthday before the viewer's own: a moment that needs an
+     action from them outranks one that simply belongs to them. */
+  "muddy_birthday",
   "birthday",
   "event_starting",
   "weekend_plans",
@@ -52,6 +72,12 @@ export const SMART_CARD_IDS = [
      growth (tier 5). The provider yields as soon as muddyCount > 0, so this
      ordering only ever applies to a genuinely empty circle. */
   "suggestions",
+  /* Tier 5, and ahead of Journey deliberately. Both are progression, but this
+     one names a feature the viewer has already SWITCHED ON and cannot use --
+     a door they opened that will not let them through -- whereas Journey
+     offers the next generic step. A specific broken thing beats a general
+     suggestion. */
+  "profile_blocking",
   "journey",
   "journey_complete",
   "buddy_progress",

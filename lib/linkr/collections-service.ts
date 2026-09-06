@@ -4,7 +4,6 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { batchBlockedIds } from "@/lib/social/permissions";
 import { loadLinkrGalleries } from "@/lib/linkr/media-projection";
-import { conversationHasActivity } from "@/lib/linkr/mutual-resolution";
 
 /**
  * The two persistent Linkr collections.
@@ -40,6 +39,20 @@ export type ClickedPerson = {
   conversationId: string | null;
   /** Drives Say hi vs Continue chat. */
   hasConversation: boolean;
+  /**
+   * The Event this pair connected AT, when they connected through Event Mode.
+   *
+   * STORED, NEVER INFERRED. This is `linkr_connections.event_id`, written by
+   * the mutual-connect transaction at the moment the pair matched. It is not
+   * derived from overlapping attendance: two people who each happened to go to
+   * the same Event, and connected through ordinary Linkr, have a null here and
+   * must never be described as having met there.
+   *
+   * Null for every ordinary Linkr connection, and null when the Event has since
+   * been deleted -- in which case the pair is still connected and simply has no
+   * context line, rather than acquiring an invented one.
+   */
+  eventName: string | null;
 };
 
 export type PendingClick = {
@@ -111,6 +124,62 @@ async function withoutBlocked(
 }
 
 /**
+ * Which of these conversations have a message anybody can still read.
+ *
+ * ONE query for the whole collection. This replaces a per-connection
+ * `conversationHasActivity` call -- concurrent, but still one `messages` round
+ * trip per card, so a 40-person collection cost 40 of them. Home now depends on
+ * this reader for its Smart Card, which makes the shape worth fixing rather
+ * than paying on every Home render.
+ *
+ * Semantics are unchanged, deliberately including the deleted-message rule: a
+ * conversation whose only message was deleted has nothing to continue, so it is
+ * absent here and the CTA stays "Say hi". Selecting the ids and building a set
+ * asks the same question `count` did, for every conversation at once.
+ */
+async function conversationsWithActivity(
+  admin: Admin,
+  conversationIds: string[]
+): Promise<Set<string>> {
+  const unique = [...new Set(conversationIds)];
+  if (unique.length === 0) return new Set();
+
+  const { data } = await admin
+    .from("messages")
+    .select("conversation_id")
+    .in("conversation_id", unique)
+    .is("deleted_at", null);
+
+  return new Set((data ?? []).map((row) => row.conversation_id));
+}
+
+/**
+ * Names for the Events these pairs connected at.
+ *
+ * Batched over every distinct `event_id` on the collection, so Event context
+ * costs one query rather than one per connection. A connection whose Event has
+ * been deleted simply has no name and therefore no context line: the pair are
+ * still connected, and inventing a label for a missing Event would be the one
+ * thing worse than omitting it.
+ */
+async function describeConnectionEvents(
+  admin: Admin,
+  eventIds: readonly (string | null)[]
+): Promise<Map<string, string>> {
+  const unique = [...new Set(eventIds.filter((id): id is string => Boolean(id)))];
+  if (unique.length === 0) return new Map();
+
+  const { data } = await admin.from("events").select("id, name").in("id", unique);
+
+  const byId = new Map<string, string>();
+  for (const event of data ?? []) {
+    const name = event.name?.trim();
+    if (name) byId.set(event.id, name);
+  }
+  return byId;
+}
+
+/**
  * CLICKED: the mutual connections, newest first.
  *
  * These people are deliberately absent from Discover -- swiping on somebody
@@ -123,7 +192,7 @@ export async function loadClickedPeople(viewerId: string): Promise<ClickedPerson
 
   const { data: connections } = await admin
     .from("linkr_connections")
-    .select("id, user_low, user_high, conversation_id, connected_at")
+    .select("id, user_low, user_high, conversation_id, connected_at, event_id")
     .or(`user_low.eq.${viewerId},user_high.eq.${viewerId}`)
     .is("ended_at", null)
     .order("connected_at", { ascending: false });
@@ -132,20 +201,15 @@ export async function loadClickedPeople(viewerId: string): Promise<ClickedPerson
   if (rows.length === 0) return [];
 
   const otherIds = rows.map((row) => (row.user_low === viewerId ? row.user_high : row.user_low));
-  const [described, allowed] = await Promise.all([
+  const [described, allowed, activity, eventNameById] = await Promise.all([
     describePeople(admin, otherIds),
-    withoutBlocked(admin, viewerId, otherIds)
+    withoutBlocked(admin, viewerId, otherIds),
+    conversationsWithActivity(
+      admin,
+      rows.map((row) => row.conversation_id).filter((id): id is string => Boolean(id))
+    ),
+    describeConnectionEvents(admin, rows.map((row) => row.event_id))
   ]);
-
-  const activity = new Map<string, boolean>();
-  await Promise.all(
-    rows.map(async (row) => {
-      activity.set(
-        row.id,
-        row.conversation_id ? await conversationHasActivity(admin, row.conversation_id) : false
-      );
-    })
-  );
 
   const people: ClickedPerson[] = [];
   for (const row of rows) {
@@ -160,7 +224,8 @@ export async function loadClickedPeople(viewerId: string): Promise<ClickedPerson
       photo: person.photo,
       connectedAt: row.connected_at,
       conversationId: row.conversation_id ?? null,
-      hasConversation: activity.get(row.id) ?? false
+      hasConversation: row.conversation_id ? activity.has(row.conversation_id) : false,
+      eventName: row.event_id ? eventNameById.get(row.event_id) ?? null : null
     });
   }
   return people;

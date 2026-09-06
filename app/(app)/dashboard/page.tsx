@@ -15,6 +15,7 @@ import { loadJourney } from "@/lib/journey/journey-service";
 import { isFirstTimeJourneyState } from "@/lib/journey/journey";
 import { loadBuddyScore } from "@/lib/engagement/buddy-score-service";
 import { HOME_EXCLUDED_SMART_CARD_IDS } from "@/lib/smart-card/home-gate";
+import { loadHomeSmartCardProjection } from "@/lib/smart-card/home-projection";
 import { loadSmartCard } from "@/lib/smart-card/smart-card-service";
 import { deriveBirthProfile } from "@/lib/profile/birth-date";
 import { isWeekendPlanningWindow } from "@/lib/smart-card/smart-card";
@@ -92,6 +93,29 @@ export default async function DashboardPage() {
    */
   const now = new Date();
   const dateOfBirth = birthDetailsResult?.data?.date_of_birth ?? null;
+
+  /**
+   * The newer Smart Card facts, in ONE batch, BOUNDED BY THE AGENDA above.
+   *
+   * It runs after the main batch rather than inside it because the decision
+   * readers take the Plans Home has already loaded and already permission
+   * filtered. Passing those ids in is what keeps this bounded: the projection
+   * never discovers Plans of its own, so it cannot reach one the viewer
+   * cannot see, and it asks about a handful of Plans rather than all of them.
+   *
+   * Fails closed as a whole. If it yields nothing, Home still renders its
+   * Smart Card from the states that were already proven.
+   */
+  const agendaPlans = (agenda?.items ?? []).filter((item) => item.kind === "plan");
+  const smartCardProjection = user
+    ? await loadHomeSmartCardProjection({
+        userId: user.id,
+        planIds: agendaPlans.map((plan) => plan.id),
+        planTitleById: new Map(agendaPlans.map((plan) => [plan.id, plan.title])),
+        now
+      })
+    : null;
+
   const smartCard = user
     ? await loadSmartCard(user.id, {
         now,
@@ -127,6 +151,14 @@ export default async function DashboardPage() {
            built from them reveals nothing one-sided. */
         incomingRequestCount: incomingRequestCount ?? 0,
         linkrMutuals: linkrMutuals ?? [],
+        /* Families 3-5. Each is a fact the projection above already bounded and
+           already permission-checked; the providers stay pure and simply choose
+           between what they are handed. */
+        eventLinkrOffer: smartCardProjection?.eventLinkrOffer ?? null,
+        muddyBirthdays: smartCardProjection?.muddyBirthdays ?? [],
+        planDecisions: smartCardProjection?.planDecisions ?? [],
+        planChatDecisions: smartCardProjection?.planChatDecisions ?? [],
+        blockedFeature: smartCardProjection?.blockedFeature ?? null,
         /* NearbyHero owns the proximity payoff and the Activation card owns
            cold-start people discovery. Excluding them HERE (rather than after
            resolution) means that when one of them ranks highest the engine

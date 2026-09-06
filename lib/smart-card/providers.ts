@@ -8,6 +8,13 @@
 
 import type { HomeUpForContext } from "@/lib/social/home-upfor-context";
 import type { LinkrMutualForCard } from "@/lib/smart-card/linkr-context";
+import type {
+  BlockedFeatureForCard,
+  EventLinkrOfferForCard,
+  MuddyBirthdayForCard,
+  PlanChatDecisionForCard,
+  PlanDecisionForCard
+} from "@/lib/smart-card/home-context";
 import { upForActivitySmartCardMedia } from "@/lib/smart-card/visuals";
 import type { BuddyScoreData } from "@/lib/engagement/buddy-score-service";
 import type { JourneyData } from "@/lib/journey/journey";
@@ -62,6 +69,30 @@ export type SmartCardInput = {
    * genuine "say hi" from a pair who are already talking.
    */
   linkrMutuals?: readonly LinkrMutualForCard[];
+  /**
+   * An Event the viewer is CHECKED IN to and has not yet answered Event Linkr
+   * for. Resolved server-side by the Events authority; absent means there is no
+   * honest offer to make, which is the correct fail-closed default.
+   */
+  eventLinkrOffer?: EventLinkrOfferForCard | null;
+  /**
+   * Muddy birthdays the viewer has ALREADY been notified about today.
+   *
+   * Comes from the birthday delivery ledger, never from anybody's date of
+   * birth. Absent means no privacy-permitted birthday to mention.
+   */
+  muddyBirthdays?: readonly MuddyBirthdayForCard[];
+  /**
+   * Plans the viewer is on that have an OPEN decision still awaiting their
+   * vote, and Plan Chats holding an open poll they have not answered.
+   */
+  planDecisions?: readonly PlanDecisionForCard[];
+  planChatDecisions?: readonly PlanChatDecisionForCard[];
+  /**
+   * A feature the viewer switched ON that their profile currently blocks them
+   * from using. Absent means nothing is blocked.
+   */
+  blockedFeature?: BlockedFeatureForCard | null;
   /** Count of plans starting inside the current weekend window. */
   weekendPlanCount: number;
   /** Privacy-safe server projection; never coordinates or numerical distance. */
@@ -661,22 +692,239 @@ function linkrMutualProvider(input: SmartCardInput): SmartCard | null {
   };
 }
 
+/**
+ * Tier 3: the same mutual moment, but the pair can be told WHERE they met.
+ *
+ * Ranked above the plain mutual because a shared Event is the thing that makes
+ * a first message easy to write -- "we met at Acoustic Night" is a conversation
+ * opener in a way "we matched" is not.
+ *
+ * THE EVENT IS THE PAIR'S OWN STORED FACT. `eventName` comes from
+ * `linkr_connections.event_id`, written when they connected through Event Mode.
+ * Nothing here compares two attendance lists, so a pair who each went to the
+ * same Event separately and connected through ordinary Linkr stays on the plain
+ * `linkr_mutual` card. Mutual-only still holds: this reads the same collection,
+ * which contains connections and never one-sided interest.
+ */
+function linkrMutualEventProvider(input: SmartCardInput): SmartCard | null {
+  const withEvent = (input.linkrMutuals ?? []).filter(
+    (person) => !person.hasConversation && Boolean(person.eventName)
+  );
+  if (withEvent.length === 0) return null;
+  const first = withEvent[0];
+
+  return {
+    id: "linkr_mutual_event",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "YOU BOTH CONNECTED",
+    title: "You connected at " + first.eventName,
+    subtitle: "You and " + first.displayName + " both chose to connect.",
+    cta: "Say hi",
+    destination: "/linkr",
+    /* Opening a Plan with somebody you have not spoken to yet is a big second
+       step, so it stays SECONDARY and the first message stays primary. */
+    secondaryAction: { label: "Make a Plan", destination: "/plans" },
+    media: first.photo ? { url: first.photo, alt: first.displayName } : undefined
+  };
+}
+
+/**
+ * Tier 2: the viewer is checked in somewhere and could opt into Event Linkr.
+ *
+ * THE CHAIN THIS STATE RESPECTS, in full:
+ *
+ *   going  ->  actual check-in  ->  Event Linkr consent  ->  discovery
+ *
+ * Each arrow is a separate decision, and this card sits on exactly ONE of them:
+ * the offer to make the third. It appears only when the Events side has already
+ * said the viewer holds a LIVE check-in and has NOT yet consented -- the
+ * `no_consent` answer from resolveEventLinkrEligibility, which is the same
+ * authority the Event screen itself uses. Being invited, going, or interested
+ * never reaches here, because none of those is a check-in.
+ *
+ * IT OFFERS, IT DOES NOT CONSENT. The card links to the Event, where the real
+ * opt-in control lives. Consent is never granted from Home, and this card never
+ * says or implies the viewer is already discoverable.
+ */
+function eventLinkrReadyProvider(input: SmartCardInput): SmartCard | null {
+  const offer = input.eventLinkrOffer;
+  if (!offer) return null;
+
+  return {
+    id: "event_linkr_ready",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "YOU'RE CHECKED IN",
+    title: "Meet people at " + offer.eventName + "?",
+    subtitle: "Choose whether to be discoverable to others here.",
+    cta: "See how it works",
+    destination: offer.href
+  };
+}
+
+/**
+ * Tier 3: a Muddy's birthday the viewer has ALREADY been told about.
+ *
+ * NO RAW DATE OF BIRTH IS READ ANYWHERE ON THIS PATH. The input is the birthday
+ * DELIVERY LEDGER -- the record of notifications the birthday job actually
+ * sent -- and reaching that ledger already required the owner's field privacy
+ * to be `approved_muddies`, their announcement preference to be on, a live
+ * friendship, and no block in either direction. Home therefore repeats a fact
+ * the product has already decided this viewer may know, rather than deriving a
+ * new one from somebody's date of birth.
+ *
+ * It links to Notifications because that is where the canonical wish flow
+ * lives. Home does not grow a second birthday surface.
+ */
+function muddyBirthdayProvider(input: SmartCardInput): SmartCard | null {
+  const birthdays = input.muddyBirthdays ?? [];
+  if (birthdays.length === 0) return null;
+  const first = birthdays[0];
+
+  return {
+    id: "muddy_birthday",
+    priority: 0,
+    illustration: "birthday",
+    eyebrow: "TODAY",
+    title: "It's " + first.displayName + "'s birthday 🎉",
+    subtitle:
+      birthdays.length > 1
+        ? birthdays.length + " of your Muddies are celebrating today."
+        : "Send them a birthday wish.",
+    cta: "Send a message",
+    destination: "/notifications"
+  };
+}
+
+/* --------------------------------------------------------------------------
+ * Decisions and coordination.
+ *
+ * Home surfaces DECISIONS, not correspondence. Every state below is built from
+ * a structured, countable decision somebody is blocked on -- an open poll with
+ * the viewer's vote missing -- and never from unread counts or message text.
+ * That boundary is what keeps Home from becoming a second inbox.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Tier 1: an open Plan poll the viewer has not voted in.
+ *
+ * ELIGIBILITY IS THE SAME QUESTION THE VOTE ITSELF ASKS. The reader admits a
+ * poll only when it is `open`, has not passed `closes_at`, belongs to a Plan
+ * already on the viewer's permission-filtered agenda, and has no vote from
+ * them. "A poll exists" is not enough, and neither is "the Plan is polling":
+ * somebody who has already voted is owed nothing and must not be asked again.
+ *
+ * The card OPENS the canonical poll UI rather than voting from Home, so its
+ * label says what it does.
+ */
+function planDecisionProvider(input: SmartCardInput): SmartCard | null {
+  const decisions = input.planDecisions ?? [];
+  if (decisions.length === 0) return null;
+  const first = decisions[0];
+
+  return {
+    id: "plan_decision",
+    priority: 0,
+    illustration: "calendar",
+    eyebrow: "NEEDS YOUR ANSWER",
+    title: first.planTitle + " needs a decision",
+    subtitle:
+      first.voterCount > 0
+        ? `${first.voterCount} ${first.voterCount === 1 ? "person has" : "people have"} voted. Yours is still missing.`
+        : "Nobody has voted yet. Yours would be the first.",
+    /* The poll's own question, so the card says what is being decided rather
+       than making the person open it to find out. */
+    meta: first.question,
+    cta: "Vote now",
+    destination: "/plans"
+  };
+}
+
+/**
+ * Tier 2: a Plan Chat holding an open poll the viewer has not answered.
+ *
+ * A STRUCTURED DECISION, NOT UNREAD MESSAGES. This reads `chat_polls` -- a poll
+ * somebody deliberately created in the conversation -- and never message text,
+ * never an unread count, and never a preview. There is no classification of
+ * what a conversation is "about"; the poll's own question is the context, and
+ * it exists because a person wrote it as a question.
+ *
+ * Membership is the reader's job and is not re-derived here: a conversation the
+ * viewer cannot access never reaches this provider, so no poll question can
+ * escape a chat the viewer is not in.
+ */
+function planChatDecisionProvider(input: SmartCardInput): SmartCard | null {
+  const decisions = input.planChatDecisions ?? [];
+  if (decisions.length === 0) return null;
+  const first = decisions[0];
+
+  return {
+    id: "plan_chat_decision",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "BEING DECIDED",
+    title: first.planTitle ? first.planTitle + " is deciding" : "A Plan is deciding",
+    subtitle: first.question,
+    cta: "Open chat",
+    destination: "/messages"
+  };
+}
+
+/* --------------------------------------------------------------------------
+ * Growth and recovery.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Tier 5: a feature the viewer TURNED ON that their profile blocks.
+ *
+ * NOT PROFILE COMPLETION. This never says "your profile is 70% complete" and
+ * never counts optional fields. It appears only when the person made an
+ * explicit, durable choice to enable a feature and that feature's OWN rules
+ * then refuse to show them -- so the effect is invisible to them: they switched
+ * Linkr on and simply never appear.
+ *
+ * The outstanding requirement is the feature's own sentence, passed through
+ * rather than restated, so Home cannot drift into a second definition of what
+ * "ready" means.
+ */
+function profileBlockingProvider(input: SmartCardInput): SmartCard | null {
+  const blocked = input.blockedFeature;
+  if (!blocked) return null;
+
+  return {
+    id: "profile_blocking",
+    priority: 0,
+    illustration: "target",
+    eyebrow: "FINISH SETUP",
+    title: blocked.requirement,
+    subtitle: `${blocked.feature} is on, but nobody can see you until this is done.`,
+    cta: "Finish profile",
+    destination: blocked.href
+  };
+}
+
 export function smartCardProviders(input: SmartCardInput): readonly SmartCardProvider[] {
   return [
     { id: "safe_arrival", build: () => safeArrivalProvider(input) },
     { id: "plan_rsvp", build: () => planRsvpProvider(input) },
+    { id: "plan_decision", build: () => planDecisionProvider(input) },
     { id: "upfor_requests", build: () => upForRequestsProvider(input) },
     { id: "muddy_request", build: () => muddyRequestProvider(input) },
     { id: "plan_starting", build: () => planStartingProvider(input) },
     { id: "event_live", build: () => eventLiveProvider(input) },
     { id: "event_commitment_starting", build: () => eventCommitmentStartingProvider(input) },
+    { id: "plan_chat_decision", build: () => planChatDecisionProvider(input) },
+    { id: "event_linkr_ready", build: () => eventLinkrReadyProvider(input) },
     { id: "upfor_active_muddy", build: () => upForActiveMuddyProvider(input) },
     { id: "upfor_momentum", build: () => upForMomentumProvider(input) },
     { id: "upfor_accepted", build: () => upForAcceptedProvider(input) },
     { id: "owned_upfor_starting", build: () => ownedUpForStartingProvider(input) },
     { id: "nearby_muddies", build: () => nearbyMuddiesProvider(input) },
     { id: "event_starting", build: () => eventStartingProvider(input) },
+    { id: "linkr_mutual_event", build: () => linkrMutualEventProvider(input) },
     { id: "linkr_mutual", build: () => linkrMutualProvider(input) },
+    { id: "muddy_birthday", build: () => muddyBirthdayProvider(input) },
     { id: "birthday", build: () => birthdayProvider(input) },
     { id: "weekend_plans", build: () => weekendPlansProvider(input) },
     { id: "upfor_scheduled", build: () => upForScheduledProvider(input) },
@@ -685,6 +933,7 @@ export function smartCardProviders(input: SmartCardInput): readonly SmartCardPro
     { id: "buddy_progress", build: () => buddyProgressProvider(input) },
     { id: "achievement", build: () => achievementProvider(input) },
     { id: "suggestions", build: () => suggestionsProvider(input) },
+    { id: "profile_blocking", build: () => profileBlockingProvider(input) },
     { id: "upfor_fallback", build: () => upForFallbackProvider() }
   ];
 }
