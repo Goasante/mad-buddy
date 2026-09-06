@@ -3,8 +3,23 @@ import { SMART_CARD_APPROVED_STATES } from "@/lib/smart-card/catalog";
 
 describe("Smart Card v2 product catalog", () => {
   it("keeps Moments out while the feature is paused", () => {
-    const ids = SMART_CARD_APPROVED_STATES.map((state) => state.id);
-    expect(ids.some((id) => id.includes("moment"))).toBe(false);
+    /* Matched precisely rather than by substring. `id.includes("moment")` also
+       catches `upfor_momentum` -- a legitimate UpFor state with no relationship
+       to the Moments feature -- which fails this test for the wrong reason and
+       invites someone to "fix" it by renaming a good state. What must never
+       come back is a Moments SOURCE: a moments-family state, or an id that is
+       the word on its own or as a whole segment. */
+    const offenders = SMART_CARD_APPROVED_STATES.filter(
+      (state) =>
+        state.family === ("moments" as typeof state.family) ||
+        /(^|_)moments?($|_)/.test(state.id)
+    ).map((state) => state.id);
+    expect(offenders).toEqual([]);
+  });
+
+  it("declares no moments family at all", () => {
+    const families = new Set(SMART_CARD_APPROVED_STATES.map((state) => state.family));
+    expect([...families]).not.toContain("moments");
   });
 
   it("contains the approved cross-product states", () => {

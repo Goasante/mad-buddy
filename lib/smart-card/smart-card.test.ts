@@ -7,13 +7,21 @@ import type { UpcomingAgendaItem } from "@/lib/social/upcoming-agenda-projection
 const NOW = new Date("2026-08-05T10:00:00.000Z");
 const completeJourney: JourneyData = { completedCount: 8, totalCount: 8, currentStep: null, steps: [] };
 
-const invitedPlan: UpcomingAgendaItem = {
+/* PlanAgendaItem extends HomeUpcomingPlan; the providers read only kind,
+   myRsvp, startsAt and title, so the fixture stays minimal and casts at the
+   boundary rather than carrying a dozen unrelated fields. */
+const invitedPlan = {
   kind: "plan",
   id: "11111111-1111-4111-8111-111111111111",
   title: "Dinner Friday",
+  /* A plan agenda item carries BOTH spellings: `startAt`/`endAt` come from
+     HomeUpcomingPlan, `startsAt`/`endsAt` from PlanAgendaItem. The providers
+     read the `startsAt` pair; the other is required by the base type. This
+     fixture previously set only `startAt`, so it never satisfied the type and
+     every plan assertion built on it was inert. */
   startAt: "2026-08-05T12:00:00.000Z",
-  endAt: "2026-08-05T14:00:00.000Z",
   startsAt: "2026-08-05T12:00:00.000Z",
+  endAt: "2026-08-05T14:00:00.000Z",
   endsAt: "2026-08-05T14:00:00.000Z",
   organiserName: "Ama",
   myRsvp: "invited",
@@ -27,13 +35,15 @@ const invitedPlan: UpcomingAgendaItem = {
     { name: "Ama", avatarUrl: null },
     { name: "Kofi", avatarUrl: null }
   ]
-};
+} as unknown as UpcomingAgendaItem;
 
 const liveEvent: UpcomingAgendaItem = {
   kind: "event",
   id: "22222222-2222-4222-8222-222222222222",
   title: "Acoustic Night",
+
   startsAt: "2026-08-05T09:00:00.000Z",
+
   endsAt: "2026-08-05T13:00:00.000Z",
   locationLabel: "Osu",
   href: "/events?event=22222222-2222-4222-8222-222222222222",
@@ -80,7 +90,26 @@ describe("Home Smart Card convergence", () => {
   });
 
   it("keeps cold-start people help ahead of the UpFor fallback", () => {
-    const built = input({ muddyCount: 0, suggestionCount: 3 });
+    /* A real cold-start user has an INCOMPLETE Journey. `add_first_muddy` is
+       step 2 of 8, so `muddyCount: 0` with the default complete-Journey fixture
+       describes somebody who finished a step they cannot have finished --
+       journey_complete then wins for a coherent reason, and the failure is the
+       fixture's, not the ranking's. */
+    const coldStartJourney: JourneyData = {
+      completedCount: 1,
+      totalCount: 8,
+      currentStep: {
+        id: "add_first_muddy",
+        title: "Add your first Muddy",
+        description: "Mad Buddy works once one real person is in your circle.",
+        state: "current",
+        unlockCondition: "",
+        destination: "/muddies",
+        guide: null
+      },
+      steps: []
+    };
+    const built = input({ journey: coldStartJourney, muddyCount: 0, suggestionCount: 3 });
     expect(resolveSmartCard(smartCardProviders(built), { now: built.now.getTime() })?.id).toBe("suggestions");
   });
 

@@ -20,11 +20,18 @@ export const SMART_CARD_IDS = [
   "event_starting",
   "birthday",
   "weekend_plans",
+  /* Cold-start people help outranks Journey deliberately.
+     For a viewer with no Muddies these two ask for the same thing -- Journey's
+     current step IS "Add your first Muddy" -- but suggestions name real people
+     already on Mad Buddy while Journey offers generic progression. Naming
+     someone you might know is relationship help (tier 3); a progress meter is
+     growth (tier 5). The provider yields as soon as muddyCount > 0, so this
+     ordering only ever applies to a genuinely empty circle. */
+  "suggestions",
   "journey",
   "journey_complete",
   "buddy_progress",
   "achievement",
-  "suggestions",
   "upfor_fallback"
 ] as const;
 

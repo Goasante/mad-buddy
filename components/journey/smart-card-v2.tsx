@@ -83,6 +83,17 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
   const quiet = treatment === "quiet";
   const safety = treatment === "safety";
 
+  /**
+   * The bar fills from 0 on mount through a real state transition; a plain CSS
+   * transition would race its own initial value and never animate.
+   *
+   * Reduced motion is handled by DERIVING the rendered width rather than
+   * setting state for it. Calling setState synchronously inside the effect --
+   * which the reduced-motion branch used to do -- triggers a cascading render
+   * on every mount for exactly the viewers who asked for less movement, and
+   * ESLint flags it. Reduced motion may remove movement; it must not cost a
+   * render pass, and it must never remove the progress itself.
+   */
   useEffect(() => {
     if (reducedMotion) return;
     const frame = requestAnimationFrame(() => setAnimatedPercent(percent));
