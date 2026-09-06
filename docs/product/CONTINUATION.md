@@ -1316,7 +1316,7 @@ database is exactly how the profiles defect shipped.
 CURRENT MAIN            5d50c19dea4744e678de18e5990de5a00992d9b4
 PRODUCTION MIGRATIONS   137 (unchanged — this programme added none)
 SMART CARD PR           #27 (DRAFT)
-SMART CARD FINAL HEAD   see PR #27 head; last code commit 8b40448
+SMART CARD FINAL HEAD   see PR #27 head; last code commit a778de7
 STATUS                  COMPLETE / READY FOR CHATGPT FINAL REVIEW
 PRODUCTION              UNTOUCHED
 ```
@@ -1351,17 +1351,37 @@ TOTAL APPROVED CATALOG STATES   54
 WIRED CARD B                    28 catalog entries / 27 providers
                                 (safe_arrival_overdue + safe_arrival_action
                                  share one live-journey provider)
-CARD A OWNED                    1   suggestions
-NEARBY HERO OWNED               2   nearby_muddy, nearby_muddies
-DELIBERATELY UNWIRED            23
+CARD A OWNED                     6
+NEARBY HERO OWNED                2
+OTHER EXISTING HOME SURFACE      7
+DEFERRED — NO CANONICAL AUTHORITY 10
+DEFERRED — PRODUCT PAUSED        1
 ```
+
+Every one of the 54 is classified individually in
+`lib/smart-card/catalog-classification.ts`, and the classification is VERIFIED
+AGAINST THE ENGINE by `catalog-classification.test.ts` rather than maintained by
+hand — a matrix that rots is worse than none.
+
+The split that matters is between the two kinds of absence, which an earlier
+draft of this document conflated into a single "23 deliberately unwired":
+
+- **7 states another Home surface already owns** — the "Coming Up" agenda rail
+  (`plan_upcoming`), the Trending Events rail (`event_saved`,
+  `event_friend_context`), Home's Safe Arrival section
+  (`safe_arrival_watcher_request`), the profile completion reminder
+  (`profile_completion`), Tours (`walkthrough`), and Groups
+  (`group_invitation`). These are settled answers. A Smart Card for any of them
+  would be one screen saying the same thing twice.
+- **10 real authority gaps** — the table below.
+- Plus 6 Card A owns, 2 NearbyHero owns, and 1 paused product decision.
 
 The catalog is a product vocabulary, not a quota. Several states are correctly
 absent, and the reasons are recorded as tests in
 `lib/smart-card/recovery-family.test.ts` so a future provider cannot be added
 without confronting the gap.
 
-### Deliberately unwired, and why
+### The 10 real authority gaps
 
 | State | Missing authority |
 |---|---|
@@ -1384,10 +1404,15 @@ without confronting the gap.
 Proximity stays qualitative; Event Linkr stays consent-aware; Linkr stays
 mutual-only; messaging stays membership-aware; Plans stay participant-aware.
 
-- **No date of birth is read to build Home.** `muddy_birthday` reads the birthday
-  *delivery ledger* — a row exists only because the job already established the
-  owner's field privacy, announcement preference, live friendship and no block.
-  `MuddyBirthdayForCard` carries no date field to leak.
+- **No OTHER user's raw date of birth is read for `muddy_birthday`.** That state
+  reads the birthday *delivery ledger* — a row exists only because the job had
+  already established the owner's field privacy, announcement preference, live
+  friendship and no block — and `MuddyBirthdayForCard` carries no date field to
+  leak. The viewer's OWN `profile_birth_details.date_of_birth` remains the
+  canonical authority for their own `birthday` card, read by the dashboard as it
+  always was. An earlier draft of this document said "no date of birth is read to
+  build Home", which was false: it described the `muddy_birthday` guarantee as
+  though it covered the whole screen.
 - **Event context on a mutual is stored, never inferred.**
   `linkr_connections.event_id` is the pair's own fact, written when they matched
   through Event Mode — not an overlap computed from two attendance histories.
@@ -1401,22 +1426,84 @@ mutual-only; messaging stays membership-aware; Plans stay participant-aware.
 
 ### Query/fanout
 
+Home does more data work than before, and the honest way to say so is to name
+the two phases rather than to report "18 → 18 unchanged":
+
 ```
-HOME BATCH READERS   18 before -> 18 after (unchanged)
-NEW READER            1  loadHomeSmartCardProjection (one parallel batch)
-PROVIDER QUERIES      0  (providers remain pure)
-DUPLICATES            0
-N+1                   0  — and one pre-existing N+1 FIXED
+MAIN HOME PARALLEL BATCH            18 readers   (unchanged)
+POST-AGENDA SMART CARD PROJECTION    1 projection (new)
+  └ subreads                         6 bounded reads, run in parallel:
+      check_ins                      the viewer's own live check-ins (limit 3)
+      events                         name one checked-in Event (by id)
+      birthday_notification_deliveries  today's delivered rows (limit 10)
+      profiles                       names for those cleared owners
+      plan_polls + plan_poll_votes   open polls on AGENDA plan ids only
+      conversation_members + conversations + chat_polls + chat_poll_votes
+                                     polls in JOINED Plan Chats
+      linkr_profiles (+ age, avatar) the blocked-feature question
+      access_grants (via resolver)   entitlement
+PROVIDER QUERIES                     0  (providers remain pure)
+LINKR ACTIVITY                       1  bounded conversation_previews RPC
+DUPLICATE DOMAIN READERS             0
+N+1                                  0  — and one pre-existing N+1 FIXED
 ```
 
-The projection is bounded by facts Home already owns: the agenda's plan ids
-(already permission-filtered), the viewer's own check-ins, today's delivered
-birthday rows. Its one loop iterates the viewer's own live check-ins, capped at
-three and returning on the first match, so its cost does not grow with data.
+**Why it runs serially after the batch:** the decision readers are bounded by
+the agenda's plan ids, which are already permission-filtered. Passing those in
+is what keeps the projection cheap and what makes it impossible for it to reach
+a Plan the viewer cannot see — so it has to wait for the agenda rather than
+join the parallel batch.
 
-`loadClickedPeople` previously called `conversationHasActivity` once per
-connection — one `messages` count per card, ~40 queries for a 40-person
-collection. Now one batched query, semantics unchanged.
+**Bounded loops:** one, in `loadEventLinkrOffer`. It iterates the viewer's own
+live check-ins, capped at three by its query and returning on the first match,
+so its cost does not grow with any table.
+
+**The Linkr activity read, and two wrong shapes on the way to it.** It began as
+one `messages` COUNT per connection — 40 round trips for a 40-person
+collection. That was replaced with a single
+`messages.select("conversation_id").in(...)`, which fixed the round trips and
+introduced a worse problem: it transferred every undeleted message row across
+every Linkr conversation to answer a yes/no question. One query, unbounded
+payload, on every Home render. It now uses the existing `conversation_previews`
+RPC, which returns exactly one row per conversation whatever the size of its
+history, and whose `deleted_at is null` filter preserves the rule that a
+conversation whose only message was deleted still reads as "Say hi".
+
+### Entitlement (Mad Buddy Access)
+
+Home resolves entitlement through the canonical `lib/access/resolver`, the same
+authority every gated Linkr and UpFor mutation uses, so Home cannot offer an
+expansion the server would then refuse. It applies `lib/access/guard.ts`'s rule
+verbatim: **expiry stops the NEXT EXPANSION, it never destroys an EXISTING
+COMMITMENT.**
+
+Only two states gate:
+
+| State | Why it gates |
+|---|---|
+| `event_linkr_ready` | Being discovered by new people at an Event is Linkr discovery. The server refuses the opt-in without Access, so offering it would send somebody to a door that will not open. |
+| `profile_blocking` | It promises that finishing the profile makes you discoverable. Without Access that promise does not come true, so the card would ask for work that changes nothing. |
+
+Everything else is untouched, and a test asserts that **byte-for-byte**: for an
+entitled and an unentitled viewer, every other card is identical JSON. Existing
+Linkr mutuals (with and without Event context), owned UpFors, Muddy-side UpFors
+both pending and accepted, Plans, Plan Chat decisions, Muddy requests,
+birthdays, Journey and Safe Arrival all behave exactly as before.
+
+The guaranteed fallback is the one card that cannot return null — it is the last
+provider, so Home would blank — and it therefore changes its WORDING rather than
+disappearing, pointing at what is still free. Copy never counts down, never
+sells, and never implies Mad Buddy itself has ended; that is asserted over every
+producible card, not just the fallback.
+
+`AccessForCard` is deliberately narrower than `AccessState`: it carries
+`canExpand` and `hadWelcomeAccess` and nothing else, because sources, expiry
+dates and days-remaining all invite a card that counts down or nags.
+
+**It fails OPEN**, unlike the mutation guard. The guard protects a mutation,
+where the safe answer to "I do not know" is no. This decides only what Home
+SAYS, where the safe answer is to keep the person's existing social life
+visible — so a failed entitlement read, or an absent one, leaves Home ungated.
 
 ### Button copy
 
@@ -1431,9 +1518,15 @@ Two harnesses against the **real rendered Home** (`next start`, real login flow,
 local fixtures only — never `next dev`, never production):
 
 ```
-scripts/hardening/smart-card-visual-proof.mjs     core V2      PASS
-scripts/hardening/smart-card-families-proof.mjs   families 3-5 85/85 PASS
+scripts/hardening/smart-card-visual-proof.mjs     core V2       PASS
+scripts/hardening/smart-card-families-proof.mjs   families 3-5  110/110 PASS
 ```
+
+The families harness also follows the rendered `Vote now` href and asserts it
+lands on that exact Plan, and drives all three entitlement states against real
+`access_grants` rows — HAS ACCESS, NO ACCESS, and EXPIRED ACCESS WITH AN
+EXISTING COMMITMENT, where the mutual matched before expiry still shows and
+still offers "Say hi".
 
 360/393/430 · light + dark · 200% text · reduced motion · no overflow ·
 44px targets · no nested interactive elements · Nearby not duplicated ·
@@ -1448,12 +1541,23 @@ no coordinates, distances, dates of birth or ages anywhere on the page.
 - **`weekend_plans` is tier 4 and eligible Friday evening to Sunday**, so it
   legitimately outranks tier-5 `profile_blocking` — and that scenario passed or
   failed depending on the day the proof ran. It now acknowledges the weekend card
-  first, measuring the card instead of the calendar.
+  first, measuring the card instead of the calendar. The same trap has a second
+  form: asserting a SPECIFIC low-tier card renders is asserting the fixture
+  account's state, not the product, because any higher-tier state legitimately
+  wins. Where the competing states cannot be held still, assert the invariant
+  ("a card renders, and it is not an expansion") and pin the exact copy in a
+  unit test instead.
+- **Two harnesses sharing one fixture user must each clear what the other can
+  create.** Fixture Plans were cleaned only by last-tracked id, so leaked ones
+  tripped `PLAN_ACTIVE_LIMIT_REACHED` in an unrelated local suite; and this
+  harness never cleared the UpFor state the CORE harness creates, so a leftover
+  tier-1 UpFor outranked every state being measured. Both produced convincing
+  false defects.
 
 ### Quality at the final head
 
 ```
-test:release   8330 passed (8187 + 143 local), 0 failures, 0 skips
+test:release   8369 passed (8226 + 143 local), 0 failures, 0 skips
 tsc            0 errors
 eslint         0 errors (112 pre-existing warnings in hardening scripts)
 build          PASS
