@@ -20,6 +20,7 @@ import {
 export type SmartCardNearbyFriend = {
   friend_id: string;
   display_name: string;
+  username: string;
   avatar_url: string | null;
   proximity_band:
     | "right_here"
@@ -194,8 +195,8 @@ function nearbyMuddiesProvider(input: SmartCardInput): SmartCard | null {
     title: many ? `${fresh.length} Muddies are around` : `${first.display_name} is ${label}`,
     subtitle: many ? "See who's around and decide if you want to say hi." : "They're nearby. Proximity never means they're automatically available.",
     meta: many ? `${first.display_name} is ${label}` : label,
-    cta: many ? "See Muddies" : "Say Hi",
-    destination: many ? "/friends" : `/friends/${first.friend_id}`
+    cta: many ? "See Muddies" : "Open Profile",
+    destination: many ? "/friends" : `/friends/${encodeURIComponent(first.username)}`
   };
 }
 
