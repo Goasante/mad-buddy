@@ -18,6 +18,7 @@ const NOW = new Date("2026-08-05T10:00:00.000Z");
 
 const mutual = (over: Partial<LinkrMutualForCard> = {}): LinkrMutualForCard => ({
   userId: "u1",
+  connectionId: "conn-1",
   displayName: "Ama",
   photo: null,
   hasConversation: false,
@@ -38,6 +39,10 @@ function input(over: Partial<SmartCardInput> = {}): SmartCardInput {
     buddyScore: null,
     recentAchievement: null,
     suggestionCount: 0,
+    /* Entitlement KNOWN and present, so the two expansion-only states are
+       eligible and these cases measure the state itself rather than the gate.
+       Entitlement is exercised deliberately in access-entitlement.test.ts. */
+    access: { canExpand: true },
     ...over
   };
 }
@@ -127,7 +132,7 @@ describe("Linkr surfaces only what both people chose", () => {
     // Never "people you might like" -- only somebody who already chose back.
     const card = pick({ linkrMutuals: [mutual()] });
     expect(card?.cta).toBe("Say hi");
-    expect(card?.destination).toBe("/linkr");
+    expect(card?.destination).toBe("/linkr?connection=conn-1");
   });
 
   it("uses the person's own photo when there is one", () => {

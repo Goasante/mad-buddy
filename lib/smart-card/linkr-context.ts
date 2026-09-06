@@ -13,6 +13,17 @@
  */
 export type LinkrMutualForCard = {
   userId: string;
+  /**
+   * The connection row's id, so the card can open THIS PAIR rather than Linkr.
+   *
+   * The destination it feeds -- `/linkr?connection=<id>` -- is deliberately
+   * LATE-BOUND: it re-resolves at open time through resolveMutualDestination,
+   * which re-checks the viewer belongs to the connection, honours a block or
+   * ending that happened since Home rendered, and opens an already-started
+   * conversation instead of a stale "Say hi" screen. Home therefore names the
+   * pair without freezing a decision about them.
+   */
+  connectionId: string;
   displayName: string;
   photo: string | null;
   /** Already talking. Not a moment, and not something to nag about. */

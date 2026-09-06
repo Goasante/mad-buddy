@@ -38,6 +38,10 @@ function input(over: Partial<SmartCardInput> = {}): SmartCardInput {
     buddyScore: null,
     recentAchievement: null,
     suggestionCount: 0,
+    /* Entitlement KNOWN and present, so the two expansion-only states are
+       eligible and these cases measure the state itself rather than the gate.
+       Entitlement is exercised deliberately in access-entitlement.test.ts. */
+    access: { canExpand: true },
     ...over
   };
 }

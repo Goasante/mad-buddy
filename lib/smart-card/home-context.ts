@@ -79,14 +79,34 @@ export type PlanChatDecisionForCard = {
  * an existing Linkr mutual, an UpFor already in flight, a Plan, a message, a
  * birthday, Safe Arrival or anything else in the free core.
  *
- * `hadWelcomeAccess` exists so copy can be honest about what ENDED rather than
- * implying Mad Buddy itself has stopped working.
+ * ── UNKNOWN IS NOT PERMISSION ─────────────────────────────────────────────
+ *
+ * There are three states, not two, and the third is the interesting one:
+ *
+ *   KNOWN + access      expansion offers allowed
+ *   KNOWN + no access   expansion offers suppressed
+ *   UNKNOWN             expansion offers suppressed, everything else intact
+ *
+ * An earlier version collapsed UNKNOWN into "allowed", reasoning that Home
+ * should fail open. That was the wrong boundary. Failing open matters for
+ * CONTINUITY -- somebody's existing mutuals, UpFors, Plans and conversations
+ * must survive any entitlement outage -- but those cards do not consult this
+ * flag at all, so they are already safe. Expansion is different: offering
+ * Event Linkr discovery when the resolver is down advertises a door the server
+ * may refuse, and telling somebody that finishing their profile will make them
+ * discoverable may simply be untrue. Suppressing an offer costs a card;
+ * making a false promise costs trust.
+ *
+ * So `canExpand` is false when the answer is unknown, and Home still shows the
+ * viewer's whole existing social world plus a free-core fallback.
  */
 export type AccessForCard = {
-  /** False when a gated expansion would be refused by the server anyway. */
+  /**
+   * True ONLY when entitlement resolved AND the viewer holds Access.
+   * False for "no access" and for "could not tell" alike -- both mean an
+   * expansion offer would not be honest.
+   */
   canExpand: boolean;
-  /** True when this account once held Welcome Access, whatever its state now. */
-  hadWelcomeAccess: boolean;
 };
 
 /**

@@ -1,7 +1,8 @@
 import "server-only";
 
-import { hasEverHadWelcomeAccess } from "@/lib/access/guard";
 import { resolveAccessForUser } from "@/lib/access/resolver";
+import { normalizePreferences } from "@/lib/notifications/preferences";
+import { batchBlockedIds } from "@/lib/social/permissions";
 import { resolveEventLinkrEligibility } from "@/lib/events/linkr-consent";
 import { resolveActivationRequirements } from "@/lib/linkr/rules";
 import { resolveAge } from "@/lib/linkr/profile-service";
@@ -103,18 +104,29 @@ export async function loadEventLinkrOffer(
 }
 
 /**
- * Muddy birthdays this viewer has ALREADY been told about today.
+ * Muddy birthdays this viewer may act on RIGHT NOW.
  *
- * READS THE DELIVERY LEDGER, NOT ANYBODY'S DATE OF BIRTH. The hourly birthday
- * job writes a row here only after it has established, for this exact pair,
- * that the owner's birthday field privacy is `approved_muddies`, their
- * announcement preference is on, a live friendship exists and neither has
- * blocked the other. A `delivered` row is therefore a decision the product has
- * already made and already acted on -- Home repeats it rather than re-deriving
- * it, and no date of birth is read on this path at all.
+ * TWO DIFFERENT QUESTIONS, and conflating them was a real defect.
  *
- * `suppressed` rows are excluded deliberately: those are people the delivery
- * layer decided NOT to tell, and Home telling them anyway would overturn that.
+ *   THE DELIVERY LEDGER answers "whose birthday is today, and was this viewer
+ *   allowed to be told?" It is a historical record: the hourly job wrote the
+ *   row only after establishing the owner's field privacy, their announcement
+ *   preference, a live friendship and no block. That makes it the DATE
+ *   authority, and it is why no date of birth is read on this path at all.
+ *
+ *   IT DOES NOT answer "is this viewer still allowed to act?" A block, an ended
+ *   friendship or a privacy change AFTER delivery leaves the row standing, and
+ *   Home would go on encouraging a birthday wish that `sendBirthdayWish` will
+ *   refuse with "This birthday wish is no longer available." A card whose
+ *   action is already doomed is worse than no card.
+ *
+ * So the ledger supplies the date and the candidate owners, and the four
+ * revocable facts are re-read for those owners NOW -- privacy, announcement
+ * preference, friendship, block -- exactly the conditions the birthday service
+ * itself checks before sending. Still no date of birth.
+ *
+ * BATCHED, not per birthday: five queries for the whole set, whatever its size.
+ * The historical row is never deleted -- it records what happened earlier.
  */
 export async function loadMuddyBirthdays(
   admin: Admin,
@@ -131,21 +143,62 @@ export async function loadMuddyBirthdays(
     .eq("status", "delivered")
     .limit(10);
 
-  const ownerIds = [...new Set((deliveries ?? []).map((row) => row.birthday_user_id))];
+  const ownerIds = [...new Set((deliveries ?? []).map((row) => row.birthday_user_id))].filter(
+    (id) => id !== userId
+  );
   if (ownerIds.length === 0) return [];
 
-  /* Names only, and only for people the ledger already cleared. A deleted or
-     hidden account drops out rather than appearing as a ghost. */
-  const { data: profiles } = await admin
-    .from("profiles")
-    .select("user_id, full_name, username, visibility_status, deleted_at")
-    .in("user_id", ownerIds);
+  const [{ data: profiles }, { data: privacyRows }, { data: preferenceRows }, { data: friendships }, blocked] =
+    await Promise.all([
+      admin
+        .from("profiles")
+        .select("user_id, full_name, username, visibility_status, deleted_at")
+        .in("user_id", ownerIds),
+      /* Birthday field privacy, as the birthday service requires it: the owner
+         must still be sharing with approved Muddies. */
+      admin
+        .from("profile_field_privacy")
+        .select("user_id, visibility")
+        .eq("field_name", "birthday")
+        .in("user_id", ownerIds),
+      admin
+        .from("user_preferences")
+        .select("user_id, notification_preferences")
+        .in("user_id", ownerIds),
+      /* The friendship must still be live. An ended one removes the card even
+         though the notification legitimately went out this morning. */
+      admin
+        .from("friendships")
+        .select("user_one_id, user_two_id")
+        .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)
+        .is("ended_at", null),
+      batchBlockedIds(admin, userId, ownerIds)
+    ]);
+
+  const sharing = new Set(
+    (privacyRows ?? [])
+      .filter((row) => row.visibility === "approved_muddies")
+      .map((row) => row.user_id)
+  );
+  const announcing = new Set(
+    (preferenceRows ?? [])
+      .filter((row) => normalizePreferences(row.notification_preferences).birthdayAnnouncementsEnabled)
+      .map((row) => row.user_id)
+  );
+  const friends = new Set(
+    (friendships ?? []).map((row) => (row.user_one_id === userId ? row.user_two_id : row.user_one_id))
+  );
 
   const birthdays: MuddyBirthdayForCard[] = [];
   for (const profile of profiles ?? []) {
+    const ownerId = profile.user_id;
     if (profile.deleted_at || profile.visibility_status === "ghost") continue;
+    if (!friends.has(ownerId)) continue;
+    if (blocked.has(ownerId)) continue;
+    if (!sharing.has(ownerId)) continue;
+    if (!announcing.has(ownerId)) continue;
     birthdays.push({
-      userId: profile.user_id,
+      userId: ownerId,
       displayName: profile.full_name?.trim() || profile.username || "A Muddy"
     });
   }
@@ -347,21 +400,27 @@ export async function loadBlockedFeature(
  * resolves through, so Home cannot offer an expansion the server would then
  * refuse -- and cannot withhold one the server would allow.
  *
- * FAILS OPEN, which is the opposite of the guard and deliberately so. The guard
- * protects a mutation, where the safe answer to "I do not know" is no. This
- * only decides what Home SAYS, where the safe answer is to keep the person's
- * existing social life visible: a failed entitlement read must never blank
- * somebody's Muddies, Plans or conversations.
+ * FAILS CLOSED FOR EXPANSION. A failed resolve yields `canExpand: false`,
+ * because an unknown entitlement cannot honestly support an offer: advertising
+ * Event Linkr discovery, or promising that finishing a profile makes somebody
+ * discoverable, may simply be untrue while the resolver is unavailable.
+ *
+ * That is not the same as failing closed for the SCREEN. No continuity provider
+ * reads this value at all, so an entitlement outage leaves the viewer's existing
+ * mutuals, UpFors, Plans, conversations, birthdays and Safe Arrival exactly as
+ * they were, and the guaranteed fallback still renders free-core copy. Only the
+ * two expansion-only offers go quiet.
+ *
+ * ONE READ, not two. `hasEverHadWelcomeAccess` was carried here for copy that
+ * could explain what had ended, but no Smart Card ever consumed it -- so Home
+ * was paying a historical-grant lookup on every render for an unused field.
  */
 export async function loadAccessForCard(userId: string): Promise<AccessForCard> {
   try {
-    const [access, hadWelcome] = await Promise.all([
-      resolveAccessForUser(userId),
-      hasEverHadWelcomeAccess(userId)
-    ]);
-    return { canExpand: access.hasAccess, hadWelcomeAccess: hadWelcome };
+    const access = await resolveAccessForUser(userId);
+    return { canExpand: access.hasAccess };
   } catch {
-    return { canExpand: true, hadWelcomeAccess: false };
+    return { canExpand: false };
   }
 }
 
@@ -380,8 +439,11 @@ const EMPTY: HomeSmartCardProjection = {
   planDecisions: [],
   planChatDecisions: [],
   blockedFeature: null,
-  /* Ungated: an absent projection must not withhold anybody's existing life. */
-  access: { canExpand: true, hadWelcomeAccess: false }
+  /* Expansion suppressed, continuity untouched. An absent projection means the
+     entitlement answer is unknown, which is not permission to make an offer --
+     and no continuity provider consults this, so nobody's existing social life
+     is withheld by it. */
+  access: { canExpand: false }
 };
 
 /**

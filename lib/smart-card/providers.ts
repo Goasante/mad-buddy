@@ -98,10 +98,12 @@ export type SmartCardInput = {
   /**
    * Mad Buddy Access, reduced to "may this viewer expand right now".
    *
-   * Optional so every existing caller and test keeps compiling, and ABSENT
-   * MEANS UNGATED on purpose: a missing entitlement fact must never silently
-   * withhold somebody's existing social life. The dashboard supplies it; a
-   * failed resolve degrades to full continuity rather than a locked Home.
+   * Optional so every existing caller and test keeps compiling. ABSENT MEANS
+   * UNKNOWN, and unknown does not grant permission: the two expansion-only
+   * states stay silent rather than advertising a door the server may refuse.
+   * Continuity is unaffected, because no continuity provider reads this field
+   * -- somebody's existing mutuals, UpFors, Plans, messages, birthdays and
+   * Safe Arrival are identical whatever entitlement says or fails to say.
    */
   access?: AccessForCard | null;
   /** Count of plans starting inside the current weekend window. */
@@ -127,6 +129,38 @@ function soonLabel(minutes: number): string {
   if (minutes < 60) return `Starts in ${Math.max(1, minutes)} min`;
   const hours = Math.max(1, Math.round(minutes / 60));
   return `Starts in ${hours} ${hours === 1 ? "hour" : "hours"}`;
+}
+
+/**
+ * The canonical destination for ONE Linkr pair.
+ *
+ * Deliberately late-bound: `/linkr?connection=<id>` re-resolves at open time
+ * through resolveMutualDestination, which re-checks that the viewer belongs to
+ * the connection, honours a block or ending that happened since Home rendered,
+ * and opens an already-running conversation rather than a stale "Say hi".
+ * Home names the pair; the route decides what to do about them.
+ *
+ * One spelling, used by both mutual states, so the two cannot drift.
+ */
+function linkrPairDestination(connectionId: string): string {
+  return `/linkr?connection=${encodeURIComponent(connectionId)}`;
+}
+
+/**
+ * The canonical destination for ONE UpFor session.
+ *
+ * `?hangout=<id>` is what the UpFor page already understands: it scrolls that
+ * session to the centre of the list. That is less than opening a detail sheet,
+ * and it is deliberately not being redesigned here -- but a card that names one
+ * UpFor should still bring the person to THAT one rather than to the top of a
+ * list they then have to search.
+ *
+ * `upfor_requests` deliberately does NOT use this: it summarises requests across
+ * every UpFor the viewer owns, so there is no single session to point at, and
+ * pretending otherwise would pick one arbitrarily.
+ */
+function upForSessionDestination(sessionId: string): string {
+  return `/hangout-mode?hangout=${encodeURIComponent(sessionId)}`;
 }
 
 function proximityLabel(band: SmartCardNearbyFriend["proximity_band"]): string | null {
@@ -489,7 +523,10 @@ function suggestionsProvider(input: SmartCardInput): SmartCard | null {
  * and never says Mad Buddy has ended -- almost all of it is still free.
  */
 function upForFallbackProvider(input: SmartCardInput): SmartCard {
-  if (input.access && !input.access.canExpand) {
+  /* UNKNOWN takes the same branch as NO ACCESS: creating an UpFor is an
+     expansion, so an unresolved entitlement must not present it as available.
+     Home still says something true, and never blanks. */
+  if (!input.access?.canExpand) {
     return {
       id: "upfor_fallback",
       priority: 0,
@@ -568,7 +605,7 @@ function upForActiveMuddyProvider(input: SmartCardInput): SmartCard | null {
     subtitle: "You asked to join. They will see it and decide.",
     meta: "Waiting on them",
     cta: "Details",
-    destination: "/hangout-mode",
+    destination: upForSessionDestination(first.id),
     media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
   };
 }
@@ -595,7 +632,7 @@ function upForMomentumProvider(input: SmartCardInput): SmartCard | null {
         ? "One Muddy is in. It only takes one."
         : first.acceptedCount + " Muddies are in.",
     cta: "Manage UpFor",
-    destination: "/hangout-mode",
+    destination: upForSessionDestination(first.id),
     media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
   };
 }
@@ -614,7 +651,7 @@ function upForAcceptedProvider(input: SmartCardInput): SmartCard | null {
     title: first.ownerName + " said yes",
     subtitle: "You are going to " + first.activityLabel.toLowerCase() + ".",
     cta: "Open UpFor",
-    destination: "/hangout-mode",
+    destination: upForSessionDestination(first.id),
     media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
   };
 }
@@ -645,7 +682,7 @@ function ownedUpForStartingProvider(input: SmartCardInput): SmartCard | null {
         ? soon.acceptedCount + (soon.acceptedCount === 1 ? " Muddy is in." : " Muddies are in.")
         : "It goes live automatically. Muddies can join from there.",
     cta: "Manage UpFor",
-    destination: "/hangout-mode",
+    destination: upForSessionDestination(soon.id),
     media: upForActivitySmartCardMedia(soon.activityType, soon.activityLabel)
   };
 }
@@ -669,7 +706,7 @@ function upForScheduledProvider(input: SmartCardInput): SmartCard | null {
         : "Nobody sees it until it starts.",
     meta: minutes === null ? undefined : soonLabel(minutes),
     cta: "Manage UpFor",
-    destination: "/hangout-mode",
+    destination: upForSessionDestination(first.id),
     media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
   };
 }
@@ -697,7 +734,10 @@ function muddyRequestProvider(input: SmartCardInput): SmartCard | null {
       count === 1 ? "Someone wants to be your Muddy" : count + " people want to be your Muddies",
     subtitle: "They are waiting to hear back from you.",
     cta: "Review requests",
-    destination: "/friends"
+    /* The REQUESTS tab, not the Muddies index. `/friends` defaults to "all",
+       so the card named a screen and then opened a different one -- the person
+       had to find the requests the card had just told them about. */
+    destination: "/friends?tab=requests"
   };
 }
 
@@ -725,7 +765,7 @@ function linkrMutualProvider(input: SmartCardInput): SmartCard | null {
         ? unspoken.length + " Linkr connections are waiting for a first message."
         : "Neither of you has said anything yet.",
     cta: "Say hi",
-    destination: "/linkr",
+    destination: linkrPairDestination(first.connectionId),
     media: first.photo ? { url: first.photo, alt: first.displayName } : undefined
   };
 }
@@ -759,7 +799,7 @@ function linkrMutualEventProvider(input: SmartCardInput): SmartCard | null {
     title: "You connected at " + first.eventName,
     subtitle: "You and " + first.displayName + " both chose to connect.",
     cta: "Say hi",
-    destination: "/linkr",
+    destination: linkrPairDestination(first.connectionId),
     /* Opening a Plan with somebody you have not spoken to yet is a big second
        step, so it stays SECONDARY and the first message stays primary. */
     secondaryAction: { label: "Make a Plan", destination: "/plans" },
@@ -789,13 +829,14 @@ function eventLinkrReadyProvider(input: SmartCardInput): SmartCard | null {
   const offer = input.eventLinkrOffer;
   if (!offer) return null;
 
-  /* ENTITLEMENT. Being discovered by new people at an Event is Linkr discovery,
-     which is one of the two gated expansions -- and the server refuses the
-     opt-in without Access anyway. Offering it here would send somebody to a
-     door that will not open, so the card simply does not appear.
+  /* ENTITLEMENT, AND UNKNOWN COUNTS AS NO. Being discovered by new people at an
+     Event is Linkr discovery, one of the two gated expansions, and the server
+     refuses the opt-in without Access anyway. Offering it would send somebody
+     to a door that will not open -- and if entitlement could not be resolved at
+     all, we cannot claim the door opens either. Both cases stay silent.
      Nothing they already have is touched: their existing mutuals, their
      conversations and their Plans are all elsewhere in this file and ungated. */
-  if (input.access && !input.access.canExpand) return null;
+  if (!input.access?.canExpand) return null;
 
   return {
     id: "event_linkr_ready",
@@ -951,12 +992,13 @@ function profileBlockingProvider(input: SmartCardInput): SmartCard | null {
   const blocked = input.blockedFeature;
   if (!blocked) return null;
 
-  /* ENTITLEMENT. This card promises that finishing the profile makes the viewer
-     discoverable. Without Access, Linkr discovery is gated anyway, so the
-     promise would not come true and the person would have done the work for
-     nothing. Access is the nearer blocker, and it is not this card's job to
-     sell it -- so the card stays silent rather than pointing at the wrong fix. */
-  if (input.access && !input.access.canExpand) return null;
+  /* ENTITLEMENT, AND UNKNOWN COUNTS AS NO. This card promises that finishing
+     the profile makes the viewer discoverable. Without Access that promise does
+     not come true -- Access is the nearer blocker, and selling it is not this
+     card's job -- and with entitlement unresolved the promise cannot be made
+     honestly either. Asking somebody to do work that may change nothing is
+     worse than staying quiet. */
+  if (!input.access?.canExpand) return null;
 
   return {
     id: "profile_blocking",

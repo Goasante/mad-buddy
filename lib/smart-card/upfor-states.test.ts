@@ -249,7 +249,17 @@ describe("every UpFor state routes somewhere real", () => {
   ])("%#: resolves to %s with a real destination", (ctx, expected) => {
     const card = pick(ctx as HomeUpForContext);
     expect(card?.id).toBe(expected);
-    expect(card?.destination).toBe("/hangout-mode");
+    /* Every UpFor state lands on the UpFor surface, and a state that names ONE
+       session lands on that session (`?hangout=<id>`, which the page centres).
+       `upfor_requests` is the deliberate exception: it summarises requests
+       across every UpFor the viewer owns, so there is no single session to
+       point at and picking one would be arbitrary. */
+    expect(card?.destination.startsWith("/hangout-mode")).toBe(true);
+    if (expected === "upfor_requests") {
+      expect(card?.destination).toBe("/hangout-mode");
+    } else {
+      expect(card?.destination).toMatch(/^\/hangout-mode\?hangout=.+/);
+    }
     expect(card?.cta.length).toBeGreaterThan(0);
   });
 });

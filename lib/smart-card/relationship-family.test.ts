@@ -22,6 +22,7 @@ const NOW = new Date("2026-08-05T10:00:00.000Z");
 
 const mutual = (over: Partial<LinkrMutualForCard> = {}): LinkrMutualForCard => ({
   userId: "u1",
+  connectionId: "conn-1",
   displayName: "Ama",
   photo: null,
   hasConversation: false,
@@ -42,6 +43,10 @@ function input(over: Partial<SmartCardInput> = {}): SmartCardInput {
     buddyScore: null,
     recentAchievement: null,
     suggestionCount: 0,
+    /* Entitlement KNOWN and present, so the two expansion-only states are
+       eligible and these cases measure the state itself rather than the gate.
+       Entitlement is exercised deliberately in access-entitlement.test.ts. */
+    access: { canExpand: true },
     ...over
   };
 }
@@ -66,6 +71,21 @@ describe("a mutual with a shared Event says where they met", () => {
     expect(card?.subtitle).toBe("You and Ama both chose to connect.");
   });
 
+  /**
+   * THE PAIR, NOT THE PRODUCT. `/linkr?connection=<id>` is deliberately
+   * late-bound: it re-resolves at open time, so a block or ending since Home
+   * rendered fails closed, and a conversation started since then opens instead
+   * of a stale "Say hi". Landing on `/linkr` would freeze none of that and make
+   * the person find the pair the card had just named.
+   */
+  it("opens THIS PAIR, not the Linkr index", () => {
+    const card = pick({
+      linkrMutuals: [mutual({ connectionId: "conn-42", eventName: "Acoustic Night" })]
+    });
+    expect(card?.destination).toBe("/linkr?connection=conn-42");
+    expect(card?.destination).not.toBe("/linkr");
+  });
+
   it("offers a first message first, and a Plan only as the second step", () => {
     const card = pick({ linkrMutuals: [mutual({ eventName: "Acoustic Night" })] });
     expect(card?.cta).toBe("Say hi");
@@ -81,6 +101,12 @@ describe("a mutual with a shared Event says where they met", () => {
     const card = pick({ linkrMutuals: [mutual({ eventName: null })] });
     expect(card?.id).toBe("linkr_mutual");
     expect(card?.title).toBe("You and Ama connected");
+  });
+
+  it("and the plain mutual opens the pair too", () => {
+    const card = pick({ linkrMutuals: [mutual({ connectionId: "conn-7", eventName: null })] });
+    expect(card?.id).toBe("linkr_mutual");
+    expect(card?.destination).toBe("/linkr?connection=conn-7");
   });
 
   it("says nothing at all when the pair is already talking", () => {

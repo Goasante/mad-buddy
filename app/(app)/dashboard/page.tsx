@@ -161,9 +161,11 @@ export default async function DashboardPage() {
         blockedFeature: smartCardProjection?.blockedFeature ?? null,
         /* ENTITLEMENT. Gates only states that would START something new, so an
            expired viewer keeps every existing Linkr mutual, UpFor commitment,
-           Plan, conversation and safety state exactly as before. Absent means
-           ungated: a failed entitlement read must never withhold someone's
-           existing social life. */
+           Plan, conversation and safety state exactly as before.
+           Absent means UNKNOWN, and unknown is not permission: the two
+           expansion offers stay quiet rather than advertising something the
+           server may refuse. Continuity is unaffected either way, because no
+           continuity provider reads this. */
         access: smartCardProjection?.access ?? null,
         /* NearbyHero owns the proximity payoff and the Activation card owns
            cold-start people discovery. Excluding them HERE (rather than after

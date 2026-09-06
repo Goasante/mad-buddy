@@ -27,12 +27,17 @@ import { resolveSmartCard } from "@/lib/smart-card/smart-card";
 
 const NOW = new Date("2026-08-05T10:00:00.000Z");
 
-const HAS_ACCESS: AccessForCard = { canExpand: true, hadWelcomeAccess: false };
-const NO_ACCESS: AccessForCard = { canExpand: false, hadWelcomeAccess: false };
-const EXPIRED_WELCOME: AccessForCard = { canExpand: false, hadWelcomeAccess: true };
+const HAS_ACCESS: AccessForCard = { canExpand: true };
+const NO_ACCESS: AccessForCard = { canExpand: false };
+/* Expired Welcome Access resolves to exactly the same answer as no access --
+   the resolver reports only CURRENTLY valid sources, and Home is given nothing
+   with which to describe what ended. It is kept as a separate constant because
+   the scenarios below are about a person mid-life, not about a flag. */
+const EXPIRED_WELCOME: AccessForCard = { canExpand: false };
 
 const mutual = (over: Partial<LinkrMutualForCard> = {}): LinkrMutualForCard => ({
   userId: "u1",
+  connectionId: "conn-1",
   displayName: "Ama",
   photo: null,
   hasConversation: false,
@@ -334,19 +339,67 @@ describe("EXPIRED ACCESS WITH AN EXISTING COMMITMENT", () => {
   });
 });
 
-describe("a missing entitlement fact never withholds anything", () => {
+describe("UNKNOWN entitlement — expansion fails CLOSED, continuity fails OPEN", () => {
   /**
-   * FAILS OPEN, unlike the mutation guard. This only decides what Home SAYS, and
-   * the safe answer to "I could not resolve entitlement" is to keep the person's
-   * existing social life visible rather than to blank it.
+   * The boundary this suite exists to hold, and it is not the obvious one.
+   *
+   * "Fail open" is the right instinct for a screen, and the wrong one for an
+   * OFFER. If entitlement cannot be resolved, advertising Event Linkr discovery
+   * promises a door the server may refuse, and telling somebody that finishing
+   * their profile will make them discoverable may simply be untrue. Suppressing
+   * an offer costs a card; making a false promise costs trust.
+   *
+   * Continuity is safe regardless, and structurally so: no continuity provider
+   * reads the access flag at all.
    */
-  it("treats absent access as ungated", () => {
-    expect(pick({ eventLinkrOffer: offer })?.id).toBe("event_linkr_ready");
-    expect(pick({ blockedFeature: blocked })?.id).toBe("profile_blocking");
-    expect(pick({})?.title).toBe("What are you UpFor today?");
-  });
+  const UNKNOWN: Array<[string, Partial<SmartCardInput>]> = [
+    ["absent", {}],
+    ["explicitly null", { access: null }]
+  ];
 
-  it("treats an explicitly null access fact as ungated too", () => {
-    expect(pick({ eventLinkrOffer: offer, access: null })?.id).toBe("event_linkr_ready");
+  for (const [label, unknown] of UNKNOWN) {
+    it(`${label} entitlement suppresses the expansion offers`, () => {
+      expect(pick({ ...unknown, eventLinkrOffer: offer })?.id).not.toBe("event_linkr_ready");
+      expect(pick({ ...unknown, blockedFeature: blocked })?.id).not.toBe("profile_blocking");
+    });
+
+    it(`${label} entitlement still fills the fallback with free-core copy`, () => {
+      const card = pick(unknown);
+      expect(card).not.toBeNull();
+      expect(card?.id).toBe("upfor_fallback");
+      expect(card?.title).toBe("Catch up with your Muddies");
+    });
+
+    it(`${label} entitlement leaves the existing social world untouched`, () => {
+      expect(pick({ ...unknown, linkrMutuals: [mutual()] })?.id).toBe("linkr_mutual");
+      expect(pick({ ...unknown, upFor: ownedWithRequests })?.id).toBe("upfor_requests");
+      expect(pick({ ...unknown, upFor: muddySideJoined("accepted") })?.id).toBe("upfor_accepted");
+      expect(pick({ ...unknown, planDecisions: [decision] })?.id).toBe("plan_decision");
+      expect(
+        pick({ ...unknown, safeArrival: { travelling: true, watcherCount: 1 } })?.id
+      ).toBe("safe_arrival");
+    });
+  }
+
+  /**
+   * Byte identity against the KNOWN no-access viewer. Unknown and no-access
+   * must be indistinguishable on screen: anything else would leak the state of
+   * the entitlement system into somebody's Home.
+   */
+  it("is byte-identical to a known no-access viewer", () => {
+    const shared: Partial<SmartCardInput> = {
+      linkrMutuals: [mutual({ eventName: "Acoustic Night" })],
+      upFor: ownedWithRequests,
+      planDecisions: [decision],
+      planChatDecisions: [chatDecision],
+      muddyBirthdays: [{ userId: "u9", displayName: "Ama" }],
+      incomingRequestCount: 1,
+      eventLinkrOffer: offer,
+      blockedFeature: blocked,
+      safeArrival: { travelling: true, watcherCount: 1 }
+    };
+    const known = buildAll({ ...shared, access: NO_ACCESS }).map((c) => JSON.stringify(c));
+    const unknown = buildAll({ ...shared, access: null }).map((c) => JSON.stringify(c));
+    expect(unknown).toEqual(known);
   });
 });

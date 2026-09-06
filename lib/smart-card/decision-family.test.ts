@@ -267,7 +267,14 @@ describe("deterministic conflicts", () => {
     const card = pick({
       planDecisions: [decision()],
       linkrMutuals: [
-        { userId: "u1", displayName: "Ama", photo: null, hasConversation: false, eventName: null }
+        {
+          userId: "u1",
+          connectionId: "conn-1",
+          displayName: "Ama",
+          photo: null,
+          hasConversation: false,
+          eventName: null
+        }
       ]
     });
     expect(card?.id).toBe("plan_decision");
