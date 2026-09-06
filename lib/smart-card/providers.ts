@@ -6,6 +6,8 @@
  * facts once, then the engine chooses the first truthful applicable state.
  */
 
+import type { HomeUpForContext } from "@/lib/social/home-upfor-context";
+import { upForActivitySmartCardMedia } from "@/lib/smart-card/visuals";
 import type { BuddyScoreData } from "@/lib/engagement/buddy-score-service";
 import type { JourneyData } from "@/lib/journey/journey";
 import type { UpcomingAgendaItem } from "@/lib/social/upcoming-agenda-projection";
@@ -40,6 +42,12 @@ export type SmartCardInput = {
   birthday: { birthdayToday: boolean; birthdayTomorrow: boolean } | null;
   /** Canonical Home agenda — Plans + Events, already permission-filtered. */
   agenda: readonly UpcomingAgendaItem[];
+  /**
+   * UpFor facts from the one batched Home read (lib/social/home-upfor-context).
+   * Optional so every existing caller and test keeps compiling; absent means
+   * "no UpFor context", which yields no UpFor card rather than a wrong one.
+   */
+  upFor?: HomeUpForContext | null;
   /** Count of plans starting inside the current weekend window. */
   weekendPlanCount: number;
   /** Privacy-safe server projection; never coordinates or numerical distance. */
@@ -365,16 +373,182 @@ function upForFallbackProvider(): SmartCard {
   };
 }
 
+
+/* ---------------------------------------------------------------------------
+ * UpFor.
+ *
+ * Every state below reads the SAME batched context (lib/social/home-upfor-context)
+ * and the canonical activity labels. No provider queries anything, and none
+ * assumes a single active session: somebody running a coffee and a gym UpFor at
+ * once is ordinary, so the owner states summarise across all of them.
+ * ------------------------------------------------------------------------ */
+
+/** Tier 1: people are waiting on the owner's answer. That is an obligation. */
+function upForRequestsProvider(input: SmartCardInput): SmartCard | null {
+  const owned = input.upFor?.ownedLive ?? [];
+  const waiting = owned.filter((session) => session.pendingRequestCount > 0);
+  if (waiting.length === 0) return null;
+
+  const total = waiting.reduce((sum, session) => sum + session.pendingRequestCount, 0);
+  const first = waiting[0];
+  const many = waiting.length > 1;
+
+  return {
+    id: "upfor_requests",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "NEEDS YOUR RESPONSE",
+    title:
+      total === 1
+        ? "Someone wants to join your " + first.activityLabel + " UpFor"
+        : total + " people want to join your " + (many ? "UpFors" : first.activityLabel + " UpFor"),
+    subtitle: "They are waiting on you before anything can happen.",
+    cta: "Review requests",
+    destination: "/hangout-mode",
+    media: many ? undefined : upForActivitySmartCardMedia(first.activityType, first.activityLabel)
+  };
+}
+
+/** Tier 2: the viewer asked to join a Muddy's live UpFor and is waiting. */
+function upForActiveMuddyProvider(input: SmartCardInput): SmartCard | null {
+  const joined = input.upFor?.joined ?? [];
+  /* Only sessions the viewer has NOT been answered on belong here; an accepted
+     request is a different, happier state below. */
+  const pending = joined.filter((session) => session.myStatus === "pending");
+  if (pending.length === 0) return null;
+  const first = pending[0];
+
+  return {
+    id: "upfor_active_muddy",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "HAPPENING NOW",
+    title: first.ownerName + " is UpFor " + first.activityLabel.toLowerCase(),
+    subtitle: "You asked to join. They will see it and decide.",
+    meta: "Waiting on them",
+    cta: "Details",
+    destination: "/hangout-mode",
+    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
+  };
+}
+
+/** Tier 2: the owner's UpFor is gathering real interest. */
+function upForMomentumProvider(input: SmartCardInput): SmartCard | null {
+  const owned = input.upFor?.ownedLive ?? [];
+  /* Momentum means people said yes, not that requests exist -- pending requests
+     are the tier-1 obligation above and must not be counted twice. */
+  const gathering = owned.filter(
+    (session) => session.acceptedCount > 0 && session.pendingRequestCount === 0
+  );
+  if (gathering.length === 0) return null;
+  const first = gathering[0];
+
+  return {
+    id: "upfor_momentum",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "GATHERING",
+    title: "Your " + first.activityLabel + " UpFor is happening",
+    subtitle:
+      first.acceptedCount === 1
+        ? "One Muddy is in. It only takes one."
+        : first.acceptedCount + " Muddies are in.",
+    cta: "Manage UpFor",
+    destination: "/hangout-mode",
+    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
+  };
+}
+
+/** Tier 2: somebody said yes to the viewer. */
+function upForAcceptedProvider(input: SmartCardInput): SmartCard | null {
+  const accepted = (input.upFor?.joined ?? []).filter((session) => session.myStatus === "accepted");
+  if (accepted.length === 0) return null;
+  const first = accepted[0];
+
+  return {
+    id: "upfor_accepted",
+    priority: 0,
+    illustration: "celebration",
+    eyebrow: "YOU ARE IN",
+    title: first.ownerName + " said yes",
+    subtitle: "You are going to " + first.activityLabel.toLowerCase() + ".",
+    cta: "Open UpFor",
+    destination: "/hangout-mode",
+    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
+  };
+}
+
+/** Tier 2: the owner's own scheduled UpFor is about to begin. */
+function ownedUpForStartingProvider(input: SmartCardInput): SmartCard | null {
+  const scheduled = input.upFor?.ownedScheduled ?? [];
+  const soon = scheduled.find((session) => {
+    if (!session.startsAt) return false;
+    const delta = Date.parse(session.startsAt) - input.now.getTime();
+    return Number.isFinite(delta) && delta > 0 && delta <= THREE_HOURS_MS;
+  });
+  if (!soon || !soon.startsAt) return null;
+  const minutes = minutesUntil(soon.startsAt, input.now);
+
+  return {
+    id: "owned_upfor_starting",
+    priority: 0,
+    illustration: "calendar",
+    eyebrow: "STARTING SOON",
+    title:
+      "Your " +
+      soon.activityLabel +
+      " UpFor " +
+      (minutes === null ? "is coming up" : soonLabel(minutes).toLowerCase()),
+    subtitle:
+      soon.acceptedCount > 0
+        ? soon.acceptedCount + (soon.acceptedCount === 1 ? " Muddy is in." : " Muddies are in.")
+        : "It goes live automatically. Muddies can join from there.",
+    cta: "Manage UpFor",
+    destination: "/hangout-mode",
+    media: upForActivitySmartCardMedia(soon.activityType, soon.activityLabel)
+  };
+}
+
+/** Tier 4: something the viewer scheduled, further out. */
+function upForScheduledProvider(input: SmartCardInput): SmartCard | null {
+  const scheduled = input.upFor?.ownedScheduled ?? [];
+  if (scheduled.length === 0) return null;
+  const first = scheduled[0];
+  const minutes = first.startsAt ? minutesUntil(first.startsAt, input.now) : null;
+
+  return {
+    id: "upfor_scheduled",
+    priority: 0,
+    illustration: "calendar",
+    eyebrow: "COMING UP",
+    title: "Your " + first.activityLabel + " UpFor is set",
+    subtitle:
+      scheduled.length > 1
+        ? scheduled.length + " UpFors scheduled."
+        : "Nobody sees it until it starts.",
+    meta: minutes === null ? undefined : soonLabel(minutes),
+    cta: "Manage UpFor",
+    destination: "/hangout-mode",
+    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
+  };
+}
+
 export function smartCardProviders(input: SmartCardInput): readonly SmartCardProvider[] {
   return [
     { id: "safe_arrival", build: () => safeArrivalProvider(input) },
     { id: "plan_rsvp", build: () => planRsvpProvider(input) },
+    { id: "upfor_requests", build: () => upForRequestsProvider(input) },
     { id: "plan_starting", build: () => planStartingProvider(input) },
     { id: "event_live", build: () => eventLiveProvider(input) },
+    { id: "upfor_active_muddy", build: () => upForActiveMuddyProvider(input) },
+    { id: "upfor_momentum", build: () => upForMomentumProvider(input) },
+    { id: "upfor_accepted", build: () => upForAcceptedProvider(input) },
+    { id: "owned_upfor_starting", build: () => ownedUpForStartingProvider(input) },
     { id: "nearby_muddies", build: () => nearbyMuddiesProvider(input) },
     { id: "event_starting", build: () => eventStartingProvider(input) },
     { id: "birthday", build: () => birthdayProvider(input) },
     { id: "weekend_plans", build: () => weekendPlansProvider(input) },
+    { id: "upfor_scheduled", build: () => upForScheduledProvider(input) },
     { id: "journey", build: () => journeyProvider(input) },
     { id: "journey_complete", build: () => journeyCompleteProvider(input) },
     { id: "buddy_progress", build: () => buddyProgressProvider(input) },

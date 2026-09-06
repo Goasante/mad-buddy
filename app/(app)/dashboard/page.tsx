@@ -3,6 +3,7 @@ import { loadActivationProjection } from "@/lib/activation/projection";
 import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
 import { loadSafeArrivalJourneys } from "@/lib/safety/safe-arrival-service";
+import { loadHomeUpForContext } from "@/lib/social/home-upfor-context";
 import { loadUpcomingAgenda } from "@/lib/social/upcoming-agenda";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/auth";
@@ -36,7 +37,7 @@ function isStatusActiveAtRequestTime(expiresAt: string) {
 export default async function DashboardPage() {
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
   const admin = createSupabaseAdminClient();
-  const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents, activation] = user
+  const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents, activation, upForContext] = user
     ? await Promise.all([
         ensureProfileForUser(user),
         supabase
@@ -61,9 +62,10 @@ export default async function DashboardPage() {
         buildMomentFeed(admin, user.id),
         buildSpotlightFeed(admin, user.id),
         getRankedUpcomingEvents(user.id, { limit: HOME_RANKED_EVENTS_LIMIT }),
-        loadActivationProjection(user.id)
+        loadActivationProjection(user.id),
+        loadHomeUpForContext(admin, user.id)
       ])
-    : [null, null, { items: [], hasMore: false }, null, null, {}, false, false, null, 0, null, null, [], [], [], null];
+    : [null, null, { items: [], hasMore: false }, null, null, {}, false, false, null, 0, null, null, [], [], [], null, null];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -117,6 +119,7 @@ export default async function DashboardPage() {
         buddyScore,
         recentAchievement: null,
         suggestionCount: 0,
+        upFor: upForContext,
         /* NearbyHero owns the proximity payoff and the Activation card owns
            cold-start people discovery. Excluding them HERE (rather than after
            resolution) means that when one of them ranks highest the engine

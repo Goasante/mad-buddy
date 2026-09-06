@@ -14,12 +14,25 @@
 export const SMART_CARD_IDS = [
   "safe_arrival",
   "plan_rsvp",
+  /* Tier 1 alongside plan_rsvp: people are waiting on the owner's answer, and
+     an unanswered join request is the same shape of obligation as an
+     unanswered Plan invitation. It sits second because a Plan has a time
+     attached and a request does not. */
+  "upfor_requests",
   "plan_starting",
   "event_live",
+  /* Tier 2. `upfor_accepted` leads the group: somebody saying yes to you is the
+     payoff UpFor exists to produce, and it is the only one of these the viewer
+     has already been waiting on. */
+  "upfor_accepted",
+  "upfor_momentum",
+  "owned_upfor_starting",
+  "upfor_active_muddy",
   "nearby_muddies",
   "event_starting",
   "birthday",
   "weekend_plans",
+  "upfor_scheduled",
   /* Cold-start people help outranks Journey deliberately.
      For a viewer with no Muddies these two ask for the same thing -- Journey's
      current step IS "Add your first Muddy" -- but suggestions name real people
